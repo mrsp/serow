@@ -1,0 +1,115 @@
+#Robot Frames (CHECK URDF)
+
+base_link: "pelvis"
+lfoot: "leftCOP_Frame"
+rfoot: "rightCOP_Frame"
+
+#ROS Topic Names
+usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
+pose_topic: "" #only if usePoseUpdate is true
+useLegOdom: false
+odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
+imu_topic: "/pelvisMiddleImu/imu"
+joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
+lfoot_force_torque_topic: "/ihmc_ros/valkyrie/output/foot_force_sensor/left"
+rfoot_force_torque_topic: "/ihmc_ros/valkyrie/output/foot_force_sensor/right"
+copl_topic: "/ihmc_ros/valkyrie/output/cop/left"
+copr_topic: "/ihmc_ros/valkyrie/output/cop/right"
+
+visualize_with_rviz: true
+ground_truth: true
+ground_truth_odom_topic: "/ihmc_ros/valkyrie/output/robot_pose"
+is_in_ds_topic: "/ihmc_ros/valkyrie/output/capturability/is_in_double_support"
+#TF from IMU to Body
+T_B_I: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
+
+#TF from External Pose to Body only if useLegOdom is false
+#T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
+T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 , 1]
+
+
+#ROS Topic Frequencies in Hz
+imu_topic_freq: 1000
+joint_topic_freq: 500
+fsr_topic_freq: 500  
+
+##Schmitt Trigger - Contact Classifier
+LLegUpThres: 1000 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 850 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 100
+StrikingContact: 500
+#Steady State Joint Kalman Filter (KF)
+estimateJoints: false #Use a Steady State KF in every joint
+
+#Rigid body Extended Kalman Filter (EKF)
+#To estimate:
+# 3-D Body Position/Velocity
+# 3-D Support Foot Position/Orientation
+# 3-D IMU-Biases
+
+#Process Noise STDs
+accelerometer_bias_random_walk:  0.0000001 #continous
+gyroscope_bias_random_walk: 4.1884e-08 #continous
+accelerometer_noise_density: 0.00151446 #m/s^2/sqrt(Hz) #continous
+gyroscope_noise_density: 0.000139556 #rad/s/sqrt(Hz) #continous
+#Support Foot/Orientation STD w.r.t World Frame
+support_position_random_walk: 1.0e-04  #m
+support_orientation_random_walk: 4.0e-04  #rad
+
+
+#Measuremets
+#Odometry Measurement Noise std:
+odom_position_noise_density: 1.0e-05
+odom_orientation_noise_density: 1.0e-05
+
+
+#Support Foot/Orientation STD w.r.t Body Frame
+support_position_noise_density: 5.0e-05
+support_orientation_noise_density: 5.0e-05
+
+#IMU Initial Biases
+bias_ax: 0.00569213
+bias_ay: -0.0044722
+bias_az: -9.80247
+bias_gx: -1.60298e-05
+bias_gy: 1.24745e-05
+bias_gz: 2.60968e-05
+
+
+#Filter Params
+gravity: 9.80 #gravity constant (m/s^2)
+
+
+# CoM Extended Kalman Filter (EKF)
+# To estimate:
+# CoM 3-D Position/Velocity
+# 3-D External Forces on the CoM
+estimateCoM: true   #Use the CoM EKF
+
+#---------------------------------------------#
+#Specify the rest only if estimateCoM is true!!
+#---------------------------------------------#
+
+
+#Process Noise
+com_position_random_walk: 1.0e-5 #in m
+com_velocity_random_walk: 5.0e-3 #in m/s
+external_force_random_walk: 2.5      #in Newtons
+#Measurment Noise
+com_position_noise_density: 1.0e-04  #CoM position in m
+com_acceleration_noise_density: 2.5.0e-02 #CoM Acceleration in m/s^2
+#Initial errors in External Forces
+bias_fx: 100  #in Newtons
+bias_fy: 10
+bias_fz: 100
+#Gyro LPF
+useGyroLPF: false
+#Cutt-off Frequencies
+gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
+#Gyro Moving Average Filter
+maWindow: 10 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
+#Filter Params
+mass: 127.324  #robot mass
+Ixx : 0.11866378  #torso inertia around x
+Iyy : 0.097963425  #torso inetria around y
+Izz : 0.083854638   #torso inertia around z

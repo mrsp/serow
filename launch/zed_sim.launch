@@ -1,0 +1,3 @@
+<launch>
+        <param name="robot_description" command="cat $(find humanoid_state_estimation)/share/urdf/zed.urdf" />
+</launch>

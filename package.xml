@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package>
+  <name>humanoid_state_estimation</name>
+  <version>0.0.0</version>
+  <description>The humanoid_state_estimation package</description>
+  <author email="spiperakis@ics.forth.gr">Stylianos Piperakis</author> 
+  <maintainer email="spiperakis@ics.forth.gr">Stylianos Piperakis</maintainer>
+  <license>BSD</license>
+  <!-- <url type="website">http://wiki.ros.org/humanoid_state_estimation</url> -->
+  <!-- Use doc_depend for packages you need only for building documentation: -->
+  <!--   <doc_depend>doxygen</doc_depend> -->
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>tf</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>cmake_modules</build_depend>
+  <build_depend>hrl_kinematics</build_depend>
+  <build_depend>dynamic_reconfigure</build_depend>
+  <run_depend>geometry_msgs</run_depend>
+  <run_depend>roscpp</run_depend>
+  <run_depend>rospy</run_depend>
+  <run_depend>std_msgs</run_depend>
+  <run_depend>tf</run_depend>
+  <run_depend>sensor_msgs</run_depend>
+  <run_depend>hrl_kinematics</run_depend>
+  <run_depend>dynamic_reconfigure</run_depend>
+</package>
