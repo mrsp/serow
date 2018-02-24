@@ -1,0 +1,116 @@
+#Robot Frames (CHECK URDF)
+base_link: "base_link"
+lfoot: "l_sole"
+rfoot: "r_sole"
+
+#ROS Topic Names
+usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
+pose_topic: "/orbslam2/pose" #only if usePoseUpdate is true
+useLegOdom: false
+odom_topic: "/vins_estimator/odometry" #only if usePoseUpdate is false and useLegOdom is false
+imu_topic: "/imu0"
+joint_state_topic: "/joint_states"
+lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
+rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
+copl_topic: "/nao_robot/LLeg/COP"
+copr_topic: "/nao_robot/RLeg/COP"
+
+
+visualize_with_rviz: true
+ground_truth: false
+ground_truth_odom_topic: " "
+
+
+#TF from IMU to Body
+T_B_I: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,0, 1]
+#T_B_I: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 ,0, 1]
+#TF from External Pose to Body only if useLegOdom is false
+T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
+#T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 , 1]
+#T_B_P: [0.0025,   -0.0256,   -0.9997, 0,0.9999,   -0.0098,    0.0027, 0, -0.0098,   -0.9996,    0.0256, 0, 0, 0, 0, 1]
+
+#ROS Topic Frequencies in Hz
+imu_topic_freq: 400
+joint_topic_freq: 100
+fsr_topic_freq: 100  
+
+##Schmitt Trigger - Contact Classifier
+LLegUpThres: 35 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 25 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 10
+StrikingContact: 30
+
+#Steady State Joint Kalman Filter (KF)
+estimateJoints: false #Use a Steady State KF in every joint
+
+#Rigid body Extended Kalman Filter (EKF)
+#To estimate:
+# 3-D Body Position/Velocity
+# 3-D Support Foot Position/Orientation
+# 3-D IMU-Biases
+
+#Process Noise STDs
+accelerometer_bias_random_walk:  0.0000001 #continous
+gyroscope_bias_random_walk: 4.1884e-08 #continous
+accelerometer_noise_density: 0.000751446 #m/s^2/sqrt(Hz) #continous
+gyroscope_noise_density: 0.0000139556 #rad/s/sqrt(Hz) #continous
+#Support Foot/Orientation STD w.r.t World Frame
+support_position_random_walk: 1.0e-04  #m
+support_orientation_random_walk: 1.0e-04  #rad
+
+
+#Measuremets
+#Odometry Measurement Noise std:
+odom_position_noise_density: 1.0e-05
+odom_orientation_noise_density: 1.0e-05
+
+
+#Support Foot/Orientation STD w.r.t Body Frame
+support_position_noise_density: 5.0e-05
+support_orientation_noise_density: 5.0e-05
+
+#IMU Initial Biases
+bias_ax: 0.0896076
+bias_ay: 0.517021
+bias_az: 0.00821103
+bias_gx:  0.0073031 
+bias_gy:  -0.0106267
+bias_gz:  -0.0149457
+
+#Filter Params
+gravity: 9.80665 #gravity constant (m/s^2)
+
+
+# CoM Extended Kalman Filter (EKF)
+# To estimate:
+# CoM 3-D Position/Velocity
+# 3-D External Forces on the CoM
+estimateCoM: true   #Use the CoM EKF
+
+#---------------------------------------------#
+#Specify the rest only if estimateCoM is true!!
+#---------------------------------------------#
+
+
+#Process Noise
+com_position_random_walk: 1.0e-5 #in m
+com_velocity_random_walk: 5.0e-3 #in m/s
+external_force_random_walk: 2.5      #in Newtons
+#Measurment Noise
+com_position_noise_density: 1.0e-05  #CoM position in m
+com_acceleration_noise_density: 2.5.0e-02 #CoM Acceleration in m/s^2
+#Initial errors in External Forces
+bias_fx: 23.678  #in Newtons
+bias_fy: -5.5658
+bias_fz: 1.94869
+#Gyro LPF
+useGyroLPF: false
+#Cutt-off Frequencies
+gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
+#Gyro Moving Average Filter
+maWindow: 10 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
+#Filter Params
+mass: 5.182530  #robot mass
+Ixx : 0.0050623407587  #torso inertia around x
+Iyy : 0.0048801358789  #torso inetria around y
+Izz : 0.001610300038   #torso inertia around z

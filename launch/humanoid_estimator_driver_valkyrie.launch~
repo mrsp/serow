@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+        <param name="robot_description" command="cat $(find humanoid_state_estimation)/share/urdf/valkyrie_sim_gazebo_sync.urdf" />
+  <!-- Call Humanoid State Estimation Driver -->
+  <node pkg="humanoid_state_estimation" type="humanoid_state_estimation" name="humanoid_state_estimation" respawn="false" output="screen" >
+ 	<!-- Load configurations from YAML file to parameter server -->
+   	 <rosparam file="$(find humanoid_state_estimation)/config/estimation_params_valkyrie.yaml" command="load"/> 
+  </node>
+</launch>
