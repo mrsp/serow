@@ -12,7 +12,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 ## Installing
 * git clone https://github.com/ahornung/hrl_kinematics.git
-* git clone git@github.com:mrsp/serow.git
+* git clone https://github.com/mrsp/serow.git
 * catkin_make
 
 
@@ -22,5 +22,5 @@ These instructions will get you a copy of the project up and running on your loc
 
 
 ## License
-BSD 
+[BSD](LICENSE) 
 
