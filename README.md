@@ -16,7 +16,7 @@ These instructions will get you a copy of the project up and running on your loc
 * catkin_make
 
 
-## ROS EXAMPLES
+## ROS Examples
 ![valk](img/valk.jpg)
 ![nao](img/nao.jpg)
 
@@ -24,5 +24,3 @@ These instructions will get you a copy of the project up and running on your loc
 ## License
 BSD 
 
-## Authors
-Stylianos Piperakis 
