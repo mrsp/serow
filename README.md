@@ -1,8 +1,7 @@
-# Project Title
-SEROW Framework for Humanoid Robot Walking Estimation
+# README
+SEROW (State Estimation RObot Walking) Framework for Humanoid Robot Walking Estimation.
 
 ## Getting Started
-
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
 
 ### Prerequisites
@@ -17,12 +16,11 @@ These instructions will get you a copy of the project up and running on your loc
 * catkin_make
 
 
-#### ROS EXAMPLES
+### ROS EXAMPLES
 ![valk](img/valk.jpg)
 ![nao](img/nao.jpg)
 
-
-##### Authors
+### Authors
 Stylianos Piperakis 
 ## License
 BSD 
