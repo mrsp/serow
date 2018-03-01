@@ -23,17 +23,20 @@ These instructions will get you a copy of the project up and running on your loc
 * rosbag play -s 1.0 --pause valk.bag
 * roslaunch humanoid_state_estimation humanoid_estimator_driver_valkyrie.launch
 * hit space to unpause the rosbag play
+
 ![valk](img/valk.jpg)
 ### NAO Walking on rough terrain outdoors
 * Download the nao bag file from [nao_bagfile](http://users.ics.forth.gr/~spiperakis/nao.bag)
 * roscore
-* rosbag play -s 1.0 --pause valk.bag
+* rosbag play --pause nao.bag
 * roslaunch humanoid_state_estimation humanoid_estimator_driver_nao.launch
 * hit space to unpause the rosbag play
+
 ![nao](img/nao.jpg)
 ### Launch on your Robot in real time
 * Specify topics on config/estimation.yaml
 * roslaunch humanoid_state_estimation humanoid_estimator_driver.launch
+* roslaunch rqt_reconfigure rqt_reconfigure (If you want to reconfiqure filter params online -> easy tuning).
 ## License
 [BSD](LICENSE) 
 
