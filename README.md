@@ -34,7 +34,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 ![nao](img/nao.jpg)
 ### Launch on your Robot in real time
-* Specify topics on config/estimation.yaml
+* Specify topics on config/estimation_params.yaml
 * roslaunch humanoid_state_estimation humanoid_estimator_driver.launch
 * roslaunch rqt_reconfigure rqt_reconfigure (If you want to reconfiqure filter params online -> easy tuning).
 ## License
