@@ -5,9 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
-        - /Estimated Support Pose1/Status1
-        - /Ground Truth CoM1/Status1
-        - /Ground Truth Odometry1/Status1
       Splitter Ratio: 0.733333
     Tree Height: 878
   - Class: rviz/Selection
@@ -288,15 +285,15 @@ Visualization Manager:
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 2.06736
-        Y: 0.114588
-        Z: 0.436131
+        X: 0.191224
+        Y: 0.264746
+        Z: 1.06887
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.714797
+      Pitch: 0.744797
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.19485
+      Yaw: 2.34486
     Saved: ~
 Window Geometry:
   Displays:

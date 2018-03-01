@@ -252,11 +252,12 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
 	ground_truth_odom_msg = *msg;
 	ground_truth_odom_inc = true;
-	Tib_gt.translation() = Vector3d(ground_truth_odom_msg.pose.pose.position.x-0.05,ground_truth_odom_msg.pose.pose.position.y+0.038,ground_truth_odom_msg.pose.pose.position.z-0.015);
+	ground_truth_odom_msg.pose.pose.position.x-=0.041177919;
+	ground_truth_odom_msg.pose.pose.position.y+=0.0411434806883;
+	ground_truth_odom_msg.pose.pose.position.z-=0.015050175;
+	Tib_gt.translation() = Vector3d(ground_truth_odom_msg.pose.pose.position.x,ground_truth_odom_msg.pose.pose.position.y,ground_truth_odom_msg.pose.pose.position.z);
 	qib_gt = Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x, ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
 	Tib_gt.linear() = qib_gt.toRotationMatrix();
-	vib_gt = Vector3d(ground_truth_odom_msg.twist.twist.linear.x,ground_truth_odom_msg.twist.twist.linear.y,twist.twist.linear.z);
-
 }
 
 void humanoid_ekf::subscribeToDS()
@@ -1028,17 +1029,8 @@ void humanoid_ekf::publishBodyEstimates() {
 		{
 			ground_truth_odom_path_msg.header.stamp = ros::Time::now();
 			ground_truth_odom_path_msg.header.frame_id = "odom";
-			temp_pose_msg.pose.position.x = Tib_gt.translation()(0);
-			temp_pose_msg.pose.position.y = Tib_gt.translation()(1);
-			temp_pose_msg.pose.position.z = Tib_gt.translation()(2);
-			temp_pose_msg.pose.orientation.x = qib_gt.x();
-			temp_pose_msg.pose.orientation.y = qib_gt.y();
-			temp_pose_msg.pose.orientation.z = qib_gt.z();
-			temp_pose_msg.pose.orientation.w = qib_gt.w();
-			temp_pose_msg.twist.linear.x = vib_gt(0);
-			temp_pose_msg.twist.linear.y = vib_gt(1);
-			temp_pose_msg.twist.linear.z = vib_gt(2);
-
+		
+			temp_pose_msg.pose = ground_truth_odom_msg.pose.pose;
 			ground_truth_odom_path_msg.poses.push_back(temp_pose_msg);
 			ground_truth_odom_path_pub.publish(ground_truth_odom_path_msg);
 

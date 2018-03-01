@@ -1,0 +1,3 @@
+<launch>
+        <param name="robot_description" command="cat $(find nao_walk)/share/urdf/nao.urdf" />
+</launch>
