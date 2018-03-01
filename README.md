@@ -17,6 +17,11 @@ These instructions will get you a copy of the project up and running on your loc
 
 
 ## ROS Examples
+*Download valkyrie bag file from http://users.ics.forth.gr/~spiperakis/valk.bag
+*roscore
+*rosbag play -s 1.0 --pause valk.bag
+*roslaunch humanoid_state_estimation humanoid_estimator_driver_valkyrie.launch
+*hit space to unpause the rosbag play
 ![valk](img/valk.jpg)
 ![nao](img/nao.jpg)
 
