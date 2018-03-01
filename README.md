@@ -18,7 +18,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 ## ROS Examples
 ### Valkyrie SRCsim
-* Download valkyrie bag file from [valk_bagfile](http://users.ics.forth.gr/~spiperakis/valk.bag)
+* Download the valkyrie bag file from [valk_bagfile](http://users.ics.forth.gr/~spiperakis/valk.bag)
 * roscore
 * rosbag play -s 1.0 --pause valk.bag
 * roslaunch humanoid_state_estimation humanoid_estimator_driver_valkyrie.launch
