@@ -37,7 +37,7 @@ These instructions will get you a copy of the project up and running on your loc
 * Feet Force Sensors  + Center of Pressure (COP) measurements in the local foot frame (e.g. topics /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP)
 
 ### Using our humanoid_fsr package
-If your robot is employed with feet force sensors and you have available a measurement for each sensor, then you can use our humanoid_fsr package to compute the COP and Force/Torque measurements in each leg.  This package automatically generates the required by SEROW /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP topics.
+If your robot is employed with feet force sensors and you have available a measurement for each sensor, then you can use our [humanoid_fsr](https://github.com/mrsp/humanoid_fsr) package to compute the COP and Force/Torque measurements in each leg.  This package automatically generates the required by SEROW /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP topics.
 
 
 ## ROS Examples
