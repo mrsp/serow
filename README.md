@@ -16,17 +16,17 @@ These instructions will get you a copy of the project up and running on your loc
 * catkin_make
 
 ## Minimum Robot Requirements
-### Using the Rigid Body Estimator to estimate 3D-Body Position/Orientation/Velocity, 3D-Support foot Position/Orientation and IMU biases.
+#### Using the Rigid Body Estimator to estimate 3D-Body Position/Orientation/Velocity, 3D-Support foot Position/Orientation and IMU biases.
 * Robot State Publisher (e.g. topics: /joint_states, /tf)
 * IMU (e.g. topic /imu0)
 * Feet Force Sensors for detecting contact (e.g. topic: /left_leg/force_torque_states, /right_leg/force_torque_states)
 
-### Using the full cascade framework (Rigid Body Estimator + CoM Estimator) to estimate 3D-Body Position/Orientation/Velocity, 3D-Support foot Position/Orientation and IMU biases, 3D-CoM Position/Velocity and 3D-External Forces on CoM.
+#### Using the full cascade framework (Rigid Body Estimator + CoM Estimator) to estimate 3D-Body Position/Orientation/Velocity, 3D-Support foot Position/Orientation and IMU biases, 3D-CoM Position/Velocity and 3D-External Forces on CoM.
 * Robot State Publisher (e.g. topics: /joint_states, /tf)
 * IMU(e.g. topic /imu0)
 * Feet Force Sensors  + Center of Pressure (COP) measurements in the local foot frame (e.g. topics /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP)
 
-### Using our humanoid_fsr package
+#### Using our humanoid_fsr package
 If your robot is employed with feet force sensors and you have available a measurement for each sensor, then you can use our humanoid_fsr package to compute the COP and Force/Torque measurements in each leg.  This package automatically generates the required by SEROW /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP topics.
 
 
