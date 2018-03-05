@@ -18,7 +18,7 @@ These instructions will get you a copy of the project up and running on your loc
 ## Minimum Robot Requirements
 ### Using the Rigid Body Estimator to estimate: 
 * 3D-Body Position/Orientation/Velocity
-* 3D-Support foot Position/Orientation
+* 3D-Support Foot Position/Orientation
 * IMU biases
 ### Requirements
 * Robot State Publisher (e.g. topics: /joint_states, /tf)
@@ -27,7 +27,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Using the full cascade framework (Rigid Body Estimator + CoM Estimator) to estimate:
 * 3D-Body Position/Orientation/Velocity
-* 3D-Support foot Position/Orientation
+* 3D-Support Foot Position/Orientation
 * IMU biases
 * 3D-CoM Position/Velocity
 * 3D-External Forces on CoM
