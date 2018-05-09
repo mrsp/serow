@@ -252,9 +252,6 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
 	ground_truth_odom_msg = *msg;
 	ground_truth_odom_inc = true;
-	ground_truth_odom_msg.pose.pose.position.x-=0.041177919;
-	ground_truth_odom_msg.pose.pose.position.y+=0.0411434806883;
-	ground_truth_odom_msg.pose.pose.position.z-=0.015050175;
 	Tib_gt.translation() = Vector3d(ground_truth_odom_msg.pose.pose.position.x,ground_truth_odom_msg.pose.pose.position.y,ground_truth_odom_msg.pose.pose.position.z);
 	qib_gt = Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x, ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
 	Tib_gt.linear() = qib_gt.toRotationMatrix();
@@ -1053,7 +1050,7 @@ void humanoid_ekf::publishBodyEstimates() {
 			ground_truth_odom_pub.publish(ground_truth_odom_msg);
 
 			ds_pub.publish(is_in_ds_msg);
-
+			
 
 
 		}
