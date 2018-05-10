@@ -74,10 +74,11 @@ private:
 	ros::NodeHandle n;
 
 	ros::Publisher bodyPose_est_pub, bodyVel_est_pub, bodyAcc_est_pub,supportPose_est_pub,
-	support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub,CoM_vel_pub,CoM_pos_pub, joint_filt_pub,
+	support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub,CoM_vel_pub,CoM_pos_pub, joint_filt_pub, rel_CoMPose_pub,
 	external_force_filt_pub, odom_est_pub, leg_odom_pub,support_path_pub, odom_path_pub, leg_odom_path_pub,com_path_pub,cop_path_pub,
-	ground_truth_odom_path_pub, ground_truth_com_path_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub;
-    ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub, ground_truth_odom_sub,ds_sub;
+	ground_truth_odom_path_pub, ground_truth_com_path_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub, rel_supportPose_pub,rel_swingPose_pub;
+    
+	ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub, ground_truth_odom_sub,ds_sub;
 	
 	double  freq, joint_freq, fsr_freq;
 	ros::Time Tbs_stamp, Tbsw_stamp;
@@ -97,13 +98,13 @@ private:
 	Affine3d T_B_I, T_B_P, Tib_gt;
 	Quaterniond q_B_I, q_B_P, qib_gt;
 	bool useJointKF, useCoMEKF, useLegOdom;
-    bool visualize_with_rviz;
+    bool visualize_with_rviz, debug_mode;
 	//ROS Messages
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
 	sensor_msgs::Imu imu_msg;
 	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg, ground_truth_com_odom_msg, CoM_odom_msg;
 	nav_msgs::Path odom_path_msg, leg_odom_path_msg, com_path_msg, cop_path_msg, support_path_msg, ground_truth_odom_path_msg, ground_truth_com_path_msg;
-	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg;
+	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg, rel_supportPose_msg, rel_swingPose_msg;
 	std_msgs::String support_leg_msg;
 	geometry_msgs::WrenchStamped RLeg_est_msg, LLeg_est_msg, lfsr_msg, rfsr_msg, external_force_filt_msg;
    
@@ -118,7 +119,7 @@ private:
 
 	tf::TransformListener Tbs_listener, Tbsw_listener;
 	tf::StampedTransform Tbs_tf, Tbsw_tf;
-	Quaterniond qbs, qbsw, qwb, qwb_;
+	Quaterniond qbs, qbsw, qwb, qwb_, qssw;
 	string base_link_frame, swing_foot_frame, support_foot_frame, lfoot_frame, rfoot_frame;
 	
 	tf::TransformListener Tfsr_listener;
@@ -146,7 +147,7 @@ private:
 
 	string support_leg, swing_leg;
 
-	Vector3d LLegGRF, RLegGRF;
+	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT;
   	Vector3d copl, copr;
 
 	Affine3d Tws, Twh, Twb, Twb_; //From support s to world frame;
