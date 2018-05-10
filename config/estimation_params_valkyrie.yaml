@@ -18,8 +18,10 @@ copr_topic: "/ihmc_ros/valkyrie/output/cop/right"
 
 visualize_with_rviz: true
 ground_truth: true
-ground_truth_odom_topic: "/ihmc_ros/valkyrie/output/robot_pose"
+ground_truth_odom_topic: "/valkyrie/ground_truth/odom"
 is_in_ds_topic: "/ihmc_ros/valkyrie/output/capturability/is_in_double_support"
+
+debug_mode: true
 #TF from IMU to Body
 T_B_I: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
 
