@@ -1309,59 +1309,59 @@ void humanoid_ekf::publishJointEstimates() {
 void humanoid_ekf::advertise() {
 
 	bodyPose_est_pub = n.advertise<geometry_msgs::PoseStamped>(
-	"/humanoid_estimator/body/pose", 1000);
+	"/humanoid_estimator/body/pose", 10);
 
 
 	bodyVel_est_pub = n.advertise<geometry_msgs::TwistStamped>(
-	"/humanoid_estimator/body/vel", 1000);
+	"/humanoid_estimator/body/vel", 10);
 
 	bodyAcc_est_pub = n.advertise<sensor_msgs::Imu>(
-	"/humanoid_estimator/body/acc", 1000);
+	"/humanoid_estimator/body/acc", 10);
 
 	supportPose_est_pub = n.advertise<geometry_msgs::PoseStamped>(
-	"/humanoid_estimator/support/pose", 1000);
+	"/humanoid_estimator/support/pose", 10);
 	
-	support_leg_pub = n.advertise<std_msgs::String>("/humanoid_estimator/support/leg",1000);		
+	support_leg_pub = n.advertise<std_msgs::String>("/humanoid_estimator/support/leg",10);		
 
-	odom_est_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/odom",1000);		
-	leg_odom_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/leg_odom",1000);
-	RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("humanoid_estimator/RLeg/GRF",1000);
-	LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("humanoid_estimator/LLeg/GRF",1000);
+	odom_est_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/odom",10);		
+	leg_odom_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/leg_odom",10);
+	RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("humanoid_estimator/RLeg/GRF",10);
+	LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("humanoid_estimator/LLeg/GRF",10);
 
 
-	COP_pub = n.advertise<geometry_msgs::PointStamped>("humanoid_estimator/COP",1000);
+	COP_pub = n.advertise<geometry_msgs::PointStamped>("humanoid_estimator/COP",10);
 
-	CoM_pos_pub = n.advertise<geometry_msgs::PointStamped>("humanoid_estimator/CoM/pos",1000);
-	CoM_vel_pub = n.advertise<geometry_msgs::TwistStamped>("humanoid_estimator/CoM/vel",1000);
-	CoM_odom_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/CoM/odom",1000);
+	CoM_pos_pub = n.advertise<geometry_msgs::PointStamped>("humanoid_estimator/CoM/pos",10);
+	CoM_vel_pub = n.advertise<geometry_msgs::TwistStamped>("humanoid_estimator/CoM/vel",10);
+	CoM_odom_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/CoM/odom",10);
 
-	joint_filt_pub =  n.advertise<sensor_msgs::JointState>("humanoid_estimator/joint_states",1000);
+	joint_filt_pub =  n.advertise<sensor_msgs::JointState>("humanoid_estimator/joint_states",10);
 
-	external_force_filt_pub = n.advertise<geometry_msgs::WrenchStamped>("humanoid_estimator/CoM/forces",1000);
+	external_force_filt_pub = n.advertise<geometry_msgs::WrenchStamped>("humanoid_estimator/CoM/forces",10);
 
 	if(visualize_with_rviz)
 	{
-		support_path_msg.poses.resize(1000);
-		odom_path_msg.poses.resize(1000);
-		leg_odom_path_msg.poses.resize(1000);
-		com_path_msg.poses.resize(1000);
-		cop_path_msg.poses.resize(1000);
-		support_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/support/path",1000);
-		odom_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/odom/path",1000);
-		leg_odom_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/leg_odom/path",1000);
-		com_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/CoM/path",1000);
-		cop_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/COP/path",1000);
-		ds_pub = n.advertise<std_msgs::Int32>("/humanoid_estimator/is_in_ds",1000);
+		support_path_msg.poses.resize(10);
+		odom_path_msg.poses.resize(10);
+		leg_odom_path_msg.poses.resize(10);
+		com_path_msg.poses.resize(10);
+		cop_path_msg.poses.resize(10);
+		support_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/support/path",2);
+		odom_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/odom/path",2);
+		leg_odom_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/leg_odom/path",2);
+		com_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/CoM/path",2);
+		cop_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/COP/path",2);
+		ds_pub = n.advertise<std_msgs::Int32>("/humanoid_estimator/is_in_ds",10);
 
 		if(ground_truth)
 		{
-			ground_truth_odom_path_msg.poses.resize(1000);
-			ground_truth_com_path_msg.poses.resize(1000);
-			ground_truth_odom_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/ground_truth/odom/path",1000);
-			ground_truth_com_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/ground_truth/com/path",1000);
+			ground_truth_odom_path_msg.poses.resize(100);
+			ground_truth_com_path_msg.poses.resize(100);
+			ground_truth_odom_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/ground_truth/odom/path",2);
+			ground_truth_com_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/ground_truth/com/path",2);
 			
-			ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/ground_truth/CoM/odom",1000);
-			ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/ground_truth/odom",1000);
+			ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/ground_truth/CoM/odom",2);
+			ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/ground_truth/odom",2);
 
 
 
@@ -1369,9 +1369,9 @@ void humanoid_ekf::advertise() {
 	}
 	if(debug_mode)
 	{
-		rel_supportPose_pub = n.advertise<geometry_msgs::PoseStamped>("/humanoid_estimator/rel_support/pose", 1000);
-		rel_swingPose_pub = n.advertise<geometry_msgs::PoseStamped>("/humanoid_estimator/rel_swing/pose", 1000);
-		rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("/humanoid_estimator/rel_CoM/pose", 1000);
+		rel_supportPose_pub = n.advertise<geometry_msgs::PoseStamped>("/humanoid_estimator/rel_support/pose", 10);
+		rel_swingPose_pub = n.advertise<geometry_msgs::PoseStamped>("/humanoid_estimator/rel_swing/pose", 10);
+		rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("/humanoid_estimator/rel_CoM/pose", 10);
 	}
 
 	
