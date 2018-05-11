@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package>
   <name>humanoid_state_estimation</name>
-  <version>0.0.0</version>
+  <version>1.0.0</version>
   <description>The humanoid_state_estimation package</description>
   <author email="spiperakis@ics.forth.gr">Stylianos Piperakis</author> 
   <maintainer email="spiperakis@ics.forth.gr">Stylianos Piperakis</maintainer>

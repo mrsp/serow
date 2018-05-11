@@ -364,8 +364,8 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 	//Initialization
 	init();
 
-	dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<humanoid_state_estimation::ParamControlConfig> >(n);
-    dynamic_reconfigure::Server<humanoid_state_estimation::ParamControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
+	dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<humanoid_state_estimation::VarianceControlConfig> >(n);
+    dynamic_reconfigure::Server<humanoid_state_estimation::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
     dynamic_recfg_->setCallback(cb);
 
 	// Load IMU parameters
@@ -392,12 +392,13 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 
 
 
-void humanoid_ekf::reconfigureCB(humanoid_state_estimation::ParamControlConfig& config, uint32_t level)
+void humanoid_ekf::reconfigureCB(humanoid_state_estimation::VarianceControlConfig& config, uint32_t level)
 {
 
       imuEKF->accb_qx = config.accb_qx;
       imuEKF->accb_qy = config.accb_qy;
       imuEKF->accb_qz = config.accb_qz;
+
       imuEKF->gyrb_qx = config.gyrb_qx;
       imuEKF->gyrb_qy = config.gyrb_qy;
       imuEKF->gyrb_qz = config.gyrb_qz;
@@ -405,6 +406,7 @@ void humanoid_ekf::reconfigureCB(humanoid_state_estimation::ParamControlConfig& 
       imuEKF->acc_qx = config.acc_qx;
       imuEKF->acc_qy = config.acc_qy;
       imuEKF->acc_qz = config.acc_qz;
+
       imuEKF->gyr_qx = config.gyr_qx;
       imuEKF->gyr_qy = config.gyr_qy;
       imuEKF->gyr_qz = config.gyr_qz;
@@ -412,6 +414,7 @@ void humanoid_ekf::reconfigureCB(humanoid_state_estimation::ParamControlConfig& 
       imuEKF->odom_px = config.odom_px; 
       imuEKF->odom_py = config.odom_py; 
       imuEKF->odom_pz = config.odom_pz; 
+
       imuEKF->odom_ax = config.odom_ax; 
       imuEKF->odom_ay = config.odom_ay; 
       imuEKF->odom_az = config.odom_az; 
@@ -420,6 +423,7 @@ void humanoid_ekf::reconfigureCB(humanoid_state_estimation::ParamControlConfig& 
       imuEKF->support_qpx = config.support_qpx; 
       imuEKF->support_qpy = config.support_qpy; 
       imuEKF->support_qpz = config.support_qpz; 
+
       imuEKF->support_qax = config.support_qax; 
       imuEKF->support_qay = config.support_qay; 
       imuEKF->support_qaz = config.support_qaz; 
@@ -427,6 +431,7 @@ void humanoid_ekf::reconfigureCB(humanoid_state_estimation::ParamControlConfig& 
       imuEKF->support_px = config.support_px; 
       imuEKF->support_py = config.support_py; 
       imuEKF->support_pz = config.support_pz; 
+	  
       imuEKF->support_ax = config.support_ax; 
       imuEKF->support_ay = config.support_ay; 
       imuEKF->support_az = config.support_az; 
@@ -535,7 +540,7 @@ void humanoid_ekf::init() {
 
 void humanoid_ekf::run() {
 	
-	static ros::Rate rate(freq);  //ROS Node Loop Rate
+	static ros::Rate rate(1.05*freq);  //ROS Node Loop Rate
 	while (ros::ok()){
 		predictWithImu = false;
 		predictWithCoM = false;
@@ -620,7 +625,6 @@ void humanoid_ekf::estimateWithIMUEKF()
 			//Update EKF
 			if(firstUpdate){
 				pos_update = Twb.translation();
-				cout<<Twb.translation()<<endl;
 				q_update = qwb;
 				//First Update
 				firstUpdate = false;
