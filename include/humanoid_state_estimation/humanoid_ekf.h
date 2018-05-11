@@ -60,7 +60,7 @@
 
 #include <hrl_kinematics/Kinematics.h>
 #include <dynamic_reconfigure/server.h>
-#include <humanoid_state_estimation/ParamControlConfig.h>
+#include "humanoid_state_estimation/VarianceControlConfig.h"
 
 
 
@@ -126,7 +126,7 @@ private:
 	tf::StampedTransform Tfsr_tf;
 
 
-    boost::shared_ptr< dynamic_reconfigure::Server<humanoid_state_estimation::ParamControlConfig> > dynamic_recfg_;
+    boost::shared_ptr< dynamic_reconfigure::Server<humanoid_state_estimation::VarianceControlConfig> > dynamic_recfg_;
 
 	// get joint positions from state message
   	std::map<std::string, double> joint_map;
@@ -258,7 +258,7 @@ public:
 	void loadCoMEKFparams();
 	void loadJointKFparams();
 	// General Methods
-	void reconfigureCB(humanoid_state_estimation::ParamControlConfig& config, uint32_t level);
+	void reconfigureCB(humanoid_state_estimation::VarianceControlConfig& config, uint32_t level);
 	void run();
 
 	bool connected();
