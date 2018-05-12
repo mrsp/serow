@@ -56,8 +56,12 @@ void humanoid_ekf::loadparams() {
 	n_p.param<bool>("debug_mode",debug_mode,false);
 	if(ground_truth){
 		n_p.param<std::string>("ground_truth_odom_topic", ground_truth_odom_topic,"ground_truth");
+		n_p.param<std::string>("ground_truth_com_topic", ground_truth_com_topic,"ground_truth_com");
 		n_p.param<std::string>("is_in_ds_topic", is_in_ds_topic,"is_in_ds_topic");
-
+	}
+	n_p.param<bool>("comp_with",comp_with,false);
+	if(comp_with){
+		n_p.param<std::string>("comp_with_odom_topic", comp_with_odom_topic,"compare_with_odom");
 	}
 	if(!useLegOdom){
 		std::vector<double> pose_list;
@@ -201,138 +205,6 @@ void humanoid_ekf::loadCoMEKFparams() {
 }
 
 
-void humanoid_ekf::subscribeToJointState()
-{
-	joint_state_sub = n.subscribe(joint_state_topic,1000,&humanoid_ekf::joint_stateCb,this);
-}
-
-void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
-{
-	joint_state_msg = *msg;
-	joint_inc = true;
-
-	if(firstJoint && useJointKF)
-	{
-		number_of_joints = joint_state_msg.name.size();
-		JointKF = new JointSSKF*[number_of_joints];
-		for (unsigned int i=0; i<number_of_joints; i++){
-			JointKF[i] = new JointSSKF();									
-			JointKF[i]->init(joint_state_msg.name[i]);
-			JointKF[i]->setdt(1.0/joint_freq);
-		}
-		firstJoint = false;
-	}
-
-	for (unsigned int i=0; i< joint_state_msg.name.size(); i++){
-		joint_map.insert(make_pair(joint_state_msg.name[i], joint_state_msg.position[i]));
-		if(useJointKF && !firstJoint)
-			JointKF[i]->filter(joint_state_msg.position[i]);
-	}
-
-}
-
-void humanoid_ekf::subscribeToOdom()
-{
-	odom_sub = n.subscribe(odom_topic,1000,&humanoid_ekf::odomCb,this);
-}
-void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
-{
-	odom_msg = *msg;
-	odom_inc = true;
-	if(firstOdom){
-		odom_msg_ = odom_msg;
-		firstOdom = false;
-	}
-}
-
-void humanoid_ekf::subscribeToGroundTruth()
-{
-	ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic,1000,&humanoid_ekf::ground_truth_odomCb,this);
-}
-void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
-{
-	ground_truth_odom_msg = *msg;
-	ground_truth_odom_inc = true;
-	Tib_gt.translation() = Vector3d(ground_truth_odom_msg.pose.pose.position.x,ground_truth_odom_msg.pose.pose.position.y,ground_truth_odom_msg.pose.pose.position.z);
-	qib_gt = Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x, ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
-	Tib_gt.linear() = qib_gt.toRotationMatrix();
-}
-
-void humanoid_ekf::subscribeToDS()
-{
-	ds_sub = n.subscribe(is_in_ds_topic,1000,&humanoid_ekf::is_in_dsCb,this);
-}
-void humanoid_ekf::is_in_dsCb(const std_msgs::Bool::ConstPtr& msg)
-{
-	 if(msg->data)
-		is_in_ds_msg.data = 1;
-	 else
-		is_in_ds_msg.data = 0;
-}
-
-
-
-
-void humanoid_ekf::subscribeToIMU()
-{
-	imu_sub = n.subscribe(imu_topic,1000,&humanoid_ekf::imuCb,this);
-}
-void humanoid_ekf::imuCb(const sensor_msgs::Imu::ConstPtr& msg)
-{
-	imu_msg = *msg;
-	imu_inc = true;
-}
-
-void humanoid_ekf::subscribeToFSR()
-{
-	//Left Foot Wrench
-	lfsr_sub = n.subscribe(lfsr_topic,1000,&humanoid_ekf::lfsrCb,this);
-	//Right Foot Wrench
-	rfsr_sub = n.subscribe(rfsr_topic,1000,&humanoid_ekf::rfsrCb,this);
-	//Left COP
-	copl_sub = n.subscribe(copr_topic,1000,&humanoid_ekf::coprCb,this);
-	//Right COP
-	copr_sub = n.subscribe(copl_topic,1000,&humanoid_ekf::coplCb,this);
-}
-
-void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
-{
-	lfsr_msg = *msg;
-	fsr_inc = true;
-}
-void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
-{
-	rfsr_msg = *msg;
-}
-
-void humanoid_ekf::coplCb(const geometry_msgs::PointStamped::ConstPtr& msg)
-{
-	copl_msg = *msg;
-}
-void humanoid_ekf::coprCb(const geometry_msgs::PointStamped::ConstPtr& msg)
-{
-	copr_msg = *msg;
-}
-
-
-
-
-void humanoid_ekf::subscribeToPose()
-{
-	pose_sub = n.subscribe(pose_topic,1000,&humanoid_ekf::poseCb,this);
-}
-
-
-
-void humanoid_ekf::poseCb(const geometry_msgs::PoseStamped::ConstPtr& msg)
-{
-	pose_msg = *msg;
-	pose_inc = true;
-	if(firstPose){
-		pose_msg_ = pose_msg;
-		firstPose = false;
-	}
-}
 
 humanoid_ekf::humanoid_ekf() 
 {
@@ -473,8 +345,12 @@ void humanoid_ekf::subscribe()
 
 	if(ground_truth){
 		subscribeToGroundTruth();
+		subscribeToGroundTruthCoM();
 		subscribeToDS();
 	}
+	if(comp_with)
+			subscribeToCompOdom();
+
 	ros::Duration(1.0).sleep();
 }
 
@@ -534,6 +410,8 @@ void humanoid_ekf::init() {
 	no_motion_it_threshold = 500;
 	Tbs_stamp = ros::Time::now();
 	Tbsw_stamp = ros::Time::now();
+	lcount = 0;
+	rcount = 0;
 }
 
 
@@ -560,8 +438,7 @@ void humanoid_ekf::run() {
 			estimateWithIMUEKF();
 			if(useCoMEKF)
 				estimateWithCoMEKF();
-			// std::cout << "COMX" << nipmEKF->comX << "COMY" << nipmEKF->comY
-			// 	<< "COMZ" << nipmEKF->comZ << std::endl;
+
 			//Publish Data
 			publishBodyEstimates();
 			publishSupportEstimates();
@@ -594,7 +471,6 @@ void humanoid_ekf::estimateWithIMUEKF()
 			imuEKF->firstrun = false;
 		}
 		//Compute the attitude and posture with the IMU-Kinematics Fusion
-
 		//Predict with the IMU gyro and acceleration
 		if(imu_inc && !predictWithImu && !imuEKF->firstrun){
 			imuEKF->predict( T_B_I.linear() * Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z),
@@ -698,7 +574,7 @@ void humanoid_ekf::estimateWithIMUEKF()
 	// 	cout<<"ax"<<imuEKF->bias_ax<<endl;
 	// 	cout<<"ay"<<imuEKF->bias_ay<<endl;
 	// 	cout<<"az"<<imuEKF->bias_az<<endl;
-	// cout<<"gx"<<imuEKF->bias_gx<<endl;
+	//  cout<<"gx"<<imuEKF->bias_gx<<endl;
 	// 	cout<<"gy"<<imuEKF->bias_gy<<endl;
 	// 	cout<<"gz"<<imuEKF->bias_gz<<endl;
 }
@@ -880,30 +756,45 @@ void humanoid_ekf::determineLegContact() {
 		firstContact = false;
 	}
 	else{
-	//Determine if the Support Foot changed (Striking Contact)	
+	//Determine if the Support Foot changed  
 		if (support_leg == "RLeg")
 		{
-			if (LLegGRF(2) > LLegUpThres  && RLegGRF(2) < LosingContact)
+			if (LLegGRF(2) > LLegUpThres  && LLegGRF(2) < StrikingContact)
 			{
-				support_leg = "LLeg";
-				support_foot_frame = lfoot_frame;
-				swing_leg = "RLeg";
-				swing_foot_frame = rfoot_frame;			
-				legSwitch = true;
+				lcount++;
+				if(lcount>3)
+				{
+					support_leg = "LLeg";
+					support_foot_frame = lfoot_frame;
+					swing_leg = "RLeg";
+					swing_foot_frame = rfoot_frame;			
+					legSwitch = true;
+					lcount=0;
+				}
 			}
+			else
+				lcount = 0;
 		}
-		if (support_leg == "LLeg")
-		{
-			if ( LLegGRF(2) < LLegLowThres && RLegGRF(2) > StrikingContact)
+		else{
+			if (LLegGRF(2) < LLegLowThres && RLegGRF(2) < StrikingContact)
 			{
-				support_leg = "RLeg";
-				support_foot_frame = rfoot_frame;
-				swing_leg = "LLeg";
-				swing_foot_frame = lfoot_frame;			
-				legSwitch = true;
+				rcount++;
+				if(rcount>3)
+				{
+					support_leg = "RLeg";
+					support_foot_frame = rfoot_frame;
+					swing_leg = "LLeg";
+					swing_foot_frame = lfoot_frame;			
+					legSwitch = true;
+					rcount=0;
+				}
 			}
+			else
+				rcount = 0;
 		}
-	}
+	 }
+  
+
 }
 
 
@@ -1047,9 +938,7 @@ void humanoid_ekf::publishBodyEstimates() {
 
 			ground_truth_com_path_msg.header.stamp = ros::Time::now();
 			ground_truth_com_path_msg.header.frame_id = "odom";
-			temp_pose_msg.pose.position.x = CoM_gt(0);
-			temp_pose_msg.pose.position.y = CoM_gt(1);
-			temp_pose_msg.pose.position.z = CoM_gt(2);
+			temp_pose_msg.pose = ground_truth_com_odom_msg.pose.pose;
 			ground_truth_com_path_msg.poses.push_back(temp_pose_msg);
 			ground_truth_com_path_pub.publish(ground_truth_com_path_msg);
 
@@ -1067,6 +956,14 @@ void humanoid_ekf::publishBodyEstimates() {
 			
 
 
+		}
+		if(comp_with){
+			comp_odom_msg.header = odom_est_msg.header;
+			comp_odom_pub.publish(comp_odom_msg);
+			comp_odom_path_msg.header = odom_est_msg.header;
+			temp_pose_msg.pose = comp_odom_msg.pose.pose;
+			comp_odom_path_msg.poses.push_back(temp_pose_msg);
+			comp_odom_path_pub.publish(comp_odom_path_msg);
 		}
 	}
 
@@ -1313,35 +1210,35 @@ void humanoid_ekf::publishJointEstimates() {
 void humanoid_ekf::advertise() {
 
 	bodyPose_est_pub = n.advertise<geometry_msgs::PoseStamped>(
-	"/humanoid_estimator/body/pose", 10);
+	"/SERoW/body/pose", 10);
 
 
 	bodyVel_est_pub = n.advertise<geometry_msgs::TwistStamped>(
-	"/humanoid_estimator/body/vel", 10);
+	"/SERoW/body/vel", 10);
 
 	bodyAcc_est_pub = n.advertise<sensor_msgs::Imu>(
-	"/humanoid_estimator/body/acc", 10);
+	"/SERoW/body/acc", 10);
 
 	supportPose_est_pub = n.advertise<geometry_msgs::PoseStamped>(
-	"/humanoid_estimator/support/pose", 10);
+	"/SERoW/support/pose", 10);
 	
-	support_leg_pub = n.advertise<std_msgs::String>("/humanoid_estimator/support/leg",10);		
+	support_leg_pub = n.advertise<std_msgs::String>("/SERoW/support/leg",10);		
 
-	odom_est_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/odom",10);		
-	leg_odom_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/leg_odom",10);
-	RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("humanoid_estimator/RLeg/GRF",10);
-	LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("humanoid_estimator/LLeg/GRF",10);
+	odom_est_pub = n.advertise<nav_msgs::Odometry>("/SERoW/odom",10);		
+	leg_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/leg_odom",10);
+	RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RLeg/GRF",10);
+	LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LLeg/GRF",10);
 
 
-	COP_pub = n.advertise<geometry_msgs::PointStamped>("humanoid_estimator/COP",10);
+	COP_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/COP",10);
 
-	CoM_pos_pub = n.advertise<geometry_msgs::PointStamped>("humanoid_estimator/CoM/pos",10);
-	CoM_vel_pub = n.advertise<geometry_msgs::TwistStamped>("humanoid_estimator/CoM/vel",10);
-	CoM_odom_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/CoM/odom",10);
+	CoM_pos_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/CoM/pos",10);
+	CoM_vel_pub = n.advertise<geometry_msgs::TwistStamped>("SERoW/CoM/vel",10);
+	CoM_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/CoM/odom",10);
 
-	joint_filt_pub =  n.advertise<sensor_msgs::JointState>("humanoid_estimator/joint_states",10);
+	joint_filt_pub =  n.advertise<sensor_msgs::JointState>("/SERoW/joint_states",10);
 
-	external_force_filt_pub = n.advertise<geometry_msgs::WrenchStamped>("humanoid_estimator/CoM/forces",10);
+	external_force_filt_pub = n.advertise<geometry_msgs::WrenchStamped>("/SERoW/CoM/forces",10);
 
 	if(visualize_with_rviz)
 	{
@@ -1350,33 +1247,194 @@ void humanoid_ekf::advertise() {
 		leg_odom_path_msg.poses.resize(10);
 		com_path_msg.poses.resize(10);
 		cop_path_msg.poses.resize(10);
-		support_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/support/path",2);
-		odom_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/odom/path",2);
-		leg_odom_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/leg_odom/path",2);
-		com_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/CoM/path",2);
-		cop_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/COP/path",2);
-		ds_pub = n.advertise<std_msgs::Int32>("/humanoid_estimator/is_in_ds",10);
+		support_path_pub = n.advertise<nav_msgs::Path>("/SERoW/support/path",2);
+		odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/odom/path",2);
+		leg_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/leg_odom/path",2);
+		com_path_pub = n.advertise<nav_msgs::Path>("/SERoW/CoM/path",2);
+		cop_path_pub = n.advertise<nav_msgs::Path>("/SERoW/COP/path",2);
+		ds_pub = n.advertise<std_msgs::Int32>("/SERoW/is_in_ds",10);
 
 		if(ground_truth)
 		{
-			ground_truth_odom_path_msg.poses.resize(100);
-			ground_truth_com_path_msg.poses.resize(100);
-			ground_truth_odom_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/ground_truth/odom/path",2);
-			ground_truth_com_path_pub = n.advertise<nav_msgs::Path>("/humanoid_estimator/ground_truth/com/path",2);
+			ground_truth_odom_path_msg.poses.resize(10);
+			ground_truth_com_path_msg.poses.resize(10);
+			ground_truth_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/ground_truth/odom/path",2);
+			ground_truth_com_path_pub = n.advertise<nav_msgs::Path>("/SERoW/ground_truth/CoM/path",2);
 			
-			ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/ground_truth/CoM/odom",2);
-			ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/humanoid_estimator/ground_truth/odom",2);
-
-
-
+			ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/CoM/odom",2);
+			ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/odom",2);
 		}
+		if(comp_with){
+			comp_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom",2);
+			comp_odom_path_msg.poses.resize(10);
+			comp_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/comp/odom/path",10);
+		}
+			
 	}
 	if(debug_mode)
 	{
-		rel_supportPose_pub = n.advertise<geometry_msgs::PoseStamped>("/humanoid_estimator/rel_support/pose", 10);
-		rel_swingPose_pub = n.advertise<geometry_msgs::PoseStamped>("/humanoid_estimator/rel_swing/pose", 10);
-		rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("/humanoid_estimator/rel_CoM/pose", 10);
+		rel_supportPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_support/pose", 10);
+		rel_swingPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_swing/pose", 10);
+		rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_CoM/pose", 10);
 	}
 
 	
+}
+
+
+void humanoid_ekf::subscribeToJointState()
+{
+	joint_state_sub = n.subscribe(joint_state_topic,1000,&humanoid_ekf::joint_stateCb,this);
+}
+
+void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
+{
+	joint_state_msg = *msg;
+	joint_inc = true;
+
+	if(firstJoint && useJointKF)
+	{
+		number_of_joints = joint_state_msg.name.size();
+		JointKF = new JointSSKF*[number_of_joints];
+		for (unsigned int i=0; i<number_of_joints; i++){
+			JointKF[i] = new JointSSKF();									
+			JointKF[i]->init(joint_state_msg.name[i]);
+			JointKF[i]->setdt(1.0/joint_freq);
+		}
+		firstJoint = false;
+	}
+
+	for (unsigned int i=0; i< joint_state_msg.name.size(); i++){
+		joint_map.insert(make_pair(joint_state_msg.name[i], joint_state_msg.position[i]));
+		if(useJointKF && !firstJoint)
+			JointKF[i]->filter(joint_state_msg.position[i]);
+	}
+
+}
+
+void humanoid_ekf::subscribeToOdom()
+{
+	odom_sub = n.subscribe(odom_topic,1000,&humanoid_ekf::odomCb,this);
+}
+
+void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
+{
+	odom_msg = *msg;
+	odom_inc = true;
+	if(firstOdom){
+		odom_msg_ = odom_msg;
+		firstOdom = false;
+	}
+}
+
+
+void humanoid_ekf::subscribeToCompOdom()
+{
+	compodom_sub = n.subscribe(comp_with_odom_topic,1000,&humanoid_ekf::compodomCb,this);
+}
+
+void humanoid_ekf::compodomCb(const nav_msgs::Odometry::ConstPtr& msg)
+{
+	comp_odom_msg = *msg;
+}
+
+
+void humanoid_ekf::subscribeToGroundTruth()
+{
+	ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic,1000,&humanoid_ekf::ground_truth_odomCb,this);
+}
+void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
+{
+	ground_truth_odom_msg = *msg;
+	ground_truth_odom_inc = true;
+	Tib_gt.translation() = Vector3d(ground_truth_odom_msg.pose.pose.position.x,ground_truth_odom_msg.pose.pose.position.y,ground_truth_odom_msg.pose.pose.position.z);
+	qib_gt = Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x, ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
+	Tib_gt.linear() = qib_gt.toRotationMatrix();
+}
+
+void humanoid_ekf::subscribeToGroundTruthCoM()
+{
+	ground_truth_com_sub = n.subscribe(ground_truth_com_topic,1000,&humanoid_ekf::ground_truth_comCb,this);
+}
+void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
+{
+	ground_truth_com_odom_msg = *msg;
+}
+
+
+
+
+
+void humanoid_ekf::subscribeToDS()
+{
+	ds_sub = n.subscribe(is_in_ds_topic,1000,&humanoid_ekf::is_in_dsCb,this);
+}
+void humanoid_ekf::is_in_dsCb(const std_msgs::Bool::ConstPtr& msg)
+{
+	 if(msg->data)
+		is_in_ds_msg.data = 1;
+	 else
+		is_in_ds_msg.data = 0;
+}
+
+
+
+
+void humanoid_ekf::subscribeToIMU()
+{
+	imu_sub = n.subscribe(imu_topic,1000,&humanoid_ekf::imuCb,this);
+}
+void humanoid_ekf::imuCb(const sensor_msgs::Imu::ConstPtr& msg)
+{
+	imu_msg = *msg;
+	imu_inc = true;
+}
+
+void humanoid_ekf::subscribeToFSR()
+{
+	//Left Foot Wrench
+	lfsr_sub = n.subscribe(lfsr_topic,1000,&humanoid_ekf::lfsrCb,this);
+	//Right Foot Wrench
+	rfsr_sub = n.subscribe(rfsr_topic,1000,&humanoid_ekf::rfsrCb,this);
+	//Left COP
+	copl_sub = n.subscribe(copr_topic,1000,&humanoid_ekf::coprCb,this);
+	//Right COP
+	copr_sub = n.subscribe(copl_topic,1000,&humanoid_ekf::coplCb,this);
+}
+
+void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
+{
+	lfsr_msg = *msg;
+	fsr_inc = true;
+}
+void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
+{
+	rfsr_msg = *msg;
+}
+
+void humanoid_ekf::coplCb(const geometry_msgs::PointStamped::ConstPtr& msg)
+{
+	copl_msg = *msg;
+}
+void humanoid_ekf::coprCb(const geometry_msgs::PointStamped::ConstPtr& msg)
+{
+	copr_msg = *msg;
+}
+
+
+
+
+void humanoid_ekf::subscribeToPose()
+{
+	pose_sub = n.subscribe(pose_topic,1000,&humanoid_ekf::poseCb,this);
+}
+
+void humanoid_ekf::poseCb(const geometry_msgs::PoseStamped::ConstPtr& msg)
+{
+	pose_msg = *msg;
+	pose_inc = true;
+	if(firstPose){
+		pose_msg_ = pose_msg;
+		firstPose = false;
+	}
 }

@@ -17,11 +17,16 @@ copl_topic: "/ihmc_ros/valkyrie/output/cop/left"
 copr_topic: "/ihmc_ros/valkyrie/output/cop/right"
 
 visualize_with_rviz: true
+#Ground-Truth
 ground_truth: true
 ground_truth_odom_topic: "/valkyrie/ground_truth/odom"
-is_in_ds_topic: "/ihmc_ros/valkyrie/output/capturability/is_in_double_support"
+ground_truth_com_topic: "/valkyrie/ground_truth/CoM"
 
+is_in_ds_topic: "/ihmc_ros/valkyrie/output/capturability/is_in_double_support"
+#To publish relative data
 debug_mode: true
+comp_with: true
+comp_with_odom_topic: "/ihmc_ros/valkyrie/output/robot_pose"
 #TF from IMU to Body
 T_B_I: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
 
@@ -36,10 +41,10 @@ joint_topic_freq: 500
 fsr_topic_freq: 500  
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 1050 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 950 #Schmitt Trigger Low Threshold in Newtons (N)
+LLegUpThres: 800 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 700 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 300
-StrikingContact: 600
+StrikingContact: 1000
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: false #Use a Steady State KF in every joint
 
