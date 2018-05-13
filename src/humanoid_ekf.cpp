@@ -54,6 +54,9 @@ void humanoid_ekf::loadparams() {
 	n_p.param<bool>("visualize_with_rviz",visualize_with_rviz,true);
 	n_p.param<bool>("ground_truth",ground_truth,false);
 	n_p.param<bool>("debug_mode",debug_mode,false);
+	n_p.param<bool>("support_idx_provided",support_idx_provided,false);
+	if(support_idx_provided)
+		n_p.param<std::string>("support_idx_topic", support_idx_topic,"support_idx");
 	if(ground_truth){
 		n_p.param<std::string>("ground_truth_odom_topic", ground_truth_odom_topic,"ground_truth");
 		n_p.param<std::string>("ground_truth_com_topic", ground_truth_com_topic,"ground_truth_com");
@@ -349,7 +352,10 @@ void humanoid_ekf::subscribe()
 		subscribeToDS();
 	}
 	if(comp_with)
-			subscribeToCompOdom();
+		subscribeToCompOdom();
+
+	if(support_idx_provided)
+		subscribeToSupportIdx();
 
 	ros::Duration(1.0).sleep();
 }
@@ -586,9 +592,6 @@ void humanoid_ekf::estimateWithCoMEKF()
 			kin->computeCOM(joint_map, com, mass,tf_right_foot,  tf_left_foot);
 			CoM_enc << com.x(), com.y(), com.z();
 
-			if(ground_truth && ground_truth_odom_inc)
-				CoM_gt = Tib_gt * CoM_enc; 
-
 
 
 			if (nipmEKF->firstrun){
@@ -756,46 +759,47 @@ void humanoid_ekf::determineLegContact() {
 		firstContact = false;
 	}
 	else{
-	//Determine if the Support Foot changed  
-		if (support_leg == "RLeg")
-		{
-			if (LLegGRF(2) > LLegUpThres  && LLegGRF(2) < StrikingContact)
+		if(!support_idx_provided){
+		//Determine if the Support Foot changed  
+			if (support_leg == "RLeg")
 			{
-				lcount++;
-				if(lcount>3)
+				if (LLegGRF(2) > LLegUpThres  && LLegGRF(2) < StrikingContact)
 				{
-					support_leg = "LLeg";
-					support_foot_frame = lfoot_frame;
-					swing_leg = "RLeg";
-					swing_foot_frame = rfoot_frame;			
-					legSwitch = true;
-					lcount=0;
+					lcount++;
+					if(lcount>3)
+					{
+						support_leg = "LLeg";
+						support_foot_frame = lfoot_frame;
+						swing_leg = "RLeg";
+						swing_foot_frame = rfoot_frame;			
+						legSwitch = true;
+						lcount=0;
+					}
 				}
+				else
+					lcount = 0;
 			}
-			else
-				lcount = 0;
-		}
-		else{
-			if (LLegGRF(2) < LLegLowThres && RLegGRF(2) < StrikingContact)
-			{
-				rcount++;
-				if(rcount>3)
+			else{
+				if (LLegGRF(2) < LLegLowThres && RLegGRF(2) < StrikingContact)
 				{
-					support_leg = "RLeg";
-					support_foot_frame = rfoot_frame;
-					swing_leg = "LLeg";
-					swing_foot_frame = lfoot_frame;			
-					legSwitch = true;
-					rcount=0;
+					rcount++;
+					if(rcount>3)
+					{
+						support_leg = "RLeg";
+						support_foot_frame = rfoot_frame;
+						swing_leg = "LLeg";
+						swing_foot_frame = lfoot_frame;			
+						legSwitch = true;
+						rcount=0;
+					}
 				}
+				else
+					rcount = 0;
 			}
-			else
-				rcount = 0;
 		}
-	 }
-  
-
+	}
 }
+  
 
 
 
@@ -1346,10 +1350,6 @@ void humanoid_ekf::subscribeToGroundTruth()
 void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
 	ground_truth_odom_msg = *msg;
-	ground_truth_odom_inc = true;
-	Tib_gt.translation() = Vector3d(ground_truth_odom_msg.pose.pose.position.x,ground_truth_odom_msg.pose.pose.position.y,ground_truth_odom_msg.pose.pose.position.z);
-	qib_gt = Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x, ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
-	Tib_gt.linear() = qib_gt.toRotationMatrix();
 }
 
 void humanoid_ekf::subscribeToGroundTruthCoM()
@@ -1361,6 +1361,33 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 	ground_truth_com_odom_msg = *msg;
 }
 
+
+
+
+void humanoid_ekf::subscribeToSupportIdx()
+{
+	support_idx_sub = n.subscribe(support_idx_topic,1000,&humanoid_ekf::support_idxCb,this);
+}
+void humanoid_ekf::support_idxCb(const std_msgs::Int32::ConstPtr& msg)
+{
+	 support_idx_msg = *msg;
+	 if(support_idx_msg.data == 1){
+					support_leg = "LLeg";
+					swing_leg = "RLeg";
+					support_foot_frame = lfoot_frame;
+					swing_foot_frame = rfoot_frame;
+					legSwitch = true;
+
+	  }
+	  else
+	  {
+					support_leg = "RLeg";
+					swing_leg = "LLeg";
+					support_foot_frame = rfoot_frame;
+					swing_foot_frame = lfoot_frame;
+					legSwitch = true;
+	  }
+}
 
 
 

@@ -152,7 +152,7 @@ Visualization Manager:
       Radius: 0.03
       Shaft Diameter: 0.1
       Shaft Length: 0.1
-      Topic: /humanoid_estimator/support/path
+      Topic: /SERoW/support/path
       Unreliable: false
       Value: true
     - Alpha: 1
@@ -258,7 +258,7 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz/Path
       Color: 25; 255; 0
-      Enabled: false
+      Enabled: true
       Head Diameter: 0.3
       Head Length: 0.2
       Length: 0.3
@@ -276,7 +276,7 @@ Visualization Manager:
       Shaft Length: 0.1
       Topic: /SERoW/comp/odom/path
       Unreliable: false
-      Value: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
@@ -301,22 +301,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 7.37742
+      Distance: 2.1402
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 3.45997
-        Y: 1.72653
-        Z: 2.13479
+        X: -0.155324
+        Y: 0.451971
+        Z: 3.26245
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.169797
+      Pitch: 0.899796
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.57986
+      Yaw: 2.94487
     Saved: ~
 Window Geometry:
   Displays:
