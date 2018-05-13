@@ -76,9 +76,11 @@ private:
 	ros::Publisher bodyPose_est_pub, bodyVel_est_pub, bodyAcc_est_pub,supportPose_est_pub,  comp_odom_pub, comp_odom_path_pub,
 	support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub,CoM_vel_pub,CoM_pos_pub, joint_filt_pub, rel_CoMPose_pub,
 	external_force_filt_pub, odom_est_pub, leg_odom_pub,support_path_pub, odom_path_pub, leg_odom_path_pub,com_path_pub,cop_path_pub,
-	ground_truth_odom_path_pub, ground_truth_com_path_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub, rel_supportPose_pub,rel_swingPose_pub;
+	ground_truth_odom_path_pub, ground_truth_com_path_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub, 
+	rel_supportPose_pub,rel_swingPose_pub;
     
-	ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub, ground_truth_odom_sub,ds_sub, compodom_sub, ground_truth_com_sub;
+	ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub,
+	ground_truth_odom_sub,ds_sub, compodom_sub, ground_truth_com_sub,support_idx_sub;
 	
 	double  freq, joint_freq, fsr_freq;
 	ros::Time Tbs_stamp, Tbsw_stamp;
@@ -111,11 +113,11 @@ private:
     geometry_msgs::PoseStamped bodyPose_est_msg, supportPose_est_msg;
 	geometry_msgs::TwistStamped bodyVel_est_msg, CoM_vel_msg;
 	sensor_msgs::Imu  bodyAcc_est_msg;
-	std_msgs::Int32 is_in_ds_msg;
+	std_msgs::Int32 is_in_ds_msg, support_idx_msg;
 	geometry_msgs::PointStamped COP_msg, copl_msg, copr_msg, CoM_pos_msg;
 
 	// Helper
-	bool is_connected_, ground_truth;
+	bool is_connected_, ground_truth, support_idx_provided;
 
 	tf::TransformListener Tbs_listener, Tbsw_listener;
 	tf::StampedTransform Tbs_tf, Tbsw_tf;
@@ -166,7 +168,7 @@ private:
 	 string imu_topic;
 	 string joint_state_topic;
 	 string odom_topic;
-	 string ground_truth_odom_topic, is_in_ds_topic, comp_with_odom_topic, ground_truth_com_topic;
+	 string ground_truth_odom_topic, is_in_ds_topic, comp_with_odom_topic, ground_truth_com_topic, support_idx_topic;
 
 	 bool usePoseUpdate;
 
@@ -181,6 +183,8 @@ private:
 	 void subscribeToGroundTruthCoM();
 	 void ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void subscribeToDS();
+	 void subscribeToSupportIdx();
+	 void support_idxCb(const std_msgs::Int32::ConstPtr& msg);
 	 void is_in_dsCb(const std_msgs::Bool::ConstPtr& msg);
 	 void ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void imuCb(const sensor_msgs::Imu::ConstPtr& msg);
