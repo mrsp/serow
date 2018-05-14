@@ -112,11 +112,11 @@ void humanoid_ekf::loadparams() {
 	n_p.param<std::string>("odom_topic", odom_topic,"odom");
 	n_p.param<std::string>("imu_topic", imu_topic,"imu");
 	n_p.param<std::string>("joint_state_topic", joint_state_topic,"joint_states");
-	n_p.param<std::string>("lfoot_force_torque_topic",lfsr_topic,"LfsrFL");
-	n_p.param<std::string>("rfoot_force_torque_topic",rfsr_topic,"LfsrFR");
+	n_p.param<std::string>("lfoot_force_torque_topic",lfsr_topic,"force_torque/left");
+	n_p.param<std::string>("rfoot_force_torque_topic",rfsr_topic,"force_torque/right");
 
-	n_p.param<std::string>("copl_topic",copl_topic,"LfsrFL");
-	n_p.param<std::string>("copr_topic",copr_topic,"LfsrFR");
+	n_p.param<std::string>("copl_topic",copl_topic,"cop/left");
+	n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
 
 	n_p.param<bool>("estimateCoM", useCoMEKF,false);
 	n_p.param<bool>("estimateJoints", useJointKF,false);
@@ -424,7 +424,7 @@ void humanoid_ekf::init() {
 
 void humanoid_ekf::run() {
 	
-	static ros::Rate rate(1.05*freq);  //ROS Node Loop Rate
+	static ros::Rate rate(1.0*freq);  //ROS Node Loop Rate
 	while (ros::ok()){
 		predictWithImu = false;
 		predictWithCoM = false;
@@ -1258,11 +1258,12 @@ void humanoid_ekf::advertise() {
 
 	if(visualize_with_rviz)
 	{
-		support_path_msg.poses.resize(10);
-		odom_path_msg.poses.resize(10);
-		leg_odom_path_msg.poses.resize(10);
-		com_path_msg.poses.resize(10);
-		cop_path_msg.poses.resize(10);
+		support_path_msg.poses.resize(2);
+		odom_path_msg.poses.resize(2);
+		leg_odom_path_msg.poses.resize(2);
+		com_path_msg.poses.resize(2);
+		cop_path_msg.poses.resize(2);
+        
 		support_path_pub = n.advertise<nav_msgs::Path>("/SERoW/support/path",2);
 		odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/odom/path",2);
 		leg_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/leg_odom/path",2);
@@ -1271,27 +1272,27 @@ void humanoid_ekf::advertise() {
 
 		if(ground_truth)
 		{
-			ground_truth_odom_path_msg.poses.resize(10);
-			ground_truth_com_path_msg.poses.resize(10);
+			ground_truth_odom_path_msg.poses.resize(2);
+			ground_truth_com_path_msg.poses.resize(2);
 			ground_truth_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/ground_truth/odom/path",2);
 			ground_truth_com_path_pub = n.advertise<nav_msgs::Path>("/SERoW/ground_truth/CoM/path",2);
 		}
 		if(comp_with){
-			comp_odom_path_msg.poses.resize(10);
-			comp_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/comp/odom/path",10);
+			comp_odom_path_msg.poses.resize(2);
+			comp_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/comp/odom/path",2);
 		}
 			
 	}
 	if(ground_truth)
 	{
-		ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/CoM/odom",2);
-		ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/odom",2);
+		ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/CoM/odom",10);
+		ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/odom",10);
 		ds_pub = n.advertise<std_msgs::Int32>("/SERoW/is_in_ds",10);
 
 	}
 	if(comp_with)
 	{
-		comp_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom",2);
+		comp_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom",10);
 
 	}
 
