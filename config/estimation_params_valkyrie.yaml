@@ -7,7 +7,7 @@ rfoot: "rightCOP_Frame"
 #ROS Topic Names
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "" #only if usePoseUpdate is true
-useLegOdom: false
+useLegOdom: true
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/pelvisMiddleImu/imu"
 joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
@@ -16,7 +16,7 @@ rfoot_force_torque_topic: "/ihmc_ros/valkyrie/output/foot_force_sensor/right"
 copl_topic: "/ihmc_ros/valkyrie/output/cop/left"
 copr_topic: "/ihmc_ros/valkyrie/output/cop/right"
 
-visualize_with_rviz: true
+visualize_with_rviz: false
 #Ground-Truth
 ground_truth: true
 ground_truth_odom_topic: "/valkyrie/ground_truth/odom"
