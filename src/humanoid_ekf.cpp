@@ -51,7 +51,7 @@ void humanoid_ekf::loadparams() {
 	n_p.param<double>("StrikingContact", StrikingContact,10.0);
 	n_p.param<bool>("useLegOdom",useLegOdom,false);
 	n_p.param<bool>("usePoseUpdate",usePoseUpdate,false);
-	n_p.param<bool>("visualize_with_rviz",visualize_with_rviz,true);
+	n_p.param<bool>("visualize_with_rviz",visualize_with_rviz,false);
 	n_p.param<bool>("ground_truth",ground_truth,false);
 	n_p.param<bool>("debug_mode",debug_mode,false);
 	n_p.param<bool>("support_idx_provided",support_idx_provided,false);
@@ -899,19 +899,37 @@ void humanoid_ekf::publishBodyEstimates() {
     //odom_est_msg.pose.covariance[i] = 0;
 	odom_est_pub.publish(odom_est_msg);
 
-	leg_odom_msg.header.stamp=ros::Time::now();
-	leg_odom_msg.header.frame_id = "odom";
-	leg_odom_msg.pose.pose.position.x = Twb.translation()(0);
-	leg_odom_msg.pose.pose.position.y = Twb.translation()(1);
-	leg_odom_msg.pose.pose.position.z = Twb.translation()(2);
-	leg_odom_msg.pose.pose.orientation.x = qwb.x();
-	leg_odom_msg.pose.pose.orientation.y = qwb.y();
-	leg_odom_msg.pose.pose.orientation.z = qwb.z();
-	leg_odom_msg.pose.pose.orientation.w = qwb.w();
-	leg_odom_pub.publish(leg_odom_msg);
+
+	if(debug_mode){
+		leg_odom_msg.header.stamp=ros::Time::now();
+		leg_odom_msg.header.frame_id = "odom";
+		leg_odom_msg.pose.pose.position.x = Twb.translation()(0);
+		leg_odom_msg.pose.pose.position.y = Twb.translation()(1);
+		leg_odom_msg.pose.pose.position.z = Twb.translation()(2);
+		leg_odom_msg.pose.pose.orientation.x = qwb.x();
+		leg_odom_msg.pose.pose.orientation.y = qwb.y();
+		leg_odom_msg.pose.pose.orientation.z = qwb.z();
+		leg_odom_msg.pose.pose.orientation.w = qwb.w();
+		leg_odom_pub.publish(leg_odom_msg);
+	}
+
+	if(ground_truth)
+	{
+			ground_truth_com_odom_msg.header.stamp = ros::Time::now();
+			ground_truth_com_odom_msg.header.frame_id = "odom";
+			ground_truth_com_odom_msg.pose.pose = temp_pose_msg.pose;
+			ground_truth_com_pub.publish(ground_truth_com_odom_msg);
 
 
+			ground_truth_odom_msg.header.frame_id = "odom";
+			ground_truth_odom_pub.publish(ground_truth_odom_msg);
 
+			ds_pub.publish(is_in_ds_msg);
+	}
+	if(comp_with){
+			comp_odom_msg.header = odom_est_msg.header;
+			comp_odom_pub.publish(comp_odom_msg);
+	}
 	if(visualize_with_rviz)
 	{
 		odom_path_msg.header = odom_est_msg.header;
@@ -947,21 +965,9 @@ void humanoid_ekf::publishBodyEstimates() {
 			ground_truth_com_path_pub.publish(ground_truth_com_path_msg);
 
 
-			ground_truth_com_odom_msg.header.stamp = ros::Time::now();
-			ground_truth_com_odom_msg.header.frame_id = "odom";
-			ground_truth_com_odom_msg.pose.pose = temp_pose_msg.pose;
-			ground_truth_com_pub.publish(ground_truth_com_odom_msg);
-
-
-			ground_truth_odom_msg.header.frame_id = "odom";
-			ground_truth_odom_pub.publish(ground_truth_odom_msg);
-
-			ds_pub.publish(is_in_ds_msg);
-			
-
-
 		}
-		if(comp_with){
+		if(comp_with)
+		{
 			comp_odom_msg.header = odom_est_msg.header;
 			comp_odom_pub.publish(comp_odom_msg);
 			comp_odom_path_msg.header = odom_est_msg.header;
@@ -1026,26 +1032,34 @@ void humanoid_ekf::publishContact() {
 }
 
 void humanoid_ekf::publishGRF() {
-	LLeg_est_msg.wrench.force.x = LLegGRF(0);
-	LLeg_est_msg.wrench.force.y = LLegGRF(1);
-	LLeg_est_msg.wrench.force.z = LLegGRF(2);
-	LLeg_est_msg.wrench.torque.x = LLegGRT(0);
-	LLeg_est_msg.wrench.torque.y = LLegGRT(1);
-	LLeg_est_msg.wrench.torque.z = LLegGRT(2);
 
-	LLeg_est_msg.header.frame_id = lfoot_frame;
-	LLeg_est_msg.header.stamp = ros::Time::now();
-	LLeg_est_pub.publish(LLeg_est_msg);
+	if(debug_mode){
+		LLeg_est_msg.wrench.force.x = LLegGRF(0);
+		LLeg_est_msg.wrench.force.y = LLegGRF(1);
+		LLeg_est_msg.wrench.force.z = LLegGRF(2);
+		LLeg_est_msg.wrench.torque.x = LLegGRT(0);
+		LLeg_est_msg.wrench.torque.y = LLegGRT(1);
+		LLeg_est_msg.wrench.torque.z = LLegGRT(2);
 
-	RLeg_est_msg.wrench.force.x = RLegGRF(0);
-	RLeg_est_msg.wrench.force.y = RLegGRF(1);
-	RLeg_est_msg.wrench.force.z = RLegGRF(2);
-	RLeg_est_msg.wrench.torque.x = RLegGRT(0);
-	RLeg_est_msg.wrench.torque.y = RLegGRT(1);
-	RLeg_est_msg.wrench.torque.z = RLegGRT(2);
-	RLeg_est_msg.header.frame_id = rfoot_frame;
-	RLeg_est_msg.header.stamp = ros::Time::now();
-	RLeg_est_pub.publish(RLeg_est_msg);
+		LLeg_est_msg.header.frame_id = lfoot_frame;
+		LLeg_est_msg.header.stamp = ros::Time::now();
+		LLeg_est_pub.publish(LLeg_est_msg);
+
+		RLeg_est_msg.wrench.force.x = RLegGRF(0);
+		RLeg_est_msg.wrench.force.y = RLegGRF(1);
+		RLeg_est_msg.wrench.force.z = RLegGRF(2);
+		RLeg_est_msg.wrench.torque.x = RLegGRT(0);
+		RLeg_est_msg.wrench.torque.y = RLegGRT(1);
+		RLeg_est_msg.wrench.torque.z = RLegGRT(2);
+		RLeg_est_msg.header.frame_id = rfoot_frame;
+		RLeg_est_msg.header.stamp = ros::Time::now();
+		RLeg_est_pub.publish(RLeg_est_msg);
+	}
+
+
+
+
+
 
 }
 
@@ -1229,9 +1243,7 @@ void humanoid_ekf::advertise() {
 	support_leg_pub = n.advertise<std_msgs::String>("/SERoW/support/leg",10);		
 
 	odom_est_pub = n.advertise<nav_msgs::Odometry>("/SERoW/odom",10);		
-	leg_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/leg_odom",10);
-	RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RLeg/GRF",10);
-	LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LLeg/GRF",10);
+	
 
 
 	COP_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/COP",10);
@@ -1256,7 +1268,6 @@ void humanoid_ekf::advertise() {
 		leg_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/leg_odom/path",2);
 		com_path_pub = n.advertise<nav_msgs::Path>("/SERoW/CoM/path",2);
 		cop_path_pub = n.advertise<nav_msgs::Path>("/SERoW/COP/path",2);
-		ds_pub = n.advertise<std_msgs::Int32>("/SERoW/is_in_ds",10);
 
 		if(ground_truth)
 		{
@@ -1264,22 +1275,34 @@ void humanoid_ekf::advertise() {
 			ground_truth_com_path_msg.poses.resize(10);
 			ground_truth_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/ground_truth/odom/path",2);
 			ground_truth_com_path_pub = n.advertise<nav_msgs::Path>("/SERoW/ground_truth/CoM/path",2);
-			
-			ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/CoM/odom",2);
-			ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/odom",2);
 		}
 		if(comp_with){
-			comp_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom",2);
 			comp_odom_path_msg.poses.resize(10);
 			comp_odom_path_pub = n.advertise<nav_msgs::Path>("/SERoW/comp/odom/path",10);
 		}
 			
 	}
+	if(ground_truth)
+	{
+		ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/CoM/odom",2);
+		ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/odom",2);
+		ds_pub = n.advertise<std_msgs::Int32>("/SERoW/is_in_ds",10);
+
+	}
+	if(comp_with)
+	{
+		comp_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom",2);
+
+	}
+
 	if(debug_mode)
 	{
 		rel_supportPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_support/pose", 10);
 		rel_swingPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_swing/pose", 10);
 		rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_CoM/pose", 10);
+		leg_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/leg_odom",10);
+		RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RLeg/GRF",10);
+		LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LLeg/GRF",10);
 	}
 
 	
