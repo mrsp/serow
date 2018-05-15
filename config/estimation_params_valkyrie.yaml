@@ -18,7 +18,7 @@ copr_topic: "/ihmc_ros/valkyrie/output/cop/right"
 
 visualize_with_rviz: false
 #Ground-Truth
-ground_truth: true
+ground_truth: false
 ground_truth_odom_topic: "/valkyrie/ground_truth/odom"
 ground_truth_com_topic: "/valkyrie/ground_truth/CoM"
 
@@ -29,7 +29,7 @@ support_idx_topic: "/ihmc_ros/valkyrie/output/support_idx"
 
 #To publish relative data
 debug_mode: true
-comp_with: true
+comp_with: false
 comp_with_odom_topic: "/ihmc_ros/valkyrie/output/robot_pose"
 #TF from IMU to Body
 T_B_I: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
@@ -59,10 +59,10 @@ estimateJoints: false #Use a Steady State KF in every joint
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  0.00000001 #continous
-gyroscope_bias_random_walk: 4.1884e-10 #continous
-accelerometer_noise_density: 0.00005 #m/s^2/sqrt(Hz) #continous
-gyroscope_noise_density: 0.000002 #rad/s/sqrt(Hz) #continous
+accelerometer_bias_random_walk:  0.0001 #continous
+gyroscope_bias_random_walk: 4.1884e-7 #continous
+accelerometer_noise_density: 0.0017 #m/s^2/sqrt(Hz) #continous
+gyroscope_noise_density: 0.00002 #rad/s/sqrt(Hz) #continous
 #Support Foot/Orientation STD w.r.t World Frame
 support_position_random_walk: 2.0e-05  #m
 support_orientation_random_walk: 2.0e-05  #rad
@@ -70,13 +70,13 @@ support_orientation_random_walk: 2.0e-05  #rad
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 5.0e-06
-odom_orientation_noise_density: 5.0e-06
+odom_position_noise_density: 2.0e-05
+odom_orientation_noise_density: 2.0e-05
 
 
 #Support Foot/Orientation STD w.r.t Body Frame
-support_position_noise_density: 4.0e-05
-support_orientation_noise_density: 4.0e-05
+support_position_noise_density: 5.0e-05
+support_orientation_noise_density: 5.0e-05
 
 
 #IMU Initial Biases
@@ -104,16 +104,16 @@ estimateCoM: true   #Use the CoM EKF
 
 
 #Process Noise
-com_position_random_walk: 1.0e-5 #in m
-com_velocity_random_walk: 1.0e-3 #in m/s
-external_force_random_walk: 2.5      #in Newtons
+com_position_random_walk: 1.0e-6 #in m
+com_velocity_random_walk: 1.0e-4 #in m/s
+external_force_random_walk: 1.0      #in Newtons
 #Measurment Noise
-com_position_noise_density: 1.0e-04  #CoM position in m
-com_acceleration_noise_density: 2.5.0e-02 #CoM Acceleration in m/s^2
+com_position_noise_density: 5.0e-04  #CoM position in m
+com_acceleration_noise_density: 2.5e-01 #CoM Acceleration in m/s^2
 #Initial errors in External Forces
-bias_fx: 100  #in Newtons
-bias_fy: 100
-bias_fz: 100
+bias_fx: 0  #in Newtons
+bias_fy: 0
+bias_fz: 0
 #Gyro LPF
 useGyroLPF: false
 #Cutt-off Frequencies

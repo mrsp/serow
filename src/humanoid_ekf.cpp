@@ -917,10 +917,9 @@ void humanoid_ekf::publishBodyEstimates() {
 	{
 			ground_truth_com_odom_msg.header.stamp = ros::Time::now();
 			ground_truth_com_odom_msg.header.frame_id = "odom";
-			ground_truth_com_odom_msg.pose.pose = temp_pose_msg.pose;
 			ground_truth_com_pub.publish(ground_truth_com_odom_msg);
 
-
+			ground_truth_odom_msg.header.stamp = ros::Time::now();
 			ground_truth_odom_msg.header.frame_id = "odom";
 			ground_truth_odom_pub.publish(ground_truth_odom_msg);
 
