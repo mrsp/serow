@@ -183,7 +183,7 @@ Visualization Manager:
       Axes Radius: 0.02
       Class: rviz/Pose
       Color: 255; 25; 0
-      Enabled: true
+      Enabled: false
       Head Length: 0.3
       Head Radius: 0.1
       Name: Estimated Body Pose
@@ -192,13 +192,13 @@ Visualization Manager:
       Shape: Axes
       Topic: /SERoW/body/pose
       Unreliable: false
-      Value: true
+      Value: false
     - Alpha: 1
       Axes Length: 0.25
       Axes Radius: 0.02
       Class: rviz/Pose
       Color: 255; 25; 0
-      Enabled: true
+      Enabled: false
       Head Length: 0.1
       Head Radius: 0.05
       Name: Estimated Support Pose
@@ -207,7 +207,7 @@ Visualization Manager:
       Shape: Axes
       Topic: /SERoW/support/pose
       Unreliable: false
-      Value: true
+      Value: false
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -301,22 +301,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.62655
+      Distance: 1.7955
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.155324
-        Y: 0.451971
-        Z: 3.26245
+        X: 0.563694
+        Y: 0.564141
+        Z: 3.55245
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.899796
+      Pitch: 1.1898
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.94487
+      Yaw: 3.19487
     Saved: ~
 Window Geometry:
   Displays:
