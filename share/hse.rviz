@@ -66,29 +66,6 @@ Visualization Manager:
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
-      Color: 170; 0; 0
-      Enabled: false
-      Head Diameter: 0.3
-      Head Length: 0.2
-      Length: 0.3
-      Line Style: Lines
-      Line Width: 0.03
-      Name: Estimated COP Trajectory
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Pose Color: 255; 85; 255
-      Pose Style: None
-      Radius: 0.03
-      Shaft Diameter: 0.1
-      Shaft Length: 0.1
-      Topic: /SERoW/COP/path
-      Unreliable: false
-      Value: false
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz/Path
       Color: 85; 255; 255
       Enabled: true
       Head Diameter: 0.3
@@ -106,7 +83,7 @@ Visualization Manager:
       Radius: 0.03
       Shaft Diameter: 0.1
       Shaft Length: 0.1
-      Topic: /SERoW/CoM/path
+      Topic: /SERoW/CoM/odom/path
       Unreliable: false
       Value: true
     - Alpha: 1
@@ -183,7 +160,7 @@ Visualization Manager:
       Axes Radius: 0.02
       Class: rviz/Pose
       Color: 255; 25; 0
-      Enabled: false
+      Enabled: true
       Head Length: 0.3
       Head Radius: 0.1
       Name: Estimated Body Pose
@@ -192,13 +169,13 @@ Visualization Manager:
       Shape: Axes
       Topic: /SERoW/body/pose
       Unreliable: false
-      Value: false
+      Value: true
     - Alpha: 1
       Axes Length: 0.25
       Axes Radius: 0.02
       Class: rviz/Pose
       Color: 255; 25; 0
-      Enabled: false
+      Enabled: true
       Head Length: 0.1
       Head Radius: 0.05
       Name: Estimated Support Pose
@@ -207,7 +184,7 @@ Visualization Manager:
       Shape: Axes
       Topic: /SERoW/support/pose
       Unreliable: false
-      Value: false
+      Value: true
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -228,7 +205,7 @@ Visualization Manager:
       Radius: 0.03
       Shaft Diameter: 0.1
       Shaft Length: 0.1
-      Topic: /SERoW/ground_truth/CoM/path
+      Topic: /SERoW/ground_truth/CoM/odom/path
       Unreliable: false
       Value: true
     - Alpha: 1
@@ -258,7 +235,7 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz/Path
       Color: 25; 255; 0
-      Enabled: false
+      Enabled: true
       Head Diameter: 0.3
       Head Length: 0.2
       Length: 0.3
@@ -276,7 +253,7 @@ Visualization Manager:
       Shaft Length: 0.1
       Topic: /SERoW/comp/odom/path
       Unreliable: false
-      Value: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 0; 0; 0
@@ -301,22 +278,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.7955
+      Distance: 0.691485
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.563694
-        Y: 0.564141
-        Z: 3.55245
+        X: 0.616177
+        Y: 1.33475
+        Z: 3.01575
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 1.1898
+      Pitch: 1.1998
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.19487
+      Yaw: 0.32987
     Saved: ~
 Window Geometry:
   Displays:

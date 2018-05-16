@@ -6,5 +6,4 @@
  	<!-- Load configurations from YAML file to parameter server -->
    	 <rosparam file="$(find humanoid_state_estimation)/config/estimation_params_valkyrie.yaml" command="load"/> 
   </node>
-<node pkg = "rviz" type = "rviz" respawn = "false" name = "rviz" output = "screen" args ="-d $(find humanoid_state_estimation)/share/hse.rviz"> </node>
 </launch>
