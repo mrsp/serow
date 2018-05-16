@@ -63,7 +63,8 @@ void humanoid_ekf::loadparams() {
 	}
 	n_p.param<bool>("comp_with",comp_with,false);
 	if(comp_with){
-		n_p.param<std::string>("comp_with_odom_topic", comp_with_odom_topic,"compare_with_odom");
+		n_p.param<std::string>("comp_with_odom0_topic", comp_with_odom0_topic,"compare_with_odom0");
+		n_p.param<std::string>("comp_with_odom1_topic", comp_with_odom1_topic,"compare_with_odom1");
 	}
 	if(!useLegOdom){
 		std::vector<double> pose_list;
@@ -925,8 +926,11 @@ void humanoid_ekf::publishBodyEstimates() {
 			ds_pub.publish(is_in_ds_msg);
 	}
 	if(comp_with){
-			comp_odom_msg.header = odom_est_msg.header;
-			comp_odom_pub.publish(comp_odom_msg);
+			comp_odom0_msg.header = odom_est_msg.header;
+			comp_odom0_pub.publish(comp_odom0_msg);
+
+			comp_odom1_msg.header = odom_est_msg.header;
+			comp_odom1_pub.publish(comp_odom1_msg);
 	}
 	
 
@@ -1197,8 +1201,8 @@ void humanoid_ekf::advertise() {
 	}
 	if(comp_with)
 	{
-		comp_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom",10);
-
+		comp_odom0_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom0",10);
+		comp_odom1_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom1",10);
 	}
 
 	if(debug_mode)
@@ -1263,14 +1267,18 @@ void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToCompOdom()
 {
-	compodom_sub = n.subscribe(comp_with_odom_topic,1000,&humanoid_ekf::compodomCb,this);
+	compodom0_sub = n.subscribe(comp_with_odom0_topic,1000,&humanoid_ekf::compodom0Cb,this);
+	compodom1_sub = n.subscribe(comp_with_odom1_topic,1000,&humanoid_ekf::compodom1Cb,this);
 }
 
-void humanoid_ekf::compodomCb(const nav_msgs::Odometry::ConstPtr& msg)
+void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
 {
-	comp_odom_msg = *msg;
+	comp_odom0_msg = *msg;
 }
-
+void humanoid_ekf::compodom1Cb(const nav_msgs::Odometry::ConstPtr& msg)
+{
+	comp_odom1_msg = *msg;
+}
 
 void humanoid_ekf::subscribeToGroundTruth()
 {

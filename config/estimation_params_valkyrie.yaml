@@ -7,7 +7,7 @@ rfoot: "rightCOP_Frame"
 #ROS Topic Names
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "" #only if usePoseUpdate is true
-useLegOdom: true
+useLegOdom: false
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/pelvisMiddleImu/imu"
 joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
@@ -30,7 +30,8 @@ support_idx_topic: "/ihmc_ros/valkyrie/output/support_idx"
 #To publish relative data
 debug_mode: true
 comp_with: true
-comp_with_odom_topic: "/ihmc_ros/valkyrie/output/visual_odom"
+comp_with_odom0_topic: "/ihmc_ros/valkyrie/output/visual_odom"
+comp_with_odom1_topic: "/ihmc_ros/valkyrie/output/external_odom"
 #TF from IMU to Body
 T_B_I: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
 
