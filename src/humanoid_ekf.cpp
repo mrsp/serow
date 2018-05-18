@@ -733,19 +733,19 @@ void humanoid_ekf::computeKinTFs() {
 	if (support_inc)
 	{
 		Tsb = Tbs.inverse();
-		//Tssw = isNear(Tssw,Tsb * Tbsw, 1e-2,1e-2,5e-2); //needed by COP
-		Tssw = Tsb*Tbsw;
+		Tssw = isNear(Tssw,Tsb * Tbsw, 1e-2,1e-2,5e-2); //needed by COP
+		//Tssw = Tsb*Tbsw;
 		qssw = Quaterniond(Tssw.linear());		
 		
 		if(legSwitch){
 			//If Support foot changed update the support foot - world TF
-			Tws = Tws * Tssw.inverse();
-			//Tws = isNear(Tws, Tws * Tssw.inverse(), 1e-2, 1e-2, 5e-2); //needed by COP
+			//Tws = Tws * Tssw.inverse();
+			Tws = isNear(Tws, Tws * Tssw.inverse(), 1e-2, 1e-2, 5e-2); //needed by COP
 			legSwitch=false;
 		}
 		Twb_ = Twb;
-		Twb = Tws * Tsb;
-		//Twb = isNear(Twb, Tws * Tsb, 5e-3, 5e-3, 5e-3);
+		//Twb = Tws * Tsb;
+		Twb = isNear(Twb, Tws * Tsb, 5e-3, 5e-3, 5e-3);
 
 		//Race Condition safe first run
 		if(firstrun){
