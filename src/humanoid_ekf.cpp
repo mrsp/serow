@@ -577,6 +577,7 @@ void humanoid_ekf::estimateWithIMUEKF()
 			imuEKF->updateWithSupport(Tbs.translation(),qbs);
 			support_inc=false;
 		}
+		
 	// 	cout<<"ax"<<imuEKF->bias_ax<<endl;
 	// 	cout<<"ay"<<imuEKF->bias_ay<<endl;
 	// 	cout<<"az"<<imuEKF->bias_az<<endl;
@@ -589,10 +590,8 @@ void humanoid_ekf::estimateWithIMUEKF()
 void humanoid_ekf::estimateWithCoMEKF()
 {
 	if(joint_inc){
-			kin->computeCOM(joint_map, com, mass,tf_right_foot,  tf_left_foot);
+			//kin->computeCOM(joint_map, com, mass,tf_right_foot,  tf_left_foot);
 			CoM_enc << com.x(), com.y(), com.z();
-
-
 
 			if (nipmEKF->firstrun){
 				nipmEKF->setdt(1.0/fsr_freq);
@@ -660,61 +659,93 @@ void humanoid_ekf::computeRGRF()
 
 void humanoid_ekf::computeKinTFs() {
 
-	try{
-		Tbs_listener.lookupTransform(base_link_frame, support_foot_frame,  
-						ros::Time(0), Tbs_tf);
+	// try{
+	// 	Tbs_listener.lookupTransform(base_link_frame, support_foot_frame,  
+	// 					ros::Time(0), Tbs_tf);
 		
-		if(Tbs_tf.stamp_ !=	Tbs_stamp)
-		{
-			Tbs_.translation() << Tbs_tf.getOrigin().x(), Tbs_tf.getOrigin().y(), Tbs_tf.getOrigin().z();
-			qbs = Quaterniond(Tbs_tf.getRotation().w(), Tbs_tf.getRotation().x(), Tbs_tf.getRotation().y(), Tbs_tf.getRotation().z());
-			Tbs_.linear() = qbs.toRotationMatrix();
-			Tbs = isNear(Tbs, Tbs_, 5e-3, 5e-3, 5e-3);
-			Tbs_stamp = Tbs_tf.stamp_;
-			support_inc = true;
-		}
-	}
-	catch (tf::TransformException ex){
-		ROS_ERROR("%s",ex.what());
-	}
+	// 	if(Tbs_tf.stamp_ !=	Tbs_stamp)
+	// 	{
+	// 		Tbs_.translation() << Tbs_tf.getOrigin().x(), Tbs_tf.getOrigin().y(), Tbs_tf.getOrigin().z();
+	// 		qbs = Quaterniond(Tbs_tf.getRotation().w(), Tbs_tf.getRotation().x(), Tbs_tf.getRotation().y(), Tbs_tf.getRotation().z());
+	// 		Tbs_.linear() = qbs.toRotationMatrix();
+	// 		Tbs = Tbs_;
+	// 		//Tbs = isNear(Tbs, Tbs_, 5e-3, 5e-3, 5e-3);
+	// 		Tbs_stamp = Tbs_tf.stamp_;
+	// 		support_inc = true;
+	// 	}
+	// }
+	// catch (tf::TransformException ex){
+	// 	ROS_ERROR("%s",ex.what());
+	// }
+	// try{
+	// 	Tbsw_listener.lookupTransform(base_link_frame, swing_foot_frame,  
+	// 			ros::Time(0), Tbsw_tf);
+	// 	if(Tbsw_tf.stamp_ != Tbsw_stamp){
+	// 		Tbsw_.translation() << Tbsw_tf.getOrigin().x(), Tbsw_tf.getOrigin().y(), Tbsw_tf.getOrigin().z();
+	// 		qbsw = Quaterniond(Tbsw_tf.getRotation().w(), Tbsw_tf.getRotation().x(), Tbsw_tf.getRotation().y(), Tbsw_tf.getRotation().z());
+	// 		Tbsw_.linear() = qbsw.toRotationMatrix();
+	// 		Tbsw = Tbsw_;
+	// 		//Tbsw = isNear(Tbsw, Tbsw_, 5e-3, 5e-3, 5e-3);
+	// 		Tbsw_stamp = Tbsw_tf.stamp_;
+	// 		swing_inc = true;
+	// 	}
+	// }
+	// catch (tf::TransformException ex){
+	// 	ROS_ERROR("%s",ex.what());
+	// }
+
+
+
+
 	
+
+	kin->computeCOM(joint_map, com, mass,tf_right_foot,  tf_left_foot);
+	if(support_leg=="LLeg")
+	{
+
+		Tbs.translation() << tf_left_foot.getOrigin().x(), tf_left_foot.getOrigin().y(), tf_left_foot.getOrigin().z();
+		qbs = Quaterniond(tf_left_foot.getRotation().w(), tf_left_foot.getRotation().x(), tf_left_foot.getRotation().y(), tf_left_foot.getRotation().z());
+		Tbsw.translation() << tf_right_foot.getOrigin().x(), tf_right_foot.getOrigin().y(), tf_right_foot.getOrigin().z();
+		qbsw = Quaterniond(tf_right_foot.getRotation().w(), tf_right_foot.getRotation().x(), tf_right_foot.getRotation().y(), tf_right_foot.getRotation().z());
+		support_inc = true;
+
+	
+	}
+	else
+	{
+
+		Tbs.translation() << tf_right_foot.getOrigin().x(), tf_right_foot.getOrigin().y(), tf_right_foot.getOrigin().z();
+		qbs = Quaterniond(tf_right_foot.getRotation().w(), tf_right_foot.getRotation().x(), tf_right_foot.getRotation().y(), tf_right_foot.getRotation().z());
+		Tbsw.translation() << tf_left_foot.getOrigin().x(), tf_left_foot.getOrigin().y(), tf_left_foot.getOrigin().z();
+		qbsw = Quaterniond(tf_left_foot.getRotation().w(), tf_left_foot.getRotation().x(), tf_left_foot.getRotation().y(), tf_left_foot.getRotation().z());
+		support_inc = true;
+
+
+	}
+
 	//TF Initialization
 	if (firstrun && support_inc){
 			Tws.translation() << 0.00, Tbs.translation()(1), 0.00;
 			Tws.linear() = Tbs.linear();
 	}
 
-	try{
-		Tbsw_listener.lookupTransform(base_link_frame, swing_foot_frame,  
-				ros::Time(0), Tbsw_tf);
-		if(Tbsw_tf.stamp_ != Tbsw_stamp){
-			Tbsw_.translation() << Tbsw_tf.getOrigin().x(), Tbsw_tf.getOrigin().y(), Tbsw_tf.getOrigin().z();
-			qbsw = Quaterniond(Tbsw_tf.getRotation().w(), Tbsw_tf.getRotation().x(), Tbsw_tf.getRotation().y(), Tbsw_tf.getRotation().z());
-			Tbsw_.linear() = qbsw.toRotationMatrix();
-			Tbsw = isNear(Tbsw, Tbsw_, 5e-3, 5e-3, 5e-3);
-			Tbsw_stamp = Tbsw_tf.stamp_;
-			swing_inc = true;
-		}
-	}
-	catch (tf::TransformException ex){
-		ROS_ERROR("%s",ex.what());
-	}
 
-	if (support_inc && swing_inc)
+	if (support_inc)
 	{
 		Tsb = Tbs.inverse();
-		Tssw = isNear(Tssw,Tsb * Tbsw, 1e-2,1e-2,5e-2); //needed by COP
-		//Tssw = Tsb*Tbsw;
+		//Tssw = isNear(Tssw,Tsb * Tbsw, 1e-2,1e-2,5e-2); //needed by COP
+		Tssw = Tsb*Tbsw;
 		qssw = Quaterniond(Tssw.linear());		
 		
 		if(legSwitch){
 			//If Support foot changed update the support foot - world TF
-			//Tws = Tws * Tssw.inverse();
-			Tws = isNear(Tws, Tws * Tssw.inverse(), 1e-2, 1e-2, 5e-2); //needed by COP
+			Tws = Tws * Tssw.inverse();
+			//Tws = isNear(Tws, Tws * Tssw.inverse(), 1e-2, 1e-2, 5e-2); //needed by COP
 			legSwitch=false;
 		}
 		Twb_ = Twb;
-		Twb = isNear(Twb, Tws * Tsb, 5e-3, 5e-3, 5e-3);
+		Twb = Tws * Tsb;
+		//Twb = isNear(Twb, Tws * Tsb, 5e-3, 5e-3, 5e-3);
 
 		//Race Condition safe first run
 		if(firstrun){
@@ -726,7 +757,6 @@ void humanoid_ekf::computeKinTFs() {
 
 		leg_odom_inc = true;
 		check_no_motion = false;
-		swing_inc = false;
 	}
 
 	
@@ -1164,55 +1194,55 @@ void humanoid_ekf::publishJointEstimates() {
 void humanoid_ekf::advertise() {
 
 	bodyPose_est_pub = n.advertise<geometry_msgs::PoseStamped>(
-	"/SERoW/body/pose", 10);
+	"/SERoW/body/pose", 1000);
 
 
 	bodyVel_est_pub = n.advertise<geometry_msgs::TwistStamped>(
-	"/SERoW/body/vel", 10);
+	"/SERoW/body/vel", 1000);
 
 	bodyAcc_est_pub = n.advertise<sensor_msgs::Imu>(
-	"/SERoW/body/acc", 10);
+	"/SERoW/body/acc", 1000);
 
 	supportPose_est_pub = n.advertise<geometry_msgs::PoseStamped>(
-	"/SERoW/support/pose", 10);
+	"/SERoW/support/pose", 1000);
 	
-	support_leg_pub = n.advertise<std_msgs::String>("/SERoW/support/leg",10);		
+	support_leg_pub = n.advertise<std_msgs::String>("/SERoW/support/leg",1000);		
 
-	odom_est_pub = n.advertise<nav_msgs::Odometry>("/SERoW/odom",10);		
+	odom_est_pub = n.advertise<nav_msgs::Odometry>("/SERoW/odom",1000);		
 	
 
 
-	COP_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/COP",10);
+	COP_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/COP",1000);
 
-	CoM_pos_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/CoM/pos",10);
-	CoM_vel_pub = n.advertise<geometry_msgs::TwistStamped>("SERoW/CoM/vel",10);
-	CoM_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/CoM/odom",10);
+	CoM_pos_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/CoM/pos",1000);
+	CoM_vel_pub = n.advertise<geometry_msgs::TwistStamped>("SERoW/CoM/vel",1000);
+	CoM_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/CoM/odom",1000);
 
-	joint_filt_pub =  n.advertise<sensor_msgs::JointState>("/SERoW/joint_states",10);
+	joint_filt_pub =  n.advertise<sensor_msgs::JointState>("/SERoW/joint_states",1000);
 
-	external_force_filt_pub = n.advertise<geometry_msgs::WrenchStamped>("/SERoW/CoM/forces",10);
+	external_force_filt_pub = n.advertise<geometry_msgs::WrenchStamped>("/SERoW/CoM/forces",1000);
 
 	if(ground_truth)
 	{
-		ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/CoM/odom",10);
-		ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/odom",10);
-		ds_pub = n.advertise<std_msgs::Int32>("/SERoW/is_in_ds",10);
+		ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/CoM/odom",1000);
+		ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/odom",1000);
+		ds_pub = n.advertise<std_msgs::Int32>("/SERoW/is_in_ds",1000);
 
 	}
 	if(comp_with)
 	{
-		comp_odom0_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom0",10);
-		comp_odom1_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom1",10);
+		comp_odom0_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom0",1000);
+		comp_odom1_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom1",1000);
 	}
 
 	if(debug_mode)
 	{
-		rel_supportPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_support/pose", 10);
-		rel_swingPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_swing/pose", 10);
-		rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_CoM/pose", 10);
-		leg_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/leg_odom",10);
-		RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RLeg/GRF",10);
-		LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LLeg/GRF",10);
+		rel_supportPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_support/pose", 1000);
+		rel_swingPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_swing/pose", 1000);
+		rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_CoM/pose", 1000);
+		leg_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/leg_odom",1000);
+		RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RLeg/GRF",1000);
+		LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LLeg/GRF",1000);
 	}
 
 	
@@ -1242,7 +1272,7 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 	}
 
 	for (unsigned int i=0; i< joint_state_msg.name.size(); i++){
-		joint_map.insert(make_pair(joint_state_msg.name[i], joint_state_msg.position[i]));
+		joint_map[joint_state_msg.name[i]]=joint_state_msg.position[i];
 		if(useJointKF && !firstJoint)
 			JointKF[i]->filter(joint_state_msg.position[i]);
 	}
