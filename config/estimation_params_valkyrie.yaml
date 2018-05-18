@@ -7,7 +7,7 @@ rfoot: "rightCOP_Frame"
 #ROS Topic Names
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "" #only if usePoseUpdate is true
-useLegOdom: false
+useLegOdom: true
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/pelvisMiddleImu/imu"
 joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
@@ -41,7 +41,7 @@ T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 , 1]
 
 
 #ROS Topic Frequencies in Hz
-imu_topic_freq: 1000
+imu_topic_freq: 500
 joint_topic_freq: 500
 fsr_topic_freq: 500  
 
