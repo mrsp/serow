@@ -61,7 +61,7 @@ estimateJoints: false #Use a Steady State KF in every joint
 
 #Process Noise STDs
 accelerometer_bias_random_walk:  0.000002 #continous
-gyroscope_bias_random_walk: 1.0e-9 #continous
+gyroscope_bias_random_walk: 1.0e-09 #continous
 accelerometer_noise_density: 0.000034 #m/s^2/sqrt(Hz) #continous
 gyroscope_noise_density: 0.0000004 #rad/s/sqrt(Hz) #continous
 #Support Foot/Orientation STD w.r.t World Frame
