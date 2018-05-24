@@ -53,14 +53,16 @@ Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the esti
 * roscore
 * rosbag play --pause valk.bag
 * roslaunch humanoid_state_estimation humanoid_estimator_driver_valkyrie.launch
+* roslaunch serow_utils serow_utils.launch
 * hit space to unpause the rosbag play
 
-![valk](img/valk.jpg)
+![valk](img/valk.png)
 ### NAO Walking on rough terrain outdoors
 * Download the nao bag file from [nao_bagfile](http://users.ics.forth.gr/~spiperakis/nao.bag)
 * roscore
 * rosbag play --pause nao.bag
 * roslaunch humanoid_state_estimation humanoid_estimator_driver_nao.launch
+* roslaunch serow_utils serow_utils.launch
 * hit space to unpause the rosbag play
 
 ![nao](img/nao.jpg)
