@@ -13,7 +13,8 @@ These instructions will get you a copy of the project up and running on your loc
 ## Installing
 * git clone https://github.com/ahornung/hrl_kinematics.git
 * git clone https://github.com/mrsp/serow.git
-* catkin_make
+* catkin_make -DCMAKE_BUILD_TYPE=Release 
+* If you are using catkin tools run: catkin build  --cmake-args -DCMAKE_BUILD_TYPE=Release 
 
 ## Minimum Robot Requirements
 ### Using the Rigid Body Estimator to estimate: 
