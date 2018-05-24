@@ -21,7 +21,7 @@ These instructions will get you a copy of the project up and running on your loc
 * 3D-Support Foot Position/Orientation
 * IMU biases
 ### Requirements
-* Robot State Publisher (e.g. topics: /joint_states, /tf)
+* Robot State Publisher (e.g. topic: /joint_states)
 * IMU (e.g. topic /imu0)
 * Feet Force Sensors for detecting contact (e.g. topic: /left_leg/force_torque_states, /right_leg/force_torque_states)
 
@@ -32,19 +32,25 @@ These instructions will get you a copy of the project up and running on your loc
 * 3D-CoM Position/Velocity
 * 3D-External Forces on CoM
 ### Requirements:
-* Robot State Publisher (e.g. topics: /joint_states, /tf)
+* Robot State Publisher (e.g. topic: /joint_states)
 * IMU(e.g. topic /imu0)
 * Feet Force Sensors  + Center of Pressure (COP) measurements in the local foot frame (e.g. topics /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP)
 
 ### Using our humanoid_fsr package
-If your robot is employed with feet force sensors and you have available a measurement for each sensor, then you can use our [humanoid_fsr](https://github.com/mrsp/humanoid_fsr) package to compute the COP and Force/Torque measurements in each leg.  This package automatically generates the required by SEROW /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP topics.
+If your robot is employed with feet force sensors and you have available a measurement for each sensor, then you can use our [humanoid_fsr](https://github.com/mrsp/humanoid_fsr) package to compute the COP and 3D - Force/Torque measurements in each leg.  This package automatically generates the required by SEROW /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP topics.
 
+### Using our humanoid_cop package
+If your robot is employed with F/T sensors and you have available a 6D wrench measurement for each leg, then you can use our [humanoid_cop](https://github.com/mrsp/humanoid_cop) package to compute the COP in each leg.  This package automatically generates the required by SEROW  /left_leg/COP, /right_leg/COP topics.
+
+
+### Using our serow_utils package
+Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the estimated trajectories and to contrast them with other trajectories (e.g. ground_truth).
 
 ## ROS Examples
 ### Valkyrie SRCsim
 * Download the valkyrie bag file from [valk_bagfile](http://users.ics.forth.gr/~spiperakis/valk.bag)
 * roscore
-* rosbag play -s 1.0 --pause valk.bag
+* rosbag play --pause valk.bag
 * roslaunch humanoid_state_estimation humanoid_estimator_driver_valkyrie.launch
 * hit space to unpause the rosbag play
 
@@ -60,7 +66,7 @@ If your robot is employed with feet force sensors and you have available a measu
 ### Launch on your Robot in real time
 * Specify topics on config/estimation_params.yaml
 * roslaunch humanoid_state_estimation humanoid_estimator_driver.launch
-* roslaunch rqt_reconfigure rqt_reconfigure (If you want to reconfiqure filter params online -> easy tuning).
+* rosrun rqt_reconfigure rqt_reconfigure (If you want to reconfiqure filter params online -> easy tuning).
 ## License
 [BSD](LICENSE) 
 
