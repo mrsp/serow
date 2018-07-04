@@ -426,6 +426,7 @@ void humanoid_ekf::run() {
 	
 	static ros::Rate rate(1.0*freq);  //ROS Node Loop Rate
 	while (ros::ok()){
+		if(imu_inc){
 		predictWithImu = false;
 		predictWithCoM = false;
 
@@ -457,6 +458,7 @@ void humanoid_ekf::run() {
 			}
 			if(useJointKF)
 				publishJointEstimates();
+		}
 		}
 		ros::spinOnce();
 		rate.sleep();
@@ -515,15 +517,13 @@ void humanoid_ekf::estimateWithIMUEKF()
 			else{
 			//Update with the odometry
 				if(no_motion_indicator || useLegOdom){
-						//cout<<"No motion"<<endl;
-						//cout<<no_motion_indicator<<endl;
 						if(leg_odom_inc){
 								pos_update += Twb.translation()-Twb_.translation();
 								Quaterniond q_now = qwb;
 								Quaterniond q_prev = qwb_;
 								q_update *=  q_now  * q_prev.inverse();
 								leg_odom_inc = false;
-								imuEKF->updateWithOdom(pos_update, q_update);	
+								imuEKF->updateWithOdom(pos_update, q_update);
 						}
 				}
 				else
@@ -577,13 +577,6 @@ void humanoid_ekf::estimateWithIMUEKF()
 			imuEKF->updateWithSupport(Tbs.translation(),qbs);
 			support_inc=false;
 		}
-		
-	// 	cout<<"ax"<<imuEKF->bias_ax<<endl;
-	// 	cout<<"ay"<<imuEKF->bias_ay<<endl;
-	// 	cout<<"az"<<imuEKF->bias_az<<endl;
-	//  cout<<"gx"<<imuEKF->bias_gx<<endl;
-	// 	cout<<"gy"<<imuEKF->bias_gy<<endl;
-	// 	cout<<"gz"<<imuEKF->bias_gz<<endl;
 }
 
 
@@ -915,6 +908,7 @@ void humanoid_ekf::publishBodyEstimates() {
 	bodyAcc_est_msg.linear_acceleration.x = imuEKF->accX;
 	bodyAcc_est_msg.linear_acceleration.y = imuEKF->accY;
 	bodyAcc_est_msg.linear_acceleration.z = imuEKF->accZ;
+
 	bodyAcc_est_msg.angular_velocity.x = imuEKF->gyroX;
 	bodyAcc_est_msg.angular_velocity.y = imuEKF->gyroY;
 	bodyAcc_est_msg.angular_velocity.z = imuEKF->gyroZ;
@@ -1251,14 +1245,13 @@ void humanoid_ekf::advertise() {
 
 void humanoid_ekf::subscribeToJointState()
 {
-	joint_state_sub = n.subscribe(joint_state_topic,1000,&humanoid_ekf::joint_stateCb,this);
+	joint_state_sub = n.subscribe(joint_state_topic,1,&humanoid_ekf::joint_stateCb,this,ros::TransportHints().tcpNoDelay());
 }
 
 void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 {
 	joint_state_msg = *msg;
 	joint_inc = true;
-
 	if(firstJoint && useJointKF)
 	{
 		number_of_joints = joint_state_msg.name.size();
@@ -1281,7 +1274,7 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToOdom()
 {
-	odom_sub = n.subscribe(odom_topic,1000,&humanoid_ekf::odomCb,this);
+	odom_sub = n.subscribe(odom_topic,1,&humanoid_ekf::odomCb,this,ros::TransportHints().tcpNoDelay());
 }
 
 void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
@@ -1297,8 +1290,8 @@ void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToCompOdom()
 {
-	compodom0_sub = n.subscribe(comp_with_odom0_topic,1000,&humanoid_ekf::compodom0Cb,this);
-	compodom1_sub = n.subscribe(comp_with_odom1_topic,1000,&humanoid_ekf::compodom1Cb,this);
+	compodom0_sub = n.subscribe(comp_with_odom0_topic,1,&humanoid_ekf::compodom0Cb,this,ros::TransportHints().tcpNoDelay());
+	compodom1_sub = n.subscribe(comp_with_odom1_topic,1,&humanoid_ekf::compodom1Cb,this,ros::TransportHints().tcpNoDelay());
 }
 
 void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
@@ -1312,7 +1305,7 @@ void humanoid_ekf::compodom1Cb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToGroundTruth()
 {
-	ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic,1000,&humanoid_ekf::ground_truth_odomCb,this);
+	ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic,1,&humanoid_ekf::ground_truth_odomCb,this,ros::TransportHints().tcpNoDelay());
 }
 void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
@@ -1321,7 +1314,7 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToGroundTruthCoM()
 {
-	ground_truth_com_sub = n.subscribe(ground_truth_com_topic,1000,&humanoid_ekf::ground_truth_comCb,this);
+	ground_truth_com_sub = n.subscribe(ground_truth_com_topic,1000,&humanoid_ekf::ground_truth_comCb,this,ros::TransportHints().tcpNoDelay());
 }
 void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
@@ -1333,7 +1326,7 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToSupportIdx()
 {
-	support_idx_sub = n.subscribe(support_idx_topic,1000,&humanoid_ekf::support_idxCb,this);
+	support_idx_sub = n.subscribe(support_idx_topic,1,&humanoid_ekf::support_idxCb,this,ros::TransportHints().tcpNoDelay());
 }
 void humanoid_ekf::support_idxCb(const std_msgs::Int32::ConstPtr& msg)
 {
@@ -1361,7 +1354,7 @@ void humanoid_ekf::support_idxCb(const std_msgs::Int32::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToDS()
 {
-	ds_sub = n.subscribe(is_in_ds_topic,1000,&humanoid_ekf::is_in_dsCb,this);
+	ds_sub = n.subscribe(is_in_ds_topic,1,&humanoid_ekf::is_in_dsCb,this,ros::TransportHints().tcpNoDelay());
 }
 void humanoid_ekf::is_in_dsCb(const std_msgs::Bool::ConstPtr& msg)
 {
@@ -1376,7 +1369,7 @@ void humanoid_ekf::is_in_dsCb(const std_msgs::Bool::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToIMU()
 {
-	imu_sub = n.subscribe(imu_topic,1000,&humanoid_ekf::imuCb,this);
+	imu_sub = n.subscribe(imu_topic,1,&humanoid_ekf::imuCb,this,ros::TransportHints().tcpNoDelay());
 }
 void humanoid_ekf::imuCb(const sensor_msgs::Imu::ConstPtr& msg)
 {
@@ -1387,13 +1380,13 @@ void humanoid_ekf::imuCb(const sensor_msgs::Imu::ConstPtr& msg)
 void humanoid_ekf::subscribeToFSR()
 {
 	//Left Foot Wrench
-	lfsr_sub = n.subscribe(lfsr_topic,1000,&humanoid_ekf::lfsrCb,this);
+	lfsr_sub = n.subscribe(lfsr_topic,1,&humanoid_ekf::lfsrCb,this,ros::TransportHints().tcpNoDelay());
 	//Right Foot Wrench
-	rfsr_sub = n.subscribe(rfsr_topic,1000,&humanoid_ekf::rfsrCb,this);
+	rfsr_sub = n.subscribe(rfsr_topic,1,&humanoid_ekf::rfsrCb,this,ros::TransportHints().tcpNoDelay());
 	//Left COP
-	copl_sub = n.subscribe(copr_topic,1000,&humanoid_ekf::coprCb,this);
+	copl_sub = n.subscribe(copr_topic,1,&humanoid_ekf::coprCb,this,ros::TransportHints().tcpNoDelay());
 	//Right COP
-	copr_sub = n.subscribe(copl_topic,1000,&humanoid_ekf::coplCb,this);
+	copr_sub = n.subscribe(copl_topic,1,&humanoid_ekf::coplCb,this,ros::TransportHints().tcpNoDelay());
 }
 
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
@@ -1420,7 +1413,7 @@ void humanoid_ekf::coprCb(const geometry_msgs::PointStamped::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToPose()
 {
-	pose_sub = n.subscribe(pose_topic,1000,&humanoid_ekf::poseCb,this);
+	pose_sub = n.subscribe(pose_topic,1,&humanoid_ekf::poseCb,this,ros::TransportHints().tcpNoDelay());
 }
 
 void humanoid_ekf::poseCb(const geometry_msgs::PoseStamped::ConstPtr& msg)
