@@ -8,13 +8,22 @@ rfoot: "r_sole"
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "/orbslam2/pose" #only if usePoseUpdate is true
 useLegOdom: false
-odom_topic: "/vins_estimator/odometry" #only if usePoseUpdate is false and useLegOdom is false
+#odom_topic: "/vins_estimator/odometry" #only if usePoseUpdate is false and useLegOdom is false
+odom_topic: "/nao_robot/odom"
 imu_topic: "/nao_robot/imu"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
 rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
 copl_topic: "/nao_robot/LLeg/COP"
 copr_topic: "/nao_robot/RLeg/COP"
+
+
+visualize_with_rviz: false
+support_idx_provided: false
+
+
+#To publish relative data
+debug_mode: true
 
 
 #TF from IMU to Body
@@ -29,8 +38,10 @@ joint_topic_freq: 100
 fsr_topic_freq: 100  
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 22 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 15 #Schmitt Trigger Low Threshold in Newtons (N)
+LLegUpThres: 25 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 14 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 8
+StrikingContact: 50
 
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: false #Use a Steady State KF in every joint

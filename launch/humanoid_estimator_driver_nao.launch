@@ -4,7 +4,7 @@
   <!-- Call Humanoid State Estimation Driver -->
   <node pkg="humanoid_state_estimation" type="humanoid_state_estimation" name="humanoid_state_estimation" respawn="false" output="screen" >
  	<!-- Load configurations from YAML file to parameter server -->
-   	 <rosparam file="$(find humanoid_state_estimation)/config/estimation_params.yaml" command="load"/> 
+   	 <rosparam file="$(find humanoid_state_estimation)/config/estimation_params_nao.yaml" command="load"/> 
   </node>
 <node pkg = "rviz" type = "rviz" respawn = "false" name = "rviz" output = "screen" args ="-d $(find humanoid_state_estimation)/share/hse.rviz"> </node>
 </launch>
