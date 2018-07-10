@@ -32,6 +32,7 @@ debug_mode: true
 comp_with: true
 comp_with_odom0_topic: "/ihmc_ros/valkyrie/output/visual_odom"
 comp_with_odom1_topic: "/ihmc_ros/valkyrie/output/external_odom"
+
 #TF from IMU to Body
 T_B_I: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
 
