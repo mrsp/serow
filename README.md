@@ -11,7 +11,7 @@ These instructions will get you a copy of the project up and running on your loc
 * [hrl_kinematics](http://wiki.ros.org/hrl_kinematics) 
 
 ## Installing
-* git clone https://github.com/ahornung/hrl_kinematics.git
+* git clone https://github.com/ahornung/hrl_kinematics.git (comment line 157 in Kinematics.cpp to avoid spam of warnings)
 * git clone https://github.com/mrsp/serow.git
 * catkin_make -DCMAKE_BUILD_TYPE=Release 
 * If you are using catkin tools run: catkin build  --cmake-args -DCMAKE_BUILD_TYPE=Release 
