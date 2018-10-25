@@ -38,10 +38,9 @@ joint_topic_freq: 100
 fsr_topic_freq: 100  
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 25 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 14 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 8
-StrikingContact: 50
+LLegUpThres: 12 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 5 #Schmitt Trigger Low Threshold in Newtons (N)
+
 
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: false #Use a Steady State KF in every joint
@@ -82,7 +81,7 @@ bias_gz:  0.000158554
 
 #Filter Params
 gravity: 9.80665 #gravity constant (m/s^2)
-
+medianWindow: 7
 
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
