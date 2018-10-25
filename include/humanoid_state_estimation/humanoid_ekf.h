@@ -60,7 +60,7 @@
 #include <hrl_kinematics/Kinematics.h>
 #include <dynamic_reconfigure/server.h>
 #include "humanoid_state_estimation/VarianceControlConfig.h"
-
+#include "humanoid_state_estimation/mediator.h"
 
 
 using namespace Eigen;
@@ -88,6 +88,7 @@ private:
 	bool firstGyrodot;
 	bool useGyroLPF;
 	int  maWindow;
+	int medianWindow;
 	bool firstJoint;
 	bool predictWithImu, predictWithCoM;
 	bool no_motion_indicator;
@@ -144,7 +145,8 @@ private:
 	double bias_fx,bias_fy,bias_fz;
 	JointSSKF** JointKF;
 	double jointFreq;
-
+	Mediator* lmdf;
+	Mediator* rmdf;
 	string support_leg, swing_leg;
 
 	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT;
@@ -156,7 +158,7 @@ private:
 	Vector3d no_motion_residual;
 	/****/
 	bool firstrun, legSwitch, firstContact;
-	
+	double LLegForceFilt, RLegForceFilt;
 	double LLegUpThres, LLegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;

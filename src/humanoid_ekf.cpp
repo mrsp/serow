@@ -120,7 +120,7 @@ void humanoid_ekf::loadparams() {
 
 	n_p.param<bool>("estimateCoM", useCoMEKF,false);
 	n_p.param<bool>("estimateJoints", useJointKF,false);
-	
+	n_p.param<int>("medianWindow", medianWindow,15);
 }
 
 void humanoid_ekf::loadJointKFparams()
@@ -180,6 +180,7 @@ void humanoid_ekf::loadIMUEKFparams()
 	n_p.param<double>("support_orientation_noise_density", imuEKF->support_az,5.0e-05);
 	n_p.param<double>("gravity", imuEKF->ghat,9.81);
 	n_p.param<double>("gravity", g,9.81);
+
 }
 
 
@@ -418,6 +419,11 @@ void humanoid_ekf::init() {
 	Tbsw_stamp = ros::Time::now();
 	lcount = 0;
 	rcount = 0;
+    
+	lmdf = MediatorNew(medianWindow);
+	rmdf = MediatorNew(medianWindow);
+	LLegForceFilt = 0;
+	RLegForceFilt = 0;
 }
 
 
@@ -765,7 +771,7 @@ void humanoid_ekf::determineLegContact() {
 	
 	//Choose Initial Support Foot based on Contact Force
 	if(firstContact){
-		if(LLegGRF(2)>RLegGRF(2)){
+		if(LLegForceFilt>RLegForceFilt){
 				// Initial support leg 
 					support_leg = "LLeg";
 					swing_leg = "RLeg";
@@ -782,42 +788,30 @@ void humanoid_ekf::determineLegContact() {
 		firstContact = false;
 	}
 	else{
-		if(!support_idx_provided){
 		//Determine if the Support Foot changed  
+		if(!support_idx_provided){
+			int ssidl = int(LLegForceFilt > LLegUpThres) - int(LLegForceFilt < LLegLowThres);
+			int ssidr = int(RLegForceFilt > LLegUpThres) - int(RLegForceFilt < LLegLowThres);
+
+			
 			if (support_leg == "RLeg")
 			{
-				if (LLegGRF(2) > LLegUpThres  && LLegGRF(2) < StrikingContact)
-				{
-					lcount++;
-					if(lcount>3)
-					{
-						support_leg = "LLeg";
-						support_foot_frame = lfoot_frame;
-						swing_leg = "RLeg";
-						swing_foot_frame = rfoot_frame;			
-						legSwitch = true;
-						lcount=0;
-					}
+				if (ssidl == 1 && ssidr != 1){
+					support_leg = "LLeg";
+					support_foot_frame = lfoot_frame;
+					swing_leg = "RLeg";
+					swing_foot_frame = rfoot_frame;			
+					legSwitch = true;
 				}
-				else
-					lcount = 0;
 			}
 			else{
-				if (LLegGRF(2) < LLegLowThres && RLegGRF(2) < StrikingContact)
-				{
-					rcount++;
-					if(rcount>3)
-					{
-						support_leg = "RLeg";
-						support_foot_frame = rfoot_frame;
-						swing_leg = "LLeg";
-						swing_foot_frame = lfoot_frame;			
-						legSwitch = true;
-						rcount=0;
-					}
+				if (ssidr == 1 && ssidl != 1){
+					support_leg = "RLeg";
+					support_foot_frame = rfoot_frame;
+					swing_leg = "LLeg";
+					swing_foot_frame = lfoot_frame;			
+					legSwitch = true;
 				}
-				else
-					rcount = 0;
 			}
 		}
 	}
@@ -1392,11 +1386,15 @@ void humanoid_ekf::subscribeToFSR()
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
 	lfsr_msg = *msg;
+	MediatorInsert(lmdf,lfsr_msg.wrench.force.z);
+	LLegForceFilt = MediatorMedian(lmdf);
 	fsr_inc = true;
 }
 void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
 	rfsr_msg = *msg;
+	MediatorInsert(rmdf,rfsr_msg.wrench.force.z);
+	RLegForceFilt = MediatorMedian(rmdf);
 }
 
 void humanoid_ekf::coplCb(const geometry_msgs::PointStamped::ConstPtr& msg)
