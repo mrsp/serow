@@ -44,7 +44,7 @@ include_directories(
 )
 
 
-add_executable(humanoid_state_estimation src/humanoid_state_estimator_driver.cpp src/humanoid_ekf.cpp  src/IMUEKF.cpp src/JointSSKF.cpp src/LPF.cpp src/MovingAverageFilter.cpp src/CoMEKF.cpp)
+add_executable(humanoid_state_estimation src/humanoid_state_estimator_driver.cpp src/humanoid_ekf.cpp  src/IMUEKF.cpp src/JointSSKF.cpp src/LPF.cpp src/MovingAverageFilter.cpp src/CoMEKF.cpp src/differentiator.cpp)
 target_link_libraries(humanoid_state_estimation ${catkin_LIBRARIES} ${Eigen3_LIBRARIES})
 
 add_dependencies(humanoid_state_estimation ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)

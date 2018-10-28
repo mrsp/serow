@@ -61,7 +61,7 @@
 #include <dynamic_reconfigure/server.h>
 #include "humanoid_state_estimation/VarianceControlConfig.h"
 #include "humanoid_state_estimation/mediator.h"
-
+#include "humanoid_state_estimation/differentiator.h"
 
 using namespace Eigen;
 using namespace std;
