@@ -28,31 +28,33 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
-#ifndef  __DIFFERENTIATOR_H__
-#define  __DIFFERENTIATOR_H__
-
-
-#include <iostream>
+ 
+#include <humanoid_state_estimation/differentiator.h>
 
 
-class Differentiator
+Differentiator::Differentiator()
 {
+    x = 0.000;
+    x_ = 0.000;
+    xdot = 0.000;
+    //Diff Time
+    dt = 0.01;
+    firstrun = true;
+    std::cout<<"Finite Differentiator Initialized Successfully"<<std::endl;
+}
 
-private:
-    float x_, dt;
-    bool firstrun;
-public:
-    float x;
-    float xdot;
-    void setParams(float dt_)
-    {
-        dt=dt_;
-    }
-    /** @fn void diff(float x)
-     *  @brief differentiates the measurement with finite differences
-    */
-    float diff(float x);
-    Differentiator();
-};
-#endif
+
+float Differentiator::diff(float  x)
+{
+	if(firstrun)
+	{
+		firstrun = false;
+		xdot =0;
+	}
+        else
+		xdot = (x - x_)/dt;
+
+	x_ = x;
+	return x;
+    /** ------------------------------------------------------------- **/
+}
