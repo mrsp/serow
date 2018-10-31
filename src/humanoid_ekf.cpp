@@ -392,8 +392,11 @@ void humanoid_ekf::init() {
 	imuEKF = new IMUEKF;
 	imuEKF->init();
 	if(useCoMEKF){
-		if(useGyroLPF)
-			gyroLPF = new LPF;
+		if(useGyroLPF){
+			gyroLPF = new butterworthLPF*[3];
+			for(unsigned int i=0;i<3;i++)
+				gyroLPF[i] = new butterworthLPF();	
+		}
 		else{
 			gyroMAF = new MovingAverageFilter*[3];
 			for(unsigned int i=0;i<3;i++)
@@ -599,8 +602,9 @@ void humanoid_ekf::estimateWithCoMEKF()
 				nipmEKF->setCoMExternalForce(Vector3d(bias_fx,bias_fy,bias_fz));
 				nipmEKF->firstrun = false;
 				if(useGyroLPF){
-					gyroLPF->setdt(1.0/fsr_freq);
-					gyroLPF->setCutOffFreq(gyro_fx,gyro_fy,gyro_fz);
+					gyroLPF[0]->init("gyro X LPF", freq, gyro_fx);
+					gyroLPF[1]->init("gyro Y LPF", freq, gyro_fy);
+					gyroLPF[2]->init("gyro Z LPF", freq, gyro_fz);
 				}
 				else{
 					for(unsigned int i=0;i<3;i++)
@@ -850,12 +854,11 @@ void humanoid_ekf::deAllocate()
 void humanoid_ekf::filterGyrodot() {
 	if (!firstGyrodot) {
 		//Compute numerical derivative
-		Gyrodot = (Vector3d(imuEKF->gyroX, imuEKF->gyroY, imuEKF->gyroZ) - Gyro_)*fsr_freq;
+		Gyrodot = (Vector3d(imuEKF->gyroX, imuEKF->gyroY, imuEKF->gyroZ) - Gyro_)*freq;
 		if(useGyroLPF){
-			gyroLPF->filter(Gyrodot);
-			Gyrodot(0) = gyroLPF->x;
-			Gyrodot(1) = gyroLPF->y;
-			Gyrodot(2) = gyroLPF->z;
+			Gyrodot(0) = gyroLPF[0]->filter(Gyrodot(0));
+			Gyrodot(1) = gyroLPF[1]->filter(Gyrodot(1));
+			Gyrodot(2) = gyroLPF[2]->filter(Gyrodot(2));
 		}
 		else{
 			gyroMAF[0]->filter(Gyrodot(0));

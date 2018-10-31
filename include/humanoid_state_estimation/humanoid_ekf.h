@@ -39,7 +39,7 @@
 #include "humanoid_state_estimation/IMUEKF.h"
 #include "humanoid_state_estimation/CoMEKF.h"
 #include "humanoid_state_estimation/JointSSKF.h"
-#include "humanoid_state_estimation/LPF.h"
+#include "humanoid_state_estimation/butterworthLPF.h"
 #include "humanoid_state_estimation/MovingAverageFilter.h"
 
 #include <eigen3/Eigen/Dense>
@@ -137,7 +137,7 @@ private:
 	IMUEKF* imuEKF;
 	Kinematics* kin;
 	CoMEKF* nipmEKF;
-	LPF* gyroLPF;
+	butterworthLPF** gyroLPF;
 	MovingAverageFilter** gyroMAF;
 	//Cuttoff Freqs for LPF
 	double gyro_fx, gyro_fy, gyro_fz;
