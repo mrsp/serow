@@ -17,13 +17,19 @@ rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
 copl_topic: "/nao_robot/LLeg/COP"
 copr_topic: "/nao_robot/RLeg/COP"
 
+#Ground-Truth
+ground_truth: false
+ground_truth_odom_topic: " "
+ground_truth_com_topic: " "
+comp_with: false
+comp_with_odom0_topic: " "
+comp_with_odom1_topic: " "
 
-visualize_with_rviz: false
 support_idx_provided: false
 
 
 #To publish relative data
-debug_mode: true
+debug_mode: false
 
 
 #TF from IMU to Body
