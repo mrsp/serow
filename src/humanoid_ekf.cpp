@@ -434,7 +434,7 @@ void humanoid_ekf::init() {
 
 void humanoid_ekf::run() {
 	
-	static ros::Rate rate(1.0*freq);  //ROS Node Loop Rate
+	static ros::Rate rate(2.0*freq);  //ROS Node Loop Rate
 	while (ros::ok()){
 		if(imu_inc){
 		predictWithImu = false;
@@ -880,26 +880,7 @@ void humanoid_ekf::filterGyrodot() {
 
 
 void humanoid_ekf::publishBodyEstimates() {
-	bodyPose_est_msg.header.stamp = ros::Time::now();
-	bodyPose_est_msg.header.frame_id = "odom";
-	bodyPose_est_msg.pose.position.x = imuEKF->rX;
-	bodyPose_est_msg.pose.position.y = imuEKF->rY;
-	bodyPose_est_msg.pose.position.z = imuEKF->rZ;
-	bodyPose_est_msg.pose.orientation.x = imuEKF->qib_.x();
-	bodyPose_est_msg.pose.orientation.y = imuEKF->qib_.y();
-	bodyPose_est_msg.pose.orientation.z = imuEKF->qib_.z();
-	bodyPose_est_msg.pose.orientation.w = imuEKF->qib_.w();
-	bodyPose_est_pub.publish(bodyPose_est_msg);
 
-	bodyVel_est_msg.header.stamp = ros::Time::now();
-	bodyVel_est_msg.header.frame_id = "odom";
-	bodyVel_est_msg.twist.linear.x = imuEKF->velX;
-	bodyVel_est_msg.twist.linear.y = imuEKF->velY;
-	bodyVel_est_msg.twist.linear.z = imuEKF->velZ;
-	bodyVel_est_msg.twist.angular.x = imuEKF->gyroX;
-	bodyVel_est_msg.twist.angular.y = imuEKF->gyroY;
-	bodyVel_est_msg.twist.angular.z = imuEKF->gyroZ;
-	bodyVel_est_pub.publish(bodyVel_est_msg);
 
 	bodyAcc_est_msg.header.stamp = ros::Time::now();
 	bodyAcc_est_msg.header.frame_id = "odom";
@@ -915,8 +896,21 @@ void humanoid_ekf::publishBodyEstimates() {
 
 	odom_est_msg.header.stamp=ros::Time::now();
 	odom_est_msg.header.frame_id = "odom";
-	odom_est_msg.pose.pose = bodyPose_est_msg.pose;
-	odom_est_msg.twist.twist = bodyVel_est_msg.twist;
+	odom_est_msg.pose.pose.position.x = imuEKF->rX;
+	odom_est_msg.pose.pose.position.y = imuEKF->rY;
+	odom_est_msg.pose.pose.position.z = imuEKF->rZ;
+	odom_est_msg.pose.pose.orientation.x = imuEKF->qib_.x();
+	odom_est_msg.pose.pose.orientation.y = imuEKF->qib_.y();
+	odom_est_msg.pose.pose.orientation.z = imuEKF->qib_.z();
+	odom_est_msg.pose.pose.orientation.w = imuEKF->qib_.w();
+
+	odom_est_msg.twist.twist.linear.x = imuEKF->velX;
+	odom_est_msg.twist.twist.linear.y = imuEKF->velY;
+	odom_est_msg.twist.twist.linear.z = imuEKF->velZ;
+	odom_est_msg.twist.twist.angular.x  = imuEKF->gyroX;
+	odom_est_msg.twist.twist.angular.y  = imuEKF->gyroY;
+	odom_est_msg.twist.twist.angular.z  = imuEKF->gyroZ;
+
 	//for(int i=0;i<36;i++)
     //odom_est_msg.pose.covariance[i] = 0;
 	odom_est_pub.publish(odom_est_msg);
@@ -1101,32 +1095,20 @@ void humanoid_ekf::publishCOP() {
 
 
 void humanoid_ekf::publishCoMEstimates() {
-	CoM_pos_msg.point.x = nipmEKF->comX;
-	CoM_pos_msg.point.y = nipmEKF->comY;
-	CoM_pos_msg.point.z = nipmEKF->comZ;
-	CoM_pos_msg.header.stamp = ros::Time::now();
-	CoM_pos_msg.header.frame_id = "odom";
-	CoM_pos_pub.publish(CoM_pos_msg);
-	CoM_vel_msg.header.frame_id = "odom";
-	CoM_vel_msg.header.stamp = ros::Time::now();
-	CoM_vel_msg.twist.linear.x = nipmEKF->velX;
-	CoM_vel_msg.twist.linear.y = nipmEKF->velY;
-	CoM_vel_msg.twist.linear.z = nipmEKF->velZ;
-	CoM_vel_pub.publish(CoM_vel_msg);
+
 
 	CoM_odom_msg.header.stamp=ros::Time::now();
 	CoM_odom_msg.header.frame_id = "odom";
-	CoM_odom_msg.pose.pose.position.x = CoM_pos_msg.point.x;
-	CoM_odom_msg.pose.pose.position.y = CoM_pos_msg.point.y;
-	CoM_odom_msg.pose.pose.position.z = CoM_pos_msg.point.z;
-	CoM_odom_msg.twist.twist = CoM_vel_msg.twist;
+	CoM_odom_msg.pose.pose.position.x = nipmEKF->comX;
+	CoM_odom_msg.pose.pose.position.y = nipmEKF->comY;
+	CoM_odom_msg.pose.pose.position.z = nipmEKF->comZ;
+	CoM_odom_msg.twist.twist.linear.x = nipmEKF->velX;
+	CoM_odom_msg.twist.twist.linear.y = nipmEKF->velY;
+	CoM_odom_msg.twist.twist.linear.z = nipmEKF->velZ;
+
 	//for(int i=0;i<36;i++)
     //odom_est_msg.pose.covariance[i] = 0;
 	CoM_odom_pub.publish(CoM_odom_msg);
-
-
-
-
 
 
 
@@ -1185,12 +1167,9 @@ void humanoid_ekf::publishJointEstimates() {
 
 void humanoid_ekf::advertise() {
 
-	bodyPose_est_pub = n.advertise<geometry_msgs::PoseStamped>(
-	"/SERoW/body/pose", 1000);
 
 
-	bodyVel_est_pub = n.advertise<geometry_msgs::TwistStamped>(
-	"/SERoW/body/vel", 1000);
+	
 
 	bodyAcc_est_pub = n.advertise<sensor_msgs::Imu>(
 	"/SERoW/body/acc", 1000);
@@ -1206,8 +1185,7 @@ void humanoid_ekf::advertise() {
 
 	COP_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/COP",1000);
 
-	CoM_pos_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/CoM/pos",1000);
-	CoM_vel_pub = n.advertise<geometry_msgs::TwistStamped>("SERoW/CoM/vel",1000);
+
 	CoM_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/CoM/odom",1000);
 
 	joint_filt_pub =  n.advertise<sensor_msgs::JointState>("/SERoW/joint_states",1000);

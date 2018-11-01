@@ -16,7 +16,7 @@ rfoot_force_torque_topic: "/ihmc_ros/valkyrie/output/foot_force_sensor/right"
 copl_topic: "/ihmc_ros/valkyrie/output/cop/left"
 copr_topic: "/ihmc_ros/valkyrie/output/cop/right"
 
-visualize_with_rviz: false
+
 #Ground-Truth
 ground_truth: true
 ground_truth_odom_topic: "/valkyrie/ground_truth/odom"
