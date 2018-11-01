@@ -43,8 +43,8 @@ LLegLowThres: 5 #Schmitt Trigger Low Threshold in Newtons (N)
 
 
 #Steady State Joint Kalman Filter (KF)
-estimateJoints: false #Use a Steady State KF in every joint
-
+estimateJoints: true #Use a Steady State KF in every joint
+joint_cutoff_freq: 10
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
 # 3-D Body Position/Velocity

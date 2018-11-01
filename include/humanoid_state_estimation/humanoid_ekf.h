@@ -38,7 +38,7 @@
 // Estimator Headers
 #include "humanoid_state_estimation/IMUEKF.h"
 #include "humanoid_state_estimation/CoMEKF.h"
-#include "humanoid_state_estimation/JointSSKF.h"
+#include "humanoid_state_estimation/JointDF.h"
 #include "humanoid_state_estimation/butterworthLPF.h"
 #include "humanoid_state_estimation/MovingAverageFilter.h"
 
@@ -131,6 +131,7 @@ private:
 
 	// get joint positions from state message
   	std::map<std::string, double> joint_map;
+	std::vector<double>joint_state_vel;
 	tf::Point com;
 	tf::Transform tf_right_foot, tf_left_foot;
 	double mass;
@@ -143,8 +144,8 @@ private:
 	double gyro_fx, gyro_fy, gyro_fz;
 	Vector3d COP_fsr, GRF_fsr, CoM_enc, Gyrodot, Gyro_;
 	double bias_fx,bias_fy,bias_fz;
-	JointSSKF** JointKF;
-	double jointFreq;
+	JointDF** JointVF;
+	double jointFreq,joint_cutoff_freq;
 	Mediator* lmdf;
 	Mediator* rmdf;
 	string support_leg, swing_leg;

@@ -127,6 +127,7 @@ void humanoid_ekf::loadJointKFparams()
 {
 	ros::NodeHandle n_p("~");
 	n_p.param<double>("joint_topic_freq",joint_freq,100.0);	
+	n_p.param<double>("joint_cutoff_freq",joint_cutoff_freq,10.0);	
 }
 
 void humanoid_ekf::loadIMUEKFparams()
@@ -832,8 +833,8 @@ void humanoid_ekf::deAllocate()
 {
 	if(useJointKF){
 		for (unsigned int i = 0; i < number_of_joints; i++)
-			delete[] JointKF[i];
-		delete[] JointKF;
+			delete[] JointVF[i];
+		delete[] JointVF;
 	}
 	if(useCoMEKF){
 		delete nipmEKF;
@@ -1167,9 +1168,9 @@ void humanoid_ekf::publishJointEstimates() {
 	joint_filt_msg.velocity.resize(number_of_joints);
 
 	for (unsigned int i = 0; i < number_of_joints; i++) {
-		joint_filt_msg.position[i] = JointKF[i]->JointPosition;
-		joint_filt_msg.velocity[i] = JointKF[i]->JointVelocity;
-		joint_filt_msg.name[i] = JointKF[i]->JointName;
+		joint_filt_msg.position[i] = JointVF[i]->JointPosition;
+		joint_filt_msg.velocity[i] = JointVF[i]->JointVelocity;
+		joint_filt_msg.name[i] = JointVF[i]->JointName;
 	}
 
 	joint_filt_pub.publish(joint_filt_msg);
@@ -1252,19 +1253,24 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 	if(firstJoint && useJointKF)
 	{
 		number_of_joints = joint_state_msg.name.size();
-		JointKF = new JointSSKF*[number_of_joints];
+		joint_state_vel.resize(number_of_joints);
+		JointVF = new JointDF*[number_of_joints];
 		for (unsigned int i=0; i<number_of_joints; i++){
-			JointKF[i] = new JointSSKF();									
-			JointKF[i]->init(joint_state_msg.name[i]);
-			JointKF[i]->setdt(1.0/joint_freq);
+			JointVF[i] = new JointDF();									
+			JointVF[i]->init(joint_state_msg.name[i],joint_freq,joint_cutoff_freq);
 		}
 		firstJoint = false;
 	}
 
 	for (unsigned int i=0; i< joint_state_msg.name.size(); i++){
 		joint_map[joint_state_msg.name[i]]=joint_state_msg.position[i];
-		if(useJointKF && !firstJoint)
-			JointKF[i]->filter(joint_state_msg.position[i]);
+		if(useJointKF && !firstJoint){
+			joint_state_vel[i]=JointVF[i]->filter(joint_state_msg.position[i]);
+			cout<<"POS"<<endl;
+			cout<<joint_state_msg.name[i]<<joint_state_msg.position[i]<<endl;
+			cout<<"Vel"<<endl;
+			cout<<joint_state_msg.name[i]<<joint_state_vel[i]<<endl;
+		}
 	}
 
 }

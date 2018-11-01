@@ -59,7 +59,7 @@ double Differentiator::diff(double  x)
 		xdot = (x - x_)/dt;
 
 	x_ = x;
-	return x;
+	return xdot;
     /** ------------------------------------------------------------- **/
 }
 
