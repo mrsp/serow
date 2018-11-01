@@ -29,33 +29,40 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef  __DIFFERENTIATOR_H__
-#define  __DIFFERENTIATOR_H__
+#include "humanoid_state_estimation/JointDF.h"
 
 
-#include <iostream>
-#include <string>
-using namespace std;
 
-class Differentiator
+void JointDF::init(string JointName_,double fsampling, double fcutoff)
 {
 
-private:
-    double x_, dt;
-    bool firstrun;
-    string name;
-public:
-    double x;
-    double xdot;
-    void setParams(double dt_)
-    {
-        dt=dt_;
-    }
-    /** @fn void diff(double x)
-     *  @brief differentiates the measurement with finite differences
-    */
-    double diff(double x);
-    void init(string name_,double dt_);
-    void reset();
-};
-#endif
+
+    JointName = JointName_;
+
+    JointPosition=0.000;
+    JointVelocity=0.000;
+
+
+    bw.init(JointName,fsampling,fcutoff);
+    df.init(JointName,1.00/fsampling);
+    std::cout<<JointName<<" Velocity Filter Initialized Successfully"<<std::endl;
+}
+
+
+void JointDF::reset()
+{
+    JointPosition=0.000;
+    JointVelocity=0.000;
+    std::cout<<JointName<<" Velocity Filter Reseted"<<std::endl;
+}
+
+
+/** JointSSKF filter to  deal with Delay, and  Noise **/
+double JointDF::filter(double JointPosMeasurement)
+{
+     JointPosition=JointPosMeasurement;
+     JointVelocity=bw.filter(df.diff(JointPosMeasurement));
+   
+     return JointVelocity;
+    /** ------------------------------------------------------------- **/
+}

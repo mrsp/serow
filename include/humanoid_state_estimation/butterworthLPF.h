@@ -11,22 +11,22 @@ class butterworthLPF
 {
     
 private:
-    float x_p, x_pp, y_p,y_pp;
-    float a1, a2, b0, b1, b2, ff, ita, q, a;
-    float fx, fs;
+    double x_p, x_pp, y_p,y_pp;
+    double a1, a2, b0, b1, b2, ff, ita, q, a;
+    double fx, fs;
     int i;
     
 public:
     string name;
     void reset();
     
-    /** @fn void filter(float y)
+    /** @fn void filter(double y)
      *  @brief filters the  measurement with a 2nd order Butterworth filter
      */
-    float filter(float y);
+    double filter(double y);
     
     butterworthLPF();
-    void init(string name_ ,float fsampling, float fcutoff);
+    void init(string name_ ,double fsampling, double fcutoff);
     
 };
 #endif

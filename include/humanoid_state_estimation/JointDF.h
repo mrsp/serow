@@ -28,34 +28,32 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+ 
+#ifndef  __JOINTDF_H__
+#define  __JOINTDF_H__
 
-#ifndef  __DIFFERENTIATOR_H__
-#define  __DIFFERENTIATOR_H__
-
-
+#include <humanoid_state_estimation/differentiator.h>
+#include <humanoid_state_estimation/butterworthLPF.h>
 #include <iostream>
-#include <string>
-using namespace std;
 
-class Differentiator
+using namespace std;
+class JointDF
 {
 
 private:
-    double x_, dt;
-    bool firstrun;
-    string name;
+    butterworthLPF bw;
+    Differentiator df;
 public:
-    double x;
-    double xdot;
-    void setParams(double dt_)
-    {
-        dt=dt_;
-    }
-    /** @fn void diff(double x)
-     *  @brief differentiates the measurement with finite differences
-    */
-    double diff(double x);
-    void init(string name_,double dt_);
+    double JointPosition;
+    double JointVelocity;
+    string JointName;
+
+    /** @fn void Filter(double JointPosMeasurement);
+     *  @brief estimates the Joint Velocity using the Joint Position measurement by the encoders
+     */
+    double filter(double JointPosMeasurement);
     void reset();
+    void init(string JointName_,double fsampling, double fcutoff);
+
 };
 #endif

@@ -32,19 +32,23 @@
 #include <humanoid_state_estimation/differentiator.h>
 
 
-Differentiator::Differentiator()
+
+void Differentiator::init(string name_,double dt_)
 {
     x = 0.000;
     x_ = 0.000;
     xdot = 0.000;
-    //Diff Time
-    dt = 0.01;
+
     firstrun = true;
-    std::cout<<"Finite Differentiator Initialized Successfully"<<std::endl;
+
+    //Diff Time
+    dt = dt_;
+    name=name_;
+    std::cout<<name<<" Finite Differentiator Initialized Successfully"<<std::endl;
 }
 
 
-float Differentiator::diff(float  x)
+double Differentiator::diff(double  x)
 {
 	if(firstrun)
 	{
@@ -58,3 +62,14 @@ float Differentiator::diff(float  x)
 	return x;
     /** ------------------------------------------------------------- **/
 }
+
+
+void Differentiator::reset()
+{
+    x = 0.000;
+    x_ = 0.000;
+    xdot = 0.000;
+    firstrun = true;
+    std::cout<<name<<"Finite Differentiator Reseted Successfully"<<std::endl;
+}
+
