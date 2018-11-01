@@ -52,7 +52,7 @@ void butterworthLPF::reset()
     
 }
 
-void butterworthLPF::init(string name_, float fsampling, float fcutoff)
+void butterworthLPF::init(string name_, double fsampling, double fcutoff)
 {
     fs = fsampling;
     fx = fcutoff;
@@ -73,9 +73,9 @@ void butterworthLPF::init(string name_, float fsampling, float fcutoff)
 
 
 /** butterworthLPF filter to  deal with the Noise **/
-float butterworthLPF::filter(float  y)
+double butterworthLPF::filter(double  y)
 {
-    float out;
+    double out;
     if(i>2)
         out = b0 * y + b1 * y_p + b2* y_pp + a1 * x_p + a2 * x_pp;
     else{
