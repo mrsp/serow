@@ -62,7 +62,7 @@
 #include "humanoid_state_estimation/VarianceControlConfig.h"
 #include "humanoid_state_estimation/mediator.h"
 #include "humanoid_state_estimation/differentiator.h"
-
+#include "humanoid_state_estimation/robotDyn.h"
 using namespace Eigen;
 using namespace std;
 using namespace hrl_kinematics;
@@ -79,6 +79,9 @@ private:
 	ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub,
 	ground_truth_odom_sub,ds_sub, compodom0_sub, compodom1_sub, ground_truth_com_sub,support_idx_sub;
 	
+	Eigen::VectorXd joint_state_pos;
+
+	serow::robotDyn* rd;
 	double  freq, joint_freq, fsr_freq;
 	ros::Time Tbs_stamp, Tbsw_stamp;
 	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, support_inc, swing_inc, check_no_motion, ground_truth_odom_inc;
@@ -169,7 +172,7 @@ private:
 	 string joint_state_topic;
 	 string odom_topic;
 	 string ground_truth_odom_topic, is_in_ds_topic, comp_with_odom0_topic, comp_with_odom1_topic, ground_truth_com_topic, support_idx_topic;
-
+     string modelname;
 	 bool usePoseUpdate;
 
 	//Odometry, from supportleg to inertial, transformation from support leg to other leg
