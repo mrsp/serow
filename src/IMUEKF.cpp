@@ -138,13 +138,13 @@ void IMUEKF::init() {
 	Kf = Matrix<double, 21, 6>::Zero();
 	s = Matrix<double, 6, 6>::Zero();
 	If = Matrix<double, 21, 21>::Identity();
-
+    R = Matrix<double, 6, 6>::Zero();
 	Acf = Matrix<double, 21, 21>::Zero();
 	Lcf = Matrix<double, 21, 18>::Zero();
 	Qff = Matrix<double, 21, 21>::Zero();
 	Qf = Matrix<double, 18, 18>::Zero();
 	Af = Matrix<double, 21, 21>::Zero();
-
+  
 	bw = Vector3d::Zero();
 	bf = Vector3d::Zero();
 
@@ -181,6 +181,7 @@ void IMUEKF::init() {
 /** IMU EKF filter to  deal with the Noise **/
 void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 {
+		  
 
 		omega = omega_;
 		f = f_;
@@ -308,9 +309,11 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 
 
 void IMUEKF::updateWithSupport(Vector3d y,  Quaterniond qy){
+			
 
 		//Support Foot Position
 		Hf = Matrix<double,6,21>::Zero();
+		R = Matrix<double,6,6>::Zero();
 		R(0, 0) = support_px * support_px;
 		R(1, 1) = support_py * support_py;
 		R(2, 2) = support_px * support_pz;
@@ -378,9 +381,10 @@ void IMUEKF::updateWithSupport(Vector3d y,  Quaterniond qy){
 
 void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 {
+	   
 
 		Hf = Matrix<double,6,21>::Zero();
-
+		R = Matrix<double,6,6>::Zero();
 		R(0, 0) = odom_px * odom_px;
 		R(1, 1) = odom_py * odom_py;
 		R(2, 2) = odom_pz * odom_pz;
@@ -407,7 +411,7 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 		Hf.block<3,3>(3,3) = Matrix3d::Identity();
 
 
-
+	   
         //s = R;
         s = Hf * P * Hf.transpose() + R;
 		Kf = P * Hf.transpose() * s.inverse();
@@ -416,6 +420,7 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 
 		//Update the mean estimate
 		x += dxf;
+
 
 		//Update the error covariance
 		P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose() + Kf * R * Kf.transpose();

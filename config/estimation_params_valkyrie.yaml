@@ -1,9 +1,9 @@
 #Robot Frames (CHECK URDF)
 
 base_link: "pelvis"
-lfoot: "leftCOP_Frame"
-rfoot: "rightCOP_Frame"
-
+lfoot: "leftFoot"
+rfoot: "rightFoot"
+modelname: "/home/master/dp_ws/src/serow/share/urdf/valkyrie_sim.urdf"
 #ROS Topic Names
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "" #only if usePoseUpdate is true
@@ -83,7 +83,7 @@ support_orientation_noise_density: 5.0e-04
 #IMU Initial Biases
 bias_ax: 0.0
 bias_ay: 0.0
-bias_az: -9.7997
+bias_az: -9.80
 bias_gx: -1.60298e-05
 bias_gy: 1.24745e-05
 bias_gz: 2.60968e-05
@@ -97,7 +97,7 @@ medianWindow: 31
 # To estimate:
 # CoM 3-D Position/Velocity
 # 3-D External Forces on the CoM
-estimateCoM: true   #Use the CoM EKF
+estimateCoM: false   #Use the CoM EKF
 
 #---------------------------------------------#
 #Specify the rest only if estimateCoM is true!!

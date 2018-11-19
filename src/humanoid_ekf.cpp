@@ -39,6 +39,9 @@ void humanoid_ekf::loadparams() {
 
 	ros::NodeHandle n_p("~");
 	// Load Server Parameters
+   	n_p.param<std::string>("modelname",modelname,"valkyrie_sim.urdf");
+	rd = new serow::robotDyn(modelname,false);
+
 	n_p.param<std::string>("base_link",base_link_frame,"base_link");
 	n_p.param<std::string>("lfoot",lfoot_frame,"l_sole");
 	n_p.param<std::string>("rfoot",rfoot_frame,"r_sole");
@@ -219,6 +222,7 @@ humanoid_ekf::humanoid_ekf()
 	firstUpdate = false;
 	firstOdom = false;
 	firstPose = false;
+
 }
 
 humanoid_ekf::~humanoid_ekf() {
@@ -594,7 +598,7 @@ void humanoid_ekf::estimateWithCoMEKF()
 {
 	if(joint_inc){
 			//kin->computeCOM(joint_map, com, mass,tf_right_foot,  tf_left_foot);
-			CoM_enc << com.x(), com.y(), com.z();
+			//CoM_enc << com.x(), com.y(), com.z();
 
 			if (nipmEKF->firstrun){
 				nipmEKF->setdt(1.0/fsr_freq);
@@ -701,31 +705,36 @@ void humanoid_ekf::computeKinTFs() {
 
 
 
-	
-
-	kin->computeCOM(joint_map, com, mass,tf_right_foot,  tf_left_foot);
+	rd->updateJointConfig(joint_state_pos);
+	CoM_enc = rd->comPosition();
+	mass = m;
+	//kin->computeCOM(joint_map, com, mass,tf_right_foot,  tf_left_foot);
 	if(support_leg=="LLeg")
 	{
-
-		Tbs.translation() << tf_left_foot.getOrigin().x(), tf_left_foot.getOrigin().y(), tf_left_foot.getOrigin().z();
-		qbs = Quaterniond(tf_left_foot.getRotation().w(), tf_left_foot.getRotation().x(), tf_left_foot.getRotation().y(), tf_left_foot.getRotation().z());
-		Tbsw.translation() << tf_right_foot.getOrigin().x(), tf_right_foot.getOrigin().y(), tf_right_foot.getOrigin().z();
-		qbsw = Quaterniond(tf_right_foot.getRotation().w(), tf_right_foot.getRotation().x(), tf_right_foot.getRotation().y(), tf_right_foot.getRotation().z());
+		Tbs.translation() = rd->linkPosition(lfoot_frame);
+		qbs = rd->linkOrientation(lfoot_frame);
+		Tbs.linear() = qbs.toRotationMatrix();
+		Tbsw.translation() = rd->linkPosition(rfoot_frame);
+		qbsw = rd->linkOrientation(rfoot_frame);
+		Tbsw.linear() = qbsw.toRotationMatrix();
 		support_inc = true;
 
 	
 	}
 	else
 	{
-
-		Tbs.translation() << tf_right_foot.getOrigin().x(), tf_right_foot.getOrigin().y(), tf_right_foot.getOrigin().z();
-		qbs = Quaterniond(tf_right_foot.getRotation().w(), tf_right_foot.getRotation().x(), tf_right_foot.getRotation().y(), tf_right_foot.getRotation().z());
-		Tbsw.translation() << tf_left_foot.getOrigin().x(), tf_left_foot.getOrigin().y(), tf_left_foot.getOrigin().z();
-		qbsw = Quaterniond(tf_left_foot.getRotation().w(), tf_left_foot.getRotation().x(), tf_left_foot.getRotation().y(), tf_left_foot.getRotation().z());
+		Tbs.translation() = rd->linkPosition(rfoot_frame);
+		qbs = rd->linkOrientation(rfoot_frame);
+		Tbs.linear() = qbs.toRotationMatrix();
+		Tbsw.translation() = rd->linkPosition(lfoot_frame);
+		qbsw = rd->linkOrientation(lfoot_frame);
+		Tbsw.linear() = qbsw.toRotationMatrix();
 		support_inc = true;
 
 
 	}
+
+
 
 	//TF Initialization
 	if (firstrun && support_inc){
@@ -761,9 +770,20 @@ void humanoid_ekf::computeKinTFs() {
 
 		leg_odom_inc = true;
 		check_no_motion = false;
-	}
 
-	
+
+	}
+    cout<<"TBS "<<Tbs.translation()<<endl;
+	cout<<"TBS "<<Tbs.linear()<<endl;
+
+    cout<<"TBSW "<<Tbsw.translation()<<endl;
+	cout<<"TBSW "<<Tbsw.linear()<<endl;
+
+    cout<<"Tws "<<Tws.translation()<<endl;
+	cout<<"Tws "<<Tws.linear()<<endl;
+
+    cout<<"Twb "<<Twb.translation()<<endl;
+    cout<<"Twb "<<Twb.linear()<<endl;
 
 
 }
@@ -1228,10 +1248,13 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 {
 	joint_state_msg = *msg;
 	joint_inc = true;
+
+
 	if(firstJoint && useJointKF)
 	{
 		number_of_joints = joint_state_msg.name.size();
 		joint_state_vel.resize(number_of_joints);
+		joint_state_pos.resize(number_of_joints);
 		JointVF = new JointDF*[number_of_joints];
 		for (unsigned int i=0; i<number_of_joints; i++){
 			JointVF[i] = new JointDF();									
@@ -1239,15 +1262,20 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 		}
 		firstJoint = false;
 	}
+	else if(firstJoint)
+	{
+		number_of_joints = joint_state_msg.name.size();
+		joint_state_pos.resize(number_of_joints);
+		firstJoint = false;
+
+	}
 
 	for (unsigned int i=0; i< joint_state_msg.name.size(); i++){
 		joint_map[joint_state_msg.name[i]]=joint_state_msg.position[i];
+		joint_state_pos[i]=joint_state_msg.position[i];
+
 		if(useJointKF && !firstJoint){
 			joint_state_vel[i]=JointVF[i]->filter(joint_state_msg.position[i]);
-			cout<<"POS"<<endl;
-			cout<<joint_state_msg.name[i]<<joint_state_msg.position[i]<<endl;
-			cout<<"Vel"<<endl;
-			cout<<joint_state_msg.name[i]<<joint_state_vel[i]<<endl;
 		}
 	}
 
@@ -1376,6 +1404,7 @@ void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 	MediatorInsert(lmdf,lfsr_msg.wrench.force.z);
 	LLegForceFilt = MediatorMedian(lmdf);
 	fsr_inc = true;
+	
 }
 void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
