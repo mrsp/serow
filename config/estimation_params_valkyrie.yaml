@@ -51,7 +51,7 @@ LLegUpThres: 600 #Schmitt Trigger High Threshold in Newtons (N)
 LLegLowThres: 250 #Schmitt Trigger Low Threshold in Newtons (N)
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: true #Use a Steady State KF in every joint
-joint_cutoff_freq: 50
+joint_cutoff_freq: 22
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
@@ -83,7 +83,7 @@ support_orientation_noise_density: 5.0e-04
 #IMU Initial Biases
 bias_ax: 0.0
 bias_ay: 0.0
-bias_az: -9.80
+bias_az: -9.7997
 bias_gx: -1.60298e-05
 bias_gy: 1.24745e-05
 bias_gz: 2.60968e-05
@@ -91,13 +91,13 @@ bias_gz: 2.60968e-05
 
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
-medianWindow: 31
+medianWindow: 21
 
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
 # CoM 3-D Position/Velocity
 # 3-D External Forces on the CoM
-estimateCoM: false   #Use the CoM EKF
+estimateCoM: true   #Use the CoM EKF
 
 #---------------------------------------------#
 #Specify the rest only if estimateCoM is true!!

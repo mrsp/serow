@@ -222,7 +222,7 @@ humanoid_ekf::humanoid_ekf()
 	firstUpdate = false;
 	firstOdom = false;
 	firstPose = false;
-
+	outFile.open("/home/master/output.txt");
 }
 
 humanoid_ekf::~humanoid_ekf() {
@@ -738,7 +738,7 @@ void humanoid_ekf::computeKinTFs() {
 
 	//TF Initialization
 	if (firstrun && support_inc){
-			Tws.translation() << 0.00, Tbs.translation()(1), 0.00;
+			Tws.translation() << Tbs.translation()(0), Tbs.translation()(1), 0.00;
 			Tws.linear() = Tbs.linear();
 	}
 
@@ -773,17 +773,6 @@ void humanoid_ekf::computeKinTFs() {
 
 
 	}
-    cout<<"TBS "<<Tbs.translation()<<endl;
-	cout<<"TBS "<<Tbs.linear()<<endl;
-
-    cout<<"TBSW "<<Tbsw.translation()<<endl;
-	cout<<"TBSW "<<Tbsw.linear()<<endl;
-
-    cout<<"Tws "<<Tws.translation()<<endl;
-	cout<<"Tws "<<Tws.linear()<<endl;
-
-    cout<<"Twb "<<Twb.translation()<<endl;
-    cout<<"Twb "<<Twb.linear()<<endl;
 
 
 }
@@ -817,10 +806,15 @@ void humanoid_ekf::determineLegContact() {
 		if(!support_idx_provided){
 			int ssidl = int(LLegForceFilt > LLegUpThres) - int(LLegForceFilt < LLegLowThres);
 			int ssidr = int(RLegForceFilt > LLegUpThres) - int(RLegForceFilt < LLegLowThres);
+			LLegLvel = rd->linearJacobian(lfoot_frame)*joint_state_vel;
+			RLegLvel = rd->linearJacobian(rfoot_frame)*joint_state_vel;
+			//cout<<"LEFT "<<LLegLvel.norm()<<endl;
+			//cout<<"RIGHT "<<RLegLvel.norm()<<endl;
 
-			
 			if (support_leg == "RLeg")
 			{
+
+				
 				if (ssidl == 1 && ssidr != 1){
 					support_leg = "LLeg";
 					support_foot_frame = lfoot_frame;
@@ -1278,6 +1272,7 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 			joint_state_vel[i]=JointVF[i]->filter(joint_state_msg.position[i]);
 		}
 	}
+	//outFile<<joint_state_pos[19]<<endl;
 
 }
 
@@ -1401,6 +1396,8 @@ void humanoid_ekf::subscribeToFSR()
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
 	lfsr_msg = *msg;
+		outFile<<lfsr_msg.wrench.force.z<<endl;
+
 	MediatorInsert(lmdf,lfsr_msg.wrench.force.z);
 	LLegForceFilt = MediatorMedian(lmdf);
 	fsr_inc = true;
@@ -1409,6 +1406,7 @@ void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
 	rfsr_msg = *msg;
+
 	MediatorInsert(rmdf,rfsr_msg.wrench.force.z);
 	RLegForceFilt = MediatorMedian(rmdf);
 }

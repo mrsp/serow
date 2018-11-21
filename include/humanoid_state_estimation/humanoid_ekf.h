@@ -52,6 +52,7 @@
 #include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Bool.h>
+#include <fstream>
 
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/Imu.h>
@@ -71,7 +72,7 @@ class humanoid_ekf{
 private:
 	// ROS Standard Variables
 	ros::NodeHandle n;
-
+    ofstream outFile;
 	ros::Publisher bodyAcc_est_pub,supportPose_est_pub, support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
 	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub, 
 	rel_supportPose_pub,rel_swingPose_pub, comp_odom0_pub, comp_odom1_pub;
@@ -79,7 +80,7 @@ private:
 	ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub,
 	ground_truth_odom_sub,ds_sub, compodom0_sub, compodom1_sub, ground_truth_com_sub,support_idx_sub;
 	
-	Eigen::VectorXd joint_state_pos;
+	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
 	serow::robotDyn* rd;
 	double  freq, joint_freq, fsr_freq;
@@ -133,7 +134,6 @@ private:
 
 	// get joint positions from state message
   	std::map<std::string, double> joint_map;
-	std::vector<double>joint_state_vel;
 	tf::Point com;
 	tf::Transform tf_right_foot, tf_left_foot;
 	double mass;
@@ -150,9 +150,11 @@ private:
 	double jointFreq,joint_cutoff_freq;
 	Mediator* lmdf;
 	Mediator* rmdf;
+	Mediator* lfvel;
+	Mediator* rfvel;	
 	string support_leg, swing_leg;
 
-	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT;
+	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT, LLegLvel, RLegLvel;
   	Vector3d copl, copr;
 	int lcount,rcount;
 	bool comp_with;
