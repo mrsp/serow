@@ -64,6 +64,8 @@
 #include "humanoid_state_estimation/mediator.h"
 #include "humanoid_state_estimation/differentiator.h"
 #include "humanoid_state_estimation/robotDyn.h"
+#include "humanoid_state_estimation/Madgwick.h"
+
 using namespace Eigen;
 using namespace std;
 using namespace hrl_kinematics;
@@ -83,6 +85,9 @@ private:
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
 	serow::robotDyn* rd;
+	serow::Madgwick* mw;
+
+
 	double  freq, joint_freq, fsr_freq;
 	ros::Time Tbs_stamp, Tbsw_stamp;
 	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, support_inc, swing_inc, check_no_motion, ground_truth_odom_inc;
@@ -118,6 +123,8 @@ private:
 	std_msgs::Int32 is_in_ds_msg, support_idx_msg;
 	geometry_msgs::PointStamped COP_msg, copl_msg, copr_msg, CoM_pos_msg;
 
+	//Madgwick gain
+	double beta;
 	// Helper
 	bool is_connected_, ground_truth, support_idx_provided;
 

@@ -53,6 +53,9 @@ LLegLowThres: 250 #Schmitt Trigger Low Threshold in Newtons (N)
 estimateJoints: true #Use a Steady State KF in every joint
 joint_cutoff_freq: 22
 
+#Madgwick Filter for attitude
+Madgwick_gain: 0.012
+
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
 # 3-D Body Position/Velocity
@@ -92,6 +95,9 @@ bias_gz: 2.60968e-05
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
 medianWindow: 21
+
+
+
 
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
