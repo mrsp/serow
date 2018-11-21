@@ -124,6 +124,13 @@ void humanoid_ekf::loadparams() {
 	n_p.param<bool>("estimateCoM", useCoMEKF,false);
 	n_p.param<bool>("estimateJoints", useJointKF,false);
 	n_p.param<int>("medianWindow", medianWindow,15);
+
+
+
+	//Madgwick Filter for Attitude Estimation
+	n_p.param<double>("Madgwick_gain", beta,0.012f);
+	mw =  new serow::Madgwick(freq,beta);
+
 }
 
 void humanoid_ekf::loadJointKFparams()
@@ -443,6 +450,11 @@ void humanoid_ekf::run() {
 		if(imu_inc){
 		predictWithImu = false;
 		predictWithCoM = false;
+
+		mw->MadgwickAHRSupdateIMU(T_B_I.linear() * Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z),
+			T_B_I.linear()*Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z));
+
+		cout<<"Euler Madw "<<mw->getR()<<endl;
 
 		if(fsr_inc){
 			computeLGRF();
