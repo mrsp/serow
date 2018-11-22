@@ -65,6 +65,7 @@
 #include "humanoid_state_estimation/differentiator.h"
 #include "humanoid_state_estimation/robotDyn.h"
 #include "humanoid_state_estimation/Madgwick.h"
+#include "humanoid_state_estimation/deadReckoning.h"
 
 using namespace Eigen;
 using namespace std;
