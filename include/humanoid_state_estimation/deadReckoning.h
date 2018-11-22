@@ -9,10 +9,15 @@ namespace serow{
         Eigen::Matrix3d C1l, C2l, C1r, C2r;
         Eigen::Vector3d RpRm, LpLm;
         
+        Eigen::Vector3d pwr,pwl,pwb;
+        Eigen::Vector3d vwr,vwl,vwb;
+
+        Eigen::Matrix3d Rwr,Rwl;
+        
         Eigen::Vector3d pwl_,pwr_;
         Eigen::Vector3d pb_l, pb_r;
         Eigen::Matrix3d Rwl_,Rwr_;
-        Eigen::Vector3d vwbKCFS, vwb;
+        Eigen::Vector3d vwbKCFS;
         Eigen::Vector3d Lomega, Romega;
     public:
         deadReckoning(Eigen::Vector3d pwl, Eigen::Vector3d pwl, Eigen::Matrix3d Rwl, Eigen::Matrix3d Rwr,
@@ -47,14 +52,14 @@ namespace serow{
                              Eigen::Vector3d vbl, Eigen::Vector3d vbr, string support_leg)
         {
             if(support_leg == "LLeg")
-                vwbKCFS= -serow::skew(omegawb) * Rwb * pbl - Rwb * vbl;
+                vwbKCFS= -serow::wedge(omegawb) * Rwb * pbl - Rwb * vbl;
             else
-                vwbKCFS= -serow::skew(omegawb) * Rwb * pbr - Rwb * vbr;
+                vwbKCFS= -serow::wedge(omegawb) * Rwb * pbr - Rwb * vbr;
 
             vwb = vwbKCFS;
         }
         
-        void computeLegKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb, Eigen::Vector3d omegabl, Eigen::Vector3d omegabr
+        void computeLegKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb, Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
                             Eigen::Vector3d pbl, Eigen::Vector3d pbr, Eigen::Vector3d vbl, Eigen::Vector3d vbr)
         {
             Rwl = Rwb * Rbl;
@@ -62,8 +67,8 @@ namespace serow{
             omegawl = omegawb + Rwb * omegabl;
             omegawr = omegawb + Rwb * omegabr;
             
-            vwl = vwb + serow::skew(omegawb) * Rwb * pbl + Rwb * vbl;
-            vwr = vwb + serow::skew(omegawb) * Rwb * pbr + Rwb * vbr;
+            vwl = vwb + serow::wedge(omegawb) * Rwb * pbl + Rwb * vbl;
+            vwr = vwb + serow::wedge(omegawb) * Rwb * pbr + Rwb * vbr;
 
         }
         void computeIMVP()
@@ -73,7 +78,7 @@ namespace serow{
             C1l = Tm2/(Lomega.squaredNorm()*Tm2+1.0f);
             C2l = C1l;
 
-            C1l *= serow::skew(Lomega);
+            C1l *= serow::wedge(Lomega);
             
             C2l *= (Lomega * Lomega.transpose() + 1.0f/Tm2 * Matrix3d::Identity());
             
@@ -82,7 +87,7 @@ namespace serow{
             C1r = Tm2/(Romega.squaredNorm()*Tm2+1.0f);
             C2r = C1r;
             
-            C1r *= serow::skew(Romega);
+            C1r *= serow::wedge(Romega);
             
             C2r *= Romega * Romega.transpose() + 1.0f/Tm2 * Matrix3d::Identity();
             
@@ -152,7 +157,7 @@ namespace serow{
     };
     
     //Computes the skew symmetric matrix of a 3-D vector
-    Matrix3d skew(Vector3d v)
+    Matrix3d wedge(Vector3d v)
     {
         Matrix3d res;
         res.Zero();
