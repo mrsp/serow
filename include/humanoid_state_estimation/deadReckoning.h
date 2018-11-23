@@ -55,11 +55,11 @@ namespace serow{
         }
         
         void computeBodyVelKCFS(Eigen::Matrix3d Rwb,Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
-                             Eigen::Vector3d vbl, Eigen::Vector3d vbr, string support_leg)
+                             Eigen::Vector3d vbl, Eigen::Vector3d vbr, double lfz, double rfz)
         {
             
 
-            if(support_leg == "LLeg")
+            if(lfz>rfz)
                 vwbKCFS= -wedge(omegawb) * Rwb * pbl - Rwb * vbl;
             else
                 vwbKCFS= -wedge(omegawb) * Rwb * pbr - Rwb * vbr;
@@ -116,7 +116,7 @@ namespace serow{
         {
             
             //Compute Body position
-            computeBodyVelKCFS(Rwb, omegawb,  pbl,  pbr, vbl, vbr, support_leg);
+            computeBodyVelKCFS(Rwb, omegawb,  pbl,  pbr, vbl, vbr, lfz, rfz);
             computeLegKCFS(Rwb,  Rbl, Rbr, omegawb,  omegabl, omegabr, pbl,  pbr,  vbl,  vbr);
             computeIMVP();
             
