@@ -19,6 +19,8 @@ namespace serow{
         Eigen::Matrix3d Rwl_,Rwr_;
         Eigen::Vector3d vwbKCFS;
         Eigen::Vector3d Lomega, Romega;
+        Eigen::Vector3d omegawl, omegawl;
+
     public:
         deadReckoning(Eigen::Vector3d pwl, Eigen::Vector3d pwl, Eigen::Matrix3d Rwl, Eigen::Matrix3d Rwr,
                       double mass_, double Tm_ = 0.3, double ef_ = 0.3, double g_= 9.81)
@@ -74,29 +76,22 @@ namespace serow{
         void computeIMVP()
         {
             Lomega=Rwl.transpose()*omegawl;
-            
-            C1l = Tm2/(Lomega.squaredNorm()*Tm2+1.0f);
-            C2l = C1l;
-
-            C1l *= serow::wedge(Lomega);
-            
-            C2l *= (Lomega * Lomega.transpose() + 1.0f/Tm2 * Matrix3d::Identity());
-            
             Romega=Rwr.transpose()*omegawr;
+
             
-            C1r = Tm2/(Romega.squaredNorm()*Tm2+1.0f);
-            C2r = C1r;
+            double temp =Tm2/(Lomega.squaredNorm()*Tm2+1.0f);
+            C1l = temp * serow::wedge(Lomega);
+            C2l = temp * (Lomega * Lomega.transpose() + 1.0f/Tm2 * Matrix3d::Identity());
+
+            temp = Tm2/(Romega.squaredNorm()*Tm2+1.0f);
+            C1r = temp * serow::wedge(Romega);
+            C2r = temp * Romega * Romega.transpose() + 1.0f/Tm2 * Matrix3d::Identity();
             
-            C1r *= serow::wedge(Romega);
-            
-            C2r *= Romega * Romega.transpose() + 1.0f/Tm2 * Matrix3d::Identity();
-            
+            //IMVP Computations
             LpLm = C2l * LpLm;
-            
             LpLm += C1l * Rwl.transpose() * vwl;
             
             RpRm = C2r * RpRm;
-            
             RpRm += C1r * Rwr.transpose() * vwr;
         }
         
@@ -172,6 +167,5 @@ namespace serow{
         return res;
     }
 
-    
     
 }
