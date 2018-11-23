@@ -394,6 +394,18 @@ void humanoid_ekf::init() {
 	RLegGRT = Vector3d::Zero();
 	copl = Vector3d::Zero();
 	copr = Vector3d::Zero();
+
+	omegabl.Zero();
+	omegabr.Zero();
+	vbl.Zero();
+	vbr.Zero();
+	Twl.Identity();
+	Twr.Identity();
+	Tbl.Identity();
+	Tbr.Identity();
+
+
+
 	no_motion_residual = Vector3d::Zero();
 	firstrun = true;
 	firstGyrodot = true;
@@ -454,7 +466,6 @@ void humanoid_ekf::run() {
 		mw->MadgwickAHRSupdateIMU(T_B_I.linear() * Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z),
 			T_B_I.linear()*Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z));
 
-		cout<<"Euler Madw "<<mw->getR()<<endl;
 
 		if(fsr_inc){
 			computeLGRF();
@@ -713,6 +724,7 @@ void humanoid_ekf::computeKinTFs() {
 	// catch (tf::TransformException ex){
 	// 	ROS_ERROR("%s",ex.what());
 	// }
+    
 
 
 
@@ -726,9 +738,12 @@ void humanoid_ekf::computeKinTFs() {
 		Tbs.translation() = rd->linkPosition(lfoot_frame);
 		qbs = rd->linkOrientation(lfoot_frame);
 		Tbs.linear() = qbs.toRotationMatrix();
+		Tbl = Tbs;
+
 		Tbsw.translation() = rd->linkPosition(rfoot_frame);
 		qbsw = rd->linkOrientation(rfoot_frame);
 		Tbsw.linear() = qbsw.toRotationMatrix();
+		Tbr = Tbsw;
 		support_inc = true;
 
 	
@@ -738,9 +753,11 @@ void humanoid_ekf::computeKinTFs() {
 		Tbs.translation() = rd->linkPosition(rfoot_frame);
 		qbs = rd->linkOrientation(rfoot_frame);
 		Tbs.linear() = qbs.toRotationMatrix();
+		Tbr = Tbs;
 		Tbsw.translation() = rd->linkPosition(lfoot_frame);
 		qbsw = rd->linkOrientation(lfoot_frame);
 		Tbsw.linear() = qbsw.toRotationMatrix();
+		Tbl = Tbsw;
 		support_inc = true;
 
 
@@ -752,6 +769,7 @@ void humanoid_ekf::computeKinTFs() {
 	if (firstrun && support_inc){
 			Tws.translation() << Tbs.translation()(0), Tbs.translation()(1), 0.00;
 			Tws.linear() = Tbs.linear();
+			
 	}
 
 
@@ -762,6 +780,21 @@ void humanoid_ekf::computeKinTFs() {
 		Tssw = Tsb*Tbsw;
 		qssw = Quaterniond(Tssw.linear());		
 		
+		if(firstrun)
+		{
+			if(support_leg=="LLeg")
+			{
+				Twl = Tws;
+				Twr = Tws * Tssw;
+			}
+			else
+			{
+				Twr = Tws;
+				Twl = Tws * Tssw;
+			}
+
+		}
+
 		if(legSwitch){
 			//If Support foot changed update the support foot - world TF
 			Tws = Tws * Tssw.inverse();
@@ -775,8 +808,18 @@ void humanoid_ekf::computeKinTFs() {
 		//Race Condition safe first run
 		if(firstrun){
 			Twb_ = Twb;
+			dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
+                       mass, 0.4, 0.3, g);
+
 			firstrun=false;
 		}
+		omegabl = rd->angularJacobian(lfoot_frame)*joint_state_vel;
+		omegabr = rd->angularJacobian(rfoot_frame)*joint_state_vel;
+		vbl =  rd->linearJacobian(lfoot_frame)*joint_state_vel;
+		vbr =  rd->linearJacobian(rfoot_frame)*joint_state_vel;
+
+
+		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, LLegForceFilt, RLegForceFilt, support_leg);
 		qwb = Quaterniond(Twb.linear());
 		qwb_ = Quaterniond(Twb_.linear());
 

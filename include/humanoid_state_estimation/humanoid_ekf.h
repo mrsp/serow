@@ -85,9 +85,11 @@ private:
 	
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
+	Eigen::Vector3d omegabl, omegabr, vbl, vbr;
+	Affine3d Twl, Twr, Tbl, Tbr;
 	serow::robotDyn* rd;
 	serow::Madgwick* mw;
-
+	serow::deadReckoning* dr;
 
 	double  freq, joint_freq, fsr_freq;
 	ros::Time Tbs_stamp, Tbsw_stamp;

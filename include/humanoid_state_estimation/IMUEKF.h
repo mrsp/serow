@@ -179,7 +179,7 @@ public:
 	void updateTF();
 
 	//Computes the skew symmetric matrix of a 3-D vector
-	inline Matrix3d wedge(
+	Matrix3d wedge(
 			Vector3d v) {
 
 		Matrix3d skew;

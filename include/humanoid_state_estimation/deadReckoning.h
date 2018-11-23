@@ -19,18 +19,22 @@ namespace serow{
         Eigen::Matrix3d Rwl_,Rwr_;
         Eigen::Vector3d vwbKCFS;
         Eigen::Vector3d Lomega, Romega;
-        Eigen::Vector3d omegawl, omegawl;
+        Eigen::Vector3d omegawl, omegawr;
 
     public:
-        deadReckoning(Eigen::Vector3d pwl, Eigen::Vector3d pwl, Eigen::Matrix3d Rwl, Eigen::Matrix3d Rwr,
-                      double mass_, double Tm_ = 0.3, double ef_ = 0.3, double g_= 9.81)
+        deadReckoning(Eigen::Vector3d pwl0, Eigen::Vector3d pwr0, Eigen::Matrix3d Rwl0, Eigen::Matrix3d Rwr0,
+                      double mass_, double Tm_ = 0.4, double ef_ = 0.3, double g_= 9.81)
         {
             
-            pwl_ = pwl;
-            pwr_ = pwr;
-            Rwl_ = Rwl;
-            Rwr_ = Rwr;
-            
+            pwl_ = pwl0;
+            pwr_ = pwr0;
+            Rwl_ = Rwl0;
+            Rwr_ = Rwr0;
+            Rwl = Rwl_;
+            Rwr = Rwr_;
+            pwl = pwl_;
+            pwr = pwr_;
+
             mass = mass_;
             Tm = Tm_;
             Tm2 = Tm*Tm;
@@ -53,15 +57,18 @@ namespace serow{
         void computeBodyVelKCFS(Eigen::Matrix3d Rwb,Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                              Eigen::Vector3d vbl, Eigen::Vector3d vbr, string support_leg)
         {
+            
+
             if(support_leg == "LLeg")
-                vwbKCFS= -serow::wedge(omegawb) * Rwb * pbl - Rwb * vbl;
+                vwbKCFS= -wedge(omegawb) * Rwb * pbl - Rwb * vbl;
             else
-                vwbKCFS= -serow::wedge(omegawb) * Rwb * pbr - Rwb * vbr;
+                vwbKCFS= -wedge(omegawb) * Rwb * pbr - Rwb * vbr;
 
             vwb = vwbKCFS;
+           
         }
         
-        void computeLegKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb, Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
+        void computeLegKCFS(Eigen::Matrix3d Rwb,Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr, Eigen::Vector3d omegawb, Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
                             Eigen::Vector3d pbl, Eigen::Vector3d pbr, Eigen::Vector3d vbl, Eigen::Vector3d vbr)
         {
             Rwl = Rwb * Rbl;
@@ -69,8 +76,9 @@ namespace serow{
             omegawl = omegawb + Rwb * omegabl;
             omegawr = omegawb + Rwb * omegabr;
             
-            vwl = vwb + serow::wedge(omegawb) * Rwb * pbl + Rwb * vbl;
-            vwr = vwb + serow::wedge(omegawb) * Rwb * pbr + Rwb * vbr;
+            vwl = vwb + wedge(omegawb) * Rwb * pbl + Rwb * vbl;
+            vwr = vwb + wedge(omegawb) * Rwb * pbr + Rwb * vbr;
+
 
         }
         void computeIMVP()
@@ -80,12 +88,12 @@ namespace serow{
 
             
             double temp =Tm2/(Lomega.squaredNorm()*Tm2+1.0f);
-            C1l = temp * serow::wedge(Lomega);
+            C1l = temp * wedge(Lomega);
             C2l = temp * (Lomega * Lomega.transpose() + 1.0f/Tm2 * Matrix3d::Identity());
 
             temp = Tm2/(Romega.squaredNorm()*Tm2+1.0f);
-            C1r = temp * serow::wedge(Romega);
-            C2r = temp * Romega * Romega.transpose() + 1.0f/Tm2 * Matrix3d::Identity();
+            C1r = temp * wedge(Romega);
+            C2r = temp * (Romega * Romega.transpose() + 1.0f/Tm2 * Matrix3d::Identity());
             
             //IMVP Computations
             LpLm = C2l * LpLm;
@@ -93,10 +101,14 @@ namespace serow{
             
             RpRm = C2r * RpRm;
             RpRm += C1r * Rwr.transpose() * vwr;
+
+
+		
         }
         
         
-        void computeDeadReckoning(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb,
+        void computeDeadReckoning(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr,
+                                  Eigen::Vector3d omegawb,
                                   Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                                   Eigen::Vector3d vbl, Eigen::Vector3d vbr,
                                   Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
@@ -105,7 +117,7 @@ namespace serow{
             
             //Compute Body position
             computeBodyVelKCFS(Rwb, omegawb,  pbl,  pbr, vbl, vbr, support_leg);
-            computeLegKCFS(Rwb,  omegawb,  omegabl, omegabr, pbl,  pbr,  vbl,  vbr);
+            computeLegKCFS(Rwb,  Rbl, Rbr, omegawb,  omegabl, omegabr, pbl,  pbr,  vbl,  vbr);
             computeIMVP();
             
             //Temp estimate of Leg position w.r.t Inertial Frame
@@ -136,7 +148,8 @@ namespace serow{
             Rwr_ = Rwr;
             pwl_ = pwl;
             pwr_ = pwr;
-            
+            cout<<"DEAD RECKONING "<<endl;
+            cout<<pwb<<endl;
         }
         
         double cropGRF(double f_)
@@ -148,24 +161,25 @@ namespace serow{
             
             return f_;
         }
+	//Computes the skew symmetric matrix of a 3-D vector
+    	Matrix3d wedge(Vector3d v)
+    	{
+		Matrix3d res;
+		res.Zero();
+		
+		res(0, 1) = -v(2);
+		res(0, 2) = v(1);
+		res(1, 2) = -v(0);
+		res(1, 0) = v(2);
+		res(2, 0) = -v(1);
+		res(2, 1) = v(0);
+		
+		return res;
+	}
+
         
     };
     
-    //Computes the skew symmetric matrix of a 3-D vector
-    Matrix3d wedge(Vector3d v)
-    {
-        Matrix3d res;
-        res.Zero();
-        
-        res(0, 1) = -v(2);
-        res(0, 2) = v(1);
-        res(1, 2) = -v(0);
-        res(1, 0) = v(2);
-        res(2, 0) = -v(1);
-        res(2, 1) = v(0);
-        
-        return res;
-    }
 
     
 }
