@@ -1,5 +1,5 @@
 #include <eigen3/Eigen/Dense>
-
+#include "humanoid_state_estimation/bodyVelCF.h"
 
 namespace serow{
     
