@@ -52,7 +52,6 @@
 #include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Bool.h>
-#include <fstream>
 
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/Imu.h>
@@ -75,7 +74,6 @@ class humanoid_ekf{
 private:
 	// ROS Standard Variables
 	ros::NodeHandle n;
-    ofstream outFile;
 	ros::Publisher bodyAcc_est_pub,supportPose_est_pub, support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
 	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub, 
 	rel_supportPose_pub,rel_swingPose_pub, comp_odom0_pub, comp_odom1_pub;

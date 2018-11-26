@@ -5,7 +5,7 @@ namespace serow{
     
     class deadReckoning{
     private:
-        double Tm, Tm2, ef, wl, wr, mass, g;
+        double Tm, Tm2, ef, wl, wr, mass, g, freq, GRF;
         Eigen::Matrix3d C1l, C2l, C1r, C2r;
         Eigen::Vector3d RpRm, LpLm;
         
@@ -21,9 +21,10 @@ namespace serow{
         Eigen::Vector3d Lomega, Romega;
         Eigen::Vector3d omegawl, omegawr;
 
+        bodyVelCF* bvcf;
     public:
         deadReckoning(Eigen::Vector3d pwl0, Eigen::Vector3d pwr0, Eigen::Matrix3d Rwl0, Eigen::Matrix3d Rwr0,
-                      double mass_, double Tm_ = 0.4, double ef_ = 0.3, double g_= 9.81)
+                      double mass_, double Tm_ = 0.4, double ef_ = 0.3, double freq_ = 100.0, double g_= 9.81,  double freqvmin_ = 0.001, double freqvmax_ = 0.5)
         {
             
             pwl_ = pwl0;
@@ -35,6 +36,7 @@ namespace serow{
             pwl = pwl_;
             pwr = pwr_;
 
+            freq = freq_;
             mass = mass_;
             Tm = Tm_;
             Tm2 = Tm*Tm;
@@ -52,6 +54,8 @@ namespace serow{
             pb_l.Zero();
             pb_r.Zero();
             vwbKCFS.Zero();
+            bvcf = new bodyVelCF(freq_, mass_, freqvmin_ ,  freqvmax_ ,  g_);
+
         }
         
         void computeBodyVelKCFS(Eigen::Matrix3d Rwb,Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
@@ -86,22 +90,36 @@ namespace serow{
             Lomega=Rwl.transpose()*omegawl;
             Romega=Rwr.transpose()*omegawr;
 
-            
-            double temp =Tm2/(Lomega.squaredNorm()*Tm2+1.0f);
-            C1l = temp * wedge(Lomega);
-            C2l = temp * (Lomega * Lomega.transpose() + 1.0f/Tm2 * Matrix3d::Identity());
+            double temp =Tm2/(Lomega.squaredNorm()*Tm2+1.0);
 
-            temp = Tm2/(Romega.squaredNorm()*Tm2+1.0f);
+            cout<<" L O "<<endl;
+            C1l = temp * wedge(Lomega);
+            C2l = temp * (Lomega * Lomega.transpose() + 1.0/Tm2 * Matrix3d::Identity());
+            cout<<C1l<<endl;
+            cout<<C2l<<endl;
+
+
+            temp = Tm2/(Romega.squaredNorm()*Tm2+1.0);
+            cout<<" R O "<<endl;
+
             C1r = temp * wedge(Romega);
-            C2r = temp * (Romega * Romega.transpose() + 1.0f/Tm2 * Matrix3d::Identity());
-            
+            C2r = temp * (Romega * Romega.transpose() + 1.0/Tm2 * Matrix3d::Identity());
+            cout<<C1r<<endl;
+            cout<<C2r<<endl;
             //IMVP Computations
             LpLm = C2l * LpLm;
             LpLm += C1l * Rwl.transpose() * vwl;
             
             RpRm = C2r * RpRm;
             RpRm += C1r * Rwr.transpose() * vwr;
-
+            
+            cout<<" RPRM "<<RpRm<<endl;
+            cout<<" LPRM "<<LpLm<<endl;
+            if(RpRm(0)>1.0)
+            {
+                 unsigned int *ip = NULL;
+                printf("Value stored at Address stored in pointer: %d \n",*ip); // gives "Segmentation fault (core dumped)"
+            }
 
 		
         }
@@ -112,11 +130,15 @@ namespace serow{
                                   Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                                   Eigen::Vector3d vbl, Eigen::Vector3d vbr,
                                   Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
-                                  double lfz, double rfz, string support_leg)
+                                  double lfz, double rfz, Eigen::Vector3d  acc, string support_leg)
         {
             
             //Compute Body position
+            double GRF=lfz+rfz;
             computeBodyVelKCFS(Rwb, omegawb,  pbl,  pbr, vbl, vbr, lfz, rfz);
+            GRF = cropGRF(GRF);
+
+            bvcf->filter(vwbKCFS, acc, GRF);
             computeLegKCFS(Rwb,  Rbl, Rbr, omegawb,  omegabl, omegabr, pbl,  pbr,  vbl,  vbr);
             computeIMVP();
             
@@ -154,12 +176,7 @@ namespace serow{
         
         double cropGRF(double f_)
         {
-            if(f_ > mass*g)
-                f_ = mass*g;
-            if(f_ < 0.0)
-                f_ = 0.0;
-            
-            return f_;
+            return  max(0.0,min(f_,mass*g));
         }
 	//Computes the skew symmetric matrix of a 3-D vector
     	Matrix3d wedge(Vector3d v)
