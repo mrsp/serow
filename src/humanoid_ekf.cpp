@@ -149,7 +149,12 @@ void humanoid_ekf::loadIMUEKFparams()
 	n_p.param<double>("bias_gx", bias_gx,0.0);
 	n_p.param<double>("bias_gy", bias_gy,0.0);
 	n_p.param<double>("bias_gz", bias_gz,0.0);
-
+	n_p.param<double>("bias_ax",  imuEKF->bias_ax,0.0);
+	n_p.param<double>("bias_ay",  imuEKF->bias_ay,0.0);
+	n_p.param<double>("bias_az",  imuEKF->bias_az,0.0);
+	n_p.param<double>("bias_gx",  imuEKF->bias_gx,0.0);
+	n_p.param<double>("bias_gy",  imuEKF->bias_gy,0.0);
+	n_p.param<double>("bias_gz",  imuEKF->bias_gz,0.0);
 	n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qx,0.001);
 	n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qy,0.001);
 	n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qz,0.001);
@@ -229,7 +234,6 @@ humanoid_ekf::humanoid_ekf()
 	firstUpdate = false;
 	firstOdom = false;
 	firstPose = false;
-	outFile.open("/home/master/output.txt");
 }
 
 humanoid_ekf::~humanoid_ekf() {
@@ -463,8 +467,8 @@ void humanoid_ekf::run() {
 		predictWithImu = false;
 		predictWithCoM = false;
 
-		mw->MadgwickAHRSupdateIMU(T_B_I.linear() * Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z),
-			T_B_I.linear()*Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z));
+		mw->MadgwickAHRSupdateIMU(T_B_I.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z))-Vector3d(bias_gx,bias_gy,bias_gz),
+			T_B_I.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z))-Vector3d(bias_ax,bias_ay,bias_az));
 
 
 		if(fsr_inc){
@@ -690,44 +694,6 @@ void humanoid_ekf::computeRGRF()
 
 void humanoid_ekf::computeKinTFs() {
 
-	// try{
-	// 	Tbs_listener.lookupTransform(base_link_frame, support_foot_frame,  
-	// 					ros::Time(0), Tbs_tf);
-		
-	// 	if(Tbs_tf.stamp_ !=	Tbs_stamp)
-	// 	{
-	// 		Tbs_.translation() << Tbs_tf.getOrigin().x(), Tbs_tf.getOrigin().y(), Tbs_tf.getOrigin().z();
-	// 		qbs = Quaterniond(Tbs_tf.getRotation().w(), Tbs_tf.getRotation().x(), Tbs_tf.getRotation().y(), Tbs_tf.getRotation().z());
-	// 		Tbs_.linear() = qbs.toRotationMatrix();
-	// 		Tbs = Tbs_;
-	// 		//Tbs = isNear(Tbs, Tbs_, 5e-3, 5e-3, 5e-3);
-	// 		Tbs_stamp = Tbs_tf.stamp_;
-	// 		support_inc = true;
-	// 	}
-	// }
-	// catch (tf::TransformException ex){
-	// 	ROS_ERROR("%s",ex.what());
-	// }
-	// try{
-	// 	Tbsw_listener.lookupTransform(base_link_frame, swing_foot_frame,  
-	// 			ros::Time(0), Tbsw_tf);
-	// 	if(Tbsw_tf.stamp_ != Tbsw_stamp){
-	// 		Tbsw_.translation() << Tbsw_tf.getOrigin().x(), Tbsw_tf.getOrigin().y(), Tbsw_tf.getOrigin().z();
-	// 		qbsw = Quaterniond(Tbsw_tf.getRotation().w(), Tbsw_tf.getRotation().x(), Tbsw_tf.getRotation().y(), Tbsw_tf.getRotation().z());
-	// 		Tbsw_.linear() = qbsw.toRotationMatrix();
-	// 		Tbsw = Tbsw_;
-	// 		//Tbsw = isNear(Tbsw, Tbsw_, 5e-3, 5e-3, 5e-3);
-	// 		Tbsw_stamp = Tbsw_tf.stamp_;
-	// 		swing_inc = true;
-	// 	}
-	// }
-	// catch (tf::TransformException ex){
-	// 	ROS_ERROR("%s",ex.what());
-	// }
-    
-
-
-
 
 	rd->updateJointConfig(joint_state_pos);
 	CoM_enc = rd->comPosition();
@@ -809,8 +775,7 @@ void humanoid_ekf::computeKinTFs() {
 		if(firstrun){
 			Twb_ = Twb;
 			dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                       mass, 0.4, 0.3, g);
-
+                       mass, 0.3, 0.3, freq, g, 0.001, 0.5);
 			firstrun=false;
 		}
 		omegabl = rd->angularJacobian(lfoot_frame)*joint_state_vel;
@@ -819,7 +784,7 @@ void humanoid_ekf::computeKinTFs() {
 		vbr =  rd->linearJacobian(rfoot_frame)*joint_state_vel;
 
 
-		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, LLegForceFilt, RLegForceFilt, support_leg);
+		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, LLegForceFilt, RLegForceFilt, mw->getAcc(),support_leg);
 		qwb = Quaterniond(Twb.linear());
 		qwb_ = Quaterniond(Twb_.linear());
 
@@ -1327,7 +1292,6 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 			joint_state_vel[i]=JointVF[i]->filter(joint_state_msg.position[i]);
 		}
 	}
-	//outFile<<joint_state_pos[19]<<endl;
 
 }
 
@@ -1451,7 +1415,6 @@ void humanoid_ekf::subscribeToFSR()
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
 	lfsr_msg = *msg;
-		outFile<<lfsr_msg.wrench.force.z<<endl;
 
 	MediatorInsert(lmdf,lfsr_msg.wrench.force.z);
 	LLegForceFilt = MediatorMedian(lmdf);

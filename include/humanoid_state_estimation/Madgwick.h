@@ -1,4 +1,5 @@
 #include <eigen3/Eigen/Dense>
+#include <iostream>
 
 namespace serow{
     class Madgwick
@@ -42,6 +43,7 @@ namespace serow{
             }
             Eigen::Matrix3d getR()
             {
+                cout<<"R "<<R<<endl;
                 return R;
             }
             Eigen::Vector3d getEuler()
@@ -51,6 +53,7 @@ namespace serow{
             void MadgwickAHRSupdateIMU(Eigen::Vector3d gyro_, Eigen::Vector3d acc_)
             {
 
+                
                 double gx = gyro_(0); 
                 double gy = gyro_(1);
                 double gz = gyro_(2);
