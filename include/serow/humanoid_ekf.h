@@ -1,5 +1,5 @@
 /*
- * humanoid_state_estimation - a complete state estimation scheme for humanoid robots
+ * SEROW - a complete state estimation scheme for humanoid robots
  *
  * Copyright 2017-2018 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
@@ -36,18 +36,17 @@
 #include <ros/ros.h>
 
 // Estimator Headers
-#include "humanoid_state_estimation/IMUEKF.h"
-#include "humanoid_state_estimation/CoMEKF.h"
-#include "humanoid_state_estimation/JointDF.h"
-#include "humanoid_state_estimation/butterworthLPF.h"
-#include "humanoid_state_estimation/MovingAverageFilter.h"
+#include "serow/IMUEKF.h"
+#include "serow/CoMEKF.h"
+#include "serow/JointDF.h"
+#include "serow/butterworthLPF.h"
+#include "serow/MovingAverageFilter.h"
 
 #include <eigen3/Eigen/Dense>
 // ROS Messages
-#include <tf/transform_listener.h>
-#include <tf/transform_datatypes.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
@@ -57,18 +56,16 @@
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 
-#include <hrl_kinematics/Kinematics.h>
 #include <dynamic_reconfigure/server.h>
-#include "humanoid_state_estimation/VarianceControlConfig.h"
-#include "humanoid_state_estimation/mediator.h"
-#include "humanoid_state_estimation/differentiator.h"
-#include "humanoid_state_estimation/robotDyn.h"
-#include "humanoid_state_estimation/Madgwick.h"
-#include "humanoid_state_estimation/deadReckoning.h"
+#include "serow/VarianceControlConfig.h"
+#include "serow/mediator.h"
+#include "serow/differentiator.h"
+#include "serow/robotDyn.h"
+#include "serow/Madgwick.h"
+#include "serow/deadReckoning.h"
 
 using namespace Eigen;
 using namespace std;
-using namespace hrl_kinematics;
 
 class humanoid_ekf{
 private:
@@ -83,15 +80,17 @@ private:
 	
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
-	Eigen::Vector3d omegabl, omegabr, vbl, vbr;
+	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vwb, omegawb;
 	Affine3d Twl, Twr, Tbl, Tbr;
 	serow::robotDyn* rd;
 	serow::Madgwick* mw;
 	serow::deadReckoning* dr;
 
+
+	bool useCF;
+	double cf_freqvmin, cf_freqvmax;
 	double  freq, joint_freq, fsr_freq;
-	ros::Time Tbs_stamp, Tbsw_stamp;
-	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, support_inc, swing_inc, check_no_motion, ground_truth_odom_inc;
+	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, support_inc, check_no_motion, ground_truth_odom_inc;
 	bool firstOdom, firstUpdate, firstPose;
 	int number_of_joints;
 	bool firstGyrodot;
@@ -129,24 +128,15 @@ private:
 	// Helper
 	bool is_connected_, ground_truth, support_idx_provided;
 
-	tf::TransformListener Tbs_listener, Tbsw_listener;
-	tf::StampedTransform Tbs_tf, Tbsw_tf;
+
 	Quaterniond qbs, qbsw, qwb, qwb_, qssw;
 	string base_link_frame, swing_foot_frame, support_foot_frame, lfoot_frame, rfoot_frame;
 	
-	tf::TransformListener Tfsr_listener;
-	tf::StampedTransform Tfsr_tf;
 
+    boost::shared_ptr< dynamic_reconfigure::Server<serow::VarianceControlConfig> > dynamic_recfg_;
 
-    boost::shared_ptr< dynamic_reconfigure::Server<humanoid_state_estimation::VarianceControlConfig> > dynamic_recfg_;
-
-	// get joint positions from state message
-  	std::map<std::string, double> joint_map;
-	tf::Point com;
-	tf::Transform tf_right_foot, tf_left_foot;
 	double mass;
 	IMUEKF* imuEKF;
-	Kinematics* kin;
 	CoMEKF* nipmEKF;
 	butterworthLPF** gyroLPF;
 	MovingAverageFilter** gyroMAF;
@@ -162,9 +152,8 @@ private:
 	Mediator* rfvel;	
 	string support_leg, swing_leg;
 
-	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT, LLegLvel, RLegLvel;
+	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT;
   	Vector3d copl, copr;
-	int lcount,rcount;
 	bool comp_with;
 	Affine3d Tws, Twh, Twb, Twb_; //From support s to world frame;
 	Affine3d Tbs, Tsb, Tssw, Tbsw, Tbs_, Tbsw_;
@@ -172,7 +161,7 @@ private:
 	/****/
 	bool firstrun, legSwitch, firstContact;
 	double LLegForceFilt, RLegForceFilt;
-	double LLegUpThres, LLegLowThres, LosingContact, StrikingContact;
+	double LLegUpThres, LLegLowThres, LosingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
 	/** Real odometry Data **/
@@ -241,27 +230,8 @@ private:
 	void advertise();
 	void subscribe();
 
-	Affine3d isNear(Affine3d T_1, Affine3d T_2, float epsx, float epsy, float epsz){
-		Affine3d T;
-		T.translation() = T_1.translation();
-		T.linear() = T_2.linear();
-
-		if(abs(T_1.translation()(0) - T_2.translation()(0)) > epsx)
-			T.translation()(0) = T_2.translation()(0);
-		if(abs(T_1.translation()(1) - T_2.translation()(1)) > epsy)
-			T.translation()(1) = T_2.translation()(1);
-		if(abs(T_1.translation()(2) - T_2.translation()(2)) > epsz)
-			T.translation()(2) = T_2.translation()(2);
-
-		return T;
-	}
-
-
 public:
-
-
-
-
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	// Constructor/Destructor
 	humanoid_ekf();
 
@@ -280,7 +250,7 @@ public:
 	void loadCoMEKFparams();
 	void loadJointKFparams();
 	// General Methods
-	void reconfigureCB(humanoid_state_estimation::VarianceControlConfig& config, uint32_t level);
+	void reconfigureCB(serow::VarianceControlConfig& config, uint32_t level);
 	void run();
 
 	bool connected();

@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "humanoid_state_estimation/IMUEKF.h"
+#include <serow/IMUEKF.h>
 
 
 IMUEKF::IMUEKF()

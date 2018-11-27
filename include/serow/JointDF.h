@@ -29,33 +29,31 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
  
-#ifndef  __JOINTSSKF_H__
-#define  __JOINTSSKF_H__
+#ifndef  __JOINTDF_H__
+#define  __JOINTDF_H__
 
-#include <eigen3/Eigen/Dense>
+#include <serow/differentiator.h>
+#include <serow/butterworthLPF.h>
 #include <iostream>
-using namespace Eigen;
+
 using namespace std;
-class JointSSKF
+class JointDF
 {
 
 private:
-    Vector2d K, x;
-    Matrix2d F;
-    bool firstrun;
+    butterworthLPF bw;
+    Differentiator df;
 public:
     double JointPosition;
     double JointVelocity;
     string JointName;
 
-    /** @fn void Filter(float JointPosMeasurement);
-     *  @brief filters the Joint Position using the measurement by the encoders
+    /** @fn void Filter(double JointPosMeasurement);
+     *  @brief estimates the Joint Velocity using the Joint Position measurement by the encoders
      */
-    double dt;
-
-    void filter(double JointPosMeasurement);
+    double filter(double JointPosMeasurement);
     void reset();
-    void init(string JointName_);
-    void setdt(double dtt);
+    void init(string JointName_,double fsampling, double fcutoff);
+
 };
 #endif

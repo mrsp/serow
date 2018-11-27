@@ -47,13 +47,13 @@ namespace serow
         Eigen::VectorXd qmin_, qmax_, dqmax_, q_;
         bool has_floating_base_;
     public:
-        
-        
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+          
         robotDyn(const std::string& model_name,
                  const bool& has_floating_base, const bool& verbose = false)
         {
             has_floating_base_ = has_floating_base;
-            std::cout << "Model loaded: -2 " << model_name << std::endl;
             pmodel_ = new se3::Model();
             
             if (has_floating_base)

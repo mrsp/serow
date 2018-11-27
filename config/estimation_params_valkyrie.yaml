@@ -7,7 +7,7 @@ modelname: "/home/master/dp_ws/src/serow/share/urdf/valkyrie_sim.urdf"
 #ROS Topic Names
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "" #only if usePoseUpdate is true
-useLegOdom: false
+useLegOdom: true
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/pelvisMiddleImu/imu"
 joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
@@ -49,12 +49,21 @@ fsr_topic_freq: 500
 ##Schmitt Trigger - Contact Classifier
 LLegUpThres: 600 #Schmitt Trigger High Threshold in Newtons (N)
 LLegLowThres: 250 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 5
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: true #Use a Steady State KF in every joint
 joint_cutoff_freq: 22
 
 #Madgwick Filter for attitude
 Madgwick_gain: 0.012
+
+#Complimentary Filter for Body Velocity  //Used in Leg Odometry
+useCF: true
+freqvmin: 0.1
+freqvmax: 2.5
+
+
+
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
@@ -87,9 +96,9 @@ support_orientation_noise_density: 5.0e-04
 bias_ax: 0.0
 bias_ay: 0.0
 bias_az: -9.7997
-bias_gx: -1.60298e-05
-bias_gy: 1.24745e-05
-bias_gz: 2.60968e-05
+bias_gx: 0.0
+bias_gy: 0.0
+bias_gz: 0.0
 
 
 #Filter Params

@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
  
-#include <humanoid_state_estimation/MovingAverageFilter.h>
+#include <serow/MovingAverageFilter.h>
 
 
 MovingAverageFilter::MovingAverageFilter()

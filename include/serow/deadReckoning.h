@@ -1,5 +1,5 @@
 #include <eigen3/Eigen/Dense>
-#include "humanoid_state_estimation/bodyVelCF.h"
+#include "serow/bodyVelCF.h"
 
 namespace serow{
     
@@ -56,11 +56,20 @@ namespace serow{
             pb_r = Eigen::Vector3d::Zero();
             vwbKCFS = Eigen::Vector3d::Zero();
             USE_CF = USE_CF_;
+
             if(USE_CF)
                 bvcf = new bodyVelCF(freq_, mass_, freqvmin_ ,  freqvmax_ ,  g_);
 
         }
-        
+        Eigen::Vector3d getOdom()
+        {
+            return pwb;
+        }
+        Eigen::Vector3d getLinearVel()
+        {
+            return vwb;
+        }
+
         void computeBodyVelKCFS(Eigen::Matrix3d Rwb,Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                              Eigen::Vector3d vbl, Eigen::Vector3d vbr, double lfz, double rfz)
         {
