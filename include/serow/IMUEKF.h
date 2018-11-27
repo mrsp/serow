@@ -89,7 +89,8 @@ private:
 
 
 public:
-
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+             
 	//State vector - with biases included
 	Matrix<double, 21, 1> x;
 

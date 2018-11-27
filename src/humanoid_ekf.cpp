@@ -32,7 +32,7 @@
 
 #include <iostream>
 #include <algorithm>
-#include "humanoid_state_estimation/humanoid_ekf.h"
+#include <serow/humanoid_ekf.h>
 
 
 void humanoid_ekf::loadparams() {
@@ -51,7 +51,6 @@ void humanoid_ekf::loadparams() {
 	n_p.param<double>("LLegUpThres", LLegUpThres,20.0);
 	n_p.param<double>("LLegLowThres", LLegLowThres,15.0);
 	n_p.param<double>("LosingContact", LosingContact,5.0);
-	n_p.param<double>("StrikingContact", StrikingContact,10.0);
 	n_p.param<bool>("useLegOdom",useLegOdom,false);
 	n_p.param<bool>("usePoseUpdate",usePoseUpdate,false);
 	n_p.param<bool>("ground_truth",ground_truth,false);
@@ -129,6 +128,11 @@ void humanoid_ekf::loadparams() {
 
 	//Madgwick Filter for Attitude Estimation
 	n_p.param<double>("Madgwick_gain", beta,0.012f);
+	n_p.param<bool>("useCF", useCF,true);
+	n_p.param<double>("freqvmax", cf_freqvmax,2.5);
+	n_p.param<double>("freqvmin", cf_freqvmin,0.1);
+
+
 	mw =  new serow::Madgwick(freq,beta);
 
 }
@@ -256,8 +260,8 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 	//Initialization
 	init();
 
-	dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<humanoid_state_estimation::VarianceControlConfig> >(n);
-    dynamic_reconfigure::Server<humanoid_state_estimation::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
+	dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<serow::VarianceControlConfig> >(n);
+    dynamic_reconfigure::Server<serow::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
     dynamic_recfg_->setCallback(cb);
 
 	// Load IMU parameters
@@ -284,7 +288,7 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 
 
 
-void humanoid_ekf::reconfigureCB(humanoid_state_estimation::VarianceControlConfig& config, uint32_t level)
+void humanoid_ekf::reconfigureCB(serow::VarianceControlConfig& config, uint32_t level)
 {
 
       imuEKF->accb_qx = config.accb_qx;
@@ -398,15 +402,16 @@ void humanoid_ekf::init() {
 	RLegGRT = Vector3d::Zero();
 	copl = Vector3d::Zero();
 	copr = Vector3d::Zero();
-
-	omegabl.Zero();
-	omegabr.Zero();
-	vbl.Zero();
-	vbr.Zero();
-	Twl.Identity();
-	Twr.Identity();
-	Tbl.Identity();
-	Tbr.Identity();
+	omegawb = Vector3d::Zero();
+	vwb = Vector3d::Zero();
+	omegabl = Vector3d::Zero();
+	omegabr = Vector3d::Zero();
+	vbl= Vector3d::Zero();
+	vbr= Vector3d::Zero();
+	Twl = Affine3d::Identity();
+	Twr = Affine3d::Identity();
+	Tbl = Affine3d::Identity();
+	Tbr = Affine3d::Identity();
 
 
 
@@ -419,6 +424,7 @@ void humanoid_ekf::init() {
 	// Initialize the IMU based EKF 
 	imuEKF = new IMUEKF;
 	imuEKF->init();
+
 	if(useCoMEKF){
 		if(useGyroLPF){
 			gyroLPF = new butterworthLPF*[3];
@@ -430,9 +436,9 @@ void humanoid_ekf::init() {
 			for(unsigned int i=0;i<3;i++)
 				gyroMAF[i] = new MovingAverageFilter();			
 		}
+
 		nipmEKF = new CoMEKF;
 		nipmEKF->init();
-		kin = new Kinematics(base_link_frame,rfoot_frame,lfoot_frame);
 	}
 	imu_inc = false;
 	fsr_inc = false;
@@ -441,15 +447,10 @@ void humanoid_ekf::init() {
 	odom_inc = false;
 	leg_odom_inc = false;
 	support_inc = false;
-	swing_inc = false;
     no_motion_indicator = false;
 	no_motion_it = 0;
 	no_motion_threshold = 5e-4;
 	no_motion_it_threshold = 500;
-	Tbs_stamp = ros::Time::now();
-	Tbsw_stamp = ros::Time::now();
-	lcount = 0;
-	rcount = 0;
     
 	lmdf = MediatorNew(medianWindow);
 	rmdf = MediatorNew(medianWindow);
@@ -461,7 +462,7 @@ void humanoid_ekf::init() {
 
 void humanoid_ekf::run() {
 	
-	static ros::Rate rate(2.0*freq);  //ROS Node Loop Rate
+	static ros::Rate rate(1.05*freq);  //ROS Node Loop Rate
 	while (ros::ok()){
 		if(imu_inc){
 		predictWithImu = false;
@@ -624,9 +625,6 @@ void humanoid_ekf::estimateWithIMUEKF()
 void humanoid_ekf::estimateWithCoMEKF()
 {
 	if(joint_inc){
-			//kin->computeCOM(joint_map, com, mass,tf_right_foot,  tf_left_foot);
-			//CoM_enc << com.x(), com.y(), com.z();
-
 			if (nipmEKF->firstrun){
 				nipmEKF->setdt(1.0/fsr_freq);
 				nipmEKF->setParams(mass,I_xx,I_yy,g);
@@ -695,24 +693,24 @@ void humanoid_ekf::computeRGRF()
 void humanoid_ekf::computeKinTFs() {
 
 
+	//Update Pinnochio
 	rd->updateJointConfig(joint_state_pos);
+
+	//Get the CoM w.r.t Body Frame
 	CoM_enc = rd->comPosition();
+
 	mass = m;
-	//kin->computeCOM(joint_map, com, mass,tf_right_foot,  tf_left_foot);
+	support_inc = true;
 	if(support_leg=="LLeg")
 	{
 		Tbs.translation() = rd->linkPosition(lfoot_frame);
 		qbs = rd->linkOrientation(lfoot_frame);
 		Tbs.linear() = qbs.toRotationMatrix();
 		Tbl = Tbs;
-
 		Tbsw.translation() = rd->linkPosition(rfoot_frame);
 		qbsw = rd->linkOrientation(rfoot_frame);
 		Tbsw.linear() = qbsw.toRotationMatrix();
 		Tbr = Tbsw;
-		support_inc = true;
-
-	
 	}
 	else
 	{
@@ -724,30 +722,18 @@ void humanoid_ekf::computeKinTFs() {
 		qbsw = rd->linkOrientation(lfoot_frame);
 		Tbsw.linear() = qbsw.toRotationMatrix();
 		Tbl = Tbsw;
-		support_inc = true;
-
-
 	}
 
+	Tsb = Tbs.inverse();
+	Tssw = Tsb*Tbsw;
+	qssw = Quaterniond(Tssw.linear());		
+		
 
 
 	//TF Initialization
-	if (firstrun && support_inc){
+	if (firstrun){
 			Tws.translation() << Tbs.translation()(0), Tbs.translation()(1), 0.00;
 			Tws.linear() = Tbs.linear();
-			
-	}
-
-
-	if (support_inc)
-	{
-		Tsb = Tbs.inverse();
-		//Tssw = isNear(Tssw,Tsb * Tbsw, 1e-2,1e-2,5e-2); //needed by COP
-		Tssw = Tsb*Tbsw;
-		qssw = Quaterniond(Tssw.linear());		
-		
-		if(firstrun)
-		{
 			if(support_leg=="LLeg")
 			{
 				Twl = Tws;
@@ -758,44 +744,49 @@ void humanoid_ekf::computeKinTFs() {
 				Twr = Tws;
 				Twl = Tws * Tssw;
 			}
-
-		}
-
-		if(legSwitch){
-			//If Support foot changed update the support foot - world TF
-			Tws = Tws * Tssw.inverse();
-			//Tws = isNear(Tws, Tws * Tssw.inverse(), 1e-2, 1e-2, 5e-2); //needed by COP
-			legSwitch=false;
-		}
-		Twb_ = Twb;
-		Twb = Tws * Tsb;
-		//Twb = isNear(Twb, Tws * Tsb, 5e-3, 5e-3, 5e-3);
-
-		//Race Condition safe first run
-		if(firstrun){
-			Twb_ = Twb;
 			dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                       mass, 0.3, 0.4, freq, g, true, 0.1, 2.5);
-			firstrun=false;
-		}
+                       mass, 0.3, 0.4, freq, g, useCF, cf_freqvmin, cf_freqvmax);
+	}
+
+
+
+		
+		//Differential Kinematics with Pinnochio
 		omegabl = rd->angularJacobian(lfoot_frame)*joint_state_vel;
 		omegabr = rd->angularJacobian(rfoot_frame)*joint_state_vel;
 		vbl =  rd->linearJacobian(lfoot_frame)*joint_state_vel;
 		vbr =  rd->linearJacobian(rfoot_frame)*joint_state_vel;
 
 
-		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, LLegForceFilt, RLegForceFilt, mw->getAcc(),support_leg);
-		qwb = Quaterniond(Twb.linear());
-		qwb_ = Quaterniond(Twb_.linear());
-
+		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, 
+		LLegForceFilt, RLegForceFilt, mw->getAcc(),support_leg);
+		
+		Twb_ = Twb;
+		qwb_ = qwb;
+		Twb.translation() = dr->getOdom();
+		qwb = Quaterniond(mw->getR());
+		vwb = dr->getLinearVel();
+		omegawb = mw->getGyro();
+		if(firstrun)
+		{
+			Twb_ = Twb;
+			qwb_ = qwb;
+			firstrun = false;
+		}
+		if(legSwitch){
+			//If Support foot changed update the support foot - world TF
+			Tws = Twb * Tbs;
+			legSwitch=false;
+		}
+		
 		leg_odom_inc = true;
 		check_no_motion = false;
 
 
-	}
-
-
 }
+
+
+
 
 
 
@@ -826,15 +817,9 @@ void humanoid_ekf::determineLegContact() {
 		if(!support_idx_provided){
 			int ssidl = int(LLegForceFilt > LLegUpThres) - int(LLegForceFilt < LLegLowThres);
 			int ssidr = int(RLegForceFilt > LLegUpThres) - int(RLegForceFilt < LLegLowThres);
-			LLegLvel = rd->linearJacobian(lfoot_frame)*joint_state_vel;
-			RLegLvel = rd->linearJacobian(rfoot_frame)*joint_state_vel;
-			//cout<<"LEFT "<<LLegLvel.norm()<<endl;
-			//cout<<"RIGHT "<<RLegLvel.norm()<<endl;
-
+		
 			if (support_leg == "RLeg")
 			{
-
-				
 				if (ssidl == 1 && ssidr != 1){
 					support_leg = "LLeg";
 					support_foot_frame = lfoot_frame;
@@ -880,6 +865,9 @@ void humanoid_ekf::deAllocate()
 		delete[] gyroMAF;
 	}
 	delete imuEKF;
+	delete rd;
+	delete mw;
+	delete dr;
 }
 
 
@@ -960,6 +948,13 @@ void humanoid_ekf::publishBodyEstimates() {
 		leg_odom_msg.pose.pose.orientation.y = qwb.y();
 		leg_odom_msg.pose.pose.orientation.z = qwb.z();
 		leg_odom_msg.pose.pose.orientation.w = qwb.w();
+		leg_odom_msg.twist.twist.linear.x = vwb(0);
+		leg_odom_msg.twist.twist.linear.y = vwb(1);
+		leg_odom_msg.twist.twist.linear.z = vwb(2);
+		leg_odom_msg.twist.twist.angular.x = omegawb(0);
+		leg_odom_msg.twist.twist.angular.y = omegawb(1);
+		leg_odom_msg.twist.twist.angular.z = omegawb(2);
+
 		leg_odom_pub.publish(leg_odom_msg);
 	}
 
@@ -1285,8 +1280,7 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 	}
 
 	for (unsigned int i=0; i< joint_state_msg.name.size(); i++){
-		joint_map[joint_state_msg.name[i]]=joint_state_msg.position[i];
-		joint_state_pos[i]=joint_state_msg.position[i];
+				joint_state_pos[i]=joint_state_msg.position[i];
 
 		if(useJointKF && !firstJoint){
 			joint_state_vel[i]=JointVF[i]->filter(joint_state_msg.position[i]);

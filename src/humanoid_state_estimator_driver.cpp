@@ -31,7 +31,7 @@
 
 
 #include <iostream>
-#include "humanoid_state_estimation/humanoid_ekf.h"
+#include <serow/humanoid_ekf.h>
 using std::string;
 using std::cerr;
 using std::endl;

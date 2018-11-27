@@ -29,81 +29,34 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
  
-#ifndef __COMEKF_H__
-#define __COMEKF_H__
+#ifndef  __JOINTSSKF_H__
+#define  __JOINTSSKF_H__
 
-#include <iostream>
 #include <eigen3/Eigen/Dense>
-
+#include <iostream>
 using namespace Eigen;
 using namespace std;
-
-class CoMEKF {
+class JointSSKF
+{
 
 private:
-
-	Matrix<double, 9, 9> F, P, I, Q, Fd;
-
-	Vector3d COP, fN, L;
-
-	Matrix<double, 6, 9> H;
-
-	Matrix<double, 9, 6> K;
-
-	Matrix<double, 6, 6> R, S;
-
-
-	Matrix<double, 6, 1> z;
-	
-	double tmp;
-	
-	void updateVars();
-
+    Vector2d K, x;
+    Matrix2d F;
+    bool firstrun;
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW       
+    double JointPosition;
+    double JointVelocity;
+    string JointName;
 
-	Matrix<double, 9, 1> x, f;
+    /** @fn void Filter(float JointPosMeasurement);
+     *  @brief filters the Joint Position using the measurement by the encoders
+     */
+    double dt;
 
-	double comd_q, com_q, fd_q, com_r, comdd_r;
-
-	double dt, m, g, I_xx,I_yy;
-
-    double bias_fx, bias_fy, bias_fz;
-	bool firstrun;
-	
-	void init();
-
-	void setdt(double dtt) {
-		dt = dtt;
-	}
-
-	void setParams(double m_, double I_xx_, double I_yy_, double g_)
-	{
-		m = m_;
-		I_xx = I_xx_;
-		I_yy = I_yy_;
-		g = g_;
-
-	}
-
-	void setCoMPos(Vector3d pos) {
-		x(0) = pos(0);
-		x(1) = pos(1);
-		x(2) = pos(2);
-	}
-	void setCoMExternalForce(Vector3d force) {
-		x(6) = force(0);
-		x(7) = force(1);
-		x(8) = force(2);
-	}
-
-	void predict(Vector3d COP_, Vector3d fN_, Vector3d L_);
-	void update(Vector3d Acc, Vector3d Pos, Vector3d Gyro, Vector3d Gyrodot);
-	void updateWithEnc(Vector3d Pos);
-	void updateWithImu(Vector3d Acc, Vector3d Pos, Vector3d Gyro);
-
-	double comX, comY, comZ, velX, velY, velZ, fX,
-			fY, fZ;
-
+    void filter(double JointPosMeasurement);
+    void reset();
+    void init(string JointName_);
+    void setdt(double dtt);
 };
-
 #endif

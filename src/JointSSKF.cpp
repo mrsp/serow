@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "humanoid_state_estimation/JointSSKF.h"
+#include <serow/JointSSKF.h>
 
 
 

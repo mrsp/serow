@@ -1,9 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-  <include file="$(find humanoid_state_estimation)/launch/valkyrie_sim.launch" />
-  <!-- Call Humanoid State Estimation Driver -->
-  <node pkg="humanoid_state_estimation" type="humanoid_state_estimation" name="humanoid_state_estimation" respawn="false" output="screen" >
- 	<!-- Load configurations from YAML file to parameter server -->
-   	 <rosparam file="$(find humanoid_state_estimation)/config/estimation_params_valkyrie.yaml" command="load"/> 
-  </node>
-</launch>

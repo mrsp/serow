@@ -29,7 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
  
-#include "humanoid_state_estimation/CoMEKF.h"
+#include <serow/CoMEKF.h>
 
 void CoMEKF::init() {
 
