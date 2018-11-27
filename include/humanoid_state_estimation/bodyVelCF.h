@@ -24,18 +24,20 @@ namespace serow{
    
 
                 if(GRFz <= 0.0)
-                    Tv_ = 2.0*M_PI * freqvmin;
+                    Tv_ = 1.0/(2.0*M_PI * freqvmin);
                 else if(GRFz>=mass*g)
-                    Tv_ = 2.0*M_PI * freqvmax;
+                    Tv_ = 1.0/(2.0*M_PI * freqvmax);
                 else
                 {
-                    Tv_ = (2.0*M_PI)*(freqvmax-freqvmin)*GRFz/(mass*g) +  (2.0*M_PI)*freqvmin; //linear Interpolation
+                    Tv_ = (freqvmax-freqvmin)*GRFz/(mass*g) + freqvmin; //linear Interpolation
+                    Tv_ = 1.0/ (2.0*M_PI * Tv_);
                 }
                 return Tv_;
             }
 
         public:
-            bodyVelCF(double freq_, double mass_, double freqvmin_ = 0.001, double freqvmax_ = 0.5, double g_ = 9.81)
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            bodyVelCF(double freq_, double mass_, double freqvmin_ = 0.1, double freqvmax_ = 2.5, double g_ = 9.81)
             {
                 outFileX.open("/home/master/outputX.txt");
                 outFileY.open("/home/master/outputY.txt");
@@ -48,13 +50,13 @@ namespace serow{
                 mass = mass_;
                 g = g_;
                 Ts = 1.0/freq_;
-                Tv = 2.0*M_PI * freqvmax;
-                G.Zero();
+                Tv = 1.0/(2.0*M_PI * freqvmax);
+                G = Eigen::Vector3d::Zero();
                 G(2) = g;
-                vwb.Zero();
-                vwb0.Zero();
-                vwbKCFS0.Zero();
-                acc0.Zero();
+                vwb = Eigen::Vector3d::Zero();
+                vwb0 = Eigen::Vector3d::Zero();
+                vwbKCFS0 = Eigen::Vector3d::Zero();
+                acc0 = Eigen::Vector3d::Zero();
             }
 
             Eigen:: Vector3d filter(Eigen::Vector3d vwbKCFS, Eigen::Vector3d acc, double GRFz)
@@ -64,10 +66,9 @@ namespace serow{
                 Tv=computeCrossoverFreq(GRFz);
 
                 double temp = Ts+2.0*Tv;
+                //Tustin Transform
                 vwb = -(Ts-2.0*Tv)/temp * vwb0 + Ts*Tv/temp * (acc + acc0) + Ts/temp * (vwbKCFS + vwbKCFS0);
-                //std::cout<<"Velocity CF"<<std::endl;
-                //std::cout<<vwb<<std::endl;
-                //std::cout<<vwbKCFS<<std::endl;
+
 
 	            outFileKX<<vwbKCFS(0)<<std::endl;
 	            outFileKY<<vwbKCFS(1)<<std::endl;
