@@ -260,10 +260,6 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 	//Initialization
 	init();
 
-	dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<serow::VarianceControlConfig> >(n);
-    dynamic_reconfigure::Server<serow::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
-    dynamic_recfg_->setCallback(cb);
-
 	// Load IMU parameters
 	loadIMUEKFparams();
 	imuEKF->setAccBias(Vector3d(bias_ax,bias_ay,bias_az));
@@ -279,9 +275,12 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 	subscribe();
 	advertise();
 
+	dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<serow::VarianceControlConfig> >(n);
+    dynamic_reconfigure::Server<serow::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
+    dynamic_recfg_->setCallback(cb);
 	is_connected_ = true;
 
-	ros::Duration(2.0).sleep();
+	ros::Duration(1.5).sleep();
 	ROS_INFO_STREAM("Humanoid State Estimator Initialized");
 
 	return true;
