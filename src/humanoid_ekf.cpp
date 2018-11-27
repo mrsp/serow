@@ -775,7 +775,7 @@ void humanoid_ekf::computeKinTFs() {
 		if(firstrun){
 			Twb_ = Twb;
 			dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                       mass, 0.3, 0.3, freq, g, 0.001, 0.5);
+                       mass, 0.3, 0.4, freq, g, true, 0.1, 2.5);
 			firstrun=false;
 		}
 		omegabl = rd->angularJacobian(lfoot_frame)*joint_state_vel;

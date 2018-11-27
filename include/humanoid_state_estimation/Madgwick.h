@@ -13,6 +13,7 @@ namespace serow{
             double q0, q1, q2, q3;	// quaternion of sensor frame relative to auxiliary frame
         
         public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
             Madgwick(double freq_, double beta_)
             {
@@ -43,7 +44,6 @@ namespace serow{
             }
             Eigen::Matrix3d getR()
             {
-                cout<<"R "<<R<<endl;
                 return R;
             }
             Eigen::Vector3d getEuler()
