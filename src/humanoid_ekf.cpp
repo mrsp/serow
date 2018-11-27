@@ -281,6 +281,7 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 
 	is_connected_ = true;
 
+	ros::Duration(2.0).sleep();
 	ROS_INFO_STREAM("Humanoid State Estimator Initialized");
 
 	return true;
@@ -378,7 +379,6 @@ void humanoid_ekf::subscribe()
 	if(support_idx_provided)
 		subscribeToSupportIdx();
 
-	ros::Duration(1.0).sleep();
 }
 
 void humanoid_ekf::init() {
