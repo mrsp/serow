@@ -38,7 +38,7 @@ using std::endl;
 
 int main( int argc, char** argv )
 {
-    ros::init(argc, argv, "humanoid_state_estimation");
+    ros::init(argc, argv, "serow");
     ros::NodeHandle n;
     if(!ros::master::check())
     {
