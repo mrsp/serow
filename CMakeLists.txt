@@ -88,7 +88,7 @@ include_directories(
 link_directories(  
 ${PINOCCHIO_LIBRARY_DIRS})
 
-add_executable(serow src/humanoid_state_estimator_driver.cpp src/humanoid_ekf.cpp  src/IMUEKF.cpp src/JointSSKF.cpp src/MovingAverageFilter.cpp src/CoMEKF.cpp src/differentiator.cpp src/butterworthLPF.cpp src/JointDF.cpp)
+add_executable(serow src/serow_driver.cpp src/humanoid_ekf.cpp  src/IMUEKF.cpp src/JointSSKF.cpp src/MovingAverageFilter.cpp src/CoMEKF.cpp src/differentiator.cpp src/butterworthLPF.cpp src/JointDF.cpp)
 target_link_libraries(serow ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
 
 add_dependencies(serow ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
