@@ -744,7 +744,7 @@ void humanoid_ekf::computeKinTFs() {
 				Twl = Tws * Tssw;
 			}
 			dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                       mass, 0.3, 0.4, freq, g, useCF, cf_freqvmin, cf_freqvmax);
+                       mass, 0.4, 0.4, freq, g, useCF, cf_freqvmin, cf_freqvmax);
 	}
 
 
@@ -758,7 +758,7 @@ void humanoid_ekf::computeKinTFs() {
 
 
 		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, 
-		LLegForceFilt, RLegForceFilt, mw->getAcc(),support_leg);
+		LLegGRF(2), RLegGRF(2), mw->getAcc(),support_leg);
 		
 		Twb_ = Twb;
 		qwb_ = qwb;
@@ -795,7 +795,7 @@ void humanoid_ekf::determineLegContact() {
 	
 	//Choose Initial Support Foot based on Contact Force
 	if(firstContact){
-		if(LLegForceFilt>RLegForceFilt){
+		if(LLegGRF(2)>LLegGRF(2)){
 				// Initial support leg 
 					support_leg = "LLeg";
 					swing_leg = "RLeg";
@@ -814,8 +814,8 @@ void humanoid_ekf::determineLegContact() {
 	else{
 		//Determine if the Support Foot changed  
 		if(!support_idx_provided){
-			int ssidl = int(LLegForceFilt > LLegUpThres) - int(LLegForceFilt < LLegLowThres);
-			int ssidr = int(RLegForceFilt > LLegUpThres) - int(RLegForceFilt < LLegLowThres);
+			int ssidl = int(LLegGRF(2) > LLegUpThres) - int(LLegGRF(2) < LLegLowThres);
+			int ssidr = int(RLegGRF(2) > LLegUpThres) - int(RLegGRF(2) < LLegLowThres);
 		
 			if (support_leg == "RLeg")
 			{
