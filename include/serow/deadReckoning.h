@@ -80,7 +80,7 @@ namespace serow{
             else
                 vwbKCFS= -wedge(omegawb) * Rwb * pbr - Rwb * vbr;
             
-            if(!USE_CF)
+            //if(!USE_CF)
                 vwb = vwbKCFS;
            
         }
@@ -140,12 +140,14 @@ namespace serow{
             
             //Compute Body position
             computeBodyVelKCFS(Rwb, omegawb,  pbl,  pbr, vbl, vbr, lfz, rfz);
+/*
             if(USE_CF)
             {
                 double GRF=lfz+rfz;
                 GRF = cropGRF(GRF);
                 vwb=bvcf->filter(vwbKCFS, acc, GRF);
             }
+*/
             computeLegKCFS(Rwb,  Rbl, Rbr, omegawb,  omegabl, omegabr, pbl,  pbr,  vbl,  vbr);
             computeIMVP();
             
