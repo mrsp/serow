@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
-  <!-- Call Humanoid State Estimation Driver -->
+  <!-- Call SEROW -->
   <node pkg="serow" type="serow" name="serow" respawn="false" output="screen" >
  	<!-- Load configurations from YAML file to parameter server -->
    	 <rosparam file="$(find serow)/config/estimation_params_nao.yaml" command="load"/> 
