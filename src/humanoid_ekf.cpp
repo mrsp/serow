@@ -51,6 +51,8 @@ void humanoid_ekf::loadparams() {
 	n_p.param<double>("LLegUpThres", LLegUpThres,20.0);
 	n_p.param<double>("LLegLowThres", LLegLowThres,15.0);
 	n_p.param<double>("LosingContact", LosingContact,5.0);
+	n_p.param<double>("StrikingContact", StrikingContact,5.0);
+
 	n_p.param<bool>("useLegOdom",useLegOdom,false);
 	n_p.param<bool>("usePoseUpdate",usePoseUpdate,false);
 	n_p.param<bool>("ground_truth",ground_truth,false);
@@ -121,7 +123,6 @@ void humanoid_ekf::loadparams() {
 	n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
 
 	n_p.param<bool>("estimateCoM", useCoMEKF,false);
-	n_p.param<bool>("estimateJoints", useJointKF,false);
 	n_p.param<int>("medianWindow", medianWindow,15);
 
 
@@ -201,6 +202,8 @@ void humanoid_ekf::loadIMUEKFparams()
 	n_p.param<double>("gravity", imuEKF->ghat,9.81);
 	n_p.param<double>("gravity", g,9.81);
 
+	imuEKF->setAccBias(Vector3d(bias_ax,bias_ay,bias_az));
+	imuEKF->setGyroBias(Vector3d(bias_gx,bias_gy,bias_gz));
 }
 
 
@@ -232,7 +235,6 @@ void humanoid_ekf::loadCoMEKFparams() {
 
 humanoid_ekf::humanoid_ekf() 
 {
-	useJointKF = false;
 	useCoMEKF = false;
 	useLegOdom = false;
 	firstUpdate = false;
@@ -260,15 +262,13 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 	//Initialization
 	init();
 
+	loadJointKFparams();
 	// Load IMU parameters
 	loadIMUEKFparams();
-	imuEKF->setAccBias(Vector3d(bias_ax,bias_ay,bias_az));
-	imuEKF->setGyroBias(Vector3d(bias_gx,bias_gy,bias_gz));
+
 
 	if(useCoMEKF)
 		loadCoMEKFparams();
-	if(useJointKF)
-		loadJointKFparams();
 
 
 	//Subscribe/Publish ROS Topics/Services
@@ -352,7 +352,7 @@ void humanoid_ekf::subscribe()
 	subscribeToIMU();
 	subscribeToFSR();
 
-	firstJoint = true;
+	firstJointStates = true;
 	subscribeToJointState();
 	
 	firstUpdate = true;
@@ -391,8 +391,6 @@ void humanoid_ekf::init() {
 	Twb_ = Twb;
 	Tbs = Affine3d::Identity();
 	Tbsw = Affine3d::Identity();
-	Tbs_ = Tbs;
-	Tbsw = Tbsw;
 	Tsb = Affine3d::Identity();
 	Tssw = Affine3d::Identity();
 	LLegGRF = Vector3d::Zero();
@@ -497,8 +495,7 @@ void humanoid_ekf::run() {
 				publishCoMEstimates();
 				publishCOP();
 			}
-			if(useJointKF)
-				publishJointEstimates();
+			publishJointEstimates();
 		}
 		}
 		ros::spinOnce();
@@ -519,6 +516,8 @@ void humanoid_ekf::estimateWithIMUEKF()
 			imuEKF->setSupportOrientation(Tws.linear());
 			imuEKF->firstrun = false;
 		}
+
+
 		//Compute the attitude and posture with the IMU-Kinematics Fusion
 		//Predict with the IMU gyro and acceleration
 		if(imu_inc && !predictWithImu && !imuEKF->firstrun){
@@ -565,6 +564,16 @@ void humanoid_ekf::estimateWithIMUEKF()
 								q_update *=  q_now  * q_prev.inverse();
 								leg_odom_inc = false;
 								imuEKF->updateWithOdom(pos_update, q_update);
+								//STORE POS 
+								if(odom_inc){
+									 odom_msg_ = odom_msg;
+									 odom_inc = false;
+								}
+								if(pose_inc){
+									pose_inc = false;
+									pose_msg_ = pose_msg;
+								}
+
 						}
 				}
 				else
@@ -700,27 +709,21 @@ void humanoid_ekf::computeKinTFs() {
 
 	mass = m;
 	support_inc = true;
-	if(support_leg=="LLeg")
+	Tbl.translation() = rd->linkPosition(lfoot_frame);
+	qbs = rd->linkOrientation(lfoot_frame);
+	Tbl.linear() = qbs.toRotationMatrix();
+	Tbs=Tbl;
+	Tbr.translation() = rd->linkPosition(rfoot_frame);
+	qbsw = rd->linkOrientation(rfoot_frame);
+	Tbr.linear() = qbsw.toRotationMatrix();
+	Tbsw = Tbr;
+
+	if(support_leg=="RLeg")
 	{
-		Tbs.translation() = rd->linkPosition(lfoot_frame);
-		qbs = rd->linkOrientation(lfoot_frame);
-		Tbs.linear() = qbs.toRotationMatrix();
-		Tbl = Tbs;
-		Tbsw.translation() = rd->linkPosition(rfoot_frame);
-		qbsw = rd->linkOrientation(rfoot_frame);
-		Tbsw.linear() = qbsw.toRotationMatrix();
-		Tbr = Tbsw;
-	}
-	else
-	{
-		Tbs.translation() = rd->linkPosition(rfoot_frame);
-		qbs = rd->linkOrientation(rfoot_frame);
-		Tbs.linear() = qbs.toRotationMatrix();
-		Tbr = Tbs;
-		Tbsw.translation() = rd->linkPosition(lfoot_frame);
-		qbsw = rd->linkOrientation(lfoot_frame);
-		Tbsw.linear() = qbsw.toRotationMatrix();
-		Tbl = Tbsw;
+		Tbs = Tbr;
+		qbs = qbsw;
+		Tbsw = Tbl;
+		qbsw =  Quaterniond(Tbl.linear());
 	}
 
 	Tsb = Tbs.inverse();
@@ -733,21 +736,18 @@ void humanoid_ekf::computeKinTFs() {
 	if (firstrun){
 			Tws.translation() << Tbs.translation()(0), Tbs.translation()(1), 0.00;
 			Tws.linear() = Tbs.linear();
-			if(support_leg=="LLeg")
-			{
-				Twl = Tws;
-				Twr = Tws * Tssw;
-			}
-			else
+			Twl = Tws;
+			Twr = Tws * Tssw;
+			if(support_leg=="RLeg")
 			{
 				Twr = Tws;
 				Twl = Tws * Tssw;
 			}
 			dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                       mass, 0.4, 0.4, freq, g, useCF, cf_freqvmin, cf_freqvmax);
+                       mass, 0.3, 1.0, freq, g, useCF, cf_freqvmin, cf_freqvmax);
 	}
 
-
+	
 
 		
 		//Differential Kinematics with Pinnochio
@@ -758,7 +758,7 @@ void humanoid_ekf::computeKinTFs() {
 
 
 		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, 
-		LLegGRF(2), RLegGRF(2), mw->getAcc(),support_leg);
+		LLegForceFilt, RLegForceFilt, mw->getAcc());
 		
 		Twb_ = Twb;
 		qwb_ = qwb;
@@ -772,12 +772,15 @@ void humanoid_ekf::computeKinTFs() {
 			qwb_ = qwb;
 			firstrun = false;
 		}
+		Tws = Twb * Tbs;
+		qws = Quaterniond(Tws.linear());
+		
 		if(legSwitch){
 			//If Support foot changed update the support foot - world TF
-			Tws = Twb * Tbs;
 			legSwitch=false;
 		}
-		
+
+
 		leg_odom_inc = true;
 		check_no_motion = false;
 
@@ -795,7 +798,7 @@ void humanoid_ekf::determineLegContact() {
 	
 	//Choose Initial Support Foot based on Contact Force
 	if(firstContact){
-		if(LLegGRF(2)>LLegGRF(2)){
+		if(LLegGRF(2)>RLegGRF(2)){
 				// Initial support leg 
 					support_leg = "LLeg";
 					swing_leg = "RLeg";
@@ -814,12 +817,11 @@ void humanoid_ekf::determineLegContact() {
 	else{
 		//Determine if the Support Foot changed  
 		if(!support_idx_provided){
-			int ssidl = int(LLegGRF(2) > LLegUpThres) - int(LLegGRF(2) < LLegLowThres);
-			int ssidr = int(RLegGRF(2) > LLegUpThres) - int(RLegGRF(2) < LLegLowThres);
-		
+			
 			if (support_leg == "RLeg")
 			{
-				if (ssidl == 1 && ssidr != 1){
+				if ((LLegForceFilt > LLegUpThres) && (RLegForceFilt<LosingContact) && (LLegForceFilt < StrikingContact))
+				{
 					support_leg = "LLeg";
 					support_foot_frame = lfoot_frame;
 					swing_leg = "RLeg";
@@ -828,7 +830,8 @@ void humanoid_ekf::determineLegContact() {
 				}
 			}
 			else{
-				if (ssidr == 1 && ssidl != 1){
+				if ((LLegForceFilt < LLegLowThres) &&  (RLegForceFilt > LosingContact))
+				{
 					support_leg = "RLeg";
 					support_foot_frame = rfoot_frame;
 					swing_leg = "LLeg";
@@ -849,11 +852,9 @@ void humanoid_ekf::determineLegContact() {
 
 void humanoid_ekf::deAllocate()
 {
-	if(useJointKF){
-		for (unsigned int i = 0; i < number_of_joints; i++)
-			delete[] JointVF[i];
-		delete[] JointVF;
-	}
+	for (unsigned int i = 0; i < number_of_joints; i++)
+		delete[] JointVF[i];
+	delete[] JointVF;
 	if(useCoMEKF){
 		delete nipmEKF;
 		if(useGyroLPF)
@@ -985,13 +986,13 @@ void humanoid_ekf::publishBodyEstimates() {
 void humanoid_ekf::publishSupportEstimates() {
 	supportPose_est_msg.header.stamp = ros::Time::now();
 	supportPose_est_msg.header.frame_id = "odom";
-	supportPose_est_msg.pose.position.x = imuEKF->Tis.translation()(0);
-	supportPose_est_msg.pose.position.y = imuEKF->Tis.translation()(1);
-	supportPose_est_msg.pose.position.z = imuEKF->Tis.translation()(2);
-	supportPose_est_msg.pose.orientation.x = imuEKF->qis_.x();
-	supportPose_est_msg.pose.orientation.y = imuEKF->qis_.y();
-	supportPose_est_msg.pose.orientation.z = imuEKF->qis_.z();
-	supportPose_est_msg.pose.orientation.w = imuEKF->qis_.w();
+	supportPose_est_msg.pose.position.x = Tws.translation()(0);
+	supportPose_est_msg.pose.position.y = Tws.translation()(1);
+	supportPose_est_msg.pose.position.z = Tws.translation()(2);
+	supportPose_est_msg.pose.orientation.x = qws.x();
+	supportPose_est_msg.pose.orientation.y = qws.y();
+	supportPose_est_msg.pose.orientation.z = qws.z();
+	supportPose_est_msg.pose.orientation.w = qws.w();
 	supportPose_est_pub.publish(supportPose_est_msg);
 
 
@@ -1258,7 +1259,7 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 	joint_inc = true;
 
 
-	if(firstJoint && useJointKF)
+	if(firstJointStates)
 	{
 		number_of_joints = joint_state_msg.name.size();
 		joint_state_vel.resize(number_of_joints);
@@ -1268,22 +1269,14 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 			JointVF[i] = new JointDF();									
 			JointVF[i]->init(joint_state_msg.name[i],joint_freq,joint_cutoff_freq);
 		}
-		firstJoint = false;
+		firstJointStates = false;
 	}
-	else if(firstJoint)
-	{
-		number_of_joints = joint_state_msg.name.size();
-		joint_state_pos.resize(number_of_joints);
-		firstJoint = false;
 
-	}
 
 	for (unsigned int i=0; i< joint_state_msg.name.size(); i++){
 				joint_state_pos[i]=joint_state_msg.position[i];
-
-		if(useJointKF && !firstJoint){
-			joint_state_vel[i]=JointVF[i]->filter(joint_state_msg.position[i]);
-		}
+			    joint_state_vel[i]=JointVF[i]->filter(joint_state_msg.position[i]);
+		
 	}
 
 }

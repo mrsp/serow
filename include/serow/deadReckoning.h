@@ -135,7 +135,7 @@ namespace serow{
                                   Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                                   Eigen::Vector3d vbl, Eigen::Vector3d vbr,
                                   Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
-                                  double lfz, double rfz, Eigen::Vector3d  acc, string support_leg)
+                                  double lfz, double rfz, Eigen::Vector3d  acc)
         {
             
             //Compute Body position
@@ -179,8 +179,8 @@ namespace serow{
             Rwr_ = Rwr;
             pwl_ = pwl;
             pwr_ = pwr;
-            cout<<"DEAD RECKONING "<<endl;
-            cout<<pwb<<endl;
+            //cout<<"DEAD RECKONING "<<endl;
+            //cout<<pwb<<endl;
         }
         
         double cropGRF(double f_)

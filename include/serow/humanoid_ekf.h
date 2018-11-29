@@ -97,7 +97,7 @@ private:
 	bool useGyroLPF;
 	int  maWindow;
 	int medianWindow;
-	bool firstJoint;
+	bool firstJointStates;
 	bool predictWithImu, predictWithCoM;
 	bool no_motion_indicator;
 	int no_motion_it, no_motion_it_threshold;
@@ -106,7 +106,7 @@ private:
 	Vector3d  pos_update, CoM_gt;
 	Affine3d T_B_I, T_B_P, Tib_gt;
 	Quaterniond q_B_I, q_B_P, qib_gt;
-	bool useJointKF, useCoMEKF, useLegOdom;
+	bool useCoMEKF, useLegOdom;
     bool debug_mode;
 	//ROS Messages
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
@@ -129,7 +129,7 @@ private:
 	bool is_connected_, ground_truth, support_idx_provided;
 
 
-	Quaterniond qbs, qbsw, qwb, qwb_, qssw;
+	Quaterniond qbs, qbsw, qwb, qwb_, qssw, qws;
 	string base_link_frame, swing_foot_frame, support_foot_frame, lfoot_frame, rfoot_frame;
 	
 
@@ -147,21 +147,19 @@ private:
 	JointDF** JointVF;
 	double jointFreq,joint_cutoff_freq;
 	Mediator* lmdf;
-	Mediator* rmdf;
-	Mediator* lfvel;
-	Mediator* rfvel;	
+	Mediator* rmdf;	
 	string support_leg, swing_leg;
 
 	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT;
   	Vector3d copl, copr;
 	bool comp_with;
 	Affine3d Tws, Twh, Twb, Twb_; //From support s to world frame;
-	Affine3d Tbs, Tsb, Tssw, Tbsw, Tbs_, Tbsw_;
+	Affine3d Tbs, Tsb, Tssw, Tbsw;
 	Vector3d no_motion_residual;
 	/****/
 	bool firstrun, legSwitch, firstContact;
 	double LLegForceFilt, RLegForceFilt;
-	double LLegUpThres, LLegLowThres, LosingContact;
+	double LLegUpThres, LLegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
 	/** Real odometry Data **/
