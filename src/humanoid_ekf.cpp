@@ -986,13 +986,13 @@ void humanoid_ekf::publishBodyEstimates() {
 void humanoid_ekf::publishSupportEstimates() {
 	supportPose_est_msg.header.stamp = ros::Time::now();
 	supportPose_est_msg.header.frame_id = "odom";
-	supportPose_est_msg.pose.position.x = Tws.translation()(0);
-	supportPose_est_msg.pose.position.y = Tws.translation()(1);
-	supportPose_est_msg.pose.position.z = Tws.translation()(2);
-	supportPose_est_msg.pose.orientation.x = qws.x();
-	supportPose_est_msg.pose.orientation.y = qws.y();
-	supportPose_est_msg.pose.orientation.z = qws.z();
-	supportPose_est_msg.pose.orientation.w = qws.w();
+	supportPose_est_msg.pose.position.x = imuEKF->Tis.translation()(0);
+	supportPose_est_msg.pose.position.y = imuEKF->Tis.translation()(1);
+	supportPose_est_msg.pose.position.z = imuEKF->Tis.translation()(2);
+	supportPose_est_msg.pose.orientation.x = imuEKF->qis_.x();
+	supportPose_est_msg.pose.orientation.y = imuEKF->qis_.y();
+	supportPose_est_msg.pose.orientation.z = imuEKF->qis_.z();
+	supportPose_est_msg.pose.orientation.w = imuEKF->qis_.w();
 	supportPose_est_pub.publish(supportPose_est_msg);
 
 

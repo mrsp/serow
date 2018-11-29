@@ -47,9 +47,9 @@ joint_topic_freq: 500
 fsr_topic_freq: 500  
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 450 #Schmitt Trigger High Threshold in Newtons (N)
+LLegUpThres: 550 #Schmitt Trigger High Threshold in Newtons (N)
 LLegLowThres: 300 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 150
+LosingContact: 50
 StrikingContact: 1500
 
 #Steady State Joint Kalman Filter (KF)
@@ -85,13 +85,13 @@ support_orientation_random_walk: 5.0e-03  #rad
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 5.0e-5
-odom_orientation_noise_density: 5.0e-5
+odom_position_noise_density: 1.0e-3
+odom_orientation_noise_density: 1.0e-3
 
 
 #Support Foot/Orientation STD w.r.t Body Frame
-support_position_noise_density: 1.0e-05
-support_orientation_noise_density: 1.0e-05
+support_position_noise_density: 1.0e-03
+support_orientation_noise_density: 1.0e-03
 
 
 #IMU Initial Biases
