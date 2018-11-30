@@ -71,7 +71,7 @@ class humanoid_ekf{
 private:
 	// ROS Standard Variables
 	ros::NodeHandle n;
-	ros::Publisher bodyAcc_est_pub,supportPose_est_pub, support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
+	ros::Publisher supportPose_est_pub, bodyAcc_est_pub,leftleg_odom_pub, rightleg_odom_pub, support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
 	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub, 
 	rel_supportPose_pub,rel_swingPose_pub, comp_odom0_pub, comp_odom1_pub;
     
@@ -80,7 +80,7 @@ private:
 	
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
-	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vwb, omegawb;
+	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vwb, omegawb, vwl, vwr, omegawr, omegawl;
 	Affine3d Twl, Twr, Tbl, Tbr;
 	serow::robotDyn* rd;
 	serow::Madgwick* mw;
@@ -104,14 +104,14 @@ private:
 	double no_motion_threshold;
 	Quaterniond  q_update;
 	Vector3d  pos_update, CoM_gt;
-	Affine3d T_B_I, T_B_P, Tib_gt;
-	Quaterniond q_B_I, q_B_P, qib_gt;
-	bool useCoMEKF, useLegOdom;
+	Affine3d T_B_I, T_B_P;
+	Quaterniond q_B_I, q_B_P;
+	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM;
     bool debug_mode;
 	//ROS Messages
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
 	sensor_msgs::Imu imu_msg;
-	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg,
+	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg, leftleg_odom_msg, rightleg_odom_msg,
 	ground_truth_com_odom_msg, CoM_odom_msg, comp_odom0_msg, comp_odom1_msg;
 	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg, rel_supportPose_msg, rel_swingPose_msg;
 	std_msgs::String support_leg_msg;
@@ -129,7 +129,7 @@ private:
 	bool is_connected_, ground_truth, support_idx_provided;
 
 
-	Quaterniond qbs, qbsw, qwb, qwb_, qssw, qws;
+	Quaterniond qbs, qbl, qbr, qwb, qwb_, qws, qwl, qwr;
 	string base_link_frame, swing_foot_frame, support_foot_frame, lfoot_frame, rfoot_frame;
 	
 
@@ -150,14 +150,14 @@ private:
 	Mediator* rmdf;	
 	string support_leg, swing_leg;
 
-	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT;
+	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT, offsetGT,offsetGTCoM;
   	Vector3d copl, copr;
 	bool comp_with;
 	Affine3d Tws, Twh, Twb, Twb_; //From support s to world frame;
 	Affine3d Tbs, Tsb, Tssw, Tbsw;
 	Vector3d no_motion_residual;
 	/****/
-	bool firstrun, legSwitch, firstContact;
+	bool firstrun, legSwitch, firstContact, LLegST, RLegST;
 	double LLegForceFilt, RLegForceFilt;
 	double LLegUpThres, LLegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
@@ -220,7 +220,9 @@ private:
 	void publishJointEstimates();
 	void publishCoMEstimates();
 	void deAllocate();
+	void publishLegEstimates();
 	void publishSupportEstimates();
+
 	void publishBodyEstimates();
 	void publishContact();
 	void publishCOP();

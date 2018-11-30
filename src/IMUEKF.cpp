@@ -82,19 +82,14 @@ void IMUEKF::init() {
 
 
 	firstrun = true;
-	P = Matrix<double, 21, 21>::Identity() * (1e-2);
+	P = Matrix<double, 15, 15>::Identity() * (1e-2);
 	P(3,3) = 1e-5;
 	P(4,4) = 1e-5;
 	P(5,5) = 1e-5;
 	P(6,6)  = 1e-6;
 	P(7,7)  = 1e-6;
 	P(8,8)  = 1e-6;
-	P(15,15) = 1e-6;
-	P(16,16) = 1e-6;
-	P(17,17) = 1e-6;
-	P(18,18) = 1e-5;
-	P(19,19) = 1e-5;
-	P(20,20) = 1e-5;
+
 
 	//Biases
 	P(9, 9) = 1e-2;
@@ -107,15 +102,14 @@ void IMUEKF::init() {
 
 
 	//Construct C
-	Hf = Matrix<double, 6, 21>::Zero();
+	Hf = Matrix<double, 6, 15>::Zero();
 
 	/*Initialize the state **/
 
 	//Rotation Matrix from Inertial to body frame
 	Rib = Matrix3d::Identity();
-	Ris = Matrix3d::Identity();
 
-	x = Matrix<double,21,1>::Zero();
+	x = Matrix<double,15,1>::Zero();
 
 	//Initializing w.r.t NAO Robot -- CHANGE IF NEEDED
 
@@ -126,24 +120,23 @@ void IMUEKF::init() {
 
 	//Initializing vectors and matrices
 	r = Vector3d::Zero();
-	ps = Vector3d::Zero();
 	v = Vector3d::Zero();
 	chi = Vector3d::Zero();
-	phi = Vector3d::Zero();
+	dxf = Matrix<double, 15, 1>::Zero();
 
-	dxf = Matrix<double, 21, 1>::Zero();
+
 
 	temp = Vector3d::Zero();
 	tempM = Matrix3d::Zero();
-	Kf = Matrix<double, 21, 6>::Zero();
+	Kf = Matrix<double, 15, 6>::Zero();
 	s = Matrix<double, 6, 6>::Zero();
-	If = Matrix<double, 21, 21>::Identity();
+	If = Matrix<double, 15, 15>::Identity();
     R = Matrix<double, 6, 6>::Zero();
-	Acf = Matrix<double, 21, 21>::Zero();
-	Lcf = Matrix<double, 21, 18>::Zero();
-	Qff = Matrix<double, 21, 21>::Zero();
-	Qf = Matrix<double, 18, 18>::Zero();
-	Af = Matrix<double, 21, 21>::Zero();
+	Acf = Matrix<double, 15, 15>::Zero();
+	Lcf = Matrix<double, 15, 12>::Zero();
+	Qff = Matrix<double, 15, 15>::Zero();
+	Qf = Matrix<double, 12, 12>::Zero();
+	Af = Matrix<double, 15, 15>::Zero();
   
 	bw = Vector3d::Zero();
 	bf = Vector3d::Zero();
@@ -152,7 +145,6 @@ void IMUEKF::init() {
 	fhat = Vector3d::Zero();
 	omegahat = Vector3d::Zero();
 
-	Tis = Affine3d::Identity();
 	Tib = Affine3d::Identity();
 	//Output Variables
 	angleX = 0.000;
@@ -193,8 +185,7 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 		// biases
 		bw = x.segment<3>(9);
 		bf = x.segment<3>(12);
-		// support foot position
-		ps = x.segment<3>(15);
+
 
 		// Correct the inputs
 		fhat = f - bf;
@@ -215,15 +206,13 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 
 		
 		//State Noise Jacobian
-		//gyro (0),acc (3),gyro_bias (6),acc_bias (9),foot_pos (12),foot_psi (15)		
+		//gyro (0),acc (3),gyro_bias (6),acc_bias (9)	
 		Lcf.block<3,3>(0,0) = wedge(v);
 		Lcf.block<3,3>(0,3) = Matrix3d::Identity();
 		Lcf.block<3,3>(3,0) = Matrix3d::Identity(); 	
 		Lcf.block<3,3>(9,6) = Matrix3d::Identity();
 		Lcf.block<3,3>(12,9) = Matrix3d::Identity();
-		//For Support Foot
-		Lcf.block<3,3>(15,12) = Matrix3d::Identity();
-		Lcf.block<3,3>(18,15) = Matrix3d::Identity();
+
 
 
 
@@ -240,17 +229,13 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 		Qf(9, 9) = accb_qx * accb_qx  ;
 		Qf(10, 10) = accb_qy * accb_qy ;
 		Qf(11, 11) = accb_qz * accb_qz ;
-		Qf(12, 12) = support_qpx * support_qpx ;
-		Qf(13, 13) = support_qpy * support_qpy ;
-		Qf(14, 14) = support_qpz * support_qpz ;
-		Qf(15, 15) = support_qax * support_qax ;
-		Qf(16, 16) = support_qay * support_qay ;
-		Qf(17, 17) = support_qaz * support_qaz ;
+
 
 		//Euler Discretization
 		Af = If + Acf * dt;
 		Qff =  Lcf * Qf * Lcf.transpose() * dt ;
         //Qff =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
+
 		/** Predict Step: Propagate the Error Covariance  **/
 		P = Af * P * Af.transpose() + Qff;
   		
@@ -285,21 +270,11 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 		x(13) = bf(1);
 		x(14) = bf(2);
 
-		//Support Position
-		x(15) = ps(0);
-		x(16) = ps(1);
-		x(17) = ps(2);
-
-		//Support Orientation Error phi
-		x(18) = 0;
-		x(19) = 0;
-		x(20) = 0;
-
 		//Propagate only if non-zero input
 		temp = omegahat;
 		temp *= dt;
 		if (temp(0) != 0.0000 && temp(1) != 0.0000 && temp(2) != 0.0000) {
-			Rib  *=  expMap(temp, 1.0);
+			Rib  *=  expMap(temp);
 		}
 		updateVars();
 
@@ -307,7 +282,7 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 
 /** Update **/
 
-
+/*
 void IMUEKF::updateWithSupport(Vector3d y,  Quaterniond qy){
 			
 
@@ -378,12 +353,13 @@ void IMUEKF::updateWithSupport(Vector3d y,  Quaterniond qy){
 
 
 }
+*/
 
 void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 {
 	   
 
-		Hf = Matrix<double,6,21>::Zero();
+		Hf = Matrix<double,6,15>::Zero();
 		R = Matrix<double,6,6>::Zero();
 		R(0, 0) = odom_px * odom_px;
 		R(1, 1) = odom_py * odom_py;
@@ -425,20 +401,12 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 		//Update the error covariance
 		P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose() + Kf * R * Kf.transpose();
 
-
-		if (dxf(18) != 0.000 && dxf(19) != 0.000 && dxf(20) != 0.000) {
-			temp(0) = dxf(18);
-			temp(1) = dxf(19);
-			temp(2) = dxf(20);
-			Ris *= expMap(temp, 1.0);
-		}
-		x.segment<3>(18) = Vector3d::Zero();
 		
 		if (dxf(3) != 0.000 && dxf(4) != 0.000 && dxf(5) != 0.000) {
 			temp(0) = dxf(3);
 			temp(1) = dxf(4);
 			temp(2) = dxf(5);
-			Rib *=  expMap(temp, 1.0);
+			Rib *=  expMap(temp);
 		}
 		x.segment<3>(3) = Vector3d::Zero();
 
@@ -452,15 +420,16 @@ void IMUEKF::updateVars()
 {
 
 
-	updateTF();
-	
-		//Update the biases
-		bias_gx = x(9);
-		bias_gy = x(10);
-		bias_gz = x(11);
-		bias_ax = x(12);
-		bias_ay = x(13);
-		bias_az = x(14);
+	Tib.linear() = Rib;
+	Tib.translation() = r;
+	qib_ = Quaterniond(Tib.linear());	
+	//Update the biases
+	bias_gx = x(9);
+	bias_gy = x(10);
+	bias_gz = x(11);
+	bias_ax = x(12);
+	bias_ay = x(13);
+	bias_az = x(14);
 
 
 	omegahat = omega - Vector3d(x(9), x(10), x(11));
@@ -487,17 +456,4 @@ void IMUEKF::updateVars()
 	angleX = temp(0);
 	angleY = temp(1);
 	angleZ = temp(2);
-
-
-
-}
-void IMUEKF::updateTF() {
-
-	Tis.linear() = Ris;
-	Tis.translation() = ps;
-
-	Tib.linear() = Rib;
-	Tib.translation() = r;
-	qib_ = Quaterniond(Tib.linear());
-	qis_ = Quaterniond(Tis.linear());
 }
