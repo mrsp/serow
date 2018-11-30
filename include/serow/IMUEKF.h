@@ -46,8 +46,6 @@
  * orientation of Body frame wrt the Inertial frame: Rib
  * accelerometer bias in Body frame : bf
  * gyro bias in Body frame : bw
- * support foot position in Inertial frame: ps
- * support foot orientation wrt to the Inertial frame: Ris
  * Measurement is Body Position/Orinetation in Inertial frame by Odometry-VO
  * and the relative Support Foot Position/Orientation by the Kinematics/Encoders
  */
@@ -61,18 +59,18 @@ class IMUEKF {
 private:
 
 
-	Matrix<double, 21, 18> Lcf;
+	Matrix<double, 15, 12> Lcf;
 
-	Matrix<double, 21, 21> P, Af, Acf, If, Qff;
+	Matrix<double, 15, 15> P, Af, Acf, If, Qff;
 
-	Matrix<double, 6, 21> Hf;
+	Matrix<double, 6, 15> Hf;
 
-	Matrix<double, 18, 18> Qf;
+	Matrix<double, 12, 12> Qf;
 
-	Matrix<double, 21, 6> Kf;
+	Matrix<double, 15, 6> Kf;
 
 	//Correction vector
-	Matrix<double, 21, 1> dxf;
+	Matrix<double, 15, 1> dxf;
 
 	//General variables
 	Matrix<double, 6, 6> s, R;
@@ -80,7 +78,7 @@ private:
 	Matrix3d tempM;
 
 	//innovation, position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
-	Vector3d r, v, chi, bf, bw, fhat, omegahat, ps, phi, omega, f, temp;
+	Vector3d r, v, chi, bf, bw, fhat, omegahat,  omega, f, temp;
 
 	Matrix<double, 6, 1> z;
 	//Quaternion
@@ -92,7 +90,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
              
 	//State vector - with biases included
-	Matrix<double, 21, 1> x;
+	Matrix<double, 15, 1> x;
 
 	bool firstrun;
 	// Gravity vector
@@ -109,11 +107,11 @@ public:
 
 	double accX, accY, accZ, velX, velY, velZ, rX, rY, rZ;
 
-	Matrix3d Rib, Ris;
+	Matrix3d Rib;
 
-	Affine3d Tis, Tib;
+	Affine3d  Tib;
 
-	Quaterniond qib_, qis_;
+	Quaterniond qib_;
 
 	//Sampling time = 1.0/Sampling Frequency
 	double dt;
@@ -151,33 +149,24 @@ public:
 		x(8) = bp(2);
 	}
 
-	//Initialize the Position
-	void setSupportPos(Vector3d sp) {
-		x(15) = sp(0);
-		x(16) = sp(1);
-		x(17) = sp(2);
-	}
-
 	//Initialize the Rotation Matrix and the Orientation Error
 	void setBodyOrientation(Matrix3d Rot_){
 		Rib = Rot_;
 	}
 
 
-	void setSupportOrientation(Matrix3d Rot_){
-		Ris = Rot_;
-	}
+
 
 	/** @fn void Filter(Matrix<double,3,1> f, Matrix<double,3,1> omega, Matrix<double,3,1>  y_r, Matrix<double,3,1>  y_q)
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
 	void predict(Vector3d omega_, Vector3d f_);
 	void updateWithOdom(Vector3d y, Quaterniond qy);
- 	void updateWithSupport(Vector3d y, Quaterniond qy);
+	void updateWithVel(Vector3d y);
+ 	//void updateWithSupport(Vector3d y, Quaterniond qy);
 
 	// Initializing Variables
 	void init();
-	void updateTF();
 
 	//Computes the skew symmetric matrix of a 3-D vector
 	Matrix3d wedge(
@@ -199,16 +188,12 @@ public:
 
 	//Rodriguez Formula
 	inline Matrix<double, 3, 3> expMap(
-			Vector3d omega, double theta) {
+			Vector3d omega) {
 
 		Matrix<double, 3, 3> res, omega_skew, I;
 		double omeganorm;
 		res = Matrix<double, 3, 3>::Zero();
 		omega_skew = Matrix<double, 3, 3>::Zero();
-
-
-		omega *= theta;
-
 		omeganorm = omega.norm();
 		I = Matrix<double, 3, 3>::Identity();
 		omega_skew = wedge(omega);

@@ -7,7 +7,7 @@ modelname: "/home/master/dp_ws/src/serow/share/urdf/valkyrie_sim.urdf"
 #ROS Topic Names
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "" #only if usePoseUpdate is true
-useLegOdom: true
+useLegOdom: false
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/pelvisMiddleImu/imu"
 joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
@@ -47,9 +47,9 @@ joint_topic_freq: 500
 fsr_topic_freq: 500  
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 550 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 300 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 50
+LLegUpThres: 250 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 80 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 20
 StrikingContact: 1500
 
 #Steady State Joint Kalman Filter (KF)
@@ -79,19 +79,19 @@ gyroscope_bias_random_walk: 4.1884e-8 #continous
 accelerometer_noise_density: 0.0035 #m/s^2/sqrt(Hz) #continous
 gyroscope_noise_density: 00.0004 #rad/s/sqrt(Hz) #continous
 #Support Foot/Orientation STD w.r.t World Frame
-support_position_random_walk: 5.0e-03 #m
-support_orientation_random_walk: 5.0e-03  #rad
+support_position_random_walk: 1.0e-05 #m
+support_orientation_random_walk: 1.0e-05  #rad
 
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 1.0e-3
-odom_orientation_noise_density: 1.0e-3
+odom_position_noise_density: 5.0e-4
+odom_orientation_noise_density: 5.0e-4
 
 
 #Support Foot/Orientation STD w.r.t Body Frame
-support_position_noise_density: 1.0e-03
-support_orientation_noise_density: 1.0e-03
+support_position_noise_density: 1.0e-05
+support_orientation_noise_density: 1.0e-05
 
 
 #IMU Initial Biases
@@ -127,7 +127,7 @@ com_position_random_walk: 1.0e-5 #in m
 com_velocity_random_walk: 5.0e-4 #in m/s
 external_force_random_walk: 2.5   #in Newtons
 #Measurment Noise
-com_position_noise_density: 1.0e-05  #CoM position in m
+com_position_noise_density: 1.0e-03  #CoM position in m
 com_acceleration_noise_density: 0.009 #CoM Acceleration in m/s^2
 #Initial errors in External Forces
 bias_fx: -23.5  #in Newtons

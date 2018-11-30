@@ -98,6 +98,23 @@ namespace serow{
 
 
         }
+        Eigen::Vector3d getLFootLinearVel()
+        {
+            return vwl;
+        }
+        Eigen::Vector3d getRFootLinearVel()
+        {
+            return vwr;
+        }
+
+        Eigen::Vector3d getLFootAngularVel()
+        {
+            return omegawl;
+        }
+        Eigen::Vector3d getRFootAngularVel()
+        {
+            return omegawr;
+        }
         void computeIMVP()
         {
             Lomega=Rwl.transpose()*omegawl;
