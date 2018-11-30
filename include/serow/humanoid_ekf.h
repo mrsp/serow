@@ -73,10 +73,10 @@ private:
 	ros::NodeHandle n;
 	ros::Publisher supportPose_est_pub, bodyAcc_est_pub,leftleg_odom_pub, rightleg_odom_pub, support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
 	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub, 
-	rel_supportPose_pub,rel_swingPose_pub, comp_odom0_pub, comp_odom1_pub;
+	rel_leftlegPose_pub,rel_rightlegPose_pub;
     
 	ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub,
-	ground_truth_odom_sub,ds_sub, compodom0_sub, compodom1_sub, ground_truth_com_sub,support_idx_sub;
+	ground_truth_odom_sub,ds_sub, ground_truth_com_sub,support_idx_sub;
 	
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
@@ -112,7 +112,7 @@ private:
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
 	sensor_msgs::Imu imu_msg;
 	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg, leftleg_odom_msg, rightleg_odom_msg,
-	ground_truth_com_odom_msg, CoM_odom_msg, comp_odom0_msg, comp_odom1_msg;
+	ground_truth_com_odom_msg, CoM_odom_msg;
 	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg, rel_supportPose_msg, rel_swingPose_msg;
 	std_msgs::String support_leg_msg;
 	geometry_msgs::WrenchStamped RLeg_est_msg, LLeg_est_msg, lfsr_msg, rfsr_msg, external_force_filt_msg;
@@ -130,7 +130,7 @@ private:
 
 
 	Quaterniond qbs, qbl, qbr, qwb, qwb_, qws, qwl, qwr;
-	string base_link_frame, swing_foot_frame, support_foot_frame, lfoot_frame, rfoot_frame;
+	string base_link_frame, support_foot_frame, lfoot_frame, rfoot_frame;
 	
 
     boost::shared_ptr< dynamic_reconfigure::Server<serow::VarianceControlConfig> > dynamic_recfg_;
@@ -148,12 +148,11 @@ private:
 	double jointFreq,joint_cutoff_freq;
 	Mediator* lmdf;
 	Mediator* rmdf;	
-	string support_leg, swing_leg;
+	string support_leg;
 
 	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT, offsetGT,offsetGTCoM;
   	Vector3d copl, copr;
-	bool comp_with;
-	Affine3d Tws, Twh, Twb, Twb_; //From support s to world frame;
+	Affine3d Tws, Twb, Twb_; //From support s to world frame;
 	Affine3d Tbs, Tsb, Tssw, Tbsw;
 	Vector3d no_motion_residual;
 	/****/
@@ -168,14 +167,13 @@ private:
 	 string imu_topic;
 	 string joint_state_topic;
 	 string odom_topic;
-	 string ground_truth_odom_topic, is_in_ds_topic, comp_with_odom0_topic, comp_with_odom1_topic, ground_truth_com_topic, support_idx_topic;
+	 string ground_truth_odom_topic, is_in_ds_topic, ground_truth_com_topic, support_idx_topic;
      string modelname;
 	 bool usePoseUpdate;
 
 	//Odometry, from supportleg to inertial, transformation from support leg to other leg
      void subscribeToIMU();
 	 void subscribeToFSR();
-	 void subscribeToCompOdom();
 	 void subscribeToJointState();
  	 void subscribeToPose();
 	 void subscribeToOdom();
@@ -191,8 +189,6 @@ private:
 	 void poseCb(const geometry_msgs::PoseStamped::ConstPtr& msg);
 	 void joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg);
 	 void odomCb(const nav_msgs::Odometry::ConstPtr& msg);
-	 void compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg);
-	 void compodom1Cb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void coplCb(const geometry_msgs::PointStamped::ConstPtr& msg);
