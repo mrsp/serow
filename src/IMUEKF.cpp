@@ -233,8 +233,8 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 
 		//Euler Discretization
 		Af = If + Acf * dt;
-		Qff =  Lcf * Qf * Lcf.transpose() * dt ;
-        //Qff =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
+		//Qff =  Lcf * Qf * Lcf.transpose() * dt ;
+        	Qff =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
 
 		/** Predict Step: Propagate the Error Covariance  **/
 		P = Af * P * Af.transpose() + Qff;

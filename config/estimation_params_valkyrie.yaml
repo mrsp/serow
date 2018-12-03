@@ -58,7 +58,7 @@ joint_cutoff_freq: 18
 Madgwick_gain: 0.012
 
 #Complimentary Filter for Body Velocity  //Used in Leg Odometry
-useCF: true
+useCF: false
 freqvmin: 0.1
 freqvmax: 2.5
 
@@ -68,7 +68,6 @@ freqvmax: 2.5
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
 # 3-D Body Position/Velocity
-# 3-D Support Foot Position/Orientation
 # 3-D IMU-Biases
 
 #Process Noise STDs
@@ -76,9 +75,6 @@ accelerometer_bias_random_walk:  0.0001 #continous
 gyroscope_bias_random_walk: 4.1884e-8 #continous
 accelerometer_noise_density: 0.0035 #m/s^2/sqrt(Hz) #continous
 gyroscope_noise_density: 00.0004 #rad/s/sqrt(Hz) #continous
-#Support Foot/Orientation STD w.r.t World Frame
-support_position_random_walk: 1.0e-05 #m
-support_orientation_random_walk: 1.0e-05  #rad
 
 
 #Measuremets
@@ -87,9 +83,6 @@ odom_position_noise_density: 5.0e-4
 odom_orientation_noise_density: 5.0e-4
 
 
-#Support Foot/Orientation STD w.r.t Body Frame
-support_position_noise_density: 1.0e-05
-support_orientation_noise_density: 1.0e-05
 
 
 #IMU Initial Biases

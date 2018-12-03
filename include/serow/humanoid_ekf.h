@@ -86,6 +86,7 @@ private:
 	serow::Madgwick* mw;
 	serow::deadReckoning* dr;
 
+  	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
 
 	bool useCF;
 	double cf_freqvmin, cf_freqvmax;
