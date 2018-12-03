@@ -39,12 +39,12 @@ void humanoid_ekf::loadparams() {
 
 	ros::NodeHandle n_p("~");
 	// Load Server Parameters
-   	n_p.param<std::string>("modelname",modelname,"valkyrie_sim.urdf");
+   	n_p.param<std::string>("modelname",modelname,"nao.urdf");
 	rd = new serow::robotDyn(modelname,false);
 
 	n_p.param<std::string>("base_link",base_link_frame,"base_link");
-	n_p.param<std::string>("lfoot",lfoot_frame,"l_sole");
-	n_p.param<std::string>("rfoot",rfoot_frame,"r_sole");
+	n_p.param<std::string>("lfoot",lfoot_frame,"l_ankle");
+	n_p.param<std::string>("rfoot",rfoot_frame,"r_ankle");
 
 	n_p.param<double>("imu_topic_freq",freq,100.0);
 	n_p.param<double>("fsr_topic_freq",fsr_freq,100.0);
@@ -178,9 +178,9 @@ void humanoid_ekf::loadIMUEKFparams()
 	n_p.param<double>("odom_position_noise_density", imuEKF->odom_px,1.0e-03);
 	n_p.param<double>("odom_position_noise_density", imuEKF->odom_py,1.0e-03);
 	n_p.param<double>("odom_position_noise_density", imuEKF->odom_pz,1.0e-03);
-	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ax,1.0e-02);
-	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay,1.0e-02);
-	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az,1.0e-02);
+	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ax,1.0e-03);
+	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay,1.0e-03);
+	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az,1.0e-03);
 
 
 
@@ -241,6 +241,8 @@ void humanoid_ekf::disconnect() {
 }
 
 bool humanoid_ekf::connect(const ros::NodeHandle nh) {
+	ROS_INFO_STREAM("SERoW Initializing...");
+
 	// Initialize ROS nodes
 	n = nh;
 	// Load ROS Parameters
@@ -267,7 +269,7 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 	is_connected_ = true;
 
 	ros::Duration(1.0).sleep();
-	ROS_INFO_STREAM("Humanoid State Estimator Initialized");
+	ROS_INFO_STREAM("SERoW Initialized");
 
 	return true;
 }
@@ -591,8 +593,8 @@ void humanoid_ekf::estimateWithIMUEKF()
 		*/
 
 		//Estimated TFs for Legs and Support foot
-		Twl = imuEKF->Tib * Tbl;
-		Twr = imuEKF->Tib * Tbr;
+		Twl = Twb * Tbl;
+		Twr = Twb * Tbr;
 		qwl = Quaterniond(Twl.linear());
 		qwr = Quaterniond(Twr.linear());
 		Tws = imuEKF->Tib * Tbs;
@@ -667,7 +669,7 @@ void humanoid_ekf::computeKinTFs() {
 
 
 	//Update Pinnochio
-	rd->updateJointConfig(joint_state_pos);
+	rd->updateJointConfig(joint_state_pos_map,joint_state_vel_map);
 
 	//Get the CoM w.r.t Body Frame
 	CoM_enc = rd->comPosition();
@@ -706,10 +708,10 @@ void humanoid_ekf::computeKinTFs() {
 
 		
 		//Differential Kinematics with Pinnochio
-		omegabl = rd->angularJacobian(lfoot_frame)*joint_state_vel;
-		omegabr = rd->angularJacobian(rfoot_frame)*joint_state_vel;
-		vbl =  rd->linearJacobian(lfoot_frame)*joint_state_vel;
-		vbr =  rd->linearJacobian(rfoot_frame)*joint_state_vel;
+		omegabl = rd->getAngularVelocity(lfoot_frame);
+		omegabr = rd->getAngularVelocity(rfoot_frame);
+		vbl =  rd->getLinearVelocity(lfoot_frame);
+		vbr =  rd->getLinearVelocity(rfoot_frame);
 
 
 		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, 
@@ -733,7 +735,6 @@ void humanoid_ekf::computeKinTFs() {
 
 		omegawl = dr->getLFootAngularVel();
 		omegawr = dr->getRFootAngularVel();
-
 
 
 		leg_odom_inc = true;
@@ -769,7 +770,7 @@ void humanoid_ekf::determineLegContact() {
 		//Determine if the Support Foot changed  
 		if(!support_idx_provided){
 			
-			if (vwl.norm()<0.05 && omegawl.norm()<0.05)
+			if (vwl.norm()<0.05)
 			{
 				if ( LLegForceFilt > LLegUpThres  && LLegForceFilt<StrikingContact)
 				{
@@ -783,7 +784,7 @@ void humanoid_ekf::determineLegContact() {
 				}
 			}
 		
-			if (vwr.norm()<0.05 && omegawr.norm()<0.05)
+			if (vwr.norm()<0.05)
 			{
 				if ( RLegForceFilt > LLegUpThres  && RLegForceFilt<StrikingContact)
 				{
@@ -1252,7 +1253,8 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 	for (unsigned int i=0; i< joint_state_msg.name.size(); i++){
 				joint_state_pos[i]=joint_state_msg.position[i];
 			    joint_state_vel[i]=JointVF[i]->filter(joint_state_msg.position[i]);
-		
+				joint_state_pos_map[joint_state_msg.name[i]]=joint_state_pos[i];
+				joint_state_vel_map[joint_state_msg.name[i]]=joint_state_vel[i];
 	}
 
 }

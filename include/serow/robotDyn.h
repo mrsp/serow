@@ -44,7 +44,7 @@ namespace serow
         std::vector<std::string> link_names, jnames_;
         std::vector<unsigned int> link_ids;
         std::map<std::string, unsigned int> link_id_;
-        Eigen::VectorXd qmin_, qmax_, dqmax_, q_;
+        Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_;
         bool has_floating_base_;
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -113,7 +113,9 @@ namespace serow
                     dqmax_[i] = 100.0;
                 }
             }
-            
+            std::cout<<"Joint Names "<<std::endl;
+            printJointNames();
+            printLinkID();
             std::cout << "Model loaded: " << model_name << std::endl;
         }
         
@@ -153,10 +155,12 @@ namespace serow
                 return "NONE";
             }
         }
-        
-        void updateJointConfig(const Eigen::VectorXd& q)
+        //void updateJointConfig(const Eigen::VectorXd& q)
+
+        void updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
         {
-            q_ = q;
+            mapJointNamesIDs(qmap,qdotmap);
+            //q_ = q;
             if (has_floating_base_)
             {
                 // Change quaternion order: in oscr it is (w,x,y,z) and in Pinocchio it is
@@ -263,8 +267,18 @@ namespace serow
         
         
         
-        
-        
+        void mapJointNamesIDs(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
+        {
+            q_.resize(jnames_.size());
+            qdot_.resize(jnames_.size());
+
+            for(unsigned int i = 0; i<jnames_.size();i++)
+            {
+                q_[i] = qmap[jnames_[i]];
+                qdot_[i] = qdotmap[jnames_[i]];
+
+            }
+        }
         
         
         Eigen::MatrixXd geometricJacobian(const std::string& link_name)
@@ -280,6 +294,15 @@ namespace serow
             }
         }
         
+        Eigen::Vector3d getLinearVelocity(const std::string& link_name)
+        {
+            return  (linearJacobian(link_name)* qdot_);
+        }
+
+        Eigen::Vector3d getAngularVelocity(const std::string& link_name)
+        {
+            return  (angularJacobian(link_name)* qdot_);
+        }
         
         std::map<std::string, unsigned int> getLinkNamesIDs()
         const
@@ -577,7 +600,14 @@ namespace serow
         {
             return dqmax_;
         }
-        
+        void printJointNames()
+        const
+        {
+            for (unsigned int i=0; i<jnames_.size(); ++i)
+                std::cout << jnames_[i] <<std::endl;
+
+
+        }
         void printJointLimits()
         const
         {

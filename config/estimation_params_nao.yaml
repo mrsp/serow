@@ -1,9 +1,8 @@
 #Robot Frames (CHECK URDF)
 base_link: "base_link"
-lfoot: "l_sole"
-rfoot: "r_sole"
-
-
+lfoot: "l_ankle"
+rfoot: "r_ankle"
+modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
 #ROS Topic Names
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "/orbslam2/pose" #only if usePoseUpdate is true
@@ -21,73 +20,90 @@ copr_topic: "/nao_robot/RLeg/COP"
 ground_truth: false
 ground_truth_odom_topic: " "
 ground_truth_com_topic: " "
-comp_with: false
-comp_with_odom0_topic: " "
-comp_with_odom1_topic: " "
+
 
 support_idx_provided: false
-
+support_idx_topic: " "
 
 #To publish relative data
-debug_mode: false
+debug_mode: true
 
 
-#TF from IMU to Body
+#TF from IMU to Body 
+#For imu0 (external IMU)
 #T_B_I: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,0, 1]
-T_B_I: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 ,0, 1]
+#For nao imu (onboard IMU)
+T_B_I: [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,-1 ,0, 0, 0, 0 ,0, 1]
+
 #TF from External Pose to Body only if useLegOdom is false
 #T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
 T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 , 1]
+
 #ROS Topic Frequencies in Hz
 imu_topic_freq: 100
 joint_topic_freq: 100
 fsr_topic_freq: 100  
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 12 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 5 #Schmitt Trigger Low Threshold in Newtons (N)
-
+LLegUpThres: 20 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 7
+StrikingContact: 60
 
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: true #Use a Steady State KF in every joint
-joint_cutoff_freq: 10
+joint_cutoff_freq: 5
+
+#Madgwick Filter for attitude
+Madgwick_gain: 0.05
+
+
+#Complimentary Filter for Body Velocity  //Used in Leg Odometry
+useCF: false
+freqvmin: 0.1
+freqvmax: 2.5
+
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
 # 3-D Body Position/Velocity
-# 3-D Support Foot Position/Orientation
 # 3-D IMU-Biases
 
 #Process Noise STDs
 accelerometer_bias_random_walk:  0.003904 #m/s^2
 gyroscope_bias_random_walk: 0.00283344
 accelerometer_noise_density: 0.0163 #m/s^2/sqrt(Hz)
-gyroscope_noise_density: 0.009525 #rad/s/sqrt(Hz)
-#Support Foot/Orientation STD w.r.t World Frame
-support_position_random_walk: 5.0e-03  #m
-support_orientation_random_walk: 5.0e-03  #rad
+gyroscope_noise_density: 0.09525 #rad/s/sqrt(Hz)
+
 
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 1.0e-04
+odom_position_noise_density: 1.0e-03
 odom_orientation_noise_density: 1.0e-03
 
 
-#Support Foot/Orientation STD w.r.t Body Frame
-support_position_noise_density: 5.0e-05
-support_orientation_noise_density: 5.0e-05
 
 #IMU Initial Biases
-bias_ax:  0.239618
-bias_ay: 0.0751756
-bias_az: -20.0327
+#bias_ax:  -0.239618
+#bias_ay: 0.0751756
+#bias_az: -18.0327
+#bias_gx:  -0.000817362
+#bias_gy:  -0.00178242
+#bias_gz:  0.000158554
+
+bias_ax:  -0.239618
+bias_ay:  0.0751756
+bias_az:  0.0
 bias_gx:  -0.000817362
 bias_gy:  -0.00178242
-bias_gz:  0.000158554
+bias_gz:  0.0
+
+
+
 
 #Filter Params
 gravity: 9.80665 #gravity constant (m/s^2)
-medianWindow: 7
+medianWindow: 9
 
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
@@ -101,12 +117,12 @@ estimateCoM: true   #Use the CoM EKF
 
 
 #Process Noise
-com_position_random_walk: 1.0e-5 #in m
-com_velocity_random_walk: 1.0e-2 #in m/s
-external_force_random_walk: 2.5      #in Newtons
+com_position_random_walk: 1.0e-6 #in m
+com_velocity_random_walk: 1.0e-3 #in m/s
+external_force_random_walk: 0.5      #in Newtons
 #Measurment Noise
-com_position_noise_density: 1.0e-04  #CoM position in m
-com_acceleration_noise_density: 2.5.0e-02 #CoM Acceleration in m/s^2
+com_position_noise_density: 1.0e-03  #CoM position in m
+com_acceleration_noise_density: 5.0e-02 #CoM Acceleration in m/s^2
 #Initial errors in External Forces
 bias_fx: 23.678  #in Newtons
 bias_fy: -5.5658
