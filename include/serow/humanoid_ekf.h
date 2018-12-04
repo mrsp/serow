@@ -63,6 +63,7 @@
 #include "serow/robotDyn.h"
 #include "serow/Madgwick.h"
 #include "serow/deadReckoning.h"
+#include "serow/Median.h"
 
 using namespace Eigen;
 using namespace std;
@@ -147,8 +148,9 @@ private:
 	double bias_fx,bias_fy,bias_fz;
 	JointDF** JointVF;
 	double jointFreq,joint_cutoff_freq;
-	Mediator* lmdf;
-	Mediator* rmdf;	
+	Mediator *lmdf, *rmdf;
+
+	WindowMedian<double> *llmdf, *rrmdf;
 	string support_leg;
 
 	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT, offsetGT,offsetGTCoM;

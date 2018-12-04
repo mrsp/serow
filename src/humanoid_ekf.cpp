@@ -415,6 +415,9 @@ void humanoid_ekf::init() {
     
 	lmdf = MediatorNew(medianWindow);
 	rmdf = MediatorNew(medianWindow);
+	//llmdf = new WindowMedian<double>(medianWindow);
+	//rrmdf = new WindowMedian<double>(medianWindow);
+
 	LLegForceFilt = 0;
 	RLegForceFilt = 0;
 }
@@ -1395,6 +1398,9 @@ void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 
 	MediatorInsert(lmdf,lfsr_msg.wrench.force.z);
 	LLegForceFilt = MediatorMedian(lmdf);
+	
+	//llmdf->insert((double)lfsr_msg.wrench.force.z);
+	//LLegForceFilt = llmdf->median();
 	fsr_inc = true;
 	
 }
@@ -1404,6 +1410,8 @@ void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 
 	MediatorInsert(rmdf,rfsr_msg.wrench.force.z);
 	RLegForceFilt = MediatorMedian(rmdf);
+	//rrmdf->insert((double)rfsr_msg.wrench.force.z);
+	//RLegForceFilt = rrmdf->median();
 }
 
 void humanoid_ekf::coplCb(const geometry_msgs::PointStamped::ConstPtr& msg)
