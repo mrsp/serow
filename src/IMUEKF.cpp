@@ -37,45 +37,6 @@ IMUEKF::IMUEKF()
 	//Gravity Vector
 	g = Vector3d::Zero();
 	g(2) = -9.80665;
-
-	odom_px = 1.0e-04;
-	odom_py = 1.0e-04;
-	odom_pz = 1.0e-04;
-	odom_ax = 1.0e-02;
-	odom_ay = 1.0e-02;
-	odom_az = 1.0e-02;
-
-
-	gyr_qx = 0.009525;
-	gyr_qy = 0.00641;
-	gyr_qz = 6.5190e-06;
-	gyrb_qx = 0.00283344;
-	gyrb_qy = 0.00137368;
-	gyrb_qz = 6.5190e-06;
-
-	acc_qx = 0.0163;
-	acc_qy = 0.0135;
-	acc_qz = 0.0156;
-
-	accb_qx = 0.003904;
-	accb_qy = 0.003904;
-	accb_qz = 0.003904;
-
-	support_qpx = 5.0e-03;
-	support_qpy = 5.0e-03;
-	support_qpz = 5.0e-03;
-	support_qax = 5.0e-03;
-	support_qay = 5.0e-03;
-	support_qaz = 5.0e-03;
-    
-	support_px = 5.0e-05;
-	support_py = 5.0e-05;
-	support_pz = 5.0e-05;
-	support_ax = 5.0e-05;
-	support_ay = 5.0e-05;
-	support_az = 5.0e-05;
-
-
 }
 
 void IMUEKF::init() {
@@ -103,6 +64,7 @@ void IMUEKF::init() {
 
 	//Construct C
 	Hf = Matrix<double, 6, 15>::Zero();
+	Hv = Matrix<double, 3, 15>::Zero();
 
 	/*Initialize the state **/
 
@@ -115,6 +77,7 @@ void IMUEKF::init() {
 
 	//Innovation Vector
 	z = Matrix<double, 6, 1>::Zero();
+	zv = Vector3d::Zero();
 
 
 
@@ -129,9 +92,15 @@ void IMUEKF::init() {
 	temp = Vector3d::Zero();
 	tempM = Matrix3d::Zero();
 	Kf = Matrix<double, 15, 6>::Zero();
+	Kv = Matrix<double, 15, 3>::Zero();
+
 	s = Matrix<double, 6, 6>::Zero();
+	sv = Matrix<double, 3, 3>::Zero();
+
 	If = Matrix<double, 15, 15>::Identity();
     R = Matrix<double, 6, 6>::Zero();
+	Rv = Matrix<double, 3, 3>::Zero();
+
 	Acf = Matrix<double, 15, 15>::Zero();
 	Lcf = Matrix<double, 15, 12>::Zero();
 	Qff = Matrix<double, 15, 15>::Zero();
@@ -281,71 +250,40 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 }
 
 /** Update **/
+void IMUEKF::updateWithTwist(Vector3d y)
+{
+	Hv = Matrix<double,3,15>::Zero();
+	Rv = Matrix<double,3,3>::Zero();
+	Rv(0, 0) = vel_px * vel_px;
+	Rv(1, 1) = vel_py * vel_py;
+	Rv(2, 2) = vel_pz * vel_pz;
 
-/*
-void IMUEKF::updateWithSupport(Vector3d y,  Quaterniond qy){
-			
+	v = x.segment<3>(0);
 
-		//Support Foot Position
-		Hf = Matrix<double,6,21>::Zero();
-		R = Matrix<double,6,6>::Zero();
-		R(0, 0) = support_px * support_px;
-		R(1, 1) = support_py * support_py;
-		R(2, 2) = support_px * support_pz;
+	//Innovetion vector
+	zv = Vector3d::Zero();
+	zv.segment<3>(0).noalias() = y - Rib * v;
 
-		R(3, 3) = support_ax * support_ax;
-		R(4, 4) = support_ay * support_ay;
-		R(5, 5) = support_az * support_az;
+	Hv.block<3,3>(0,0) = Rib;
+	Hv.block<3,3>(0,3).noalias() = -Rib * wedge(v);
+	sv = Rv;
+	sv.noalias() += Hv * P * Hv.transpose();
+	Kv.noalias() = P * Hv.transpose() * sv.inverse();
 
-
-		ps= x.segment<3>(15);
-		r = x.segment<3>(6);
-		temp = Rib.transpose() * (ps - r);
-		z.segment<3>(0) = y - temp;
-
-		Hf.block<3,3>(0, 3) = wedge(temp);
-		Hf.block<3,3>(0,6) = -Rib.transpose();
-		Hf.block<3,3>(0,15) = Rib.transpose();
-		
-		//Support Foot Orientation
-		Quaterniond qbs(Rib.transpose() * Ris);
-		//z.segment<3>(3) = logMap(qy * qbs.inverse()); 
-		z.segment<3>(3) = logMap( qbs.inverse() * qy);
-        //z.segment<3>(3) = logMap( qy.inverse() * qbs);
-		Hf.block<3,3>(3,3) = -Ris.transpose()*Rib;
-		Hf.block<3,3>(3,18) = Matrix3d::Identity();
-
-
-		//Compute the Kalman gain
-	    //s = R;
-		s = Hf * P * Hf.transpose() + R;
-		Kf = P * Hf.transpose() * s.inverse();
-
-
-		//Correction
-		dxf = Kf * z;
+	dxf.noalias() = Kv * zv;
 
 		//Update the mean estimate
 		x += dxf;
 
 		//Update the error covariance
-		P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose() + Kf * R * Kf.transpose();
+		P = (If - Kv * Hv) * P * (If - Kv * Hv).transpose() + Kv * Rv * Kv.transpose();
 
 
-
-		if (dxf(18) != 0.000 && dxf(19) != 0.000 && dxf(20) != 0.000) {
-			temp(0) = dxf(18);
-			temp(1) = dxf(19);
-			temp(2) = dxf(20);
-			Ris *= expMap(temp, 1.0);
-		}
-		x.segment<3>(18) = Vector3d::Zero();
-		
 		if (dxf(3) != 0.000 && dxf(4) != 0.000 && dxf(5) != 0.000) {
 			temp(0) = dxf(3);
 			temp(1) = dxf(4);
 			temp(2) = dxf(5);
-			Rib *=  expMap(temp, 1.0);
+			Rib *=  expMap(dxf.segment<3>(3));
 		}
 		x.segment<3>(3) = Vector3d::Zero();
 
@@ -353,7 +291,6 @@ void IMUEKF::updateWithSupport(Vector3d y,  Quaterniond qy){
 
 
 }
-*/
 
 void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 {
@@ -379,20 +316,18 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 		Hf.block<3,3>(0,6) = Matrix3d::Identity();
 
 
-		Quaterniond qib(Rib);
-		//z.segment<3>(3) = logMap( (qy * qib.inverse() ));
-		z.segment<3>(3) = logMap( (qib.inverse() * qy ));
-        //z.segment<3>(3) = logMap( (qy.inverse() * qib ));
-    
+		//Quaterniond qib(Rib);
+		//z.segment<3>(3) = logMap( (qib.inverse() * qy ));
+        z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
 		Hf.block<3,3>(3,3) = Matrix3d::Identity();
 
 
 	   
-        //s = R;
-        s = Hf * P * Hf.transpose() + R;
-		Kf = P * Hf.transpose() * s.inverse();
+        s = R;
+        s.noalias() = Hf * P * Hf.transpose();
+		Kf.noalias() = P * Hf.transpose() * s.inverse();
 
-		dxf = Kf * z;
+		dxf.noalias() = Kf * z;
 
 		//Update the mean estimate
 		x += dxf;

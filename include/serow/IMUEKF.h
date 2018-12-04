@@ -34,7 +34,7 @@
 
 #include <iostream>
 #include <eigen3/Eigen/Dense>
-#include <math.h>       /* isnan, sqrt */
+#include <cmath>       /* isnan, sqrt */
 /* @author MUMRA
  */
 
@@ -52,7 +52,6 @@
 
  
 using namespace Eigen;
-using namespace std;
 
 class IMUEKF {
 
@@ -64,10 +63,12 @@ private:
 	Matrix<double, 15, 15> P, Af, Acf, If, Qff;
 
 	Matrix<double, 6, 15> Hf;
+	Matrix<double, 3, 15> Hv;
 
 	Matrix<double, 12, 12> Qf;
 
 	Matrix<double, 15, 6> Kf;
+	Matrix<double, 15, 3> Kv;
 
 	//Correction vector
 	Matrix<double, 15, 1> dxf;
@@ -75,12 +76,15 @@ private:
 	//General variables
 	Matrix<double, 6, 6> s, R;
 
+	Matrix<double, 3, 3> sv, Rv;
+
 	Matrix3d tempM;
 
 	//innovation, position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
 	Vector3d r, v, chi, bf, bw, fhat, omegahat,  omega, f, temp;
 
 	Matrix<double, 6, 1> z;
+	Vector3d zv;
 	//Quaternion
 
 
@@ -99,8 +103,8 @@ public:
 	//Noise Stds
 
 	double  acc_qx,acc_qy,acc_qz,gyr_qx,gyr_qy,gyr_qz,gyrb_qx,gyrb_qy,gyrb_qz,
-	accb_qx,accb_qy,accb_qz,support_qpx,support_qpy,support_qpz,support_qax,support_qay,
-	support_qaz, odom_px, odom_py, odom_pz, odom_ax, odom_ay,odom_az,support_px, support_py, support_pz, support_ax,support_ay,support_az;
+	accb_qx,accb_qy,accb_qz, odom_px, odom_py, odom_pz, odom_ax, odom_ay,odom_az,
+	vel_px, vel_py, vel_pz;
 
 	double gyroX, gyroY, gyroZ, angleX, angleY, angleZ, bias_gx, bias_gy, bias_gz,
 			bias_ax, bias_ay, bias_az, ghat;
@@ -162,7 +166,7 @@ public:
 	 */
 	void predict(Vector3d omega_, Vector3d f_);
 	void updateWithOdom(Vector3d y, Quaterniond qy);
-	void updateWithVel(Vector3d y);
+	void updateWithTwist(Vector3d y);
  	//void updateWithSupport(Vector3d y, Quaterniond qy);
 
 	// Initializing Variables
@@ -185,6 +189,14 @@ public:
 		return skew;
 
 	}
+	Vector3d vec(Matrix3d M)
+	{
+		Vector3d v = Vector3d::Zero();
+		v(0) = M(2,1);
+		v(1) = M(0,2);
+		v(2) = M(1,0);
+		return v;
+	}
 
 	//Rodriguez Formula
 	inline Matrix<double, 3, 3> expMap(
@@ -192,16 +204,21 @@ public:
 
 		Matrix<double, 3, 3> res, omega_skew, I;
 		double omeganorm;
+
 		res = Matrix<double, 3, 3>::Zero();
 		omega_skew = Matrix<double, 3, 3>::Zero();
 		omeganorm = omega.norm();
+
 		I = Matrix<double, 3, 3>::Identity();
-		omega_skew = wedge(omega);
 
 		res = I;
-		res += omega_skew * (sin(omeganorm) / omeganorm);
-		res += (omega_skew * omega_skew) * (
-				(1.000 - cos(omeganorm)) / (omeganorm * omeganorm));
+		if(omeganorm !=0.0)
+		{
+			omega_skew = wedge(omega);
+			res += omega_skew * (sin(omeganorm) / omeganorm);
+			res += (omega_skew * omega_skew) * (
+					(1.000 - cos(omeganorm)) / (omeganorm * omeganorm));
+		}
 
 		return res;
 	}
@@ -209,22 +226,17 @@ public:
 	inline Vector3d logMap(
 			Matrix<double, 3, 3> Rt) {
 
-		Vector3d res;
-		res = Vector3d::Zero();
+		Vector3d res = Vector3d::Zero();
+		double costheta = (Rt.trace()-1.0)/2.0;
+		double theta = acos(costheta);
+		Matrix<double, 3, 3> lnR = Matrix<double, 3, 3>::Zero();
 
-		if (Rt.trace() != 1.000) {
-			double theta = acos((Rt.trace() - 1.000) / 2.000);
-
-			double temp = sqrt(
-					(double) ((Rt(2, 1) - Rt(1, 2)) * (Rt(2, 1) - Rt(1, 2))
-							+ (Rt(0, 2) - Rt(2, 0)) * (Rt(0, 2) - Rt(2, 0))
-							+ (Rt(1, 0) - Rt(0, 1)) * (Rt(1, 0) - Rt(0, 1))));
-
-			res(0) = Rt(2, 1) - Rt(1, 2);
-			res(1) = Rt(0, 2) - Rt(2, 0);
-			res(2) = Rt(1, 0) - Rt(0, 1);
-			res *= theta / temp;
+		if (theta != 0.000) {
+			lnR.noalias() =  Rt - Rt.transpose();
+			lnR *= theta /(2.0*sin(theta));
+			res = vec(lnR); 			
 		}
+
 		return res;
 	}
 
@@ -244,7 +256,7 @@ inline Vector3d logMap(
 
 		omega = tempV * (2.0 * acos(q.w() / temp));
 		//omega = tempV * (2.0 * atan2(temp_,q.w()));
-		if(isnan(omega(0) + omega(1) + omega(2)))
+		if(std::isnan(omega(0) + omega(1) + omega(2)))
 			omega = Vector3d::Zero();
 
 		return omega;
