@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(serow)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
+#add_compile_options(-std=c++11)
 
 
 find_package(catkin REQUIRED COMPONENTS
@@ -14,8 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(PkgConfig REQUIRED)
-find_package(Eigen3 REQUIRED)
 
+PKG_CHECK_MODULES(EIGEN3 eigen3>=3.2 REQUIRED)
 PKG_CHECK_MODULES(PINOCCHIO pinocchio REQUIRED)
 PKG_CHECK_MODULES(URDFDOM urdfdom>=0.2 REQUIRED)
 # Special care for Eigen>3.2.10
