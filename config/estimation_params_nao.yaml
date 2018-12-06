@@ -6,9 +6,9 @@ modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
 #ROS Topic Names
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "/orbslam2/pose" #only if usePoseUpdate is true
-useLegOdom: true
-#odom_topic: "/vins_estimator/odometry" #only if usePoseUpdate is false and useLegOdom is false
-odom_topic: "/nao_robot/odom"
+useLegOdom: false
+odom_topic: "/vins_estimator/odometry" #only if usePoseUpdate is false and useLegOdom is false
+#odom_topic: "/nao_robot/odom"
 imu_topic: "/nao_robot/imu"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
@@ -33,11 +33,11 @@ debug_mode: true
 #For imu0 (external IMU)
 #T_B_I: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,0, 1]
 #For nao imu (onboard IMU)
-T_B_I: [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,-1 ,0, 0, 0, 0 ,0, 1]
-
+T_B_A: [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,-1 ,0, 0, 0, 0 ,0, 1]
+T_B_G: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 ,0, 1]
 #TF from External Pose to Body only if useLegOdom is false
-#T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
-T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 , 1]
+T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
+#T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 , 1]
 
 #ROS Topic Frequencies in Hz
 imu_topic_freq: 100
@@ -52,10 +52,10 @@ StrikingContact: 60
 
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: true #Use a Steady State KF in every joint
-joint_cutoff_freq: 5
+joint_cutoff_freq: 10
 
 #Madgwick Filter for attitude
-Madgwick_gain: 0.1
+Madgwick_gain: 0.3
 
 
 #Complimentary Filter for Body Velocity  //Used in Leg Odometry
@@ -69,8 +69,8 @@ freqvmax: 2.5
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  0.0003904 #m/s^2
-gyroscope_bias_random_walk: 0.000283344
+accelerometer_bias_random_walk:  0.03904 #m/s^2
+gyroscope_bias_random_walk: 0.00283344
 accelerometer_noise_density: 0.163 #m/s^2
 gyroscope_noise_density: 0.09525 #rad/s
 
@@ -78,8 +78,8 @@ gyroscope_noise_density: 0.09525 #rad/s
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 1.0e-03
-odom_orientation_noise_density: 1.0e-03
+odom_position_noise_density: 1.0e-04
+odom_orientation_noise_density: 1.0e-04
 
 
 
@@ -91,9 +91,9 @@ odom_orientation_noise_density: 1.0e-03
 #bias_gy:  -0.00178242
 #bias_gz:  0.000158554
 
-bias_ax:  -0.239618
-bias_ay:  0.0751756
-bias_az:  0.0
+bias_ax:  0.239618
+bias_ay:  -0.1934
+bias_az:   18.0327
 bias_gx:  -0.000817362
 bias_gy:  -0.00178242
 bias_gz:  0.0
@@ -121,7 +121,7 @@ com_position_random_walk: 1.0e-6 #in m
 com_velocity_random_walk: 1.0e-2 #in m/s
 external_force_random_walk: 0.5      #in Newtons
 #Measurment Noise
-com_position_noise_density: 1.0e-03  #CoM position in m
+com_position_noise_density: 1.0e-04  #CoM position in m
 com_acceleration_noise_density: 5.0e-02 #CoM Acceleration in m/s^2
 #Initial errors in External Forces
 bias_fx: 0.0  #in Newtons

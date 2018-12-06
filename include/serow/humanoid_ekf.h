@@ -106,8 +106,8 @@ private:
 	double no_motion_threshold;
 	Quaterniond  q_update;
 	Vector3d  pos_update, CoM_gt;
-	Affine3d T_B_I, T_B_P;
-	Quaterniond q_B_I, q_B_P;
+	Affine3d T_B_A, T_B_G, T_B_P;
+	Quaterniond q_B_A, q_B_G, q_B_P;
 	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM;
     bool debug_mode;
 	//ROS Messages

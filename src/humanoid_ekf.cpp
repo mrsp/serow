@@ -91,25 +91,50 @@ void humanoid_ekf::loadparams() {
 		T_B_P(3,3) = pose_list[15];		
 		q_B_P = Quaterniond(T_B_P.linear());
 	}
-	std::vector<double> imu_list;
-	n_p.getParam("T_B_I",imu_list);
-	T_B_I(0,0) = imu_list[0];
-	T_B_I(0,1) = imu_list[1];
-	T_B_I(0,2) = imu_list[2];
-	T_B_I(0,3) = imu_list[3];
-	T_B_I(1,0) = imu_list[4];
-	T_B_I(1,1) = imu_list[5];
-	T_B_I(1,2) = imu_list[6];
-	T_B_I(1,3) = imu_list[7];
-	T_B_I(2,0) = imu_list[8];
-	T_B_I(2,1) = imu_list[9];
-	T_B_I(2,2) = imu_list[10];
-	T_B_I(2,3) = imu_list[11];
-	T_B_I(3,0) = imu_list[12];
-	T_B_I(3,1) = imu_list[13];
-	T_B_I(3,2) = imu_list[14];
-	T_B_I(3,3) = imu_list[15];		
-	q_B_I = Quaterniond(T_B_I.linear());
+	std::vector<double> acc_list;
+	n_p.getParam("T_B_A",acc_list);
+	T_B_A(0,0) = acc_list[0];
+	T_B_A(0,1) = acc_list[1];
+	T_B_A(0,2) = acc_list[2];
+	T_B_A(0,3) = acc_list[3];
+	T_B_A(1,0) = acc_list[4];
+	T_B_A(1,1) = acc_list[5];
+	T_B_A(1,2) = acc_list[6];
+	T_B_A(1,3) = acc_list[7];
+	T_B_A(2,0) = acc_list[8];
+	T_B_A(2,1) = acc_list[9];
+	T_B_A(2,2) = acc_list[10];
+	T_B_A(2,3) = acc_list[11];
+	T_B_A(3,0) = acc_list[12];
+	T_B_A(3,1) = acc_list[13];
+	T_B_A(3,2) = acc_list[14];
+	T_B_A(3,3) = acc_list[15];
+		
+	q_B_A = Quaterniond(T_B_A.linear());
+
+
+
+	std::vector<double> gyro_list;
+	n_p.getParam("T_B_G",gyro_list);
+	T_B_G(0,0) = gyro_list[0];
+	T_B_G(0,1) = gyro_list[1];
+	T_B_G(0,2) = gyro_list[2];
+	T_B_G(0,3) = gyro_list[3];
+	T_B_G(1,0) = gyro_list[4];
+	T_B_G(1,1) = gyro_list[5];
+	T_B_G(1,2) = gyro_list[6];
+	T_B_G(1,3) = gyro_list[7];
+	T_B_G(2,0) = gyro_list[8];
+	T_B_G(2,1) = gyro_list[9];
+	T_B_G(2,2) = gyro_list[10];
+	T_B_G(2,3) = gyro_list[11];
+	T_B_G(3,0) = gyro_list[12];
+	T_B_G(3,1) = gyro_list[13];
+	T_B_G(3,2) = gyro_list[14];
+	T_B_G(3,3) = gyro_list[15];
+		
+	q_B_G = Quaterniond(T_B_G.linear());
+
 
 
 	n_p.param<std::string>("pose_topic", pose_topic,"pose");
@@ -188,8 +213,8 @@ void humanoid_ekf::loadIMUEKFparams()
 	n_p.param<double>("gravity", imuEKF->ghat,9.81);
 	n_p.param<double>("gravity", g,9.81);
 
-	imuEKF->setAccBias(Vector3d(bias_ax,bias_ay,bias_az));
-	imuEKF->setGyroBias(Vector3d(bias_gx,bias_gy,bias_gz));
+	imuEKF->setAccBias(T_B_A.linear()*Vector3d(bias_ax,bias_ay,bias_az));
+	imuEKF->setGyroBias(T_B_G.linear()*Vector3d(bias_gx,bias_gy,bias_gz));
 }
 
 
@@ -432,8 +457,8 @@ void humanoid_ekf::run() {
 		predictWithImu = false;
 		predictWithCoM = false;
 
-		mw->MadgwickAHRSupdateIMU(T_B_I.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z))-Vector3d(bias_gx,bias_gy,bias_gz),
-			T_B_I.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z))-Vector3d(bias_ax,bias_ay,bias_az));
+		mw->MadgwickAHRSupdateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)-Vector3d(bias_gx,bias_gy,bias_gz)),
+			T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)-Vector3d(bias_ax,bias_ay,bias_az)));
 
 
 		if(fsr_inc){
@@ -487,8 +512,8 @@ void humanoid_ekf::estimateWithIMUEKF()
 		//Compute the attitude and posture with the IMU-Kinematics Fusion
 		//Predict with the IMU gyro and acceleration
 		if(imu_inc && !predictWithImu && !imuEKF->firstrun){
-			imuEKF->predict( T_B_I.linear() * Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z),
-			T_B_I.linear()*Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z));
+			imuEKF->predict( T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z),
+			T_B_A.linear()*Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z));
 			imu_inc = false;
 			predictWithImu = true;
 		}
