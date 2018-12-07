@@ -207,7 +207,9 @@ void humanoid_ekf::loadIMUEKFparams()
 	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay,1.0e-03);
 	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az,1.0e-03);
 
-
+	n_p.param<double>("velocity_noise_density", imuEKF->vel_px,1.0e-02);
+	n_p.param<double>("velocity_noise_density", imuEKF->vel_py,1.0e-02);
+	n_p.param<double>("velocity_noise_density", imuEKF->vel_pz,1.0e-02);
 
 
 	n_p.param<double>("gravity", imuEKF->ghat,9.81);
@@ -432,6 +434,7 @@ void humanoid_ekf::init() {
 	joint_inc = false;
 	odom_inc = false;
 	leg_odom_inc = false;
+	leg_vel_inc = false;
 	support_inc = false;
     no_motion_indicator = false;
 	no_motion_it = 0;
@@ -571,6 +574,12 @@ void humanoid_ekf::estimateWithIMUEKF()
 				{
 					if(!usePoseUpdate)
 					{
+
+						if(leg_vel_inc)
+						{
+							imuEKF->updateWithTwist(vwb);
+							leg_vel_inc = false;
+						}
 						if(odom_inc)
 						{
 								pos_update += T_B_P.linear() * Vector3d(odom_msg.pose.pose.position.x - odom_msg_.pose.pose.position.x,
@@ -766,6 +775,7 @@ void humanoid_ekf::computeKinTFs() {
 
 
 		leg_odom_inc = true;
+		leg_vel_inc = true;
 		check_no_motion = false;
 
 

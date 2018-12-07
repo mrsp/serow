@@ -92,7 +92,7 @@ private:
 	bool useCF;
 	double cf_freqvmin, cf_freqvmax;
 	double  freq, joint_freq, fsr_freq;
-	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, support_inc, check_no_motion, ground_truth_odom_inc;
+	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, ground_truth_odom_inc;
 	bool firstOdom, firstUpdate, firstPose;
 	int number_of_joints;
 	bool firstGyrodot;

@@ -137,8 +137,74 @@ void IMUEKF::init() {
 }
 
 /** ------------------------------------------------------------- **/
+Matrix<double,15,1> IMUEKF::computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
+{
+	Matrix<double,15,1> res = Matrix<double,15,1>::Zero();
+
+	//Inputs without bias
+	omega_ -= x_.segment<3>(9);
+	f_ -= x_.segment<3>(12);
+
+	//Nonlinear Process Model
+	v = x_.segment<3>(0);
+	res.segment<3>(0).noalias() = -wedge(omega_) * v;
+	res.segment<3>(0).noalias() -= Rib_.transpose()*g;
+	res.segment<3>(0) += f_;
+	res.segment<3>(6).noalias() = Rib_ * v;
+
+	return res;
+}
+
+Matrix<double,15,1> IMUEKF::computeDynRK4(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
+{
+	Matrix<double,15,1> k1 = Matrix<double,15,1>::Zero();
+	Matrix<double,15,1> k2 = Matrix<double,15,1>::Zero();
+	Matrix<double,15,1> k3 = Matrix<double,15,1>::Zero();
+	Matrix<double,15,1> k4 = Matrix<double,15,1>::Zero();
+	Matrix<double,15,1> res;
+
+	k1 = computeDyn(x_,Rib_, omega__, f__);
+	x_temp.noalias() = x_ + k1 * dt/2.00;
+	omega_temp.noalias() = (omega_ + omega__)/2.00;
+	Rib_temp.noalias() = Rib_ * expMap(omega_temp);
+	f_temp.noalias() = (f_ + f__)/2.00;
+	k2 = computeDyn(x_temp,Rib_temp, omega_temp, f_temp);
 
 
+	x_temp.noalias() = x_ + k2 * dt/2.00;
+	k3 = computeDyn(x_temp,Rib_temp, omega_temp, f_temp);
+	
+	
+	x_temp.noalias() = x_ + k3 * dt;
+	Rib_temp.noalias() = Rib_ * expMap(omega_);
+	k4 = computeDyn(x_temp,Rib_temp, omega_, f_);
+
+	res = x_;
+	res.noalias() += dt/6.00 * (k1 + 2*k2 +2*k3 + k4); 
+
+	return res;
+
+}
+
+Matrix<double,15,15> IMUEKF::computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
+{
+	omega_ -= x_.segment<3>(9);
+	f_ -= x_.segment<3>(12);
+
+	Matrix<double,15,15> res = Matrix<double,15,15>::Zero();
+
+	res.block<3,3>(0,0) = -wedge(omegahat);
+	res.block<3,3>(0,3).noalias() = wedge(Rib.transpose() * g);
+	res.block<3,3>(3,3) = -wedge(omegahat);
+	res.block<3,3>(6,0) = Rib;
+	res.block<3,3>(6,3).noalias() = -Rib * wedge(v);
+	res.block<3,3>(0,9) = -wedge(v);
+	res.block<3,3>(0,12) = -Matrix3d::Identity();
+	res.block<3,3>(3,9) = -Matrix3d::Identity();
+
+
+	return res;
+}
 /** IMU EKF filter to  deal with the Noise **/
 void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 {
@@ -240,12 +306,14 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 		x(14) = bf(2);
 
 		//Propagate only if non-zero input
-		temp = omegahat;
-		temp *= dt;
-		if (temp(0) != 0.0000 && temp(1) != 0.0000 && temp(2) != 0.0000) {
-			Rib  *=  expMap(temp);
+		if (omegahat(0) != 0.000 && omegahat(1) != 0.000 && omegahat(2) != 0.000) 
+		{
+			Rib  *=  expMap(omegahat*dt);
 		}
 		updateVars();
+
+		f__ = f_;
+		omega__ = omega_;
 
 }
 
@@ -279,10 +347,8 @@ void IMUEKF::updateWithTwist(Vector3d y)
 		P = (If - Kv * Hv) * P * (If - Kv * Hv).transpose() + Kv * Rv * Kv.transpose();
 
 
-		if (dxf(3) != 0.000 && dxf(4) != 0.000 && dxf(5) != 0.000) {
-			temp(0) = dxf(3);
-			temp(1) = dxf(4);
-			temp(2) = dxf(5);
+		if (dxf(3) != 0.000 && dxf(4) != 0.000 && dxf(5) != 0.000) 
+		{
 			Rib *=  expMap(dxf.segment<3>(3));
 		}
 		x.segment<3>(3) = Vector3d::Zero();
@@ -337,11 +403,9 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 		P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose() + Kf * R * Kf.transpose();
 
 		
-		if (dxf(3) != 0.000 && dxf(4) != 0.000 && dxf(5) != 0.000) {
-			temp(0) = dxf(3);
-			temp(1) = dxf(4);
-			temp(2) = dxf(5);
-			Rib *=  expMap(temp);
+		if (dxf(3) != 0.000 && dxf(4) != 0.000 && dxf(5) != 0.000)
+		{
+			Rib *=  expMap(dxf.segment<3>(3));
 		}
 		x.segment<3>(3) = Vector3d::Zero();
 
