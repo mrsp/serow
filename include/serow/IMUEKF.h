@@ -81,12 +81,17 @@ private:
 	Matrix3d tempM;
 
 	//innovation, position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
-	Vector3d r, v, chi, bf, bw, fhat, omegahat,  omega, f, temp;
+	Vector3d r, v, chi, bf, bw, fhat, omegahat,  omega, f, temp, omega__, f__, omega_temp, f_temp;
+	Matrix3d Rib_temp;
 
 	Matrix<double, 6, 1> z;
 	Vector3d zv;
 	//Quaternion
 
+
+    Matrix<double,15,1> computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
+	Matrix<double,15,1> computeDynRK4(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
+	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 
 
 
@@ -94,7 +99,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
              
 	//State vector - with biases included
-	Matrix<double, 15, 1> x;
+	Matrix<double, 15, 1> x, x_temp;
 
 	bool firstrun;
 	// Gravity vector
@@ -202,18 +207,17 @@ public:
 	inline Matrix<double, 3, 3> expMap(
 			Vector3d omega) {
 
-		Matrix<double, 3, 3> res, omega_skew, I;
+		Matrix<double, 3, 3> res;
 		double omeganorm;
 
-		res = Matrix<double, 3, 3>::Zero();
-		omega_skew = Matrix<double, 3, 3>::Zero();
 		omeganorm = omega.norm();
+		res =  Matrix<double, 3, 3>::Identity();
 
-		I = Matrix<double, 3, 3>::Identity();
-
-		res = I;
 		if(omeganorm !=0.0)
 		{
+			Matrix<double, 3, 3>  omega_skew;
+			omega_skew = Matrix<double, 3, 3>::Zero();
+
 			omega_skew = wedge(omega);
 			res += omega_skew * (sin(omeganorm) / omeganorm);
 			res += (omega_skew * omega_skew) * (
@@ -229,9 +233,9 @@ public:
 		Vector3d res = Vector3d::Zero();
 		double costheta = (Rt.trace()-1.0)/2.0;
 		double theta = acos(costheta);
-		Matrix<double, 3, 3> lnR = Matrix<double, 3, 3>::Zero();
 
 		if (theta != 0.000) {
+			Matrix<double, 3, 3> lnR = Matrix<double, 3, 3>::Zero();
 			lnR.noalias() =  Rt - Rt.transpose();
 			lnR *= theta /(2.0*sin(theta));
 			res = vec(lnR); 			
