@@ -88,7 +88,7 @@ private:
 	Vector3d zv;
 	//Quaternion
 
-
+    //RK4 Integration 
     Matrix<double,15,1> computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 	Matrix<double,15,1> computeDynRK4(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
@@ -103,7 +103,7 @@ public:
 
 	bool firstrun;
 	// Gravity vector
-	Vector3d g;
+    Vector3d g, bgyr, bacc, gyro, acc, vel, pos;
 
 	//Noise Stds
 
@@ -163,7 +163,10 @@ public:
 		Rib = Rot_;
 	}
 
-
+    void setBodyVel(Vector3d bv)
+    {
+        x.segment<3>(0).noalias() = Rib.transpose() * bv;
+    }
 
 
 	/** @fn void Filter(Matrix<double,3,1> f, Matrix<double,3,1> omega, Matrix<double,3,1>  y_r, Matrix<double,3,1>  y_q)
