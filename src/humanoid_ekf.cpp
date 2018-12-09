@@ -674,9 +674,9 @@ void humanoid_ekf::estimateWithCoMEKF()
 
 		if(joint_inc && predictWithCoM){
 			nipmEKF->update(
-					Vector3d(imuEKF->accX, imuEKF->accY, imuEKF->accZ - imuEKF->ghat),
+					imuEKF->acc - imuEKF->g,
 					imuEKF->Tib*CoM_enc,
-					Vector3d(imuEKF->gyroX, imuEKF->gyroY, imuEKF->gyroZ),Gyrodot);
+					imuEKF->gyro,Gyrodot);
 			joint_inc = false;
 		}
 
@@ -899,7 +899,7 @@ void humanoid_ekf::deAllocate()
 void humanoid_ekf::filterGyrodot() {
 	if (!firstGyrodot) {
 		//Compute numerical derivative
-		Gyrodot = (Vector3d(imuEKF->gyroX, imuEKF->gyroY, imuEKF->gyroZ) - Gyro_)*freq;
+		Gyrodot = (imuEKF->gyro - Gyro_)*freq;
 		if(useGyroLPF){
 			Gyrodot(0) = gyroLPF[0]->filter(Gyrodot(0));
 			Gyrodot(1) = gyroLPF[1]->filter(Gyrodot(1));
@@ -919,7 +919,7 @@ void humanoid_ekf::filterGyrodot() {
 		Gyrodot = Vector3d::Zero();
 		firstGyrodot = false;
 	}
-	Gyro_ = Vector3d(imuEKF->gyroX, imuEKF->gyroY, imuEKF->gyroZ);
+	Gyro_ = imuEKF->gyro;
 }
 
 
@@ -943,10 +943,10 @@ void humanoid_ekf::publishBodyEstimates() {
 	odom_est_msg.pose.pose.position.x = imuEKF->rX;
 	odom_est_msg.pose.pose.position.y = imuEKF->rY;
 	odom_est_msg.pose.pose.position.z = imuEKF->rZ;
-	odom_est_msg.pose.pose.orientation.x = imuEKF->qib_.x();
-	odom_est_msg.pose.pose.orientation.y = imuEKF->qib_.y();
-	odom_est_msg.pose.pose.orientation.z = imuEKF->qib_.z();
-	odom_est_msg.pose.pose.orientation.w = imuEKF->qib_.w();
+	odom_est_msg.pose.pose.orientation.x = imuEKF->qib.x();
+	odom_est_msg.pose.pose.orientation.y = imuEKF->qib.y();
+	odom_est_msg.pose.pose.orientation.z = imuEKF->qib.z();
+	odom_est_msg.pose.pose.orientation.w = imuEKF->qib.w();
 
 	odom_est_msg.twist.twist.linear.x = imuEKF->velX;
 	odom_est_msg.twist.twist.linear.y = imuEKF->velY;
