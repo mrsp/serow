@@ -133,7 +133,6 @@ void IMUEKF::init() {
     velZ = 0.000;
     
     std::cout << "IMU EKF Initialized Successfully" << std::endl;
-    
 }
 
 /** ------------------------------------------------------------- **/
@@ -155,35 +154,78 @@ Matrix<double,15,1> IMUEKF::computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3
     return res;
 }
 
-Matrix<double,15,1> IMUEKF::computeDynRK4(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
+Matrix<double,15,1> IMUEKF::computeRK4(Matrix<double,15,1>&res, Matrix<double,15,15>&res_trans, Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
 {
-    Matrix<double,15,1> k1 = Matrix<double,15,1>::Zero();
-    Matrix<double,15,1> k2 = Matrix<double,15,1>::Zero();
-    Matrix<double,15,1> k3 = Matrix<double,15,1>::Zero();
-    Matrix<double,15,1> k4 = Matrix<double,15,1>::Zero();
-    Matrix<double,15,1> res;
     
+    Matrix<double,15,1> k, k1, k2, k3, k4, x_mid;
+    Matrix<double,15,15> K1, K2, K3, K4, K0;
+    Vector3d f_mid, omega_mid;
+    Matrix3d Rib_mid;
+    
+    Rib_mid = Matrix3d::Identity();
+    k1 = Matrix<double,15,1>::Zero();
+    k2 = Matrix<double,15,1>::Zero();
+    k3 = Matrix<double,15,1>::Zero();
+    k4 = Matrix<double,15,1>::Zero();
+    K1 = Matrix<double,15,15>::Zero();
+    K2 = Matrix<double,15,15>::Zero();
+    K3 = Matrix<double,15,15>::Zero();
+    K4 = Matrix<double,15,15>::Zero();
+    
+    
+    //compute first coefficient
     k1 = computeDyn(x_,Rib_, omega__, f__);
-    x_temp.noalias() = x_ + k1 * dt/2.00;
-    omega_temp.noalias() = (omega_ + omega__)/2.00;
-    Rib_temp.noalias() = Rib_ * expMap(omega_temp);
-    f_temp.noalias() = (f_ + f__)/2.00;
-    k2 = computeDyn(x_temp,Rib_temp, omega_temp, f_temp);
     
+    //Compute mid point with k1
+    x_mid.noalias() = x_ + k1 * dt/2.00;
+    omega_mid.noalias() = (omega_ + omega__)/2.00;
+    Rib_mid.noalias() = Rib_ * expMap(omega_mid);
+    f_mid.noalias() = (f_ + f__)/2.00;
     
-    x_temp.noalias() = x_ + k2 * dt/2.00;
-    k3 = computeDyn(x_temp,Rib_temp, omega_temp, f_temp);
+    //Compute second coefficient
+    k2 = computeDyn(x_mid,Rib_mid, omega_mid, f_mid);
     
+    //Compute mid point with k2
+    x_mid.noalias() = x_ + k2 * dt/2.00;
+    //Compute third coefficient
+    k3 = computeDyn(x_mid,Rib_mid, omega_mid, f_mid);
     
-    x_temp.noalias() = x_ + k3 * dt;
-    Rib_temp.noalias() = Rib_ * expMap(omega_);
-    k4 = computeDyn(x_temp,Rib_temp, omega_, f_);
+    //Compute point with k3
+    x_mid.noalias() = x_ + k3 * dt;
+    Rib_mid.noalias() = Rib_ * expMap(omega_);
+    //Compute fourth coefficient
+    k4 = computeDyn(x_mid,Rib_mid, omega_, f_);
     
+    //RK4 approximation of x
     res = x_;
-    res.noalias() += dt/6.00 * (k1 + 2*k2 +2*k3 + k4);
+    k.noalias() =  (k1 + 2*k2 +2*k3 + k4)/6.00;
+    res.noalias() += dt * k;
     
-    return res;
+    //Compute the RK4 approximated mid point
+    x_mid = x_;
+    x_mid.noalias() += dt/2.00 * k;
+    Rib_mid.noalias() = Rib_ * expMap(omega_mid);
     
+    K1 = computeTrans(x_,Rib_, omega_, f_);
+    K2 = computeTrans(x_mid,Rib_mid, omega_mid, f_mid);
+    K3 = K2;
+    
+    K0  = Matrix<double,15,15>::Identity();
+    K0.noalias() += dt/2.00 * K1;
+    K2 = K2 * K0;
+    
+    K0 = Matrix<double,15,15>::Identity();
+    K0.noalias() += dt/2.00 * K2;
+    K3 = K3 * K0;
+    
+    K4 =  computeTrans(res, Rib_res, omega_, f_);
+    K0 = Matrix<double,15,15>::Identity();
+    K0.noalias() += dt * K3;
+    K4 = K4 *  K0;
+    
+    //RK4 approximation of Transition Matrix
+    res_trans =  Matrix<double,15,15>::Identity();
+    res_trans.noalias() += (K1 + 2*K2 + 2*K3 + K4) * dt/6.00;
 }
 
 Matrix<double,15,15> IMUEKF::computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
@@ -205,6 +247,12 @@ Matrix<double,15,15> IMUEKF::computeTrans(Matrix<double,15,1> x_, Matrix<double,
     
     return res;
 }
+
+
+
+
+
+
 /** IMU EKF filter to  deal with the Noise **/
 void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 {
