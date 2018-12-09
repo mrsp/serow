@@ -86,7 +86,6 @@ private:
 
 	Matrix<double, 6, 1> z;
 	Vector3d zv;
-	//Quaternion
 
     //RK4 Integration 
     Matrix<double,15,1> computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
