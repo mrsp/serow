@@ -78,31 +78,31 @@ private:
 
 	Matrix<double, 3, 3> sv, Rv;
 
-	Matrix3d tempM;
 
 	//innovation, position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
-	Vector3d r, v, chi, bf, bw, fhat, omegahat,  omega, f, temp, omega__, f__, omega_temp, f_temp;
-	Matrix3d Rib_temp;
+	Vector3d r, v, bf, bw, fhat, omegahat,  omega, f, temp, omega_p, f_p;
 
 	Matrix<double, 6, 1> z;
 	Vector3d zv;
 
     //RK4 Integration 
     Matrix<double,15,1> computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
-	Matrix<double,15,1> computeDynRK4(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
+	void computeRK4(Matrix3d& Rib_,  Matrix<double,15,1>& x_,  Matrix<double,15,15>& A_trans, Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0);
 	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 
+	void euler(Vector3d omega_, Vector3d f_);
 
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
              
 	//State vector - with biases included
-	Matrix<double, 15, 1> x, x_temp;
+	Matrix<double, 15, 1> x;
 
 	bool firstrun;
+	bool useEuler;
 	// Gravity vector
-    Vector3d g, bgyr, bacc, gyro, acc, vel, pos;
+    Vector3d g, bgyr, bacc, gyro, acc, vel, pos, angle;
 
 	//Noise Stds
 
@@ -119,7 +119,7 @@ public:
 
 	Affine3d  Tib;
 
-	Quaterniond qib_;
+	Quaterniond qib;
 
 	//Sampling time = 1.0/Sampling Frequency
 	double dt;
@@ -164,7 +164,7 @@ public:
 
     void setBodyVel(Vector3d bv)
     {
-        x.segment<3>(0).noalias() = Rib.transpose() * bv;
+        x.segment<3>(0).noalias() =  bv;
     }
 
 

@@ -69,8 +69,8 @@ freqvmax: 2.5
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  0.03904 #m/s^2
-gyroscope_bias_random_walk: 0.00283344
+accelerometer_bias_random_walk:  0.03904 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 0.00283344 # rad/s/sqrt(s)
 accelerometer_noise_density: 0.163 #m/s^2
 gyroscope_noise_density: 0.09525 #rad/s
 
