@@ -43,7 +43,7 @@ void IMUEKF::init() {
     
     
     firstrun = true;
-    useEuler = true;
+    useEuler = false;
     If = Matrix<double, 15, 15>::Identity();
     P = Matrix<double, 15, 15>::Zero();
     //vel
@@ -86,7 +86,6 @@ void IMUEKF::init() {
     
     
     //Initializing vectors and matrices
-    r = Vector3d::Zero();
     v = Vector3d::Zero();
     dxf = Matrix<double, 15, 1>::Zero();
     
@@ -103,22 +102,35 @@ void IMUEKF::init() {
     Rv = Matrix<double, 3, 3>::Zero();
     
     Acf = Matrix<double, 15, 15>::Zero();
-    Lcf = Matrix<double, 15, 12>::Zero();
     Qff = Matrix<double, 15, 15>::Zero();
     Qf = Matrix<double, 12, 12>::Zero();
     Af = Matrix<double, 15, 15>::Zero();
     
-    bw = Vector3d::Zero();
-    bf = Vector3d::Zero();
+    bgyr = Vector3d::Zero();
+    bacc = Vector3d::Zero();
     gyro = Vector3d::Zero();
     acc = Vector3d::Zero();
     angle = Vector3d::Zero();
+
+
     //bias removed acceleration and gyro rate
     fhat = Vector3d::Zero();
     omegahat = Vector3d::Zero();
     f_p = Vector3d::Zero();
     omega_p = Vector3d::Zero();
     Tib = Affine3d::Identity();
+
+
+
+    //Compute some parts of the Input-Noise Jacobian once since they are constants 
+    //gyro (0),acc (3),gyro_bias (6),acc_bias (9)
+    Lcf = Matrix<double, 15, 12>::Zero();
+    Lcf.block<3,3>(0,3) = Matrix3d::Identity();
+    Lcf.block<3,3>(3,0) = Matrix3d::Identity();
+    Lcf.block<3,3>(9,6) = Matrix3d::Identity();
+    Lcf.block<3,3>(12,9) = Matrix3d::Identity();
+
+
     //Output Variables
     angleX = 0.000;
     angleY = 0.000;
@@ -150,15 +162,15 @@ Matrix<double,15,1> IMUEKF::computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3
     
     //Nonlinear Process Model
     v = x_.segment<3>(0);
-    res.segment<3>(0).noalias() = -wedge(omega_) * v;
-    res.segment<3>(0).noalias() -= Rib_.transpose()*g;
+    res.segment<3>(0).noalias() = v.cross(omega_);
+    res.segment<3>(0).noalias() += Rib_.transpose()*g;
     res.segment<3>(0) += f_;
     res.segment<3>(6).noalias() = Rib_ * v;
     
     return res;
 }
 
-void IMUEKF::computeRK4(Matrix3d& Rib_,  Matrix<double,15,1>& x_,  Matrix<double,15,15>& A_trans, Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0)
+void IMUEKF::RK4(Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0)
 {
     
     Matrix<double,15,1> k, k1, k2, k3, k4, x_mid, x0;
@@ -177,8 +189,8 @@ void IMUEKF::computeRK4(Matrix3d& Rib_,  Matrix<double,15,1>& x_,  Matrix<double
     K3 = Matrix<double,15,15>::Zero();
     K4 = Matrix<double,15,15>::Zero();
     
-    x0 = x_;
-    Rib0 = Rib_;
+    x0 = x;
+    Rib0 = Rib;
     //compute first coefficient
     k1 = computeDyn(x0,Rib0, omega0, f0);
     
@@ -212,7 +224,7 @@ void IMUEKF::computeRK4(Matrix3d& Rib_,  Matrix<double,15,1>& x_,  Matrix<double
     Rib_mid.noalias() = Rib0 * expMap(omega_mid);
     
     //Next state
-    x_.noalias() += dt * k;
+    x.noalias() += dt * k;
 
     
 
@@ -229,37 +241,37 @@ void IMUEKF::computeRK4(Matrix3d& Rib_,  Matrix<double,15,1>& x_,  Matrix<double
     K3 = K3 * K0;
     
     //Update Rotation
-    temp.noalias() = omega_- x_.segment<3>(9);
+    temp.noalias() = omega_- x.segment<3>(9);
     temp *= dt;
     if(temp(0)!=0 && temp(1) !=0 && temp(2)!=0)
-        Rib_ *=  expMap(temp);
+        Rib_mid *=  expMap(temp);
+
     //Compute the 4th Coefficient
-    K4 =  computeTrans(x_, Rib_, omega_, f_);
+    K4 =  computeTrans(x, Rib_mid, omega_, f_);
     K0 = If;
     K0.noalias() += dt * K3;
     K4 = K4 *  K0;
     
     //RK4 approximation of Transition Matrix
-    A_trans =  If;
-    A_trans.noalias() += (K1 + 2*K2 + 2*K3 + K4) * dt/6.00;
+    Af =  If;
+    Af.noalias() += (K1 + 2*K2 + 2*K3 + K4) * dt/6.00;
 }
 
 Matrix<double,15,15> IMUEKF::computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
 {
-    omega_ -= x_.segment<3>(9);
-    f_ -= x_.segment<3>(12);
-    
+    omega_.noalias() -= x_.segment<3>(9);
+    f_.noalias() -= x_.segment<3>(12);
+    v = x_.segment<3>(0);
     Matrix<double,15,15> res = Matrix<double,15,15>::Zero();
     
-    res.block<3,3>(0,0) = -wedge(omegahat);
-    res.block<3,3>(0,3).noalias() = wedge(Rib.transpose() * g);
-    res.block<3,3>(3,3) = -wedge(omegahat);
-    res.block<3,3>(6,0) = Rib;
-    res.block<3,3>(6,3).noalias() = -Rib * wedge(v);
-    res.block<3,3>(0,9) = -wedge(v);
-    res.block<3,3>(0,12) = -Matrix3d::Identity();
-    res.block<3,3>(3,9) = -Matrix3d::Identity();
-    
+    res.block<3,3>(0,0).noalias() = -wedge(omega_);
+    res.block<3,3>(0,3).noalias() = wedge(Rib_.transpose() * g);
+    res.block<3,3>(3,3).noalias() = -wedge(omega_);
+    res.block<3,3>(6,0) = Rib_;
+    res.block<3,3>(6,3).noalias() = -Rib_ * wedge(v);
+    res.block<3,3>(0,9).noalias() = -wedge(v);
+    res.block<3,3>(0,12).noalias() = -Matrix3d::Identity();
+    res.block<3,3>(3,9).noalias() = -Matrix3d::Identity();
     
     return res;
 }
@@ -267,108 +279,15 @@ Matrix<double,15,15> IMUEKF::computeTrans(Matrix<double,15,1> x_, Matrix<double,
 
 void IMUEKF::euler(Vector3d omega_, Vector3d f_)
 {
-    omega = omega_;
-    f = f_;
-    
-    // relative velocity
-    v = x.segment<3>(0);
-    // absolute position
-    r = x.segment<3>(6);
-    // biases
-    bw = x.segment<3>(9);
-    bf = x.segment<3>(12);
-    
-    
-    // Correct the inputs
-    fhat.noalias() = f - bf;
-    omegahat.noalias() = omega - bw;
-    
-    /** Linearization **/
-    //Transition matrix Jacobian
-    Acf.block<3,3>(0,0).noalias() = -wedge(omegahat);
-    Acf.block<3,3>(0,3).noalias() = wedge(Rib.transpose() * g);
-    Acf.block<3,3>(3,3).noalias() = -wedge(omegahat);
-    Acf.block<3,3>(6,0) = Rib;
-    Acf.block<3,3>(6,3).noalias() = -Rib * wedge(v);
-    Acf.block<3,3>(0,9).noalias() = -wedge(v);
-    Acf.block<3,3>(0,12) = -Matrix3d::Identity();
-    Acf.block<3,3>(3,9) = -Matrix3d::Identity();
-    
-    
-    
-    
-    //State Noise Jacobian
-    //gyro (0),acc (3),gyro_bias (6),acc_bias (9)
-    Lcf.block<3,3>(0,0).noalias() = wedge(v);
-    Lcf.block<3,3>(0,3) = Matrix3d::Identity();
-    Lcf.block<3,3>(3,0) = Matrix3d::Identity();
-    Lcf.block<3,3>(9,6) = Matrix3d::Identity();
-    Lcf.block<3,3>(12,9) = Matrix3d::Identity();
-    
-    
-    
-    
-    // Covariance Q with full state + biases
-    Qf(0, 0) = gyr_qx * gyr_qx  * dt;
-    Qf(1, 1) = gyr_qy * gyr_qy  * dt;
-    Qf(2, 2) = gyr_qz * gyr_qz  * dt;
-    Qf(3, 3) = acc_qx * acc_qx  * dt;
-    Qf(4, 4) = acc_qy * acc_qy  * dt;
-    Qf(5, 5) = acc_qz * acc_qz  * dt;
-    Qf(6, 6) = gyrb_qx * gyrb_qx ;
-    Qf(7, 7) = gyrb_qy * gyrb_qy ;
-    Qf(8, 8) = gyrb_qz * gyrb_qz  ;
-    Qf(9, 9) = accb_qx * accb_qx  ;
-    Qf(10, 10) = accb_qy * accb_qy ;
-    Qf(11, 11) = accb_qz * accb_qz ;
-    
-    
+    Acf=computeTrans(x,Rib,omega_,f_);
+      
     //Euler Discretization - First order Truncation
     Af = If;
-    Af.noalias() += Acf * dt;
-    Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt ;
-    //Qff =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
+    Af.noalias() += Acf * dt;  
     
-    /** Predict Step: Propagate the Error Covariance  **/
-    P = Af * P * Af.transpose() + Qff;
-    
-    /** Predict Step : Propagate the Mean estimate **/
-    //Body Velocity
-    
-    temp.noalias() = v.cross(omegahat) + Rib.transpose() * g + fhat;
-    temp *= dt;
-    
-    x(0) = v(0) + temp(0);
-    x(1) = v(1) + temp(1);
-    x(2) = v(2) + temp(2);
-    
-    x(3) = 0;
-    x(4) = 0;
-    x(5) = 0;
-    
-    //Body position
-    temp.noalias() = Rib * v;
-    temp *= dt;
-    x(6) = r(0) + temp(0);
-    x(7) = r(1) + temp(1);
-    x(8) = r(2) + temp(2);
-    
-    //Gyro bias
-    x(9) = bw(0);
-    x(10) = bw(1);
-    x(11) = bw(2);
-    
-    //Acc bias
-    x(12) = bf(0);
-    x(13) = bf(1);
-    x(14) = bf(2);
-    
-    //Propagate only if non-zero input
-    if (omegahat(0) != 0 && omegahat(1) != 0 && omegahat(2) != 0)
-    {
-        Rib  *=  expMap(omegahat*dt);
-    }
-
+    /** Predict Step : Propagate the Mean estimate **/   
+    dxf = computeDyn(x,Rib,omega_,f_);
+    x.noalias() += (dxf*dt);
 }
 
 
@@ -377,16 +296,62 @@ void IMUEKF::euler(Vector3d omega_, Vector3d f_)
 /** IMU EKF filter to  deal with the Noise **/
 void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 {
+
+    omega = omega_;
+    f = f_;
+    //Used in updati     ng Rib with the Rodriquez formula
+    omegahat.noalias() = omega - x.segment<3>(9);
+    v = x.segment<3>(0);
+    
+    //Update the Input-noise Jacobian
+    Lcf.block<3,3>(0,0).noalias() = wedge(v);
+
+
     if(useEuler)
         euler(omega_,f_);
     else
     {
-        //Store the input
+        RK4(omega_,f_,omega_p,f_p);
+        //Store the IMU input for the next integration 
         f_p = f;
         omega_p = omega;
     }
+
+  
+
+    // Covariance Q with full state + biases
+    Qf(0, 0) = gyr_qx * gyr_qx * dt;
+    Qf(1, 1) = gyr_qy * gyr_qy * dt;
+    Qf(2, 2) = gyr_qz * gyr_qz * dt;
+    Qf(3, 3) = acc_qx * acc_qx * dt;
+    Qf(4, 4) = acc_qy * acc_qy * dt;
+    Qf(5, 5) = acc_qz * acc_qz * dt ;
+    Qf(6, 6) = gyrb_qx * gyrb_qx ;
+    Qf(7, 7) = gyrb_qy * gyrb_qy ;
+    Qf(8, 8) = gyrb_qz * gyrb_qz  ;
+    Qf(9, 9) = accb_qx * accb_qx  ;
+    Qf(10, 10) = accb_qy * accb_qy ;
+    Qf(11, 11) = accb_qz * accb_qz ;
+    
+
+    Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt ;
+    //Qff =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
+    
+    /** Predict Step: Propagate the Error Covariance  **/
+    P = Af * P * Af.transpose();
+    P.noalias() += Qff;
+    
+    //Propagate only if non-zero input
+
+    if (omegahat(0) != 0 && omegahat(1) != 0 && omegahat(2) != 0)
+    {
+        Rib  *=  expMap(omegahat*dt);
+    }
+
+    x.segment<3>(3) = Vector3d::Zero();
     updateVars();
 }
+
 
 /** Update **/
 void IMUEKF::updateWithTwist(Vector3d y)
@@ -472,7 +437,8 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     
     
     //Update the error covariance
-    P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose() + Kf * R * Kf.transpose();
+    P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
+    P.noalias() += Kf * R * Kf.transpose();
     
     
     if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
@@ -491,9 +457,14 @@ void IMUEKF::updateVars()
 {
     
     
+    pos = x.segment<3>(6);
+    rX = pos(0);
+    rY = pos(1);
+    rZ = pos(2);
     Tib.linear() = Rib;
-    Tib.translation() = x.segment<3>(6);
+    Tib.translation() = pos;
     qib = Quaterniond(Tib.linear());
+
     //Update the biases
     bgyr = x.segment<3>(9);
     bacc = x.segment<3>(12);
@@ -519,16 +490,11 @@ void IMUEKF::updateVars()
     accY = acc(1);
     accZ = acc(2);
     
-    vel = Rib * x.segment<3>(0);
+    v = x.segment<3>(0);
+    vel = Rib * v;
     velX = vel(0);
     velY = vel(1);
     velZ = vel(2);
-    
-    
-    pos = x.segment<3>(6);
-    rX = x(6);
-    rY = x(7);
-    rZ = x(8);
     
     
     //ROLL - PITCH - YAW

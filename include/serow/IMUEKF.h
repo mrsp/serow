@@ -80,14 +80,14 @@ private:
 
 
 	//innovation, position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
-	Vector3d r, v, bf, bw, fhat, omegahat,  omega, f, temp, omega_p, f_p;
+	Vector3d r, v, omega, f, fhat, omegahat, temp, omega_p, f_p;
 
 	Matrix<double, 6, 1> z;
 	Vector3d zv;
 
     //RK4 Integration 
     Matrix<double,15,1> computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
-	void computeRK4(Matrix3d& Rib_,  Matrix<double,15,1>& x_,  Matrix<double,15,15>& A_trans, Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0);
+	void RK4(Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0);
 	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 
 	void euler(Vector3d omega_, Vector3d f_);
@@ -132,23 +132,25 @@ public:
 		dt = dtt;
 	}
 
-	void setGyroBias(Vector3d bgyr)
+	void setGyroBias(Vector3d bgyr_)
 	{
-		x(9) = bgyr(0);
-		x(10) = bgyr(1);
-		x(11) = bgyr(2);
-		bias_gx = bgyr(0);
-		bias_gy = bgyr(1);
-		bias_gz = bgyr(2);
+		bgyr = bgyr_;
+		x(9) = bgyr_(0);
+		x(10) = bgyr_(1);
+		x(11) = bgyr_(2);
+		bias_gx = bgyr_(0);
+		bias_gy = bgyr_(1);
+		bias_gz = bgyr_(2);
 	}
-	void setAccBias(Vector3d bacc)
+	void setAccBias(Vector3d bacc_)
 	{
-		x(12) = bacc(0);
-		x(13) = bacc(1);
-		x(14) = bacc(2);
-		bias_ax = bacc(0);
-		bias_ay = bacc(1);
-		bias_az = bacc(2);
+		bacc = bacc_;
+		x(12) = bacc_(0);
+		x(13) = bacc_(1);
+		x(14) = bacc_(2);
+		bias_ax = bacc_(0);
+		bias_ay = bacc_(1);
+		bias_az = bacc_(2);
 	}
 	//Initialize the Position
 	void setBodyPos(Vector3d bp) {
