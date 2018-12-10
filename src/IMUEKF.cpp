@@ -43,7 +43,7 @@ void IMUEKF::init() {
     
     
     firstrun = true;
-    useEuler = false;
+    useEuler = true;
     If = Matrix<double, 15, 15>::Identity();
     P = Matrix<double, 15, 15>::Zero();
     //vel
@@ -70,6 +70,9 @@ void IMUEKF::init() {
     
     //Construct C
     Hf = Matrix<double, 6, 15>::Zero();
+    Hf.block<3,3>(0,6) = Matrix3d::Identity();
+    Hf.block<3,3>(3,3) = Matrix3d::Identity();
+
     Hv = Matrix<double, 3, 15>::Zero();
     
     /*Initialize the state **/
@@ -356,8 +359,6 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 /** Update **/
 void IMUEKF::updateWithTwist(Vector3d y)
 {
-    Hv = Matrix<double,3,15>::Zero();
-    Rv = Matrix<double,3,3>::Zero();
     Rv(0, 0) = vel_px * vel_px;
     Rv(1, 1) = vel_py * vel_py;
     Rv(2, 2) = vel_pz * vel_pz;
@@ -399,8 +400,6 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 {
     
     
-    Hf = Matrix<double,6,15>::Zero();
-    R = Matrix<double,6,6>::Zero();
     R(0, 0) = odom_px * odom_px;
     R(1, 1) = odom_py * odom_py;
     R(2, 2) = odom_pz * odom_pz;
@@ -411,21 +410,12 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     
     r = x.segment<3>(6);
     
-    
     //Innovetion vector
-    z.segment<3>(0) = y - r;
-    
-    
-    Hf.block<3,3>(0,6) = Matrix3d::Identity();
-    
-    
-    //Quaterniond qib(Rib);
-    //z.segment<3>(3) = logMap( (qib.inverse() * qy ));
+    z.segment<3>(0) = y - r;    
     z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
-    Hf.block<3,3>(3,3) = Matrix3d::Identity();
     
     
-    
+    //Compute the Kalman Gain
     s = R;
     s.noalias() = Hf * P * Hf.transpose();
     Kf.noalias() = P * Hf.transpose() * s.inverse();

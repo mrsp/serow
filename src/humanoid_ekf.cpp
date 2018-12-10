@@ -147,6 +147,7 @@ void humanoid_ekf::loadparams() {
 	n_p.param<std::string>("copl_topic",copl_topic,"cop/left");
 	n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
 
+
 	n_p.param<bool>("estimateCoM", useCoMEKF,false);
 	n_p.param<int>("medianWindow", medianWindow,15);
 
@@ -214,7 +215,7 @@ void humanoid_ekf::loadIMUEKFparams()
 
 	n_p.param<double>("gravity", imuEKF->ghat,9.81);
 	n_p.param<double>("gravity", g,9.81);
-
+    n_p.param<bool>("useEuler", imuEKF->useEuler,true);
 	imuEKF->setAccBias(T_B_A.linear()*Vector3d(bias_ax,bias_ay,bias_az));
 	imuEKF->setGyroBias(T_B_G.linear()*Vector3d(bias_gx,bias_gy,bias_gz));
 }
@@ -241,7 +242,7 @@ void humanoid_ekf::loadCoMEKFparams() {
 	n_p.param<double>("gyro_cut_off_freq",gyro_fy,7.0);
 	n_p.param<double>("gyro_cut_off_freq",gyro_fz,7.0);
 	n_p.param<int>("maWindow",maWindow,10);
-
+	n_p.param<bool>("useEuler", nipmEKF->useEuler,true);
 }
 
 
@@ -276,7 +277,6 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 	loadparams();
 	//Initialization
 	init();
-
 	loadJointKFparams();
 	// Load IMU parameters
 	loadIMUEKFparams();

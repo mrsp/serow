@@ -81,10 +81,10 @@ gyroscope_noise_density: 0.09525 #rad/s
 odom_position_noise_density: 1.0e-03
 odom_orientation_noise_density: 1.0e-03
 
-velocity_noise_density: 3.0e-03;
+velocity_noise_density: 1.0e-02;
 
 
-#IMU Initial Biases
+#IMU Initial Biases - Biases are substracted!
 #bias_ax:  -0.239618
 #bias_ay: 0.0751756
 #bias_az: -18.0327

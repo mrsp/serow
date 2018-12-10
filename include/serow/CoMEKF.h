@@ -69,7 +69,7 @@ public:
 
     double bias_fx, bias_fy, bias_fz;
 	bool firstrun;
-	
+	bool useEuler;
 	void init();
 
 	void setdt(double dtt) {

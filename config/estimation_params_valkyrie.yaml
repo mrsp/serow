@@ -4,17 +4,31 @@ base_link: "pelvis"
 lfoot: "leftFoot"
 rfoot: "rightFoot"
 modelname: "/home/master/dp_ws/src/serow/share/urdf/valkyrie_sim.urdf"
-#ROS Topic Names
-usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
-pose_topic: "" #only if usePoseUpdate is true
+
 useLegOdom: false
+
+#ROS Topic Names
+
+
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
+usePoseUpdate: false  #if true specify pose_topic / Do not use if odom_topic is set
+pose_topic: "" #only if usePoseUpdate is true
+
 imu_topic: "/pelvisMiddleImu/imu"
 joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
 lfoot_force_torque_topic: "/ihmc_ros/valkyrie/output/foot_force_sensor/left"
 rfoot_force_torque_topic: "/ihmc_ros/valkyrie/output/foot_force_sensor/right"
 copl_topic: "/ihmc_ros/valkyrie/output/cop/left"
 copr_topic: "/ihmc_ros/valkyrie/output/cop/right"
+
+
+
+#Choose Integration Method
+#Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
+useEuler = true
+
+
+
 
 
 #Ground-Truth
@@ -32,7 +46,8 @@ debug_mode: true
 
 
 #TF from IMU to Body
-T_B_I: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
+T_B_A: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
+T_B_G: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
 
 #TF from External Pose to Body only if useLegOdom is false
 #T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
@@ -71,27 +86,27 @@ freqvmax: 2.5
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  0.0001 #continous
-gyroscope_bias_random_walk: 4.1884e-8 #continous
-accelerometer_noise_density: 0.0035 #m/s^2/sqrt(Hz) #continous
-gyroscope_noise_density: 00.0004 #rad/s/sqrt(Hz) #continous
+accelerometer_bias_random_walk:  0.0005 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 4.1884e-8 # rad/s/sqrt(s)
+accelerometer_noise_density: 0.0085 #m/s^2 
+gyroscope_noise_density: 0.0001 #rad/s 
 
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 5.0e-4
-odom_orientation_noise_density: 5.0e-4
+odom_position_noise_density: 1.0e-2
+odom_orientation_noise_density: 1.0e-2
+
+velocity_noise_density: 0.5;
 
 
-
-
-#IMU Initial Biases
+#IMU Initial Biases - Biases are substracted!
 bias_ax: 0.0
 bias_ay: 0.0
-bias_az: -9.7997
+bias_az: 9.7997
 bias_gx: -1.60298e-05
-bias_gy: 1.24745e-05
-bias_gz: 2.60968e-05
+bias_gy: -1.24745e-05
+bias_gz: -2.60968e-05
 
 
 
@@ -114,12 +129,12 @@ estimateCoM: true   #Use the CoM EKF
 
 
 #Process Noise
-com_position_random_walk: 1.0e-5 #in m
+com_position_random_walk: 1.0e-6 #in m
 com_velocity_random_walk: 5.0e-4 #in m/s
 external_force_random_walk: 2.5   #in Newtons
 #Measurment Noise
-com_position_noise_density: 1.0e-03  #CoM position in m
-com_acceleration_noise_density: 0.009 #CoM Acceleration in m/s^2
+com_position_noise_density: 1.0e-02  #CoM position in m
+com_acceleration_noise_density: 0.5 #CoM Acceleration in m/s^2
 #Initial errors in External Forces
 bias_fx: -23.5  #in Newtons
 bias_fy: -24.0
@@ -129,7 +144,7 @@ useGyroLPF: false
 #Cutt-off Frequencies
 gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
 #Gyro Moving Average Filter
-maWindow: 10 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
+maWindow: 15 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
 #Filter Params
 mass: 127.324  #robot mass
 Ixx : 0.11866378  #torso inertia around x
