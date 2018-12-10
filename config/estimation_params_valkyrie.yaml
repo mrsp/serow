@@ -25,7 +25,7 @@ copr_topic: "/ihmc_ros/valkyrie/output/cop/right"
 
 #Choose Integration Method
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
-useEuler = true
+useEuler: false
 
 
 

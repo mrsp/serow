@@ -44,7 +44,7 @@ private:
 
 	Matrix<double, 9, 9> F, P, I, Q, Fd;
 
-	Vector3d COP, fN, L;
+	Vector3d COP, fN, L, COP_p, fN_p, L_p;
 
 	Matrix<double, 6, 9> H;
 
@@ -58,6 +58,11 @@ private:
 	double tmp;
 	
 	void updateVars();
+
+	void euler(Vector3d COP_, Vector3d fN_, Vector3d L_);
+	Matrix<double,9,1> computeDyn(Matrix<double,9,1> x_, Vector3d COP_, Vector3d fN_, Vector3d L_);
+	Matrix<double,9,9> computeTrans(Matrix<double,9,1> x_,  Vector3d COP_, Vector3d fN_, Vector3d L_);
+	void RK4(Vector3d COP_, Vector3d fN_, Vector3d L_, Vector3d COP0, Vector3d fN0, Vector3d L0);
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
