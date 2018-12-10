@@ -577,7 +577,7 @@ void humanoid_ekf::estimateWithIMUEKF()
 
 						if(leg_vel_inc)
 						{
-							imuEKF->updateWithTwist(vwb);
+							//imuEKF->updateWithTwist(vwb);
 							leg_vel_inc = false;
 						}
 						if(odom_inc)
