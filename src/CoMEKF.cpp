@@ -33,6 +33,8 @@
 
 void CoMEKF::init() {
 
+
+	useEuler = false;
 	F  = Matrix<double,9,9>::Zero();
 	Fd  = Matrix<double,9,9>::Zero();
 	I = Matrix<double,9,9>::Identity();
