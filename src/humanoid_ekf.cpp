@@ -110,7 +110,6 @@ void humanoid_ekf::loadparams() {
 	T_B_A(3,2) = acc_list[14];
 	T_B_A(3,3) = acc_list[15];
 		
-	q_B_A = Quaterniond(T_B_A.linear());
 
 
 
@@ -133,7 +132,6 @@ void humanoid_ekf::loadparams() {
 	T_B_G(3,2) = gyro_list[14];
 	T_B_G(3,3) = gyro_list[15];
 		
-	q_B_G = Quaterniond(T_B_G.linear());
 
 
 
@@ -144,8 +142,47 @@ void humanoid_ekf::loadparams() {
 	n_p.param<std::string>("lfoot_force_torque_topic",lfsr_topic,"force_torque/left");
 	n_p.param<std::string>("rfoot_force_torque_topic",rfsr_topic,"force_torque/right");
 
-	n_p.param<std::string>("copl_topic",copl_topic,"cop/left");
-	n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
+	std::vector<double> ftl_list;
+	n_p.getParam("T_FT_LL",ftl_list);
+	T_FT_LL(0,0) = ftl_list[0];
+	T_FT_LL(0,1) = ftl_list[1];
+	T_FT_LL(0,2) = ftl_list[2];
+	T_FT_LL(0,3) = ftl_list[3];
+	T_FT_LL(1,0) = ftl_list[4];
+	T_FT_LL(1,1) = ftl_list[5];
+	T_FT_LL(1,2) = ftl_list[6];
+	T_FT_LL(1,3) = ftl_list[7];
+	T_FT_LL(2,0) = ftl_list[8];
+	T_FT_LL(2,1) = ftl_list[9];
+	T_FT_LL(2,2) = ftl_list[10];
+	T_FT_LL(2,3) = ftl_list[11];
+	T_FT_LL(3,0) = ftl_list[12];
+	T_FT_LL(3,1) = ftl_list[13];
+	T_FT_LL(3,2) = ftl_list[14];
+	T_FT_LL(3,3) = ftl_list[15];
+
+
+	std::vector<double> ftr_list;
+	n_p.getParam("T_FT_RL",ftr_list);
+	T_FT_RL(0,0) = ftr_list[0];
+	T_FT_RL(0,1) = ftr_list[1];
+	T_FT_RL(0,2) = ftr_list[2];
+	T_FT_RL(0,3) = ftr_list[3];
+	T_FT_RL(1,0) = ftr_list[4];
+	T_FT_RL(1,1) = ftr_list[5];
+	T_FT_RL(1,2) = ftr_list[6];
+	T_FT_RL(1,3) = ftr_list[7];
+	T_FT_RL(2,0) = ftr_list[8];
+	T_FT_RL(2,1) = ftr_list[9];
+	T_FT_RL(2,2) = ftr_list[10];
+	T_FT_RL(2,3) = ftr_list[11];
+	T_FT_RL(3,0) = ftr_list[12];
+	T_FT_RL(3,1) = ftr_list[13];
+	T_FT_RL(3,2) = ftr_list[14];
+	T_FT_RL(3,3) = ftr_list[15];
+
+	//n_p.param<std::string>("copl_topic",copl_topic,"cop/left");
+	//n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
 
 
 	n_p.param<bool>("estimateCoM", useCoMEKF,false);
@@ -630,8 +667,8 @@ void humanoid_ekf::estimateWithIMUEKF()
 		*/
 
 		//Estimated TFs for Legs and Support foot
-		Twl = Twb * Tbl;
-		Twr = Twb * Tbr;
+		Twl = imuEKF->Tib  * Tbl;
+		Twr = imuEKF->Tib  * Tbr;
 		qwl = Quaterniond(Twl.linear());
 		qwr = Quaterniond(Twr.linear());
 		Tws = imuEKF->Tib * Tbs;
@@ -691,6 +728,11 @@ void humanoid_ekf::computeLGRF()
 	LLegGRT(1) = lfsr_msg.wrench.torque.y;
 	LLegGRT(2) = lfsr_msg.wrench.torque.z;
 
+
+	LLegGRF = T_FT_LL.linear() * LLegGRF;
+	LLegGRT = T_FT_LL.linear() * LLegGRT;
+
+
 }
 void humanoid_ekf::computeRGRF()
 {
@@ -700,6 +742,9 @@ void humanoid_ekf::computeRGRF()
 	RLegGRT(0) = rfsr_msg.wrench.torque.x;
 	RLegGRT(1) = rfsr_msg.wrench.torque.y;
 	RLegGRT(2) = rfsr_msg.wrench.torque.z;
+
+	RLegGRF = T_FT_RL.linear() * RLegGRF;
+	RLegGRT = T_FT_RL.linear() * RLegGRT;
 }
 
 void humanoid_ekf::computeKinTFs() {
@@ -877,14 +922,21 @@ void humanoid_ekf::deAllocate()
 	for (unsigned int i = 0; i < number_of_joints; i++)
 		delete[] JointVF[i];
 	delete[] JointVF;
+
 	if(useCoMEKF){
 		delete nipmEKF;
 		if(useGyroLPF)
-			delete gyroLPF;
+		{
+			for (unsigned int i = 0; i <3; i++)
+				delete[] gyroLPF[i];
+			delete[] gyroLPF;
+		}
 		else
-		for (unsigned int i = 0; i <3; i++)
-			delete[] gyroMAF[i];
-		delete[] gyroMAF;
+		{
+			for (unsigned int i = 0; i <3; i++)
+				delete[] gyroMAF[i];
+			delete[] gyroMAF;
+		}
 	}
 	delete imuEKF;
 	delete rd;
@@ -1097,12 +1149,6 @@ void humanoid_ekf::publishGRF() {
 		RLeg_est_msg.header.stamp = ros::Time::now();
 		RLeg_est_pub.publish(RLeg_est_msg);
 	}
-
-
-
-
-
-
 }
 
 
@@ -1115,8 +1161,19 @@ void humanoid_ekf::computeCOP(Affine3d Twl_, Affine3d Twr_) {
 
 
 	// Computation of the CoP in the Local Coordinate Frame of the Foot
-	copl = Vector3d(copl_msg.point.x, copl_msg.point.y,0);
-	copr = Vector3d(copr_msg.point.x, copr_msg.point.y,0);
+	copl = Vector3d::Zero();
+	if(LLegGRF(2)!=0)
+	{
+		copl(0) = -LLegGRT(1)/LLegGRF(2);
+		copl(1) = LLegGRT(0)/LLegGRF(2);
+	}
+	copr = Vector3d::Zero();
+	if(RLegGRF(2)!=0)
+	{
+		copr(0) = -RLegGRT(1)/RLegGRF(2);
+		copr(1) = RLegGRT(0)/RLegGRF(2);
+	}
+
 	weightl = LLegGRF(2)/g;
 	weightr = RLegGRF(2)/g;
 
@@ -1422,9 +1479,9 @@ void humanoid_ekf::subscribeToFSR()
 	//Right Foot Wrench
 	rfsr_sub = n.subscribe(rfsr_topic,1,&humanoid_ekf::rfsrCb,this,ros::TransportHints().tcpNoDelay());
 	//Left COP
-	copl_sub = n.subscribe(copr_topic,1,&humanoid_ekf::coprCb,this,ros::TransportHints().tcpNoDelay());
+	//copl_sub = n.subscribe(copr_topic,1,&humanoid_ekf::coprCb,this,ros::TransportHints().tcpNoDelay());
 	//Right COP
-	copr_sub = n.subscribe(copl_topic,1,&humanoid_ekf::coplCb,this,ros::TransportHints().tcpNoDelay());
+	//copr_sub = n.subscribe(copl_topic,1,&humanoid_ekf::coplCb,this,ros::TransportHints().tcpNoDelay());
 }
 
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
@@ -1439,6 +1496,7 @@ void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 	fsr_inc = true;
 	
 }
+
 void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
 	rfsr_msg = *msg;
@@ -1449,6 +1507,7 @@ void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 	//RLegForceFilt = rrmdf->median();
 }
 
+/*
 void humanoid_ekf::coplCb(const geometry_msgs::PointStamped::ConstPtr& msg)
 {
 	copl_msg = *msg;
@@ -1457,7 +1516,7 @@ void humanoid_ekf::coprCb(const geometry_msgs::PointStamped::ConstPtr& msg)
 {
 	copr_msg = *msg;
 }
-
+*/
 
 
 
