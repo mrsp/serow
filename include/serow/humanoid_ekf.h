@@ -106,8 +106,8 @@ private:
 	double no_motion_threshold;
 	Quaterniond  q_update;
 	Vector3d  pos_update, CoM_gt;
-	Affine3d T_B_A, T_B_G, T_B_P;
-	Quaterniond q_B_A, q_B_G, q_B_P;
+	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RL, T_FT_LL;
+	Quaterniond  q_B_P;
 	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM;
     bool debug_mode;
 	//ROS Messages
@@ -165,7 +165,7 @@ private:
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
 	/** Real odometry Data **/
-     string lfsr_topic,rfsr_topic,copl_topic,copr_topic;
+     string lfsr_topic,rfsr_topic; //copl_topic,copr_topic;
 	 string pose_topic;
 	 string imu_topic;
 	 string joint_state_topic;
