@@ -88,28 +88,28 @@ Matrix<double,9,9> CoMEKF::computeTrans(Matrix<double,9,1> x_,  Vector3d COP_, V
     
 	res.block<3,3>(0,3) = Matrix3d::Identity();
 	res(3, 6) = 1.000 / m;
-	res(4, 7) =  1.000 / m;
-	res(5, 8) =   1.000 / m;
+	res(4, 7) = 1.000 / m;
+	res(5, 8) = 1.000 / m;
 
 
 
 	tmp = x_(2)-COP_(2);
 
-   	res(3, 0) = (fN_(2) + x_(8)) / (m * tmp);
+   	res(3, 0) = (fN_(2)) / (m * tmp);
 
-	res(3, 2) = -((fN_(2) + x_(8)) * (x_(0) - COP_(0))) / (m * tmp * tmp) +
+	res(3, 2) = -((fN_(2)) * (x_(0) - COP_(0))) / (m * tmp * tmp) +
 	 L_(1) / (m * tmp * tmp);
 
 	
-	res(3, 8) = (x_(0) - COP_(0)) / (m * tmp);
+	//res(3, 8) = (x_(0) - COP_(0)) / (m * tmp);
 	
-	res(4, 1) = (fN_(2) + x_(8)) / (m * tmp);
+	res(4, 1) = (fN_(2)) / (m * tmp);
 
-	res(4, 2) = - ( fN_(2) + x_(8) ) * ( x_(1) - COP_(1) ) / (m * tmp * tmp) -
+	res(4, 2) = - (fN_(2)) * ( x_(1) - COP_(1) ) / (m * tmp * tmp) -
 	L_(0) / (m * tmp * tmp);
 	
 	
-	res(4, 8) = (x_(1) - COP_(1)) / (m * tmp);
+	//res(4, 8) = (x_(1) - COP_(1)) / (m * tmp);
     
     return res;
 }
@@ -135,8 +135,8 @@ Matrix<double,9,1> CoMEKF::computeDyn(Matrix<double,9,1> x_, Vector3d COP_, Vect
     tmp = x_(2)-COP_(2);
 
 	res.segment<3>(0) = x_.segment<3>(3);
-    res(3) = (x_(0) - COP_(0)) / (m * tmp) * (fN_(2) + x_(8)) + x_(6) / m - L_(1) / (m * tmp); 
-	res(4) = (x_(1) - COP_(1)) / (m * tmp) * (fN_(2) + x_(8)) + x_(7) / m + L_(0) / (m * tmp);
+    res(3) = (x_(0) - COP_(0)) / (m * tmp) * (fN_(2)) + x_(6) / m - L_(1) / (m * tmp); 
+	res(4) = (x_(1) - COP_(1)) / (m * tmp) * (fN_(2)) + x_(7) / m + L_(0) / (m * tmp);
  	res(5) = (fN_(2) + x_(8)) / m - g;
     return res;
 }
@@ -344,24 +344,25 @@ void CoMEKF::update(Vector3d Acc, Vector3d Pos, Vector3d Gyro, Vector3d Gyrodot)
 
 	z.segment<3>(0).noalias() = Pos - x.segment<3>(0);
 
-	z(3) = Acc(0) - ( (x(0) - COP(0)) / (m * tmp) * (fN(2) + x(8)) + x(6) / m - L(1) / (m * tmp) );
-	z(4) = Acc(1) - ( (x(1) - COP(1)) / (m * tmp) * (fN(2) + x(8)) + x(7) / m + L(0) / (m * tmp) );
+	z(3) = Acc(0) - ( (x(0) - COP(0)) / (m * tmp) * (fN(2) ) + x(6) / m - L(1) / (m * tmp) );
+	z(4) = Acc(1) - ( (x(1) - COP(1)) / (m * tmp) * (fN(2) ) + x(7) / m + L(0) / (m * tmp) );
 	z(5) = Acc(2) - ( (fN(2) + x(8)) / m - g );
 
 
 
 
 
-	H(3, 0) = (fN(2) + x(8)) / (m * tmp);
-	H(3, 2) =  -((fN(2) + x(8)) * (x(0) - COP(0))) / (m * tmp * tmp) +  L(1) / (m * tmp * tmp);
+	H(3, 0) = (fN(2) ) / (m * tmp);
+	H(3, 2) =  -((fN(2) ) * (x(0) - COP(0))) / (m * tmp * tmp) +  L(1) / (m * tmp * tmp);
 
+	//H(3, 8) = (x(0) - COP(0)) / (m * tmp);
+	//H(4, 8) = (x(1) - COP(1)) / (m * tmp);
+
+	H(4, 1) = (fN(2)) / (m * tmp);
+	H(4, 2) = - ( fN(2)) * ( x(1) - COP(1) ) / (m * tmp * tmp) - L(0) / (m * tmp * tmp);
+	
 	H(3, 6) = 1.000 / m;
-	H(3, 8) = (x(0) - COP(0)) / (m * tmp);
-
-	H(4, 1) = (fN(2) + x(8)) / (m * tmp);
-	H(4, 2) = - ( fN(2) + x(8) ) * ( x(1) - COP(1) ) / (m * tmp * tmp) - L(0) / (m * tmp * tmp);
 	H(4, 7) = 1.000 / m;
-	H(4, 8) = (x(1) - COP(1)) / (m * tmp);
 	H(5, 8) = 1.000 / m;
 
 

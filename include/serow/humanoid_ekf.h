@@ -73,7 +73,7 @@ private:
 	// ROS Standard Variables
 	ros::NodeHandle n;
 	ros::Publisher supportPose_est_pub, bodyAcc_est_pub,leftleg_odom_pub, rightleg_odom_pub, support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
-	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub, 
+	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, CoM_leg_odom_pub, ground_truth_odom_pub,ds_pub, 
 	rel_leftlegPose_pub,rel_rightlegPose_pub;
     
 	ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub,
@@ -92,7 +92,7 @@ private:
 	bool useCF;
 	double cf_freqvmin, cf_freqvmax;
 	double  freq, joint_freq, fsr_freq;
-	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, ground_truth_odom_inc;
+	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
 	bool firstOdom, firstUpdate, firstPose;
 	int number_of_joints;
 	bool firstGyrodot;
@@ -144,7 +144,7 @@ private:
 	MovingAverageFilter** gyroMAF;
 	//Cuttoff Freqs for LPF
 	double gyro_fx, gyro_fy, gyro_fz;
-	Vector3d COP_fsr, GRF_fsr, CoM_enc, Gyrodot, Gyro_;
+	Vector3d COP_fsr, GRF_fsr, CoM_enc, Gyrodot, Gyro_, CoM_leg_odom;
 	double bias_fx,bias_fy,bias_fz;
 	JointDF** JointVF;
 	double jointFreq,joint_cutoff_freq;
