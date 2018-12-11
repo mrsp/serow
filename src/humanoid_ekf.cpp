@@ -473,6 +473,7 @@ void humanoid_ekf::init() {
 	leg_odom_inc = false;
 	leg_vel_inc = false;
 	support_inc = false;
+	com_inc = false;
     no_motion_indicator = false;
 	no_motion_it = 0;
 	no_motion_threshold = 5e-4;
@@ -491,7 +492,7 @@ void humanoid_ekf::init() {
 
 void humanoid_ekf::run() {
 	
-	static ros::Rate rate(1.05*freq);  //ROS Node Loop Rate
+	static ros::Rate rate(freq);  //ROS Node Loop Rate
 	while (ros::ok()){
 		if(imu_inc){
 		predictWithImu = false;
@@ -556,11 +557,15 @@ void humanoid_ekf::estimateWithIMUEKF()
 			T_B_A.linear()*Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z));
 			imu_inc = false;
 			predictWithImu = true;
+			cout<<"PredictWithIMU-"<<endl;
 		}
 
 		//Check for no motion
 		if(predictWithImu)
 		{
+
+			cout<<"UpdateWithIMU--"<<endl;
+
 			if(check_no_motion){
 				no_motion_residual = Twb.translation()-Twb_.translation();
 				if(no_motion_residual.norm() < no_motion_threshold)
@@ -678,11 +683,13 @@ void humanoid_ekf::estimateWithIMUEKF()
 
 void humanoid_ekf::estimateWithCoMEKF()
 {
-	if(joint_inc){
+
+	CoM_leg_odom = Twb*CoM_enc;
+	if(com_inc){
 			if (nipmEKF->firstrun){
 				nipmEKF->setdt(1.0/fsr_freq);
 				nipmEKF->setParams(mass,I_xx,I_yy,g);
-				nipmEKF->setCoMPos(Twb*CoM_enc);
+				nipmEKF->setCoMPos(CoM_leg_odom);
 				nipmEKF->setCoMExternalForce(Vector3d(bias_fx,bias_fy,bias_fz));
 				nipmEKF->firstrun = false;
 				if(useGyroLPF){
@@ -699,7 +706,7 @@ void humanoid_ekf::estimateWithCoMEKF()
 	}
 	
 	//Compute the COP in the Inertial Frame
-		if(fsr_inc && predictWithImu && !predictWithCoM && !nipmEKF->firstrun){
+		if(fsr_inc  && !predictWithCoM && !nipmEKF->firstrun){
 			computeCOP(Twl,Twr);
 			//Numerically compute the Gyro acceleration in the Inertial Frame and use a 3-Point Low-Pass filter
 			filterGyrodot();
@@ -707,14 +714,18 @@ void humanoid_ekf::estimateWithCoMEKF()
 			nipmEKF->predict(COP_fsr,GRF_fsr,imuEKF->Rib*Inertia*Gyrodot);
 			fsr_inc = false;
 			predictWithCoM = true;
+			cout<<"PredictithCoM---"<<endl;
+
 		}
 
-		if(joint_inc && predictWithCoM){
+		if(com_inc && predictWithCoM){
 			nipmEKF->update(
-					imuEKF->acc - imuEKF->g,
+					imuEKF->acc+imuEKF->g,
 					imuEKF->Tib*CoM_enc,
 					imuEKF->gyro,Gyrodot);
-			joint_inc = false;
+			com_inc = false;
+			cout<<"UpdateWithCoM----"<<endl;
+				
 		}
 
 }
@@ -821,6 +832,7 @@ void humanoid_ekf::computeKinTFs() {
 
 		leg_odom_inc = true;
 		leg_vel_inc = true;
+		com_inc = true;
 		check_no_motion = false;
 
 
@@ -1039,7 +1051,6 @@ void humanoid_ekf::publishBodyEstimates() {
 			ground_truth_odom_msg.header.stamp = ros::Time::now();
 			ground_truth_odom_msg.header.frame_id = "odom";
 			ground_truth_odom_pub.publish(ground_truth_odom_msg);
-
 			ds_pub.publish(is_in_ds_msg);
 	}
 }
@@ -1224,6 +1235,21 @@ void humanoid_ekf::publishCoMEstimates() {
 	//for(int i=0;i<36;i++)
     //odom_est_msg.pose.covariance[i] = 0;
 	CoM_odom_pub.publish(CoM_odom_msg);
+
+	CoM_odom_msg.header.stamp=ros::Time::now();
+	CoM_odom_msg.header.frame_id = "odom";
+	CoM_odom_msg.pose.pose.position.x = CoM_leg_odom(0);
+	CoM_odom_msg.pose.pose.position.y = CoM_leg_odom(1);
+	CoM_odom_msg.pose.pose.position.z = CoM_leg_odom(2);
+	CoM_odom_msg.twist.twist.linear.x = 0;
+	CoM_odom_msg.twist.twist.linear.y = 0;
+	CoM_odom_msg.twist.twist.linear.z = 0;
+	//for(int i=0;i<36;i++)
+    //odom_est_msg.pose.covariance[i] = 0;
+	CoM_leg_odom_pub.publish(CoM_odom_msg);
+
+
+
 	external_force_filt_msg.header.frame_id = "odom";
 	external_force_filt_msg.header.stamp = ros::Time::now();
 	external_force_filt_msg.wrench.force.x = nipmEKF->fX;
@@ -1292,6 +1318,7 @@ void humanoid_ekf::advertise() {
 	COP_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/COP",1000);
 
 	CoM_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/CoM/odom",1000);
+	CoM_leg_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/CoM/leg_odom",1000);
 
 	joint_filt_pub =  n.advertise<sensor_msgs::JointState>("/SERoW/joint_states",1000);
 
