@@ -83,7 +83,7 @@ gyroscope_noise_density: 0.2 #rad/s  #Continuous Time
 #Odometry Measurement Noise std:
 odom_position_noise_density: 1.0e-2
 odom_orientation_noise_density: 1.0e-2
-velocity_noise_density: 1.0;
+velocity_noise_density: 2.5
 
 #IMU Initial Biases - Biases are substracted!
 bias_ax: 0.0

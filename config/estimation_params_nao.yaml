@@ -56,7 +56,7 @@ StrikingContact: 60
 
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: true #Use a Steady State KF in every joint
-joint_cutoff_freq: 10
+joint_cutoff_freq: 8
 
 #Madgwick Filter for attitude
 Madgwick_gain: 0.3
@@ -89,7 +89,7 @@ gyroscope_noise_density: 0.09525 #rad/s #Continuous Time
 odom_position_noise_density: 1.0e-02
 odom_orientation_noise_density: 1.0e-02
 
-velocity_noise_density: 1.0
+velocity_noise_density: 0.1
 
 #IMU Initial Biases - Biases are substracted!
 bias_ax: 0.239618
@@ -105,7 +105,7 @@ bias_gz: -0.000158554
 
 #Filter Params
 gravity: 9.80665 #gravity constant (m/s^2)
-medianWindow: 10
+medianWindow: 12
 
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
@@ -120,10 +120,10 @@ estimateCoM: true   #Use the CoM EKF
 
 #Process Noise
 com_position_random_walk: 1.0e-5 #in m
-com_velocity_random_walk: 1.0e-2 #in m/s
+com_velocity_random_walk: 1.0e-3 #in m/s
 external_force_random_walk: 2.5      #in Newtons
 #Measurment Noise
-com_position_noise_density: 1.0e-4  #CoM position in m
+com_position_noise_density: 1.0e-3  #CoM position in m
 com_acceleration_noise_density: 2.5e-02 #CoM Acceleration in m/s^2
 #Initial errors in External Forces
 bias_fx: 23.678  #in Newtons
@@ -134,7 +134,7 @@ useGyroLPF: false
 #Cutt-off Frequencies
 gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
 #Gyro Moving Average Filter
-maWindow: 10 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
+maWindow: 14 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
 #Filter Params
 mass: 5.182530  #robot mass
 Ixx : 0.0050623407587  #torso inertia around x
