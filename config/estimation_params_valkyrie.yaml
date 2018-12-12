@@ -21,6 +21,7 @@ ground_truth: true
 ground_truth_odom_topic: "/valkyrie/ground_truth/odom"
 ground_truth_com_topic: "/valkyrie/ground_truth/CoM"
 is_in_ds_topic: "/ihmc_ros/valkyrie/output/capturability/is_in_double_support"
+T_B_GT: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 
 
 #If external Support Foot Detection is provided

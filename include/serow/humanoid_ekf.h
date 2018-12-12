@@ -105,9 +105,9 @@ private:
 	int no_motion_it, no_motion_it_threshold;
 	double no_motion_threshold;
 	Quaterniond  q_update;
-	Vector3d  pos_update, CoM_gt;
-	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RL, T_FT_LL;
-	Quaterniond  q_B_P;
+	Vector3d  pos_update, CoM_gt, temp;
+	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RL, T_FT_LL, T_B_GT;
+	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, qoffsetGT;
 	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM;
     bool debug_mode;
 	//ROS Messages
