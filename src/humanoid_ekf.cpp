@@ -557,14 +557,12 @@ void humanoid_ekf::estimateWithIMUEKF()
 			T_B_A.linear()*Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z));
 			imu_inc = false;
 			predictWithImu = true;
-			cout<<"PredictWithIMU-"<<endl;
 		}
 
 		//Check for no motion
 		if(predictWithImu)
 		{
 
-			cout<<"UpdateWithIMU--"<<endl;
 
 			if(check_no_motion){
 				no_motion_residual = Twb.translation()-Twb_.translation();
@@ -619,7 +617,7 @@ void humanoid_ekf::estimateWithIMUEKF()
 
 						if(leg_vel_inc)
 						{
-							//imuEKF->updateWithTwist(vwb);
+							imuEKF->updateWithTwist(vwb);
 							leg_vel_inc = false;
 						}
 						if(odom_inc)
@@ -714,7 +712,6 @@ void humanoid_ekf::estimateWithCoMEKF()
 			nipmEKF->predict(COP_fsr,GRF_fsr,imuEKF->Rib*Inertia*Gyrodot);
 			fsr_inc = false;
 			predictWithCoM = true;
-			cout<<"PredictithCoM---"<<endl;
 
 		}
 
@@ -724,7 +721,6 @@ void humanoid_ekf::estimateWithCoMEKF()
 					imuEKF->Tib*CoM_enc,
 					imuEKF->gyro,Gyrodot);
 			com_inc = false;
-			cout<<"UpdateWithCoM----"<<endl;
 				
 		}
 
