@@ -68,6 +68,25 @@ void humanoid_ekf::loadparams() {
 		n_p.param<std::string>("ground_truth_odom_topic", ground_truth_odom_topic,"ground_truth");
 		n_p.param<std::string>("ground_truth_com_topic", ground_truth_com_topic,"ground_truth_com");
 		n_p.param<std::string>("is_in_ds_topic", is_in_ds_topic,"is_in_ds_topic");
+		std::vector<double> gt_list;
+		n_p.getParam("T_B_GT",gt_list);
+		T_B_GT(0,0) = gt_list[0];
+		T_B_GT(0,1) = gt_list[1];
+		T_B_GT(0,2) = gt_list[2];
+		T_B_GT(0,3) = gt_list[3];
+		T_B_GT(1,0) = gt_list[4];
+		T_B_GT(1,1) = gt_list[5];
+		T_B_GT(1,2) = gt_list[6];
+		T_B_GT(1,3) = gt_list[7];
+		T_B_GT(2,0) = gt_list[8];
+		T_B_GT(2,1) = gt_list[9];
+		T_B_GT(2,2) = gt_list[10];
+		T_B_GT(2,3) = gt_list[11];
+		T_B_GT(3,0) = gt_list[12];
+		T_B_GT(3,1) = gt_list[13];
+		T_B_GT(3,2) = gt_list[14];
+		T_B_GT(3,3) = gt_list[15];
+		q_B_GT = Quaterniond(T_B_GT.linear());
 	}
 	
 	if(!useLegOdom){
@@ -317,7 +336,6 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 	loadJointKFparams();
 	// Load IMU parameters
 	loadIMUEKFparams();
-
 
 	if(useCoMEKF)
 		loadCoMEKFparams();
@@ -661,13 +679,6 @@ void humanoid_ekf::estimateWithIMUEKF()
 			}
 		}
 
-		/*
-		//Update with the Support foot position and orientation
-		if(support_inc && predictWithImu){
-			imuEKF->updateWithSupport(Tbs.translation(),qbs);
-			support_inc=false;
-		}
-		*/
 
 		//Estimated TFs for Legs and Support foot
 		Twl = imuEKF->Tib  * Tbl;
@@ -1405,18 +1416,26 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
 	if(!firstrun){
 		ground_truth_odom_msg = *msg;
-
+		temp = Vector3d(ground_truth_odom_msg.pose.pose.position.x, ground_truth_odom_msg.pose.pose.position.y, ground_truth_odom_msg.pose.pose.position.z);
+		temp = T_B_GT.linear()*temp;
+		tempq = q_B_GT * Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x,ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
 		if(firstGT){
 			offsetGT = Vector3d::Zero();
 			offsetGT(0) = ground_truth_odom_msg.pose.pose.position.x - Twb.translation()(0);
 			offsetGT(1) = ground_truth_odom_msg.pose.pose.position.y - Twb.translation()(1);
 			offsetGT(2) = ground_truth_odom_msg.pose.pose.position.z - Twb.translation()(2);
+			qoffsetGT = tempq * qwb.inverse();
 			firstGT=false;
 		}
 		
-		ground_truth_odom_msg.pose.pose.position.x = ground_truth_odom_msg.pose.pose.position.x - offsetGT(0);
-		ground_truth_odom_msg.pose.pose.position.y = ground_truth_odom_msg.pose.pose.position.y - offsetGT(1);
-		ground_truth_odom_msg.pose.pose.position.z = ground_truth_odom_msg.pose.pose.position.z - offsetGT(2);
+		ground_truth_odom_msg.pose.pose.position.x = temp(0) - offsetGT(0);
+		ground_truth_odom_msg.pose.pose.position.y = temp(1) - offsetGT(1);
+		ground_truth_odom_msg.pose.pose.position.z = temp(2) - offsetGT(2);
+		tempq = tempq * qoffsetGT.inverse();
+		ground_truth_odom_msg.pose.pose.orientation.w = tempq.w();
+		ground_truth_odom_msg.pose.pose.orientation.x = tempq.x();
+		ground_truth_odom_msg.pose.pose.orientation.y = tempq.y();
+		ground_truth_odom_msg.pose.pose.orientation.z = tempq.z();
 
 	}
 
@@ -1432,17 +1451,29 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 	if(!firstrun){
 		ground_truth_com_odom_msg = *msg;
 
+		temp = Vector3d(ground_truth_com_odom_msg.pose.pose.position.x,ground_truth_com_odom_msg.pose.pose.position.y,ground_truth_com_odom_msg.pose.pose.position.z);
+		temp = T_B_GT.linear()*temp;
+		tempq = q_B_GT * Quaterniond(ground_truth_com_odom_msg.pose.pose.orientation.w,ground_truth_com_odom_msg.pose.pose.orientation.x,ground_truth_com_odom_msg.pose.pose.orientation.y,ground_truth_com_odom_msg.pose.pose.orientation.z);
 		if(firstGTCoM){
 			offsetGTCoM = Vector3d::Zero();
 			Vector3d tempCoMOffset = Twb * CoM_enc;
-			offsetGTCoM(0) = ground_truth_com_odom_msg.pose.pose.position.x - tempCoMOffset(0);
-			offsetGTCoM(1) = ground_truth_com_odom_msg.pose.pose.position.y - tempCoMOffset(1);
-			offsetGTCoM(2) = ground_truth_com_odom_msg.pose.pose.position.z - tempCoMOffset(2);
+			offsetGTCoM(0) = temp(0) - tempCoMOffset(0);
+			offsetGTCoM(1) = temp(1) - tempCoMOffset(1);
+			offsetGTCoM(2) = temp(2) - tempCoMOffset(2);
+			qoffsetGTCoM = tempq * qwb.inverse();
 			firstGTCoM=false;
 		}
-		ground_truth_com_odom_msg.pose.pose.position.x = ground_truth_com_odom_msg.pose.pose.position.x - offsetGTCoM(0);
-		ground_truth_com_odom_msg.pose.pose.position.y = ground_truth_com_odom_msg.pose.pose.position.y - offsetGTCoM(1);
-		ground_truth_com_odom_msg.pose.pose.position.z = ground_truth_com_odom_msg.pose.pose.position.z - offsetGTCoM(2);
+		ground_truth_com_odom_msg.pose.pose.position.x = temp(0) - offsetGTCoM(0);
+		ground_truth_com_odom_msg.pose.pose.position.y = temp(1)  - offsetGTCoM(1);
+		ground_truth_com_odom_msg.pose.pose.position.z = temp(2)  - offsetGTCoM(2);
+
+		tempq = tempq * qoffsetGTCoM.inverse();
+
+		ground_truth_com_odom_msg.pose.pose.orientation.w = tempq.w();
+		ground_truth_com_odom_msg.pose.pose.orientation.x = tempq.x();
+		ground_truth_com_odom_msg.pose.pose.orientation.y = tempq.y();
+		ground_truth_com_odom_msg.pose.pose.orientation.z = tempq.z();
+
 	}		
 }
 
