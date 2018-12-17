@@ -804,7 +804,7 @@ void humanoid_ekf::computeKinTFs() {
 			Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
 			Twr.linear() = Tbr.linear();
 			dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                       mass, 0.005, 0.1, freq, g, useCF, cf_freqvmin, cf_freqvmax); //USED TO BE 0.3 instead of 0.05
+                       mass, 0.001, 0.1, freq, g, useCF, cf_freqvmin, cf_freqvmax); //USED TO BE 0.3 instead of 0.05
 	}
 
 	
