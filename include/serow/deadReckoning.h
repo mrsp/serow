@@ -75,21 +75,21 @@ namespace serow{
         {
             
 
-            //if(lfz>rfz)
-            //    vwbKCFS= -wedge(omegawb) * Rwb * pbl - Rwb * vbl;
-            //else
-            //    vwbKCFS= -wedge(omegawb) * Rwb * pbr - Rwb * vbr;
+            if(lfz>rfz)
+                vwbKCFS= -wedge(omegawb) * Rwb * pbl - Rwb * vbl;
+            else
+                vwbKCFS= -wedge(omegawb) * Rwb * pbr - Rwb * vbr;
             
 
             //Cropping the vertical GRF
-            lfz = cropGRF(lfz);
-            rfz = cropGRF(rfz);
+            //lfz = cropGRF(lfz);
+            //rfz = cropGRF(rfz);
             
             //GRF Coefficients
-            wl = (lfz + ef)/(lfz+rfz+2.0*ef);
-            wr = (rfz + ef)/(lfz+rfz+2.0*ef);
+            //wl = (lfz + ef)/(lfz+rfz+2.0*ef);
+            //wr = (rfz + ef)/(lfz+rfz+2.0*ef);
 
-            vwbKCFS= wl*(-wedge(omegawb) * Rwb * pbl - Rwb * vbl) + wr*(-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
+            //vwbKCFS= wl*(-wedge(omegawb) * Rwb * pbl - Rwb * vbl) + wr*(-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
             //if(!USE_CF)
                 vwb = vwbKCFS;
            

@@ -72,10 +72,10 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  1.0e-1 #m/s^2/sqrt(s)
-gyroscope_bias_random_walk: 1.0e-2 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.5 #m/s^2  #Continuous Time
-gyroscope_noise_density: 0.05 #rad/s  #Continuous Time
+accelerometer_bias_random_walk:  1.0e-4 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 1.0e-5 # rad/s/sqrt(s)
+accelerometer_noise_density: 0.01 #m/s^2  #Continuous Time
+gyroscope_noise_density: 0.001 #rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
@@ -84,7 +84,7 @@ odom_orientation_noise_density: 1.0e-06
 velocity_noise_density: 0.1
 
 #IMU Initial Biases - Biases are substracted!
-bias_ax: 0.3903
+bias_ax: 0.30
 bias_ay: -0.0394
 bias_az: 0.1309
 bias_gx: -7.9088e-04
@@ -123,7 +123,7 @@ gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
 #Gyro Moving Average Filter
 maWindow: 15 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
 #Filter Params
-mass: 64.0  #robot mass
+mass: 71.0  #robot mass
 Ixx : 0.11866378  #torso inertia around x
 Iyy : 0.097963425  #torso inetria around y
 Izz : 0.083854638   #torso inertia around z
