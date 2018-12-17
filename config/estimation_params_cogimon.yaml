@@ -1,0 +1,129 @@
+#Robot Frames (CHECK URDF)
+base_link: "base_link"
+lfoot: "LFoot"
+rfoot: "RFoot"
+modelname: "/home/master/dp_ws/src/serow/share/urdf/cogimon.urdf"
+
+useLegOdom: true
+#ROS Topic Names
+odom_topic: "/cogimon/ground_truth/odom" #only if usePoseUpdate is false and useLegOdom is false
+usePoseUpdate: false  #if true specify pose_topic / Do not use if odom_topic is set
+pose_topic: "/pose" #only if usePoseUpdate is true
+imu_topic: "/xbotcore/cogimon/imu/imu_link"
+joint_state_topic: "/cogimon/joint_states"
+lfoot_force_torque_topic: "/xbotcore/cogimon/ft/l_leg_ft"
+rfoot_force_torque_topic: "/xbotcore/cogimon/ft/r_leg_ft"
+
+
+#Ground-Truth #Not Mandatory - For comparison only
+ground_truth: true
+ground_truth_odom_topic: "/cogimon/ground_truth/odom"
+ground_truth_com_topic: "/com"
+is_in_ds_topic: "/ds"
+T_B_GT: [0, 0, 1, 0, 1, 0, 0, 0, 0, 1 , 0, 0, 0, 0 ,0, 1]
+
+
+#If external Support Foot Detection is provided
+support_idx_provided: false
+support_idx_topic: "/sp"
+
+#To publish relative data
+debug_mode: true
+
+#TF from IMU to Body
+T_B_A: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
+T_B_G: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
+#TF from F/T to Left Foot
+T_FT_LL: [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0 , -1 , 0, 0, 0 ,0, 1]
+#TF from F/T to Right Foot
+T_FT_RL: [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0 , -1 , 0, 0, 0 ,0, 1]
+#TF from External Pose to Body only if useLegOdom is false
+T_B_P: [0, 0, 1, 0, 1, 0, 0, 0, 0, 1 , 0, 0, 0, 0 ,0, 1]
+
+#ROS Topic Frequencies in Hz
+imu_topic_freq: 200
+joint_topic_freq: 200
+fsr_topic_freq: 200  
+
+##Schmitt Trigger - Contact Classifier
+LLegUpThres: 134 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 42 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 20
+StrikingContact: 1200
+
+#Compute Joint Velocities
+joint_cutoff_freq: 12
+
+#Madgwick Filter for attitude
+Madgwick_gain: 0.05
+
+#Complimentary Filter for Body Velocity  //Used in Leg Odometry
+useCF: false
+freqvmin: 0.1
+freqvmax: 2.5
+
+#Choose Integration Method
+#Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
+useEuler: true
+
+#Rigid body Extended Kalman Filter (EKF)
+#To estimate:
+# 3-D Body Position/Velocity
+# 3-D IMU-Biases
+
+#Process Noise STDs
+accelerometer_bias_random_walk:  0.00025 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 4.1884e-4 # rad/s/sqrt(s)
+accelerometer_noise_density: 0.1 #m/s^2  #Continuous Time
+gyroscope_noise_density: 0.01 #rad/s  #Continuous Time
+
+#Measuremets
+#Odometry Measurement Noise std:
+odom_position_noise_density: 1.0e-06
+odom_orientation_noise_density: 1.0e-06
+velocity_noise_density: 0.1
+
+#IMU Initial Biases - Biases are substracted!
+bias_ax: 0.3903
+bias_ay: -0.0394
+bias_az: 0.1309
+bias_gx: -7.9088e-04
+bias_gy: 4.2031e-04
+bias_gz: -0.0077
+
+#Filter Params
+gravity: 9.80665 #gravity constant (m/s^2)
+medianWindow: 14
+
+# CoM Extended Kalman Filter (EKF)
+# To estimate:
+# CoM 3-D Position/Velocity
+# 3-D External Forces on the CoM
+estimateCoM: true   #Use the CoM EKF
+
+#---------------------------------------------#
+#Specify the rest only if estimateCoM is true!!
+#---------------------------------------------#
+
+#Process Noise
+com_position_random_walk: 1.0e-5 #in m
+com_velocity_random_walk: 5.0e-4 #in m/s
+external_force_random_walk: 2.5   #in Newtons
+#Measurment Noise
+com_position_noise_density: 1.0e-04  #CoM position in m
+com_acceleration_noise_density: 0.09 #CoM Acceleration in m/s^2
+#Initial errors in External Forces
+bias_fx: -23.5  #in Newtons
+bias_fy: -24.0
+bias_fz: -55.0
+#Gyro LPF
+useGyroLPF: false
+#Cutt-off Frequencies
+gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
+#Gyro Moving Average Filter
+maWindow: 15 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
+#Filter Params
+mass: 64.0  #robot mass
+Ixx : 0.11866378  #torso inertia around x
+Iyy : 0.097963425  #torso inetria around y
+Izz : 0.083854638   #torso inertia around z
