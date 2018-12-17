@@ -52,10 +52,10 @@ LosingContact: 20
 StrikingContact: 1000
 
 #Compute Joint Velocities
-joint_cutoff_freq: 10
+joint_cutoff_freq: 25
 
 #Madgwick Filter for attitude
-Madgwick_gain: 0.05
+Madgwick_gain: 0.06
 
 #Complimentary Filter for Body Velocity  //Used in Leg Odometry
 useCF: false
@@ -84,8 +84,8 @@ odom_orientation_noise_density: 1.0e-06
 velocity_noise_density: 0.1
 
 #IMU Initial Biases - Biases are substracted!
-bias_ax: 0.30
-bias_ay: -0.0394
+bias_ax: 0.34
+bias_ay: -0.04
 bias_az: 0.1309
 bias_gx: -7.9088e-04
 bias_gy: 4.2031e-04
