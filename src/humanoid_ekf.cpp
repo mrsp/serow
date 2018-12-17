@@ -257,12 +257,12 @@ void humanoid_ekf::loadIMUEKFparams()
 	n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qy,1.0e-05);
 	n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qz,1.0e-05);
 
-	n_p.param<double>("odom_position_noise_density", imuEKF->odom_px,1.0e-03);
-	n_p.param<double>("odom_position_noise_density", imuEKF->odom_py,1.0e-03);
-	n_p.param<double>("odom_position_noise_density", imuEKF->odom_pz,1.0e-03);
-	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ax,1.0e-03);
-	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay,1.0e-03);
-	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az,1.0e-03);
+	n_p.param<double>("odom_position_noise_density", imuEKF->odom_px,1.0e-01);
+	n_p.param<double>("odom_position_noise_density", imuEKF->odom_py,1.0e-01);
+	n_p.param<double>("odom_position_noise_density", imuEKF->odom_pz,1.0e-01);
+	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ax,1.0e-01);
+	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay,1.0e-01);
+	n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az,1.0e-01);
 
 	n_p.param<double>("velocity_noise_density", imuEKF->vel_px,1.0e-02);
 	n_p.param<double>("velocity_noise_density", imuEKF->vel_py,1.0e-02);
@@ -741,7 +741,7 @@ void humanoid_ekf::computeLGRF()
 {
 	LLegGRF(0) = lfsr_msg.wrench.force.x;
 	LLegGRF(1) = lfsr_msg.wrench.force.y;
-	LLegGRF(2) = lfsr_msg.wrench.force.z;
+	LLegGRF(2) = lfsr_msg.wrench.force.z ;
 	LLegGRT(0) = lfsr_msg.wrench.torque.x;
 	LLegGRT(1) = lfsr_msg.wrench.torque.y;
 	LLegGRT(2) = lfsr_msg.wrench.torque.z;
@@ -749,7 +749,8 @@ void humanoid_ekf::computeLGRF()
 
 	LLegGRF = T_FT_LL.linear() * LLegGRF;
 	LLegGRT = T_FT_LL.linear() * LLegGRT;
-
+	MediatorInsert(lmdf,LLegGRF(2));
+	LLegForceFilt = MediatorMedian(lmdf);
 
 }
 void humanoid_ekf::computeRGRF()
@@ -763,6 +764,8 @@ void humanoid_ekf::computeRGRF()
 
 	RLegGRF = T_FT_RL.linear() * RLegGRF;
 	RLegGRT = T_FT_RL.linear() * RLegGRT;
+	MediatorInsert(rmdf,RLegGRF(2));
+	RLegForceFilt = MediatorMedian(rmdf);
 }
 
 void humanoid_ekf::computeKinTFs() {
@@ -801,7 +804,7 @@ void humanoid_ekf::computeKinTFs() {
 			Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
 			Twr.linear() = Tbr.linear();
 			dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                       mass, 0.3, 1.0, freq, g, useCF, cf_freqvmin, cf_freqvmax);
+                       mass, 0.005, 0.1, freq, g, useCF, cf_freqvmin, cf_freqvmax); //USED TO BE 0.3 instead of 0.05
 	}
 
 	
@@ -813,7 +816,7 @@ void humanoid_ekf::computeKinTFs() {
 		vbl =  rd->getLinearVelocity(lfoot_frame);
 		vbr =  rd->getLinearVelocity(rfoot_frame);
 
-
+	
 		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, 
 		LLegForceFilt, RLegForceFilt, mw->getAcc());
 		
@@ -869,6 +872,9 @@ void humanoid_ekf::determineLegContact() {
 		firstContact = false;
 	}
 	else{
+		//cout<<"LEFT NORM "<<vwl.norm()<<endl;
+		//cout<<"RIGHT NORM "<<vwr.norm()<<endl;
+
 		//Determine if the Support Foot changed  
 		if(!support_idx_provided){
 			
@@ -1416,14 +1422,14 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
 	if(!firstrun){
 		ground_truth_odom_msg = *msg;
-		temp = Vector3d(ground_truth_odom_msg.pose.pose.position.x, ground_truth_odom_msg.pose.pose.position.y, ground_truth_odom_msg.pose.pose.position.z);
-		temp = T_B_GT.linear()*temp;
+		temp = T_B_GT.linear()*Vector3d(ground_truth_odom_msg.pose.pose.position.x, ground_truth_odom_msg.pose.pose.position.y, ground_truth_odom_msg.pose.pose.position.z);
 		tempq = q_B_GT * Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x,ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
 		if(firstGT){
+
 			offsetGT = Vector3d::Zero();
-			offsetGT(0) = ground_truth_odom_msg.pose.pose.position.x - Twb.translation()(0);
-			offsetGT(1) = ground_truth_odom_msg.pose.pose.position.y - Twb.translation()(1);
-			offsetGT(2) = ground_truth_odom_msg.pose.pose.position.z - Twb.translation()(2);
+			offsetGT(0) = temp(0) - Twb.translation()(0);
+			offsetGT(1) = temp(1)  - Twb.translation()(1);
+			offsetGT(2) = temp(2)  - Twb.translation()(2);
 			qoffsetGT = tempq * qwb.inverse();
 			firstGT=false;
 		}
@@ -1436,7 +1442,6 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 		ground_truth_odom_msg.pose.pose.orientation.x = tempq.x();
 		ground_truth_odom_msg.pose.pose.orientation.y = tempq.y();
 		ground_truth_odom_msg.pose.pose.orientation.z = tempq.z();
-
 	}
 
 }
@@ -1450,7 +1455,6 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
 	if(!firstrun){
 		ground_truth_com_odom_msg = *msg;
-
 		temp = Vector3d(ground_truth_com_odom_msg.pose.pose.position.x,ground_truth_com_odom_msg.pose.pose.position.y,ground_truth_com_odom_msg.pose.pose.position.z);
 		temp = T_B_GT.linear()*temp;
 		tempq = q_B_GT * Quaterniond(ground_truth_com_odom_msg.pose.pose.orientation.w,ground_truth_com_odom_msg.pose.pose.orientation.x,ground_truth_com_odom_msg.pose.pose.orientation.y,ground_truth_com_odom_msg.pose.pose.orientation.z);
@@ -1542,8 +1546,6 @@ void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
 	lfsr_msg = *msg;
 
-	MediatorInsert(lmdf,lfsr_msg.wrench.force.z);
-	LLegForceFilt = MediatorMedian(lmdf);
 	
 	//llmdf->insert((double)lfsr_msg.wrench.force.z);
 	//LLegForceFilt = llmdf->median();
@@ -1555,8 +1557,6 @@ void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
 	rfsr_msg = *msg;
 
-	MediatorInsert(rmdf,rfsr_msg.wrench.force.z);
-	RLegForceFilt = MediatorMedian(rmdf);
 	//rrmdf->insert((double)rfsr_msg.wrench.force.z);
 	//RLegForceFilt = rrmdf->median();
 }

@@ -51,13 +51,13 @@ void IMUEKF::init() {
     P(1,1) = 1e-2;
     P(2,2) = 1e-2;
     //Rot error
-    P(3,3) = 1e-3;
-    P(4,4) = 1e-3;
-    P(5,5) = 1e-3;
+    P(3,3) = 1e-4;
+    P(4,4) = 1e-4;
+    P(5,5) = 1e-4;
     //Pos
-    P(6,6)  = 1e-6;
-    P(7,7)  = 1e-6;
-    P(8,8)  = 1e-6;
+    P(6,6)  = 1e-4;
+    P(7,7)  = 1e-4;
+    P(8,8)  = 1e-4;
     //Biases
     P(9, 9) = 1e-2;
     P(10, 10) = 1e-2;
@@ -337,8 +337,8 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
     Qf(11, 11) = accb_qz * accb_qz ;
     
 
-    Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt ;
-    //Qff =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
+    //Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt;
+    Qff.noalias() =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
     
     /** Predict Step: Propagate the Error Covariance  **/
     P = Af * P * Af.transpose();
@@ -362,7 +362,7 @@ void IMUEKF::updateWithTwist(Vector3d y)
     Rv(0, 0) = vel_px * vel_px;
     Rv(1, 1) = vel_py * vel_py;
     Rv(2, 2) = vel_pz * vel_pz;
-    
+    Rv = Rv/dt;
     v = x.segment<3>(0);
     
     //Innovetion vector
@@ -407,7 +407,7 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     R(3, 3) = odom_ax * odom_ax;
     R(4, 4) = odom_ay * odom_ay;
     R(5, 5) = odom_az * odom_az;
-    
+    R = R/dt;
     r = x.segment<3>(6);
     
     //Innovetion vector
@@ -417,7 +417,7 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     
     //Compute the Kalman Gain
     s = R;
-    s.noalias() = Hf * P * Hf.transpose();
+    s.noalias() += Hf * P * Hf.transpose();
     Kf.noalias() = P * Hf.transpose() * s.inverse();
     
     dxf.noalias() = Kf * z;
@@ -458,6 +458,8 @@ void IMUEKF::updateVars()
     //Update the biases
     bgyr = x.segment<3>(9);
     bacc = x.segment<3>(12);
+    std::cout<<" BIASG "<<bgyr<<std::endl;
+    std::cout<<" BIASA "<<bacc<<std::endl;
 
     bias_gx = x(9);
     bias_gy = x(10);
