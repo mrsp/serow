@@ -47,17 +47,17 @@ void IMUEKF::init() {
     If = Matrix<double, 15, 15>::Identity();
     P = Matrix<double, 15, 15>::Zero();
     //vel
-    P(0,0) = 1e-3;
-    P(1,1) = 1e-3;
-    P(2,2) = 1e-3;
+    P(0,0) = 1e-2;
+    P(1,1) = 1e-2;
+    P(2,2) = 1e-2;
     //Rot error
-    P(3,3) = 1e-4;
-    P(4,4) = 1e-4;
-    P(5,5) = 1e-4;
+    P(3,3) = 1e-2;
+    P(4,4) = 1e-2;
+    P(5,5) = 1e-2;
     //Pos
-    P(6,6)  = 1e-5;
-    P(7,7)  = 1e-5;
-    P(8,8)  = 1e-5;
+    P(6,6)  = 1e-4;
+    P(7,7)  = 1e-4;
+    P(8,8)  = 1e-4;
     //Biases
     P(9, 9) = 1e-3;
     P(10, 10) = 1e-3;
@@ -272,7 +272,7 @@ Matrix<double,15,15> IMUEKF::computeTrans(Matrix<double,15,1> x_, Matrix<double,
     res.block<3,3>(3,3).noalias() = -wedge(omega_);
     res.block<3,3>(6,0) = Rib_;
     res.block<3,3>(6,3).noalias() = -Rib_ * wedge(v);
-    res.block<3,3>(0,9).noalias() = -wedge(v);
+    res.block<3,3>(0,9).noalias() = wedge(v);
     res.block<3,3>(0,12).noalias() = -Matrix3d::Identity();
     res.block<3,3>(3,9).noalias() = -Matrix3d::Identity();
     
@@ -413,7 +413,8 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     //Innovetion vector
     z.segment<3>(0) = y - r;    
     z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
-    
+    //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
+
     
     //Compute the Kalman Gain
     s = R;
@@ -458,8 +459,7 @@ void IMUEKF::updateVars()
     //Update the biases
     bgyr = x.segment<3>(9);
     bacc = x.segment<3>(12);
-    std::cout<<" BIASG "<<bgyr<<std::endl;
-    std::cout<<" BIASA "<<bacc<<std::endl;
+   
 
     bias_gx = x(9);
     bias_gy = x(10);
@@ -491,6 +491,7 @@ void IMUEKF::updateVars()
     
     //ROLL - PITCH - YAW
     angle = getEulerAngles(Rib);
+
     angleX = angle(0);
     angleY = angle(1);
     angleZ = angle(2);

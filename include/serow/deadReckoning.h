@@ -5,7 +5,7 @@ namespace serow{
     
     class deadReckoning{
     private:
-        double Tm, Tm2, ef, wl, wr, mass, g, freq, GRF;
+        double Tm, Tm2, ef, wl, wr, mass, g, freq, GRF, Tm3, alpha1, alpha3;
         Eigen::Matrix3d C1l, C2l, C1r, C2r;
         Eigen::Vector3d RpRm, LpLm;
         
@@ -14,18 +14,22 @@ namespace serow{
 
         Eigen::Matrix3d Rwr,Rwl;
         
-        Eigen::Vector3d pwl_,pwr_;
+        Eigen::Vector3d pwl_,pwr_, plf, prf; //FT
         Eigen::Vector3d pb_l, pb_r;
         Eigen::Matrix3d Rwl_,Rwr_;
         Eigen::Vector3d vwbKCFS;
         Eigen::Vector3d Lomega, Romega;
         Eigen::Vector3d omegawl, omegawr;
+
+        Eigen::Matrix3d AL, AR;
+        Eigen::Vector3d bL, bR;
         bool USE_CF;
         bodyVelCF* bvcf;
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         deadReckoning(Eigen::Vector3d pwl0, Eigen::Vector3d pwr0, Eigen::Matrix3d Rwl0, Eigen::Matrix3d Rwr0,
-                      double mass_, double Tm_ = 0.3, double ef_ = 0.4, double freq_ = 100.0, double g_= 9.81, bool USE_CF_ = false, double freqvmin_ = 0.1, double freqvmax_ = 2.5)
+                      double mass_, double alpha1_ = 1.0, double alpha3_ = 0.01, double freq_ = 100.0, double g_= 9.81, bool USE_CF_ = false, double freqvmin_ = 0.1, double freqvmax_ = 2.5,
+                      Eigen::Vector3d plf_ = Eigen::Vector3d::Zero(), Eigen::Vector3d prf_ = Eigen::Vector3d::Zero())
         {
             
             pwl_ = pwl0;
@@ -39,9 +43,9 @@ namespace serow{
 
             freq = freq_;
             mass = mass_;
-            Tm = Tm_;
+            Tm = 1.0/freq;
             Tm2 = Tm*Tm;
-            ef = ef_;
+            ef = 0.5;
             g =  g_;
             C1l = Eigen::Matrix3d::Zero();
             C2l = Eigen::Matrix3d::Zero();
@@ -56,7 +60,12 @@ namespace serow{
             pb_r = Eigen::Vector3d::Zero();
             vwbKCFS = Eigen::Vector3d::Zero();
             USE_CF = USE_CF_;
+            plf = plf_;
+            prf = prf_;
 
+            alpha1 = alpha1_;
+            alpha3 = alpha3_;
+            Tm3 = (mass*mass*g*g)/(freq*freq);
             if(USE_CF)
                 bvcf = new bodyVelCF(freq_, mass_, freqvmin_ ,  freqvmax_ ,  g_);
 
@@ -74,7 +83,7 @@ namespace serow{
                              Eigen::Vector3d vbl, Eigen::Vector3d vbr, double lfz, double rfz)
         {
             
-
+            
             if(lfz>rfz)
                 vwbKCFS= -wedge(omegawb) * Rwb * pbl - Rwb * vbl;
             else
@@ -82,14 +91,16 @@ namespace serow{
             
 
             //Cropping the vertical GRF
-            //lfz = cropGRF(lfz);
-            //rfz = cropGRF(rfz);
+            /*
+            lfz = cropGRF(lfz);
+            rfz = cropGRF(rfz);
             
             //GRF Coefficients
-            //wl = (lfz + ef)/(lfz+rfz+2.0*ef);
-            //wr = (rfz + ef)/(lfz+rfz+2.0*ef);
+            wl = (lfz + ef)/(lfz+rfz+2.0*ef);
+            wr = (rfz + ef)/(lfz+rfz+2.0*ef);
 
-            //vwbKCFS= wl*(-wedge(omegawb) * Rwb * pbl - Rwb * vbl) + wr*(-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
+            vwbKCFS= wl*(-wedge(omegawb) * Rwb * pbl - Rwb * vbl) + wr*(-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
+            */
             //if(!USE_CF)
                 vwb = vwbKCFS;
            
@@ -155,6 +166,36 @@ namespace serow{
         
 		
         }
+        void computeIMVPFT(Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
+        {
+            Lomega=Rwl.transpose()*omegawl;
+            Romega=Rwr.transpose()*omegawr;
+
+
+            AL.noalias() = 1.0/Tm2*Matrix3d::Identity();
+            AL.noalias() -= alpha1* wedge(Lomega)*wedge(Lomega);
+            AL.noalias() -= alpha3/Tm3 * wedge(lf);
+
+            bL.noalias() = 1.0/Tm2 *  LpLm;
+            bL.noalias() += alpha1*wedge(Lomega)*Rwl.transpose()*vwl;
+            bL.noalias() += alpha3/Tm3 *(wedge(lf)*lt - wedge(lf)*wedge(lf) * plf);
+
+            LpLm = AL.inverse()*bL;
+
+            AR.noalias() =1.0/Tm2*Matrix3d::Identity();
+            AR.noalias() -= alpha1* wedge(Romega)*wedge(Romega);
+            AR.noalias() -= alpha3/Tm3 * wedge(rf);
+
+            bR.noalias() = 1.0/Tm2 *  RpRm;
+            bR.noalias() += alpha1*wedge(Romega)*Rwr.transpose()*vwr;
+            bR.noalias() += alpha3/Tm3 *(wedge(rf)*rt - wedge(rf)*wedge(rf) * prf);
+
+            RpRm = AR.inverse()*bR;
+
+            cout<<" LEFT IMVP "<<LpLm<<endl;
+            cout<<" Right IMVP "<<RpRm<<endl;
+
+        }
         
         
         void computeDeadReckoning(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr,
@@ -162,7 +203,7 @@ namespace serow{
                                   Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                                   Eigen::Vector3d vbl, Eigen::Vector3d vbr,
                                   Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
-                                  double lfz, double rfz, Eigen::Vector3d  acc)
+                                  double lfz, double rfz, Eigen::Vector3d  acc, Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
         {
             
             //Compute Body position
@@ -176,8 +217,9 @@ namespace serow{
             }
 */
             computeLegKCFS(Rwb,  Rbl, Rbr, omegawb,  omegabl, omegabr, pbl,  pbr,  vbl,  vbr);
-            computeIMVP();
-            
+            //computeIMVP();
+            computeIMVPFT(lf, rf, lt, rt);
+
             //Temp estimate of Leg position w.r.t Inertial Frame
             pwl = pwl_ - Rwl*LpLm + Rwl_*LpLm;
             pwr = pwr_ - Rwr*RpRm + Rwr_*RpRm;

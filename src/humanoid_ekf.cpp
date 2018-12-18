@@ -52,6 +52,7 @@ void humanoid_ekf::loadparams() {
 	n_p.param<double>("LLegLowThres", LLegLowThres,15.0);
 	n_p.param<double>("LosingContact", LosingContact,5.0);
 	n_p.param<double>("StrikingContact", StrikingContact,5.0);
+	n_p.param<double>("VelocityThres", VelocityThres,0.5);
 
 	n_p.param<bool>("useLegOdom",useLegOdom,false);
 	n_p.param<bool>("usePoseUpdate",usePoseUpdate,false);
@@ -180,7 +181,7 @@ void humanoid_ekf::loadparams() {
 	T_FT_LL(3,2) = ftl_list[14];
 	T_FT_LL(3,3) = ftl_list[15];
 
-
+	p_FT_LL = Vector3d(T_FT_LL(0,3), T_FT_LL(1,3), T_FT_LL(2,3));
 	std::vector<double> ftr_list;
 	n_p.getParam("T_FT_RL",ftr_list);
 	T_FT_RL(0,0) = ftr_list[0];
@@ -199,6 +200,7 @@ void humanoid_ekf::loadparams() {
 	T_FT_RL(3,1) = ftr_list[13];
 	T_FT_RL(3,2) = ftr_list[14];
 	T_FT_RL(3,3) = ftr_list[15];
+	p_FT_RL = Vector3d(T_FT_RL(0,3), T_FT_RL(1,3), T_FT_RL(2,3));
 
 	//n_p.param<std::string>("copl_topic",copl_topic,"cop/left");
 	//n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
@@ -214,6 +216,8 @@ void humanoid_ekf::loadparams() {
 	n_p.param<bool>("useCF", useCF,true);
 	n_p.param<double>("freqvmax", cf_freqvmax,2.5);
 	n_p.param<double>("freqvmin", cf_freqvmin,0.1);
+	n_p.param<double>("Tau0", Tau0, 0.5);
+	n_p.param<double>("Tau1", Tau1, 0.01);
 
 
 	mw =  new serow::Madgwick(freq,beta);
@@ -804,7 +808,7 @@ void humanoid_ekf::computeKinTFs() {
 			Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
 			Twr.linear() = Tbr.linear();
 			dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                       mass, 0.001, 0.1, freq, g, useCF, cf_freqvmin, cf_freqvmax); //USED TO BE 0.3 instead of 0.05
+                       mass, Tau0, Tau1, freq, g, useCF, cf_freqvmin, cf_freqvmax,p_FT_LL,p_FT_RL); //USED TO BE 0.3 instead of 0.05
 	}
 
 	
@@ -818,7 +822,7 @@ void humanoid_ekf::computeKinTFs() {
 
 	
 		dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr, 
-		LLegForceFilt, RLegForceFilt, mw->getAcc());
+		LLegForceFilt, RLegForceFilt, mw->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
 		
 		Twb_ = Twb;
 		qwb_ = qwb;
@@ -878,7 +882,7 @@ void humanoid_ekf::determineLegContact() {
 		//Determine if the Support Foot changed  
 		if(!support_idx_provided){
 			
-			if (vwl.norm()<0.05)
+			if (vwl.norm()<VelocityThres)
 			{
 				if ( LLegForceFilt > LLegUpThres  && LLegForceFilt<StrikingContact)
 				{
@@ -892,7 +896,7 @@ void humanoid_ekf::determineLegContact() {
 				}
 			}
 		
-			if (vwr.norm()<0.05)
+			if (vwr.norm()<VelocityThres)
 			{
 				if ( RLegForceFilt > LLegUpThres  && RLegForceFilt<StrikingContact)
 				{
@@ -1422,22 +1426,19 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
 	if(!firstrun){
 		ground_truth_odom_msg = *msg;
-		temp = T_B_GT.linear()*Vector3d(ground_truth_odom_msg.pose.pose.position.x, ground_truth_odom_msg.pose.pose.position.y, ground_truth_odom_msg.pose.pose.position.z);
+		temp =  T_B_GT.linear()*Vector3d(ground_truth_odom_msg.pose.pose.position.x, ground_truth_odom_msg.pose.pose.position.y, ground_truth_odom_msg.pose.pose.position.z);
 		tempq = q_B_GT * Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x,ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
 		if(firstGT){
-
-			offsetGT = Vector3d::Zero();
-			offsetGT(0) = temp(0) - Twb.translation()(0);
-			offsetGT(1) = temp(1)  - Twb.translation()(1);
-			offsetGT(2) = temp(2)  - Twb.translation()(2);
-			qoffsetGT = tempq * qwb.inverse();
+			qoffsetGT =  qwb  * tempq.inverse();
+			offsetGT = Twb.translation() - temp;
 			firstGT=false;
 		}
-		
-		ground_truth_odom_msg.pose.pose.position.x = temp(0) - offsetGT(0);
-		ground_truth_odom_msg.pose.pose.position.y = temp(1) - offsetGT(1);
-		ground_truth_odom_msg.pose.pose.position.z = temp(2) - offsetGT(2);
-		tempq = tempq * qoffsetGT.inverse();
+		tempq =  qoffsetGT * tempq;
+		temp = offsetGT + temp;
+
+		ground_truth_odom_msg.pose.pose.position.x = temp(0);
+		ground_truth_odom_msg.pose.pose.position.y = temp(1);
+		ground_truth_odom_msg.pose.pose.position.z = temp(2);
 		ground_truth_odom_msg.pose.pose.orientation.w = tempq.w();
 		ground_truth_odom_msg.pose.pose.orientation.x = tempq.x();
 		ground_truth_odom_msg.pose.pose.orientation.y = tempq.y();
@@ -1455,23 +1456,20 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
 	if(!firstrun){
 		ground_truth_com_odom_msg = *msg;
-		temp = Vector3d(ground_truth_com_odom_msg.pose.pose.position.x,ground_truth_com_odom_msg.pose.pose.position.y,ground_truth_com_odom_msg.pose.pose.position.z);
-		temp = T_B_GT.linear()*temp;
+		temp = T_B_GT.linear()*Vector3d(ground_truth_com_odom_msg.pose.pose.position.x,ground_truth_com_odom_msg.pose.pose.position.y,ground_truth_com_odom_msg.pose.pose.position.z);
 		tempq = q_B_GT * Quaterniond(ground_truth_com_odom_msg.pose.pose.orientation.w,ground_truth_com_odom_msg.pose.pose.orientation.x,ground_truth_com_odom_msg.pose.pose.orientation.y,ground_truth_com_odom_msg.pose.pose.orientation.z);
 		if(firstGTCoM){
-			offsetGTCoM = Vector3d::Zero();
 			Vector3d tempCoMOffset = Twb * CoM_enc;
-			offsetGTCoM(0) = temp(0) - tempCoMOffset(0);
-			offsetGTCoM(1) = temp(1) - tempCoMOffset(1);
-			offsetGTCoM(2) = temp(2) - tempCoMOffset(2);
-			qoffsetGTCoM = tempq * qwb.inverse();
+			offsetGTCoM = tempCoMOffset - temp;
+			qoffsetGTCoM = qwb * tempq.inverse();
 			firstGTCoM=false;
 		}
-		ground_truth_com_odom_msg.pose.pose.position.x = temp(0) - offsetGTCoM(0);
-		ground_truth_com_odom_msg.pose.pose.position.y = temp(1)  - offsetGTCoM(1);
-		ground_truth_com_odom_msg.pose.pose.position.z = temp(2)  - offsetGTCoM(2);
+		tempq =  qoffsetGTCoM * tempq;
+		temp = offsetGTCoM + temp;
+		ground_truth_com_odom_msg.pose.pose.position.x = temp(0);
+		ground_truth_com_odom_msg.pose.pose.position.y = temp(1);
+		ground_truth_com_odom_msg.pose.pose.position.z = temp(2);
 
-		tempq = tempq * qoffsetGTCoM.inverse();
 
 		ground_truth_com_odom_msg.pose.pose.orientation.w = tempq.w();
 		ground_truth_com_odom_msg.pose.pose.orientation.x = tempq.x();
