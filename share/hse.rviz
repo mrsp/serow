@@ -67,7 +67,7 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz/Path
       Color: 85; 255; 255
-      Enabled: true
+      Enabled: false
       Head Diameter: 0.3
       Head Length: 0.2
       Length: 0.3
@@ -85,7 +85,7 @@ Visualization Manager:
       Shaft Length: 0.1
       Topic: /SERoW/CoM/odom/path
       Unreliable: false
-      Value: true
+      Value: false
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -136,7 +136,7 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz/Path
       Color: 0; 255; 0
-      Enabled: true
+      Enabled: false
       Head Diameter: 0.3
       Head Length: 0.2
       Length: 0.3
@@ -154,7 +154,7 @@ Visualization Manager:
       Shaft Length: 0.1
       Topic: /SERoW/leg_odom/path
       Unreliable: false
-      Value: true
+      Value: false
     - Alpha: 1
       Axes Length: 0.5
       Axes Radius: 0.02
@@ -347,22 +347,22 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 3.24851
+      Distance: 2.54549
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.386218
-        Y: -0.508901
-        Z: -0.145389
+        X: 0.0550684
+        Y: -0.42192
+        Z: -0.160563
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.415399
+      Pitch: 0.8454
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.59042
+      Yaw: 0.985418
     Saved: ~
 Window Geometry:
   Displays:

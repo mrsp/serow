@@ -81,7 +81,7 @@ private:
 	
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
-	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vwb, omegawb, vwl, vwr, omegawr, omegawl;
+	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vwb, omegawb, vwl, vwr, omegawr, omegawl, 	p_FT_LL, p_FT_RL;
 	Affine3d Twl, Twr, Tbl, Tbr;
 	serow::robotDyn* rd;
 	serow::Madgwick* mw;
@@ -90,7 +90,7 @@ private:
   	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
 
 	bool useCF;
-	double cf_freqvmin, cf_freqvmax;
+	double cf_freqvmin, cf_freqvmax, Tau0, Tau1, VelocityThres;
 	double  freq, joint_freq, fsr_freq;
 	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
 	bool firstOdom, firstUpdate, firstPose;
