@@ -261,7 +261,7 @@ void CoMEKF::predict(Vector3d COP_, Vector3d fN_, Vector3d L_){
 	
 	
 	P = Fd * P * Fd.transpose();
-	P.noalias() += Q;
+	P.noalias() += Q*dt;
 
 
 	updateVars();
@@ -373,8 +373,9 @@ void CoMEKF::update(Vector3d Acc, Vector3d Pos, Vector3d Gyro, Vector3d Gyrodot)
 	R(3, 3) = comdd_r * comdd_r;
 	R(4, 4) = R(3, 3);
 	R(5, 5) = R(3, 3);
-
-	S = R;
+    R = R * dt;
+	
+    S = R;
 	S.noalias() += H * P * H.transpose();
 	K.noalias() = P * H.transpose() * S.inverse();
 

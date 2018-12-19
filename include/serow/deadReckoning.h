@@ -11,18 +11,16 @@ namespace serow{
         
         Eigen::Vector3d pwr,pwl,pwb;
         Eigen::Vector3d vwr,vwl,vwb;
-
         Eigen::Matrix3d Rwr,Rwl;
-        
-        Eigen::Vector3d pwl_,pwr_, plf, prf; //FT
+        Eigen::Vector3d pwl_,pwr_;
         Eigen::Vector3d pb_l, pb_r;
         Eigen::Matrix3d Rwl_,Rwr_;
         Eigen::Vector3d vwbKCFS;
         Eigen::Vector3d Lomega, Romega;
         Eigen::Vector3d omegawl, omegawr;
 
-        Eigen::Matrix3d AL, AR;
-        Eigen::Vector3d bL, bR;
+        Eigen::Matrix3d AL, AR, wedgerf, wedgelf;
+        Eigen::Vector3d bL, bR, plf, prf; //FT w.r.t Foot Frame;
         bool USE_CF;
         bodyVelCF* bvcf;
     public:
@@ -45,14 +43,13 @@ namespace serow{
             mass = mass_;
             Tm = 1.0/freq;
             Tm2 = Tm*Tm;
-            ef = 0.5;
+            ef = 0.1;
             g =  g_;
             C1l = Eigen::Matrix3d::Zero();
             C2l = Eigen::Matrix3d::Zero();
             C1r = Eigen::Matrix3d::Zero();
             C2r = Eigen::Matrix3d::Zero();
-            RpRm=Eigen::Vector3d::Zero();
-            LpLm=Eigen::Vector3d::Zero();
+            
             Lomega = Eigen::Vector3d::Zero();
             Romega = Eigen::Vector3d::Zero();
             vwb = Eigen::Vector3d::Zero();
@@ -62,7 +59,8 @@ namespace serow{
             USE_CF = USE_CF_;
             plf = plf_;
             prf = prf_;
-
+            RpRm=prf;
+            LpLm=plf;
             alpha1 = alpha1_;
             alpha3 = alpha3_;
             Tm3 = (mass*mass*g*g)/(freq*freq);
@@ -83,15 +81,14 @@ namespace serow{
                              Eigen::Vector3d vbl, Eigen::Vector3d vbr, double lfz, double rfz)
         {
             
-            
+            /*
             if(lfz>rfz)
                 vwbKCFS= -wedge(omegawb) * Rwb * pbl - Rwb * vbl;
             else
                 vwbKCFS= -wedge(omegawb) * Rwb * pbr - Rwb * vbr;
-            
+            */
 
             //Cropping the vertical GRF
-            /*
             lfz = cropGRF(lfz);
             rfz = cropGRF(rfz);
             
@@ -99,8 +96,9 @@ namespace serow{
             wl = (lfz + ef)/(lfz+rfz+2.0*ef);
             wr = (rfz + ef)/(lfz+rfz+2.0*ef);
 
-            vwbKCFS= wl*(-wedge(omegawb) * Rwb * pbl - Rwb * vbl) + wr*(-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
-            */
+            vwbKCFS.noalias() = wl*(-wedge(omegawb) * Rwb * pbl - Rwb * vbl);
+            vwbKCFS.noalias() += wr*(-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
+            
             //if(!USE_CF)
                 vwb = vwbKCFS;
            
@@ -171,30 +169,28 @@ namespace serow{
             Lomega=Rwl.transpose()*omegawl;
             Romega=Rwr.transpose()*omegawr;
 
-
+            wedgerf = wedge(rf);
+            wedgelf = wedge(lf);
+            
             AL.noalias() = 1.0/Tm2*Matrix3d::Identity();
             AL.noalias() -= alpha1* wedge(Lomega)*wedge(Lomega);
-            AL.noalias() -= alpha3/Tm3 * wedge(lf);
+            AL.noalias() -= alpha3/Tm3 * wedgelf;
 
             bL.noalias() = 1.0/Tm2 *  LpLm;
             bL.noalias() += alpha1*wedge(Lomega)*Rwl.transpose()*vwl;
-            bL.noalias() += alpha3/Tm3 *(wedge(lf)*lt - wedge(lf)*wedge(lf) * plf);
+            bL.noalias() += alpha3/Tm3 * wedgelf * lt - wedgelf * wedgelf * plf);
 
-            LpLm = AL.inverse()*bL;
+            LpLm.noalias() = AL.inverse()*bL;
 
-            AR.noalias() =1.0/Tm2*Matrix3d::Identity();
+            AR.noalias() = 1.0/Tm2*Matrix3d::Identity();
             AR.noalias() -= alpha1* wedge(Romega)*wedge(Romega);
-            AR.noalias() -= alpha3/Tm3 * wedge(rf);
+            AR.noalias() -= alpha3/Tm3 * wedgerf;
 
             bR.noalias() = 1.0/Tm2 *  RpRm;
             bR.noalias() += alpha1*wedge(Romega)*Rwr.transpose()*vwr;
-            bR.noalias() += alpha3/Tm3 *(wedge(rf)*rt - wedge(rf)*wedge(rf) * prf);
+            bR.noalias() += alpha3/Tm3 * wedgerf *rt - wedgerf * wedgerf * prf);
 
-            RpRm = AR.inverse()*bR;
-
-            cout<<" LEFT IMVP "<<LpLm<<endl;
-            cout<<" Right IMVP "<<RpRm<<endl;
-
+            RpRm.noalias() = AR.inverse()*bR;
         }
         
         
