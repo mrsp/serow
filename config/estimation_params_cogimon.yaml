@@ -55,6 +55,8 @@ medianWindow: 14
 
 #Compute Joint Velocities
 joint_cutoff_freq: 25
+joint_noise_density: 0.0463 # rad
+
 
 #Madgwick Filter for attitude
 Madgwick_gain: 0.06
@@ -76,24 +78,24 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  1.0e-4 #m/s^2/sqrt(s)
-gyroscope_bias_random_walk: 1.0e-6 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.8 #m/s^2  #Continuous Time
-gyroscope_noise_density: 0.1 #rad/s  #Continuous Time
+accelerometer_bias_random_walk:  1.0e-2 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 1.0e-4 # rad/s/sqrt(s)
+accelerometer_noise_density: 1.9519 # m/s^2  #Continuous Time
+gyroscope_noise_density: 0.2155 # rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 0.0
-odom_orientation_noise_density: 0.0
+odom_position_noise_density: 0.1
+odom_orientation_noise_density: 0.1
 velocity_noise_density: 0.1
 
 #IMU Initial Biases - Biases are substracted!
-bias_ax: 0.34
-bias_ay: -0.04
-bias_az: 0.1309
-bias_gx: 0.0
-bias_gy: 0.0
-bias_gz: 0.0
+bias_ax: 0.3919
+bias_ay: -0.0394
+bias_az: 0.1322
+bias_gx: -7.9088e-04
+bias_gy: 4.2031e-04
+bias_gz: -0.0077
 
 #Filter Params
 gravity: 9.80665 #gravity constant (m/s^2)

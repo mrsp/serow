@@ -323,22 +323,22 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
   
 
     // Covariance Q with full state + biases
-    Qf(0, 0) = gyr_qx * gyr_qx * dt;
-    Qf(1, 1) = gyr_qy * gyr_qy * dt;
-    Qf(2, 2) = gyr_qz * gyr_qz * dt;
-    Qf(3, 3) = acc_qx * acc_qx * dt;
-    Qf(4, 4) = acc_qy * acc_qy * dt;
-    Qf(5, 5) = acc_qz * acc_qz * dt ;
-    Qf(6, 6) = gyrb_qx * gyrb_qx ;
-    Qf(7, 7) = gyrb_qy * gyrb_qy ;
-    Qf(8, 8) = gyrb_qz * gyrb_qz  ;
-    Qf(9, 9) = accb_qx * accb_qx  ;
-    Qf(10, 10) = accb_qy * accb_qy ;
-    Qf(11, 11) = accb_qz * accb_qz ;
+    Qf(0, 0) = gyr_qx * gyr_qx * dt * dt;
+    Qf(1, 1) = gyr_qy * gyr_qy * dt * dt;
+    Qf(2, 2) = gyr_qz * gyr_qz * dt * dt;
+    Qf(3, 3) = acc_qx * acc_qx * dt * dt;
+    Qf(4, 4) = acc_qy * acc_qy * dt * dt;
+    Qf(5, 5) = acc_qz * acc_qz * dt * dt ;
+    Qf(6, 6) = gyrb_qx * gyrb_qx * dt;
+    Qf(7, 7) = gyrb_qy * gyrb_qy * dt;
+    Qf(8, 8) = gyrb_qz * gyrb_qz * dt ;
+    Qf(9, 9) = accb_qx * accb_qx * dt ;
+    Qf(10, 10) = accb_qy * accb_qy * dt;
+    Qf(11, 11) = accb_qz * accb_qz * dt;
     
 
-    //Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt;
-    Qff.noalias() =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
+    Qff.noalias() =  Lcf * Qf * Lcf.transpose();
+    //Qff.noalias() =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
     
     /** Predict Step: Propagate the Error Covariance  **/
     P = Af * P * Af.transpose();
@@ -362,7 +362,7 @@ void IMUEKF::updateWithTwist(Vector3d y)
     Rv(0, 0) = vel_px * vel_px;
     Rv(1, 1) = vel_py * vel_py;
     Rv(2, 2) = vel_pz * vel_pz;
-    Rv = Rv/dt;
+    Rv = Rv*dt;
     v = x.segment<3>(0);
     
     //Innovetion vector
@@ -407,7 +407,7 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     R(3, 3) = odom_ax * odom_ax;
     R(4, 4) = odom_ay * odom_ay;
     R(5, 5) = odom_az * odom_az;
-    R = R/dt;
+    R = R*dt;
     r = x.segment<3>(6);
     
     //Innovetion vector
