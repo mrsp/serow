@@ -362,7 +362,7 @@ void IMUEKF::updateWithTwist(Vector3d y)
     Rv(0, 0) = vel_px * vel_px;
     Rv(1, 1) = vel_py * vel_py;
     Rv(2, 2) = vel_pz * vel_pz;
-    Rv = Rv*dt;
+    //Rv = Rv*dt;
     v = x.segment<3>(0);
     
     //Innovetion vector
@@ -398,16 +398,14 @@ void IMUEKF::updateWithTwist(Vector3d y)
 
 void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 {
-    
-    
     R(0, 0) = odom_px * odom_px;
-    R(1, 1) = odom_py * odom_py;
-    R(2, 2) = odom_pz * odom_pz;
+    R(1, 1) = R(0, 0);
+    R(2, 2) = R(0, 0);
     
     R(3, 3) = odom_ax * odom_ax;
     R(4, 4) = odom_ay * odom_ay;
     R(5, 5) = odom_az * odom_az;
-    R = R*dt;
+    //R = R*dt;
     r = x.segment<3>(6);
     
     //Innovetion vector
@@ -459,7 +457,7 @@ void IMUEKF::updateVars()
     //Update the biases
     bgyr = x.segment<3>(9);
     bacc = x.segment<3>(12);
-   
+     
 
     bias_gx = x(9);
     bias_gy = x(10);

@@ -349,9 +349,9 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
 	subscribe();
 	advertise();
 
-	dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<serow::VarianceControlConfig> >(n);
-    dynamic_reconfigure::Server<serow::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
-    dynamic_recfg_->setCallback(cb);
+	//dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<serow::VarianceControlConfig> >(n);
+    //dynamic_reconfigure::Server<serow::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
+    // dynamic_recfg_->setCallback(cb);
 	is_connected_ = true;
 
 	ros::Duration(1.0).sleep();

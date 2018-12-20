@@ -178,7 +178,7 @@ namespace serow{
 
             bL.noalias() = 1.0/Tm2 *  LpLm;
             bL.noalias() += alpha1*wedge(Lomega)*Rwl.transpose()*vwl;
-            bL.noalias() += alpha3/Tm3 * wedgelf * lt - wedgelf * wedgelf * plf);
+            bL.noalias() += alpha3/Tm3 * (wedgelf * lt - wedgelf * wedgelf * plf);
 
             LpLm.noalias() = AL.inverse()*bL;
 
@@ -188,7 +188,7 @@ namespace serow{
 
             bR.noalias() = 1.0/Tm2 *  RpRm;
             bR.noalias() += alpha1*wedge(Romega)*Rwr.transpose()*vwr;
-            bR.noalias() += alpha3/Tm3 * wedgerf *rt - wedgerf * wedgerf * prf);
+            bR.noalias() += alpha3/Tm3 * (wedgerf *rt - wedgerf * wedgerf * prf);
 
             RpRm.noalias() = AR.inverse()*bR;
         }
