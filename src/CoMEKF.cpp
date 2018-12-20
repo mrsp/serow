@@ -373,7 +373,7 @@ void CoMEKF::update(Vector3d Acc, Vector3d Pos, Vector3d Gyro, Vector3d Gyrodot)
 	R(3, 3) = comdd_r * comdd_r;
 	R(4, 4) = R(3, 3);
 	R(5, 5) = R(3, 3);
-    R = R * dt;
+    //R = R * dt;
 	
     S = R;
 	S.noalias() += H * P * H.transpose();
