@@ -62,6 +62,7 @@
 #include "serow/differentiator.h"
 #include "serow/robotDyn.h"
 #include "serow/Madgwick.h"
+#include "serow/Mahony.h"
 #include "serow/deadReckoning.h"
 #include "serow/Median.h"
 
@@ -84,7 +85,10 @@ private:
 	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vwb, omegawb, vwl, vwr, omegawr, omegawl, 	p_FT_LL, p_FT_RL;
 	Affine3d Twl, Twr, Tbl, Tbr;
 	serow::robotDyn* rd;
+    bool useMahony;
 	serow::Madgwick* mw;
+    serow::Mahony* mh;
+    double Kp, Ki, bias_max, bias_may, bias_maz, bias_mgx, bias_mgy, bias_mgz;
 	serow::deadReckoning* dr;
 
   	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;

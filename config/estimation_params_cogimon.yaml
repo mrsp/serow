@@ -58,15 +58,29 @@ joint_cutoff_freq: 25
 joint_noise_density: 0.0463 # rad
 
 
-#Madgwick Filter for attitude
+#Mahony Filter for attitude
+useMahony: true
+Mahony_Kp: 0.25
+Mahony_Ki: 0.1
+#Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.06
+bias_max: 0.0
+bias_may: 0.0
+bias_maz: 0.0
+bias_mgx: 0.0
+bias_mgy: 0.0
+bias_mgz: 0.0
+
+
+#Leg Odometry Coefficients
+Tau0: 1.0
+Tau1: 0.003
 
 #Complimentary Filter for Body Velocity  //Used in Leg Odometry
 useCF: false
 freqvmin: 0.1
 freqvmax: 2.5
-Tau0: 1.0
-Tau1: 0.003
+
 
 #Choose Integration Method
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
