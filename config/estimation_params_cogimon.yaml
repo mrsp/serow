@@ -64,7 +64,7 @@ Mahony_Kp: 0.05
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.06
-bias_max: 0.39
+bias_max: 0.3
 bias_may: -0.33
 bias_maz: 0.1322
 bias_mgx: 0.00140645
@@ -73,7 +73,7 @@ bias_mgz: -0.000320313
 
 
 #Leg Odometry Coefficients
-Tau0: 1.0
+Tau0: 0.8
 Tau1: 0.002
 
 #Complimentary Filter for Body Velocity  //Used in Leg Odometry
@@ -99,12 +99,12 @@ gyroscope_noise_density: 0.2155 # rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 0.02
+odom_position_noise_density: 0.01
 odom_orientation_noise_density: 0.01
 velocity_noise_density: 1.5
 
 #IMU Initial Biases - Biases are substracted!
-bias_ax:  0.4
+bias_ax:  0.3
 bias_ay:  -0.33
 bias_az: 0.1322
 bias_gx: -0.00140645
