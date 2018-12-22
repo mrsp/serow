@@ -61,7 +61,14 @@ namespace serow{
             double halfvx, halfvy, halfvz;
             double halfex, halfey, halfez;
             double qa, qb, qc;
-            
+            double ax,ay,az,gx,gy,gz;
+	    
+	    gx = gyro_(0);
+	    gy = gyro_(1);
+	    gz = gyro_(2);
+	    ax = acc_(0);
+	    ay = acc_(1);
+	    az = acc_(2);
             // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
             if(!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
                 

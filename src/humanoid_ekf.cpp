@@ -538,13 +538,13 @@ void humanoid_ekf::run() {
             predictWithCoM = false;
             if(useMahony)
             {
-                mh->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)-Vector3d(bias_mwgx,bias_mwgy,bias_mwgz)),
-                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)-Vector3d(bias_mwax,bias_mway,bias_mwaz)));
+                mh->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)-Vector3d(bias_mgx,bias_mgy,bias_mgz)),
+                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)-Vector3d(bias_max,bias_may,bias_maz)));
             }
             else
             {
-                mw->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)-Vector3d(bias_mwgx,bias_mwgy,bias_mwgz)),
-                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)-Vector3d(bias_mwax,bias_mway,bias_mwaz)));
+                mw->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)-Vector3d(bias_mgx,bias_mgy,bias_mgz)),
+                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)-Vector3d(bias_max,bias_may,bias_maz)));
             }
             
             if(fsr_inc){

@@ -47,24 +47,24 @@ void IMUEKF::init() {
     If = Matrix<double, 15, 15>::Identity();
     P = Matrix<double, 15, 15>::Zero();
     //vel
-    P(0,0) = 1e-2;
-    P(1,1) = 1e-2;
-    P(2,2) = 1e-2;
+    P(0,0) = 1e-4;
+    P(1,1) = 1e-4;
+    P(2,2) = 1e-4;
     //Rot error
-    P(3,3) = 1e-2;
-    P(4,4) = 1e-2;
-    P(5,5) = 1e-2;
+    P(3,3) = 1e-3;
+    P(4,4) = 1e-3;
+    P(5,5) = 1e-3;
     //Pos
-    P(6,6)  = 1e-4;
-    P(7,7)  = 1e-4;
-    P(8,8)  = 1e-4;
+    P(6,6)  = 1e-6;
+    P(7,7)  = 1e-6;
+    P(8,8)  = 1e-6;
     //Biases
-    P(9, 9) = 1e-3;
-    P(10, 10) = 1e-3;
-    P(11, 11) = 1e-3;
-    P(12, 12) = 1e-3;
-    P(13, 13) = 1e-3;
-    P(14, 14) = 1e-3;
+    P(9, 9) = 1e-4;
+    P(10, 10) = 1e-4;
+    P(11, 11) = 1e-4;
+    P(12, 12) = 1e-4;
+    P(13, 13) = 1e-4;
+    P(14, 14) = 1e-4;
     
     
     
@@ -272,7 +272,7 @@ Matrix<double,15,15> IMUEKF::computeTrans(Matrix<double,15,1> x_, Matrix<double,
     res.block<3,3>(3,3).noalias() = -wedge(omega_);
     res.block<3,3>(6,0) = Rib_;
     res.block<3,3>(6,3).noalias() = -Rib_ * wedge(v);
-    res.block<3,3>(0,9).noalias() = wedge(v);
+    res.block<3,3>(0,9).noalias() = -wedge(v);
     res.block<3,3>(0,12).noalias() = -Matrix3d::Identity();
     res.block<3,3>(3,9).noalias() = -Matrix3d::Identity();
     
@@ -323,21 +323,21 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
   
 
     // Covariance Q with full state + biases
-    Qf(0, 0) = gyr_qx * gyr_qx * dt * dt;
-    Qf(1, 1) = gyr_qy * gyr_qy * dt * dt;
-    Qf(2, 2) = gyr_qz * gyr_qz * dt * dt;
-    Qf(3, 3) = acc_qx * acc_qx * dt * dt;
-    Qf(4, 4) = acc_qy * acc_qy * dt * dt;
-    Qf(5, 5) = acc_qz * acc_qz * dt * dt ;
-    Qf(6, 6) = gyrb_qx * gyrb_qx * dt;
-    Qf(7, 7) = gyrb_qy * gyrb_qy * dt;
-    Qf(8, 8) = gyrb_qz * gyrb_qz * dt ;
-    Qf(9, 9) = accb_qx * accb_qx * dt ;
-    Qf(10, 10) = accb_qy * accb_qy * dt;
-    Qf(11, 11) = accb_qz * accb_qz * dt;
+    Qf(0, 0) = gyr_qx * gyr_qx * dt ;
+    Qf(1, 1) = gyr_qy * gyr_qy * dt ;
+    Qf(2, 2) = gyr_qz * gyr_qz * dt ;
+    Qf(3, 3) = acc_qx * acc_qx * dt ;
+    Qf(4, 4) = acc_qy * acc_qy * dt ;
+    Qf(5, 5) = acc_qz * acc_qz * dt ;
+    Qf(6, 6) = gyrb_qx * gyrb_qx ;
+    Qf(7, 7) = gyrb_qy * gyrb_qy ;
+    Qf(8, 8) = gyrb_qz * gyrb_qz  ;
+    Qf(9, 9) = accb_qx * accb_qx  ;
+    Qf(10, 10) = accb_qy * accb_qy ;
+    Qf(11, 11) = accb_qz * accb_qz ;
     
 
-    Qff.noalias() =  Lcf * Qf * Lcf.transpose();
+    Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt;
     //Qff.noalias() =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
     
     /** Predict Step: Propagate the Error Covariance  **/
@@ -403,8 +403,8 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     R(2, 2) = R(0, 0);
     
     R(3, 3) = odom_ax * odom_ax;
-    R(4, 4) = odom_ay * odom_ay;
-    R(5, 5) = odom_az * odom_az;
+    R(4, 4) =  R(3, 3);
+    R(5, 5) =  R(3, 3);
     //R = R*dt;
     r = x.segment<3>(6);
     
@@ -457,7 +457,8 @@ void IMUEKF::updateVars()
     //Update the biases
     bgyr = x.segment<3>(9);
     bacc = x.segment<3>(12);
-     
+    std::cout<<"Biasgx "<<bgyr<<std::endl;
+    std::cout<<"Biasax "<<bacc<<std::endl;
 
     bias_gx = x(9);
     bias_gy = x(10);
