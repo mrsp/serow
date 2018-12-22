@@ -57,7 +57,7 @@ void butterworthLPF::init(string name_, double fsampling, double fcutoff)
     fs = fsampling;
     fx = fcutoff;
     
-    ff = 2*fx/fs;
+    ff = fx/fs;
     ita =1.0/ tan(3.14159265359*ff);
     q=sqrt(2.0);
     b0 = 1.0 / (1.0 + q*ita + ita*ita);
@@ -66,7 +66,7 @@ void butterworthLPF::init(string name_, double fsampling, double fcutoff)
     a1 = 2.0 * (ita*ita - 1.0) * b0;
     a2 = -(1.0 - q*ita + ita*ita) * b0;
     name = name_;
-    a = (3.14159265359*ff)/(3.14159265359*ff+1);
+    a = (2.0*3.14159265359*ff)/(2.0*3.14159265359*ff+1.0);
     cout<<name<<" Butterworth Filter Initialized Successfully"<<endl;
     
 }

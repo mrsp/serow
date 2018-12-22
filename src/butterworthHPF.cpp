@@ -46,21 +46,23 @@ void butterworthHPF::init(string name_, double fsampling, double fcutoff)
 {
     fs = fsampling;
     fx = fcutoff;
-    ff = 2*fx/fs;
+    ff = fx/fs;
     ita =1.0/ tan(3.14159265359*ff);
     q=sqrt(2.0);
     b0 = 1.0 / (1.0 + q*ita + ita*ita);
     b1= 2*b0;
     b2= b0;
     
+   
+    a1 = 2.0 * (ita*ita - 1.0) * b0;
+    a2 = -(1.0 - q*ita + ita*ita) * b0;
+    
     b0 = b0*ita*ita;
     b1 = -b1*ita*ita;
     b2 = b2*ita*ita;
     
-    a1 = 2.0 * (ita*ita - 1.0) * b0;
-    a2 = -(1.0 - q*ita + ita*ita) * b0;
     name = name_;
-    a = (1.0)/(3.14159265359*ff+1);
+    a = (1.0)/(2.0*3.14159265359*ff+1.0);
     cout<<name<<"High-Pass Butterworth Filter Initialized Successfully"<<endl;
     
 }
