@@ -1460,13 +1460,13 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
     if(!firstrun){
         ground_truth_odom_msg = *msg;
         temp =  T_B_GT.linear()*Vector3d(ground_truth_odom_msg.pose.pose.position.x, ground_truth_odom_msg.pose.pose.position.y, ground_truth_odom_msg.pose.pose.position.z);
-        tempq = q_B_GT * Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x,ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
+        tempq =  Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x,ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
         if(firstGT){
             qoffsetGT =  qwb  * tempq.inverse();
             offsetGT = Twb.translation() - temp;
             firstGT=false;
         }
-        tempq =  qoffsetGT * tempq;
+        tempq =  q_B_GT * (qoffsetGT * tempq);
         temp = offsetGT + temp;
         
         ground_truth_odom_msg.pose.pose.position.x = temp(0);
@@ -1490,14 +1490,14 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
     if(!firstrun){
         ground_truth_com_odom_msg = *msg;
         temp = T_B_GT.linear()*Vector3d(ground_truth_com_odom_msg.pose.pose.position.x,ground_truth_com_odom_msg.pose.pose.position.y,ground_truth_com_odom_msg.pose.pose.position.z);
-        tempq = q_B_GT * Quaterniond(ground_truth_com_odom_msg.pose.pose.orientation.w,ground_truth_com_odom_msg.pose.pose.orientation.x,ground_truth_com_odom_msg.pose.pose.orientation.y,ground_truth_com_odom_msg.pose.pose.orientation.z);
+        tempq =  Quaterniond(ground_truth_com_odom_msg.pose.pose.orientation.w,ground_truth_com_odom_msg.pose.pose.orientation.x,ground_truth_com_odom_msg.pose.pose.orientation.y,ground_truth_com_odom_msg.pose.pose.orientation.z);
         if(firstGTCoM){
             Vector3d tempCoMOffset = Twb * CoM_enc;
             offsetGTCoM = tempCoMOffset - temp;
             qoffsetGTCoM = qwb * tempq.inverse();
             firstGTCoM=false;
         }
-        tempq =  qoffsetGTCoM * tempq;
+        tempq =  q_B_GT * (qoffsetGTCoM * tempq);
         temp = offsetGTCoM + temp;
         ground_truth_com_odom_msg.pose.pose.position.x = temp(0);
         ground_truth_com_odom_msg.pose.pose.position.y = temp(1);
