@@ -19,7 +19,7 @@ These instructions will get you a copy of the project up and running on your loc
 * [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 
 
 ## Installing
-* Install [Pinocchio] (https://stack-of-tasks.github.io/pinocchio/download.html)
+* Install [Pinocchio](https://stack-of-tasks.github.io/pinocchio/download.html)
 * git clone https://github.com/mrsp/serow.git
 * catkin_make -DCMAKE_BUILD_TYPE=Release 
 * If you are using catkin tools run: catkin build  --cmake-args -DCMAKE_BUILD_TYPE=Release 
@@ -76,8 +76,7 @@ Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the esti
 ![nao](img/nao.jpg)
 ### Launch on your Robot in real time
 * Specify topics on config/estimation_params.yaml
-* roslaunch humanoid_state_estimation humanoid_estimator_driver.launch
-* rosrun rqt_reconfigure rqt_reconfigure (If you want to reconfiqure filter params online -> easy tuning).
+* roslaunch serow serow.launch
 ## License
 [BSD](LICENSE) 
 
