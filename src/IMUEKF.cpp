@@ -445,7 +445,6 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 void IMUEKF::updateVars()
 {
     
-    
     pos = x.segment<3>(6);
     rX = pos(0);
     rY = pos(1);
