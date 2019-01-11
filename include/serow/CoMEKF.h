@@ -29,46 +29,86 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
  
-#include <serow/MovingAverageFilter.h>
+#ifndef __COMEKF_H__
+#define __COMEKF_H__
+
+#include <iostream>
+#include <eigen3/Eigen/Dense>
+
+using namespace Eigen;
+using namespace std;
+
+class CoMEKF {
+
+private:
+
+	Matrix<double, 9, 9> F, P, I, Q, Fd;
+
+	Vector3d COP, fN, L, COP_p, fN_p, L_p;
+
+	Matrix<double, 6, 9> H;
+
+	Matrix<double, 9, 6> K;
+
+	Matrix<double, 6, 6> R, S;
 
 
-MovingAverageFilter::MovingAverageFilter()
-{
-    x = 0.000;
-    //Window Size
-    windowSize = 10;
-    currentstep = 0;
-    std::cout<<"Moving Average Filter Initialized Successfully"<<std::endl;
-}
+	Matrix<double, 6, 1> z;
+	
+	double tmp;
+	
+	void updateVars();
 
+	void euler(Vector3d COP_, Vector3d fN_, Vector3d L_);
+	Matrix<double,9,1> computeDyn(Matrix<double,9,1> x_, Vector3d COP_, Vector3d fN_, Vector3d L_);
+	Matrix<double,9,9> computeTrans(Matrix<double,9,1> x_,  Vector3d COP_, Vector3d fN_, Vector3d L_);
+	void RK4(Vector3d COP_, Vector3d fN_, Vector3d L_, Vector3d COP0, Vector3d fN0, Vector3d L0);
 
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+	Matrix<double, 9, 1> x, f;
 
-void MovingAverageFilter::reset()
-{
-    x = 0.000;
-    currentstep = 0;
-    while(windowBuffer.size()>0)
-        windowBuffer.pop();
-    std::cout<<"Moving Average Filter Reseted"<<std::endl;
-}
+	double comd_q, com_q, fd_q, com_r, comdd_r;
 
+	double dt, m, g, I_xx,I_yy;
 
-/** MovingAverageFilter filter to  deal with the Noise **/
-void MovingAverageFilter::filter(float  y)
-{
+    double bias_fx, bias_fy, bias_fz;
+	bool firstrun;
+	bool useEuler;
+	void init();
 
-    if(currentstep<windowSize)
-    {
-        //Moving Window
-        x = (x*currentstep + y) /(currentstep + 1);
-        currentstep++;
-    }
-    else
-    {
-        x+=(y-windowBuffer.front())/windowSize;
-        if(windowBuffer.size()>=windowSize)
-            windowBuffer.pop();
-    }
-    windowBuffer.push(y);
-    /** ------------------------------------------------------------- **/
-}
+	void setdt(double dtt) {
+		dt = dtt;
+	}
+
+	void setParams(double m_, double I_xx_, double I_yy_, double g_)
+	{
+		m = m_;
+		I_xx = I_xx_;
+		I_yy = I_yy_;
+		g = g_;
+
+	}
+
+	void setCoMPos(Vector3d pos) {
+		x(0) = pos(0);
+		x(1) = pos(1);
+		x(2) = pos(2);
+	}
+	void setCoMExternalForce(Vector3d force) {
+		x(6) = force(0);
+		x(7) = force(1);
+		x(8) = force(2);
+	}
+
+	void predict(Vector3d COP_, Vector3d fN_, Vector3d L_);
+	void update(Vector3d Acc, Vector3d Pos, Vector3d Gyro, Vector3d Gyrodot);
+	void updateWithEnc(Vector3d Pos);
+	void updateWithImu(Vector3d Acc, Vector3d Pos, Vector3d Gyro);
+
+	double comX, comY, comZ, velX, velY, velZ, fX,
+			fY, fZ;
+
+};
+
+#endif

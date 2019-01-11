@@ -34,7 +34,7 @@
 
 #include <iostream>
 #include <eigen3/Eigen/Dense>
-#include <math.h>       /* isnan, sqrt */
+#include <cmath>       /* isnan, sqrt */
 /* @author MUMRA
  */
 
@@ -46,73 +46,80 @@
  * orientation of Body frame wrt the Inertial frame: Rib
  * accelerometer bias in Body frame : bf
  * gyro bias in Body frame : bw
- * support foot position in Inertial frame: ps
- * support foot orientation wrt to the Inertial frame: Ris
  * Measurement is Body Position/Orinetation in Inertial frame by Odometry-VO
  * and the relative Support Foot Position/Orientation by the Kinematics/Encoders
  */
 
  
 using namespace Eigen;
-using namespace std;
 
 class IMUEKF {
 
 private:
 
 
-	Matrix<double, 21, 18> Lcf;
+	Matrix<double, 15, 12> Lcf;
 
-	Matrix<double, 21, 21> P, Af, Acf, If, Qff;
+	Matrix<double, 15, 15> P, Af, Acf, If, Qff;
 
-	Matrix<double, 6, 21> Hf;
+	Matrix<double, 6, 15> Hf;
+	Matrix<double, 3, 15> Hv;
 
-	Matrix<double, 18, 18> Qf;
+	Matrix<double, 12, 12> Qf;
 
-	Matrix<double, 21, 6> Kf;
+	Matrix<double, 15, 6> Kf;
+	Matrix<double, 15, 3> Kv;
 
 	//Correction vector
-	Matrix<double, 21, 1> dxf;
+	Matrix<double, 15, 1> dxf;
 
 	//General variables
 	Matrix<double, 6, 6> s, R;
 
-	Matrix3d tempM;
+	Matrix<double, 3, 3> sv, Rv;
+
 
 	//innovation, position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
-	Vector3d r, v, chi, bf, bw, fhat, omegahat, ps, phi, omega, f, temp;
+	Vector3d r, v, omega, f, fhat, omegahat, temp, omega_p, f_p;
 
 	Matrix<double, 6, 1> z;
-	//Quaternion
+	Vector3d zv;
 
+    //RK4 Integration 
+    Matrix<double,15,1> computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
+	void RK4(Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0);
+	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 
+	void euler(Vector3d omega_, Vector3d f_);
 
 
 public:
-
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+             
 	//State vector - with biases included
-	Matrix<double, 21, 1> x;
+	Matrix<double, 15, 1> x;
 
 	bool firstrun;
+	bool useEuler;
 	// Gravity vector
-	Vector3d g;
+    Vector3d g, bgyr, bacc, gyro, acc, vel, pos, angle;
 
 	//Noise Stds
 
 	double  acc_qx,acc_qy,acc_qz,gyr_qx,gyr_qy,gyr_qz,gyrb_qx,gyrb_qy,gyrb_qz,
-	accb_qx,accb_qy,accb_qz,support_qpx,support_qpy,support_qpz,support_qax,support_qay,
-	support_qaz, odom_px, odom_py, odom_pz, odom_ax, odom_ay,odom_az,support_px, support_py, support_pz, support_ax,support_ay,support_az;
+	accb_qx,accb_qy,accb_qz, odom_px, odom_py, odom_pz, odom_ax, odom_ay,odom_az,
+	vel_px, vel_py, vel_pz;
 
 	double gyroX, gyroY, gyroZ, angleX, angleY, angleZ, bias_gx, bias_gy, bias_gz,
 			bias_ax, bias_ay, bias_az, ghat;
 
 	double accX, accY, accZ, velX, velY, velZ, rX, rY, rZ;
 
-	Matrix3d Rib, Ris;
+	Matrix3d Rib;
 
-	Affine3d Tis, Tib;
+	Affine3d  Tib;
 
-	Quaterniond qib_, qis_;
+	Quaterniond qib;
 
 	//Sampling time = 1.0/Sampling Frequency
 	double dt;
@@ -125,23 +132,25 @@ public:
 		dt = dtt;
 	}
 
-	void setGyroBias(Vector3d bgyr)
+	void setGyroBias(Vector3d bgyr_)
 	{
-		x(9) = bgyr(0);
-		x(10) = bgyr(1);
-		x(11) = bgyr(2);
-		bias_gx = bgyr(0);
-		bias_gy = bgyr(1);
-		bias_gz = bgyr(2);
+		bgyr = bgyr_;
+		x(9) = bgyr_(0);
+		x(10) = bgyr_(1);
+		x(11) = bgyr_(2);
+		bias_gx = bgyr_(0);
+		bias_gy = bgyr_(1);
+		bias_gz = bgyr_(2);
 	}
-	void setAccBias(Vector3d bacc)
+	void setAccBias(Vector3d bacc_)
 	{
-		x(12) = bacc(0);
-		x(13) = bacc(1);
-		x(14) = bacc(2);
-		bias_ax = bacc(0);
-		bias_ay = bacc(1);
-		bias_az = bacc(2);
+		bacc = bacc_;
+		x(12) = bacc_(0);
+		x(13) = bacc_(1);
+		x(14) = bacc_(2);
+		bias_ax = bacc_(0);
+		bias_ay = bacc_(1);
+		bias_az = bacc_(2);
 	}
 	//Initialize the Position
 	void setBodyPos(Vector3d bp) {
@@ -150,36 +159,30 @@ public:
 		x(8) = bp(2);
 	}
 
-	//Initialize the Position
-	void setSupportPos(Vector3d sp) {
-		x(15) = sp(0);
-		x(16) = sp(1);
-		x(17) = sp(2);
-	}
-
 	//Initialize the Rotation Matrix and the Orientation Error
 	void setBodyOrientation(Matrix3d Rot_){
 		Rib = Rot_;
 	}
 
+    void setBodyVel(Vector3d bv)
+    {
+        x.segment<3>(0).noalias() =  bv;
+    }
 
-	void setSupportOrientation(Matrix3d Rot_){
-		Ris = Rot_;
-	}
 
 	/** @fn void Filter(Matrix<double,3,1> f, Matrix<double,3,1> omega, Matrix<double,3,1>  y_r, Matrix<double,3,1>  y_q)
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
 	void predict(Vector3d omega_, Vector3d f_);
 	void updateWithOdom(Vector3d y, Quaterniond qy);
- 	void updateWithSupport(Vector3d y, Quaterniond qy);
+	void updateWithTwist(Vector3d y);
+ 	//void updateWithSupport(Vector3d y, Quaterniond qy);
 
 	// Initializing Variables
 	void init();
-	void updateTF();
 
 	//Computes the skew symmetric matrix of a 3-D vector
-	inline Matrix3d wedge(
+	Matrix3d wedge(
 			Vector3d v) {
 
 		Matrix3d skew;
@@ -195,27 +198,35 @@ public:
 		return skew;
 
 	}
+	Vector3d vec(Matrix3d M)
+	{
+		Vector3d v = Vector3d::Zero();
+		v(0) = M(2,1);
+		v(1) = M(0,2);
+		v(2) = M(1,0);
+		return v;
+	}
 
 	//Rodriguez Formula
 	inline Matrix<double, 3, 3> expMap(
-			Vector3d omega, double theta) {
+			Vector3d omega) {
 
-		Matrix<double, 3, 3> res, omega_skew, I;
+		Matrix<double, 3, 3> res;
 		double omeganorm;
-		res = Matrix<double, 3, 3>::Zero();
-		omega_skew = Matrix<double, 3, 3>::Zero();
-
-
-		omega *= theta;
 
 		omeganorm = omega.norm();
-		I = Matrix<double, 3, 3>::Identity();
-		omega_skew = wedge(omega);
+		res =  Matrix<double, 3, 3>::Identity();
 
-		res = I;
-		res += omega_skew * (sin(omeganorm) / omeganorm);
-		res += (omega_skew * omega_skew) * (
-				(1.000 - cos(omeganorm)) / (omeganorm * omeganorm));
+		if(omeganorm !=0.0)
+		{
+			Matrix<double, 3, 3>  omega_skew;
+			omega_skew = Matrix<double, 3, 3>::Zero();
+
+			omega_skew = wedge(omega);
+			res += omega_skew * (sin(omeganorm) / omeganorm);
+			res += (omega_skew * omega_skew) * (
+					(1.000 - cos(omeganorm)) / (omeganorm * omeganorm));
+		}
 
 		return res;
 	}
@@ -223,22 +234,17 @@ public:
 	inline Vector3d logMap(
 			Matrix<double, 3, 3> Rt) {
 
-		Vector3d res;
-		res = Vector3d::Zero();
+		Vector3d res = Vector3d::Zero();
+		double costheta = (Rt.trace()-1.0)/2.0;
+		double theta = acos(costheta);
 
-		if (Rt.trace() != 1.000) {
-			double theta = acos((Rt.trace() - 1.000) / 2.000);
-
-			double temp = sqrt(
-					(double) ((Rt(2, 1) - Rt(1, 2)) * (Rt(2, 1) - Rt(1, 2))
-							+ (Rt(0, 2) - Rt(2, 0)) * (Rt(0, 2) - Rt(2, 0))
-							+ (Rt(1, 0) - Rt(0, 1)) * (Rt(1, 0) - Rt(0, 1))));
-
-			res(0) = Rt(2, 1) - Rt(1, 2);
-			res(1) = Rt(0, 2) - Rt(2, 0);
-			res(2) = Rt(1, 0) - Rt(0, 1);
-			res *= theta / temp;
+		if (theta != 0.000) {
+			Matrix<double, 3, 3> lnR = Matrix<double, 3, 3>::Zero();
+			lnR.noalias() =  Rt - Rt.transpose();
+			lnR *= theta /(2.0*sin(theta));
+			res = vec(lnR); 			
 		}
+
 		return res;
 	}
 
@@ -258,7 +264,7 @@ inline Vector3d logMap(
 
 		omega = tempV * (2.0 * acos(q.w() / temp));
 		//omega = tempV * (2.0 * atan2(temp_,q.w()));
-		if(isnan(omega(0) + omega(1) + omega(2)))
+		if(std::isnan(omega(0) + omega(1) + omega(2)))
 			omega = Vector3d::Zero();
 
 		return omega;

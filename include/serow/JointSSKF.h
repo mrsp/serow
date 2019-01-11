@@ -29,46 +29,34 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
  
-#include <serow/MovingAverageFilter.h>
+#ifndef  __JOINTSSKF_H__
+#define  __JOINTSSKF_H__
 
-
-MovingAverageFilter::MovingAverageFilter()
-{
-    x = 0.000;
-    //Window Size
-    windowSize = 10;
-    currentstep = 0;
-    std::cout<<"Moving Average Filter Initialized Successfully"<<std::endl;
-}
-
-
-
-void MovingAverageFilter::reset()
-{
-    x = 0.000;
-    currentstep = 0;
-    while(windowBuffer.size()>0)
-        windowBuffer.pop();
-    std::cout<<"Moving Average Filter Reseted"<<std::endl;
-}
-
-
-/** MovingAverageFilter filter to  deal with the Noise **/
-void MovingAverageFilter::filter(float  y)
+#include <eigen3/Eigen/Dense>
+#include <iostream>
+using namespace Eigen;
+using namespace std;
+class JointSSKF
 {
 
-    if(currentstep<windowSize)
-    {
-        //Moving Window
-        x = (x*currentstep + y) /(currentstep + 1);
-        currentstep++;
-    }
-    else
-    {
-        x+=(y-windowBuffer.front())/windowSize;
-        if(windowBuffer.size()>=windowSize)
-            windowBuffer.pop();
-    }
-    windowBuffer.push(y);
-    /** ------------------------------------------------------------- **/
-}
+private:
+    Vector2d K, x;
+    Matrix2d F;
+    bool firstrun;
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW       
+    double JointPosition;
+    double JointVelocity;
+    string JointName;
+
+    /** @fn void Filter(float JointPosMeasurement);
+     *  @brief filters the Joint Position using the measurement by the encoders
+     */
+    double dt;
+
+    void filter(double JointPosMeasurement);
+    void reset();
+    void init(string JointName_);
+    void setdt(double dtt);
+};
+#endif

@@ -29,33 +29,47 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
  
-#ifndef  __JOINTSSKF_H__
-#define  __JOINTSSKF_H__
+#include <serow/differentiator.h>
 
-#include <eigen3/Eigen/Dense>
-#include <iostream>
-using namespace Eigen;
-using namespace std;
-class JointSSKF
+
+
+void Differentiator::init(string name_,double dt_)
 {
+    x = 0.000;
+    x_ = 0.000;
+    xdot = 0.000;
 
-private:
-    Vector2d K, x;
-    Matrix2d F;
-    bool firstrun;
-public:
-    double JointPosition;
-    double JointVelocity;
-    string JointName;
+    firstrun = true;
 
-    /** @fn void Filter(float JointPosMeasurement);
-     *  @brief filters the Joint Position using the measurement by the encoders
-     */
-    double dt;
+    //Diff Time
+    dt = dt_;
+    name=name_;
+    std::cout<<name<<" Finite Differentiator Initialized Successfully"<<std::endl;
+}
 
-    void filter(double JointPosMeasurement);
-    void reset();
-    void init(string JointName_);
-    void setdt(double dtt);
-};
-#endif
+
+double Differentiator::diff(double  x)
+{
+	if(firstrun)
+	{
+		firstrun = false;
+		xdot =0;
+	}
+        else
+		xdot = (x - x_)/dt;
+
+	x_ = x;
+	return xdot;
+    /** ------------------------------------------------------------- **/
+}
+
+
+void Differentiator::reset()
+{
+    x = 0.000;
+    x_ = 0.000;
+    xdot = 0.000;
+    firstrun = true;
+    std::cout<<name<<"Finite Differentiator Reseted Successfully"<<std::endl;
+}
+
