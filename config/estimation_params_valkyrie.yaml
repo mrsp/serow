@@ -13,8 +13,7 @@ imu_topic: "/pelvisMiddleImu/imu"
 joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
 lfoot_force_torque_topic: "/ihmc_ros/valkyrie/output/foot_force_sensor/left"
 rfoot_force_torque_topic: "/ihmc_ros/valkyrie/output/foot_force_sensor/right"
-#copl_topic: "/ihmc_ros/valkyrie/output/cop/left" #Deprecated
-#copr_topic: "/ihmc_ros/valkyrie/output/cop/right" #Deprecated
+
 
 #Ground-Truth #Not Mandatory - For comparison only
 ground_truth: true
@@ -52,14 +51,34 @@ LLegUpThres: 250 #Schmitt Trigger High Threshold in Newtons (N)
 LLegLowThres: 80 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 20
 StrikingContact: 1500
+VelocityThres: 0.05
+medianWindow: 13
 
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: true #Use a Steady State KF in every joint
-joint_cutoff_freq: 18
+joint_cutoff_freq: 20
 
-#Madgwick Filter for attitude
+
+#Mahony Filter for attitude
+useMahony: true
+Mahony_Kp: 0.02
+Mahony_Ki: 0.0
+
+#Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.012
 
+bias_max: 0.0
+bias_may: 0.0
+bias_maz: 9.7997
+bias_mgx: -1.60298e-05
+bias_mgy: -1.24745e-05
+bias_mgz: -2.60968e-05
+
+
+
+#Leg Odometry Coefficients
+Tau0: 1.0
+Tau1: 1.0
 #Complimentary Filter for Body Velocity  //Used in Leg Odometry
 useCF: false
 freqvmin: 0.1
@@ -96,7 +115,7 @@ bias_gz: -2.60968e-05
 
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
-medianWindow: 11
+
 
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
