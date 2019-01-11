@@ -51,7 +51,7 @@ LLegUpThres: 250 #Schmitt Trigger High Threshold in Newtons (N)
 LLegLowThres: 80 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 20
 StrikingContact: 1500
-VelocityThres: 0.05
+VelocityThres: 0.07
 medianWindow: 13
 
 #Steady State Joint Kalman Filter (KF)
