@@ -16,10 +16,10 @@ These instructions will get you a copy of the project up and running on your loc
 * Ubuntu 14.04 and later
 * ROS indigo and later
 * Eigen 3.2.0 and later
-* [hrl_kinematics](http://wiki.ros.org/hrl_kinematics) 
+* [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 
 
 ## Installing
-* git clone https://github.com/ahornung/hrl_kinematics.git (comment line 157 in Kinematics.cpp to avoid spam of warnings)
+* Install [Pinocchio](https://stack-of-tasks.github.io/pinocchio/download.html)
 * git clone https://github.com/mrsp/serow.git
 * catkin_make -DCMAKE_BUILD_TYPE=Release 
 * If you are using catkin tools run: catkin build  --cmake-args -DCMAKE_BUILD_TYPE=Release 
@@ -60,7 +60,7 @@ Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the esti
 * Download the valkyrie bag file from [valk_bagfile](http://users.ics.forth.gr/~spiperakis/valk.bag)
 * roscore
 * rosbag play --pause valk.bag
-* roslaunch humanoid_state_estimation humanoid_estimator_driver_valkyrie.launch
+* roslaunch serow serow_valkyrie.launch
 * roslaunch serow_utils serow_utils.launch
 * hit space to unpause the rosbag play
 
@@ -69,15 +69,14 @@ Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the esti
 * Download the nao bag file from [nao_bagfile](http://users.ics.forth.gr/~spiperakis/nao.bag)
 * roscore
 * rosbag play --pause nao.bag
-* roslaunch humanoid_state_estimation humanoid_estimator_driver_nao.launch
+* roslaunch serow serow_nao.launch
 * roslaunch serow_utils serow_utils.launch
 * hit space to unpause the rosbag play
 
 ![nao](img/nao.jpg)
 ### Launch on your Robot in real time
 * Specify topics on config/estimation_params.yaml
-* roslaunch humanoid_state_estimation humanoid_estimator_driver.launch
-* rosrun rqt_reconfigure rqt_reconfigure (If you want to reconfiqure filter params online -> easy tuning).
+* roslaunch serow serow.launch
 ## License
 [BSD](LICENSE) 
 
