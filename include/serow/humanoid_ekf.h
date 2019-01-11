@@ -1,5 +1,5 @@
 /*
- * humanoid_state_estimation - a complete state estimation scheme for humanoid robots
+ * SEROW - a complete state estimation scheme for humanoid robots
  *
  * Copyright 2017-2018 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
@@ -36,18 +36,17 @@
 #include <ros/ros.h>
 
 // Estimator Headers
-#include "humanoid_state_estimation/IMUEKF.h"
-#include "humanoid_state_estimation/CoMEKF.h"
-#include "humanoid_state_estimation/JointSSKF.h"
-#include "humanoid_state_estimation/LPF.h"
-#include "humanoid_state_estimation/MovingAverageFilter.h"
+#include "serow/IMUEKF.h"
+#include "serow/CoMEKF.h"
+#include "serow/JointDF.h"
+#include "serow/butterworthLPF.h"
+#include "serow/MovingAverageFilter.h"
 
 #include <eigen3/Eigen/Dense>
 // ROS Messages
-#include <tf/transform_listener.h>
-#include <tf/transform_datatypes.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
@@ -57,54 +56,69 @@
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 
-#include <hrl_kinematics/Kinematics.h>
 #include <dynamic_reconfigure/server.h>
-#include "humanoid_state_estimation/VarianceControlConfig.h"
-#include "humanoid_state_estimation/mediator.h"
-
+#include "serow/VarianceControlConfig.h"
+#include "serow/mediator.h"
+#include "serow/differentiator.h"
+#include "serow/robotDyn.h"
+#include "serow/Madgwick.h"
+#include "serow/Mahony.h"
+#include "serow/deadReckoning.h"
+#include "serow/Median.h"
 
 using namespace Eigen;
 using namespace std;
-using namespace hrl_kinematics;
 
 class humanoid_ekf{
 private:
 	// ROS Standard Variables
 	ros::NodeHandle n;
-
-	ros::Publisher bodyPose_est_pub, bodyVel_est_pub, bodyAcc_est_pub,supportPose_est_pub,  
-	support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub,CoM_vel_pub,CoM_pos_pub, joint_filt_pub, rel_CoMPose_pub,
-	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, ground_truth_odom_pub,ds_pub, 
-	rel_supportPose_pub,rel_swingPose_pub, comp_odom0_pub, comp_odom1_pub;
+	ros::Publisher supportPose_est_pub, bodyAcc_est_pub,leftleg_odom_pub, rightleg_odom_pub, support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
+	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, CoM_leg_odom_pub, ground_truth_odom_pub,ds_pub, 
+	rel_leftlegPose_pub,rel_rightlegPose_pub;
     
 	ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub,
-	ground_truth_odom_sub,ds_sub, compodom0_sub, compodom1_sub, ground_truth_com_sub,support_idx_sub;
+	ground_truth_odom_sub,ds_sub, ground_truth_com_sub,support_idx_sub;
 	
+	Eigen::VectorXd joint_state_pos,joint_state_vel;
+
+	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vwb, omegawb, vwl, vwr, omegawr, omegawl, 	p_FT_LL, p_FT_RL;
+	Affine3d Twl, Twr, Tbl, Tbr;
+	serow::robotDyn* rd;
+    bool useMahony;
+	serow::Madgwick* mw;
+    serow::Mahony* mh;
+    double Kp, Ki, bias_max, bias_may, bias_maz, bias_mgx, bias_mgy, bias_mgz;
+	serow::deadReckoning* dr;
+
+  	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
+
+	bool useCF;
+	double cf_freqvmin, cf_freqvmax, Tau0, Tau1, VelocityThres;
 	double  freq, joint_freq, fsr_freq;
-	ros::Time Tbs_stamp, Tbsw_stamp;
-	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, support_inc, swing_inc, check_no_motion, ground_truth_odom_inc;
+	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
 	bool firstOdom, firstUpdate, firstPose;
 	int number_of_joints;
 	bool firstGyrodot;
 	bool useGyroLPF;
 	int  maWindow;
 	int medianWindow;
-	bool firstJoint;
+	bool firstJointStates;
 	bool predictWithImu, predictWithCoM;
 	bool no_motion_indicator;
 	int no_motion_it, no_motion_it_threshold;
 	double no_motion_threshold;
 	Quaterniond  q_update;
-	Vector3d  pos_update, CoM_gt;
-	Affine3d T_B_I, T_B_P, Tib_gt;
-	Quaterniond q_B_I, q_B_P, qib_gt;
-	bool useJointKF, useCoMEKF, useLegOdom;
+	Vector3d  pos_update, CoM_gt, temp;
+	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RL, T_FT_LL, T_B_GT;
+	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, qoffsetGT;
+	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM;
     bool debug_mode;
 	//ROS Messages
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
 	sensor_msgs::Imu imu_msg;
-	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg,
-	ground_truth_com_odom_msg, CoM_odom_msg, comp_odom0_msg, comp_odom1_msg;
+	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg, leftleg_odom_msg, rightleg_odom_msg,
+	ground_truth_com_odom_msg, CoM_odom_msg;
 	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg, rel_supportPose_msg, rel_swingPose_msg;
 	std_msgs::String support_leg_msg;
 	geometry_msgs::WrenchStamped RLeg_est_msg, LLeg_est_msg, lfsr_msg, rfsr_msg, external_force_filt_msg;
@@ -115,67 +129,58 @@ private:
 	std_msgs::Int32 is_in_ds_msg, support_idx_msg;
 	geometry_msgs::PointStamped COP_msg, copl_msg, copr_msg, CoM_pos_msg;
 
+	//Madgwick gain
+	double beta;
 	// Helper
 	bool is_connected_, ground_truth, support_idx_provided;
 
-	tf::TransformListener Tbs_listener, Tbsw_listener;
-	tf::StampedTransform Tbs_tf, Tbsw_tf;
-	Quaterniond qbs, qbsw, qwb, qwb_, qssw;
-	string base_link_frame, swing_foot_frame, support_foot_frame, lfoot_frame, rfoot_frame;
+
+	Quaterniond qbs, qbl, qbr, qwb, qwb_, qws, qwl, qwr;
+	string base_link_frame, support_foot_frame, lfoot_frame, rfoot_frame;
 	
-	tf::TransformListener Tfsr_listener;
-	tf::StampedTransform Tfsr_tf;
 
+    boost::shared_ptr< dynamic_reconfigure::Server<serow::VarianceControlConfig> > dynamic_recfg_;
 
-    boost::shared_ptr< dynamic_reconfigure::Server<humanoid_state_estimation::VarianceControlConfig> > dynamic_recfg_;
-
-	// get joint positions from state message
-  	std::map<std::string, double> joint_map;
-	tf::Point com;
-	tf::Transform tf_right_foot, tf_left_foot;
 	double mass;
 	IMUEKF* imuEKF;
-	Kinematics* kin;
 	CoMEKF* nipmEKF;
-	LPF* gyroLPF;
+	butterworthLPF** gyroLPF;
 	MovingAverageFilter** gyroMAF;
 	//Cuttoff Freqs for LPF
 	double gyro_fx, gyro_fy, gyro_fz;
-	Vector3d COP_fsr, GRF_fsr, CoM_enc, Gyrodot, Gyro_;
+	Vector3d COP_fsr, GRF_fsr, CoM_enc, Gyrodot, Gyro_, CoM_leg_odom;
 	double bias_fx,bias_fy,bias_fz;
-	JointSSKF** JointKF;
-	double jointFreq;
-	Mediator* lmdf;
-	Mediator* rmdf;
-	string support_leg, swing_leg;
+	JointDF** JointVF;
+	double jointFreq,joint_cutoff_freq;
+	Mediator *lmdf, *rmdf;
 
-	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT;
+	WindowMedian<double> *llmdf, *rrmdf;
+	string support_leg;
+
+	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT, offsetGT,offsetGTCoM;
   	Vector3d copl, copr;
-	int lcount,rcount;
-	bool comp_with;
-	Affine3d Tws, Twh, Twb, Twb_; //From support s to world frame;
-	Affine3d Tbs, Tsb, Tssw, Tbsw, Tbs_, Tbsw_;
+	Affine3d Tws, Twb, Twb_; //From support s to world frame;
+	Affine3d Tbs, Tsb, Tssw, Tbsw;
 	Vector3d no_motion_residual;
 	/****/
-	bool firstrun, legSwitch, firstContact;
+	bool firstrun, legSwitch, firstContact, LLegST, RLegST;
 	double LLegForceFilt, RLegForceFilt;
 	double LLegUpThres, LLegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
 	/** Real odometry Data **/
-     string lfsr_topic,rfsr_topic,copl_topic,copr_topic;
+     string lfsr_topic,rfsr_topic; //copl_topic,copr_topic;
 	 string pose_topic;
 	 string imu_topic;
 	 string joint_state_topic;
 	 string odom_topic;
-	 string ground_truth_odom_topic, is_in_ds_topic, comp_with_odom0_topic, comp_with_odom1_topic, ground_truth_com_topic, support_idx_topic;
-
+	 string ground_truth_odom_topic, is_in_ds_topic, ground_truth_com_topic, support_idx_topic;
+     string modelname;
 	 bool usePoseUpdate;
 
 	//Odometry, from supportleg to inertial, transformation from support leg to other leg
      void subscribeToIMU();
 	 void subscribeToFSR();
-	 void subscribeToCompOdom();
 	 void subscribeToJointState();
  	 void subscribeToPose();
 	 void subscribeToOdom();
@@ -191,8 +196,6 @@ private:
 	 void poseCb(const geometry_msgs::PoseStamped::ConstPtr& msg);
 	 void joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg);
 	 void odomCb(const nav_msgs::Odometry::ConstPtr& msg);
-	 void compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg);
-	 void compodom1Cb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void coplCb(const geometry_msgs::PointStamped::ConstPtr& msg);
@@ -220,7 +223,9 @@ private:
 	void publishJointEstimates();
 	void publishCoMEstimates();
 	void deAllocate();
+	void publishLegEstimates();
 	void publishSupportEstimates();
+
 	void publishBodyEstimates();
 	void publishContact();
 	void publishCOP();
@@ -228,27 +233,8 @@ private:
 	void advertise();
 	void subscribe();
 
-	Affine3d isNear(Affine3d T_1, Affine3d T_2, float epsx, float epsy, float epsz){
-		Affine3d T;
-		T.translation() = T_1.translation();
-		T.linear() = T_2.linear();
-
-		if(abs(T_1.translation()(0) - T_2.translation()(0)) > epsx)
-			T.translation()(0) = T_2.translation()(0);
-		if(abs(T_1.translation()(1) - T_2.translation()(1)) > epsy)
-			T.translation()(1) = T_2.translation()(1);
-		if(abs(T_1.translation()(2) - T_2.translation()(2)) > epsz)
-			T.translation()(2) = T_2.translation()(2);
-
-		return T;
-	}
-
-
 public:
-
-
-
-
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	// Constructor/Destructor
 	humanoid_ekf();
 
@@ -267,7 +253,7 @@ public:
 	void loadCoMEKFparams();
 	void loadJointKFparams();
 	// General Methods
-	void reconfigureCB(humanoid_state_estimation::VarianceControlConfig& config, uint32_t level);
+	void reconfigureCB(serow::VarianceControlConfig& config, uint32_t level);
 	void run();
 
 	bool connected();

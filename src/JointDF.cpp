@@ -29,36 +29,40 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <serow/JointDF.h>
 
-#include <iostream>
-#include "humanoid_state_estimation/humanoid_ekf.h"
-using std::string;
-using std::cerr;
-using std::endl;
 
-int main( int argc, char** argv )
+
+void JointDF::init(string JointName_,double fsampling, double fcutoff)
 {
-    ros::init(argc, argv, "humanoid_state_estimation");
-    ros::NodeHandle n;
-    if(!ros::master::check())
-    {
-        cerr<<"Could not contact master!\nQuitting... "<<endl;
-        return -1;
-    }
 
-    humanoid_ekf* hse = new humanoid_ekf();
-    hse->connect(n);
-    if(!hse->connected())
-    {
-        ROS_ERROR("Could not connect to Humanoid robot!");
-        return -1;
-    }
 
-    // Run the spinner in a separate thread to prevent lockups
-    hse->run();
+    JointName = JointName_;
 
-    //Done here
-    ROS_INFO( "Quitting... " );
+    JointPosition=0.000;
+    JointVelocity=0.000;
 
-    return 0;
+
+    bw.init(JointName,fsampling,fcutoff);
+    df.init(JointName,1.00/fsampling);
+    std::cout<<JointName<<" Velocity Filter Initialized Successfully"<<std::endl;
+}
+
+
+void JointDF::reset()
+{
+    JointPosition=0.000;
+    JointVelocity=0.000;
+    std::cout<<JointName<<" Velocity Filter Reseted"<<std::endl;
+}
+
+
+/** JointSSKF filter to  deal with Delay, and  Noise **/
+double JointDF::filter(double JointPosMeasurement)
+{
+     JointPosition=JointPosMeasurement;
+     JointVelocity=bw.filter(df.diff(JointPosMeasurement));
+   
+     return JointVelocity;
+    /** ------------------------------------------------------------- **/
 }

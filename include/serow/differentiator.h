@@ -28,62 +28,34 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
- 
-#include "humanoid_state_estimation/LPF.h"
 
-LPF::LPF()
+#ifndef  __DIFFERENTIATOR_H__
+#define  __DIFFERENTIATOR_H__
+
+
+#include <iostream>
+#include <string>
+using namespace std;
+
+class Differentiator
 {
-    s = Vector3d::Zero();
-    s_ = Vector3d::Zero();
-    a_lp = Matrix3d::Zero();
 
-    x = 0;
-    y = 0;
-    z = 0;
-
-}
-void LPF::reset()
-{
-    s = Vector3d::Zero();
-    s_ = Vector3d::Zero();
-    a_lp = Matrix3d::Zero();
-
-    x = 0;
-    y = 0;
-    z = 0;
-
-    std::cout<<"LPF reseted! "<<std::endl;
-}
-
-void LPF::setdt(double dtt)
-{
-    dt=dtt;
-}
-
-void LPF::setCutOffFreq(double fx_, double fy_, double fz_)
-{
-    fx = fx_;
-    fy = fy_;
-    fz = fz_;
-}
-
-
-/** LPF filter to  deal with the Noise **/
-void LPF::filter(Vector3d  y_m)
-{
-    //Cut-off Frequencies
-    a_lp(0,0)=(2.0*3.14159265359*dt*fx)/(2*3.14159265359*dt*fx+1);
-    a_lp(1,1)=(2.0*3.14159265359*dt*fy)/(2*3.14159265359*dt*fy+1);
-    a_lp(2,2)=(2.0*3.14159265359*dt*fz)/(2*3.14159265359*dt*fz+1);
-
-    //Low Pass Filtering
-    s= a_lp*y_m + s_ - a_lp * s_;
-
-
-    x=s(0);
-    y=s(1);
-    z=s(2);
-
-    s_=s;
-    /** ------------------------------------------------------------- **/
-}
+private:
+    double x_, dt;
+    bool firstrun;
+    string name;
+public:
+    double x;
+    double xdot;
+    void setParams(double dt_)
+    {
+        dt=dt_;
+    }
+    /** @fn void diff(double x)
+     *  @brief differentiates the measurement with finite differences
+    */
+    double diff(double x);
+    void init(string name_,double dt_);
+    void reset();
+};
+#endif

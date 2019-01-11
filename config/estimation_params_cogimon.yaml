@@ -1,0 +1,148 @@
+#Robot Frames (CHECK URDF)
+base_link: "base_link"
+lfoot: "LFoot"
+rfoot: "RFoot"
+modelname: "/home/master/dp_ws/src/serow/share/urdf/cogimon.urdf"
+
+useLegOdom: true
+#ROS Topic Names
+odom_topic: "/cogimon/ground_truth/odom" #only if usePoseUpdate is false and useLegOdom is false
+usePoseUpdate: false  #if true specify pose_topic / Do not use if odom_topic is set
+pose_topic: "/pose" #only if usePoseUpdate is true
+imu_topic: "/xbotcore/cogimon/imu/imu_link"
+joint_state_topic: "/cogimon/joint_states"
+lfoot_force_torque_topic: "/xbotcore/cogimon/ft/l_leg_ft"
+rfoot_force_torque_topic: "/xbotcore/cogimon/ft/r_leg_ft"
+
+
+#Ground-Truth #Not Mandatory - For comparison only
+ground_truth: true
+ground_truth_odom_topic: "/cogimon/ground_truth/odom"
+ground_truth_com_topic: "/com"
+is_in_ds_topic: "/ds"
+T_B_GT: [0, 0, 1, 0, 1, 0, 0, 0, 0, 1 , 0, 0, 0, 0 ,0, 1]
+
+
+#If external Support Foot Detection is provided
+support_idx_provided: false
+support_idx_topic: "/sp"
+
+#To publish relative data
+debug_mode: true
+
+#TF from IMU to Body
+T_B_A: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
+T_B_G: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
+#TF from F/T to Left Foot
+T_FT_LL: [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0 , -1 , -0.035, 0, 0, 0, 1]
+#TF from F/T to Right Foot
+T_FT_RL: [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0 , -1 , -0.035, 0, 0, 0, 1]
+#TF from External Pose to Body only if useLegOdom is false
+T_B_P: [0, 0, 1, 0, 1, 0, 0, 0, 0, 1 , 0, 0, 0, 0 ,0, 1]
+
+#ROS Topic Frequencies in Hz
+imu_topic_freq: 200
+joint_topic_freq: 200
+fsr_topic_freq: 200  
+
+##Schmitt Trigger - Contact Classifier
+LLegUpThres: 142 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 42.5 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 15.0
+StrikingContact: 800
+VelocityThres: 0.1
+medianWindow: 9
+
+#Compute Joint Velocities
+joint_cutoff_freq: 25
+joint_noise_density: 0.0463 # rad
+
+
+#Mahony Filter for attitude
+useMahony: true
+Mahony_Kp: 0.05
+Mahony_Ki: 0.0
+#Madgwick Filter for attitude if useMahony is false
+Madgwick_gain: 0.06
+bias_max: 0.3
+bias_may: -0.33
+bias_maz: 0.1322
+bias_mgx: 0.00140645
+bias_mgy: -0.00140645
+bias_mgz: -0.000320313
+
+
+#Leg Odometry Coefficients
+Tau0: 0.8
+Tau1: 0.002
+
+#Complimentary Filter for Body Velocity  //Used in Leg Odometry
+useCF: false
+freqvmin: 0.1
+freqvmax: 2.5
+
+
+#Choose Integration Method
+#Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
+useEuler: true
+
+#Rigid body Extended Kalman Filter (EKF)
+#To estimate:
+# 3-D Body Position/Velocity
+# 3-D IMU-Biases
+
+#Process Noise STDs
+accelerometer_bias_random_walk:  1.0e-6 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 1.0e-7 # rad/s/sqrt(s)
+accelerometer_noise_density: 1.9519 # m/s^2  #Continuous Time
+gyroscope_noise_density: 0.2155 # rad/s  #Continuous Time
+
+#Measuremets
+#Odometry Measurement Noise std:
+odom_position_noise_density: 0.01
+odom_orientation_noise_density: 0.01
+velocity_noise_density: 1.5
+
+#IMU Initial Biases - Biases are substracted!
+bias_ax:  0.3
+bias_ay:  -0.33
+bias_az: 0.1322
+bias_gx: -0.00140645
+bias_gy: -0.00140645
+bias_gz: -0.000320313
+
+#Filter Params
+gravity: 9.80665 #gravity constant (m/s^2)
+
+# CoM Extended Kalman Filter (EKF)
+# To estimate:
+# CoM 3-D Position/Velocity
+# 3-D External Forces on the CoM
+estimateCoM: true   #Use the CoM EKF
+
+#---------------------------------------------#
+#Specify the rest only if estimateCoM is true!!
+#---------------------------------------------#
+
+#Process Noise
+com_position_random_walk: 1.0e-3 #in m
+com_velocity_random_walk: 5.0e-1 #in m/s
+external_force_random_walk: 5.0  #in Newtons
+#Measurment Noise
+com_position_noise_density: 1.0e-03  #CoM position in m
+com_acceleration_noise_density: 1.9519 #CoM Acceleration in m/s^2
+#Initial errors in External Forces
+bias_fx: 0.0  #in Newtons
+bias_fy: 0.0
+bias_fz: 0.0
+#Gyro LPF
+useGyroLPF: false
+#Cutt-off Frequencies
+gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
+#Gyro Moving Average Filter
+maWindow: 15 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
+#Filter Params
+mass: 64.5957  #robot mass
+Ixx : 0.038130318  #torso inertia around x
+Iyy : 0.0089760596  #torso inetria around y
+Izz : 0.039650845  #torso inertia around z

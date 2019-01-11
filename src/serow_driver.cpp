@@ -28,37 +28,37 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
- 
-#ifndef  __LPF_H__
-#define  __LPF_H__
 
-#include <eigen3/Eigen/Dense>
+
 #include <iostream>
-/* Filters a 3D vector (X, Y, Z) */
-using namespace Eigen;
+#include <serow/humanoid_ekf.h>
+using std::string;
+using std::cerr;
+using std::endl;
 
-class LPF
+int main( int argc, char** argv )
 {
+    ros::init(argc, argv, "serow");
+    ros::NodeHandle n;
+    if(!ros::master::check())
+    {
+        cerr<<"Could not contact master!\nQuitting... "<<endl;
+        return -1;
+    }
 
-private:
+    humanoid_ekf* hse = new humanoid_ekf();
+    hse->connect(n);
+    if(!hse->connected())
+    {
+        ROS_ERROR("Could not connect to Humanoid robot!");
+        return -1;
+    }
 
-    Vector3d s, s_, temp;
-    Matrix3d  a_lp;
+    // Run the spinner in a separate thread to prevent lockups
+    hse->run();
 
-public:
-    double x,y,z;
+    //Done here
+    ROS_INFO( "Quitting... " );
 
-    double fx,fy,fz,dt; //Cut-off Freq
-
-
-    /** @fn void filter(Vector3d y)
-     *  @brief filters a 3-D measurement 
-    */
-    void filter(Vector3d );
-    void reset();
-    LPF();
-    void setCutOffFreq(double , double, double );
-    void setdt(double );
-
-};
-#endif
+    return 0;
+}
