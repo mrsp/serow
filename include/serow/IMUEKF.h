@@ -85,12 +85,16 @@ private:
 	Matrix<double, 6, 1> z;
 	Vector3d zv;
 
+    double tau, zeta, f0, e0, e_t, f_t;
+   
     //RK4 Integration 
     Matrix<double,15,1> computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 	void RK4(Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0);
 	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 
 	void euler(Vector3d omega_, Vector3d f_);
+	void updateOutlierDetectionParams(Eigen::Matrix<double, 6,6> B);
+	double computePsi(double xx);
 
 
 public:

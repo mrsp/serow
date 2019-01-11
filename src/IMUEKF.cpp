@@ -406,8 +406,13 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     R(4, 4) =  R(3, 3);
     R(5, 5) =  R(3, 3);
     //R = R*dt;
+ 
+
+
+    /*
+ 
     r = x.segment<3>(6);
-    
+
     //Innovetion vector
     z.segment<3>(0) = y - r;    
     z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
@@ -419,28 +424,128 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     s.noalias() += Hf * P * Hf.transpose();
     Kf.noalias() = P * Hf.transpose() * s.inverse();
     
+    //Update the error covariance
+    P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
+    P.noalias() += Kf * R * Kf.transpose();
+
     dxf.noalias() = Kf * z;
     
     //Update the mean estimate
     x += dxf;
+    */
     
+     tau = 1.0;
+     zeta = 1.0;
+     f0 = 0.1;
+     e0 = 0.9;
+     e_t = e0;
+     f_t = f0;
     
-    //Update the error covariance
-    P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
-    P.noalias() += Kf * R * Kf.transpose();
-    
-    
-    if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+    Eigen::Matrix<double, 15,15> P_i = P;
+    Eigen::Matrix<double, 15,1> x_i = x;
+    Eigen::Matrix<double, 15,1> x_i_ = x;
+    Eigen::Matrix3d Rib_i = Rib;
+    Eigen::Matrix<double, 6,6> R_z;
+
+    while(tau>=1.0e-03)
     {
-        Rib *=  expMap(dxf.segment<3>(3));
+         std::cout<<"Loop "<<tau<<std::endl;
+
+         if(zeta>=1.0e-07)
+         {
+            std::cout<<"inlier "<<zeta<<std::endl;
+
+            //Innovetion vector
+            r = x_i.segment<3>(6);
+            z.segment<3>(0) = y -r;    
+            z.segment<3>(3) = logMap((Rib_i.transpose() * qy.toRotationMatrix()));
+            //Compute the Kalman Gain
+            R_z = R/zeta;
+            s = R_z;
+            s.noalias() += Hf * P_i* Hf.transpose();
+            Kf.noalias() = P_i * Hf.transpose() * s.inverse();
+            
+            //Update the error covariance
+            //P_i.noalias() = P - Kf * s * Kf.transpose();
+            P_i = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
+            P_i.noalias() += Kf * R_z * Kf.transpose();
+
+            dxf.noalias() = Kf * z;
+            
+            //Update the mean estimate
+            x_i_ = x_i;
+            x_i  = x + dxf;
+
+            if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+            {
+                Rib_i =  Rib *expMap(dxf.segment<3>(3));
+            }
+            x_i.segment<3>(3) = Vector3d::Zero();
+            //updateOutlierDetectionParams(Hf*P_i*Hf.transpose());
+        }
+        else
+        {
+           std::cout<<"outlier "<<zeta<<std::endl;
+
+            x_i = x_i_;
+        }
+
+     
+        tau = (x_i.segment<9>(0) - x_i_.segment<9>(0)).norm();
+        std::cout<<"Updating "<<tau<<std::endl;
+
     }
-    x.segment<3>(3) = Vector3d::Zero();
+
+    Rib = Rib_i;
+    x = x_i;
+    P = P_i;
+    
+   
+    
+
     
     updateVars();
     
 }
 
 
+//Update the outlier indicator Zeta
+void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 6,6> B)
+{
+    double  lnp = computePsi(e_t) - computePsi(e_t+f_t);
+    double  ln1_p = computePsi(f_t) - computePsi(e_t+f_t);
+
+    double pzeta_1 =  exp(lnp - 0.5*(B*R.inverse()).trace()); 
+    double pzeta_0 =  exp(ln1_p);
+
+    //Normalization factor
+    double norm_factor = 1.0/(pzeta_1+pzeta_0);
+
+    //p(zeta) are now proper probabilities
+    pzeta_1 = norm_factor * pzeta_1;
+    pzeta_0 = norm_factor * pzeta_0;
+
+    //mean of bernulli
+    zeta = pzeta_1 / (pzeta_1 + pzeta_0);
+    
+    //Update epsilon and f
+    e_t = e0 + zeta;
+    f_t = f0 + 1.0 - zeta;
+}
+
+double IMUEKF::computePsi(double xx)
+{
+    double res = 0.0;
+
+    for(unsigned int i=0;i<50;i++)
+    {
+        res += xx/(i*(xx+i));
+    }
+    
+    res += -0.57721 + 1.0/xx; 
+
+    return res;
+}
 
 void IMUEKF::updateVars()
 {
