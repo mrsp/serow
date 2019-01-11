@@ -13,8 +13,7 @@ imu_topic: "/nao_robot/imu"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
 rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
-#copl_topic: "/nao_robot/LLeg/COP" #Deprecated
-#copr_topic: "/nao_robot/RLeg/COP" #Deprecated
+
 
 #Ground-Truth
 ground_truth: false
@@ -26,7 +25,7 @@ support_idx_provided: false
 support_idx_topic: " "
 
 #To publish relative data
-debug_mode: true
+debug_mode: false
 
 
 #TF from IMU to Body 
@@ -56,12 +55,27 @@ StrikingContact: 60
 
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: true #Use a Steady State KF in every joint
-joint_cutoff_freq: 8
+joint_cutoff_freq: 16
 
-#Madgwick Filter for attitude
+
+
+#Mahony Filter for attitude
+useMahony: true
+Mahony_Kp: 0.5
+Mahony_Ki: 0.0
+#Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.3
+bias_max: 0.239618
+bias_may: -0.1934
+bias_maz: 0.0
+bias_mgx: -0.000817362
+bias_mgy: -0.00178242
+bias_mgz: -0.000158554
 
 
+#Leg Odometry Coefficients
+Tau0: 1.0
+Tau1: 1.0
 #Complimentary Filter for Body Velocity  //Used in Leg Odometry
 useCF: false
 freqvmin: 0.1
@@ -69,7 +83,7 @@ freqvmax: 2.5
 
 #Choose Integration Method
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
-useEuler: false
+useEuler: true
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
@@ -86,8 +100,8 @@ gyroscope_noise_density: 0.09525 #rad/s #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 1.0e-02
-odom_orientation_noise_density: 1.0e-02
+odom_position_noise_density: 1.0e-03
+odom_orientation_noise_density: 1.0e-03
 
 velocity_noise_density: 0.1
 
@@ -95,7 +109,7 @@ velocity_noise_density: 0.1
 bias_ax: 0.239618
 bias_ay: -0.1934
 #bias_ay: 0.0751756
-bias_az: 18.0327
+bias_az:  0.0
 bias_gx: -0.000817362
 bias_gy: -0.00178242
 bias_gz: -0.000158554
@@ -119,16 +133,16 @@ estimateCoM: true   #Use the CoM EKF
 
 
 #Process Noise
-com_position_random_walk: 1.0e-5 #in m
-com_velocity_random_walk: 1.0e-3 #in m/s
-external_force_random_walk: 2.5      #in Newtons
+com_position_random_walk: 1.0e-4 #in m
+com_velocity_random_walk: 5.0e-3 #in m/s
+external_force_random_walk: 1.0      #in Newtons
 #Measurment Noise
-com_position_noise_density: 1.0e-3  #CoM position in m
-com_acceleration_noise_density: 2.5e-02 #CoM Acceleration in m/s^2
+com_position_noise_density: 1.0e-4  #CoM position in m
+com_acceleration_noise_density: 2.5e-01 #CoM Acceleration in m/s^2
 #Initial errors in External Forces
-bias_fx: 23.678  #in Newtons
-bias_fy: -5.5658
-bias_fz: 1.94869
+bias_fx: 0.678  #in Newtons
+bias_fy: 0.5658
+bias_fz: 0.94869
 #Gyro LPF
 useGyroLPF: false
 #Cutt-off Frequencies
