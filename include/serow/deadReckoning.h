@@ -63,7 +63,7 @@ namespace serow{
             LpLm=plf;
             alpha1 = alpha1_;
             alpha3 = alpha3_;
-            Tm3 = (mass*mass*g*g)/(freq*freq);
+            Tm3 = (mass*mass*g*g)*Tm2;
             if(USE_CF)
                 bvcf = new bodyVelCF(freq_, mass_, freqvmin_ ,  freqvmax_ ,  g_);
 
@@ -174,7 +174,7 @@ namespace serow{
             
             AL.noalias() = 1.0/Tm2*Matrix3d::Identity();
             AL.noalias() -= alpha1* wedge(Lomega)*wedge(Lomega);
-            AL.noalias() -= alpha3/Tm3 * wedgelf;
+            AL.noalias() -= alpha3/Tm3 *wedgelf*wedgelf;
 
             bL.noalias() = 1.0/Tm2 *  LpLm;
             bL.noalias() += alpha1*wedge(Lomega)*Rwl.transpose()*vwl;
@@ -184,7 +184,7 @@ namespace serow{
 
             AR.noalias() = 1.0/Tm2*Matrix3d::Identity();
             AR.noalias() -= alpha1* wedge(Romega)*wedge(Romega);
-            AR.noalias() -= alpha3/Tm3 * wedgerf;
+            AR.noalias() -= alpha3/Tm3 * wedgerf * wedgerf;
 
             bR.noalias() = 1.0/Tm2 *  RpRm;
             bR.noalias() += alpha1*wedge(Romega)*Rwr.transpose()*vwr;
