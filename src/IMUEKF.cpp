@@ -457,8 +457,8 @@ void IMUEKF::updateVars()
     //Update the biases
     bgyr = x.segment<3>(9);
     bacc = x.segment<3>(12);
-    std::cout<<"Biasgx "<<bgyr<<std::endl;
-    std::cout<<"Biasax "<<bacc<<std::endl;
+    //std::cout<<"Biasgx "<<bgyr<<std::endl;
+    //std::cout<<"Biasax "<<bacc<<std::endl;
 
     bias_gx = x(9);
     bias_gy = x(10);
