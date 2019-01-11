@@ -447,7 +447,7 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     Eigen::Matrix3d Rib_i = Rib;
     Eigen::Matrix<double, 6,6> R_z;
 
-    while(tau>=1.0e-03)
+    while(tau>=5.0e-03)
     {
          std::cout<<"Loop "<<tau<<std::endl;
 
@@ -481,7 +481,7 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
                 Rib_i =  Rib *expMap(dxf.segment<3>(3));
             }
             x_i.segment<3>(3) = Vector3d::Zero();
-            //updateOutlierDetectionParams(Hf*P_i*Hf.transpose());
+            updateOutlierDetectionParams(Hf*P_i*Hf.transpose());
         }
         else
         {
@@ -512,8 +512,9 @@ void IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 //Update the outlier indicator Zeta
 void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 6,6> B)
 {
-    double  lnp = computePsi(e_t) - computePsi(e_t+f_t);
-    double  ln1_p = computePsi(f_t) - computePsi(e_t+f_t);
+    double efpsi = computePsi(e_t+f_t);
+    double  lnp = computePsi(e_t) - efpsi;
+    double  ln1_p = computePsi(f_t) -efpsi;
 
     double pzeta_1 =  exp(lnp - 0.5*(B*R.inverse()).trace()); 
     double pzeta_0 =  exp(ln1_p);
@@ -533,18 +534,19 @@ void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 6,6> B)
     f_t = f0 + 1.0 - zeta;
 }
 
-double IMUEKF::computePsi(double xx)
+double IMUEKF::computePsi(double xxx)
 {
-    double res = 0.0;
-
-    for(unsigned int i=0;i<50;i++)
-    {
-        res += xx/(i*(xx+i));
-    }
     
-    res += -0.57721 + 1.0/xx; 
+  double result = 0, xx, xx2, xx4;
+  for ( ; xxx < 7; ++xxx)
+    result -= 1/xxx;
 
-    return res;
+  xxx -= 1.0/2.0;
+  xx = 1.0/xxx;
+  xx2 = xx*xx;
+  xx4 = xx2*xx2;
+  result += log(xxx)+(1./24.)*xx2-(7.0/960.0)*xx4+(31.0/8064.0)*xx4*xx2-(127.0/30720.0)*xx4*xx4;
+  return result;
 }
 
 void IMUEKF::updateVars()
