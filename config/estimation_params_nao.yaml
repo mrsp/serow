@@ -3,9 +3,11 @@ base_link: "base_link"
 lfoot: "l_ankle"
 rfoot: "r_ankle"
 modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
+
 #ROS Topic Names
 usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
 pose_topic: "/orbslam2/pose" #only if usePoseUpdate is true
+
 useLegOdom: true
 odom_topic: "/vins_estimator/odometry" #only if usePoseUpdate is false and useLegOdom is false
 #odom_topic: "/nao_robot/odom"
@@ -17,12 +19,12 @@ rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
 
 #Ground-Truth
 ground_truth: false
-ground_truth_odom_topic: " "
-ground_truth_com_topic: " "
+ground_truth_odom_topic: "/gt"
+ground_truth_com_topic: "/gt_com"
 
 
 support_idx_provided: false
-support_idx_topic: " "
+support_idx_topic: "/sp"
 
 #To publish relative data
 debug_mode: false
@@ -57,8 +59,6 @@ StrikingContact: 60
 estimateJoints: true #Use a Steady State KF in every joint
 joint_cutoff_freq: 16
 
-
-
 #Mahony Filter for attitude
 useMahony: true
 Mahony_Kp: 0.5
@@ -71,7 +71,6 @@ bias_maz: 0.0
 bias_mgx: -0.000817362
 bias_mgy: -0.00178242
 bias_mgz: -0.000158554
-
 
 #Leg Odometry Coefficients
 Tau0: 1.0
@@ -95,8 +94,6 @@ accelerometer_bias_random_walk:  0.013904 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 0.00283344 # rad/s/sqrt(s)
 accelerometer_noise_density: 0.163 #m/s^2 #Continuous Time 
 gyroscope_noise_density: 0.09525 #rad/s #Continuous Time
-
-
 
 #Measuremets
 #Odometry Measurement Noise std:
