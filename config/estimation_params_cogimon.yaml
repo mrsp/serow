@@ -73,9 +73,10 @@ bias_mgz: -0.000320313
 
 
 #Leg Odometry Coefficients
-Tau0: 0.8
-Tau1: 0.002
-
+#Tau0: 0.8
+#Tau1: 0.002
+Tau0: 1.0
+Tau1: 1.0
 #Complimentary Filter for Body Velocity  //Used in Leg Odometry
 useCF: false
 freqvmin: 0.1
