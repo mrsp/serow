@@ -84,10 +84,16 @@ private:
 
 	Matrix<double, 6, 1> z;
 	Vector3d zv;
-
+    
+    //Robust Gaussian ESKF
     double tau, zeta, f0, e0, e_t, f_t;
-   
-    //RK4 Integration 
+    Eigen::Matrix<double, 6,6> R_z;
+    Eigen::Matrix<double, 15,15> P_i;
+    Eigen::Matrix<double, 15,1> x_i, x_i_;
+    Eigen::Matrix3d Rib_i;
+    double efpsi, lnp, ln1_p, pzeta_1, pzeta_0, norm_factor;
+    bool outlier;
+    //RK4 Integration
     Matrix<double,15,1> computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 	void RK4(Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0);
 	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
@@ -105,6 +111,7 @@ public:
 
 	bool firstrun;
 	bool useEuler;
+    bool useOutlierDetection;
 	// Gravity vector
     Vector3d g, bgyr, bacc, gyro, acc, vel, pos, angle;
 
@@ -178,7 +185,7 @@ public:
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
 	void predict(Vector3d omega_, Vector3d f_);
-	void updateWithOdom(Vector3d y, Quaterniond qy);
+	bool updateWithOdom(Vector3d y, Quaterniond qy);
 	void updateWithTwist(Vector3d y);
  	//void updateWithSupport(Vector3d y, Quaterniond qy);
 
