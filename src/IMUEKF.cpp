@@ -47,29 +47,28 @@ void IMUEKF::init() {
     If = Matrix<double, 15, 15>::Identity();
     P = Matrix<double, 15, 15>::Zero();
     //vel
-    P(0,0) = 1e-4;
-    P(1,1) = 1e-4;
-    P(2,2) = 1e-4;
+    P(0,0) = 1e-2;
+    P(1,1) = 1e-2;
+    P(2,2) = 1e-2;
     //Rot error
-    P(3,3) = 1e-3;
-    P(4,4) = 1e-3;
-    P(5,5) = 1e-3;
+    P(3,3) = 5e-2;
+    P(4,4) = 5e-2;
+    P(5,5) = 5e-2;
     //Pos
-    P(6,6)  = 1e-6;
-    P(7,7)  = 1e-6;
-    P(8,8)  = 1e-6;
+    P(6,6)  = 1e-3;
+    P(7,7)  = 1e-3;
+    P(8,8)  = 1e-3;
     //Biases
-    P(9, 9) = 1e-4;
-    P(10, 10) = 1e-4;
-    P(11, 11) = 1e-4;
-    P(12, 12) = 1e-4;
-    P(13, 13) = 1e-4;
-    P(14, 14) = 1e-4;
+    P(9, 9) = 1e-2;
+    P(10, 10) = 1e-2;
+    P(11, 11) = 1e-2;
+    P(12, 12) = 1e-2;
+    P(13, 13) = 1e-2;
+    P(14, 14) = 1e-2;
     
     //For outlier detection
     f0 = 0.1;
     e0 = 0.9;
-    useOutlierDetection = true;
     //Construct C
     Hf = Matrix<double, 6, 15>::Zero();
     Hf.block<3,3>(0,6) = Matrix3d::Identity();
@@ -398,7 +397,7 @@ void IMUEKF::updateWithTwist(Vector3d y)
     
 }
 
-bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
+bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection)
 {
     R(0, 0) = odom_px * odom_px;
     R(1, 1) = R(0, 0);
@@ -409,10 +408,9 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
     R(5, 5) =  R(3, 3);
     
     outlier = false;
-    if(!useOutlierDetection)
+    if(!useOutlierDetection )
     {
         r = x.segment<3>(6);
-        
         //Innovetion vector
         z.segment<3>(0) = y - r;
         z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
@@ -449,9 +447,9 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
         //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
         
         
-        while(tau>5.0e-04)
+        while(tau>5.0e-03)
         {
-            if(zeta>1.0e-06)
+            if(zeta>1.0e-10)
             {
                 //Compute the Kalman Gain
                 R_z = R/zeta;
@@ -475,7 +473,11 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
                 x_i.segment<3>(3) = Vector3d::Zero();
                 
                 //outlier detection with the position measurement vector
-                updateOutlierDetectionParams(y*y.transpose()-2.0*y*(x_i.segment<3>(6)).tranpose()+Hf.block<3,3>(0,6)*P_i*(Hf.block<3,3>(0,6)).transpose());
+		tempM = y*y.transpose();
+		tempM.noalias() -=  -2.0*y*x_i.segment<3>(6).transpose();
+		tempM.noalias() += x_i.segment<3>(6)*x_i.segment<3>(6).transpose();
+        tempM.noalias() += P_i.block<3,3>(0,6);
+                updateOutlierDetectionParams(tempM);
             }
             else
             {
@@ -484,6 +486,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
                 Rib_i = Rib;
                 P_i = P;
                 outlier = true;
+		std::cout<<"Outlier"<<std::endl;
             }
             
             //Check for convergence
@@ -501,13 +504,13 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy)
 
 
 //Update the outlier indicator Zeta
-void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 6,6> BetaT)
+void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> BetaT)
 {
     efpsi = computePsi(e_t+f_t);
     lnp = computePsi(e_t) - efpsi;
     ln1_p = computePsi(f_t) -efpsi;
     
-    pzeta_1 =  exp(lnp - 0.5*(BetatT*R.inverse()).trace());
+    pzeta_1 =  exp(lnp - 0.5*(BetaT*(R.block<3,3>(0,0)).inverse()).trace());
     pzeta_0 =  exp(ln1_p);
     
     //Normalization factor

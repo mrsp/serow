@@ -105,11 +105,11 @@ private:
 	int medianWindow;
 	bool firstJointStates;
 	bool predictWithImu, predictWithCoM;
-	bool no_motion_indicator;
+	bool no_motion_indicator, outlier;
 	int no_motion_it, no_motion_it_threshold;
 	double no_motion_threshold;
-	Quaterniond  q_update;
-	Vector3d  pos_update, CoM_gt, temp;
+	Quaterniond  q_update, q_update_, q_leg_update, q_now, q_prev;
+	Vector3d  pos_update, pos_update_, pos_leg_update, CoM_gt, temp;
 	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RL, T_FT_LL, T_B_GT;
 	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, qoffsetGT;
 	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM;
