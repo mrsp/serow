@@ -631,18 +631,20 @@ void humanoid_ekf::estimateWithIMUEKF()
             q_update = qwb;
             //First Update
             firstUpdate = false;
-            imuEKF->updateWithOdom(pos_update, q_update);
+            imuEKF->updateWithOdom(pos_update, q_update,false);
         }
         else{
             //Update with the odometry
-            if(no_motion_indicator || useLegOdom){
-                if(leg_odom_inc){
-                    pos_update += Twb.translation()-Twb_.translation();
-                    Quaterniond q_now = qwb;
-                    Quaterniond q_prev = qwb_;
-                    q_update *=  q_now  * q_prev.inverse();
+            if(leg_odom_inc){
+                    pos_leg_update = Twb.translation()-Twb_.translation();
+                    q_leg_update =  qwb  * qwb_.inverse();
+            }
+            if(no_motion_indicator || useLegOdom && leg_odom_inc){
+         
+                    pos_update += pos_leg_update;
+                    q_update *= q_leg_update;
+                    imuEKF->updateWithOdom(pos_update, q_update,false);
                     leg_odom_inc = false;
-                    imuEKF->updateWithOdom(pos_update, q_update);
                     //STORE POS
                     if(odom_inc){
                         odom_msg_ = odom_msg;
@@ -652,8 +654,6 @@ void humanoid_ekf::estimateWithIMUEKF()
                         pose_inc = false;
                         pose_msg_ = pose_msg;
                     }
-                    
-                }
             }
             else
             {
@@ -667,20 +667,36 @@ void humanoid_ekf::estimateWithIMUEKF()
                     }
                     if(odom_inc)
                     {
+                        pos_update_ = pos_update;
                         pos_update += T_B_P.linear() * Vector3d(odom_msg.pose.pose.position.x - odom_msg_.pose.pose.position.x,
                                                                 odom_msg.pose.pose.position.y - odom_msg_.pose.pose.position.y ,odom_msg.pose.pose.position.z - odom_msg_.pose.pose.position.z);
                         
-                        Quaterniond q_now =  q_B_P * Quaterniond(odom_msg.pose.pose.orientation.w,odom_msg.pose.pose.orientation.x,
+                         q_now =  q_B_P * Quaterniond(odom_msg.pose.pose.orientation.w,odom_msg.pose.pose.orientation.x,
                                                                  odom_msg.pose.pose.orientation.y,odom_msg.pose.pose.orientation.z);
                         
-                        Quaterniond q_prev = q_B_P * Quaterniond(odom_msg_.pose.pose.orientation.w,odom_msg_.pose.pose.orientation.x,
+                         q_prev = q_B_P * Quaterniond(odom_msg_.pose.pose.orientation.w,odom_msg_.pose.pose.orientation.x,
                                                                  odom_msg_.pose.pose.orientation.y,odom_msg_.pose.pose.orientation.z) ;
                         
+                        q_update_ = q_update;
+
                         q_update *=   ( q_now * q_prev.inverse());
                         odom_inc = false;
                         odom_msg_ = odom_msg;
-                        imuEKF->updateWithOdom(pos_update, q_update);
-                        
+                        outlier = imuEKF->updateWithOdom(pos_update, q_update, true);
+                        if(outlier && leg_odom_inc)
+                        {
+                            pos_update = pos_update_;
+                            q_update = q_update_;
+
+                            pos_update += pos_leg_update;
+                            q_update *= q_leg_update;
+                            imuEKF->updateWithOdom(pos_update, q_update, false);
+                            leg_odom_inc = false;
+                        }
+                        else
+                        {
+
+                        }
                     }
                 }
                 else
@@ -689,14 +705,14 @@ void humanoid_ekf::estimateWithIMUEKF()
                     {
                         pos_update += T_B_P.linear() * Vector3d(pose_msg.pose.position.x-pose_msg_.pose.position.x,
                                                                 pose_msg.pose.position.y-pose_msg_.pose.position.y,pose_msg.pose.position.z-pose_msg_.pose.position.z);
-                        Quaterniond q_now = q_B_P * Quaterniond(pose_msg.pose.orientation.w,pose_msg.pose.orientation.x,
+                         q_now = q_B_P * Quaterniond(pose_msg.pose.orientation.w,pose_msg.pose.orientation.x,
                                                                 pose_msg.pose.orientation.y,pose_msg.pose.orientation.z);
-                        Quaterniond q_prev = q_B_P *  Quaterniond(pose_msg_.pose.orientation.w,pose_msg_.pose.orientation.x,
+                         q_prev = q_B_P *  Quaterniond(pose_msg_.pose.orientation.w,pose_msg_.pose.orientation.x,
                                                                   pose_msg_.pose.orientation.y,pose_msg_.pose.orientation.z);
                         q_update *=   ( q_now * q_prev.inverse());
                         pose_inc = false;
                         pose_msg_ = pose_msg;
-                        imuEKF->updateWithOdom(pos_update, q_update);
+                        imuEKF->updateWithOdom(pos_update, q_update, true);
                         
                     }
                 }

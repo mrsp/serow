@@ -38,7 +38,7 @@
 /* @author MUMRA
  */
 
-/* @brief  IMU-Kinematics/Encoders-VO fusion
+/* @brief  IMU-Kinematics/Encoders-VO-LO fusion
  * dx/dt=f(x,u,w)
  * y_k=Hx_k+v
  * State is  position in Inertial frame : r
@@ -76,7 +76,7 @@ private:
 	//General variables
 	Matrix<double, 6, 6> s, R;
 
-	Matrix<double, 3, 3> sv, Rv;
+	Matrix<double, 3, 3> sv, Rv, tempM;
 
 
 	//innovation, position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
@@ -99,7 +99,7 @@ private:
 	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 
 	void euler(Vector3d omega_, Vector3d f_);
-	void updateOutlierDetectionParams(Eigen::Matrix<double, 6,6> B);
+	void updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> B);
 	double computePsi(double xx);
 
 
@@ -111,7 +111,7 @@ public:
 
 	bool firstrun;
 	bool useEuler;
-    bool useOutlierDetection;
+
 	// Gravity vector
     Vector3d g, bgyr, bacc, gyro, acc, vel, pos, angle;
 
@@ -185,7 +185,7 @@ public:
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
 	void predict(Vector3d omega_, Vector3d f_);
-	bool updateWithOdom(Vector3d y, Quaterniond qy);
+	bool updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection);
 	void updateWithTwist(Vector3d y);
  	//void updateWithSupport(Vector3d y, Quaterniond qy);
 
