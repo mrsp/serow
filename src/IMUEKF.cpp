@@ -447,7 +447,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
         
         
-        while(tau>5.0e-03)
+        while(tau>1.0e-03)
         {
             if(zeta>1.0e-10)
             {
@@ -474,7 +474,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
                 
                 //outlier detection with the position measurement vector
 		tempM = y*y.transpose();
-		tempM.noalias() -=  -2.0*y*x_i.segment<3>(6).transpose();
+		tempM.noalias() -=  2.0*y*x_i.segment<3>(6).transpose();
 		tempM.noalias() += x_i.segment<3>(6)*x_i.segment<3>(6).transpose();
         tempM.noalias() += P_i.block<3,3>(0,6);
                 updateOutlierDetectionParams(tempM);

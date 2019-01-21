@@ -77,7 +77,7 @@ private:
 	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, CoM_leg_odom_pub, ground_truth_odom_pub,ds_pub, 
 	rel_leftlegPose_pub,rel_rightlegPose_pub;
     
-	ros::Subscriber imu_sub, joint_state_sub, pose_sub, lfsr_sub, rfsr_sub, odom_sub, copl_sub, copr_sub,
+	ros::Subscriber imu_sub, joint_state_sub, lfsr_sub, rfsr_sub, odom_sub, 
 	ground_truth_odom_sub,ds_sub, ground_truth_com_sub,support_idx_sub;
 	
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
@@ -96,9 +96,9 @@ private:
 	bool useCF;
 	double cf_freqvmin, cf_freqvmax, Tau0, Tau1, VelocityThres;
 	double  freq, joint_freq, fsr_freq;
-	bool fsr_inc, pose_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
-	bool firstOdom, firstUpdate, firstPose;
-	int number_of_joints;
+	bool fsr_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
+	bool firstOdom, firstUpdate, odom_divergence;
+	int number_of_joints, outlier_count;
 	bool firstGyrodot;
 	bool useGyroLPF;
 	int  maWindow;
@@ -182,7 +182,6 @@ private:
      void subscribeToIMU();
 	 void subscribeToFSR();
 	 void subscribeToJointState();
- 	 void subscribeToPose();
 	 void subscribeToOdom();
 	 void subscribeToGroundTruth();
 	 void subscribeToGroundTruthCoM();
@@ -193,13 +192,12 @@ private:
 	 void is_in_dsCb(const std_msgs::Bool::ConstPtr& msg);
 	 void ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void imuCb(const sensor_msgs::Imu::ConstPtr& msg);
-	 void poseCb(const geometry_msgs::PoseStamped::ConstPtr& msg);
 	 void joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg);
 	 void odomCb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
-	 void coplCb(const geometry_msgs::PointStamped::ConstPtr& msg);
-	 void coprCb(const geometry_msgs::PointStamped::ConstPtr& msg);
+	 //void coplCb(const geometry_msgs::PointStamped::ConstPtr& msg);
+	 //void coprCb(const geometry_msgs::PointStamped::ConstPtr& msg);
 
 
 	 void computeLGRF();
