@@ -67,9 +67,9 @@ Madgwick_gain: 0.06
 bias_max: 0.3
 bias_may: -0.33
 bias_maz: 0.1322
-bias_mgx: 0.00140645
-bias_mgy: -0.00140645
-bias_mgz: -0.000320313
+bias_mgx: -1.1372e-05
+bias_mgy: 8.4509e-05
+bias_mgz: 1.3276e-04
 
 
 #Leg Odometry Coefficients
@@ -108,9 +108,9 @@ velocity_noise_density: 1.5
 bias_ax:  0.3
 bias_ay:  -0.33
 bias_az: 0.1322
-bias_gx: -0.00140645
-bias_gy: -0.00140645
-bias_gz: -0.000320313
+bias_gx: -1.1372e-05
+bias_gy: 8.4509e-05
+bias_gz: 1.3276e-04
 
 #Filter Params
 gravity: 9.80665 #gravity constant (m/s^2)

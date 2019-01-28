@@ -647,11 +647,7 @@ void humanoid_ekf::estimateWithIMUEKF()
             }
             else
             {                    
-                    if(leg_vel_inc)
-                    {
-                        imuEKF->updateWithTwist(vwb);
-                        leg_vel_inc = false;
-                    }
+               
                     if(odom_inc && !odom_divergence)
                     {
                         if(outlier_count<3)
@@ -699,13 +695,19 @@ void humanoid_ekf::estimateWithIMUEKF()
                         }
                         
                     }
-                    else if(odom_divergence &&  leg_odom_inc)
+
+                    if(odom_divergence &&  leg_odom_inc)
                     {
                         std::cout<<"Odom divergence, updating only with leg odometry"<<std::endl;
                         pos_update += pos_leg_update;
                         q_update *= q_leg_update;
                         imuEKF->updateWithOdom(pos_update, q_update, false);
                         leg_odom_inc = false;
+                    }
+                    else if(leg_vel_inc)
+                    {
+                        imuEKF->updateWithTwist(vwb);
+                        leg_vel_inc = false;
                     }
             }
         }
