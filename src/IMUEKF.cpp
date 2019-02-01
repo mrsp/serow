@@ -47,24 +47,24 @@ void IMUEKF::init() {
     If = Matrix<double, 15, 15>::Identity();
     P = Matrix<double, 15, 15>::Zero();
     //vel
-    P(0,0) = 1e-2;
-    P(1,1) = 1e-2;
-    P(2,2) = 1e-2;
+    P(0,0) = 1e-1;
+    P(1,1) = 1e-1;
+    P(2,2) = 1e-1;
     //Rot error
-    P(3,3) = 5e-2;
-    P(4,4) = 5e-2;
-    P(5,5) = 5e-2;
+    P(3,3) = 1e-2;
+    P(4,4) = 1e-2;
+    P(5,5) = 1e-2;
     //Pos
     P(6,6)  = 1e-3;
     P(7,7)  = 1e-3;
     P(8,8)  = 1e-3;
     //Biases
-    P(9, 9) = 1e-2;
-    P(10, 10) = 1e-2;
-    P(11, 11) = 1e-2;
-    P(12, 12) = 1e-2;
-    P(13, 13) = 1e-2;
-    P(14, 14) = 1e-2;
+    P(9, 9) = 1e-1;
+    P(10, 10) = 1e-1;
+    P(11, 11) = 1e-1;
+    P(12, 12) = 1e-1;
+    P(13, 13) = 1e-1;
+    P(14, 14) = 1e-1;
     
     //For outlier detection
     f0 = 0.1;
@@ -406,7 +406,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
     R(3, 3) = odom_ax * odom_ax;
     R(4, 4) =  R(3, 3);
     R(5, 5) =  R(3, 3);
-    
+
     outlier = false;
     if(!useOutlierDetection )
     {
@@ -414,7 +414,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         //Innovetion vector
         z.segment<3>(0) = y - r;
         z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
-        
+        //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
         
         //Compute the Kalman Gain
         s = R;
@@ -447,7 +447,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
         
         
-        while(tau>1.0e-03)
+        while(tau>1.0e-06)
         {
             if(zeta>1.0e-10)
             {
@@ -490,7 +490,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
             }
             
             //Check for convergence
-            tau = (x_i.segment<3>(6) - x_i_.segment<3>(6)).norm();
+            tau = (x_i.segment<3>(6) - x_i_.segment<3>(6)).norm()/(x_i_.segment<3>(6)).norm();
         }
         
         Rib = Rib_i;

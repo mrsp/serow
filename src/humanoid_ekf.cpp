@@ -207,7 +207,7 @@ void humanoid_ekf::loadparams() {
     
     
     n_p.param<bool>("estimateCoM", useCoMEKF,false);
-    n_p.param<int>("medianWindow", medianWindow,15);
+    n_p.param<int>("medianWindow", medianWindow, 10);
     
     
     n_p.param<bool>("useMahony", useMahony,true);
@@ -231,7 +231,7 @@ void humanoid_ekf::loadparams() {
     n_p.param<double>("bias_mgy", bias_mgy,0.0);
     n_p.param<double>("bias_mgz", bias_mgz,0.0);
     
-    n_p.param<bool>("useCF", useCF,true);
+    n_p.param<bool>("useCF", useCF, false);
     n_p.param<double>("freqvmax", cf_freqvmax,2.5);
     n_p.param<double>("freqvmin", cf_freqvmin,0.1);
     n_p.param<double>("Tau0", Tau0, 0.5);
@@ -650,7 +650,7 @@ void humanoid_ekf::estimateWithIMUEKF()
                
                     if(odom_inc && !odom_divergence)
                     {
-                        if(outlier_count<3)
+                        if(outlier_count<4)
                         {
                             pos_update_ = pos_update;
                             pos_update += T_B_P.linear() * Vector3d(odom_msg.pose.pose.position.x - odom_msg_.pose.pose.position.x,
