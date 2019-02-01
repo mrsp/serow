@@ -866,6 +866,7 @@ void humanoid_ekf::computeKinTFs() {
     }
     Twb_ = Twb;
     Twb.translation() = dr->getOdom();
+    Twb.linear() = qwb.toRotationMatrix();
     vwb = dr->getLinearVel();
     
     

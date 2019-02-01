@@ -303,7 +303,7 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
     
     omega = omega_;
     f = f_;
-    //Used in updati     ng Rib with the Rodriquez formula
+    //Used in updating Rib with the Rodriquez formula
     omegahat.noalias() = omega - x.segment<3>(9);
     v = x.segment<3>(0);
     
@@ -312,7 +312,7 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
     
     
     if(useEuler)
-    euler(omega_,f_);
+        euler(omega_,f_);
     else
     {
         RK4(omega_,f_,omega_p,f_p);
@@ -426,9 +426,13 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         P.noalias() += Kf * R * Kf.transpose();
         
         dxf.noalias() = Kf * z;
-        
-        //Update the mean estimate
         x += dxf;
+        if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+        {
+             Rib *=  expMap(dxf.segment<3>(3));
+        }
+        x.segment<3>(3) = Vector3d::Zero();
+        //Update the mean estimate
     }
     else
     {
@@ -486,7 +490,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
                 Rib_i = Rib;
                 P_i = P;
                 outlier = true;
-		std::cout<<"Outlier"<<std::endl;
+		        std::cout<<"Outlier"<<std::endl;
             }
             
             //Check for convergence
@@ -558,8 +562,7 @@ void IMUEKF::updateVars()
     //Update the biases
     bgyr = x.segment<3>(9);
     bacc = x.segment<3>(12);
-    //std::cout<<"Biasgx "<<bgyr<<std::endl;
-    //std::cout<<"Biasax "<<bacc<<std::endl;
+
     
     bias_gx = x(9);
     bias_gy = x(10);
