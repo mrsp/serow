@@ -51,13 +51,13 @@ void IMUEKF::init() {
     P(1,1) = 1e-1;
     P(2,2) = 1e-1;
     //Rot error
-    P(3,3) = 1e-2;
-    P(4,4) = 1e-2;
-    P(5,5) = 1e-2;
+    P(3,3) = 1e-3;
+    P(4,4) = 1e-3;
+    P(5,5) = 1e-3;
     //Pos
-    P(6,6)  = 1e-3;
-    P(7,7)  = 1e-3;
-    P(8,8)  = 1e-3;
+    P(6,6)  = 5e-4;
+    P(7,7)  = 5e-4;
+    P(8,8)  = 5e-4;
     //Biases
     P(9, 9) = 1e-1;
     P(10, 10) = 1e-1;
@@ -67,8 +67,8 @@ void IMUEKF::init() {
     P(14, 14) = 1e-1;
     
     //For outlier detection
-    f0 = 0.1;
-    e0 = 0.9;
+    f0 = 0.01;
+    e0 = 0.99;
     //Construct C
     Hf = Matrix<double, 6, 15>::Zero();
     Hf.block<3,3>(0,6) = Matrix3d::Identity();
@@ -338,8 +338,8 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
     Qf(11, 11) = accb_qz * accb_qz ;
     
     
-    Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt;
-    //Qff.noalias() =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
+    //Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt;
+    Qff.noalias() =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
     
     /** Predict Step: Propagate the Error Covariance  **/
     P = Af * P * Af.transpose();
@@ -451,7 +451,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
         
         
-        while(tau>1.0e-06)
+        while(tau>1.0e-03)
         {
             if(zeta>1.0e-10)
             {
@@ -464,6 +464,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
                 //Update the error covariance
                 P_i = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
                 P_i.noalias() += Kf * R_z * Kf.transpose();
+		//P_i = P - Kf*s*Kf.transpose();
                 dxf.noalias() = Kf * z;
                 
                 //Update the mean estimate
@@ -480,7 +481,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
 		tempM = y*y.transpose();
 		tempM.noalias() -=  2.0*y*x_i.segment<3>(6).transpose();
 		tempM.noalias() += x_i.segment<3>(6)*x_i.segment<3>(6).transpose();
-        tempM.noalias() += P_i.block<3,3>(0,6);
+        	tempM.noalias() += P_i.block<3,3>(6,6);
                 updateOutlierDetectionParams(tempM);
             }
             else
@@ -490,11 +491,11 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
                 Rib_i = Rib;
                 P_i = P;
                 outlier = true;
-		        std::cout<<"Outlier"<<std::endl;
+		std::cout<<"Outlier"<<std::endl;
             }
             
             //Check for convergence
-            tau = (x_i.segment<3>(6) - x_i_.segment<3>(6)).norm()/(x_i_.segment<3>(6)).norm();
+            tau = (x_i.segment<3>(6) - x_i_.segment<3>(6)).norm();
         }
         
         Rib = Rib_i;
@@ -513,8 +514,12 @@ void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> BetaT)
     efpsi = computePsi(e_t+f_t);
     lnp = computePsi(e_t) - efpsi;
     ln1_p = computePsi(f_t) -efpsi;
-    
-    pzeta_1 =  exp(lnp - 0.5*(BetaT*(R.block<3,3>(0,0)).inverse()).trace());
+
+    tempM = BetaT*(R.block<3,3>(0,0)).inverse();
+    std::cout<<"lnp "<<lnp<<std::endl;
+    std::cout<<"ln1_p "<<ln1_p<<std::endl;
+  
+    pzeta_1 =  exp(lnp - 0.5*(tempM).trace());
     pzeta_0 =  exp(ln1_p);
     
     //Normalization factor
@@ -523,11 +528,13 @@ void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> BetaT)
     //p(zeta) are now proper probabilities
     pzeta_1 = norm_factor * pzeta_1;
     pzeta_0 = norm_factor * pzeta_0;
-    
+    std::cout<<"pzeta1 "<<pzeta_1<<std::endl;
+    std::cout<<"pzeta0 "<<pzeta_0<<std::endl;
     //mean of bernulli
     zeta = pzeta_1 / (pzeta_1 + pzeta_0);
     
     //Update epsilon and f
+    std::cout<<"zeta "<<zeta<<std::endl;
     e_t = e0 + zeta;
     f_t = f0 + 1.0 - zeta;
 }
