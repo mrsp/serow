@@ -67,8 +67,8 @@ void IMUEKF::init() {
     P(14, 14) = 1e-1;
     
     //For outlier detection
-    f0 = 0.1;
-    e0 = 0.9;
+    f0 = 0.01;
+    e0 = 0.99;
     //Construct C
     Hf = Matrix<double, 6, 15>::Zero();
     Hf.block<3,3>(0,6) = Matrix3d::Identity();
@@ -589,6 +589,9 @@ void IMUEKF::updateVars()
     omegahat = omega + bgyr;
     fhat = f + bacc;
     
+    //std::cout<<"Bias "<<std::endl;
+    //std::cout<<bgyr<<std::endl;
+    //std::cout<<bacc<<std::endl;
     gyro  = Rib * omegahat;
     gyroX = gyro(0);
     gyroY = gyro(1);

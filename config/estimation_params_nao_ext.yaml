@@ -7,8 +7,8 @@ modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
 #ROS Topic Names
 
 useLegOdom: false
-#odom_topic: "/vins_estimator/odometry" #only if useLegOdom is false
-odom_topic: "/svo/odom"
+odom_topic: "/vins_estimator/odometry" #only if useLegOdom is false
+#odom_topic: "/svo/odom"
 imu_topic: "/imu0"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
@@ -89,8 +89,8 @@ useEuler: true
 #Process Noise STDs
 accelerometer_bias_random_walk: 0.005 #m/s^2
 gyroscope_bias_random_walk: 4.1884e-05 # rad/s
-accelerometer_noise_density:  0.153 #m/s^2 
-gyroscope_noise_density: 0.027 #rad/s 
+accelerometer_noise_density:  0.2 #m/s^2 
+gyroscope_noise_density: 0.04 #rad/s 
 
 #VO Measuremets
 #Odometry Measurement Noise std:
@@ -98,14 +98,14 @@ gyroscope_noise_density: 0.027 #rad/s
 #odom_orientation_noise_density: 1.0e-02
 
 #Odom Measurements
-odom_position_noise_density: 5.0e-03
-odom_orientation_noise_density: 5.0e-03
+odom_position_noise_density: 5.0e-04
+odom_orientation_noise_density: 5.0e-04
 
 #RP Lidar Odom
 #odom_position_noise_density: 0.0111
 #odom_orientation_noise_density: 0.0145
 
-velocity_noise_density: 1.0
+velocity_noise_density: 0.1
 
 #IMU Initial Biases - Biases are substracted!
 bias_ax: 0
