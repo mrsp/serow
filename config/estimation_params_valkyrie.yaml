@@ -69,10 +69,10 @@ Madgwick_gain: 0.012
 
 bias_max: 0.0
 bias_may: 0.0
-bias_maz: 9.7997
-bias_mgx: -1.60298e-05
-bias_mgy: -1.24745e-05
-bias_mgz: -2.60968e-05
+bias_maz: -9.7997
+bias_mgx: 1.60298e-05
+bias_mgy: 1.24745e-05
+bias_mgz: 2.60968e-05
 
 
 
@@ -108,10 +108,10 @@ velocity_noise_density: 2.5
 #IMU Initial Biases - Biases are substracted!
 bias_ax: 0.0
 bias_ay: 0.0
-bias_az: 9.7997
-bias_gx: -1.60298e-05
-bias_gy: -1.24745e-05
-bias_gz: -2.60968e-05
+bias_az: -9.7997
+bias_gx: 1.60298e-05
+bias_gy: 1.24745e-05
+bias_gz: 2.60968e-05
 
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
