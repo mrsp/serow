@@ -41,9 +41,9 @@ T_FT_LL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 #TF from F/T to Right Foot
 T_FT_RL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 #TF from External Odom to Body only if useLegOdom is false
-T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
+#T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1] #VINS
 #T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 , 1]
-
+T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
 #ROS Topic Frequencies in Hz
 imu_topic_freq: 100
 joint_topic_freq: 100
@@ -111,13 +111,13 @@ odom_orientation_noise_density: 1.0e-03
 velocity_noise_density: 1.0
 
 #IMU Initial Biases - Biases are substracted!
-bias_ax: 0.239618
-bias_ay: -0.1934
-#bias_ay: 0.0751756
+bias_ax: -0.239618
+bias_ay: 0.1934
+#bias_ay: -0.0751756
 bias_az:  0.0
-bias_gx: -0.000817362
-bias_gy: -0.00178242
-bias_gz: -0.000158554
+bias_gx: 0.000817362
+bias_gy: 0.00178242
+bias_gz: 0.000158554
 
 
 

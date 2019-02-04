@@ -51,24 +51,24 @@ void IMUEKF::init() {
     P(1,1) = 1e-1;
     P(2,2) = 1e-1;
     //Rot error
-    P(3,3) = 1e-3;
-    P(4,4) = 1e-3;
-    P(5,5) = 1e-3;
+    P(3,3) = 1e-2;
+    P(4,4) = 1e-2;
+    P(5,5) = 1e-2;
     //Pos
-    P(6,6)  = 5e-4;
-    P(7,7)  = 5e-4;
-    P(8,8)  = 5e-4;
+    P(6,6)  = 5e-3;
+    P(7,7)  = 5e-3;
+    P(8,8)  = 5e-3;
     //Biases
-    P(9, 9) = 1e-1;
-    P(10, 10) = 1e-1;
-    P(11, 11) = 1e-1;
+    P(9, 9) = 1e-2;
+    P(10, 10) = 1e-2;
+    P(11, 11) = 1e-2;
     P(12, 12) = 1e-1;
     P(13, 13) = 1e-1;
     P(14, 14) = 1e-1;
     
     //For outlier detection
-    f0 = 0.01;
-    e0 = 0.99;
+    f0 = 0.1;
+    e0 = 0.9;
     //Construct C
     Hf = Matrix<double, 6, 15>::Zero();
     Hf.block<3,3>(0,6) = Matrix3d::Identity();
@@ -161,8 +161,8 @@ Matrix<double,15,1> IMUEKF::computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3
     Matrix<double,15,1> res = Matrix<double,15,1>::Zero();
     
     //Inputs without bias
-    omega_ -= x_.segment<3>(9);
-    f_ -= x_.segment<3>(12);
+    omega_ += x_.segment<3>(9);
+    f_ += x_.segment<3>(12);
     
     //Nonlinear Process Model
     v = x_.segment<3>(0);
@@ -245,7 +245,7 @@ void IMUEKF::RK4(Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0)
     K3 = K3 * K0;
     
     //Update Rotation
-    temp.noalias() = omega_- x.segment<3>(9);
+    temp.noalias() = omega_+ x.segment<3>(9);
     temp *= dt;
     if(temp(0)!=0 && temp(1) !=0 && temp(2)!=0)
     Rib_mid *=  expMap(temp);
@@ -263,19 +263,25 @@ void IMUEKF::RK4(Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0)
 
 Matrix<double,15,15> IMUEKF::computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
 {
-    omega_.noalias() -= x_.segment<3>(9);
-    f_.noalias() -= x_.segment<3>(12);
+    omega_.noalias() += x_.segment<3>(9);
+    f_.noalias() += x_.segment<3>(12);
     v = x_.segment<3>(0);
     Matrix<double,15,15> res = Matrix<double,15,15>::Zero();
     
     res.block<3,3>(0,0).noalias() = -wedge(omega_);
     res.block<3,3>(0,3).noalias() = wedge(Rib_.transpose() * g);
+    res.block<3,3>(0,12).noalias() = Matrix3d::Identity();
+    res.block<3,3>(0,9).noalias() = wedge(v);
+
     res.block<3,3>(3,3).noalias() = -wedge(omega_);
+    res.block<3,3>(3,9).noalias() = Matrix3d::Identity();
+
     res.block<3,3>(6,0) = Rib_;
     res.block<3,3>(6,3).noalias() = -Rib_ * wedge(v);
-    res.block<3,3>(0,9).noalias() = -wedge(v);
-    res.block<3,3>(0,12).noalias() = -Matrix3d::Identity();
-    res.block<3,3>(3,9).noalias() = -Matrix3d::Identity();
+
+
+ 
+
     
     return res;
 }
@@ -304,7 +310,7 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
     omega = omega_;
     f = f_;
     //Used in updating Rib with the Rodriquez formula
-    omegahat.noalias() = omega - x.segment<3>(9);
+    omegahat.noalias() = omega + x.segment<3>(9);
     v = x.segment<3>(0);
     
     //Update the Input-noise Jacobian
@@ -338,8 +344,8 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
     Qf(11, 11) = accb_qz * accb_qz ;
     
     
-    //Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt;
-    Qff.noalias() =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
+    Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt;
+    //Qff.noalias() =  Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt ;
     
     /** Predict Step: Propagate the Error Covariance  **/
     P = Af * P * Af.transpose();
@@ -396,6 +402,7 @@ void IMUEKF::updateWithTwist(Vector3d y)
     
     
 }
+
 
 bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection)
 {
@@ -579,8 +586,8 @@ void IMUEKF::updateVars()
     bias_az = x(14);
     
     
-    omegahat = omega - bgyr;
-    fhat = f - bacc;
+    omegahat = omega + bgyr;
+    fhat = f + bacc;
     
     gyro  = Rib * omegahat;
     gyroX = gyro(0);

@@ -64,12 +64,12 @@ Mahony_Kp: 0.05
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.06
-bias_max: 0.3
-bias_may: -0.33
-bias_maz: 0.1322
-bias_mgx: -1.1372e-05
-bias_mgy: 8.4509e-05
-bias_mgz: 1.3276e-04
+bias_max: -0.3
+bias_may: 0.33
+bias_maz: -0.1322
+bias_mgx: 1.1372e-05
+bias_mgy: -8.4509e-05
+bias_mgz: -1.3276e-04
 
 
 #Leg Odometry Coefficients
@@ -105,12 +105,12 @@ odom_orientation_noise_density: 0.01
 velocity_noise_density: 1.5
 
 #IMU Initial Biases - Biases are substracted!
-bias_ax:  0.3
-bias_ay:  -0.33
-bias_az: 0.1322
-bias_gx: -1.1372e-05
-bias_gy: 8.4509e-05
-bias_gz: 1.3276e-04
+bias_ax:  -0.3
+bias_ay:  0.33
+bias_az: -0.1322
+bias_gx: 1.1372e-05
+bias_gy: -8.4509e-05
+bias_gz: -1.3276e-04
 
 #Filter Params
 gravity: 9.80665 #gravity constant (m/s^2)
