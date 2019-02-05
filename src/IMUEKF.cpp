@@ -306,7 +306,7 @@ void IMUEKF::euler(Vector3d omega_, Vector3d f_)
 /** IMU EKF filter to  deal with the Noise **/
 void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 {
-    
+           std::cout<<"predict with IMU"<<std::endl;
     omega = omega_;
     f = f_;
     //Used in updating Rib with the Rodriquez formula
@@ -366,10 +366,11 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 /** Update **/
 void IMUEKF::updateWithTwist(Vector3d y)
 {
+       std::cout<<"update with TWIST "<<std::endl;
     Rv(0, 0) = vel_px * vel_px;
     Rv(1, 1) = vel_py * vel_py;
     Rv(2, 2) = vel_pz * vel_pz;
-    //Rv = Rv*dt;
+
     v = x.segment<3>(0);
     
     //Innovetion vector
@@ -402,10 +403,50 @@ void IMUEKF::updateWithTwist(Vector3d y)
     
     
 }
+void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
+{
 
+    R(0, 0) = leg_odom_px * leg_odom_px;
+    R(1, 1) = R(0, 0);
+    R(2, 2) = R(0, 0);
+    
+    R(3, 3) = leg_odom_ax * leg_odom_ax;
+    R(4, 4) =  R(3, 3);
+    R(5, 5) =  R(3, 3);
+
+
+        r = x.segment<3>(6);
+        //Innovetion vector
+        z.segment<3>(0) = y - r;
+        z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
+        //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
+        
+        //Compute the Kalman Gain
+        s = R;
+        s.noalias() += Hf * P * Hf.transpose();
+        Kf.noalias() = P * Hf.transpose() * s.inverse();
+        
+        //Update the error covariance
+        P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
+        P.noalias() += Kf * R * Kf.transpose();
+        
+        dxf.noalias() = Kf * z;
+        x += dxf;
+        if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+        {
+             Rib *=  expMap(dxf.segment<3>(3));
+        }
+        x.segment<3>(3) = Vector3d::Zero();
+
+
+    updateVars();
+
+
+}
 
 bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection)
 {
+       std::cout<<"update with Odom"<<std::endl;
     R(0, 0) = odom_px * odom_px;
     R(1, 1) = R(0, 0);
     R(2, 2) = R(0, 0);
@@ -415,7 +456,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
     R(5, 5) =  R(3, 3);
 
     outlier = false;
-    if(!useOutlierDetection )
+    if(!useOutlierDetection)
     {
         r = x.segment<3>(6);
         //Innovetion vector
@@ -457,8 +498,8 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
         //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
         
-        
-        while(tau>1.0e-03)
+        unsigned int j=0;
+        while(j<4)
         {
             if(zeta>1.0e-10)
             {
@@ -501,8 +542,8 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
 		std::cout<<"Outlier"<<std::endl;
             }
             
-            //Check for convergence
-            tau = (x_i.segment<3>(6) - x_i_.segment<3>(6)).norm();
+	    j++;
+
         }
         
         Rib = Rib_i;
@@ -523,8 +564,8 @@ void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> BetaT)
     ln1_p = computePsi(f_t) -efpsi;
 
     tempM = BetaT*(R.block<3,3>(0,0)).inverse();
-    std::cout<<"lnp "<<lnp<<std::endl;
-    std::cout<<"ln1_p "<<ln1_p<<std::endl;
+    //std::cout<<"lnp "<<lnp<<std::endl;
+    //std::cout<<"ln1_p "<<ln1_p<<std::endl;
   
     pzeta_1 =  exp(lnp - 0.5*(tempM).trace());
     pzeta_0 =  exp(ln1_p);
@@ -535,13 +576,13 @@ void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> BetaT)
     //p(zeta) are now proper probabilities
     pzeta_1 = norm_factor * pzeta_1;
     pzeta_0 = norm_factor * pzeta_0;
-    std::cout<<"pzeta1 "<<pzeta_1<<std::endl;
-    std::cout<<"pzeta0 "<<pzeta_0<<std::endl;
+    //std::cout<<"pzeta1 "<<pzeta_1<<std::endl;
+    //std::cout<<"pzeta0 "<<pzeta_0<<std::endl;
     //mean of bernulli
     zeta = pzeta_1 / (pzeta_1 + pzeta_0);
     
     //Update epsilon and f
-    std::cout<<"zeta "<<zeta<<std::endl;
+    //std::cout<<"zeta "<<zeta<<std::endl;
     e_t = e0 + zeta;
     f_t = f0 + 1.0 - zeta;
 }

@@ -119,7 +119,8 @@ public:
 
 	double  acc_qx,acc_qy,acc_qz,gyr_qx,gyr_qy,gyr_qz,gyrb_qx,gyrb_qy,gyrb_qz,
 	accb_qx,accb_qy,accb_qz, odom_px, odom_py, odom_pz, odom_ax, odom_ay,odom_az,
-	vel_px, vel_py, vel_pz;
+	vel_px, vel_py, vel_pz, leg_odom_px, leg_odom_py, leg_odom_pz, leg_odom_ax,
+	leg_odom_ay, leg_odom_az;
 
 	double gyroX, gyroY, gyroZ, angleX, angleY, angleZ, bias_gx, bias_gy, bias_gz,
 			bias_ax, bias_ay, bias_az, ghat;
@@ -186,6 +187,7 @@ public:
 	 */
 	void predict(Vector3d omega_, Vector3d f_);
 	bool updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection);
+	void updateWithLegOdom(Vector3d y, Quaterniond qy);
 	void updateWithTwist(Vector3d y);
  	//void updateWithSupport(Vector3d y, Quaterniond qy);
 
