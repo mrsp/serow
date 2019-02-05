@@ -7,8 +7,9 @@ modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
 #ROS Topic Names
 
 useLegOdom: false
-odom_topic: "/vins_estimator/odometry" #only if useLegOdom is false
-#odom_topic: "/svo/odom"
+#odom_topic: "/vins_estimator/odometry" #only if useLegOdom is false
+odom_topic: "/svo/odom"
+#odom_topic: "/lidar/odom"
 imu_topic: "/imu0"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
@@ -54,7 +55,7 @@ StrikingContact: 60
 
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: true #Use a Steady State KF in every joint
-joint_cutoff_freq: 4.0
+joint_cutoff_freq: 6.0
 
 #Mahony Filter for attitude
 useMahony: true
@@ -89,23 +90,25 @@ useEuler: true
 #Process Noise STDs
 accelerometer_bias_random_walk: 0.005 #m/s^2
 gyroscope_bias_random_walk: 4.1884e-05 # rad/s
-accelerometer_noise_density:  0.2 #m/s^2 
-gyroscope_noise_density: 0.04 #rad/s 
+accelerometer_noise_density:  0.0075 #m/s^2  #MTI-300
+gyroscope_noise_density: 0.0014 #rad/s  #MTI-300
 
 #VO Measuremets
 #Odometry Measurement Noise std:
-#odom_position_noise_density: 1.0e-02
-#odom_orientation_noise_density: 1.0e-02
+leg_odom_position_noise_density: 1.0e-04
+leg_odom_orientation_noise_density: 1.0e-04
 
 #Odom Measurements
-odom_position_noise_density: 5.0e-04
-odom_orientation_noise_density: 5.0e-04
+odom_position_noise_density: 1.0e-03
+odom_orientation_noise_density: 1.0e-03
 
 #RP Lidar Odom
-#odom_position_noise_density: 0.0111
-#odom_orientation_noise_density: 0.0145
+#odom_position_noise_density: 0.0024
+#odom_orientation_noise_density: 0.0017
 
-velocity_noise_density: 0.1
+velocity_noise_density_x: 0.0750
+velocity_noise_density_y: 0.2344
+velocity_noise_density_z: 0.0208
 
 #IMU Initial Biases - Biases are substracted!
 bias_ax: 0
@@ -119,8 +122,8 @@ bias_gz: 0
 
 
 #Filter Params
-gravity: 9.80665 #gravity constant (m/s^2)
-medianWindow: 10
+gravity: 9.80 #gravity constant (m/s^2)
+medianWindow: 9
 
 # CoM Extended Kalman Filter (EKF)
 # To estimate:

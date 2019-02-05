@@ -284,10 +284,18 @@ void humanoid_ekf::loadIMUEKFparams()
     n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ax,1.0e-01);
     n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay,1.0e-01);
     n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az,1.0e-01);
-    
-    n_p.param<double>("velocity_noise_density", imuEKF->vel_px,1.0e-02);
-    n_p.param<double>("velocity_noise_density", imuEKF->vel_py,1.0e-02);
-    n_p.param<double>("velocity_noise_density", imuEKF->vel_pz,1.0e-02);
+  
+
+    n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_px,1.0e-01);
+    n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_py,1.0e-01);
+    n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_pz,1.0e-01);
+    n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_ax,1.0e-01);
+    n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_ay,1.0e-01);
+    n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_az,1.0e-01);
+  
+    n_p.param<double>("velocity_noise_density_x", imuEKF->vel_px,1.0e-02);
+    n_p.param<double>("velocity_noise_density_y", imuEKF->vel_py,1.0e-02);
+    n_p.param<double>("velocity_noise_density_z", imuEKF->vel_pz,1.0e-02);
     
     
     n_p.param<double>("gravity", imuEKF->ghat,9.81);
@@ -625,7 +633,7 @@ void humanoid_ekf::estimateWithIMUEKF()
             q_update = qwb;
             //First Update
             firstUpdate = false;
-            imuEKF->updateWithOdom(pos_update, q_update,false);
+            imuEKF->updateWithLegOdom(pos_update, q_update);
         }
         else{
             //Update with the odometry
@@ -637,7 +645,7 @@ void humanoid_ekf::estimateWithIMUEKF()
          
                     pos_update += pos_leg_update;
                     q_update *= q_leg_update;
-                    imuEKF->updateWithOdom(pos_update, q_update,false);
+                    imuEKF->updateWithLegOdom(pos_update, q_update);
                     leg_odom_inc = false;
                     //STORE POS
                     if(odom_inc){
@@ -650,7 +658,7 @@ void humanoid_ekf::estimateWithIMUEKF()
                
                     if(odom_inc && !odom_divergence)
                     {
-                        if(outlier_count<4)
+                        if(outlier_count<3)
                         {
                             pos_update_ = pos_update;
                             pos_update += T_B_P.linear() * Vector3d(odom_msg.pose.pose.position.x - odom_msg_.pose.pose.position.x,
@@ -680,7 +688,7 @@ void humanoid_ekf::estimateWithIMUEKF()
 
                                     pos_update += pos_leg_update;
                                     q_update *= q_leg_update;
-                                    imuEKF->updateWithOdom(pos_update, q_update, false);
+                                    imuEKF->updateWithLegOdom(pos_update, q_update);
                                     leg_odom_inc = false;
                                 }
                             }
@@ -701,7 +709,7 @@ void humanoid_ekf::estimateWithIMUEKF()
                         std::cout<<"Odom divergence, updating only with leg odometry"<<std::endl;
                         pos_update += pos_leg_update;
                         q_update *= q_leg_update;
-                        imuEKF->updateWithOdom(pos_update, q_update, false);
+                        imuEKF->updateWithLegOdom(pos_update, q_update);
                         leg_odom_inc = false;
                     }
                     else if(leg_vel_inc)
