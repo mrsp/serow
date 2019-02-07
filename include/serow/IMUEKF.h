@@ -101,7 +101,7 @@ private:
 	void euler(Vector3d omega_, Vector3d f_);
 	void updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> B);
 	double computePsi(double xx);
-
+     Matrix<double,15,1> computeDiscreteDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

@@ -10,6 +10,7 @@ useLegOdom: false
 #odom_topic: "/vins_estimator/odometry" #only if useLegOdom is false
 odom_topic: "/svo/odom"
 #odom_topic: "/lidar/odom"
+
 imu_topic: "/imu0"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
@@ -39,9 +40,9 @@ T_FT_LL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 #TF from F/T to Right Foot
 T_FT_RL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 #TF from External Odom to Body only if useLegOdom is false
-T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
+#T_B_P: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1]
 #T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
-
+T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
 #ROS Topic Frequencies in Hz
 imu_topic_freq: 100
 joint_topic_freq: 100
@@ -55,7 +56,7 @@ StrikingContact: 60
 
 #Steady State Joint Kalman Filter (KF)
 estimateJoints: true #Use a Steady State KF in every joint
-joint_cutoff_freq: 6.0
+joint_cutoff_freq: 4.0
 
 #Mahony Filter for attitude
 useMahony: true
@@ -77,6 +78,8 @@ Tau1: 1.0
 useCF: false
 freqvmin: 0.1
 freqvmax: 2.5
+mass: 5.182530  #robot mass
+
 
 #Choose Integration Method
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
@@ -88,29 +91,30 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk: 0.005 #m/s^2
-gyroscope_bias_random_walk: 4.1884e-05 # rad/s
-accelerometer_noise_density:  0.0075 #m/s^2  #MTI-300
-gyroscope_noise_density: 0.0014 #rad/s  #MTI-300
+accelerometer_bias_random_walk: 5.e-03 #m/s^2
+gyroscope_bias_random_walk: 5.0e-04 # rad/s
+accelerometer_noise_density:  0.05 #m/s^2  #MTI-300
+gyroscope_noise_density: 0.01 #rad/s  #MTI-300
 
 #VO Measuremets
 #Odometry Measurement Noise std:
-leg_odom_position_noise_density: 1.0e-04
-leg_odom_orientation_noise_density: 1.0e-04
+leg_odom_position_noise_density: 5.0e-04
+leg_odom_orientation_noise_density: 1.0e-03
 
+useOutlierDetection: true
 #Odom Measurements
 odom_position_noise_density: 1.0e-03
 odom_orientation_noise_density: 1.0e-03
 
 #RP Lidar Odom
-#odom_position_noise_density: 0.0024
-#odom_orientation_noise_density: 0.0017
+#odom_position_noise_density: 0.003
+#odom_orientation_noise_density: 0.01
 
-velocity_noise_density_x: 0.0750
-velocity_noise_density_y: 0.2344
-velocity_noise_density_z: 0.0208
+velocity_noise_density_x: 0.13
+velocity_noise_density_y: 0.18
+velocity_noise_density_z: 0.09
 
-#IMU Initial Biases - Biases are substracted!
+#IMU Initial Biases - Biases are additive and are in the IMU !
 bias_ax: 0
 bias_ay: 0
 bias_az: 0
@@ -123,13 +127,13 @@ bias_gz: 0
 
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
-medianWindow: 9
+medianWindow: 10
 
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
 # CoM 3-D Position/Velocity
 # 3-D External Forces on the CoM
-estimateCoM: true   #Use the CoM EKF
+estimateCoM: false   #Use the CoM EKF
 
 #---------------------------------------------#
 #Specify the rest only if estimateCoM is true!!
@@ -154,7 +158,6 @@ gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
 #Gyro Moving Average Filter
 maWindow: 14 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
 #Filter Params
-mass: 5.182530  #robot mass
 Ixx : 0.0050623407587  #torso inertia around x
 Iyy : 0.0048801358789  #torso inetria around y
 Izz : 0.001610300038   #torso inertia around z

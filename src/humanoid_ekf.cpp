@@ -224,20 +224,14 @@ void humanoid_ekf::loadparams() {
         n_p.param<double>("Madgwick_gain", beta,0.012f);
         mw =  new serow::Madgwick(freq,beta);
     }
-    n_p.param<double>("bias_max", bias_max,0.0);
-    n_p.param<double>("bias_may", bias_may,0.0);
-    n_p.param<double>("bias_maz", bias_maz,0.0);
-    n_p.param<double>("bias_mgx", bias_mgx,0.0);
-    n_p.param<double>("bias_mgy", bias_mgy,0.0);
-    n_p.param<double>("bias_mgz", bias_mgz,0.0);
-    
+
     n_p.param<bool>("useCF", useCF, false);
     n_p.param<double>("freqvmax", cf_freqvmax,2.5);
     n_p.param<double>("freqvmin", cf_freqvmin,0.1);
     n_p.param<double>("Tau0", Tau0, 0.5);
     n_p.param<double>("Tau1", Tau1, 0.01);
     
-    
+    n_p.param<double>("mass", m, 5.14);
     
 }
 
@@ -257,12 +251,7 @@ void humanoid_ekf::loadIMUEKFparams()
     n_p.param<double>("bias_gx", bias_gx,0.0);
     n_p.param<double>("bias_gy", bias_gy,0.0);
     n_p.param<double>("bias_gz", bias_gz,0.0);
-    n_p.param<double>("bias_ax",  imuEKF->bias_ax,0.0);
-    n_p.param<double>("bias_ay",  imuEKF->bias_ay,0.0);
-    n_p.param<double>("bias_az",  imuEKF->bias_az,0.0);
-    n_p.param<double>("bias_gx",  imuEKF->bias_gx,0.0);
-    n_p.param<double>("bias_gy",  imuEKF->bias_gy,0.0);
-    n_p.param<double>("bias_gz",  imuEKF->bias_gz,0.0);
+
     n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qx,0.001);
     n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qy,0.001);
     n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qz,0.001);
@@ -293,14 +282,16 @@ void humanoid_ekf::loadIMUEKFparams()
     n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_ay,1.0e-01);
     n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_az,1.0e-01);
   
-    n_p.param<double>("velocity_noise_density_x", imuEKF->vel_px,1.0e-02);
-    n_p.param<double>("velocity_noise_density_y", imuEKF->vel_py,1.0e-02);
-    n_p.param<double>("velocity_noise_density_z", imuEKF->vel_pz,1.0e-02);
+    n_p.param<double>("velocity_noise_density_x", imuEKF->vel_px,1.0e-01);
+    n_p.param<double>("velocity_noise_density_y", imuEKF->vel_py,1.0e-01);
+    n_p.param<double>("velocity_noise_density_z", imuEKF->vel_pz,1.0e-01);
     
     
     n_p.param<double>("gravity", imuEKF->ghat,9.81);
     n_p.param<double>("gravity", g,9.81);
     n_p.param<bool>("useEuler", imuEKF->useEuler,true);
+
+    n_p.param<bool>("useOutlierDetection",useOutlierDetection,false);
     imuEKF->setAccBias(T_B_A.linear()*Vector3d(bias_ax,bias_ay,bias_az));
     imuEKF->setGyroBias(T_B_G.linear()*Vector3d(bias_gx,bias_gy,bias_gz));
 }
@@ -315,7 +306,6 @@ void humanoid_ekf::loadCoMEKFparams() {
     n_p.param<double>("external_force_random_walk", nipmEKF->fd_q, 1.0);
     n_p.param<double>("com_position_noise_density", nipmEKF->com_r, 1.0e-04);
     n_p.param<double>("com_acceleration_noise_density", nipmEKF->comdd_r, 5.0e-02);
-    n_p.param<double>("mass", m, 5.14);
     n_p.param<double>("Ixx", I_xx,0.00000);
     n_p.param<double>("Iyy", I_yy,0.00000);
     n_p.param<double>("Izz", I_zz,0.00000);
@@ -526,7 +516,6 @@ void humanoid_ekf::init() {
     rmdf = MediatorNew(medianWindow);
     //llmdf = new WindowMedian<double>(medianWindow);
     //rrmdf = new WindowMedian<double>(medianWindow);
-    
     LLegForceFilt = 0;
     RLegForceFilt = 0;
 }
@@ -542,13 +531,13 @@ void humanoid_ekf::run() {
             predictWithCoM = false;
             if(useMahony)
             {
-                mh->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)+Vector3d(bias_mgx,bias_mgy,bias_mgz)),
-                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)+Vector3d(bias_max,bias_may,bias_maz)));
+                mh->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)+Vector3d(bias_gx,bias_gy,bias_gz)),
+                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)+Vector3d(bias_ax,bias_ay,bias_az)));
             }
             else
             {
-                mw->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)+Vector3d(bias_mgx,bias_mgy,bias_mgz)),
-                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)+Vector3d(bias_max,bias_may,bias_maz)));
+                mw->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)+Vector3d(bias_gx,bias_gy,bias_gz)),
+                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)+Vector3d(bias_ax,bias_ay,bias_az)));
             }
             
             if(fsr_inc){
@@ -658,7 +647,7 @@ void humanoid_ekf::estimateWithIMUEKF()
                
                     if(odom_inc && !odom_divergence)
                     {
-                        if(outlier_count<3)
+                        if(outlier_count<10)
                         {
                             pos_update_ = pos_update;
                             pos_update += T_B_P.linear() * Vector3d(odom_msg.pose.pose.position.x - odom_msg_.pose.pose.position.x,
@@ -675,7 +664,7 @@ void humanoid_ekf::estimateWithIMUEKF()
                             q_update *=   ( q_now * q_prev.inverse());
                             odom_inc = false;
                             odom_msg_ = odom_msg;
-                            outlier = imuEKF->updateWithOdom(pos_update, q_update, true);
+                            outlier = imuEKF->updateWithOdom(pos_update, q_update, useOutlierDetection);
                         
                             if(outlier)
                             {
@@ -846,7 +835,7 @@ void humanoid_ekf::computeKinTFs() {
         Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
         Twr.linear() = Tbr.linear();
         dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                                      mass, Tau0, Tau1, freq, g, useCF, cf_freqvmin, cf_freqvmax,p_FT_LL,p_FT_RL); //USED TO BE 0.3 instead of 0.05
+                                      mass, Tau0, Tau1, joint_freq, g, useCF, cf_freqvmin, cf_freqvmax,p_FT_LL,p_FT_RL); //USED TO BE 0.3 instead of 0.05
     }
     
     
@@ -1067,7 +1056,7 @@ void humanoid_ekf::publishBodyEstimates() {
     bodyAcc_est_msg.angular_velocity.z = imuEKF->gyroZ;
     bodyAcc_est_pub.publish(bodyAcc_est_msg);
     
-    
+    odom_est_msg.child_frame_id = base_link_frame;
     odom_est_msg.header.stamp=ros::Time::now();
     odom_est_msg.header.frame_id = "odom";
     odom_est_msg.pose.pose.position.x = imuEKF->rX;
@@ -1089,7 +1078,8 @@ void humanoid_ekf::publishBodyEstimates() {
     //odom_est_msg.pose.covariance[i] = 0;
     odom_est_pub.publish(odom_est_msg);
     
-    
+    leg_odom_msg.child_frame_id = base_link_frame;
+
     leg_odom_msg.header.stamp=ros::Time::now();
     leg_odom_msg.header.frame_id = "odom";
     leg_odom_msg.pose.pose.position.x = Twb.translation()(0);
@@ -1110,10 +1100,12 @@ void humanoid_ekf::publishBodyEstimates() {
     
     if(ground_truth)
     {
+        ground_truth_com_odom_msg.child_frame_id = "CoM_frame";
         ground_truth_com_odom_msg.header.stamp = ros::Time::now();
         ground_truth_com_odom_msg.header.frame_id = "odom";
         ground_truth_com_pub.publish(ground_truth_com_odom_msg);
         
+        ground_truth_odom_msg.child_frame_id = base_link_frame;
         ground_truth_odom_msg.header.stamp = ros::Time::now();
         ground_truth_odom_msg.header.frame_id = "odom";
         ground_truth_odom_pub.publish(ground_truth_odom_msg);
@@ -1136,6 +1128,7 @@ void humanoid_ekf::publishSupportEstimates() {
 
 
 void humanoid_ekf::publishLegEstimates() {
+    leftleg_odom_msg.child_frame_id = lfoot_frame;
     leftleg_odom_msg.header.stamp=ros::Time::now();
     leftleg_odom_msg.header.frame_id = "odom";
     leftleg_odom_msg.pose.pose.position.x = Twl.translation()(0);
@@ -1153,6 +1146,7 @@ void humanoid_ekf::publishLegEstimates() {
     leftleg_odom_msg.twist.twist.angular.z = omegawl(2);
     leftleg_odom_pub.publish(leftleg_odom_msg);
     
+    rightleg_odom_msg.child_frame_id = rfoot_frame;
     rightleg_odom_msg.header.stamp=ros::Time::now();
     rightleg_odom_msg.header.frame_id = "odom";
     rightleg_odom_msg.pose.pose.position.x = Twr.translation()(0);
@@ -1290,6 +1284,7 @@ void humanoid_ekf::publishCOP() {
 
 
 void humanoid_ekf::publishCoMEstimates() {
+    CoM_odom_msg.child_frame_id = "CoM_frame";
     CoM_odom_msg.header.stamp=ros::Time::now();
     CoM_odom_msg.header.frame_id = "odom";
     CoM_odom_msg.pose.pose.position.x = nipmEKF->comX;
@@ -1301,7 +1296,7 @@ void humanoid_ekf::publishCoMEstimates() {
     //for(int i=0;i<36;i++)
     //odom_est_msg.pose.covariance[i] = 0;
     CoM_odom_pub.publish(CoM_odom_msg);
-    
+    CoM_odom_msg.child_frame_id = "CoM_frame";
     CoM_odom_msg.header.stamp=ros::Time::now();
     CoM_odom_msg.header.frame_id = "odom";
     CoM_odom_msg.pose.pose.position.x = CoM_leg_odom(0);
@@ -1451,7 +1446,6 @@ void humanoid_ekf::subscribeToOdom()
 {
     odom_sub = n.subscribe(odom_topic,1,&humanoid_ekf::odomCb,this,ros::TransportHints().tcpNoDelay());
     firstOdom = true;
-    
 }
 
 void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
