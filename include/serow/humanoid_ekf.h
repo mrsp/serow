@@ -112,7 +112,7 @@ private:
 	Vector3d  pos_update, pos_update_, pos_leg_update, CoM_gt, temp;
 	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RL, T_FT_LL, T_B_GT;
 	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, qoffsetGT;
-	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM;
+	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM, useOutlierDetection;
     bool debug_mode;
 	//ROS Messages
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;

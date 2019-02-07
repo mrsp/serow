@@ -9,7 +9,7 @@ namespace serow{
         Eigen::Matrix3d C1l, C2l, C1r, C2r;
         Eigen::Vector3d RpRm, LpLm;
         
-        Eigen::Vector3d pwr,pwl,pwb;
+        Eigen::Vector3d pwr,pwl,pwb, pwb_;
         Eigen::Vector3d vwr,vwl,vwb;
         Eigen::Matrix3d Rwr,Rwl;
         Eigen::Vector3d pwl_,pwr_;
@@ -21,7 +21,7 @@ namespace serow{
 
         Eigen::Matrix3d AL, AR, wedgerf, wedgelf;
         Eigen::Vector3d bL, bR, plf, prf; //FT w.r.t Foot Frame;
-        bool USE_CF;
+        bool USE_CF, firstrun;
         bodyVelCF* bvcf;
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -29,7 +29,7 @@ namespace serow{
                       double mass_, double alpha1_ = 1.0, double alpha3_ = 0.01, double freq_ = 100.0, double g_= 9.81, bool USE_CF_ = false, double freqvmin_ = 0.1, double freqvmax_ = 2.5,
                       Eigen::Vector3d plf_ = Eigen::Vector3d::Zero(), Eigen::Vector3d prf_ = Eigen::Vector3d::Zero())
         {
-            
+            firstrun = true;
             pwl_ = pwl0;
             pwr_ = pwr0;
             Rwl_ = Rwl0;
@@ -38,9 +38,11 @@ namespace serow{
             Rwr = Rwr_;
             pwl = pwl_;
             pwr = pwr_;
-
+            pwb_ = Eigen::Vector3d::Zero();
+	    pwb = pwb_;
             freq = freq_;
             mass = mass_;
+	    //Joint Freq
             Tm = 1.0/freq;
             Tm2 = Tm*Tm;
             ef = 0.1;
@@ -235,6 +237,7 @@ namespace serow{
             
             
             //Leg Odometry Estimate
+	    pwb_ = pwb;
             pwb = wl * pb_l + wr * pb_r;
             //Leg Position Estimate w.r.t Inertial Frame
             pwl += pwb - pb_l;
@@ -244,6 +247,10 @@ namespace serow{
             Rwr_ = Rwr;
             pwl_ = pwl;
             pwr_ = pwr;
+	    if(!firstrun)
+	    	vwb = (pwb - pwb_)*freq;
+	    else
+		firstrun = false;
             //cout<<"DEAD RECKONING "<<endl;
             //cout<<pwb<<endl;
         }
