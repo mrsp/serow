@@ -91,10 +91,10 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk: 5.e-03 #m/s^2
-gyroscope_bias_random_walk: 5.0e-04 # rad/s
-accelerometer_noise_density:  0.0075 #m/s^2  #MTI-300
-gyroscope_noise_density: 0.0014 #rad/s  #MTI-300
+accelerometer_bias_random_walk: 0.000433 #m/s^2
+gyroscope_bias_random_walk: 2.66e-05 # rad/s
+accelerometer_noise_density:  0.0075 #m/s^2 or 150 #MTI-300
+gyroscope_noise_density: 0.0014 #rad/s 28 #MTI-300
 
 #VO Measuremets
 #Odometry Measurement Noise std:
