@@ -627,6 +627,7 @@ void humanoid_ekf::estimateWithIMUEKF()
         else{
             //Update with the odometry
             if(leg_odom_inc){
+                    //Diff leg odom update
                     pos_leg_update = Twb.translation()-Twb_.translation();
                     q_leg_update =  qwb  * qwb_.inverse();
             }
@@ -634,7 +635,7 @@ void humanoid_ekf::estimateWithIMUEKF()
          
                     pos_update += pos_leg_update;
                     q_update *= q_leg_update;
-                    imuEKF->updateWithLegOdom(pos_update, q_update);
+                    imuEKF->updateWithTwistRotation(vwb, q_update);
                     leg_odom_inc = false;
                     //STORE POS
                     if(odom_inc){
@@ -647,7 +648,7 @@ void humanoid_ekf::estimateWithIMUEKF()
                
                     if(odom_inc && !odom_divergence)
                     {
-                        if(outlier_count<10)
+                        if(outlier_count<3)
                         {
                             pos_update_ = pos_update;
                             pos_update += T_B_P.linear() * Vector3d(odom_msg.pose.pose.position.x - odom_msg_.pose.pose.position.x,
@@ -669,17 +670,9 @@ void humanoid_ekf::estimateWithIMUEKF()
                             if(outlier)
                             {
                                 outlier_count++;
-
-                                if(leg_odom_inc)
-                                {
-                                    pos_update = pos_update_;
-                                    q_update = q_update_;
-
-                                    pos_update += pos_leg_update;
-                                    q_update *= q_leg_update;
-                                    imuEKF->updateWithLegOdom(pos_update, q_update);
-                                    leg_odom_inc = false;
-                                }
+                                pos_update = pos_update_;
+                                q_update = q_update_;
+                               
                             }
                             else
                             {
@@ -698,7 +691,7 @@ void humanoid_ekf::estimateWithIMUEKF()
                         std::cout<<"Odom divergence, updating only with leg odometry"<<std::endl;
                         pos_update += pos_leg_update;
                         q_update *= q_leg_update;
-                        imuEKF->updateWithLegOdom(pos_update, q_update);
+                        imuEKF->updateWithTwistRotation(vwb, q_update);
                         leg_odom_inc = false;
                     }
                     else if(leg_vel_inc)

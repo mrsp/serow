@@ -67,13 +67,15 @@ void IMUEKF::init() {
     P(14, 14) = 1e-2;
     
     //For outlier detection
-    f0 = 0.01;
-    e0 = 0.99;
+    f0 = 0.1;
+    e0 = 0.9;
     //Construct C
     Hf = Matrix<double, 6, 15>::Zero();
     Hf.block<3,3>(0,6) = Matrix3d::Identity();
     Hf.block<3,3>(3,3) = Matrix3d::Identity();
-    
+    Hvf = Matrix<double, 6, 15>::Zero();
+    Hvf.block<3,3>(3,3) = Matrix3d::Identity();
+
     Hv = Matrix<double, 3, 15>::Zero();
     
     /*Initialize the state **/
@@ -436,6 +438,56 @@ void IMUEKF::updateWithTwist(Vector3d y)
     
     
 }
+
+
+/** Update **/
+void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
+{
+
+    R(0, 0) = vel_px * vel_px;
+    R(1, 1) = vel_py * vel_py;
+    R(2, 2) = vel_pz * vel_pz;
+    R(3, 3) = leg_odom_ax * leg_odom_ax;
+    R(4, 4) =  R(3, 3);
+    R(5, 5) =  R(3, 3);
+
+
+    v = x.segment<3>(0);
+    std::cout<<" Update with Twist Rot" <<std::endl;
+    std::cout<<y<<std::endl;
+    //Innovetion vector
+    z.segment<3>(0) = y;
+    z.segment<3>(0).noalias() -= Rib * v;
+    z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
+
+
+    Hvf.block<3,3>(0,0) = Rib;
+    Hvf.block<3,3>(0,3).noalias() = -Rib * wedge(v);
+    s = R;
+    s.noalias() += Hvf * P * Hvf.transpose();
+    Kf.noalias() = P * Hvf.transpose() * s.inverse();
+    
+    dxf.noalias() = Kf * z;
+   
+    //Update the mean estimate
+    x += dxf;
+    
+    //Update the error covariance
+    P = (If - Kf * Hvf) * P * (If - Hvf.transpose()*Kf.transpose());
+    P.noalias()+= Kf * R * Kf.transpose();
+    
+    
+    if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+    {
+        Rib *=  expMap(dxf.segment<3>(3));
+    }
+    x.segment<3>(3) = Vector3d::Zero();
+    
+    updateVars();
+    
+    
+}
+
 void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
 {
     std::cout<<"Update with LO"<<std::endl;
@@ -532,13 +584,12 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
         
         unsigned int j=0;
-        while(j<3)
+        while(j<4)
         {
             if(zeta>1.0e-5)
             {
                 //Compute the Kalman Gain
-	        R_z = R;
-                R_z.block<3,3>(0,0) /= zeta;
+	        R_z = R/zeta;
                 s = R_z;
                 s.noalias() += Hf * P * Hf.transpose();
                 Kf.noalias() = P * Hf.transpose() * s.inverse();
@@ -664,9 +715,9 @@ void IMUEKF::updateVars()
     omegahat = omega + bgyr;
     fhat = f + bacc;
     
-    std::cout<<"Bias "<<std::endl;
-    std::cout<<bgyr<<std::endl;
-    std::cout<<bacc<<std::endl;
+    //std::cout<<"Bias "<<std::endl;
+    //std::cout<<bgyr<<std::endl;
+    //std::cout<<bacc<<std::endl;
     gyro  = Rib * omegahat;
     gyroX = gyro(0);
     gyroY = gyro(1);

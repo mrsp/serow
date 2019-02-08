@@ -62,7 +62,7 @@ private:
 
 	Matrix<double, 15, 15> P, Af, Acf, If, Qff;
 
-	Matrix<double, 6, 15> Hf;
+	Matrix<double, 6, 15> Hf, Hvf;
 	Matrix<double, 3, 15> Hv;
 
 	Matrix<double, 12, 12> Qf;
@@ -189,7 +189,8 @@ public:
 	bool updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection);
 	void updateWithLegOdom(Vector3d y, Quaterniond qy);
 	void updateWithTwist(Vector3d y);
- 	//void updateWithSupport(Vector3d y, Quaterniond qy);
+	void updateWithTwistRotation(Vector3d y,Quaterniond qy);
+
 
 	// Initializing Variables
 	void init();
