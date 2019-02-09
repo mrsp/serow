@@ -6,7 +6,7 @@ modelname: "/home/master/dp_ws/src/serow/share/urdf/cogimon.urdf"
 
 useLegOdom: false
 #ROS Topic Names
-odom_topic: "/svo/odom" #only if usePoseUpdate is false and useLegOdom is false
+odom_topic: "/svo/odom2" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/xbotcore/cogimon/imu/imu_link"
 joint_state_topic: "/cogimon/joint_states"
 lfoot_force_torque_topic: "/xbotcore/cogimon/ft/l_leg_ft"
@@ -91,9 +91,9 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  1.0e-6 #m/s^2/sqrt(s)
-gyroscope_bias_random_walk: 1.0e-7 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.019519 # m/s^2  #Continuous Time
+accelerometer_bias_random_walk:  1.0e-4 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 1.0e-5 # rad/s/sqrt(s)
+accelerometer_noise_density: 0.05 # m/s^2  #Continuous Time
 gyroscope_noise_density: 0.005 # rad/s  #Continuous Time
 
 #Measuremets
@@ -103,10 +103,10 @@ leg_odom_position_noise_density: 5.0e-04
 leg_odom_orientation_noise_density: 1.0e-03
 #VO
 useOutlierDetection: true
-odom_position_noise_density: 4.0e-02
-odom_orientation_noise_density: 4.0e-02
+odom_position_noise_density: 5.0e-02 #4
+odom_orientation_noise_density: 5.0e-01 #4
 
-velocity_noise_density_x: 0.01
+velocity_noise_density_x: 0.01 #2
 velocity_noise_density_y: 0.01
 velocity_noise_density_z: 0.01
 
