@@ -584,7 +584,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
         
         unsigned int j=0;
-        while(j<4)
+        while(j<3)
         {
             if(zeta>1.0e-5)
             {

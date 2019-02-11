@@ -3,32 +3,30 @@ base_link: "base_link"
 lfoot: "l_ankle"
 rfoot: "r_ankle"
 modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
+useLegOdom: false
 
 #ROS Topic Names
-
-useLegOdom: false
-#odom_topic: "/vins_estimator/odometry" #only if useLegOdom is false
-odom_topic: "/svo/odom"
+odom_topic: "/svo/odom/0"
 #odom_topic: "/lidar/odom"
-
 imu_topic: "/imu0"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
 rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
 
-
 #Ground-Truth
 ground_truth: false
-ground_truth_odom_topic: "/gt"
+ground_truth_odom_topic: "/nao/ground_truth/odom"
 ground_truth_com_topic: "/gt_com"
+T_B_GT: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0 ,0, 1]
 
+comp_with: true
+comp_with_odom0_topic: "/svo/odom/0"
 
 support_idx_provided: false
 support_idx_topic: "/sp"
 
 #To publish relative data
 debug_mode: false
-
 
 #TF from IMU to Body 
 #For imu0 (external IMU)
@@ -43,6 +41,7 @@ T_FT_RL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 T_B_P: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1] #SVO without imu
 #T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
 #T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
+
 #ROS Topic Frequencies in Hz
 imu_topic_freq: 100
 joint_topic_freq: 100
@@ -54,9 +53,8 @@ LLegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 7
 StrikingContact: 60
 
-#Steady State Joint Kalman Filter (KF)
-estimateJoints: true #Use a Steady State KF in every joint
-joint_cutoff_freq: 4.0
+#Joint Velocity Estimation
+joint_cutoff_freq: 6.0
 
 #Mahony Filter for attitude
 useMahony: true
@@ -74,10 +72,7 @@ bias_mgz: 0
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
-#Complimentary Filter for Body Velocity  //Used in Leg Odometry
-useCF: false
-freqvmin: 0.1
-freqvmax: 2.5
+medianWindow: 10
 mass: 5.182530  #robot mass
 
 
@@ -101,12 +96,10 @@ gyroscope_noise_density: 0.0014 #rad/s 28 #MTI-300
 leg_odom_position_noise_density: 5.0e-04
 leg_odom_orientation_noise_density: 1.0e-03
 
-useOutlierDetection: true
+useOutlierDetection: false
 #Odom Measurements
-#odom_position_noise_density: 9.0e-03
-#odom_orientation_noise_density: 9.0e-03
-odom_position_noise_density: 5.0e-02
-odom_orientation_noise_density: 5.0e-02
+odom_position_noise_density: 1.0e-01 #2.0e-01
+odom_orientation_noise_density: 1.0e-01 #2.0e-01
 
 #RP Lidar Odom
 #odom_position_noise_density: 0.003
@@ -129,7 +122,7 @@ bias_gz: 0
 
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
-medianWindow: 10
+
 
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
