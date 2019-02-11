@@ -94,25 +94,25 @@ gyroscope_noise_density: 0.0014 #rad/s 28 #MTI-300
 #VO Measuremets
 #Odometry Measurement Noise std:
 leg_odom_position_noise_density: 5.0e-04
-leg_odom_orientation_noise_density: 1.0e-03
+leg_odom_orientation_noise_density: 5.0e-02
 
 useOutlierDetection: false
 #Odom Measurements
-odom_position_noise_density: 1.0e-01 #2.0e-01
-odom_orientation_noise_density: 1.0e-01 #2.0e-01
+odom_position_noise_density: 5.0e-02 #2.0e-01
+odom_orientation_noise_density: 5.0e-02 #2.0e-01
 
 #RP Lidar Odom
 #odom_position_noise_density: 0.003
 #odom_orientation_noise_density: 0.01
 
-velocity_noise_density_x: 0.02
-velocity_noise_density_y: 0.02
-velocity_noise_density_z: 0.02
+velocity_noise_density_x: 0.008
+velocity_noise_density_y: 0.008
+velocity_noise_density_z: 0.008
 
 #IMU Initial Biases - Biases are additive and are in the IMU !
-bias_ax: 0
-bias_ay: 0
-bias_az: 0
+bias_ax: 0.34931
+bias_ay: -0.444857
+bias_az: -0.00997911
 bias_gx: 0
 bias_gy: 0
 bias_gz: 0
