@@ -584,7 +584,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
         
         unsigned int j=0;
-        while(j<3)
+        while(j<4)
         {
             if(zeta>1.0e-5)
             {
@@ -715,9 +715,9 @@ void IMUEKF::updateVars()
     omegahat = omega + bgyr;
     fhat = f + bacc;
     
-    //std::cout<<"Bias "<<std::endl;
-    //std::cout<<bgyr<<std::endl;
-    //std::cout<<bacc<<std::endl;
+    std::cout<<"Bias "<<std::endl;
+    std::cout<<bgyr<<std::endl;
+    std::cout<<bacc<<std::endl;
     gyro  = Rib * omegahat;
     gyroX = gyro(0);
     gyroY = gyro(1);
