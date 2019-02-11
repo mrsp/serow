@@ -75,10 +75,10 @@ private:
 	ros::NodeHandle n;
 	ros::Publisher supportPose_est_pub, bodyAcc_est_pub,leftleg_odom_pub, rightleg_odom_pub, support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
 	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, CoM_leg_odom_pub, ground_truth_odom_pub,ds_pub, 
-	rel_leftlegPose_pub,rel_rightlegPose_pub;
+	rel_leftlegPose_pub,rel_rightlegPose_pub, comp_odom0_pub;
     
 	ros::Subscriber imu_sub, joint_state_sub, lfsr_sub, rfsr_sub, odom_sub, 
-	ground_truth_odom_sub,ds_sub, ground_truth_com_sub,support_idx_sub;
+	ground_truth_odom_sub,ds_sub, ground_truth_com_sub,support_idx_sub, compodom0_sub;
 	
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
@@ -168,6 +168,15 @@ private:
 	double LLegUpThres, LLegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
+
+
+	bool comp_with, comp_odom0_inc, firstCO;
+	std::string comp_with_odom0_topic;
+	Vector3d offsetCO;
+	Quaterniond qoffsetCO;
+	nav_msgs::Odometry comp_odom0_msg;
+	void subscribeToCompOdom();
+	void compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg);
 	/** Real odometry Data **/
      string lfsr_topic,rfsr_topic; //copl_topic,copr_topic;
 	 string pose_topic;
@@ -196,9 +205,7 @@ private:
 	 void odomCb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
-	 //void coplCb(const geometry_msgs::PointStamped::ConstPtr& msg);
-	 //void coprCb(const geometry_msgs::PointStamped::ConstPtr& msg);
-
+	 
 
 	 void computeLGRF();
 	 void computeRGRF();

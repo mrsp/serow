@@ -205,7 +205,11 @@ void humanoid_ekf::loadparams() {
     //n_p.param<std::string>("copl_topic",copl_topic,"cop/left");
     //n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
     
-    
+    n_p.param<bool>("comp_with",comp_with,false);
+    comp_odom0_inc = false;
+    if(comp_with)
+	n_p.param<std::string>("comp_with_odom0_topic", comp_with_odom0_topic,"compare_with_odom0");
+
     n_p.param<bool>("estimateCoM", useCoMEKF,false);
     n_p.param<int>("medianWindow", medianWindow, 10);
     
@@ -441,6 +445,8 @@ void humanoid_ekf::subscribe()
     if(support_idx_provided)
     subscribeToSupportIdx();
     
+    if(comp_with)
+	subscribeToCompOdom();
 }
 
 void humanoid_ekf::init() {
@@ -1104,6 +1110,11 @@ void humanoid_ekf::publishBodyEstimates() {
         ground_truth_odom_pub.publish(ground_truth_odom_msg);
         ds_pub.publish(is_in_ds_msg);
     }
+    if(comp_odom0_inc){
+	comp_odom0_msg.header = odom_est_msg.header;
+	comp_odom0_pub.publish(comp_odom0_msg);
+	comp_odom0_inc = false;
+    }
 }
 
 void humanoid_ekf::publishSupportEstimates() {
@@ -1394,7 +1405,9 @@ void humanoid_ekf::advertise() {
         RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RLeg/GRF",1000);
         LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LLeg/GRF",1000);
     }
-    
+    if(comp_with)
+    	comp_odom0_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom0",1000);
+
     
 }
 
@@ -1516,6 +1529,35 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 }
 
 
+void humanoid_ekf::subscribeToCompOdom()
+{
+	compodom0_sub = n.subscribe(comp_with_odom0_topic,1000,&humanoid_ekf::compodom0Cb,this);
+	firstCO = true;
+}
+
+void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
+{
+	comp_odom0_msg = *msg;
+	temp = T_B_P.linear()*Vector3d(comp_odom0_msg.pose.pose.position.x,comp_odom0_msg.pose.pose.position.y,comp_odom0_msg.pose.pose.position.z);
+	tempq = Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
+ 	if(firstCO){
+            qoffsetCO =  qwb  * tempq.inverse();
+            offsetCO = Twb.translation() - temp;
+            firstCO=false;
+        }
+        tempq =  q_B_P * (qoffsetCO * tempq);
+        temp = offsetCO + temp;
+        
+        comp_odom0_msg.pose.pose.position.x = temp(0);
+        comp_odom0_msg.pose.pose.position.y = temp(1);
+        comp_odom0_msg.pose.pose.position.z = temp(2);
+        comp_odom0_msg.pose.pose.orientation.w = tempq.w();
+        comp_odom0_msg.pose.pose.orientation.x = tempq.x();
+        comp_odom0_msg.pose.pose.orientation.y = tempq.y();
+        comp_odom0_msg.pose.pose.orientation.z = tempq.z();
+   
+	comp_odom0_inc = true;
+}
 
 
 void humanoid_ekf::subscribeToSupportIdx()
