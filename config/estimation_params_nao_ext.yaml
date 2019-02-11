@@ -110,12 +110,12 @@ velocity_noise_density_y: 0.008
 velocity_noise_density_z: 0.008
 
 #IMU Initial Biases - Biases are additive and are in the IMU !
-bias_ax: 0.34931
-bias_ay: -0.444857
-bias_az: -0.00997911
-bias_gx: 0
-bias_gy: 0
-bias_gz: 0
+bias_ax: 0.0
+bias_ay: 0.0
+bias_az: 0.0
+bias_gx: 0.0
+bias_gy: 0.0
+bias_gz: 0.0
 
 
 

@@ -1414,9 +1414,8 @@ void humanoid_ekf::advertise() {
 
 void humanoid_ekf::subscribeToJointState()
 {
-    joint_state_sub = n.subscribe(joint_state_topic,1,&humanoid_ekf::joint_stateCb,this,ros::TransportHints().tcpNoDelay());
     firstJointStates = true;
-    
+    joint_state_sub = n.subscribe(joint_state_topic,1,&humanoid_ekf::joint_stateCb,this,ros::TransportHints().tcpNoDelay());    
 }
 
 void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
@@ -1450,8 +1449,8 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToOdom()
 {
-    odom_sub = n.subscribe(odom_topic,1,&humanoid_ekf::odomCb,this,ros::TransportHints().tcpNoDelay());
     firstOdom = true;
+    odom_sub = n.subscribe(odom_topic,1,&humanoid_ekf::odomCb,this,ros::TransportHints().tcpNoDelay());
 }
 
 void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
@@ -1468,8 +1467,9 @@ void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToGroundTruth()
 {
-    ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic,1,&humanoid_ekf::ground_truth_odomCb,this,ros::TransportHints().tcpNoDelay());
     firstGT = true;
+    ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic,1,&humanoid_ekf::ground_truth_odomCb,this,ros::TransportHints().tcpNoDelay());
+
 }
 void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
@@ -1498,8 +1498,9 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToGroundTruthCoM()
 {
-    ground_truth_com_sub = n.subscribe(ground_truth_com_topic,1000,&humanoid_ekf::ground_truth_comCb,this,ros::TransportHints().tcpNoDelay());
     firstGTCoM=true;
+    ground_truth_com_sub = n.subscribe(ground_truth_com_topic,1000,&humanoid_ekf::ground_truth_comCb,this,ros::TransportHints().tcpNoDelay());
+
 }
 void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
@@ -1531,12 +1532,14 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToCompOdom()
 {
-	compodom0_sub = n.subscribe(comp_with_odom0_topic,1000,&humanoid_ekf::compodom0Cb,this);
 	firstCO = true;
+	compodom0_sub = n.subscribe(comp_with_odom0_topic,1000,&humanoid_ekf::compodom0Cb,this);
+
 }
 
 void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
 {
+if(!firstrun){
 	comp_odom0_msg = *msg;
 	temp = T_B_P.linear()*Vector3d(comp_odom0_msg.pose.pose.position.x,comp_odom0_msg.pose.pose.position.y,comp_odom0_msg.pose.pose.position.z);
 	tempq = Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
@@ -1557,6 +1560,7 @@ void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
         comp_odom0_msg.pose.pose.orientation.z = tempq.z();
    
 	comp_odom0_inc = true;
+}
 }
 
 
