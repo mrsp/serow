@@ -7,8 +7,9 @@ useLegOdom: false
 
 #ROS Topic Names
 odom_topic: "/svo/odom/0"
-#odom_topic: "/lidar/odom"
+#odom_topic: "/odom_rf2o"
 imu_topic: "/imu0"
+#imu_topic: "/nao_robot/imu"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
 rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
@@ -21,7 +22,7 @@ T_B_GT: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0 ,0, 1]
 
 comp_with: true
 comp_with_odom0_topic: "/svo/odom/0"
-
+#comp_with_odom0_topic: "/odom_rf2o"
 support_idx_provided: false
 support_idx_topic: "/sp"
 
@@ -32,14 +33,15 @@ debug_mode: false
 #For imu0 (external IMU)
 T_B_A: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 1]
 T_B_G: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,0, 1]
-
+#T_B_A: [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,-1 ,0, 0, 0, 0 ,0, 1] #onboard imu
+#T_B_G: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 ,0, 1] #onboard imu
 #TF from F/T to Left Foot
 T_FT_LL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 #TF from F/T to Right Foot
 T_FT_RL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 #TF from External Odom to Body only if useLegOdom is false
-T_B_P: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1] #SVO without imu
-#T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
+#T_B_P: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1] #SVO without imu
+T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
 #T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
 
 #ROS Topic Frequencies in Hz
@@ -96,13 +98,13 @@ gyroscope_noise_density: 0.0014 #rad/s 28 #MTI-300
 leg_odom_position_noise_density: 5.0e-04
 leg_odom_orientation_noise_density: 5.0e-02
 
-useOutlierDetection: false
+useOutlierDetection: true
 #Odom Measurements
 odom_position_noise_density: 5.0e-02 #2.0e-01
 odom_orientation_noise_density: 5.0e-02 #2.0e-01
 
 #RP Lidar Odom
-#odom_position_noise_density: 0.003
+#odom_position_noise_density: 0.015
 #odom_orientation_noise_density: 0.01
 
 velocity_noise_density_x: 0.008
