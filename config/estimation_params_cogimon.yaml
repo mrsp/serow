@@ -55,7 +55,7 @@ LLegLowThres: 42.5 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 15.0
 StrikingContact: 800
 VelocityThres: 0.1
-medianWindow: 9
+medianWindow: 14
 
 #Compute Joint Velocities
 joint_cutoff_freq: 25
@@ -64,7 +64,7 @@ joint_noise_density: 0.0463 # rad
 
 #Mahony Filter for attitude
 useMahony: true
-Mahony_Kp: 0.1
+Mahony_Kp: 0.05
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.06
@@ -95,9 +95,9 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  1.0e-4 #m/s^2/sqrt(s)
-gyroscope_bias_random_walk: 1.0e-5 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.05 # m/s^2  #Continuous Time
+accelerometer_bias_random_walk:  1.0e-5 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 1.0e-6 # rad/s/sqrt(s)
+accelerometer_noise_density: 0.01 # m/s^2  #Continuous Time
 gyroscope_noise_density: 0.005 # rad/s  #Continuous Time
 
 #Measuremets
@@ -107,21 +107,25 @@ leg_odom_position_noise_density: 5.0e-04
 leg_odom_orientation_noise_density: 5.0e-02
 #VO
 useOutlierDetection: true
-odom_position_noise_density: 4.0e-02 #4 2.5
-odom_orientation_noise_density: 1.0e-01 #4
+odom_position_noise_density: 3.5e-02 #4 3.5
+odom_orientation_noise_density: 5.0e-02 #4
 
-velocity_noise_density_x: 0.01 #2
-velocity_noise_density_y: 0.01
-velocity_noise_density_z: 0.01
+velocity_noise_density_x: 0.007 #0.007
+velocity_noise_density_y: 0.007 #0.009
+velocity_noise_density_z: 0.007 #0.007
 
 
-#IMU Initial Biases - Biases are substracted!
-bias_ax: 0
-bias_ay: 0
-bias_az: 0
+#IMU Initial Biases - Biases are added!
+bias_ax: -0.2
+bias_ay: 0.1
+bias_az: -0.09
 bias_gx: 0
 bias_gy: 0
 bias_gz: 0
+
+
+
+
 
 #Filter Params
 gravity: 9.80665 #gravity constant (m/s^2)

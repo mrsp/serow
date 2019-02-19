@@ -1110,11 +1110,11 @@ void humanoid_ekf::publishBodyEstimates() {
         ground_truth_odom_pub.publish(ground_truth_odom_msg);
         ds_pub.publish(is_in_ds_msg);
     }
-    if(comp_odom0_inc){
+    //if(comp_odom0_inc){
 	comp_odom0_msg.header = odom_est_msg.header;
 	comp_odom0_pub.publish(comp_odom0_msg);
 	comp_odom0_inc = false;
-    }
+    //}
 }
 
 void humanoid_ekf::publishSupportEstimates() {
@@ -1414,8 +1414,9 @@ void humanoid_ekf::advertise() {
 
 void humanoid_ekf::subscribeToJointState()
 {
-    firstJointStates = true;
-    joint_state_sub = n.subscribe(joint_state_topic,1,&humanoid_ekf::joint_stateCb,this,ros::TransportHints().tcpNoDelay());    
+
+    joint_state_sub = n.subscribe(joint_state_topic,1,&humanoid_ekf::joint_stateCb,this,ros::TransportHints().tcpNoDelay());  
+    firstJointStates = true;  
 }
 
 void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
@@ -1449,8 +1450,9 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToOdom()
 {
-    firstOdom = true;
+
     odom_sub = n.subscribe(odom_topic,1,&humanoid_ekf::odomCb,this,ros::TransportHints().tcpNoDelay());
+    firstOdom = true;
 }
 
 void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
@@ -1467,8 +1469,9 @@ void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToGroundTruth()
 {
-    firstGT = true;
+
     ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic,1,&humanoid_ekf::ground_truth_odomCb,this,ros::TransportHints().tcpNoDelay());
+    firstGT = true;
 
 }
 void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
@@ -1476,13 +1479,13 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
     if(!firstrun){
         ground_truth_odom_msg = *msg;
         temp =  T_B_GT.linear()*Vector3d(ground_truth_odom_msg.pose.pose.position.x, ground_truth_odom_msg.pose.pose.position.y, ground_truth_odom_msg.pose.pose.position.z);
-        tempq =  Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x,ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
+        tempq =  q_B_GT * Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x,ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
         if(firstGT){
             qoffsetGT =  qwb  * tempq.inverse();
             offsetGT = Twb.translation() - temp;
             firstGT=false;
         }
-        tempq =  q_B_GT * (qoffsetGT * tempq);
+        tempq =  qoffsetGT * tempq;
         temp = offsetGT + temp;
         
         ground_truth_odom_msg.pose.pose.position.x = temp(0);
@@ -1498,8 +1501,9 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToGroundTruthCoM()
 {
-    firstGTCoM=true;
+
     ground_truth_com_sub = n.subscribe(ground_truth_com_topic,1000,&humanoid_ekf::ground_truth_comCb,this,ros::TransportHints().tcpNoDelay());
+    firstGTCoM=true;
 
 }
 void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
@@ -1507,14 +1511,14 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
     if(!firstrun){
         ground_truth_com_odom_msg = *msg;
         temp = T_B_GT.linear()*Vector3d(ground_truth_com_odom_msg.pose.pose.position.x,ground_truth_com_odom_msg.pose.pose.position.y,ground_truth_com_odom_msg.pose.pose.position.z);
-        tempq =  Quaterniond(ground_truth_com_odom_msg.pose.pose.orientation.w,ground_truth_com_odom_msg.pose.pose.orientation.x,ground_truth_com_odom_msg.pose.pose.orientation.y,ground_truth_com_odom_msg.pose.pose.orientation.z);
+        tempq = q_B_GT * Quaterniond(ground_truth_com_odom_msg.pose.pose.orientation.w,ground_truth_com_odom_msg.pose.pose.orientation.x,ground_truth_com_odom_msg.pose.pose.orientation.y,ground_truth_com_odom_msg.pose.pose.orientation.z);
         if(firstGTCoM){
             Vector3d tempCoMOffset = Twb * CoM_enc;
             offsetGTCoM = tempCoMOffset - temp;
             qoffsetGTCoM = qwb * tempq.inverse();
             firstGTCoM=false;
         }
-        tempq =  q_B_GT * (qoffsetGTCoM * tempq);
+        tempq =   qoffsetGTCoM * tempq;
         temp = offsetGTCoM + temp;
         ground_truth_com_odom_msg.pose.pose.position.x = temp(0);
         ground_truth_com_odom_msg.pose.pose.position.y = temp(1);
@@ -1532,9 +1536,9 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToCompOdom()
 {
-	firstCO = true;
-	compodom0_sub = n.subscribe(comp_with_odom0_topic,1000,&humanoid_ekf::compodom0Cb,this);
 
+	compodom0_sub = n.subscribe(comp_with_odom0_topic,1000,&humanoid_ekf::compodom0Cb,this,ros::TransportHints().tcpNoDelay());
+	firstCO = true;
 }
 
 void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
@@ -1542,13 +1546,14 @@ void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
 if(!firstrun){
 	comp_odom0_msg = *msg;
 	temp = T_B_P.linear()*Vector3d(comp_odom0_msg.pose.pose.position.x,comp_odom0_msg.pose.pose.position.y,comp_odom0_msg.pose.pose.position.z);
-	tempq = Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
- 	if(firstCO){
+	tempq = q_B_P *Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
+ 	
+	if(firstCO){
             qoffsetCO =  qwb  * tempq.inverse();
             offsetCO = Twb.translation() - temp;
             firstCO=false;
         }
-        tempq =  q_B_P * (qoffsetCO * tempq);
+        tempq =   (qoffsetCO * tempq);
         temp = offsetCO + temp;
         
         comp_odom0_msg.pose.pose.position.x = temp(0);
