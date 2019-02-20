@@ -596,7 +596,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
             }
         
             temp = y-x_i.segment<3>(6);
-            if(temp.transpose()*P_i.block<3,3>(6,6).inverse()*temp)<mahalanobis_TH)
+            if((temp.transpose()*P_i.block<3,3>(6,6).inverse()*temp)<mahalanobis_TH)
             {
             
                 P = P_i;
