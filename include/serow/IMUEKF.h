@@ -126,7 +126,7 @@ public:
 			bias_ax, bias_ay, bias_az, ghat;
 
 	double accX, accY, accZ, velX, velY, velZ, rX, rY, rZ;
-
+    double mahalanobis_TH;
 	Matrix3d Rib;
 
 	Affine3d  Tib;
