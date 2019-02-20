@@ -37,6 +37,7 @@ IMUEKF::IMUEKF()
     //Gravity Vector
     g = Vector3d::Zero();
     g(2) = -9.80;
+    mahalanobis_TH = -1;
 }
 
 void IMUEKF::init() {
@@ -543,29 +544,67 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
     outlier = false;
     if(!useOutlierDetection)
     {
-        r = x.segment<3>(6);
-        //Innovetion vector
-        z.segment<3>(0) = y - r;
-        z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
-        //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
-        
-        //Compute the Kalman Gain
-        s = R;
-        s.noalias() += Hf * P * Hf.transpose();
-        Kf.noalias() = P * Hf.transpose() * s.inverse();
-        
-        //Update the error covariance
-        P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
-        P.noalias() += Kf * R * Kf.transpose();
-        
-        dxf.noalias() = Kf * z;
-        x += dxf;
-        if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+        if(mahalanobis_TH == -1)
         {
-             Rib *=  expMap(dxf.segment<3>(3));
+            r = x.segment<3>(6);
+            //Innovetion vector
+            z.segment<3>(0) = y - r;
+            z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
+            //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
+            
+            //Compute the Kalman Gain
+            s = R;
+            s.noalias() += Hf * P * Hf.transpose();
+            Kf.noalias() = P * Hf.transpose() * s.inverse();
+            
+            //Update the error covariance
+            P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
+            P.noalias() += Kf * R * Kf.transpose();
+            
+            dxf.noalias() = Kf * z;
+            //Update the mean estimate
+            x += dxf;
+            if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+            {
+                 Rib *=  expMap(dxf.segment<3>(3));
+            }
+            x.segment<3>(3) = Vector3d::Zero();
         }
-        x.segment<3>(3) = Vector3d::Zero();
-        //Update the mean estimate
+        else
+        {
+            r = x.segment<3>(6);
+            //Innovetion vector
+            z.segment<3>(0) = y - r;
+            z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
+            //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
+            
+            //Compute the Kalman Gain
+            s = R;
+            s.noalias() += Hf * P * Hf.transpose();
+            Kf.noalias() = P * Hf.transpose() * s.inverse();
+            
+            //Update the error covariance
+            P_i = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
+            P_i.noalias() += Kf * R * Kf.transpose();
+            dxf.noalias() = Kf * z;
+            //Update the mean estimate
+            x_i  = x + dxf;
+            
+            if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+            {
+                Rib_i =  Rib*expMap(dxf.segment<3>(3));
+            }
+        
+            temp = y-x_i.segment<3>(6);
+            if(temp.transpose()*P_i.block<3,3>(6,6).inverse()*temp)<mahalanobis_TH)
+            {
+            
+                P = P_i;
+                x = x_i;
+                Rib = Rib_i;
+                x.segment<3>(3) = Vector3d::Zero();
+            }
+        }
     }
     else
     {
