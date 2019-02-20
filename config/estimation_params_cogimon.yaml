@@ -95,10 +95,10 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  1.0e-5 #m/s^2/sqrt(s)
+accelerometer_bias_random_walk:  2.4336e-05 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 1.0e-6 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.01 # m/s^2  #Continuous Time
-gyroscope_noise_density: 0.005 # rad/s  #Continuous Time
+accelerometer_noise_density: 0.0221 # m/s^2  #Continuous Time
+gyroscope_noise_density: 9.7738e-04 # rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
@@ -106,7 +106,7 @@ gyroscope_noise_density: 0.005 # rad/s  #Continuous Time
 leg_odom_position_noise_density: 5.0e-04
 leg_odom_orientation_noise_density: 5.0e-02
 #VO
-useOutlierDetection: true
+useOutlierDetection: false
 odom_position_noise_density: 3.5e-02 #4 3.5
 odom_orientation_noise_density: 5.0e-02 #4
 
