@@ -78,8 +78,9 @@ bias_mgz: -0.000158554
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
-medianWindow: 9
-
+medianWindow: 10
+#mass: 5.182530  #robot mass
+mass: 6.6530  #robot mass
 #Choose Integration Method
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
 useEuler: true
@@ -101,22 +102,24 @@ gyroscope_noise_density: 0.00968 #rad/s
 leg_odom_position_noise_density: 5.0e-04
 leg_odom_orientation_noise_density: 5.0e-02
 
-useOutlierDetection: true
+useOutlierDetection: false
+#mahalanobis_TH: 9
+mahalanobis_TH: -1
 #Odom Measurements
 #odom_position_noise_density: 5.0e-02 #2.0e-01
 #odom_orientation_noise_density: 5.0e-02 #2.0e-01
 
 #RP Lidar Odom
-odom_position_noise_density: 0.015
-odom_orientation_noise_density: 0.01
+odom_position_noise_density: 0.012
+odom_orientation_noise_density: 5.0e-02
 
-velocity_noise_density_x: 0.01
-velocity_noise_density_y: 0.01
-velocity_noise_density_z: 0.01
+velocity_noise_density_x: 0.013
+velocity_noise_density_y: 0.013
+velocity_noise_density_z: 0.013
 
 
 #IMU Initial Biases - Biases are substracted!
-bias_ax: -0.239618
+bias_ax: -0.639618
 bias_ay: 0.1934
 #bias_ay: -0.0751756
 bias_az:  0.0
@@ -160,7 +163,6 @@ gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
 #Gyro Moving Average Filter
 maWindow: 14 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
 #Filter Params
-mass: 5.182530  #robot mass
 Ixx : 0.0050623407587  #torso inertia around x
 Iyy : 0.0048801358789  #torso inetria around y
 Izz : 0.001610300038   #torso inertia around z

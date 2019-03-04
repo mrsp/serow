@@ -3,11 +3,9 @@ Panels:
     Help Height: 0
     Name: Displays
     Property Tree Widget:
-      Expanded:
-        - /Status1
-        - /Grid1
+      Expanded: ~
       Splitter Ratio: 0.359813
-    Tree Height: 506
+    Tree Height: 439
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -26,7 +24,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Image
+    SyncSource: LaserScan
 Visualization Manager:
   Class: ""
   Displays:
@@ -137,7 +135,7 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz/Path
       Color: 0; 255; 0
-      Enabled: true
+      Enabled: false
       Head Diameter: 0.3
       Head Length: 0.2
       Length: 0.3
@@ -155,10 +153,10 @@ Visualization Manager:
       Shaft Length: 0.1
       Topic: /SERoW/leg_odom/path
       Unreliable: false
-      Value: true
+      Value: false
     - Alpha: 1
-      Axes Length: 0.4
-      Axes Radius: 0.02
+      Axes Length: 0.1
+      Axes Radius: 0.01
       Class: rviz/Pose
       Color: 255; 25; 0
       Enabled: true
@@ -325,8 +323,8 @@ Visualization Manager:
       Unreliable: false
       Value: false
     - Alpha: 1
-      Axes Length: 0.2
-      Axes Radius: 0.02
+      Axes Length: 0.1
+      Axes Radius: 0.01
       Class: rviz/Pose
       Color: 255; 25; 0
       Enabled: true
@@ -340,8 +338,8 @@ Visualization Manager:
       Unreliable: false
       Value: true
     - Alpha: 1
-      Axes Length: 0.2
-      Axes Radius: 0.02
+      Axes Length: 0.1
+      Axes Radius: 0.01
       Class: rviz/Pose
       Color: 255; 25; 0
       Enabled: true
@@ -355,7 +353,7 @@ Visualization Manager:
       Unreliable: false
       Value: true
     - Class: rviz/Image
-      Enabled: true
+      Enabled: false
       Image Topic: /svo/image/0
       Max Value: 1
       Median window: 5
@@ -365,7 +363,7 @@ Visualization Manager:
       Queue Size: 2
       Transport Hint: raw
       Unreliable: false
-      Value: true
+      Value: false
     - Alpha: 1
       Axes Length: 0.2
       Axes Radius: 0.01
@@ -377,9 +375,39 @@ Visualization Manager:
       Name: VO_pose
       Shaft Length: 0.1
       Shaft Radius: 0.01
-      Shape: Axes
+      Shape: Arrow
       Topic: /SERoW/comp/pose0
       Unreliable: false
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/LaserScan
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 47
+      Min Color: 0; 0; 0
+      Min Intensity: 10
+      Name: LaserScan
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.02
+      Style: Flat Squares
+      Topic: /scan
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
       Value: true
   Enabled: true
   Global Options:
@@ -405,32 +433,32 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.77742
+      Distance: 0.47055
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.111226
-        Y: -0.853971
-        Z: 0.71856
+        X: 0.445548
+        Y: -0.580639
+        Z: 0.423112
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.815401
+      Pitch: 0.475402
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.07859
+      Yaw: 4.42858
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1176
+  Height: 1056
   Hide Left Dock: false
   Hide Right Dock: true
   Image:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000400000000000001fa000003fefc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005300fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003600000237000000b700fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000a0049006d0061006700650100000273000001c10000001600ffffff000000010000010f000003e8fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730000000028000003e80000009b00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000074e00000044fc0100000002fb0000000800540069006d006501000000000000074e0000024600fffffffb0000000800540069006d006501000000000000045000000000000000000000054e000003fe00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000001fa00000386fc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005300fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730000000036000001f4000000b700fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000a0049006d0061006700650000000036000003860000001600ffffff000000010000010f000003e8fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730000000028000003e80000009b00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000074e00000044fc0100000002fb0000000800540069006d006501000000000000074e0000024600fffffffb0000000800540069006d006501000000000000045000000000000000000000074e0000038600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:

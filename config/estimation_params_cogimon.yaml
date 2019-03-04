@@ -4,7 +4,7 @@ lfoot: "LFoot"
 rfoot: "RFoot"
 modelname: "/home/master/dp_ws/src/serow/share/urdf/cogimon.urdf"
 
-useLegOdom: false
+useLegOdom: true
 #ROS Topic Names
 odom_topic: "/svo/odom0" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/xbotcore/cogimon/imu/imu_link"
@@ -64,10 +64,10 @@ joint_noise_density: 0.0463 # rad
 
 #Mahony Filter for attitude
 useMahony: true
-Mahony_Kp: 0.05
+Mahony_Kp: 0.001
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
-Madgwick_gain: 0.06
+Madgwick_gain: 0.00001
 bias_max: 0
 bias_may: 0
 bias_maz: 0
@@ -95,8 +95,8 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  2.4336e-05 #m/s^2/sqrt(s)
-gyroscope_bias_random_walk: 1.0e-6 # rad/s/sqrt(s)
+accelerometer_bias_random_walk:  2.4336e-08 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 1.0e-9 # rad/s/sqrt(s)
 accelerometer_noise_density: 0.0221 # m/s^2  #Continuous Time
 gyroscope_noise_density: 9.7738e-04 # rad/s  #Continuous Time
 
@@ -104,21 +104,23 @@ gyroscope_noise_density: 9.7738e-04 # rad/s  #Continuous Time
 #Odometry Measurement Noise std:
 #LO
 leg_odom_position_noise_density: 5.0e-04
-leg_odom_orientation_noise_density: 5.0e-02
+leg_odom_orientation_noise_density: 8.0e-03
 #VO
 useOutlierDetection: false
+mahalanobis_TH: 22.0
+#mahalanobis_TH: -1.0
 odom_position_noise_density: 3.5e-02 #4 3.5
 odom_orientation_noise_density: 5.0e-02 #4
 
-velocity_noise_density_x: 0.007 #0.007
-velocity_noise_density_y: 0.007 #0.009
-velocity_noise_density_z: 0.007 #0.007
+velocity_noise_density_x: 0.035 #0.007
+velocity_noise_density_y: 0.035 #0.009
+velocity_noise_density_z: 0.035 #0.007
 
 
 #IMU Initial Biases - Biases are added!
-bias_ax: -0.2
-bias_ay: 0.1
-bias_az: -0.09
+bias_ax: -0.32
+bias_ay: -0.04
+bias_az: -0.078
 bias_gx: 0
 bias_gy: 0
 bias_gz: 0
