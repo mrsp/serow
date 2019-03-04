@@ -60,7 +60,7 @@ joint_cutoff_freq: 6.0
 
 #Mahony Filter for attitude
 useMahony: true
-Mahony_Kp: 1.0
+Mahony_Kp: 0.9
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.3
@@ -75,7 +75,7 @@ bias_mgz: 0
 Tau0: 1.0
 Tau1: 1.0
 medianWindow: 10
-mass: 5.182530  #robot mass
+mass: 6.6530  #robot mass
 
 
 #Choose Integration Method
@@ -88,19 +88,22 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk: 0.000433 #m/s^2
-gyroscope_bias_random_walk: 2.66e-05 # rad/s
-accelerometer_noise_density:  0.0075 #m/s^2 or 150 #MTI-300
-gyroscope_noise_density: 0.0014 #rad/s 28 #MTI-300
+accelerometer_bias_random_walk: 0.00433 #m/s^2
+gyroscope_bias_random_walk: 2.66e-04 # rad/s
+accelerometer_noise_density:  0.0150 #m/s^2 or 150 #MTI-300
+gyroscope_noise_density: 0.0028 #rad/s 28 #MTI-300
 
 #VO Measuremets
 #Odometry Measurement Noise std:
 leg_odom_position_noise_density: 5.0e-04
 leg_odom_orientation_noise_density: 5.0e-02
 
-useOutlierDetection: true
+
 #Odom Measurements
-odom_position_noise_density: 5.0e-02 #2.0e-01
+mahalanobis_TH: 16.0
+#mahalanobis_TH: -1
+useOutlierDetection: false
+odom_position_noise_density: 8.0e-02 #2.0e-01
 odom_orientation_noise_density: 5.0e-02 #2.0e-01
 
 #RP Lidar Odom

@@ -48,24 +48,24 @@ void IMUEKF::init() {
     If = Matrix<double, 15, 15>::Identity();
     P = Matrix<double, 15, 15>::Zero();
     //vel
-    P(0,0) = 1e-2;
-    P(1,1) = 1e-2;
-    P(2,2) = 1e-2;
+    P(0,0) = 1e-5;
+    P(1,1) = 1e-5;
+    P(2,2) = 1e-5;
     //Rot error
-    P(3,3) = 5e-2;
-    P(4,4) = 5e-2;
-    P(5,5) = 5e-2;
+    P(3,3) = 1e-5;
+    P(4,4) = 1e-5;
+    P(5,5) = 1e-5;
     //Pos
-    P(6,6)  = 1e-3;
-    P(7,7)  = 1e-3;
-    P(8,8)  = 1e-3;
+    P(6,6)  = 1e-8;
+    P(7,7)  = 1e-8;
+    P(8,8)  = 1e-8;
     //Biases
-    P(9, 9) = 1e-3;
-    P(10, 10) = 1e-3;
-    P(11, 11) = 1e-3;
-    P(12, 12) = 1e-2;
-    P(13, 13) = 1e-2;
-    P(14, 14) = 1e-2;
+    P(9, 9) = 1e-9;
+    P(10, 10) = 1e-9;
+    P(11, 11) = 1e-9;
+    P(12, 12) = 1e-7;
+    P(13, 13) = 1e-7;
+    P(14, 14) = 1e-7;
     
     //For outlier detection
     f0 = 0.1;
@@ -341,7 +341,7 @@ Matrix<double,15,1> IMUEKF::computeDiscreteDyn(Matrix<double,15,1> x_, Matrix<do
 /** IMU EKF filter to  deal with the Noise **/
 void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 {
-    std::cout<<"Predict with IMU"<<std::endl;
+    //std::cout<<"Predict with IMU"<<std::endl;
     omega = omega_;
     f = f_;
     //Used in updating Rib with the Rodriquez formula
@@ -407,8 +407,8 @@ void IMUEKF::updateWithTwist(Vector3d y)
     Rv(2, 2) = vel_pz * vel_pz;
 
     v = x.segment<3>(0);
-    std::cout<<" Update with Twist " <<std::endl;
-    std::cout<<y<<std::endl;
+    //std::cout<<" Update with Twist " <<std::endl;
+    //std::cout<<y<<std::endl;
     //Innovetion vector
     zv = y;
     zv.noalias() -= Rib * v;
@@ -454,8 +454,8 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
 
 
     v = x.segment<3>(0);
-    std::cout<<" Update with Twist Rot" <<std::endl;
-    std::cout<<y<<std::endl;
+    //std::cout<<" Update with Twist Rot" <<std::endl;
+    //std::cout<<y<<std::endl;
     //Innovetion vector
     z.segment<3>(0) = y;
     z.segment<3>(0).noalias() -= Rib * v;
@@ -491,7 +491,7 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
 
 void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
 {
-    std::cout<<"Update with LO"<<std::endl;
+    //std::cout<<"Update with LO"<<std::endl;
     R(0, 0) = leg_odom_px * leg_odom_px;
     R(1, 1) = R(0, 0);
     R(2, 2) = R(0, 0);
@@ -505,7 +505,7 @@ void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
         //Innovetion vector
         z.segment<3>(0) = y - r;
         z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
-        //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
+        //z.segment<3>(3) = logMap(qy.toRotationMatrix().transpose() * Rib);
         
         //Compute the Kalman Gain
         s = R;
@@ -532,7 +532,7 @@ void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
 
 bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection)
 {
-    std::cout<<"Update with VO "<<std::endl;
+    //std::cout<<"Update with VO "<<std::endl;
     R(0, 0) = odom_px * odom_px;
     R(1, 1) = R(0, 0);
     R(2, 2) = R(0, 0);
@@ -544,14 +544,14 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
     outlier = false;
     if(!useOutlierDetection)
     {
-        if(mahalanobis_TH == -1)
+        if(mahalanobis_TH <= 0)
         {
             r = x.segment<3>(6);
             //Innovetion vector
             z.segment<3>(0) = y - r;
             z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
             //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
-            
+            //z.segment<3>(3) = logMap(qy.toRotationMatrix().transpose() * Rib);
             //Compute the Kalman Gain
             s = R;
             s.noalias() += Hf * P * Hf.transpose();
@@ -594,16 +594,24 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
             {
                 Rib_i =  Rib*expMap(dxf.segment<3>(3));
             }
-        
+            s =  Hf * P_i * Hf.transpose() + R;
             temp = y-x_i.segment<3>(6);
-            if((temp.transpose()*P_i.block<3,3>(6,6).inverse()*temp)<mahalanobis_TH)
+	    double var_TH = temp.transpose()*s.block<3,3>(0,0).inverse()*temp;
+	     std::cout<<"MA"<< std::endl;
+	    std::cout<<var_TH<< std::endl;
+	     std::cout<<"---"<< std::endl;
+            if(var_TH<mahalanobis_TH)
             {
             
                 P = P_i;
                 x = x_i;
                 Rib = Rib_i;
                 x.segment<3>(3) = Vector3d::Zero();
+
             }
+	    else{
+		outlier = true;
+	    }
         }
     }
     else
@@ -620,8 +628,8 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
         r = x.segment<3>(6);
         z.segment<3>(0) = y -r;
         z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
-        //z.segment<3>(3) = logMap(qy.toRotationMatrix() * Rib.transpose());
-        
+        //z.segment<3>(3) = logMap(qy.toRotationMatrix().transpose() * Rib);
+
         unsigned int j=0;
         while(j<4)
         {
@@ -753,10 +761,11 @@ void IMUEKF::updateVars()
     
     omegahat = omega + bgyr;
     fhat = f + bacc;
-    
+    /*
     std::cout<<"Bias "<<std::endl;
     std::cout<<bgyr<<std::endl;
     std::cout<<bacc<<std::endl;
+*/
     gyro  = Rib * omegahat;
     gyroX = gyro(0);
     gyroY = gyro(1);

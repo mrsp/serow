@@ -295,7 +295,7 @@ void humanoid_ekf::loadIMUEKFparams()
     n_p.param<double>("gravity", g,9.81);
     n_p.param<bool>("useEuler", imuEKF->useEuler,true);
     n_p.param<bool>("useOutlierDetection",useOutlierDetection,false);
-    n_p.param<double>("mahalanobis_TH", imuEKF->mahalanobis_TH,-1);
+    n_p.param<double>("mahalanobis_TH", imuEKF->mahalanobis_TH,-1.0);
     imuEKF->setAccBias(T_B_A.linear()*Vector3d(bias_ax,bias_ay,bias_az));
     imuEKF->setGyroBias(T_B_G.linear()*Vector3d(bias_gx,bias_gy,bias_gz));
 }
