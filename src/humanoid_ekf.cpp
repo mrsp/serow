@@ -694,7 +694,7 @@ void humanoid_ekf::estimateWithIMUEKF()
 
                     if(odom_divergence &&  leg_odom_inc)
                     {
-                        std::cout<<"Odom divergence, updating only with leg odometry"<<std::endl;
+                        //std::cout<<"Odom divergence, updating only with leg odometry"<<std::endl;
                         pos_update += pos_leg_update;
                         q_update *= q_leg_update;
                         imuEKF->updateWithTwistRotation(vwb, q_update);

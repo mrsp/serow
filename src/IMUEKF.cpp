@@ -597,9 +597,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
             s =  Hf * P_i * Hf.transpose() + R;
             temp = y-x_i.segment<3>(6);
 	    double var_TH = temp.transpose()*s.block<3,3>(0,0).inverse()*temp;
-	     std::cout<<"MA"<< std::endl;
-	    std::cout<<var_TH<< std::endl;
-	     std::cout<<"---"<< std::endl;
+	 
             if(var_TH<mahalanobis_TH)
             {
             
@@ -671,7 +669,6 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
                 P_i = P;
                 outlier = true;
                 break;
-		std::cout<<"Outlier"<<std::endl;
             }
             
 	    j++;
@@ -696,8 +693,6 @@ void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> BetaT)
     ln1_p = computePsi(f_t) -efpsi;
 
     tempM = BetaT*(R.block<3,3>(0,0)).inverse();
-    //std::cout<<"lnp "<<lnp<<std::endl;
-    //std::cout<<"ln1_p "<<ln1_p<<std::endl;
   
     pzeta_1 =  exp(lnp - 0.5*(tempM).trace());
     pzeta_0 =  exp(ln1_p);
@@ -708,13 +703,11 @@ void IMUEKF::updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> BetaT)
     //p(zeta) are now proper probabilities
     pzeta_1 = norm_factor * pzeta_1;
     pzeta_0 = norm_factor * pzeta_0;
-    //std::cout<<"pzeta1 "<<pzeta_1<<std::endl;
-    //std::cout<<"pzeta0 "<<pzeta_0<<std::endl;
+  
     //mean of bernulli
     zeta = pzeta_1 / (pzeta_1 + pzeta_0);
     
     //Update epsilon and f
-    //std::cout<<"zeta "<<zeta<<std::endl;
     e_t = e0 + zeta;
     f_t = f0 + 1.0 - zeta;
 }
@@ -761,11 +754,7 @@ void IMUEKF::updateVars()
     
     omegahat = omega + bgyr;
     fhat = f + bacc;
-    /*
-    std::cout<<"Bias "<<std::endl;
-    std::cout<<bgyr<<std::endl;
-    std::cout<<bacc<<std::endl;
-*/
+
     gyro  = Rib * omegahat;
     gyroX = gyro(0);
     gyroY = gyro(1);
