@@ -28,19 +28,20 @@
 #include <Eigen/Dense>
 
 using namespace std;
+using namespace pinocchio;
 
 
 namespace serow
 {
     
-    
+
     class robotDyn
     {
         
         
     private:
-        se3::Model *pmodel_;
-        se3::Data *data_;
+        pinocchio::Model *pmodel_;
+        pinocchio::Data *data_;
         std::vector<std::string> link_names, jnames_;
         std::vector<unsigned int> link_ids;
         std::map<std::string, unsigned int> link_id_;
@@ -54,16 +55,16 @@ namespace serow
                  const bool& has_floating_base, const bool& verbose = false)
         {
             has_floating_base_ = has_floating_base;
-            pmodel_ = new se3::Model();
+            pmodel_ = new pinocchio::Model();
             
             if (has_floating_base)
                 // TODO: Check the Joint for FreeFlyer, if it is correct
-                se3::urdf::buildModel(model_name, se3::JointModelFreeFlyer(),
+                pinocchio::urdf::buildModel(model_name, pinocchio::JointModelFreeFlyer(),
                                       *pmodel_, verbose);
             else
-                se3::urdf::buildModel(model_name, *pmodel_, verbose);
+                pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
             
-            data_ = new se3::Data(*pmodel_);
+            data_ = new pinocchio::Data(*pmodel_);
             
             jnames_.clear();
             jnames_ = pmodel_->names;
@@ -170,13 +171,13 @@ namespace serow
                 qpin[4] = q_[5];
                 qpin[5] = q_[6];
                 qpin[6] = q_[3];
-                se3::forwardKinematics(*pmodel_, *data_, qpin);
-                se3::computeJointJacobians(*pmodel_, *data_, qpin);
+                pinocchio::forwardKinematics(*pmodel_, *data_, qpin);
+                pinocchio::computeJointJacobians(*pmodel_, *data_, qpin);
             }
             else
             {
-                se3::forwardKinematics(*pmodel_, *data_, q_);
-                se3::computeJointJacobians(*pmodel_, *data_, q_);
+                pinocchio::forwardKinematics(*pmodel_, *data_, q_);
+                pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
             }
         }
         
@@ -193,7 +194,7 @@ namespace serow
         {
             
             
-            se3::container::aligned_vector<se3::Frame> frames;
+            pinocchio::container::aligned_vector<pinocchio::Frame> frames;
             frames = pmodel_->frames;
             
             // IDs of joints
@@ -204,14 +205,14 @@ namespace serow
             {
                 // For fixed joints: this will be used to discard links that do not move
                 jointId = static_cast<unsigned int>
-                (pmodel_->getFrameId(frames[i].name,se3::FIXED_JOINT));
+                (pmodel_->getFrameId(frames[i].name,pinocchio::FIXED_JOINT));
                 if (jointId != frames.size())
                     id_fixed_joints.push_back(jointId);
                 // For movable joints: this will be used to order the link numbers (in
                 // Pinocchio the link numbers and joint numbers obtained from "frames" are
                 // in a particularly different order)
                 jointId = static_cast<unsigned int>
-                (pmodel_->getFrameId(frames[i].name,se3::JOINT));
+                (pmodel_->getFrameId(frames[i].name,pinocchio::JOINT));
                 if (jointId != frames.size())
                 {
                     // Only add if the current jointId is different from the previous one
@@ -385,10 +386,10 @@ namespace serow
         Eigen::MatrixXd
         linearJacobian(const unsigned int& link_number)
         {
-            se3::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
+            pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
             // This Jacobian is in the LOCAL frame. It has to be transformed to the
             // WORLD frame (using the joint rotation matrix).
-            se3::getJointJacobian<se3::LOCAL>(*pmodel_, *data_, link_number, J);
+            pinocchio::getJointJacobian<pinocchio::LOCAL>(*pmodel_, *data_, link_number, J);
             // Note: For some reason, the Jacobian in the supposedly fixed frame is
             // different from the one in rbdl. Check why???
             
@@ -436,7 +437,7 @@ namespace serow
         
         Eigen::MatrixXd angularJacobian(const unsigned int& link_number)
         {
-            se3::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
+            pinocchio::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
             
             if (has_floating_base_)
             {
@@ -444,7 +445,7 @@ namespace serow
                 Eigen::Vector4d q;
                 
                 // Jacobian in global frame
-                se3::getJointJacobian<se3::LOCAL>(*pmodel_, *data_, link_number, J);
+                pinocchio::getJointJacobian<pinocchio::LOCAL>(*pmodel_, *data_, link_number, J);
                 
                 // The structure of J is: [0 | Rot_ff_wrt_world | Jq_wrt_world]
                 Jang.rightCols(ndofActuated()) = J.block(3,6,3,ndofActuated());
@@ -458,7 +459,7 @@ namespace serow
             else
             {
                 // Jacobian in local frame
-                se3::getJointJacobian<se3::LOCAL>(*pmodel_, *data_, link_number, J);
+                pinocchio::getJointJacobian<pinocchio::LOCAL>(*pmodel_, *data_, link_number, J);
                 // Transform Jacobian from local frame to base frame
                 return (data_->oMi[link_number].rotation())*J.bottomRows(3);
             }
@@ -479,9 +480,9 @@ namespace serow
         
         Eigen::MatrixXd geometricJacobian(const unsigned int& link_number)
         {
-            se3::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
+            pinocchio::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
             // Jacobian in local (link) frame
-            se3::getJointJacobian<se3::LOCAL>(*pmodel_, *data_, link_number, J);
+            pinocchio::getJointJacobian<pinocchio::LOCAL>(*pmodel_, *data_, link_number, J);
             
             if (has_floating_base_)
             {
@@ -530,9 +531,9 @@ namespace serow
                 qpin[4] = q_[5];
                 qpin[5] = q_[6];
                 qpin[6] = q_[3];
-                //Eigen::Vector3d com = se3::centerOfMass(*pmodel_, *data_, qpin);
+                //Eigen::Vector3d com = pinocchio::centerOfMass(*pmodel_, *data_, qpin);
                 //std::cout << qpin.head(7).transpose() << std::endl;
-                se3::centerOfMass(*pmodel_, *data_, qpin);
+                pinocchio::centerOfMass(*pmodel_, *data_, qpin);
                 
                 // Eigen::Matrix3d Rbase; Rbase = quaternionToRotation(q_.segment(3,4));
                 // com = Rbase*data_->com[0];
@@ -540,8 +541,8 @@ namespace serow
             }
             else
             {
-                //Eigen::Vector3d com = se3::centerOfMass(*pmodel_, *data_, q_);
-                se3::centerOfMass(*pmodel_, *data_, q_);
+                //Eigen::Vector3d com = pinocchio::centerOfMass(*pmodel_, *data_, q_);
+                pinocchio::centerOfMass(*pmodel_, *data_, q_);
                 com = data_->com[0];
             }
             
@@ -563,11 +564,11 @@ namespace serow
                 qpin[4] = q_[5];
                 qpin[5] = q_[6];
                 qpin[6] = q_[3];
-                Jcom = se3::jacobianCenterOfMass(*pmodel_, *data_, qpin);
+                Jcom = pinocchio::jacobianCenterOfMass(*pmodel_, *data_, qpin);
             }
             else
             {
-                Jcom = se3::jacobianCenterOfMass(*pmodel_, *data_, q_);
+                Jcom = pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
             }
             return Jcom;
         }
