@@ -328,7 +328,7 @@ void humanoid_ekf::loadCoMEKFparams() {
 
 humanoid_ekf::humanoid_ekf() 
 {
-    useCoMEKF = false;
+    useCoMEKF = true;
     useLegOdom = false;
     firstUpdate = false;
     firstOdom = false;

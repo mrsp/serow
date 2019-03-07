@@ -2,7 +2,7 @@
 base_link: "base_link"
 lfoot: "l_ankle"
 rfoot: "r_ankle"
-modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
+modelname: "/home/ammar/Desktop/dp_ws/src/serow/share/urdf/nao.urdf"
 
 #ROS Topic Names
 
