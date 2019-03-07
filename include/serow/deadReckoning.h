@@ -1,6 +1,6 @@
 #include <eigen3/Eigen/Dense>
 #include "serow/bodyVelCF.h"
-
+#include "serow/Gaussian.h"
 namespace serow{
     
     class deadReckoning{
@@ -23,6 +23,7 @@ namespace serow{
         Eigen::Vector3d bL, bR, plf, prf; //FT w.r.t Foot Frame;
         bool USE_CF, firstrun;
         bodyVelCF* bvcf;
+	Gaussian* gs;
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         deadReckoning(Eigen::Vector3d pwl0, Eigen::Vector3d pwr0, Eigen::Matrix3d Rwl0, Eigen::Matrix3d Rwr0,
