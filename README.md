@@ -7,7 +7,7 @@ Video: https://www.youtube.com/watch?v=nkzqNhf3_F4
 
 Papers: 
 * Nonlinear State Estimation for Humanoid Robot Walking, https://ieeexplore.ieee.org/document/8403285 (RA-L + IROS 2018)
-* Robust Gaussian Error-State Kalman Filter
+* Robust Gaussian Error-State Kalman Filter for Humanoid Robot Walking
 
 Upon requests a matlab version will be released shortly.
 
