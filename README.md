@@ -13,13 +13,13 @@ Upon requests a matlab version will be released shortly.
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
 
 ## Prerequisites
-* Ubuntu 14.04 and later
-* ROS indigo and later
+* Ubuntu 16.04 and later
+* ROS kinetic and later
 * Eigen 3.2.0 and later
 * [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 
 
 ## Installing
-* Install [Pinocchio](https://stack-of-tasks.github.io/pinocchio/download.html)
+* sudo apt-get install ros-kinetic-pinocchio
 * git clone https://github.com/mrsp/serow.git
 * catkin_make -DCMAKE_BUILD_TYPE=Release 
 * If you are using catkin tools run: catkin build  --cmake-args -DCMAKE_BUILD_TYPE=Release 
