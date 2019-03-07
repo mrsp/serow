@@ -5,7 +5,9 @@ SEROW (State Estimation RObot Walking) Framework for Humanoid Robot Walking Esti
 
 Video: https://www.youtube.com/watch?v=nkzqNhf3_F4
 
-Paper: https://ieeexplore.ieee.org/document/8403285 (RA-L + IROS 2018)
+Papers: 
+* Nonlinear State Estimation for Humanoid Robot Walking, https://ieeexplore.ieee.org/document/8403285 (RA-L + IROS 2018)
+* Robust Gaussian Error-State Kalman Filter
 
 Upon requests a matlab version will be released shortly.
 
