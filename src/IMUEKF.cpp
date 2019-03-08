@@ -56,16 +56,16 @@ void IMUEKF::init() {
     P(4,4) = 1e-5;
     P(5,5) = 1e-5;
     //Pos
-    P(6,6)  = 1e-8;
-    P(7,7)  = 1e-8;
-    P(8,8)  = 1e-8;
+    P(6,6)  = 1e-9;
+    P(7,7)  = 1e-9;
+    P(8,8)  = 1e-9;
     //Biases
-    P(9, 9) = 1e-9;
-    P(10, 10) = 1e-9;
-    P(11, 11) = 1e-9;
-    P(12, 12) = 1e-7;
-    P(13, 13) = 1e-7;
-    P(14, 14) = 1e-7;
+    P(9, 9) = 1e-6;
+    P(10, 10) = 1e-6;
+    P(11, 11) = 1e-6;
+    P(12, 12) = 1e-5;
+    P(13, 13) = 1e-5;
+    P(14, 14) = 1e-5;
     
     //For outlier detection
     f0 = 0.1;
@@ -742,8 +742,10 @@ void IMUEKF::updateVars()
     //Update the biases
     bgyr = x.segment<3>(9);
     bacc = x.segment<3>(12);
-
-    
+    //std::cout<<"bacc"<<std::endl;
+    //std::cout<<bacc<<std::endl;
+    //std::cout<<"bgyr"<<std::endl;
+    //std::cout<<bgyr<<std::endl;
     bias_gx = x(9);
     bias_gy = x(10);
     bias_gz = x(11);
