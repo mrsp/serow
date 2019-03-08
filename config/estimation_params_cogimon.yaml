@@ -55,7 +55,7 @@ LLegLowThres: 42.5 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 15.0
 StrikingContact: 800
 VelocityThres: 0.1
-medianWindow: 14
+medianWindow: 5
 
 #Compute Joint Velocities
 joint_cutoff_freq: 25
@@ -68,18 +68,11 @@ Mahony_Kp: 0.001
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.00001
-bias_max: 0
-bias_may: 0
-bias_maz: 0
-bias_mgx: 0
-bias_mgy: 0
-bias_mgz: 0
+
 
 
 
 #Leg Odometry Coefficients
-#Tau0: 0.8
-#Tau1: 0.002
 Tau0: 1.0
 Tau1: 1.0
 
@@ -95,8 +88,8 @@ useEuler: true
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  2.4336e-08 #m/s^2/sqrt(s)
-gyroscope_bias_random_walk: 1.0e-9 # rad/s/sqrt(s)
+accelerometer_bias_random_walk:  2.4336e-03 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 1.0e-3 # rad/s/sqrt(s)
 accelerometer_noise_density: 0.0221 # m/s^2  #Continuous Time
 gyroscope_noise_density: 9.7738e-04 # rad/s  #Continuous Time
 
@@ -112,18 +105,18 @@ mahalanobis_TH: 22.0
 odom_position_noise_density: 3.5e-02 #4 3.5
 odom_orientation_noise_density: 5.0e-02 #4
 
-velocity_noise_density_x: 0.035 #0.007
-velocity_noise_density_y: 0.035 #0.009
-velocity_noise_density_z: 0.035 #0.007
+velocity_noise_density_x: 0.015 #0.007
+velocity_noise_density_y: 0.015 #0.009
+velocity_noise_density_z: 0.015 #0.007
 
 
 #IMU Initial Biases - Biases are added!
-bias_ax: -0.32
-bias_ay: -0.04
-bias_az: -0.078
-bias_gx: 0
-bias_gy: 0
-bias_gz: 0
+bias_ax: -1.03753
+bias_ay: 0.0543627
+bias_az: -0.0824804
+bias_gx: -1.24626e-07
+bias_gy: -4.49618e-07
+bias_gz: 2.82382e-08
 
 
 
@@ -159,7 +152,7 @@ useGyroLPF: false
 #Cutt-off Frequencies
 gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
 #Gyro Moving Average Filter
-maWindow: 15 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
+maWindow: 5 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
 #Filter Params
 Ixx : 0.038130318  #torso inertia around x
 Iyy : 0.0089760596  #torso inetria around y
