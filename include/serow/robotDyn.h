@@ -42,7 +42,7 @@
 #include <Eigen/Dense>
 
 using namespace std;
-using namespace pinocchio;
+
 
 
 namespace serow
@@ -178,7 +178,7 @@ namespace serow
             //q_ = q;
             if (has_floating_base_)
             {
-                // Change quaternion order: in oscr it is (w,x,y,z) and in Pinocchio it is
+                // Change quaternion order: in Pinocchio it is
                 // (x,y,z,w)
                 Eigen::VectorXd qpin; qpin = q_;
                 qpin[3] = q_[4];
@@ -210,7 +210,7 @@ namespace serow
             
             pinocchio::container::aligned_vector<pinocchio::Frame> frames;
             frames = pmodel_->frames;
-            
+          
             // IDs of joints
             unsigned int jointId, jointIdprev=-1;
             std::vector<unsigned int> id_fixed_joints;
@@ -401,9 +401,9 @@ namespace serow
         linearJacobian(const unsigned int& link_number)
         {
             pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
-            // This Jacobian is in the LOCAL frame. It has to be transformed to the
+            // This Jacobian is in the pinocchio::LOCAL frame. It has to be transformed to the
             // WORLD frame (using the joint rotation matrix).
-            pinocchio::getJointJacobian<pinocchio::LOCAL>(*pmodel_, *data_, link_number, J);
+            pinocchio::getJointJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
             // Note: For some reason, the Jacobian in the supposedly fixed frame is
             // different from the one in rbdl. Check why???
             
@@ -432,7 +432,7 @@ namespace serow
             }
             else
             {
-                // Transform Jacobian from local frame to base frame
+                // Transform Jacobian from pinocchio::LOCAL frame to base frame
                 return (data_->oMi[link_number].rotation())*J.topRows(3);
             }
         }
@@ -459,7 +459,7 @@ namespace serow
                 Eigen::Vector4d q;
                 
                 // Jacobian in global frame
-                pinocchio::getJointJacobian<pinocchio::LOCAL>(*pmodel_, *data_, link_number, J);
+                pinocchio::getJointJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
                 
                 // The structure of J is: [0 | Rot_ff_wrt_world | Jq_wrt_world]
                 Jang.rightCols(ndofActuated()) = J.block(3,6,3,ndofActuated());
@@ -472,9 +472,9 @@ namespace serow
             }
             else
             {
-                // Jacobian in local frame
-                pinocchio::getJointJacobian<pinocchio::LOCAL>(*pmodel_, *data_, link_number, J);
-                // Transform Jacobian from local frame to base frame
+                // Jacobian in pinocchio::LOCAL frame
+                pinocchio::getJointJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
+                // Transform Jacobian from pinocchio::LOCAL frame to base frame
                 return (data_->oMi[link_number].rotation())*J.bottomRows(3);
             }
             
@@ -495,8 +495,8 @@ namespace serow
         Eigen::MatrixXd geometricJacobian(const unsigned int& link_number)
         {
             pinocchio::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
-            // Jacobian in local (link) frame
-            pinocchio::getJointJacobian<pinocchio::LOCAL>(*pmodel_, *data_, link_number, J);
+            // Jacobian in pinocchio::LOCAL (link) frame
+            pinocchio::getJointJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
             
             if (has_floating_base_)
             {
@@ -522,7 +522,7 @@ namespace serow
             }
             else
             {
-                // Transform Jacobians from local frame to base frame
+                // Transform Jacobians from pinocchio::LOCAL frame to base frame
                 J.topRows(3) = (data_->oMi[link_number].rotation())*J.topRows(3);
                 J.bottomRows(3) = (data_->oMi[link_number].rotation())*J.bottomRows(3);
                 return J;

@@ -2,7 +2,7 @@
 base_link: "base_link"
 lfoot: "LFoot"
 rfoot: "RFoot"
-modelname: "/home/ammar/Desktop/dp_ws/src/serow/share/urdf/cogimon.urdf"
+modelname: "/home/master/dp_ws/src/serow/share/urdf/cogimon.urdf"
 
 useLegOdom: true
 #ROS Topic Names
