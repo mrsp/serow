@@ -2,11 +2,11 @@
 base_link: "base_link"
 lfoot: "l_ankle"
 rfoot: "r_ankle"
-modelname: "/home/ammar/Desktop/dp_ws/src/serow/share/urdf/nao.urdf"
+modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
 
 #ROS Topic Names
 
-useLegOdom: false
+useLegOdom: true
 #odom_topic: "/svo/odom/0"
 odom_topic: "/odom_rf2o"
 imu_topic: "/nao_robot/imu"

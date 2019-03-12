@@ -110,7 +110,7 @@ velocity_noise_density_y: 0.035 #0.009
 velocity_noise_density_z: 0.035 #0.007
 
 
-#IMU Initial Biases - Biases are added!
+#IMU Initial Biases in the IMU local frame - Biases are added!
 bias_ax: -0.53753
 bias_ay: 0.0543627
 bias_az: -0.0824804
