@@ -34,6 +34,8 @@
 #include <pinocchio/algorithm/jacobian.hpp>
 #include <pinocchio/algorithm/center-of-mass.hpp>
 #include <pinocchio/multibody/model.hpp>
+#include <pinocchio/multibody/data.hpp>
+#include <pinocchio/algorithm/frames.hpp>
 #include <string>
 #include <vector>
 #include <map>
@@ -56,9 +58,7 @@ namespace serow
     private:
         pinocchio::Model *pmodel_;
         pinocchio::Data *data_;
-        std::vector<std::string> link_names, jnames_;
-        std::vector<unsigned int> link_ids;
-        std::map<std::string, unsigned int> link_id_;
+        std::vector<std::string> jnames_;
         Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_;
         bool has_floating_base_;
     public:
@@ -72,7 +72,6 @@ namespace serow
             pmodel_ = new pinocchio::Model();
             
             if (has_floating_base)
-                // TODO: Check the Joint for FreeFlyer, if it is correct
                 pinocchio::urdf::buildModel(model_name, pinocchio::JointModelFreeFlyer(),
                                       *pmodel_, verbose);
             else
@@ -97,13 +96,7 @@ namespace serow
             qmax_  = pmodel_->upperPositionLimit;
             dqmax_ = pmodel_->velocityLimit;
             
-            // Get the map for links and their IDs
-            link_names.clear();
-            link_ids.clear();
-            linkNames(link_names, link_ids);
-            for (unsigned int i=0; i<link_names.size(); ++i)
-                link_id_[link_names[i]] = link_ids[i];
-            
+           
             
             // If free-floating base, eliminate the "root_joint" when displaying
             if (has_floating_base_)
@@ -117,30 +110,32 @@ namespace serow
             
             // Continuous joints are given spurious values par default, set those values
             // to arbitrary ones
-            for (unsigned int i=0; i<qmin_.size(); ++i)
+            for (int i=0; i<qmin_.size(); ++i)
             {
                 double d = qmax_[i]-qmin_[i];
                 // If wrong values or if difference less than 0.05 deg (0.001 rad)
                 if ( (d<0) || (fabs(d)<0.001) )
                 {
-                    qmin_[i]  = -20.0;
-                    qmax_[i]  =  20.0;
-                    dqmax_[i] = 100.0;
+                    qmin_[i]  = -50.0;
+                    qmax_[i]  =  50.0;
+                    dqmax_[i] = 200.0;
                 }
             }
             std::cout<<"Joint Names "<<std::endl;
             printJointNames();
-            printLinkID();
+	    std::cout<<"with "<<ndofActuated()<<" actuated joints"<<std::endl;
             std::cout << "Model loaded: " << model_name << std::endl;
-        }
+	
+	}
         
         
-        unsigned int ndof()
+        int ndof()
         const
         {
             return pmodel_->nq;
         }
-        unsigned int ndofActuated()
+
+        int ndofActuated()
         const
         {
             if (has_floating_base_)
@@ -149,33 +144,12 @@ namespace serow
             else
                 return pmodel_->nq;
         }
-        std::string floatingLink()
-        const
-        {
-            unsigned int flink_id = 1;
-            if (has_floating_base_)
-            {
-                std::map< std::string, unsigned int >::const_iterator it;
-                for (it = link_id_.begin(); it != link_id_.end(); ++it)
-                {
-                    if (it->second == flink_id)
-                        return it->first;
-                }
-                std::cerr << "No floating link found!" << std::endl;
-                return "NONE";
-            }
-            else
-            {
-                std::cerr << "Robot has no floating link (or floating base)" << std::endl;
-                return "NONE";
-            }
-        }
+
         //void updateJointConfig(const Eigen::VectorXd& q)
 
         void updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
         {
             mapJointNamesIDs(qmap,qdotmap);
-            //q_ = q;
             if (has_floating_base_)
             {
                 // Change quaternion order: in Pinocchio it is
@@ -185,109 +159,29 @@ namespace serow
                 qpin[4] = q_[5];
                 qpin[5] = q_[6];
                 qpin[6] = q_[3];
-                pinocchio::forwardKinematics(*pmodel_, *data_, qpin);
+                //pinocchio::forwardKinematics(*pmodel_, *data_, qpin);
+                pinocchio::framesForwardKinematics(*pmodel_, *data_, qpin);
                 pinocchio::computeJointJacobians(*pmodel_, *data_, qpin);
+
             }
             else
             {
-                pinocchio::forwardKinematics(*pmodel_, *data_, q_);
+                //pinocchio::forwardKinematics(*pmodel_, *data_, q_);
+                pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
                 pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
+
             }
         }
         
         
-        Eigen::Vector3d linkPosition(const unsigned int& link_number)
-        const
-        {
-            return data_->oMi[link_number].translation();
-        }
-        
-        void linkNames(std::vector<std::string>& link_names,
-                       std::vector<unsigned int>& link_ids)
-        const
-        {
-            
-            
-            pinocchio::container::aligned_vector<pinocchio::Frame> frames;
-            frames = pmodel_->frames;
-          
-            // IDs of joints
-            unsigned int jointId, jointIdprev=-1;
-            std::vector<unsigned int> id_fixed_joints;
-            std::vector<unsigned int> id_joints;
-            for(unsigned int i=0; i<frames.size(); ++i)
-            {
-                // For fixed joints: this will be used to discard links that do not move
-                jointId = static_cast<unsigned int>
-                (pmodel_->getFrameId(frames[i].name,pinocchio::FIXED_JOINT));
-                if (jointId != frames.size())
-                    id_fixed_joints.push_back(jointId);
-                // For movable joints: this will be used to order the link numbers (in
-                // Pinocchio the link numbers and joint numbers obtained from "frames" are
-                // in a particularly different order)
-                jointId = static_cast<unsigned int>
-                (pmodel_->getFrameId(frames[i].name,pinocchio::JOINT));
-                if (jointId != frames.size())
-                {
-                    // Only add if the current jointId is different from the previous one
-                    // (due to a 'feature' in pinocchio that repeats some joints in 'frames')
-                    if (jointId != jointIdprev)
-                        id_joints.push_back(jointId);
-                    jointIdprev = jointId;
-                }
-            }
-            
-            // IDs and names of links if their parent is not a fixed joint (convention:
-            // e.g. if joint ID is 5, associated link ID is 6)
-            unsigned int linkId;
-            bool fixed_link = false;
-            // When there is floating base, an additional base_link is used, then, no '1'
-            // needs to be added here ... afterall, this seems to be not needed (when
-            // there is floating base the link number changes (+1) but Pinocchio
-            // internally takes care of it.
-            // unsigned int bias = has_floating_base_ ? 0 : 1;
-            for(unsigned int i=0; i<frames.size(); ++i)
-            {
-                linkId = static_cast<unsigned int> (pmodel_->getBodyId(frames[i].name));
-                if (linkId != frames.size())
-                {
-                    // Discard joints attached to fixed link
-                    for (unsigned int k=0; k<id_fixed_joints.size(); ++k)
-                    {
-                        if ((id_fixed_joints[k]+1) == linkId)
-                        {
-                            fixed_link = true;
-                            break;
-                        }
-                    }
-                    if (!fixed_link)
-                    {
-                        link_names.push_back(frames[i].name);
-                        // Map the link numbers to the associated parent joints
-                        for (unsigned int k=0; k<id_joints.size(); ++k)
-                        {
-                            if ((id_joints[k]+1) == linkId)
-                            {
-                                //linkId = k+bias;
-                                linkId = k+1;
-                                break;
-                            }
-                        }
-                        link_ids.push_back(linkId);
-                    }
-                    fixed_link = false;
-                }
-            }
-        }
-        
-        
+  
         
         void mapJointNamesIDs(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
         {
             q_.resize(jnames_.size());
             qdot_.resize(jnames_.size());
 
-            for(unsigned int i = 0; i<jnames_.size();i++)
+            for(int i = 0; i<jnames_.size();i++)
             {
                 q_[i] = qmap[jnames_[i]];
                 qdot_[i] = qdotmap[jnames_[i]];
@@ -296,116 +190,130 @@ namespace serow
         }
         
         
-        Eigen::MatrixXd geometricJacobian(const std::string& link_name)
+        Eigen::MatrixXd geometricJacobian(const std::string& frame_name)
         {
             try{
-                return geometricJacobian(static_cast<unsigned int>(link_id_.at(link_name)));
+		    pinocchio::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
+		    // Jacobian in pinocchio::LOCAL (link) frame
+
+
+		    int link_number = (int) pmodel_->getFrameId(frame_name);
+		    pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+
+		    if (has_floating_base_)
+		    {
+		        Eigen::MatrixXd Jg; Jg.resize(6, this->ndof()); Jg.setZero();
+		        Eigen::Matrix3d Rbase; Rbase = quaternionToRotation(q_.segment(3,4));
+		        Jg.topLeftCorner(3,3) =
+		        Rbase.transpose()*data_->oMf[link_number].rotation()*J.block(0,0,3,3);
+		        Jg.topRightCorner(3,ndofActuated()) =
+		        (data_->oMf[link_number].rotation())*J.block(0,6,3,ndofActuated());
+		        Jg.bottomRightCorner(3,ndofActuated()) =
+		        (data_->oMf[link_number].rotation())*J.block(3,6,3,ndofActuated());
+		        
+		        Eigen::MatrixXd T; T.resize(3,4);
+		        T <<
+		        -2.0*q_(4),  2.0*q_(3), -2.0*q_(6),  2.0*q_(5),
+		        -2.0*q_(5),  2.0*q_(6),  2.0*q_(3), -2.0*q_(4),
+		        -2.0*q_(6), -2.0*q_(5),  2.0*q_(4),  2.0*q_(3);
+		        Jg.block(0,3,3,4) =
+		        data_->oMf[link_number].rotation()*J.block(0,3,3,3)*Rbase.transpose()*T;
+		        Jg.block(3,3,3,4) = T;
+		        
+                		return Jg;
+            		}
+		    	else
+		    	{
+				// Transform Jacobians from pinocchio::LOCAL frame to base frame
+				J.topRows(3) = (data_->oMf[link_number].rotation())*J.topRows(3);
+				J.bottomRows(3) = (data_->oMf[link_number].rotation())*J.bottomRows(3);
+				return J;
+		  	}
+
             }
             catch (std::exception& e)
             {
-                std::cerr << "WARNING: Link name " << link_name << " is invalid! ... "
+                std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
                 <<  "Returning zeros" << std::endl;
                 return Eigen::MatrixXd::Zero(6,ndofActuated());
             }
         }
         
-        Eigen::Vector3d getLinearVelocity(const std::string& link_name)
+
+
+  
+
+        Eigen::Vector3d getLinearVelocity(const std::string& frame_name)
         {
-            return  (linearJacobian(link_name)* qdot_);
+            return  (linearJacobian(frame_name)* qdot_);
         }
 
-        Eigen::Vector3d getAngularVelocity(const std::string& link_name)
+        Eigen::Vector3d getAngularVelocity(const std::string& frame_name)
         {
-            return  (angularJacobian(link_name)* qdot_);
+            return  (angularJacobian(frame_name)* qdot_);
         }
         
-        std::map<std::string, unsigned int> getLinkNamesIDs()
-        const
+     
+        
+      
+        
+        Eigen::Vector3d linkPosition(const std::string& frame_name)
         {
-            return link_id_;
-        }
-        
-        
-        Eigen::Vector3d linkPosition(const unsigned int& link_number)
-        {
-            return data_->oMi[link_number].translation();
-        }
-        
-        
-        Eigen::Vector3d linkPosition(const std::string& link_name)
-        {
-            try{
-                return linkPosition(static_cast<unsigned int>(link_id_.at(link_name)));
+            try{ 
+           	 return data_->oMf[(int) pmodel_->getFrameId(frame_name)].translation();
             }
             catch (std::exception& e)
             {
-                std::cerr << "WARNING: Link name " << link_name << " is invalid! ... "
+                std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
                 <<  "Returning zeros" << std::endl;
                 return Eigen::Vector3d::Zero();
             }
         }
         
         
-        Eigen::Quaterniond linkOrientation(const unsigned int& link_number)
-        {
-            Eigen::Vector4d temp = rotationToQuaternion(data_->oMi[link_number].rotation());
-            Eigen::Quaterniond tempQ;
-            tempQ.w() = temp(0);
-            tempQ.x() = temp(1);
-            tempQ.y() = temp(2);
-            tempQ.z() = temp(3);
-            return tempQ;
-
-        }
+      
         
-        
-        Eigen::Quaterniond linkOrientation(const std::string& link_name)
+        Eigen::Quaterniond linkOrientation(const std::string& frame_name)
         {
             try{
-                return linkOrientation(static_cast<unsigned int>(link_id_.at(link_name)));
+		Eigen::Vector4d temp = rotationToQuaternion(data_->oMf[(int) pmodel_->getFrameId(frame_name)].rotation());
+		    Eigen::Quaterniond tempQ;
+		    tempQ.w() = temp(0);
+		    tempQ.x() = temp(1);
+		    tempQ.y() = temp(2);
+		    tempQ.z() = temp(3);
+		    return tempQ;
             }
             catch (std::exception& e)
             {
-                std::cerr << "WARNING: Link name " << link_name << " is invalid! ... "
+                std::cerr << "WARNING: Frame name " << frame_name << " is invalid! ... "
                 <<  "Returning zeros" << std::endl;
                 return Eigen::Quaterniond::Identity();
             }
         }
         
         
-        Eigen::VectorXd linkPose(const unsigned int& link_number)
+        Eigen::VectorXd linkPose(const std::string& frame_name)
         {
             Eigen::VectorXd lpose(7);
-            lpose.head(3) = data_->oMi[link_number].translation();
-            lpose.tail(4) = rotationToQuaternion(data_->oMi[link_number].rotation());
+            lpose.head(3) = data_->oMf[(int) pmodel_->getFrameId(frame_name)].translation();
+            lpose.tail(4) = rotationToQuaternion(data_->oMf[(int) pmodel_->getFrameId(frame_name)].rotation());
             
             return lpose;
         }
         
         
-        Eigen::VectorXd linkPose(const std::string& link_name)
+        
+        
+       
+        Eigen::MatrixXd linearJacobian(const std::string& frame_name)
         {
+		pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
+		int link_number = (int) pmodel_->getFrameId(frame_name);
+            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
             try{
-                return linkPose(static_cast<unsigned int>(link_id_.at(link_name)));
-            }
-            catch (std::exception& e)
-            {
-                std::cerr << "WARNING: Link name " << link_name << " is invalid! ... "
-                <<  "Returning zeros" << std::endl;
-                return Eigen::VectorXd::Zero(7,1);
-            }
-        }
-        
-        
-        Eigen::MatrixXd
-        linearJacobian(const unsigned int& link_number)
-        {
-            pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
-            // This Jacobian is in the pinocchio::LOCAL frame. It has to be transformed to the
-            // WORLD frame (using the joint rotation matrix).
-            pinocchio::getJointJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-            // Note: For some reason, the Jacobian in the supposedly fixed frame is
-            // different from the one in rbdl. Check why???
+ 		
+
             
             if (has_floating_base_)
             {
@@ -416,9 +324,9 @@ namespace serow
                 Eigen::MatrixXd Jlin; Jlin.resize(3, this->ndof()); Jlin.setZero();
                 Eigen::Matrix3d Rbase; Rbase = quaternionToRotation(q_.segment(3,4));
                 Jlin.leftCols(3) =
-                Rbase.transpose()*data_->oMi[link_number].rotation()*J.block(0,0,3,3);
+                Rbase.transpose()*data_->oMf[link_number].rotation()*J.block(0,0,3,3);
                 Jlin.rightCols(ndofActuated()) =
-                (data_->oMi[link_number].rotation())*J.block(0,6,3,ndofActuated());
+                (data_->oMf[link_number].rotation())*J.block(0,6,3,ndofActuated());
                 
                 Eigen::MatrixXd T; T.resize(3,4);
                 T <<
@@ -426,108 +334,66 @@ namespace serow
                 -2.0*q_(5),  2.0*q_(6),  2.0*q_(3), -2.0*q_(4),
                 -2.0*q_(6), -2.0*q_(5),  2.0*q_(4),  2.0*q_(3);
                 Jlin.middleCols(3,4) =
-                data_->oMi[link_number].rotation()*J.block(0,3,3,3)*Rbase.transpose()*T;
+                data_->oMf[link_number].rotation()*J.block(0,3,3,3)*Rbase.transpose()*T;
                 
                 return Jlin;
             }
             else
             {
                 // Transform Jacobian from pinocchio::LOCAL frame to base frame
-                return (data_->oMi[link_number].rotation())*J.topRows(3);
+                return (data_->oMf[link_number].rotation())*J.topRows(3);
             }
-        }
-        Eigen::MatrixXd linearJacobian(const std::string& link_name)
-        {
-            try{
-                return linearJacobian(link_id_.at(link_name));
             }
             catch (std::exception& e)
             {
-                std::cerr << "WARNING: Link name " << link_name << " is invalid! ... "
+                std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
                 <<  "Returning zeros" << std::endl;
                 return Eigen::MatrixXd::Zero(3,ndofActuated());
             }
         }
         
-        Eigen::MatrixXd angularJacobian(const unsigned int& link_number)
+
+        Eigen::MatrixXd angularJacobian(const std::string& frame_name)
         {
-            pinocchio::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
-            
-            if (has_floating_base_)
-            {
-                Eigen::MatrixXd Jang; Jang.resize(3, this->ndof()); Jang.setZero();
-                Eigen::Vector4d q;
-                
-                // Jacobian in global frame
-                pinocchio::getJointJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
-                
-                // The structure of J is: [0 | Rot_ff_wrt_world | Jq_wrt_world]
-                Jang.rightCols(ndofActuated()) = J.block(3,6,3,ndofActuated());
-                q = rotationToQuaternion(J.block(3,3,3,3));
-                Jang.middleCols(3,4) <<
-                -2.0*q(1),  2.0*q(0), -2.0*q(3),  2.0*q(2),
-                -2.0*q(2),  2.0*q(3),  2.0*q(0), -2.0*q(1),
-                -2.0*q(3), -2.0*q(2),  2.0*q(1),  2.0*q(0);
-                return Jang;
-            }
-            else
-            {
-                // Jacobian in pinocchio::LOCAL frame
-                pinocchio::getJointJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
-                // Transform Jacobian from pinocchio::LOCAL frame to base frame
-                return (data_->oMi[link_number].rotation())*J.bottomRows(3);
-            }
-            
-        }
-        Eigen::MatrixXd angularJacobian(const std::string& link_name)
-        {
+		pinocchio::Data::Matrix6x J(6, pmodel_->nv); 
+	        J.fill(0);
+            	    int link_number = (int) pmodel_->getFrameId(frame_name);
             try{
-                return angularJacobian(static_cast<unsigned int>(link_id_.at(link_name)));
+
+		    if (has_floating_base_)
+		    {
+		        Eigen::MatrixXd Jang; Jang.resize(3, this->ndof()); Jang.setZero();
+		        Eigen::Vector4d q;
+		        
+		        // Jacobian in global frame
+		        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number,pinocchio::WORLD, J);
+		        
+		        // The structure of J is: [0 | Rot_ff_wrt_world | Jq_wrt_world]
+		        Jang.rightCols(ndofActuated()) = J.block(3,6,3,ndofActuated());
+		        q = rotationToQuaternion(J.block(3,3,3,3));
+		        Jang.middleCols(3,4) <<
+		        -2.0*q(1),  2.0*q(0), -2.0*q(3),  2.0*q(2),
+		        -2.0*q(2),  2.0*q(3),  2.0*q(0), -2.0*q(1),
+		        -2.0*q(3), -2.0*q(2),  2.0*q(1),  2.0*q(0);
+		        return Jang;
+		    }
+		    else
+		    {
+		        // Jacobian in pinocchio::LOCAL frame
+		        pinocchio::getJointJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
+		        // Transform Jacobian from pinocchio::LOCAL frame to base frame
+		        return (data_->oMf[link_number].rotation())*J.bottomRows(3);
+		    }
             }
             catch (std::exception& e)
             {
-                std::cerr << "WARNING: Link name " << link_name << " is invalid! ... "
+                std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
                 <<  "Returning zeros" << std::endl;
                 return Eigen::MatrixXd::Zero(3,ndofActuated());
             }
         }
         
-        Eigen::MatrixXd geometricJacobian(const unsigned int& link_number)
-        {
-            pinocchio::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
-            // Jacobian in pinocchio::LOCAL (link) frame
-            pinocchio::getJointJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-            
-            if (has_floating_base_)
-            {
-                Eigen::MatrixXd Jg; Jg.resize(6, this->ndof()); Jg.setZero();
-                Eigen::Matrix3d Rbase; Rbase = quaternionToRotation(q_.segment(3,4));
-                Jg.topLeftCorner(3,3) =
-                Rbase.transpose()*data_->oMi[link_number].rotation()*J.block(0,0,3,3);
-                Jg.topRightCorner(3,ndofActuated()) =
-                (data_->oMi[link_number].rotation())*J.block(0,6,3,ndofActuated());
-                Jg.bottomRightCorner(3,ndofActuated()) =
-                (data_->oMi[link_number].rotation())*J.block(3,6,3,ndofActuated());
-                
-                Eigen::MatrixXd T; T.resize(3,4);
-                T <<
-                -2.0*q_(4),  2.0*q_(3), -2.0*q_(6),  2.0*q_(5),
-                -2.0*q_(5),  2.0*q_(6),  2.0*q_(3), -2.0*q_(4),
-                -2.0*q_(6), -2.0*q_(5),  2.0*q_(4),  2.0*q_(3);
-                Jg.block(0,3,3,4) =
-                data_->oMi[link_number].rotation()*J.block(0,3,3,3)*Rbase.transpose()*T;
-                Jg.block(3,3,3,4) = T;
-                
-                return Jg;
-            }
-            else
-            {
-                // Transform Jacobians from pinocchio::LOCAL frame to base frame
-                J.topRows(3) = (data_->oMi[link_number].rotation())*J.topRows(3);
-                J.bottomRows(3) = (data_->oMi[link_number].rotation())*J.bottomRows(3);
-                return J;
-            }
-        }
+      
         
         
         Eigen::VectorXd comPosition()
@@ -618,7 +484,7 @@ namespace serow
         void printJointNames()
         const
         {
-            for (unsigned int i=0; i<jnames_.size(); ++i)
+            for (int i=0; i<jnames_.size(); ++i)
                 std::cout << jnames_[i] <<std::endl;
 
 
@@ -635,22 +501,13 @@ namespace serow
                 return;
             }
             std::cout << "\nJoint Name\t qmin \t qmax \t dqmax" << std::endl;
-            for (unsigned int i=0; i<jnames_.size(); ++i)
+            for (int i=0; i<jnames_.size(); ++i)
                 std::cout << jnames_[i] << "\t\t" << qmin_[i] << "\t" << qmax_[i] << "\t"
                 << dqmax_[i] << std::endl;
         }
         
         
-        void printLinkID()
-        const
-        {
-            std::cout << "\nMap link names: IDs" << std::endl;
-            std::map<std::string, unsigned int>::const_iterator it;
-            for (it=link_id_.begin(); it!=link_id_.end(); ++it)
-                std::cout << "(" << it->first << ": " << it->second << "), ";
-            std::cout << "\b\b";
-            std::cout << " " << std::endl;
-        }
+       
         
         double sgn(const double& x)
         {
