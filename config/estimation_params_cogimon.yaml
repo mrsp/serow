@@ -58,7 +58,7 @@ VelocityThres: 0.1
 medianWindow: 5
 
 #Compute Joint Velocities
-joint_cutoff_freq: 25
+joint_cutoff_freq: 12
 joint_noise_density: 0.0463 # rad
 
 
@@ -111,7 +111,7 @@ velocity_noise_density_z: 0.035 #0.007
 
 
 #IMU Initial Biases in the IMU local frame - Biases are added!
-bias_ax: -0.53753
+bias_ax: -0.42753
 bias_ay: 0.0543627
 bias_az: -0.0824804
 bias_gx: -1.24626e-07
