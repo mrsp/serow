@@ -1,7 +1,7 @@
 #Robot Frames (CHECK URDF)
 base_link: "base_link"
-lfoot: "LFoot"
-rfoot: "RFoot"
+lfoot: "l_ankle"
+rfoot: "r_ankle"
 modelname: "/home/master/dp_ws/src/serow/share/urdf/cogimon.urdf"
 
 useLegOdom: true
@@ -14,14 +14,14 @@ rfoot_force_torque_topic: "/xbotcore/cogimon/ft/r_leg_ft"
 
 
 #Ground-Truth #Not Mandatory - For comparison only
-ground_truth: true
+ground_truth: false
 ground_truth_odom_topic: "/cogimon/ground_truth/odom"
 ground_truth_com_topic: "/cogimon/ground_truth/com/odom"
 is_in_ds_topic: "/ds"
 T_B_GT: [0, 0, 1, 0, 1, 0, 0, 0, 0, 1 , 0, 0, 0, 0 ,0, 1]
 
 
-comp_with: true
+comp_with: false
 comp_with_odom0_topic: "/svo/odom0"
 
 
@@ -47,7 +47,7 @@ imu_topic_freq: 200
 joint_topic_freq: 200
 fsr_topic_freq: 200  
 
-mass: 64.5957  #robot mass
+mass: 70.5957  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
 LLegUpThres: 142 #Schmitt Trigger High Threshold in Newtons (N)
@@ -105,13 +105,13 @@ mahalanobis_TH: 22.0
 odom_position_noise_density: 3.5e-02 #4 3.5
 odom_orientation_noise_density: 5.0e-02 #4
 
-velocity_noise_density_x: 0.015 #0.007
-velocity_noise_density_y: 0.015 #0.009
-velocity_noise_density_z: 0.015 #0.007
+velocity_noise_density_x: 0.035 #0.007
+velocity_noise_density_y: 0.035 #0.009
+velocity_noise_density_z: 0.035 #0.007
 
 
 #IMU Initial Biases - Biases are added!
-bias_ax: -1.03753
+bias_ax: -0.53753
 bias_ay: 0.0543627
 bias_az: -0.0824804
 bias_gx: -1.24626e-07
