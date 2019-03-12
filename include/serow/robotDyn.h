@@ -197,7 +197,8 @@ namespace serow
 		    // Jacobian in pinocchio::LOCAL (link) frame
 
 
-		    int link_number = (int) pmodel_->getFrameId(frame_name);
+            	    pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
+
 		    pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
 
 		    if (has_floating_base_)
@@ -260,7 +261,9 @@ namespace serow
         Eigen::Vector3d linkPosition(const std::string& frame_name)
         {
             try{ 
-           	 return data_->oMf[(int) pmodel_->getFrameId(frame_name)].translation();
+           	 pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
+
+           	 return data_->oMf[link_number].translation();
             }
             catch (std::exception& e)
             {
@@ -276,7 +279,10 @@ namespace serow
         Eigen::Quaterniond linkOrientation(const std::string& frame_name)
         {
             try{
-		Eigen::Vector4d temp = rotationToQuaternion(data_->oMf[(int) pmodel_->getFrameId(frame_name)].rotation());
+
+                pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
+
+		Eigen::Vector4d temp = rotationToQuaternion(data_->oMf[link_number].rotation());
 		    Eigen::Quaterniond tempQ;
 		    tempQ.w() = temp(0);
 		    tempQ.x() = temp(1);
@@ -296,8 +302,10 @@ namespace serow
         Eigen::VectorXd linkPose(const std::string& frame_name)
         {
             Eigen::VectorXd lpose(7);
-            lpose.head(3) = data_->oMf[(int) pmodel_->getFrameId(frame_name)].translation();
-            lpose.tail(4) = rotationToQuaternion(data_->oMf[(int) pmodel_->getFrameId(frame_name)].rotation());
+            pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
+
+            lpose.head(3) = data_->oMf[link_number].translation();
+            lpose.tail(4) = rotationToQuaternion(data_->oMf[link_number].rotation());
             
             return lpose;
         }
@@ -309,7 +317,8 @@ namespace serow
         Eigen::MatrixXd linearJacobian(const std::string& frame_name)
         {
 		pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
-		int link_number = (int) pmodel_->getFrameId(frame_name);
+            pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
+
             pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
             try{
  		
@@ -355,18 +364,20 @@ namespace serow
 
         Eigen::MatrixXd angularJacobian(const std::string& frame_name)
         {
-		pinocchio::Data::Matrix6x J(6, pmodel_->nv); 
-	        J.fill(0);
-            	    int link_number = (int) pmodel_->getFrameId(frame_name);
+		pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
+            	pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
+
+
             try{
 
 		    if (has_floating_base_)
 		    {
+
 		        Eigen::MatrixXd Jang; Jang.resize(3, this->ndof()); Jang.setZero();
 		        Eigen::Vector4d q;
 		        
 		        // Jacobian in global frame
-		        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number,pinocchio::WORLD, J);
+		        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
 		        
 		        // The structure of J is: [0 | Rot_ff_wrt_world | Jq_wrt_world]
 		        Jang.rightCols(ndofActuated()) = J.block(3,6,3,ndofActuated());
@@ -376,11 +387,14 @@ namespace serow
 		        -2.0*q(2),  2.0*q(3),  2.0*q(0), -2.0*q(1),
 		        -2.0*q(3), -2.0*q(2),  2.0*q(1),  2.0*q(0);
 		        return Jang;
+
 		    }
 		    else
 		    {
+
 		        // Jacobian in pinocchio::LOCAL frame
-		        pinocchio::getJointJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
+		        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
+
 		        // Transform Jacobian from pinocchio::LOCAL frame to base frame
 		        return (data_->oMf[link_number].rotation())*J.bottomRows(3);
 		    }
