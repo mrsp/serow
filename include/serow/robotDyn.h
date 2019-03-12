@@ -1,5 +1,5 @@
 /*
- * humanoid_state_estimation - a complete state estimation scheme for humanoid robots
+ * SERoW - a complete state estimation scheme for humanoid robots
  *
  * Copyright 2018-2019 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
