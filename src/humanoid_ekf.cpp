@@ -54,6 +54,19 @@ void humanoid_ekf::loadparams() {
     n_p.param<double>("StrikingContact", StrikingContact,5.0);
     n_p.param<double>("VelocityThres", VelocityThres,0.5);
     
+
+    n_p.param<bool>("useGEM",useGEM,false);
+    n_p.param<double>("foot_polygon_xmin", foot_polygon_xmin, -0.103);
+    n_p.param<double>("foot_polygon_xmax", foot_polygon_xmax, 0.107);
+    n_p.param<double>("foot_polygon_ymin", foot_polygon_ymin, -0.055);
+    n_p.param<double>("foot_polygon_ymax", foot_polygon_ymax, 0.055);
+    n_p.param<double>("lforce_sigma", lforce_sigma, 2.2734);
+    n_p.param<double>("rforce_sigma", rforce_sigma, 5.6421);
+    n_p.param<double>("lcop_sigma", lcop_sigma, 0.005);
+    n_p.param<double>("rcop_sigma", rcop_sigma, 0.005);
+
+
+
     n_p.param<bool>("useLegOdom",useLegOdom,false);
     n_p.param<bool>("usePoseUpdate",usePoseUpdate,false);
     
@@ -835,6 +848,9 @@ void humanoid_ekf::computeKinTFs() {
         Twr.linear() = Tbr.linear();
         dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
                                       mass, Tau0, Tau1, joint_freq, g, useCF, cf_freqvmin, cf_freqvmax,p_FT_LL,p_FT_RL); //USED TO BE 0.3 instead of 0.05
+        cd = new serow::ContactDetection();
+        cd->init(lfoot_frame, rfoot_frame, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
+            foot_polygon_ymin, foot_polygon_ymax, lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, VelocityThres);
     }
     
     
@@ -891,9 +907,6 @@ void humanoid_ekf::computeKinTFs() {
 
 
 
-
-
-
 /* Schmidtt Trigger */
 void humanoid_ekf::determineLegContact() {
     
@@ -912,9 +925,12 @@ void humanoid_ekf::determineLegContact() {
         firstContact = false;
     }
     else{
-        //cout<<"LEFT NORM "<<vwl.norm()<<endl;
-        //cout<<"RIGHT NORM "<<vwr.norm()<<endl;
+        cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl, vwr);
+
         
+
+
+
         //Determine if the Support Foot changed
         if(!support_idx_provided){
             
@@ -972,6 +988,19 @@ void humanoid_ekf::determineLegContact() {
             }
             
         }
+        //Cropping the vertical GRF
+        lfz = cropGRF(lfz);
+        rfz = cropGRF(rfz);
+
+        //GRF Coefficients
+        wl = (lfz + ef) / (lfz + rfz + 2.0 * ef);
+        wr = (rfz + ef) / (lfz + rfz + 2.0 * ef);
+
+        std::cout<<"SMITT SUPPORT "<<support_foot_frame<<std::endl;
+        std::cout<<"GEM SUPPORT "<<cd->getSupport()<<std::endl;
+        std::cout<<"GEM LLeg "<<cd->getLLegContactProb()<<std::endl;
+        std::cout<<"GEM RLeg "<<cd->getRLegContactProb()<<std::endl;
+        std::cout<<"----------------"<<std::endl;
     }
 }
 
@@ -1465,14 +1494,10 @@ void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr& msg)
     }
 }
 
-
-
 void humanoid_ekf::subscribeToGroundTruth()
 {
-
     ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic,1,&humanoid_ekf::ground_truth_odomCb,this,ros::TransportHints().tcpNoDelay());
     firstGT = true;
-
 }
 void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
@@ -1501,10 +1526,8 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 
 void humanoid_ekf::subscribeToGroundTruthCoM()
 {
-
     ground_truth_com_sub = n.subscribe(ground_truth_com_topic,1000,&humanoid_ekf::ground_truth_comCb,this,ros::TransportHints().tcpNoDelay());
     firstGTCoM=true;
-
 }
 void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
