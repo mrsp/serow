@@ -65,6 +65,7 @@
 #include "serow/Mahony.h"
 #include "serow/deadReckoning.h"
 #include "serow/Median.h"
+#include <serow/ContactDetection.h>
 
 using namespace Eigen;
 using namespace std;
@@ -157,6 +158,10 @@ private:
 	WindowMedian<double> *llmdf, *rrmdf;
 	string support_leg;
 
+	serow::ContactDetection* cd;
+	bool useGEM;
+	double foot_polygon_xmin, foot_polygon_xmax, foot_polygon_ymin, foot_polygon_ymax;
+	double lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma;
 	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT, offsetGT,offsetGTCoM;
   	Vector3d copl, copr;
 	Affine3d Tws, Twb, Twb_; //From support s to world frame;
