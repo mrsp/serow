@@ -208,7 +208,7 @@ Matrix<double,21,21> IMUinEKF::Adjoint(Matrix<double,7,7> X_)
 
 }
 
-void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d hR_R, Vector3d hR_L, int contactR, int, contactL)
+void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d hR_R, Vector3d hR_L, int contactR, int contactL)
 {
 
    seperateState(X,theta,Rib,vwb,pwb,dR,dL,bgyr,bacc)
@@ -424,8 +424,8 @@ void IMUinEKF::updateVars()
     Rib = Rwb;
     
     //Update the biases
-    bgyr = x.segment<3>(9);
-    bacc = x.segment<3>(12);
+    bgyr = theta.segment<3>(0);
+    bacc = theta.segment<3>(3);
     //std::cout<<"bacc"<<std::endl;
     //std::cout<<bacc<<std::endl;
     //std::cout<<"bgyr"<<std::endl;

@@ -988,13 +988,7 @@ void humanoid_ekf::determineLegContact() {
             }
             
         }
-        //Cropping the vertical GRF
-        lfz = cropGRF(lfz);
-        rfz = cropGRF(rfz);
-
-        //GRF Coefficients
-        wl = (lfz + ef) / (lfz + rfz + 2.0 * ef);
-        wr = (rfz + ef) / (lfz + rfz + 2.0 * ef);
+       
 
         std::cout<<"SMITT SUPPORT "<<support_foot_frame<<std::endl;
         std::cout<<"GEM SUPPORT "<<cd->getSupport()<<std::endl;
