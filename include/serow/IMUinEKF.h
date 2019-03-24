@@ -152,7 +152,7 @@ public:
 	/** @fn void Filter(Matrix<double,3,1> f, Matrix<double,3,1> omega, Matrix<double,3,1>  y_r, Matrix<double,3,1>  y_q)
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
-	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d hR_R, Vector3d hR_L, int contactR, int contactL);
+	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Matrix3d hR_R, Matrix3d hR_L, int contactR, int contactL);
 	void updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactL, int contactR);
 
 
