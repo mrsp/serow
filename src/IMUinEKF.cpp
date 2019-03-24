@@ -171,7 +171,7 @@ Matrix<double,7,7> IMUinEKF::exp(Matrix<double,15,1> v)
     return dX;
 }
 
-Matrix3d IMUinEKF::exp_SO3(Vector3d v);
+Matrix3d IMUinEKF::exp_SO3(Vector3d v)
 {
     Matrix3d R = Matrix3d::Identity();
     Matrix3d A = skew(v);
