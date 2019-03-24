@@ -59,7 +59,7 @@ private:
 
 
 
-	Matrix<double, 21, 21> P, Af, Adj, Phi, If, Qff, Qf
+	Matrix<double, 21, 21> P, Af, Adj, Phi, If, Qff, Qf;
 	Matrix3d I;
 	Vector3d  w_, a_;
 	
@@ -89,7 +89,7 @@ public:
 			bias_ax, bias_ay, bias_az, ghat;
 
 	double accX, accY, accZ, velX, velY, velZ, rX, rY, rZ;
-	Matrix3d Rwb, Rib;
+	Matrix3d Rwb, Rib, Qc;
 
 	Affine3d  Tib;
 
@@ -98,7 +98,7 @@ public:
 	//Sampling time = 1.0/Sampling Frequency
 	double dt;
 
-	IMUEKF();
+	IMUinEKF();
 
 	void constructState(Matrix<double,7,7>&X_, Matrix<double,6,1> &theta_, Matrix3d R_, Vector3d v_, Vector3d  p_, Vector3d dR_,  Vector3d dL_, Vector3d bg_, Vector3d ba_);
 	void seperateState(Matrix<double,7,7>X_, Matrix<double,6,1> theta_, Matrix3d& R_, Vector3d& v_, Vector3d&  p_, Vector3d& dR_,  Vector3d& dL_, Vector3d& bg_, Vector3d& ba_);
@@ -152,7 +152,7 @@ public:
 	/** @fn void Filter(Matrix<double,3,1> f, Matrix<double,3,1> omega, Matrix<double,3,1>  y_r, Matrix<double,3,1>  y_q)
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
-	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d hR_R, Vector3d hR_L, int contactR, int, contactL);
+	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d hR_R, Vector3d hR_L, int contactR, int contactL);
 	void updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactL, int contactR);
 
 
