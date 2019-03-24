@@ -164,10 +164,10 @@ Matrix<double,7,7> IMUinEKF::exp(Matrix<double,15,1> v)
         Jr.noalias() += (phi-sin(phi))/(phi2*phi)*A2;
     }
     dX.block<3,3>(0,0) = R;
-    dX.block<3,3>(0,3).noalias() = Jr * v.segment<3>(3);
-    dX.block<3,3>(0,6).noalias() = Jr * v.segment<3>(6);
-    dX.block<3,3>(0,9).noalias() = Jr * v.segment<3>(9);
-    dX.block<3,3>(0,12).noalias() = Jr * v.segment<3>(12);
+    dX.block<3,1>(0,3).noalias() = Jr * v.segment<3>(3);
+    dX.block<3,1>(0,4).noalias() = Jr * v.segment<3>(6);
+    dX.block<3,1>(0,5).noalias() = Jr * v.segment<3>(9);
+    dX.block<3,1>(0,6).noalias() = Jr * v.segment<3>(12);
     return dX;
 }
 
@@ -284,7 +284,7 @@ void IMUinEKF::updateStateSingleContact(Matrix<double,7,1> Y, Matrix<double,7,1>
     Matrix3d S = N;
     S += H * P * H.transpose();
 
-    Matrix<double,21,3> K = P * H * S.inverse();
+    Matrix<double,21,3> K = P * H.transpose() * S.inverse();
 
     Matrix<double,7,7> BigX = Matrix<double,7,7>::Zero();
     BigX.block<7,7>(0,6) = X;
@@ -309,7 +309,7 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y, Matrix<double,14,1
     Matrix<double,6,6> S = N;
     S += H * P * H.transpose();
 
-    Matrix<double,21,6> K = P * H * S.inverse();
+    Matrix<double,21,6> K = P * H.transpose() * S.inverse();
 
     Matrix<double,14,14> BigX = Matrix<double,14,14>::Zero();
     
@@ -385,7 +385,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
       
        Matrix3d N = Matrix3d::Zero();
        N = Rwb * JRQeJR * Rwb.transpose() +  R;
-       Matrix<double,3,14> PI = Matrix<double,3,14>::Zero();
+       Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
    }
@@ -405,7 +405,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
       
        Matrix3d N = Matrix3d::Zero();
        N = Rwb * JLQeJL * Rwb.transpose() +  R;
-       Matrix<double,3,14> PI = Matrix<double,3,14>::Zero();
+       Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
    }
