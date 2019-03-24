@@ -208,10 +208,10 @@ Matrix<double,21,21> IMUinEKF::Adjoint(Matrix<double,7,7> X_)
 
 }
 
-void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d hR_R, Vector3d hR_L, int contactR, int contactL)
+void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Matrix3d hR_R, Matrix3d hR_L, int contactR, int contactL)
 {
 
-   seperateState(X,theta,Rib,vwb,pwb,dR,dL,bgyr,bacc)
+   seperateState(X,theta,Rib,vwb,pwb,dR,dL,bgyr,bacc);
    w_ = angular_velocity;
    a_ = linear_acceleration;
 
@@ -268,7 +268,7 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     P.noalias() += Qff;
     
     pwb += vwb* dt + 0.5 * (Rwb * a + g)*dt * dt;
-    vwb += (Rwb*a + g)*dt
+    vwb += (Rwb*a + g)*dt;
     Rwb *= exp_SO3(w*dt);
 
     constructState(X,theta, Rwb, vwb, pwb, dR, dL, bgyr, bacc);
