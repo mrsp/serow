@@ -37,6 +37,8 @@
 
 // Estimator Headers
 #include "serow/IMUEKF.h"
+#include "serow/IMUinEKF.h"
+
 #include "serow/CoMEKF.h"
 #include "serow/JointDF.h"
 #include "serow/butterworthLPF.h"
