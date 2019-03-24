@@ -337,16 +337,20 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y, Matrix<double,14,1
 void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactL, int contactR)
 {
    Rwb = X.block<3,3>(0,0);
+   R(0,0) = foot_kinx * foot_kinx;
+   R(1,1) = foot_kinx * foot_kinx;
+   R(2,2) = foot_kinx * foot_kinx;
+
    if(contactL && contactR)
    {
-       Matrix<double,14,1> Y = Matrix<double,14,1>::Zeros();
+       Matrix<double,14,1> Y = Matrix<double,14,1>::Zero();
        Y.segment<3>(0) = s_pR;
        Y(4) = 1.00;
        Y(5) = -1.00;
        Y.segment<3>(7) = s_pL;
        Y(11) = 1.00;
        Y(13) = -1.00;
-       Matrix<double,14,1> b = Matrix<double,14,1>::Zeros();
+       Matrix<double,14,1> b = Matrix<double,14,1>::Zero();
        b(4) = 1.00;
        b(5) = -1.00;
        b(11) = 1.00;
@@ -367,11 +371,11 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
    }
    else if(contactR)
    {
-       Matrix<double,7,1> Y = Matrix<double,7,1>::Zeros();
+       Matrix<double,7,1> Y = Matrix<double,7,1>::Zero();
        Y.segment<3>(0) = s_pR;
        Y(4) = 1.00;
        Y(5) = -1.00;
-       Matrix<double,7,1> b = Matrix<double,7,1>::Zeros();
+       Matrix<double,7,1> b = Matrix<double,7,1>::Zero();
        b(4) = 1.00;
        b(5) = -1.00;
      
@@ -387,11 +391,11 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
    }
    else if(contactL)
    {
-       Matrix<double,7,1> Y = Matrix<double,7,1>::Zeros();
+       Matrix<double,7,1> Y = Matrix<double,7,1>::Zero();
        Y.segment<3>(0) = s_pR;
        Y(4) = 1.00;
        Y(6) = -1.00;
-       Matrix<double,7,1> b = Matrix<double,7,1>::Zeros();
+       Matrix<double,7,1> b = Matrix<double,7,1>::Zero();
        b(4) = 1.00;
        b(6) = -1.00;
      

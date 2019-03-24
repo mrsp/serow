@@ -61,7 +61,7 @@ private:
 
 	Matrix<double, 21, 21> P, Af, Adj, Phi, If, Qff, Qf;
 	Matrix3d I;
-	Vector3d  w_, a_;
+	Vector3d  w_, a_, w, a;
 	
 	//State vector - with biases included
 	Matrix<double, 7, 7> X;
@@ -83,13 +83,13 @@ public:
 	//Noise Stds
 
 	double  acc_qx,acc_qy,acc_qz,gyr_qx,gyr_qy,gyr_qz,gyrb_qx,gyrb_qy,gyrb_qz,
-	accb_qx,accb_qy,accb_qz, foot_contactx, foot_contacty, foot_contactz, kinx, kiny, kinz;
+	accb_qx,accb_qy,accb_qz, foot_contactx, foot_contacty, foot_contactz, foot_kinx, foot_kiny, foot_kinz;
 
 	double gyroX, gyroY, gyroZ, angleX, angleY, angleZ, bias_gx, bias_gy, bias_gz,
 			bias_ax, bias_ay, bias_az, ghat;
 
 	double accX, accY, accZ, velX, velY, velZ, rX, rY, rZ;
-	Matrix3d Rwb, Rib, Qc;
+	Matrix3d Rwb, Rib, Qc, R;
 
 	Affine3d  Tib;
 
