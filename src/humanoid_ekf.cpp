@@ -215,6 +215,7 @@ void humanoid_ekf::loadparams() {
     T_FT_RL(3,3) = ftr_list[15];
     p_FT_RL = Vector3d(T_FT_RL(0,3), T_FT_RL(1,3), T_FT_RL(2,3));
     
+
     //n_p.param<std::string>("copl_topic",copl_topic,"cop/left");
     //n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
     
@@ -226,7 +227,7 @@ void humanoid_ekf::loadparams() {
     n_p.param<bool>("estimateCoM", useCoMEKF,false);
     n_p.param<int>("medianWindow", medianWindow, 10);
     
-    
+    //Attitude Estimation for Leg Odometry
     n_p.param<bool>("useMahony", useMahony,true);
     if(useMahony)
     {
@@ -380,8 +381,9 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh) {
     //Subscribe/Publish ROS Topics/Services
     subscribe();
     advertise();
-    
-    //dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<serow::VarianceControlConfig> >(n);
+    //
+    //ros::NodeHandle np("~")
+    //dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<serow::VarianceControlConfig> >(np);
     //dynamic_reconfigure::Server<serow::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
     // dynamic_recfg_->setCallback(cb);
     is_connected_ = true;
@@ -440,13 +442,10 @@ void humanoid_ekf::subscribe()
     
     subscribeToIMU();
     subscribeToFSR();
-    
     subscribeToJointState();
     
     if(!useLegOdom)
-    {
         subscribeToOdom();
-    }
     
     
     if(ground_truth){
@@ -456,10 +455,10 @@ void humanoid_ekf::subscribe()
     }
     
     if(support_idx_provided)
-    subscribeToSupportIdx();
+        subscribeToSupportIdx();
     
     if(comp_with)
-	subscribeToCompOdom();
+	    subscribeToCompOdom();
 }
 
 void humanoid_ekf::init() {
@@ -489,8 +488,6 @@ void humanoid_ekf::init() {
     Tbr = Affine3d::Identity();
     vwl= Vector3d::Zero();
     vwr= Vector3d::Zero();
-    
-    
     no_motion_residual = Vector3d::Zero();
     firstrun = true;
     firstUpdate = true;
@@ -514,7 +511,6 @@ void humanoid_ekf::init() {
             for(unsigned int i=0;i<3;i++)
             gyroMAF[i] = new MovingAverageFilter();
         }
-        
         nipmEKF = new CoMEKF;
         nipmEKF->init();
     }
@@ -622,7 +618,7 @@ void humanoid_ekf::estimateWithIMUEKF()
         if(check_no_motion){
             no_motion_residual = Twb.translation()-Twb_.translation();
             if(no_motion_residual.norm() < no_motion_threshold)
-            no_motion_it++;
+                no_motion_it++;
             else{
                 no_motion_indicator = false;
                 no_motion_it = 0;
@@ -821,7 +817,6 @@ void humanoid_ekf::computeKinTFs() {
     CoM_enc = rd->comPosition();
     
     mass = m;
-    support_inc = true;
     Tbl.translation() = rd->linkPosition(lfoot_frame);
     qbl = rd->linkOrientation(lfoot_frame);
     Tbl.linear() = qbl.toRotationMatrix();
@@ -847,13 +842,8 @@ void humanoid_ekf::computeKinTFs() {
         Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
         Twr.linear() = Tbr.linear();
         dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                                      mass, Tau0, Tau1, joint_freq, g, useCF, cf_freqvmin, cf_freqvmax,p_FT_LL,p_FT_RL); //USED TO BE 0.3 instead of 0.05
-        cd = new serow::ContactDetection();
-        cd->init(lfoot_frame, rfoot_frame, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
-            foot_polygon_ymin, foot_polygon_ymax, lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, VelocityThres);
+                                      mass, Tau0, Tau1, joint_freq, g, useCF, cf_freqvmin, cf_freqvmax,p_FT_LL,p_FT_RL); 
     }
-    
-    
     
     
     //Differential Kinematics with Pinnochio
@@ -861,26 +851,31 @@ void humanoid_ekf::computeKinTFs() {
     omegabr = rd->getAngularVelocity(rfoot_frame);
     vbl =  rd->getLinearVelocity(lfoot_frame);
     vbr =  rd->getLinearVelocity(rfoot_frame);
-    
-    if(useMahony){
-        dr->computeDeadReckoning(mh->getR(),  Tbl.linear(),  Tbr.linear(), mh->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
-                                 LLegForceFilt, RLegForceFilt, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
-        qwb_ = qwb;
-        qwb = Quaterniond(mh->getR());
-        omegawb = mh->getGyro();
+    if(!firstContact){
+        if(useMahony){
+            dr->computeDeadReckoning(mh->getR(),  Tbl.linear(),  Tbr.linear(), mh->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
+                                    LLegForceFilt, RLegForceFilt, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            
+            //dr->computeDeadReckoningGEM(mh->getR(),  Tbl.linear(),  Tbr.linear(), mh->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
+            //                         cd->getLLegContactProb,  cd->getRLegContactProb, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            qwb_ = qwb;
+            qwb = Quaterniond(mh->getR());
+            omegawb = mh->getGyro();
+        }
+        else{
+            dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
+                                    LLegForceFilt, RLegForceFilt, mw->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            //dr->computeDeadReckoningGEM(mh->getR(),  Tbl.linear(),  Tbr.linear(), mh->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
+            //                         cd->getLLegContactProb,  cd->getRLegContactProb, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            qwb_ = qwb;
+            qwb = Quaterniond(mw->getR());
+            omegawb = mw->getGyro();
+        }
+        Twb_ = Twb;
+        Twb.translation() = dr->getOdom();
+        Twb.linear() = qwb.toRotationMatrix();
+        vwb = dr->getLinearVel();
     }
-    else{
-        dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
-                                 LLegForceFilt, RLegForceFilt, mw->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
-        qwb_ = qwb;
-        qwb = Quaterniond(mw->getR());
-        omegawb = mw->getGyro();
-    }
-    Twb_ = Twb;
-    Twb.translation() = dr->getOdom();
-    Twb.linear() = qwb.toRotationMatrix();
-    vwb = dr->getLinearVel();
-    
     
     if(firstrun)
     {
@@ -899,6 +894,7 @@ void humanoid_ekf::computeKinTFs() {
     leg_odom_inc = true;
     leg_vel_inc = true;
     com_inc = true;
+    support_inc = true;
     check_no_motion = false;
     
     
@@ -912,6 +908,10 @@ void humanoid_ekf::determineLegContact() {
     
     //Choose Initial Support Foot based on Contact Force
     if(firstContact){
+        cd = new serow::ContactDetection();
+        cd->init(lfoot_frame, rfoot_frame, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
+            foot_polygon_ymin, foot_polygon_ymax, lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, VelocityThres);
+
         if(LLegGRF(2)>RLegGRF(2)){
             // Initial support leg
             support_leg = "LLeg";
@@ -926,10 +926,6 @@ void humanoid_ekf::determineLegContact() {
     }
     else{
         cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl, vwr);
-
-        
-
-
 
         //Determine if the Support Foot changed
         if(!support_idx_provided){

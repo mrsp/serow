@@ -81,7 +81,7 @@ class deadReckoning
     }
 
     void computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
-                            Eigen::Vector3d vbl, Eigen::Vector3d vbr, double lfz, double rfz)
+                            Eigen::Vector3d vbl, Eigen::Vector3d vbr, double wl_, double wr_)
     {
 
         /*
@@ -89,18 +89,11 @@ class deadReckoning
                 vwbKCFS= -wedge(omegawb) * Rwb * pbl - Rwb * vbl;
             else
                 vwbKCFS= -wedge(omegawb) * Rwb * pbr - Rwb * vbr;
-            */
+        */
 
-        //Cropping the vertical GRF
-        lfz = cropGRF(lfz);
-        rfz = cropGRF(rfz);
-
-        //GRF Coefficients
-        wl = (lfz + ef) / (lfz + rfz + 2.0 * ef);
-        wr = (rfz + ef) / (lfz + rfz + 2.0 * ef);
-
-        vwbKCFS.noalias() = wl * (-wedge(omegawb) * Rwb * pbl - Rwb * vbl);
-        vwbKCFS.noalias() += wr * (-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
+       
+        vwbKCFS.noalias() = wl_ * (-wedge(omegawb) * Rwb * pbl - Rwb * vbl);
+        vwbKCFS.noalias() += wr_ * (-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
 
         //if(!USE_CF)
         vwb = vwbKCFS;
@@ -196,7 +189,14 @@ class deadReckoning
     {
 
         //Compute Body position
-        computeBodyVelKCFS(Rwb, omegawb, pbl, pbr, vbl, vbr, lfz, rfz);
+        //Cropping the vertical GRF
+        lfz = cropGRF(lfz);
+        rfz = cropGRF(rfz);
+        //GRF Coefficients
+        wl = (lfz + ef) / (lfz + rfz + 2.0 * ef);
+        wr = (rfz + ef) / (lfz + rfz + 2.0 * ef);
+
+        computeBodyVelKCFS(Rwb, omegawb, pbl, pbr, vbl, vbr, wl, wr);
         /*
             if(USE_CF)
             {
@@ -205,6 +205,8 @@ class deadReckoning
                 vwb=bvcf->filter(vwbKCFS, acc, GRF);
             }
         */
+
+
         computeLegKCFS(Rwb, Rbl, Rbr, omegawb, omegabl, omegabr, pbl, pbr, vbl, vbr);
         //computeIMVP();
         computeIMVPFT(lf, rf, lt, rt);
@@ -218,13 +220,63 @@ class deadReckoning
         //Leg odometry with right foot
         pb_r = pwr - Rwb * pbr;
 
-        //Cropping the vertical GRF
-        lfz = cropGRF(lfz);
-        rfz = cropGRF(rfz);
 
-        //GRF Coefficients
-        wl = (lfz + ef) / (lfz + rfz + 2.0 * ef);
-        wr = (rfz + ef) / (lfz + rfz + 2.0 * ef);
+        //Leg Odometry Estimate
+        pwb_ = pwb;
+        pwb = wl * pb_l + wr * pb_r;
+        //Leg Position Estimate w.r.t Inertial Frame
+        pwl += pwb - pb_l;
+        pwr += pwb - pb_r;
+        //Needed in the next iteration
+        Rwl_ = Rwl;
+        Rwr_ = Rwr;
+        pwl_ = pwl;
+        pwr_ = pwr;
+        if (!firstrun)
+            vwb = (pwb - pwb_) * freq;
+        else
+            firstrun = false;
+        //cout<<"DEAD RECKONING "<<endl;
+        //cout<<pwb<<endl;
+    }
+
+
+    void computeDeadReckoningGEM(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr,
+                              Eigen::Vector3d omegawb,
+                              Eigen::Vector3d pbl, Eigen::Vector3d pbr,
+                              Eigen::Vector3d vbl, Eigen::Vector3d vbr,
+                              Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
+                              double wl_, double wr_, Eigen::Vector3d acc, Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
+    {
+
+        
+        wl = wl_;
+        wr = wr_;
+
+        computeBodyVelKCFS(Rwb, omegawb, pbl, pbr, vbl, vbr, wl, wr);
+        /*
+            if(USE_CF)
+            {
+                double GRF=lfz+rfz;
+                GRF = cropGRF(GRF);
+                vwb=bvcf->filter(vwbKCFS, acc, GRF);
+            }
+        */
+
+
+        computeLegKCFS(Rwb, Rbl, Rbr, omegawb, omegabl, omegabr, pbl, pbr, vbl, vbr);
+        //computeIMVP();
+        computeIMVPFT(lf, rf, lt, rt);
+
+        //Temp estimate of Leg position w.r.t Inertial Frame
+        pwl = pwl_ - Rwl * LpLm + Rwl_ * LpLm;
+        pwr = pwr_ - Rwr * RpRm + Rwr_ * RpRm;
+
+        //Leg odometry with left foot
+        pb_l = pwl - Rwb * pbl;
+        //Leg odometry with right foot
+        pb_r = pwr - Rwb * pbr;
+
 
         //Leg Odometry Estimate
         pwb_ = pwb;
