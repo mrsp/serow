@@ -113,12 +113,12 @@ public:
     }
     else
     {
-      if ((pl >= 0.5 && pr <= 0.5) && (vwl.norm() < VelocityThres && vwr.norm() > VelocityThres))
+      if ((pl >= pr) && (vwl.norm() < VelocityThres && vwr.norm() > VelocityThres))
       {
         support_leg = "LLeg";
         support_foot_frame = lfoot_frame;
       }
-      else if ((pr >= 0.5 && pl <= 0.5) && (vwr.norm() < VelocityThres && vwl.norm() > VelocityThres))
+      else if ((pr >= pl) && (vwr.norm() < VelocityThres && vwl.norm() > VelocityThres))
       {
         support_leg = "RLeg";
         support_foot_frame = rfoot_frame;

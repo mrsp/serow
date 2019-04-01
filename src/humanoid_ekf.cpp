@@ -67,6 +67,7 @@ void humanoid_ekf::loadparams() {
 
 
 
+
     n_p.param<bool>("useLegOdom",useLegOdom,false);
     n_p.param<bool>("usePoseUpdate",usePoseUpdate,false);
     
@@ -124,6 +125,11 @@ void humanoid_ekf::loadparams() {
         T_B_P(3,3) = pose_list[15];
         q_B_P = Quaterniond(T_B_P.linear());
     }
+    else
+    {
+        T_B_P.Identity();
+    }
+    
     std::vector<double> acc_list;
     n_p.getParam("T_B_A",acc_list);
     T_B_A(0,0) = acc_list[0];
@@ -222,7 +228,7 @@ void humanoid_ekf::loadparams() {
     n_p.param<bool>("comp_with",comp_with,false);
     comp_odom0_inc = false;
     if(comp_with)
-	n_p.param<std::string>("comp_with_odom0_topic", comp_with_odom0_topic,"compare_with_odom0");
+	    n_p.param<std::string>("comp_with_odom0_topic", comp_with_odom0_topic,"compare_with_odom0");
 
     n_p.param<bool>("estimateCoM", useCoMEKF,false);
     n_p.param<int>("medianWindow", medianWindow, 10);
@@ -857,7 +863,7 @@ void humanoid_ekf::computeKinTFs() {
                                     LLegForceFilt, RLegForceFilt, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
             
             //dr->computeDeadReckoningGEM(mh->getR(),  Tbl.linear(),  Tbr.linear(), mh->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
-            //                         cd->getLLegContactProb,  cd->getRLegContactProb, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            //                         cd->getLLegContactProb(),  cd->getRLegContactProb(), mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
             qwb_ = qwb;
             qwb = Quaterniond(mh->getR());
             omegawb = mh->getGyro();
@@ -865,8 +871,8 @@ void humanoid_ekf::computeKinTFs() {
         else{
             dr->computeDeadReckoning(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
                                     LLegForceFilt, RLegForceFilt, mw->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
-            //dr->computeDeadReckoningGEM(mh->getR(),  Tbl.linear(),  Tbr.linear(), mh->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
-            //                         cd->getLLegContactProb,  cd->getRLegContactProb, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            //dr->computeDeadReckoningGEM(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
+            //                        cd->getLLegContactProb(),  cd->getRLegContactProb(), mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
             qwb_ = qwb;
             qwb = Quaterniond(mw->getR());
             omegawb = mw->getGyro();
@@ -905,12 +911,35 @@ void humanoid_ekf::computeKinTFs() {
 
 /* Schmidtt Trigger */
 void humanoid_ekf::determineLegContact() {
-    
+         copl = Vector3d::Zero();
+        if(LLegGRF(2)!=0)
+        {
+            copl(0) = -LLegGRT(1)/LLegGRF(2);
+            copl(1) = LLegGRT(0)/LLegGRF(2);
+        }
+        copr = Vector3d::Zero();
+        if(RLegGRF(2)!=0)
+        {
+            copr(0) = -RLegGRT(1)/RLegGRF(2);
+            copr(1) = RLegGRT(0)/RLegGRF(2);
+        }
+        
+      
+        
+        if(LLegGRF(2) < LosingContact)
+        {
+            copl  = Vector3d::Zero();
+        }
+        if(RLegGRF(2) < LosingContact)
+        {
+            copr  = Vector3d::Zero();
+        }
     //Choose Initial Support Foot based on Contact Force
     if(firstContact){
         cd = new serow::ContactDetection();
         cd->init(lfoot_frame, rfoot_frame, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
             foot_polygon_ymin, foot_polygon_ymax, lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, VelocityThres);
+        cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl, vwr);
 
         if(LLegGRF(2)>RLegGRF(2)){
             // Initial support leg
@@ -925,8 +954,8 @@ void humanoid_ekf::determineLegContact() {
         firstContact = false;
     }
     else{
+       
         cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl, vwr);
-
         //Determine if the Support Foot changed
         if(!support_idx_provided){
             
@@ -1558,9 +1587,8 @@ void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
 {
 if(!firstrun){
 	comp_odom0_msg = *msg;
-	temp = T_B_P.linear()*Vector3d(comp_odom0_msg.pose.pose.position.x,comp_odom0_msg.pose.pose.position.y,comp_odom0_msg.pose.pose.position.z);
-	tempq = q_B_P *Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
- 	
+	temp = Vector3d(comp_odom0_msg.pose.pose.position.x,comp_odom0_msg.pose.pose.position.y,comp_odom0_msg.pose.pose.position.z);
+	tempq = Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
 	if(firstCO){
             qoffsetCO =  qwb  * tempq.inverse();
             offsetCO = Twb.translation() - temp;

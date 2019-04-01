@@ -8,20 +8,20 @@ useLegOdom: true
 #ROS Topic Names
 odom_topic: "/svo/odom/0"
 #odom_topic: "/odom_rf2o"
-imu_topic: "/imu0"
+imu_topic: "/imu/data"
 #imu_topic: "/nao_robot/imu"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
 rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
 
 #Ground-Truth
-ground_truth: false
-ground_truth_odom_topic: "/nao/ground_truth/odom"
+ground_truth: true
+ground_truth_odom_topic: "/orbslam2/odom"
 ground_truth_com_topic: "/gt_com"
-T_B_GT: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0 ,0, 1]
+T_B_GT: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1]
 
 comp_with: true
-comp_with_odom0_topic: "/svo/odom/0"
+comp_with_odom0_topic: "/dvo/odom"
 #comp_with_odom0_topic: "/odom_rf2o"
 support_idx_provided: false
 support_idx_topic: "/sp"
@@ -55,6 +55,28 @@ LLegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 7
 StrikingContact: 60
 
+
+useGEM: false
+foot_polygon_xmin: -0.047
+foot_polygon_xmax: 0.11
+foot_polygon_ymin: -0.05
+foot_polygon_ymax: 0.038
+lforce_sigma: 1.5
+rforce_sigma: 1.5
+lcop_sigma: 0.015
+rcop_sigma: 0.015
+VelocityThres: 0.15
+
+
+
+
+
+
+
+
+
+
+
 #Joint Velocity Estimation
 joint_cutoff_freq: 6.0
 
@@ -74,8 +96,9 @@ bias_mgz: 0
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
-medianWindow: 10
-mass: 6.6530  #robot mass
+medianWindow: 8
+#mass: 6.6530  #robot mass
+mass: 5.4  #robot mass
 
 
 #Choose Integration Method
@@ -110,9 +133,9 @@ odom_orientation_noise_density: 5.0e-02 #2.0e-01
 #odom_position_noise_density: 0.015
 #odom_orientation_noise_density: 0.01
 
-velocity_noise_density_x: 0.008
-velocity_noise_density_y: 0.008
-velocity_noise_density_z: 0.008
+velocity_noise_density_x: 0.01
+velocity_noise_density_y: 0.01
+velocity_noise_density_z: 0.01
 
 #IMU Initial Biases - Biases are additive and are in the IMU !
 bias_ax: 0.0
