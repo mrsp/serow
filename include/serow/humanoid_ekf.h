@@ -161,6 +161,10 @@ private:
 	string support_leg;
 
 	serow::ContactDetection* cd;
+    Vector3d coplw, coprw;
+    double weightl, weightr;
+
+
 	bool useGEM;
 	double foot_polygon_xmin, foot_polygon_xmax, foot_polygon_ymin, foot_polygon_ymax;
 	double lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma;
@@ -216,7 +220,8 @@ private:
 
 	 void computeLGRF();
 	 void computeRGRF();
-	 void computeCOP(Affine3d Tis_, Affine3d Tssprime_);
+	 void computeLocalCOP();
+	 void computeGlobalCOP(Affine3d Tis_, Affine3d Tssprime_);
 	 void filterGyrodot();
 	//private methods
 	void init();
