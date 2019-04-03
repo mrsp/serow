@@ -494,6 +494,10 @@ void humanoid_ekf::init() {
     Tbr = Affine3d::Identity();
     vwl= Vector3d::Zero();
     vwr= Vector3d::Zero();
+    coplw = Vector3d::Zero();
+    coprw = Vector3d::Zero();
+    weightl = 0.000;
+    weightr = 0.000;   
     no_motion_residual = Vector3d::Zero();
     firstrun = true;
     firstUpdate = true;
@@ -541,8 +545,7 @@ void humanoid_ekf::init() {
     RLegForceFilt = 0;
 }
 
-
-
+/** Main Loop **/ 
 void humanoid_ekf::run() {
     
     static ros::Rate rate(freq);  //ROS Node Loop Rate
@@ -553,14 +556,15 @@ void humanoid_ekf::run() {
             if(useMahony)
             {
                 mh->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)+Vector3d(bias_gx,bias_gy,bias_gz)),
-                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)+Vector3d(bias_ax,bias_ay,bias_az)));
+                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)+Vector3d(bias_ax,bias_ay,bias_az)));
             }
             else
             {
                 mw->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z)+Vector3d(bias_gx,bias_gy,bias_gz)),
-                              T_B_A.linear()*(Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)+Vector3d(bias_ax,bias_ay,bias_az)));
+                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z)+Vector3d(bias_ax,bias_ay,bias_az)));
             }
             
+
             if(fsr_inc){
                 computeLGRF();
                 computeRGRF();
@@ -568,15 +572,20 @@ void humanoid_ekf::run() {
                 determineLegContact();
             }
             
+            
             //Compute the required transformation matrices (tfs) with Kinematics
-            if(joint_inc){
+            if(joint_inc)
+            {
                 computeKinTFs();
             }
+
+            //Main Loop
             if(!firstrun){
                 estimateWithIMUEKF();
                 if(useCoMEKF)
-                estimateWithCoMEKF();
+                    estimateWithCoMEKF();
                 
+
                 //Publish Data
                 publishJointEstimates();
                 publishBodyEstimates();
@@ -597,6 +606,13 @@ void humanoid_ekf::run() {
     //De-allocation of Heap
     deAllocate();
 }
+
+
+
+
+
+
+
 
 void humanoid_ekf::estimateWithIMUEKF()
 {
@@ -761,14 +777,13 @@ void humanoid_ekf::estimateWithCoMEKF()
     
     //Compute the COP in the Inertial Frame
     if(fsr_inc  && !predictWithCoM && !nipmEKF->firstrun){
-        computeCOP(Twl,Twr);
+        computeGlobalCOP(Twl,Twr);
         //Numerically compute the Gyro acceleration in the Inertial Frame and use a 3-Point Low-Pass filter
         filterGyrodot();
         DiagonalMatrix<double,3> Inertia(I_xx,I_yy,I_zz);
         nipmEKF->predict(COP_fsr,GRF_fsr,imuEKF->Rib*Inertia*Gyrodot);
         fsr_inc = false;
         predictWithCoM = true;
-        
     }
     
     if(com_inc && predictWithCoM){
@@ -790,8 +805,6 @@ void humanoid_ekf::computeLGRF()
     LLegGRT(0) = lfsr_msg.wrench.torque.x;
     LLegGRT(1) = lfsr_msg.wrench.torque.y;
     LLegGRT(2) = lfsr_msg.wrench.torque.z;
-    
-    
     LLegGRF = T_FT_LL.linear() * LLegGRF;
     LLegGRT = T_FT_LL.linear() * LLegGRT;
     MediatorInsert(lmdf,LLegGRF(2));
@@ -806,7 +819,6 @@ void humanoid_ekf::computeRGRF()
     RLegGRT(0) = rfsr_msg.wrench.torque.x;
     RLegGRT(1) = rfsr_msg.wrench.torque.y;
     RLegGRT(2) = rfsr_msg.wrench.torque.z;
-    
     RLegGRF = T_FT_RL.linear() * RLegGRF;
     RLegGRT = T_FT_RL.linear() * RLegGRT;
     MediatorInsert(rmdf,RLegGRF(2));
@@ -911,35 +923,12 @@ void humanoid_ekf::computeKinTFs() {
 
 /* Schmidtt Trigger */
 void humanoid_ekf::determineLegContact() {
-         copl = Vector3d::Zero();
-        if(LLegGRF(2)!=0)
-        {
-            copl(0) = -LLegGRT(1)/LLegGRF(2);
-            copl(1) = LLegGRT(0)/LLegGRF(2);
-        }
-        copr = Vector3d::Zero();
-        if(RLegGRF(2)!=0)
-        {
-            copr(0) = -RLegGRT(1)/RLegGRF(2);
-            copr(1) = RLegGRT(0)/RLegGRF(2);
-        }
-        
-      
-        
-        if(LLegGRF(2) < LosingContact)
-        {
-            copl  = Vector3d::Zero();
-        }
-        if(RLegGRF(2) < LosingContact)
-        {
-            copr  = Vector3d::Zero();
-        }
     //Choose Initial Support Foot based on Contact Force
     if(firstContact){
         cd = new serow::ContactDetection();
         cd->init(lfoot_frame, rfoot_frame, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
             foot_polygon_ymin, foot_polygon_ymax, lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, VelocityThres);
-        cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl, vwr);
+        cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl.norm(), vwr.norm());
 
         if(LLegGRF(2)>RLegGRF(2)){
             // Initial support leg
@@ -955,7 +944,7 @@ void humanoid_ekf::determineLegContact() {
     }
     else{
        
-        cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl, vwr);
+        cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl.norm(), vwr.norm());
         //Determine if the Support Foot changed
         if(!support_idx_provided){
             
@@ -1274,43 +1263,43 @@ void humanoid_ekf::publishGRF() {
     }
 }
 
+void humanoid_ekf::computeLocalCOP()
+{
+        copl = Vector3d::Zero();
+        if(LLegGRF(2)!=0)
+        {
+            copl(0) = -LLegGRT(1)/LLegGRF(2);
+            copl(1) = LLegGRT(0)/LLegGRF(2);
+        }
+        copr = Vector3d::Zero();
+        if(RLegGRF(2)!=0)
+        {
+            copr(0) = -RLegGRT(1)/RLegGRF(2);
+            copr(1) = RLegGRT(0)/RLegGRF(2);
+        }
+        
+        weightl = LLegGRF(2)/g;
+        weightr = RLegGRF(2)/g;
+        
+        if(LLegGRF(2) < LosingContact)
+        {
+            copl  = Vector3d::Zero();
+            LLegGRF = Vector3d::Zero();
+            LLegGRT = Vector3d::Zero();
+            weightl = 0.0;
+        }
+        if(RLegGRF(2) < LosingContact)
+        {
+            copr  = Vector3d::Zero();
+            RLegGRF = Vector3d::Zero();
+            RLegGRT = Vector3d::Zero();
+            weightr = 0.0;
+        }
 
-void humanoid_ekf::computeCOP(Affine3d Twl_, Affine3d Twr_) {
-    
-    
-    Vector3d coplw, coprw;
-    double weightl, weightr;
-    
-    
-    
-    // Computation of the CoP in the Local Coordinate Frame of the Foot
-    copl = Vector3d::Zero();
-    if(LLegGRF(2)!=0)
-    {
-        copl(0) = -LLegGRT(1)/LLegGRF(2);
-        copl(1) = LLegGRT(0)/LLegGRF(2);
-    }
-    copr = Vector3d::Zero();
-    if(RLegGRF(2)!=0)
-    {
-        copr(0) = -RLegGRT(1)/RLegGRF(2);
-        copr(1) = RLegGRT(0)/RLegGRF(2);
-    }
-    
-    weightl = LLegGRF(2)/g;
-    weightr = RLegGRF(2)/g;
-    
-    if(LLegGRF(2) < LosingContact)
-    {
-        copl  = Vector3d::Zero();
-        weightl = 0.0;
-    }
-    if(RLegGRF(2) < LosingContact)
-    {
-        copr  = Vector3d::Zero();
-        weightr = 0.0;
-    }
-    
+}
+
+void humanoid_ekf::computeGlobalCOP(Affine3d Twl_, Affine3d Twr_) {
+        
     // Compute the CoP wrt the Support Foot Frame
     coplw = Twl_ * copl;
     coprw = Twr_ * copr;

@@ -223,12 +223,12 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
 
    
     
-    Af.block<3,3>(3,15).noalias() = -Rwb;
-    Af.block<3,3>(6,18).noalias() = -Rwb;
-    Af.block<3,3>(6,15).noalias() = -skew(vwb) * Rwb;
-    Af.block<3,3>(9,15).noalias() = -skew(pwb) * Rwb;
-    Af.block<3,3>(12,15).noalias() = -skew(dR) * Rwb;
-    Af.block<3,3>(15,15).noalias() = -skew(dL) * Rwb;    
+    Af.block<3,3>(0,15).noalias() = -Rwb;
+    Af.block<3,3>(3,18).noalias() = -Rwb;
+    Af.block<3,3>(3,15).noalias() = -skew(vwb) * Rwb;
+    Af.block<3,3>(6,15).noalias() = -skew(pwb) * Rwb;
+    Af.block<3,3>(9,15).noalias() = -skew(dR) * Rwb;
+    Af.block<3,3>(12,15).noalias() = -skew(dL) * Rwb;    
     
     
     Phi = If + Af*dt;
