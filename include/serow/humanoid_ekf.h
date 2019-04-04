@@ -99,7 +99,7 @@ private:
 	bool useCF;
 	double cf_freqvmin, cf_freqvmax, Tau0, Tau1, VelocityThres;
 	double  freq, joint_freq, fsr_freq;
-	bool fsr_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
+	bool lfsr_inc, rfsr_inc, lft_inc, rft_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
 	bool firstOdom, firstUpdate, odom_divergence;
 	int number_of_joints, outlier_count;
 	bool firstGyrodot;
@@ -174,9 +174,9 @@ private:
 	Affine3d Tbs, Tsb, Tssw, Tbsw;
 	Vector3d no_motion_residual;
 	/****/
-	bool firstrun, legSwitch, firstContact, LLegST, RLegST;
+	bool  kinematicsInitialized, firstContact;
 	double LLegForceFilt, RLegForceFilt;
-	double LLegUpThres, LLegLowThres, LosingContact, StrikingContact;
+	double LegHighThres, LegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
 
@@ -189,7 +189,7 @@ private:
 	void subscribeToCompOdom();
 	void compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg);
 	/** Real odometry Data **/
-     string lfsr_topic,rfsr_topic; //copl_topic,copr_topic;
+     string lfsr_topic,rfsr_topic; 
 	 string pose_topic;
 	 string imu_topic;
 	 string joint_state_topic;
@@ -206,10 +206,8 @@ private:
 	 void subscribeToGroundTruth();
 	 void subscribeToGroundTruthCoM();
 	 void ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg);
-	 void subscribeToDS();
 	 void subscribeToSupportIdx();
 	 void support_idxCb(const std_msgs::Int32::ConstPtr& msg);
-	 void is_in_dsCb(const std_msgs::Bool::ConstPtr& msg);
 	 void ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void imuCb(const sensor_msgs::Imu::ConstPtr& msg);
 	 void joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg);
