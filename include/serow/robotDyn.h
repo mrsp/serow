@@ -59,7 +59,7 @@ namespace serow
         pinocchio::Model *pmodel_;
         pinocchio::Data *data_;
         std::vector<std::string> jnames_;
-        Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_;
+        Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_, qn;
         bool has_floating_base_;
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -91,12 +91,12 @@ namespace serow
             qmin_.resize(jnames_.size());
             qmax_.resize(jnames_.size());
             dqmax_.resize(jnames_.size());
-            
+            qn.resize(jnames_.size());
             qmin_  = pmodel_->lowerPositionLimit;
             qmax_  = pmodel_->upperPositionLimit;
             dqmax_ = pmodel_->velocityLimit;
             
-           
+            
             
             // If free-floating base, eliminate the "root_joint" when displaying
             if (has_floating_base_)
@@ -123,7 +123,7 @@ namespace serow
             }
             std::cout<<"Joint Names "<<std::endl;
             printJointNames();
-	    std::cout<<"with "<<ndofActuated()<<" actuated joints"<<std::endl;
+	        std::cout<<"with "<<ndofActuated()<<" actuated joints"<<std::endl;
             std::cout << "Model loaded: " << model_name << std::endl;
 	
 	}
@@ -147,7 +147,7 @@ namespace serow
 
         //void updateJointConfig(const Eigen::VectorXd& q)
 
-        void updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
+        void updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap, double joint_std = 0.03)
         {
             mapJointNamesIDs(qmap,qdotmap);
             if (has_floating_base_)
@@ -171,10 +171,21 @@ namespace serow
                 pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
 
             }
+             qn.setOnes();
+             qn = qn * joint_std;
         }
         
         
-  
+        Eigen::Vector3d getLinearVelocityNoise(const std::string& frame_name)
+        {
+            return linearJacobian(frame_name) * qn;
+
+        }
+        Eigen::Vector3d getAngularVelocityNoise(const std::string& frame_name)
+        {
+            return angularJacobian(frame_name) * qn;
+
+        }
         
         void mapJointNamesIDs(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
         {
