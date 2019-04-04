@@ -85,7 +85,8 @@ private:
 	
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
-	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vwb, omegawb, vwl, vwr, omegawr, omegawl, 	p_FT_LL, p_FT_RL;
+	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vbln, vbrn, vwb, omegawb, vwl, vwr, omegawr, omegawl, 	p_FT_LL, p_FT_RL;
+	Eigen::Matrix3d JLQnJLt, JRQnJRt;
 	Affine3d Twl, Twr, Tbl, Tbr;
 	serow::robotDyn* rd;
     bool useMahony;
@@ -179,7 +180,7 @@ private:
 	double LegHighThres, LegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
-
+	double joint_noise_density;
 
 	bool comp_with, comp_odom0_inc, firstCO;
 	std::string comp_with_odom0_topic;
@@ -194,7 +195,7 @@ private:
 	 string imu_topic;
 	 string joint_state_topic;
 	 string odom_topic;
-	 string ground_truth_odom_topic, is_in_ds_topic, ground_truth_com_topic, support_idx_topic;
+	 string ground_truth_odom_topic, ground_truth_com_topic, support_idx_topic;
      string modelname;
 	 bool usePoseUpdate;
 

@@ -82,13 +82,12 @@ void humanoid_ekf::loadparams() {
     
     n_p.param<bool>("support_idx_provided",support_idx_provided,false);
     if(support_idx_provided)
-    n_p.param<std::string>("support_idx_topic", support_idx_topic,"support_idx");
+        n_p.param<std::string>("support_idx_topic", support_idx_topic,"support_idx");
     
     if(ground_truth)
     {
         n_p.param<std::string>("ground_truth_odom_topic", ground_truth_odom_topic,"ground_truth");
         n_p.param<std::string>("ground_truth_com_topic", ground_truth_com_topic,"ground_truth_com");
-        n_p.param<std::string>("is_in_ds_topic", is_in_ds_topic,"is_in_ds_topic");
         std::vector<double> gt_list;
         n_p.getParam("T_B_GT",gt_list);
         T_B_GT(0,0) = gt_list[0];
@@ -184,6 +183,7 @@ void humanoid_ekf::loadparams() {
     n_p.param<std::string>("odom_topic", odom_topic,"odom");
     n_p.param<std::string>("imu_topic", imu_topic,"imu");
     n_p.param<std::string>("joint_state_topic", joint_state_topic,"joint_states");
+    n_p.param<double>("joint_noise_density",joint_noise_density,0.03);
     n_p.param<std::string>("lfoot_force_torque_topic",lfsr_topic,"force_torque/left");
     n_p.param<std::string>("rfoot_force_torque_topic",rfsr_topic,"force_torque/right");
     
@@ -499,6 +499,9 @@ void humanoid_ekf::init() {
     Tbr = Affine3d::Identity();
     vwl= Vector3d::Zero();
     vwr= Vector3d::Zero();
+    vbln = Vector3d::Zero();
+    vbrn = Vector3d::Zero();
+
     coplw = Vector3d::Zero();
     coprw = Vector3d::Zero();
     weightl = 0.000;
@@ -828,7 +831,7 @@ void humanoid_ekf::computeKinTFs() {
 
 
     //Update the Kinematic Structure
-    rd->updateJointConfig(joint_state_pos_map,joint_state_vel_map);
+    rd->updateJointConfig(joint_state_pos_map,joint_state_vel_map, joint_noise_density);
     
     //Get the CoM w.r.t Body Frame
     CoM_enc = rd->comPosition();
@@ -841,7 +844,6 @@ void humanoid_ekf::computeKinTFs() {
     Tbr.translation() = rd->linkPosition(rfoot_frame);
     qbr = rd->linkOrientation(rfoot_frame);
     Tbr.linear() = qbr.toRotationMatrix();
-    
     
 
     
@@ -861,6 +863,12 @@ void humanoid_ekf::computeKinTFs() {
     omegabr = rd->getAngularVelocity(rfoot_frame);
     vbl =  rd->getLinearVelocity(lfoot_frame);
     vbr =  rd->getLinearVelocity(rfoot_frame);
+
+    //Noises for update
+    vbln = rd->getLinearVelocityNoise(lfoot_frame);
+    vbrn = rd->getLinearVelocityNoise(rfoot_frame);
+    JLQnJLt = vbln * vbln.transpose();
+    JRQnJRt = vbrn * vbrn.transpose();
 
     if(lft_inc && rft_inc){
         computeLGRF();
@@ -929,6 +937,8 @@ void humanoid_ekf::computeKinTFs() {
         
         omegawl = dr->getLFootAngularVel();
         omegawr = dr->getRFootAngularVel();
+
+
     }
     
     if(!kinematicsInitialized)
