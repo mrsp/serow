@@ -88,10 +88,6 @@ public:
     sigmarf = sigmarf_;
     sigmalc = sigmalc_;
     sigmarc = sigmarc_;
-    VelocityThres = VelocityThres_;
-    LegHighThres = 0; //Add this
-    LegLowThres = 0;  //Add this
-    StrikingContact = 0; //Add this
     contactL = 0;
     contactR = 0;
     pl = 0;
@@ -102,6 +98,21 @@ public:
     prc = 0;
     firstContact = true;
   }
+
+  void init(std::string lfoot_frame_, std::string rfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_)
+  {
+
+    lfoot_frame = lfoot_frame_;
+    rfoot_frame = rfoot_frame_;
+    LegHighThres = LegHighThres_; 
+    LegLowThres = LegLowThres_;  
+    StrikingContact = StrikingContact_; 
+    VelocityThres = VelocityThres_;
+    firstContact = true;
+    pl = 0;
+    pr = 0;
+  }
+
 
   double getLLegContactProb()
   {
@@ -128,7 +139,10 @@ public:
   {
     return support_foot_frame;
   }
-
+  std::string getSupportLeg()
+  {
+    return support_leg;
+  }
 
 
 

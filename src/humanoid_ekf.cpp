@@ -48,23 +48,29 @@ void humanoid_ekf::loadparams() {
     
     n_p.param<double>("imu_topic_freq",freq,100.0);
     n_p.param<double>("fsr_topic_freq",fsr_freq,100.0);
-    n_p.param<double>("LLegUpThres", LLegUpThres,20.0);
-    n_p.param<double>("LLegLowThres", LLegLowThres,15.0);
-    n_p.param<double>("LosingContact", LosingContact,5.0);
-    n_p.param<double>("StrikingContact", StrikingContact,5.0);
-    n_p.param<double>("VelocityThres", VelocityThres,0.5);
+
     
-
+    n_p.param<double>("VelocityThres", VelocityThres,0.5);
+    n_p.param<double>("LosingContact", LosingContact,5.0);
     n_p.param<bool>("useGEM",useGEM,false);
-    n_p.param<double>("foot_polygon_xmin", foot_polygon_xmin, -0.103);
-    n_p.param<double>("foot_polygon_xmax", foot_polygon_xmax, 0.107);
-    n_p.param<double>("foot_polygon_ymin", foot_polygon_ymin, -0.055);
-    n_p.param<double>("foot_polygon_ymax", foot_polygon_ymax, 0.055);
-    n_p.param<double>("lforce_sigma", lforce_sigma, 2.2734);
-    n_p.param<double>("rforce_sigma", rforce_sigma, 5.6421);
-    n_p.param<double>("lcop_sigma", lcop_sigma, 0.005);
-    n_p.param<double>("rcop_sigma", rcop_sigma, 0.005);
-
+    if(useGEM)
+    {
+        n_p.param<double>("foot_polygon_xmin", foot_polygon_xmin, -0.103);
+        n_p.param<double>("foot_polygon_xmax", foot_polygon_xmax, 0.107);
+        n_p.param<double>("foot_polygon_ymin", foot_polygon_ymin, -0.055);
+        n_p.param<double>("foot_polygon_ymax", foot_polygon_ymax, 0.055);
+        n_p.param<double>("lforce_sigma", lforce_sigma, 2.2734);
+        n_p.param<double>("rforce_sigma", rforce_sigma, 5.6421);
+        n_p.param<double>("lcop_sigma", lcop_sigma, 0.005);
+        n_p.param<double>("rcop_sigma", rcop_sigma, 0.005);
+    }
+    else
+    {
+        n_p.param<double>("LLegUpThres", LegHighThres,20.0);
+        n_p.param<double>("LLegLowThres", LegLowThres,15.0);
+        n_p.param<double>("StrikingContact", StrikingContact,5.0);    
+    }
+    
 
 
 
@@ -457,7 +463,6 @@ void humanoid_ekf::subscribe()
     if(ground_truth){
         subscribeToGroundTruth();
         subscribeToGroundTruthCoM();
-        subscribeToDS();
     }
     
     if(support_idx_provided)
@@ -499,11 +504,9 @@ void humanoid_ekf::init() {
     weightl = 0.000;
     weightr = 0.000;   
     no_motion_residual = Vector3d::Zero();
-    firstrun = true;
+    kinematicsInitialized = false;
     firstUpdate = true;
     firstGyrodot = true;
-    LLegST = false;
-    RLegST = false;
     firstContact = true;
     
     // Initialize the IMU based EKF
@@ -525,13 +528,18 @@ void humanoid_ekf::init() {
         nipmEKF->init();
     }
     imu_inc = false;
-    fsr_inc = false;
+    lfsr_inc = false;
+    rfsr_inc = false;
+    lft_inc = false;
+    rft_inc = false;
+
     joint_inc = false;
     odom_inc = false;
     leg_odom_inc = false;
     leg_vel_inc = false;
     support_inc = false;
     com_inc = false;
+    
     no_motion_indicator = false;
     no_motion_it = 0;
     no_motion_threshold = 5e-4;
@@ -565,22 +573,13 @@ void humanoid_ekf::run() {
             }
             
 
-            if(fsr_inc){
-                computeLGRF();
-                computeRGRF();
-                //Determine which foot is in contact with the Ground and is the current support foot
-                determineLegContact();
-            }
-            
-            
             //Compute the required transformation matrices (tfs) with Kinematics
             if(joint_inc)
-            {
                 computeKinTFs();
-            }
+            
 
             //Main Loop
-            if(!firstrun){
+            if(kinematicsInitialized){
                 estimateWithIMUEKF();
                 if(useCoMEKF)
                     estimateWithCoMEKF();
@@ -754,7 +753,6 @@ void humanoid_ekf::estimateWithIMUEKF()
 void humanoid_ekf::estimateWithCoMEKF()
 {
     
-    CoM_leg_odom = Twb*CoM_enc;
     if(com_inc){
         if (nipmEKF->firstrun){
             nipmEKF->setdt(1.0/fsr_freq);
@@ -776,13 +774,14 @@ void humanoid_ekf::estimateWithCoMEKF()
     }
     
     //Compute the COP in the Inertial Frame
-    if(fsr_inc  && !predictWithCoM && !nipmEKF->firstrun){
+    if(lfsr_inc  && rfsr_inc && !predictWithCoM && !nipmEKF->firstrun){
         computeGlobalCOP(Twl,Twr);
         //Numerically compute the Gyro acceleration in the Inertial Frame and use a 3-Point Low-Pass filter
         filterGyrodot();
         DiagonalMatrix<double,3> Inertia(I_xx,I_yy,I_zz);
         nipmEKF->predict(COP_fsr,GRF_fsr,imuEKF->Rib*Inertia*Gyrodot);
-        fsr_inc = false;
+        lfsr_inc = false;
+        rfsr_inc = false;
         predictWithCoM = true;
     }
     
@@ -792,7 +791,6 @@ void humanoid_ekf::estimateWithCoMEKF()
                         imuEKF->Tib*CoM_enc,
                         imuEKF->gyro,Gyrodot);
         com_inc = false;
-        
     }
     
 }
@@ -827,8 +825,9 @@ void humanoid_ekf::computeRGRF()
 
 void humanoid_ekf::computeKinTFs() {
     
-    
-    //Update Pinnochio
+
+
+    //Update the Kinematic Structure
     rd->updateJointConfig(joint_state_pos_map,joint_state_vel_map);
     
     //Get the CoM w.r.t Body Frame
@@ -844,17 +843,10 @@ void humanoid_ekf::computeKinTFs() {
     Tbr.linear() = qbr.toRotationMatrix();
     
     
-    Tbs=Tbl;
-    qbs=qbl;
-    if(support_leg=="RLeg")
-    {
-        Tbs = Tbr;
-        qbs = qbr;
-    }
-    
+
     
     //TF Initialization
-    if (firstrun){
+    if (!kinematicsInitialized){
         Twl.translation() << Tbl.translation()(0), Tbl.translation()(1), 0.00;
         Twl.linear() = Tbl.linear();
         Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
@@ -869,6 +861,44 @@ void humanoid_ekf::computeKinTFs() {
     omegabr = rd->getAngularVelocity(rfoot_frame);
     vbl =  rd->getLinearVelocity(lfoot_frame);
     vbr =  rd->getLinearVelocity(rfoot_frame);
+
+    if(lft_inc && rft_inc){
+        computeLGRF();
+        computeRGRF();
+        if(firstContact){
+            cd = new serow::ContactDetection();
+            if(useGEM)
+            {
+                cd->init(lfoot_frame, rfoot_frame, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
+                    foot_polygon_ymin, foot_polygon_ymax, lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, VelocityThres);
+            }
+            else
+            {
+                 cd->init(lfoot_frame, rfoot_frame, LegHighThres, LegLowThres,  StrikingContact,  VelocityThres);
+            }
+            
+            firstContact = false;
+        }
+        computeLocalCOP();
+        if(useGEM)
+            cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl.norm(), vwr.norm());
+        else
+            cd->SchmittTriggerWithKinematics(LLegForceFilt, RLegForceFilt, vwl.norm(), vwr.norm());
+
+        lft_inc = false;
+        rft_inc = false;
+
+        Tbs=Tbl;
+        qbs=qbl;
+        if(cd->getSupportLeg()=="RLeg")
+        {
+            Tbs = Tbr;
+            qbs = qbr;
+        }
+    }
+
+
+
     if(!firstContact){
         if(useMahony){
             dr->computeDeadReckoning(mh->getR(),  Tbl.linear(),  Tbr.linear(), mh->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
@@ -892,131 +922,31 @@ void humanoid_ekf::computeKinTFs() {
         Twb_ = Twb;
         Twb.translation() = dr->getOdom();
         Twb.linear() = qwb.toRotationMatrix();
+        
         vwb = dr->getLinearVel();
+        vwl = dr->getLFootLinearVel();
+        vwr = dr->getRFootLinearVel();
+        
+        omegawl = dr->getLFootAngularVel();
+        omegawr = dr->getRFootAngularVel();
     }
     
-    if(firstrun)
+    if(!kinematicsInitialized)
     {
         Twb_ = Twb;
         qwb_ = qwb;
-        firstrun = false;
+        kinematicsInitialized = true;
     }
     
-    vwl = dr->getLFootLinearVel();
-    vwr = dr->getRFootLinearVel();
-    
-    omegawl = dr->getLFootAngularVel();
-    omegawr = dr->getRFootAngularVel();
-    
-    
+
+    CoM_leg_odom = Twb*CoM_enc;
+
     leg_odom_inc = true;
     leg_vel_inc = true;
     com_inc = true;
     support_inc = true;
     check_no_motion = false;
-    
-    
 }
-
-
-
-
-/* Schmidtt Trigger */
-void humanoid_ekf::determineLegContact() {
-    //Choose Initial Support Foot based on Contact Force
-    if(firstContact){
-        cd = new serow::ContactDetection();
-        cd->init(lfoot_frame, rfoot_frame, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
-            foot_polygon_ymin, foot_polygon_ymax, lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, VelocityThres);
-        cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl.norm(), vwr.norm());
-
-        if(LLegGRF(2)>RLegGRF(2)){
-            // Initial support leg
-            support_leg = "LLeg";
-            support_foot_frame = lfoot_frame;
-        }
-        else
-        {
-            support_leg = "RLeg";
-            support_foot_frame = rfoot_frame;
-        }
-        firstContact = false;
-    }
-    else{
-       
-        cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl.norm(), vwr.norm());
-        //Determine if the Support Foot changed
-        if(!support_idx_provided){
-            
-            if (vwl.norm()<VelocityThres)
-            {
-                if ( LLegForceFilt > LLegUpThres  && LLegForceFilt<StrikingContact)
-                {
-                    LLegST = true;
-                }
-            }
-            else{
-                if (LLegForceFilt < LLegLowThres)
-                {
-                    LLegST = false;
-                }
-            }
-            
-            if (vwr.norm()<VelocityThres)
-            {
-                if ( RLegForceFilt > LLegUpThres  && RLegForceFilt<StrikingContact)
-                {
-                    RLegST = true;
-                }
-            }
-            else{
-                if (RLegForceFilt < LLegLowThres)
-                {
-                    RLegST = false;
-                }
-            }
-            
-            
-            if(LLegST && RLegST)
-            {
-                if(LLegForceFilt>RLegForceFilt)
-                {
-                    support_leg = "LLeg";
-                    support_foot_frame = lfoot_frame;
-                }
-                else
-                {
-                    support_leg = "RLeg";
-                    support_foot_frame = rfoot_frame;
-                }
-            }
-            else if(LLegST)
-            {
-                support_leg = "LLeg";
-                support_foot_frame = lfoot_frame;
-            }
-            else if(RLegST)
-            {
-                support_leg = "RLeg";
-                support_foot_frame = rfoot_frame;
-            }
-            
-        }
-       
-
-        std::cout<<"SMITT SUPPORT "<<support_foot_frame<<std::endl;
-        std::cout<<"GEM SUPPORT "<<cd->getSupport()<<std::endl;
-        std::cout<<"GEM LLeg "<<cd->getLLegContactProb()<<std::endl;
-        std::cout<<"GEM RLeg "<<cd->getRLegContactProb()<<std::endl;
-        std::cout<<"----------------"<<std::endl;
-    }
-}
-
-
-
-
-
-
 
 
 void humanoid_ekf::deAllocate()
@@ -1045,6 +975,7 @@ void humanoid_ekf::deAllocate()
     delete mw;
     delete mh;
     delete dr;
+    delete cd;
 }
 
 
@@ -1077,165 +1008,6 @@ void humanoid_ekf::filterGyrodot() {
     Gyro_ = imuEKF->gyro;
 }
 
-
-void humanoid_ekf::publishBodyEstimates() {
-    
-    
-    bodyAcc_est_msg.header.stamp = ros::Time::now();
-    bodyAcc_est_msg.header.frame_id = "odom";
-    bodyAcc_est_msg.linear_acceleration.x = imuEKF->accX;
-    bodyAcc_est_msg.linear_acceleration.y = imuEKF->accY;
-    bodyAcc_est_msg.linear_acceleration.z = imuEKF->accZ;
-    
-    bodyAcc_est_msg.angular_velocity.x = imuEKF->gyroX;
-    bodyAcc_est_msg.angular_velocity.y = imuEKF->gyroY;
-    bodyAcc_est_msg.angular_velocity.z = imuEKF->gyroZ;
-    bodyAcc_est_pub.publish(bodyAcc_est_msg);
-    
-    odom_est_msg.child_frame_id = base_link_frame;
-    odom_est_msg.header.stamp=ros::Time::now();
-    odom_est_msg.header.frame_id = "odom";
-    odom_est_msg.pose.pose.position.x = imuEKF->rX;
-    odom_est_msg.pose.pose.position.y = imuEKF->rY;
-    odom_est_msg.pose.pose.position.z = imuEKF->rZ;
-    odom_est_msg.pose.pose.orientation.x = imuEKF->qib.x();
-    odom_est_msg.pose.pose.orientation.y = imuEKF->qib.y();
-    odom_est_msg.pose.pose.orientation.z = imuEKF->qib.z();
-    odom_est_msg.pose.pose.orientation.w = imuEKF->qib.w();
-    
-    odom_est_msg.twist.twist.linear.x = imuEKF->velX;
-    odom_est_msg.twist.twist.linear.y = imuEKF->velY;
-    odom_est_msg.twist.twist.linear.z = imuEKF->velZ;
-    odom_est_msg.twist.twist.angular.x  = imuEKF->gyroX;
-    odom_est_msg.twist.twist.angular.y  = imuEKF->gyroY;
-    odom_est_msg.twist.twist.angular.z  = imuEKF->gyroZ;
-    
-    //for(int i=0;i<36;i++)
-    //odom_est_msg.pose.covariance[i] = 0;
-    odom_est_pub.publish(odom_est_msg);
-    
-    leg_odom_msg.child_frame_id = base_link_frame;
-
-    leg_odom_msg.header.stamp=ros::Time::now();
-    leg_odom_msg.header.frame_id = "odom";
-    leg_odom_msg.pose.pose.position.x = Twb.translation()(0);
-    leg_odom_msg.pose.pose.position.y = Twb.translation()(1);
-    leg_odom_msg.pose.pose.position.z = Twb.translation()(2);
-    leg_odom_msg.pose.pose.orientation.x = qwb.x();
-    leg_odom_msg.pose.pose.orientation.y = qwb.y();
-    leg_odom_msg.pose.pose.orientation.z = qwb.z();
-    leg_odom_msg.pose.pose.orientation.w = qwb.w();
-    leg_odom_msg.twist.twist.linear.x = vwb(0);
-    leg_odom_msg.twist.twist.linear.y = vwb(1);
-    leg_odom_msg.twist.twist.linear.z = vwb(2);
-    leg_odom_msg.twist.twist.angular.x = omegawb(0);
-    leg_odom_msg.twist.twist.angular.y = omegawb(1);
-    leg_odom_msg.twist.twist.angular.z = omegawb(2);
-    leg_odom_pub.publish(leg_odom_msg);
-    
-    
-    if(ground_truth)
-    {
-        ground_truth_com_odom_msg.child_frame_id = "CoM_frame";
-        ground_truth_com_odom_msg.header.stamp = ros::Time::now();
-        ground_truth_com_odom_msg.header.frame_id = "odom";
-        ground_truth_com_pub.publish(ground_truth_com_odom_msg);
-        
-        ground_truth_odom_msg.child_frame_id = base_link_frame;
-        ground_truth_odom_msg.header.stamp = ros::Time::now();
-        ground_truth_odom_msg.header.frame_id = "odom";
-        ground_truth_odom_pub.publish(ground_truth_odom_msg);
-        ds_pub.publish(is_in_ds_msg);
-    }
-    //if(comp_odom0_inc){
-	comp_odom0_msg.header = odom_est_msg.header;
-	comp_odom0_pub.publish(comp_odom0_msg);
-	comp_odom0_inc = false;
-    //}
-}
-
-void humanoid_ekf::publishSupportEstimates() {
-    supportPose_est_msg.header.stamp = ros::Time::now();
-    supportPose_est_msg.header.frame_id = "odom";
-    supportPose_est_msg.pose.position.x = Tws.translation()(0);
-    supportPose_est_msg.pose.position.y = Tws.translation()(1);
-    supportPose_est_msg.pose.position.z = Tws.translation()(2);
-    supportPose_est_msg.pose.orientation.x = qws.x();
-    supportPose_est_msg.pose.orientation.y = qws.y();
-    supportPose_est_msg.pose.orientation.z = qws.z();
-    supportPose_est_msg.pose.orientation.w = qws.w();
-    supportPose_est_pub.publish(supportPose_est_msg);
-}
-
-
-void humanoid_ekf::publishLegEstimates() {
-    leftleg_odom_msg.child_frame_id = lfoot_frame;
-    leftleg_odom_msg.header.stamp=ros::Time::now();
-    leftleg_odom_msg.header.frame_id = "odom";
-    leftleg_odom_msg.pose.pose.position.x = Twl.translation()(0);
-    leftleg_odom_msg.pose.pose.position.y = Twl.translation()(1);
-    leftleg_odom_msg.pose.pose.position.z = Twl.translation()(2);
-    leftleg_odom_msg.pose.pose.orientation.x = qwl.x();
-    leftleg_odom_msg.pose.pose.orientation.y = qwl.y();
-    leftleg_odom_msg.pose.pose.orientation.z = qwl.z();
-    leftleg_odom_msg.pose.pose.orientation.w = qwl.w();
-    leftleg_odom_msg.twist.twist.linear.x = vwl(0);
-    leftleg_odom_msg.twist.twist.linear.y = vwl(1);
-    leftleg_odom_msg.twist.twist.linear.z = vwl(2);
-    leftleg_odom_msg.twist.twist.angular.x = omegawl(0);
-    leftleg_odom_msg.twist.twist.angular.y = omegawl(1);
-    leftleg_odom_msg.twist.twist.angular.z = omegawl(2);
-    leftleg_odom_pub.publish(leftleg_odom_msg);
-    
-    rightleg_odom_msg.child_frame_id = rfoot_frame;
-    rightleg_odom_msg.header.stamp=ros::Time::now();
-    rightleg_odom_msg.header.frame_id = "odom";
-    rightleg_odom_msg.pose.pose.position.x = Twr.translation()(0);
-    rightleg_odom_msg.pose.pose.position.y = Twr.translation()(1);
-    rightleg_odom_msg.pose.pose.position.z = Twr.translation()(2);
-    rightleg_odom_msg.pose.pose.orientation.x = qwr.x();
-    rightleg_odom_msg.pose.pose.orientation.y = qwr.y();
-    rightleg_odom_msg.pose.pose.orientation.z = qwr.z();
-    rightleg_odom_msg.pose.pose.orientation.w = qwr.w();
-    rightleg_odom_msg.twist.twist.linear.x = vwr(0);
-    rightleg_odom_msg.twist.twist.linear.y = vwr(1);
-    rightleg_odom_msg.twist.twist.linear.z = vwr(2);
-    rightleg_odom_msg.twist.twist.angular.x = omegawr(0);
-    rightleg_odom_msg.twist.twist.angular.y = omegawr(1);
-    rightleg_odom_msg.twist.twist.angular.z = omegawr(2);
-    rightleg_odom_pub.publish(rightleg_odom_msg);
-    
-    if(debug_mode)
-    {
-        temp_pose_msg.pose.position.x = Tbl.translation()(0);
-        temp_pose_msg.pose.position.y = Tbl.translation()(1);
-        temp_pose_msg.pose.position.z = Tbl.translation()(2);
-        temp_pose_msg.pose.orientation.x = qbl.x();
-        temp_pose_msg.pose.orientation.y = qbl.y();
-        temp_pose_msg.pose.orientation.z = qbl.z();
-        temp_pose_msg.pose.orientation.w = qbl.w();
-        temp_pose_msg.header.stamp = ros::Time::now();
-        temp_pose_msg.header.frame_id = base_link_frame;
-        rel_leftlegPose_pub.publish(temp_pose_msg);
-        
-        temp_pose_msg.pose.position.x = Tbr.translation()(0);
-        temp_pose_msg.pose.position.y = Tbr.translation()(1);
-        temp_pose_msg.pose.position.z = Tbr.translation()(2);
-        temp_pose_msg.pose.orientation.x = qbr.x();
-        temp_pose_msg.pose.orientation.y = qbr.y();
-        temp_pose_msg.pose.orientation.z = qbr.z();
-        temp_pose_msg.pose.orientation.w = qbr.w();
-        
-        temp_pose_msg.header.stamp = ros::Time::now();
-        temp_pose_msg.header.frame_id = base_link_frame;
-        rel_rightlegPose_pub.publish(temp_pose_msg);
-    }
-}
-
-void humanoid_ekf::publishContact() {
-    support_leg_msg.data = support_leg;
-    support_leg_pub.publish(support_leg_msg);
-}
 
 void humanoid_ekf::publishGRF() {
     
@@ -1399,7 +1171,6 @@ void humanoid_ekf::publishJointEstimates() {
 void humanoid_ekf::advertise() {
     
     
-    
     supportPose_est_pub =  n.advertise<geometry_msgs::PoseStamped>(
                                                                    "/SERoW/support/pose", 1000);
     
@@ -1509,7 +1280,7 @@ void humanoid_ekf::subscribeToGroundTruth()
 }
 void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
-    if(!firstrun){
+    if(kinematicsInitialized){
         ground_truth_odom_msg = *msg;
         temp =  T_B_GT.linear()*Vector3d(ground_truth_odom_msg.pose.pose.position.x, ground_truth_odom_msg.pose.pose.position.y, ground_truth_odom_msg.pose.pose.position.z);
         tempq =  q_B_GT * Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w,ground_truth_odom_msg.pose.pose.orientation.x,ground_truth_odom_msg.pose.pose.orientation.y,ground_truth_odom_msg.pose.pose.orientation.z);
@@ -1539,7 +1310,7 @@ void humanoid_ekf::subscribeToGroundTruthCoM()
 }
 void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg)
 {
-    if(!firstrun){
+    if(kinematicsInitialized){
         ground_truth_com_odom_msg = *msg;
         temp = T_B_GT.linear()*Vector3d(ground_truth_com_odom_msg.pose.pose.position.x,ground_truth_com_odom_msg.pose.pose.position.y,ground_truth_com_odom_msg.pose.pose.position.z);
         tempq = q_B_GT * Quaterniond(ground_truth_com_odom_msg.pose.pose.orientation.w,ground_truth_com_odom_msg.pose.pose.orientation.x,ground_truth_com_odom_msg.pose.pose.orientation.y,ground_truth_com_odom_msg.pose.pose.orientation.z);
@@ -1574,28 +1345,28 @@ void humanoid_ekf::subscribeToCompOdom()
 
 void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
 {
-if(!firstrun){
-	comp_odom0_msg = *msg;
-	temp = Vector3d(comp_odom0_msg.pose.pose.position.x,comp_odom0_msg.pose.pose.position.y,comp_odom0_msg.pose.pose.position.z);
-	tempq = Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
-	if(firstCO){
-            qoffsetCO =  qwb  * tempq.inverse();
-            offsetCO = Twb.translation() - temp;
-            firstCO=false;
-        }
-        tempq =   (qoffsetCO * tempq);
-        temp = offsetCO + temp;
-        
-        comp_odom0_msg.pose.pose.position.x = temp(0);
-        comp_odom0_msg.pose.pose.position.y = temp(1);
-        comp_odom0_msg.pose.pose.position.z = temp(2);
-        comp_odom0_msg.pose.pose.orientation.w = tempq.w();
-        comp_odom0_msg.pose.pose.orientation.x = tempq.x();
-        comp_odom0_msg.pose.pose.orientation.y = tempq.y();
-        comp_odom0_msg.pose.pose.orientation.z = tempq.z();
-   
-	comp_odom0_inc = true;
-}
+    if(kinematicsInitialized){
+        comp_odom0_msg = *msg;
+        temp = Vector3d(comp_odom0_msg.pose.pose.position.x,comp_odom0_msg.pose.pose.position.y,comp_odom0_msg.pose.pose.position.z);
+        tempq = Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
+        if(firstCO){
+                qoffsetCO =  qwb  * tempq.inverse();
+                offsetCO = Twb.translation() - temp;
+                firstCO=false;
+            }
+            tempq =   (qoffsetCO * tempq);
+            temp = offsetCO + temp;
+            
+            comp_odom0_msg.pose.pose.position.x = temp(0);
+            comp_odom0_msg.pose.pose.position.y = temp(1);
+            comp_odom0_msg.pose.pose.position.z = temp(2);
+            comp_odom0_msg.pose.pose.orientation.w = tempq.w();
+            comp_odom0_msg.pose.pose.orientation.x = tempq.x();
+            comp_odom0_msg.pose.pose.orientation.y = tempq.y();
+            comp_odom0_msg.pose.pose.orientation.z = tempq.z();
+    
+        comp_odom0_inc = true;
+    }
 }
 
 
@@ -1619,22 +1390,6 @@ void humanoid_ekf::support_idxCb(const std_msgs::Int32::ConstPtr& msg)
 
 
 
-
-void humanoid_ekf::subscribeToDS()
-{
-    ds_sub = n.subscribe(is_in_ds_topic,1,&humanoid_ekf::is_in_dsCb,this,ros::TransportHints().tcpNoDelay());
-}
-void humanoid_ekf::is_in_dsCb(const std_msgs::Bool::ConstPtr& msg)
-{
-    if(msg->data)
-    is_in_ds_msg.data = 1;
-    else
-    is_in_ds_msg.data = 0;
-}
-
-
-
-
 void humanoid_ekf::subscribeToIMU()
 {
     imu_sub = n.subscribe(imu_topic,1,&humanoid_ekf::imuCb,this,ros::TransportHints().tcpNoDelay());
@@ -1651,42 +1406,180 @@ void humanoid_ekf::subscribeToFSR()
     lfsr_sub = n.subscribe(lfsr_topic,1,&humanoid_ekf::lfsrCb,this,ros::TransportHints().tcpNoDelay());
     //Right Foot Wrench
     rfsr_sub = n.subscribe(rfsr_topic,1,&humanoid_ekf::rfsrCb,this,ros::TransportHints().tcpNoDelay());
-    //Left COP
-    //copl_sub = n.subscribe(copr_topic,1,&humanoid_ekf::coprCb,this,ros::TransportHints().tcpNoDelay());
-    //Right COP
-    //copr_sub = n.subscribe(copl_topic,1,&humanoid_ekf::coplCb,this,ros::TransportHints().tcpNoDelay());
 }
 
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
     lfsr_msg = *msg;
-    
-    
-    //llmdf->insert((double)lfsr_msg.wrench.force.z);
-    //LLegForceFilt = llmdf->median();
-    fsr_inc = true;
-    
+    lfsr_inc = true;
+    lft_inc = true;    
 }
 
 void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 {
     rfsr_msg = *msg;
-    
-    //rrmdf->insert((double)rfsr_msg.wrench.force.z);
-    //RLegForceFilt = rrmdf->median();
+    rft_inc = true;
+    rfsr_inc = true;
 }
 
-/*
- void humanoid_ekf::coplCb(const geometry_msgs::PointStamped::ConstPtr& msg)
- {
- copl_msg = *msg;
- }
- void humanoid_ekf::coprCb(const geometry_msgs::PointStamped::ConstPtr& msg)
- {
- copr_msg = *msg;
- }
- */
 
 
 
+void humanoid_ekf::publishBodyEstimates() {
+    
+    
+    bodyAcc_est_msg.header.stamp = ros::Time::now();
+    bodyAcc_est_msg.header.frame_id = "odom";
+    bodyAcc_est_msg.linear_acceleration.x = imuEKF->accX;
+    bodyAcc_est_msg.linear_acceleration.y = imuEKF->accY;
+    bodyAcc_est_msg.linear_acceleration.z = imuEKF->accZ;
+    
+    bodyAcc_est_msg.angular_velocity.x = imuEKF->gyroX;
+    bodyAcc_est_msg.angular_velocity.y = imuEKF->gyroY;
+    bodyAcc_est_msg.angular_velocity.z = imuEKF->gyroZ;
+    bodyAcc_est_pub.publish(bodyAcc_est_msg);
+    
+    odom_est_msg.child_frame_id = base_link_frame;
+    odom_est_msg.header.stamp=ros::Time::now();
+    odom_est_msg.header.frame_id = "odom";
+    odom_est_msg.pose.pose.position.x = imuEKF->rX;
+    odom_est_msg.pose.pose.position.y = imuEKF->rY;
+    odom_est_msg.pose.pose.position.z = imuEKF->rZ;
+    odom_est_msg.pose.pose.orientation.x = imuEKF->qib.x();
+    odom_est_msg.pose.pose.orientation.y = imuEKF->qib.y();
+    odom_est_msg.pose.pose.orientation.z = imuEKF->qib.z();
+    odom_est_msg.pose.pose.orientation.w = imuEKF->qib.w();
+    
+    odom_est_msg.twist.twist.linear.x = imuEKF->velX;
+    odom_est_msg.twist.twist.linear.y = imuEKF->velY;
+    odom_est_msg.twist.twist.linear.z = imuEKF->velZ;
+    odom_est_msg.twist.twist.angular.x  = imuEKF->gyroX;
+    odom_est_msg.twist.twist.angular.y  = imuEKF->gyroY;
+    odom_est_msg.twist.twist.angular.z  = imuEKF->gyroZ;
+    
+    //for(int i=0;i<36;i++)
+    //odom_est_msg.pose.covariance[i] = 0;
+    odom_est_pub.publish(odom_est_msg);
+    
+    leg_odom_msg.child_frame_id = base_link_frame;
 
+    leg_odom_msg.header.stamp=ros::Time::now();
+    leg_odom_msg.header.frame_id = "odom";
+    leg_odom_msg.pose.pose.position.x = Twb.translation()(0);
+    leg_odom_msg.pose.pose.position.y = Twb.translation()(1);
+    leg_odom_msg.pose.pose.position.z = Twb.translation()(2);
+    leg_odom_msg.pose.pose.orientation.x = qwb.x();
+    leg_odom_msg.pose.pose.orientation.y = qwb.y();
+    leg_odom_msg.pose.pose.orientation.z = qwb.z();
+    leg_odom_msg.pose.pose.orientation.w = qwb.w();
+    leg_odom_msg.twist.twist.linear.x = vwb(0);
+    leg_odom_msg.twist.twist.linear.y = vwb(1);
+    leg_odom_msg.twist.twist.linear.z = vwb(2);
+    leg_odom_msg.twist.twist.angular.x = omegawb(0);
+    leg_odom_msg.twist.twist.angular.y = omegawb(1);
+    leg_odom_msg.twist.twist.angular.z = omegawb(2);
+    leg_odom_pub.publish(leg_odom_msg);
+    
+    
+    if(ground_truth)
+    {
+        ground_truth_com_odom_msg.child_frame_id = "CoM_frame";
+        ground_truth_com_odom_msg.header.stamp = ros::Time::now();
+        ground_truth_com_odom_msg.header.frame_id = "odom";
+        ground_truth_com_pub.publish(ground_truth_com_odom_msg);
+        
+        ground_truth_odom_msg.child_frame_id = base_link_frame;
+        ground_truth_odom_msg.header.stamp = ros::Time::now();
+        ground_truth_odom_msg.header.frame_id = "odom";
+        ground_truth_odom_pub.publish(ground_truth_odom_msg);
+        ds_pub.publish(is_in_ds_msg);
+    }
+    //if(comp_odom0_inc){
+	comp_odom0_msg.header = odom_est_msg.header;
+	comp_odom0_pub.publish(comp_odom0_msg);
+	comp_odom0_inc = false;
+    //}
+}
+
+void humanoid_ekf::publishSupportEstimates() {
+    supportPose_est_msg.header.stamp = ros::Time::now();
+    supportPose_est_msg.header.frame_id = "odom";
+    supportPose_est_msg.pose.position.x = Tws.translation()(0);
+    supportPose_est_msg.pose.position.y = Tws.translation()(1);
+    supportPose_est_msg.pose.position.z = Tws.translation()(2);
+    supportPose_est_msg.pose.orientation.x = qws.x();
+    supportPose_est_msg.pose.orientation.y = qws.y();
+    supportPose_est_msg.pose.orientation.z = qws.z();
+    supportPose_est_msg.pose.orientation.w = qws.w();
+    supportPose_est_pub.publish(supportPose_est_msg);
+}
+
+
+void humanoid_ekf::publishLegEstimates() {
+    leftleg_odom_msg.child_frame_id = lfoot_frame;
+    leftleg_odom_msg.header.stamp=ros::Time::now();
+    leftleg_odom_msg.header.frame_id = "odom";
+    leftleg_odom_msg.pose.pose.position.x = Twl.translation()(0);
+    leftleg_odom_msg.pose.pose.position.y = Twl.translation()(1);
+    leftleg_odom_msg.pose.pose.position.z = Twl.translation()(2);
+    leftleg_odom_msg.pose.pose.orientation.x = qwl.x();
+    leftleg_odom_msg.pose.pose.orientation.y = qwl.y();
+    leftleg_odom_msg.pose.pose.orientation.z = qwl.z();
+    leftleg_odom_msg.pose.pose.orientation.w = qwl.w();
+    leftleg_odom_msg.twist.twist.linear.x = vwl(0);
+    leftleg_odom_msg.twist.twist.linear.y = vwl(1);
+    leftleg_odom_msg.twist.twist.linear.z = vwl(2);
+    leftleg_odom_msg.twist.twist.angular.x = omegawl(0);
+    leftleg_odom_msg.twist.twist.angular.y = omegawl(1);
+    leftleg_odom_msg.twist.twist.angular.z = omegawl(2);
+    leftleg_odom_pub.publish(leftleg_odom_msg);
+    
+    rightleg_odom_msg.child_frame_id = rfoot_frame;
+    rightleg_odom_msg.header.stamp=ros::Time::now();
+    rightleg_odom_msg.header.frame_id = "odom";
+    rightleg_odom_msg.pose.pose.position.x = Twr.translation()(0);
+    rightleg_odom_msg.pose.pose.position.y = Twr.translation()(1);
+    rightleg_odom_msg.pose.pose.position.z = Twr.translation()(2);
+    rightleg_odom_msg.pose.pose.orientation.x = qwr.x();
+    rightleg_odom_msg.pose.pose.orientation.y = qwr.y();
+    rightleg_odom_msg.pose.pose.orientation.z = qwr.z();
+    rightleg_odom_msg.pose.pose.orientation.w = qwr.w();
+    rightleg_odom_msg.twist.twist.linear.x = vwr(0);
+    rightleg_odom_msg.twist.twist.linear.y = vwr(1);
+    rightleg_odom_msg.twist.twist.linear.z = vwr(2);
+    rightleg_odom_msg.twist.twist.angular.x = omegawr(0);
+    rightleg_odom_msg.twist.twist.angular.y = omegawr(1);
+    rightleg_odom_msg.twist.twist.angular.z = omegawr(2);
+    rightleg_odom_pub.publish(rightleg_odom_msg);
+    
+    if(debug_mode)
+    {
+        temp_pose_msg.pose.position.x = Tbl.translation()(0);
+        temp_pose_msg.pose.position.y = Tbl.translation()(1);
+        temp_pose_msg.pose.position.z = Tbl.translation()(2);
+        temp_pose_msg.pose.orientation.x = qbl.x();
+        temp_pose_msg.pose.orientation.y = qbl.y();
+        temp_pose_msg.pose.orientation.z = qbl.z();
+        temp_pose_msg.pose.orientation.w = qbl.w();
+        temp_pose_msg.header.stamp = ros::Time::now();
+        temp_pose_msg.header.frame_id = base_link_frame;
+        rel_leftlegPose_pub.publish(temp_pose_msg);
+        
+        temp_pose_msg.pose.position.x = Tbr.translation()(0);
+        temp_pose_msg.pose.position.y = Tbr.translation()(1);
+        temp_pose_msg.pose.position.z = Tbr.translation()(2);
+        temp_pose_msg.pose.orientation.x = qbr.x();
+        temp_pose_msg.pose.orientation.y = qbr.y();
+        temp_pose_msg.pose.orientation.z = qbr.z();
+        temp_pose_msg.pose.orientation.w = qbr.w();
+        
+        temp_pose_msg.header.stamp = ros::Time::now();
+        temp_pose_msg.header.frame_id = base_link_frame;
+        rel_rightlegPose_pub.publish(temp_pose_msg);
+    }
+}
+
+void humanoid_ekf::publishContact() {
+    support_leg_msg.data = support_leg;
+    support_leg_pub.publish(support_leg_msg);
+}
