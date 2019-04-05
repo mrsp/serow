@@ -49,10 +49,13 @@ void humanoid_ekf::loadparams() {
     n_p.param<double>("imu_topic_freq",freq,100.0);
     n_p.param<double>("fsr_topic_freq",fsr_freq,100.0);
 
+    n_p.param<bool>("useInIMUEKF",useInIMUEKF,true);
     
+
+
     n_p.param<double>("VelocityThres", VelocityThres,0.5);
     n_p.param<double>("LosingContact", LosingContact,5.0);
-    n_p.param<bool>("useGEM",useGEM,false);
+    n_p.param<bool>("useGEM",useGEM, true);
     if(useGEM)
     {
         n_p.param<double>("foot_polygon_xmin", foot_polygon_xmin, -0.103);
@@ -281,49 +284,77 @@ void humanoid_ekf::loadIMUEKFparams()
     n_p.param<double>("bias_gx", bias_gx,0.0);
     n_p.param<double>("bias_gy", bias_gy,0.0);
     n_p.param<double>("bias_gz", bias_gz,0.0);
-
-    n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qx,0.001);
-    n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qy,0.001);
-    n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qz,0.001);
-    
-    n_p.param<double>("gyroscope_noise_density", imuEKF->gyr_qx,0.0001);
-    n_p.param<double>("gyroscope_noise_density", imuEKF->gyr_qy,0.0001);
-    n_p.param<double>("gyroscope_noise_density", imuEKF->gyr_qz,0.0001);
-    
-    n_p.param<double>("accelerometer_bias_random_walk", imuEKF->accb_qx,1.0e-04);
-    n_p.param<double>("accelerometer_bias_random_walk", imuEKF->accb_qy,1.0e-04);
-    n_p.param<double>("accelerometer_bias_random_walk", imuEKF->accb_qz,1.0e-04);
-    n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qx,1.0e-05);
-    n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qy,1.0e-05);
-    n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qz,1.0e-05);
-    
-    n_p.param<double>("odom_position_noise_density", imuEKF->odom_px,1.0e-01);
-    n_p.param<double>("odom_position_noise_density", imuEKF->odom_py,1.0e-01);
-    n_p.param<double>("odom_position_noise_density", imuEKF->odom_pz,1.0e-01);
-    n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ax,1.0e-01);
-    n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay,1.0e-01);
-    n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az,1.0e-01);
-  
-
-    n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_px,1.0e-01);
-    n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_py,1.0e-01);
-    n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_pz,1.0e-01);
-    n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_ax,1.0e-01);
-    n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_ay,1.0e-01);
-    n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_az,1.0e-01);
-  
-    n_p.param<double>("velocity_noise_density_x", imuEKF->vel_px,1.0e-01);
-    n_p.param<double>("velocity_noise_density_y", imuEKF->vel_py,1.0e-01);
-    n_p.param<double>("velocity_noise_density_z", imuEKF->vel_pz,1.0e-01);
-    
-    
-    n_p.param<double>("gravity", imuEKF->ghat,9.81);
     n_p.param<double>("gravity", g,9.81);
-    n_p.param<bool>("useEuler", imuEKF->useEuler,true);
-    n_p.param<bool>("useOutlierDetection",useOutlierDetection,false);
-    n_p.param<double>("mahalanobis_TH", imuEKF->mahalanobis_TH,-1.0);
-    imuEKF->setAccBias(T_B_A.linear()*Vector3d(bias_ax,bias_ay,bias_az));
-    imuEKF->setGyroBias(T_B_G.linear()*Vector3d(bias_gx,bias_gy,bias_gz));
+
+
+
+    if(!useInIMUEKF){
+        n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qx,0.001);
+        n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qy,0.001);
+        n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qz,0.001);
+        
+        n_p.param<double>("gyroscope_noise_density", imuEKF->gyr_qx,0.0001);
+        n_p.param<double>("gyroscope_noise_density", imuEKF->gyr_qy,0.0001);
+        n_p.param<double>("gyroscope_noise_density", imuEKF->gyr_qz,0.0001);
+        
+        n_p.param<double>("accelerometer_bias_random_walk", imuEKF->accb_qx,1.0e-04);
+        n_p.param<double>("accelerometer_bias_random_walk", imuEKF->accb_qy,1.0e-04);
+        n_p.param<double>("accelerometer_bias_random_walk", imuEKF->accb_qz,1.0e-04);
+        n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qx,1.0e-05);
+        n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qy,1.0e-05);
+        n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qz,1.0e-05);
+        
+        n_p.param<double>("odom_position_noise_density", imuEKF->odom_px,1.0e-01);
+        n_p.param<double>("odom_position_noise_density", imuEKF->odom_py,1.0e-01);
+        n_p.param<double>("odom_position_noise_density", imuEKF->odom_pz,1.0e-01);
+        n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ax,1.0e-01);
+        n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay,1.0e-01);
+        n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az,1.0e-01);
+    
+
+        n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_px,1.0e-01);
+        n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_py,1.0e-01);
+        n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_pz,1.0e-01);
+        n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_ax,1.0e-01);
+        n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_ay,1.0e-01);
+        n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_az,1.0e-01);
+    
+        n_p.param<double>("velocity_noise_density_x", imuEKF->vel_px,1.0e-01);
+        n_p.param<double>("velocity_noise_density_y", imuEKF->vel_py,1.0e-01);
+        n_p.param<double>("velocity_noise_density_z", imuEKF->vel_pz,1.0e-01);
+        n_p.param<double>("gravity", imuEKF->ghat,9.81);
+        n_p.param<bool>("useEuler", imuEKF->useEuler,true);
+        n_p.param<bool>("useOutlierDetection",useOutlierDetection,false);
+        n_p.param<double>("mahalanobis_TH", imuEKF->mahalanobis_TH,-1.0);
+        imuEKF->setAccBias(T_B_A.linear()*Vector3d(bias_ax,bias_ay,bias_az));
+        imuEKF->setGyroBias(T_B_G.linear()*Vector3d(bias_gx,bias_gy,bias_gz));
+    }
+    else
+    {
+        n_p.param<double>("accelerometer_noise_density", imuInEKF->acc_qx,0.001);
+        n_p.param<double>("accelerometer_noise_density", imuInEKF->acc_qy,0.001);
+        n_p.param<double>("accelerometer_noise_density", imuInEKF->acc_qz,0.001);
+        
+        n_p.param<double>("gyroscope_noise_density", imuInEKF->gyr_qx,0.0001);
+        n_p.param<double>("gyroscope_noise_density", imuInEKF->gyr_qy,0.0001);
+        n_p.param<double>("gyroscope_noise_density", imuInEKF->gyr_qz,0.0001);
+        
+        n_p.param<double>("accelerometer_bias_random_walk", imuInEKF->accb_qx,1.0e-04);
+        n_p.param<double>("accelerometer_bias_random_walk", imuInEKF->accb_qy,1.0e-04);
+        n_p.param<double>("accelerometer_bias_random_walk", imuInEKF->accb_qz,1.0e-04);
+        n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qx,1.0e-05);
+        n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qy,1.0e-05);
+        n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qz,1.0e-05);
+
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactx,1.0e-05);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty,1.0e-05);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz,1.0e-05);
+
+        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinx,1.0e-01);
+        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kiny,1.0e-01);
+        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinz,1.0e-01);
+    }
+    
 }
 
 
@@ -513,9 +544,19 @@ void humanoid_ekf::init() {
     firstContact = true;
     
     // Initialize the IMU based EKF
-    imuEKF = new IMUEKF;
-    imuEKF->init();
     
+    if(!useInIMUEKF)
+    {
+        imuEKF = new IMUEKF;
+        imuEKF->init();
+    }
+    else
+    {
+        imuInEKF = new IMUinEKF;
+        imuInEKF->init();
+    }
+    
+
     if(useCoMEKF){
         if(useGyroLPF){
             gyroLPF = new butterworthLPF*[3];
@@ -583,7 +624,11 @@ void humanoid_ekf::run() {
 
             //Main Loop
             if(kinematicsInitialized){
-                estimateWithIMUEKF();
+                if(!useInIMUEKF)
+                    estimateWithIMUEKF();
+                else
+                    estimateWithInIMUEKF();
+                    
                 if(useCoMEKF)
                     estimateWithCoMEKF();
                 
@@ -612,6 +657,50 @@ void humanoid_ekf::run() {
 
 
 
+
+void humanoid_ekf::estimateWithInIMUEKF()
+{
+    //Initialize the IMU EKF state
+    if(imuInEKF->firstrun == true)
+    {
+        imuInEKF->setdt(1.0/freq);
+        imuInEKF->setBodyPos(Twb.translation());
+        imuInEKF->setBodyOrientation(Twb.linear());
+        imuInEKF->setLeftContact(Vector3d(dr->getLFootIMVPPosition()(0),dr->getLFootIMVPPosition()(1),0.00));
+        imuInEKF->setRightContact(Vector3d(dr->getRFootIMVPPosition()(0),dr->getRFootIMVPPosition()(1),0.00));
+        cout<<"Init "<<imuInEKF->X<<endl;
+        imuInEKF->firstrun = false;
+    }
+    
+    
+    //Compute the attitude and posture with the IMU-Kinematics Fusion
+    //Predict with the IMU gyro and acceleration
+    if(imu_inc && !predictWithImu && !imuInEKF->firstrun){
+        imuInEKF->predict( T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x,imu_msg.angular_velocity.y,imu_msg.angular_velocity.z),
+                        T_B_A.linear()*Vector3d(imu_msg.linear_acceleration.x,imu_msg.linear_acceleration.y,imu_msg.linear_acceleration.z),
+                        dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), dr->getRFootIMVPOrientation(), dr->getLFootIMVPOrientation(),
+                        cd->isRLegContact(),cd->isLLegContact()
+                        );
+        imu_inc = false;
+        predictWithImu = true;
+    }
+    
+    //Check for no motion
+    if(predictWithImu)
+    {
+        if(leg_odom_inc){
+            imuInEKF->updateKinematics(dr->getRFootIMVPPosition(),dr->getLFootIMVPPosition(), JRQnJRt, JLQnJLt,  cd->isRLegContact(),cd->isLLegContact());
+            leg_odom_inc = false;
+        }
+    }
+    //Estimated TFs for Legs and Support foot
+    Twl = imuInEKF->Tib  * Tbl;
+    Twr = imuInEKF->Tib  * Tbr;
+    qwl = Quaterniond(Twl.linear());
+    qwr = Quaterniond(Twr.linear());
+    Tws = imuInEKF->Tib * Tbs;
+    qws = Quaterniond(Tws.linear());
+}
 
 
 
@@ -888,8 +977,13 @@ void humanoid_ekf::computeKinTFs() {
             firstContact = false;
         }
         computeLocalCOP();
-        if(useGEM)
+        cout<<"COP "<<endl;
+        cout<<copl<<endl;
+        cout<<copr<<endl;
+        if(useGEM){
             cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl.norm(), vwr.norm());
+            cout<<"HERE "<<endl;
+        }
         else
             cd->SchmittTriggerWithKinematics(LLegForceFilt, RLegForceFilt, vwl.norm(), vwr.norm());
 
@@ -928,6 +1022,7 @@ void humanoid_ekf::computeKinTFs() {
             omegawb = mw->getGyro();
         }
         Twb_ = Twb;
+
         Twb.translation() = dr->getOdom();
         Twb.linear() = qwb.toRotationMatrix();
         
@@ -939,23 +1034,18 @@ void humanoid_ekf::computeKinTFs() {
         omegawr = dr->getRFootAngularVel();
 
 
-    }
-    
-    if(!kinematicsInitialized)
-    {
-        Twb_ = Twb;
-        qwb_ = qwb;
-        kinematicsInitialized = true;
+        CoM_leg_odom = Twb*CoM_enc;
+        leg_odom_inc = true;
+        leg_vel_inc = true;
+        com_inc = true;
+        support_inc = true;
+        check_no_motion = false;
+        if(!kinematicsInitialized)
+            kinematicsInitialized = true;
+
     }
     
 
-    CoM_leg_odom = Twb*CoM_enc;
-
-    leg_odom_inc = true;
-    leg_vel_inc = true;
-    com_inc = true;
-    support_inc = true;
-    check_no_motion = false;
 }
 
 
@@ -1438,41 +1528,75 @@ void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg)
 void humanoid_ekf::publishBodyEstimates() {
     
     
-    bodyAcc_est_msg.header.stamp = ros::Time::now();
-    bodyAcc_est_msg.header.frame_id = "odom";
-    bodyAcc_est_msg.linear_acceleration.x = imuEKF->accX;
-    bodyAcc_est_msg.linear_acceleration.y = imuEKF->accY;
-    bodyAcc_est_msg.linear_acceleration.z = imuEKF->accZ;
+    if(!useInIMUEKF){
+        bodyAcc_est_msg.header.stamp = ros::Time::now();
+        bodyAcc_est_msg.header.frame_id = "odom";
+        bodyAcc_est_msg.linear_acceleration.x = imuEKF->accX;
+        bodyAcc_est_msg.linear_acceleration.y = imuEKF->accY;
+        bodyAcc_est_msg.linear_acceleration.z = imuEKF->accZ;
+        
+        bodyAcc_est_msg.angular_velocity.x = imuEKF->gyroX;
+        bodyAcc_est_msg.angular_velocity.y = imuEKF->gyroY;
+        bodyAcc_est_msg.angular_velocity.z = imuEKF->gyroZ;
+        bodyAcc_est_pub.publish(bodyAcc_est_msg);
     
-    bodyAcc_est_msg.angular_velocity.x = imuEKF->gyroX;
-    bodyAcc_est_msg.angular_velocity.y = imuEKF->gyroY;
-    bodyAcc_est_msg.angular_velocity.z = imuEKF->gyroZ;
-    bodyAcc_est_pub.publish(bodyAcc_est_msg);
-    
-    odom_est_msg.child_frame_id = base_link_frame;
-    odom_est_msg.header.stamp=ros::Time::now();
-    odom_est_msg.header.frame_id = "odom";
-    odom_est_msg.pose.pose.position.x = imuEKF->rX;
-    odom_est_msg.pose.pose.position.y = imuEKF->rY;
-    odom_est_msg.pose.pose.position.z = imuEKF->rZ;
-    odom_est_msg.pose.pose.orientation.x = imuEKF->qib.x();
-    odom_est_msg.pose.pose.orientation.y = imuEKF->qib.y();
-    odom_est_msg.pose.pose.orientation.z = imuEKF->qib.z();
-    odom_est_msg.pose.pose.orientation.w = imuEKF->qib.w();
-    
-    odom_est_msg.twist.twist.linear.x = imuEKF->velX;
-    odom_est_msg.twist.twist.linear.y = imuEKF->velY;
-    odom_est_msg.twist.twist.linear.z = imuEKF->velZ;
-    odom_est_msg.twist.twist.angular.x  = imuEKF->gyroX;
-    odom_est_msg.twist.twist.angular.y  = imuEKF->gyroY;
-    odom_est_msg.twist.twist.angular.z  = imuEKF->gyroZ;
+        odom_est_msg.child_frame_id = base_link_frame;
+        odom_est_msg.header.stamp=ros::Time::now();
+        odom_est_msg.header.frame_id = "odom";
+        odom_est_msg.pose.pose.position.x = imuEKF->rX;
+        odom_est_msg.pose.pose.position.y = imuEKF->rY;
+        odom_est_msg.pose.pose.position.z = imuEKF->rZ;
+        odom_est_msg.pose.pose.orientation.x = imuEKF->qib.x();
+        odom_est_msg.pose.pose.orientation.y = imuEKF->qib.y();
+        odom_est_msg.pose.pose.orientation.z = imuEKF->qib.z();
+        odom_est_msg.pose.pose.orientation.w = imuEKF->qib.w();
+        
+        odom_est_msg.twist.twist.linear.x = imuEKF->velX;
+        odom_est_msg.twist.twist.linear.y = imuEKF->velY;
+        odom_est_msg.twist.twist.linear.z = imuEKF->velZ;
+        odom_est_msg.twist.twist.angular.x  = imuEKF->gyroX;
+        odom_est_msg.twist.twist.angular.y  = imuEKF->gyroY;
+        odom_est_msg.twist.twist.angular.z  = imuEKF->gyroZ;
     
     //for(int i=0;i<36;i++)
     //odom_est_msg.pose.covariance[i] = 0;
-    odom_est_pub.publish(odom_est_msg);
+        odom_est_pub.publish(odom_est_msg);
+    }
+    else
+    {
+        bodyAcc_est_msg.header.stamp = ros::Time::now();
+        bodyAcc_est_msg.header.frame_id = "odom";
+        bodyAcc_est_msg.linear_acceleration.x = imuInEKF->accX;
+        bodyAcc_est_msg.linear_acceleration.y = imuInEKF->accY;
+        bodyAcc_est_msg.linear_acceleration.z = imuInEKF->accZ;
+        
+        bodyAcc_est_msg.angular_velocity.x = imuInEKF->gyroX;
+        bodyAcc_est_msg.angular_velocity.y = imuInEKF->gyroY;
+        bodyAcc_est_msg.angular_velocity.z = imuInEKF->gyroZ;
+        bodyAcc_est_pub.publish(bodyAcc_est_msg);
+    
+        odom_est_msg.child_frame_id = base_link_frame;
+        odom_est_msg.header.stamp=ros::Time::now();
+        odom_est_msg.header.frame_id = "odom";
+        odom_est_msg.pose.pose.position.x = imuInEKF->rX;
+        odom_est_msg.pose.pose.position.y = imuInEKF->rY;
+        odom_est_msg.pose.pose.position.z = imuInEKF->rZ;
+        odom_est_msg.pose.pose.orientation.x = imuInEKF->qib.x();
+        odom_est_msg.pose.pose.orientation.y = imuInEKF->qib.y();
+        odom_est_msg.pose.pose.orientation.z = imuInEKF->qib.z();
+        odom_est_msg.pose.pose.orientation.w = imuInEKF->qib.w();
+        
+        odom_est_msg.twist.twist.linear.x = imuInEKF->velX;
+        odom_est_msg.twist.twist.linear.y = imuInEKF->velY;
+        odom_est_msg.twist.twist.linear.z = imuInEKF->velZ;
+        odom_est_msg.twist.twist.angular.x  = imuInEKF->gyroX;
+        odom_est_msg.twist.twist.angular.y  = imuInEKF->gyroY;
+        odom_est_msg.twist.twist.angular.z  = imuInEKF->gyroZ;
+        odom_est_pub.publish(odom_est_msg);
+
+    }
     
     leg_odom_msg.child_frame_id = base_link_frame;
-
     leg_odom_msg.header.stamp=ros::Time::now();
     leg_odom_msg.header.frame_id = "odom";
     leg_odom_msg.pose.pose.position.x = Twb.translation()(0);

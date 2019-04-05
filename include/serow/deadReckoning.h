@@ -8,7 +8,7 @@ class deadReckoning
   private:
     double Tm, Tm2, ef, wl, wr, mass, g, freq, GRF, Tm3, alpha1, alpha3;
     Eigen::Matrix3d C1l, C2l, C1r, C2r;
-    Eigen::Vector3d RpRm, LpLm;
+    Eigen::Vector3d RpRm, LpLm, RpRmb, LpLmb;
 
     Eigen::Vector3d pwr, pwl, pwb, pwb_;
     Eigen::Vector3d vwr, vwl, vwb;
@@ -20,7 +20,7 @@ class deadReckoning
     Eigen::Vector3d Lomega, Romega;
     Eigen::Vector3d omegawl, omegawr;
 
-    Eigen::Matrix3d AL, AR, wedgerf, wedgelf;
+    Eigen::Matrix3d AL, AR, wedgerf, wedgelf, RRpRm, RLpLm;
     Eigen::Vector3d bL, bR, plf, prf; //FT w.r.t Foot Frame;
     bool USE_CF, firstrun;
     bodyVelCF *bvcf;
@@ -110,6 +110,7 @@ class deadReckoning
         vwl = vwb + wedge(omegawb) * Rwb * pbl + Rwb * vbl;
         vwr = vwb + wedge(omegawb) * Rwb * pbr + Rwb * vbr;
     }
+
     Eigen::Vector3d getLFootLinearVel()
     {
         return vwl;
@@ -127,6 +128,28 @@ class deadReckoning
     {
         return omegawr;
     }
+
+    Eigen::Vector3d getLFootIMVPPosition()
+    {
+        return LpLmb;
+    }
+
+    Eigen::Vector3d getRFootIMVPPosition()
+    {
+        return RpRmb;
+    }
+
+    Eigen::Matrix3d getLFootIMVPOrientation()
+    {
+        return RLpLm;
+    }
+
+    Eigen::Matrix3d getRFootIMVPOrientation()
+    {
+        return RRpRm;
+    }
+
+
     void computeIMVP()
     {
         Lomega = Rwl.transpose() * omegawl;
@@ -178,6 +201,8 @@ class deadReckoning
         bR.noalias() += alpha3 / Tm3 * (wedgerf * rt - wedgerf * wedgerf * prf);
 
         RpRm.noalias() = AR.inverse() * bR;
+
+
     }
 
     void computeDeadReckoning(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr,
@@ -208,8 +233,18 @@ class deadReckoning
 
 
         computeLegKCFS(Rwb, Rbl, Rbr, omegawb, omegabl, omegabr, pbl, pbr, vbl, vbr);
+
+
+        RLpLm = Rbl;
+        RRpRm = Rbr;
+
+
         //computeIMVP();
         computeIMVPFT(lf, rf, lt, rt);
+
+
+        RpRmb = Rbr * RpRm - pbr;
+        LpLmb = Rbl * LpLm - pbl;
 
         //Temp estimate of Leg position w.r.t Inertial Frame
         pwl = pwl_ - Rwl * LpLm + Rwl_ * LpLm;
@@ -227,6 +262,10 @@ class deadReckoning
         //Leg Position Estimate w.r.t Inertial Frame
         pwl += pwb - pb_l;
         pwr += pwb - pb_r;
+
+        
+
+
         //Needed in the next iteration
         Rwl_ = Rwl;
         Rwr_ = Rwr;

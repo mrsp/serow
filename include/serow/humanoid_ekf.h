@@ -147,6 +147,8 @@ private:
 
 	double mass;
 	IMUEKF* imuEKF;
+	IMUinEKF* imuInEKF;
+	bool useInIMUEKF;
 	CoMEKF* nipmEKF;
 	butterworthLPF** gyroLPF;
 	MovingAverageFilter** gyroMAF;
@@ -227,10 +229,9 @@ private:
 
 	void estimateWithCoMEKF();
 	void estimateWithIMUEKF();
+	void estimateWithInIMUEKF();
 
 
-
-	void determineLegContact();
 
 
 	void computeKinTFs();
