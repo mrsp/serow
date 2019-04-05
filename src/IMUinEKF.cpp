@@ -263,7 +263,7 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     Qff.noalias() =  Phi * Adj * Qf * Adj.transpose() * Phi.transpose() * dt ;
     
     /** Predict Step: Propagate the Error Covariance  **/
-    P = Af * P * Af.transpose();
+    P = Phi * P * Phi.transpose();
     P.noalias() += Qff;
     
     pwb += vwb* dt + 0.5 * (Rwb * a + g)*dt * dt;
@@ -290,7 +290,7 @@ void IMUinEKF::updateStateSingleContact(Matrix<double,7,1> Y, Matrix<double,7,1>
     Matrix<double,21,3> K = P * H.transpose() * S.inverse();
 
     Matrix<double,7,7> BigX = Matrix<double,7,7>::Zero();
-    BigX.block<7,7>(0,6) = X;
+    BigX.block<7,7>(0,0) = X;
   
     
     Matrix<double,7,1> Z =  BigX * Y - b;
