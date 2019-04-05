@@ -60,15 +60,16 @@ private:
       pl = 0;
       pr = 0;
     }
-
+    cout<<"PROB IN CONTACT"<<endl;
+    cout<<pl<<endl;
+    cout<<pr<<endl;
     contactL=0;
-    if(pl>=0.5)
+    if(pl>=0.2)
       contactL=1;
 
     contactR=0;
-    if(pr>=0.5)
+    if(pr>=0.2)
       contactR=1;
-    
     
   }
 
@@ -172,6 +173,13 @@ public:
             support_leg = "RLeg";
             support_foot_frame = rfoot_frame;
         }
+        if(pl>=0.2)
+          contactL=1;
+
+        contactR=0;
+        if(pr>=0.2)
+          contactR=1;
+          
         firstContact = false;
     }
     else
@@ -332,7 +340,7 @@ public:
 
     computeContactProb(lf,  rf,  coplx,  coply,  coprx,  copry);
     //Choose Initial Support Foot based on Contact Force
-    if (firstContact)
+    if(firstContact)
     {
       if (pl > pr)
       {

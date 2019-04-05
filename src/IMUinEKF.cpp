@@ -49,6 +49,8 @@ void IMUinEKF::init() {
     I = Matrix3d::Identity();
     P = Matrix<double, 21, 21>::Zero();
     X = Matrix<double,7,7>::Identity();
+    R = Matrix<double, 3, 3>::Zero();
+
     /* State is X where
     X(0:2,0:2) is Rwb 
     X(0:2,3) is v_wb 
@@ -108,10 +110,8 @@ void IMUinEKF::init() {
     acc = Vector3d::Zero();
     angle = Vector3d::Zero();
     
-    
-    
-    
-    std::cout << "IMU EKF Initialized Successfully" << std::endl;
+
+    std::cout << "IMU Right-Invariant EKF Initialized Successfully" << std::endl;
 }
 
 
@@ -123,28 +123,25 @@ void IMUinEKF::constructState(Matrix<double,7,7>&X_, Matrix<double,6,1> &theta_,
 {
     X_=  Matrix<double,7,7>::Identity();
     X_.block<3,3>(0,0) = R_;
-    X_.block<1,3>(0,3) = v_;
-    X_.block<1,3>(0,4) = p_;
-    X_.block<1,3>(0,5) = dR_;
-    X_.block<1,3>(0,6) = dL_;
+    X_.block<3,1>(0,3) = v_;
+    X_.block<3,1>(0,4) = p_;
+    X_.block<3,1>(0,5) = dR_;
+    X_.block<3,1>(0,6) = dL_;
 
     theta_.segment<3>(0) = bg_;
-    theta_.segment<3>(3) = ba_;
-  
+    theta_.segment<3>(3) = ba_; 
 }
 
 void IMUinEKF::seperateState(Matrix<double,7,7>X_, Matrix<double,6,1> theta_, Matrix3d& R_, Vector3d& v_, Vector3d&  p_, Vector3d& dR_,  Vector3d& dL_, Vector3d& bg_, Vector3d& ba_)
 {
-    
     R_ = X_.block<3,3>(0,0);
-    v_ =  X_.block<1,3>(0,3);
-    p_ = X_.block<1,3>(0,4);
-    dR_ = X_.block<1,3>(0,5);
-    dL_ = X_.block<1,3>(0,6);
+    v_ =  X_.block<3,1>(0,3);
+    p_ = X_.block<3,1>(0,4);
+    dR_ = X_.block<3,1>(0,5);
+    dL_ = X_.block<3,1>(0,6);
 
     bg_ = theta_.segment<3>(0);
-    ba_ = theta_.segment<3>(3);
-  
+    ba_ = theta_.segment<3>(3); 
 }
 
 Matrix<double,7,7> IMUinEKF::exp(Matrix<double,15,1> v)
@@ -210,7 +207,7 @@ Matrix<double,21,21> IMUinEKF::Adjoint(Matrix<double,7,7> X_)
 
 }
 
-void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Matrix3d hR_R, Matrix3d hR_L, int contactR, int contactL)
+void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbr, Vector3d pbl,  Matrix3d hR_R, Matrix3d hR_L, int contactR, int contactL)
 {
 
    seperateState(X,theta,Rib,vwb,pwb,dR,dL,bgyr,bacc);
@@ -272,9 +269,13 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     pwb += vwb* dt + 0.5 * (Rwb * a + g)*dt * dt;
     vwb += (Rwb*a + g)*dt;
     Rwb *= exp_SO3(w*dt);
-
-    constructState(X,theta, Rwb, vwb, pwb, dR, dL, bgyr, bacc);
-    updateVars();
+    //Foot Position Dynamics
+   // dR = contactR*dR + (1-contactR)*(pwb + Rwb * pbr);
+   // dL = contactL*dL + (1-contactL)*(pwb + Rwb * pbr);
+   constructState(X,theta, Rwb, vwb, pwb, dR, dL, bgyr, bacc);
+   updateVars();
+   std::cout<<"STATE PREDICT "<<std::endl;
+   std::cout<<X<<std::endl;
 }
 
 
@@ -315,12 +316,10 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y, Matrix<double,14,1
 
     Matrix<double,14,14> BigX = Matrix<double,14,14>::Zero();
     
-    int i = 1;
-    while(i<=2)
-    {
-        BigX.block<7,7>(7*(i-1),7*i-1) = X;
-        i++;
-    }
+
+    BigX.block<7,7>(0,0) = X;
+    BigX.block<7,7>(7,7) = X;
+
     Matrix<double,14,1> Z =  BigX * Y - b;
 
 
@@ -336,13 +335,21 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y, Matrix<double,14,1
 }
 
 
-void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactL, int contactR)
+void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL)
 {
+
+   std::cout<<" CONTACT STATUS "<<std::endl;
+   std::cout<<contactR<<std::endl;
+   std::cout<<contactL<<std::endl;
    Rwb = X.block<3,3>(0,0);
    R(0,0) = foot_kinx * foot_kinx;
-   R(1,1) = foot_kinx * foot_kinx;
-   R(2,2) = foot_kinx * foot_kinx;
+   R(1,1) = foot_kiny * foot_kiny;
+   R(2,2) = foot_kinz * foot_kinz;
+   std::cout<<" R "<<std::endl;
 
+   std::cout<<R<<std::endl;
+
+	
    if(contactL && contactR)
    {
        Matrix<double,14,1> Y = Matrix<double,14,1>::Zero();
@@ -366,10 +373,15 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        Matrix<double,6,6> N = Matrix<double,6,6>::Zero();
        N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() +  R;
        N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() +  R;
+
+
+       std::cout<<" NOISE COVARIANCE "<<std::endl;
+       std::cout<<N<<std::endl;
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        PI.block<3,3>(3,3) = Matrix3d::Identity();  
        updateStateDoubleContact(Y,b,H,N,PI);
+       updateVars();
    }
    else if(contactR)
    {
@@ -390,6 +402,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
+       updateVars();
    }
    else if(contactL)
    {
@@ -410,7 +423,10 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
+       updateVars();
    }
+   std::cout<<"STATE UPDATE "<<std::endl;
+   std::cout<<X<<std::endl;
 }
 
 void IMUinEKF::updateVars()

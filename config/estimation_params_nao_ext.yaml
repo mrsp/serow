@@ -56,7 +56,7 @@ LosingContact: 7
 StrikingContact: 60
 
 
-useGEM: false
+useGEM: true
 foot_polygon_xmin: -0.047
 foot_polygon_xmax: 0.11
 foot_polygon_ymin: -0.05

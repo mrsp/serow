@@ -64,7 +64,7 @@ private:
 	Vector3d  w_, a_, w, a;
 	
 	//State vector - with biases included
-	Matrix<double, 7, 7> X;
+
 	Matrix<double, 6, 1> theta;
 	void updateStateSingleContact(Matrix<double,7,1> Y, Matrix<double,7,1> b, Matrix<double,3,21> H, Matrix3d N, Matrix<double,3,7> PI);
 	void updateStateDoubleContact(Matrix<double,14,1>Y, Matrix<double,14,1> b, Matrix<double,6,21> H, Matrix<double,6,6> N, Matrix<double,6,14> PI);
@@ -74,7 +74,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
              
 
-
+	Matrix<double, 7, 7> X;
 	bool firstrun;
 
 	// Gravity vector
@@ -136,24 +136,39 @@ public:
 	void setBodyPos(Vector3d bp)
 	{
 		pwb = bp;
+		X.block<3,1>(0,4) = bp;
 	}
 
 	//Initialize the Rotation Matrix and the Orientation Error
 	void setBodyOrientation(Matrix3d bR){
 		Rwb = bR;
+   		X.block<3,3>(0,0) = bR;
 	}
 
-    void setBodyVel(Vector3d bv)
-    {
-        vwb = bv;
-    }
+	void setBodyVel(Vector3d bv)
+	{
+	 	vwb = bv;
+	    	X.block<3,1>(0,3) = bv;
+	}
 
+	void setLeftContact(Vector3d bl)
+	{
+		dL = bl;
+		X.block<3,1>(0,5) = bl;
 
+	}
+
+	void setRightContact(Vector3d br)
+	{
+		dR = br;
+		X.block<3,1>(0,6) = br;
+
+	}
 	/** @fn void Filter(Matrix<double,3,1> f, Matrix<double,3,1> omega, Matrix<double,3,1>  y_r, Matrix<double,3,1>  y_q)
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
-	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Matrix3d hR_R, Matrix3d hR_L, int contactR, int contactL);
-	void updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactL, int contactR);
+	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbr, Vector3d pbl, Matrix3d hR_R, Matrix3d hR_L, int contactR, int contactL);
+	void updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL);
 
 
 	// Initializing Variables
