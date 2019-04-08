@@ -49,7 +49,7 @@ void IMUinEKF::init() {
     I = Matrix3d::Identity();
     P = Matrix<double, 21, 21>::Zero();
     X = Matrix<double,7,7>::Identity();
-    R = Matrix<double, 3, 3>::Zero();
+    theta = Matrix<double,6,1>::Zero();
 
     /* State is X where
     X(0:2,0:2) is Rwb 
@@ -63,32 +63,32 @@ void IMUinEKF::init() {
     */
 
     //Rot error
-    P(0,0) = 1e-5;
-    P(1,1) = 1e-5;
-    P(2,2) = 1e-5;
+    P(0,0) = 1e-1;
+    P(1,1) = 1e-1;
+    P(2,2) = 1e-1;
     //Vel error
-    P(3,3) = 1e-5;
-    P(4,4) = 1e-5;
-    P(5,5) = 1e-5;
+    P(3,3) = 1e-1;
+    P(4,4) = 1e-1;
+    P(5,5) = 1e-1;
     //Pos error
-    P(6,6)  = 1e-6;
-    P(7,7)  = 1e-6;
-    P(8,8)  = 1e-6;
+    P(6,6)  = 1e-1;
+    P(7,7)  = 1e-1;
+    P(8,8)  = 1e-1;
     //dR error
-    P(9,9)  = 1e-6;
-    P(10,10)  = 1e-6;
-    P(11,11)  = 1e-6;
+    P(9,9)  = 1e-1;
+    P(10,10)  = 1e-1;
+    P(11,11)  = 1e-1;
     //dL error
-    P(12,12)  = 1e-6;
-    P(13,13)  = 1e-6;
-    P(14,14)  = 1e-6;
+    P(12,12)  = 1e-1;
+    P(13,13)  = 1e-1;
+    P(14,14)  = 1e-1;
     //Biases
-    P(15, 15) = 1e-2;
-    P(16, 16) = 1e-2;
-    P(17, 17) = 1e-2;
-    P(18, 19) = 1e-2;
-    P(19, 19) = 1e-2;
-    P(20, 20) = 1e-2;
+    P(15, 15) = 1e-1;
+    P(16, 16) = 1e-1;
+    P(17, 17) = 1e-1;
+    P(18, 19) = 1e-1;
+    P(19, 19) = 1e-1;
+    P(20, 20) = 1e-1;
     
     Af = Matrix<double,21,21>::Zero();
     Af.block<3,3>(3,0).noalias() = skew(g);
@@ -283,40 +283,40 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
 
 
 
-void IMUinEKF::updateStateSingleContact(Matrix<double,7,1> Y, Matrix<double,7,1> b, Matrix<double,3,21> H, Matrix3d N, Matrix<double,3,7> PI)
+void IMUinEKF::updateStateSingleContact(Matrix<double,7,1> Y_, Matrix<double,7,1> b_, Matrix<double,3,21> H_, Matrix3d N_, Matrix<double,3,7> PI_)
 {
 
-    Matrix3d S = N;
-    S += H * P * H.transpose();
+    Matrix3d S_ = N_;
+    S_ += H_ * P * H_.transpose();
 
-    Matrix<double,21,3> K = P * H.transpose() * S.inverse();
+    Matrix<double,21,3> K_ = P * H_.transpose() * S_.inverse();
 
     Matrix<double,7,7> BigX = Matrix<double,7,7>::Zero();
     BigX.block<7,7>(0,0) = X;
   
     
-    Matrix<double,7,1> Z =  BigX * Y - b;
+    Matrix<double,7,1> Z_ =  BigX * Y_ - b_;
 
-    std::cout<<"Zeta "<<std::endl;
-    std::cout<<Z<<std::endl;
+    std::cout<<"K * P "<<std::endl;
+    std::cout<<K_ * PI_<<std::endl;
 
     //Update State
-    Matrix<double,21,1> delta = K * PI * Z;
-    Matrix<double,7,7> dX = exp_SE3(delta.segment<15>(0));
-    Matrix<double,6,1> dtheta = delta.segment<6>(15);
-    X = dX * X;
-    theta += dtheta;
+    Matrix<double,21,1> delta_ = K_ * PI_ * Z_;
+    Matrix<double,7,7> dX_ = exp_SE3(delta_.segment<15>(0));
+    Matrix<double,6,1> dtheta_ = delta_.segment<6>(15);
+    X = dX_ * X;
+    theta += dtheta_;
 
-    Matrix<double,21,21> IKH = If - K*H;
-    P = IKH * P * IKH.transpose() + K * N * K.transpose();
+    Matrix<double,21,21> IKH = If - K_*H_;
+    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
 }
 
-void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y, Matrix<double,14,1> b, Matrix<double,6,21> H, Matrix<double,6,6> N, Matrix<double,6,14> PI)
+void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,1> b_, Matrix<double,6,21> H_, Matrix<double,6,6> N_, Matrix<double,6,14> PI_)
 {
-    Matrix<double,6,6> S = N;
-    S += H * P * H.transpose();
+    Matrix<double,6,6> S_ = N_;
+    S_ += H_ * P * H_.transpose();
 
-    Matrix<double,21,6> K = P * H.transpose() * S.inverse();
+    Matrix<double,21,6> K_ = P * H_.transpose() * S_.inverse();
 
     Matrix<double,14,14> BigX = Matrix<double,14,14>::Zero();
     
@@ -324,21 +324,21 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y, Matrix<double,14,1
     BigX.block<7,7>(0,0) = X;
     BigX.block<7,7>(7,7) = X;
 
-    Matrix<double,14,1> Z =  BigX * Y - b;
+    Matrix<double,14,1> Z_ =  BigX * Y_ - b_;
 
-    std::cout<<"Zeta "<<std::endl;
-    std::cout<<Z<<std::endl;
+    std::cout<<"K * P "<<std::endl;
+    std::cout<<K_ * PI_<<std::endl;
 
 
     //Update State
-    Matrix<double,21,1> delta = K * PI * Z;
-    Matrix<double,7,7> dX = exp(delta.segment<15>(0));
-    Matrix<double,6,1> dtheta = delta.segment<6>(15);
-    X = dX * X;
-    theta += dtheta;
+    Matrix<double,21,1> delta_ = K_ * PI_ * Z_;
+    Matrix<double,7,7> dX_ = exp_SE3(delta_.segment<15>(0));
+    Matrix<double,6,1> dtheta_ = delta_.segment<6>(15);
+    X = dX_ * X;
+    theta += dtheta_;
 
-    Matrix<double,21,21> IKH = If - K*H;
-    P = IKH * P * IKH.transpose() + K * N * K.transpose();
+    Matrix<double,21,21> IKH = If - K_*H_;
+    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
 }
 
 
@@ -377,8 +377,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
        N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
 
-       //N.block<3,3>(0,0) =   R;
-       //N.block<3,3>(3,3) =  R;
+       N.block<3,3>(0,0) =   Qc;
+       N.block<3,3>(3,3) =  Qc;
        std::cout<<" NOISE COVARIANCE "<<std::endl;
        std::cout<<N<<std::endl;
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
