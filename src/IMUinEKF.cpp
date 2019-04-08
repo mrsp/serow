@@ -272,8 +272,8 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     vwb += (Rwb*a + g)*dt;
     Rwb *= exp_SO3(w*dt);
     //Foot Position Dynamics
-   // dR = contactR*dR + (1-contactR)*(pwb + Rwb * pbr);
-   // dL = contactL*dL + (1-contactL)*(pwb + Rwb * pbr);
+     dR = contactR*dR + (1-contactR)*(pwb + Rwb * pbr);
+     dL = contactL*dL + (1-contactL)*(pwb + Rwb * pbr);
    constructState(X,theta, Rwb, vwb, pwb, dR, dL, bgyr, bacc);
    updateVars();
    std::cout<<"STATE PREDICT "<<std::endl;
