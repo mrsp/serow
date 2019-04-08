@@ -977,9 +977,7 @@ void humanoid_ekf::computeKinTFs() {
             firstContact = false;
         }
         computeLocalCOP();
-        cout<<"COP "<<endl;
-        cout<<copl<<endl;
-        cout<<copr<<endl;
+
         if(useGEM){
             cd->computeSupportFoot(LLegForceFilt, RLegForceFilt,  copl(0),  copl(1),  copr(0),  copr(1), vwl.norm(), vwr.norm());
             cout<<"HERE "<<endl;
@@ -992,7 +990,10 @@ void humanoid_ekf::computeKinTFs() {
 
         Tbs=Tbl;
         qbs=qbl;
-        if(cd->getSupportLeg()=="RLeg")
+        support_leg = cd->getSupportLeg();
+        cout<<"support leg"<<endl;
+        cout<<support_leg<<endl;
+        if(support_leg.compare("RLeg"))
         {
             Tbs = Tbr;
             qbs = qbr;
