@@ -243,8 +243,8 @@ class deadReckoning
         computeIMVPFT(lf, rf, lt, rt);
 
 
-        RpRmb = Rbr * RpRm - pbr;
-        LpLmb = Rbl * LpLm - pbl;
+        RpRmb = Rbr * RpRm + pbr;
+        LpLmb = Rbl * LpLm + pbl;
 
         //Temp estimate of Leg position w.r.t Inertial Frame
         pwl = pwl_ - Rwl * LpLm + Rwl_ * LpLm;

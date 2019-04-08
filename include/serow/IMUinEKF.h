@@ -67,7 +67,7 @@ private:
 
 	Matrix<double, 6, 1> theta;
 	void updateStateSingleContact(Matrix<double,7,1> Y, Matrix<double,7,1> b, Matrix<double,3,21> H, Matrix3d N, Matrix<double,3,7> PI);
-	void updateStateDoubleContact(Matrix<double,14,1>Y, Matrix<double,14,1> b, Matrix<double,6,21> H, Matrix<double,6,6> N, Matrix<double,6,14> PI);
+	void updateStateDoubleContact(Matrix<double,14,1> Y, Matrix<double,14,1> b, Matrix<double,6,21> H, Matrix<double,6,6> N, Matrix<double,6,14> PI);
 
 
 public:
@@ -100,7 +100,7 @@ public:
 
 	IMUinEKF();
 
-	void constructState(Matrix<double,7,7>&X_, Matrix<double,6,1> &theta_, Matrix3d R_, Vector3d v_, Vector3d  p_, Vector3d dR_,  Vector3d dL_, Vector3d bg_, Vector3d ba_);
+	void constructState(Matrix<double,7,7>& X_, Matrix<double,6,1>& theta_, Matrix3d R_, Vector3d v_, Vector3d  p_, Vector3d dR_,  Vector3d dL_, Vector3d bg_, Vector3d ba_);
 	void seperateState(Matrix<double,7,7>X_, Matrix<double,6,1> theta_, Matrix3d& R_, Vector3d& v_, Vector3d&  p_, Vector3d& dR_,  Vector3d& dL_, Vector3d& bg_, Vector3d& ba_);
 	Matrix<double,7,7> exp(Matrix<double,15,1> v);
 	Matrix3d exp_SO3(Vector3d v);
@@ -148,7 +148,7 @@ public:
 	void setBodyVel(Vector3d bv)
 	{
 	 	vwb = bv;
-	    	X.block<3,1>(0,3) = bv;
+	    X.block<3,1>(0,3) = bv;
 	}
 
 	void setLeftContact(Vector3d bl)

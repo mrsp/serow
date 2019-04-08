@@ -79,7 +79,7 @@ VelocityThres: 0.15
 
 #Joint Velocity Estimation
 joint_cutoff_freq: 6.0
-joint_noise_density: 0.03
+joint_noise_density: 0.1
 #Mahony Filter for attitude
 useMahony: true
 Mahony_Kp: 0.9
@@ -118,7 +118,7 @@ gyroscope_noise_density: 0.0028 #rad/s 28 #MTI-300
 
 #VO Measuremets
 #Odometry Measurement Noise std:
-leg_odom_position_noise_density: 5.0e-04
+leg_odom_position_noise_density: 5.0e-04 #5.0e-04
 leg_odom_orientation_noise_density: 5.0e-02
 
 

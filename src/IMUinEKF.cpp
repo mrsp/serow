@@ -83,12 +83,12 @@ void IMUinEKF::init() {
     P(13,13)  = 1e-6;
     P(14,14)  = 1e-6;
     //Biases
-    P(15, 15) = 1e-6;
-    P(16, 16) = 1e-6;
-    P(17, 17) = 1e-6;
-    P(18, 19) = 1e-5;
-    P(19, 19) = 1e-5;
-    P(20, 20) = 1e-5;
+    P(15, 15) = 1e-2;
+    P(16, 16) = 1e-2;
+    P(17, 17) = 1e-2;
+    P(18, 19) = 1e-2;
+    P(19, 19) = 1e-2;
+    P(20, 20) = 1e-2;
     
     Af = Matrix<double,21,21>::Zero();
     Af.block<3,3>(3,0).noalias() = skew(g);
@@ -146,42 +146,44 @@ void IMUinEKF::seperateState(Matrix<double,7,7>X_, Matrix<double,6,1> theta_, Ma
 
 Matrix<double,7,7> IMUinEKF::exp(Matrix<double,15,1> v)
 {
-    Matrix<double,7,7> dX = Matrix<double,7,7>::Identity();
-    Matrix3d A = skew(v.segment<3>(0));
-    Matrix3d A2 = A * A;
+    Matrix<double,7,7> dX_ = Matrix<double,7,7>::Identity();
     double phi = v.segment<3>(0).norm();
-    double phi2 = phi * phi;
-    Matrix3d R = Matrix3d::Identity();
-    Matrix3d Jr = Matrix3d::Identity();
-    
+    Matrix3d R_ = Matrix3d::Identity();
+    Matrix3d Jr_ = Matrix3d::Identity();
     if(phi >=1e-6)
     {
-        R.noalias() += sin(phi)/phi*A;
-        R.noalias() += (1-cos(phi))/(phi2) * A2;
+        Matrix3d A = skew(v.segment<3>(0));
+        Matrix3d A2 = A * A;
+        double phi2 = phi * phi;
+        R_.noalias() += sin(phi)/phi*A;
+        R_.noalias() += (1-cos(phi))/(phi2) * A2;
 
-        Jr.noalias() += (1-cos(phi))/(phi2)*A;
-        Jr.noalias() += (phi-sin(phi))/(phi2*phi)*A2;
+        Jr_.noalias() += (1-cos(phi))/(phi2)*A;
+        Jr_.noalias() += (phi-sin(phi))/(phi2*phi)*A2;
     }
-    dX.block<3,3>(0,0) = R;
-    dX.block<3,1>(0,3).noalias() = Jr * v.segment<3>(3);
-    dX.block<3,1>(0,4).noalias() = Jr * v.segment<3>(6);
-    dX.block<3,1>(0,5).noalias() = Jr * v.segment<3>(9);
-    dX.block<3,1>(0,6).noalias() = Jr * v.segment<3>(12);
-    return dX;
+    dX_.block<3,3>(0,0) = R_;
+    dX_.block<3,1>(0,3).noalias() = Jr_ * v.segment<3>(3);
+    dX_.block<3,1>(0,4).noalias() = Jr_ * v.segment<3>(6);
+    dX_.block<3,1>(0,5).noalias() = Jr_ * v.segment<3>(9);
+    dX_.block<3,1>(0,6).noalias() = Jr_ * v.segment<3>(12);
+
+    std::cout<<" DX "<<std::endl;
+    std::cout<<dX_<<std::endl;
+    return dX_;
 }
 
 Matrix3d IMUinEKF::exp_SO3(Vector3d v)
 {
-    Matrix3d R = Matrix3d::Identity();
+    Matrix3d R_ = Matrix3d::Identity();
     Matrix3d A = skew(v);
     double phi = v.norm();
     if(phi>=1e-6)
     {
-       R.noalias() += (sin(phi)/phi)*A;
-       R.noalias() += (1-cos(phi))/(phi*phi)*A*A;
+       R_.noalias() += (sin(phi)/phi)*A;
+       R_.noalias() += (1-cos(phi))/(phi*phi)*A*A;
     }
 
-    return R;
+    return R_;
 }
 
 Matrix<double,21,21> IMUinEKF::Adjoint(Matrix<double,7,7> X_)
@@ -295,6 +297,8 @@ void IMUinEKF::updateStateSingleContact(Matrix<double,7,1> Y, Matrix<double,7,1>
     
     Matrix<double,7,1> Z =  BigX * Y - b;
 
+    std::cout<<"Zeta "<<std::endl;
+    std::cout<<Z<<std::endl;
 
     //Update State
     Matrix<double,21,1> delta = K * PI * Z;
@@ -322,6 +326,9 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y, Matrix<double,14,1
 
     Matrix<double,14,1> Z =  BigX * Y - b;
 
+    std::cout<<"Zeta "<<std::endl;
+    std::cout<<Z<<std::endl;
+
 
     //Update State
     Matrix<double,21,1> delta = K * PI * Z;
@@ -339,8 +346,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
 {
 
    std::cout<<" CONTACT STATUS "<<std::endl;
-   std::cout<<contactR<<std::endl;
-   std::cout<<contactL<<std::endl;
+   std::cout<<s_pR<<std::endl;
+   std::cout<<s_pL<<std::endl;
    Rwb = X.block<3,3>(0,0);
    R(0,0) = foot_kinx * foot_kinx;
    R(1,1) = foot_kiny * foot_kiny;
@@ -371,10 +378,11 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        H.block<3,3>(3,12) = Matrix3d::Identity();
 
        Matrix<double,6,6> N = Matrix<double,6,6>::Zero();
-       N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() +  R;
-       N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() +  R;
+       N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose();
+       N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose();
 
-
+       //N.block<3,3>(0,0) =   R;
+       //N.block<3,3>(3,3) =  R;
        std::cout<<" NOISE COVARIANCE "<<std::endl;
        std::cout<<N<<std::endl;
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
@@ -399,6 +407,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
       
        Matrix3d N = Matrix3d::Zero();
        N = Rwb * JRQeJR * Rwb.transpose() +  R;
+       //N = R;
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
@@ -407,7 +416,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
    else if(contactL)
    {
        Matrix<double,7,1> Y = Matrix<double,7,1>::Zero();
-       Y.segment<3>(0) = s_pR;
+       Y.segment<3>(0) = s_pL;
        Y(4) = 1.00;
        Y(6) = -1.00;
        Matrix<double,7,1> b = Matrix<double,7,1>::Zero();
@@ -420,6 +429,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
       
        Matrix3d N = Matrix3d::Zero();
        N = Rwb * JLQeJL * Rwb.transpose() +  R;
+       //N = R;
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
@@ -444,10 +454,10 @@ void IMUinEKF::updateVars()
     //Update the biases
     bgyr = theta.segment<3>(0);
     bacc = theta.segment<3>(3);
-    //std::cout<<"bacc"<<std::endl;
-    //std::cout<<bacc<<std::endl;
-    //std::cout<<"bgyr"<<std::endl;
-    //std::cout<<bgyr<<std::endl;
+    std::cout<<"bacc"<<std::endl;
+    std::cout<<bacc<<std::endl;
+    std::cout<<"bgyr"<<std::endl;
+    std::cout<<bgyr<<std::endl;
     bias_gx = bgyr(0);
     bias_gy = bgyr(1);
     bias_gz = bgyr(2);

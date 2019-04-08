@@ -172,7 +172,7 @@ namespace serow
 
             }
              qn.setOnes();
-             qn = qn * joint_std;
+             qn *= joint_std;
         }
         
         

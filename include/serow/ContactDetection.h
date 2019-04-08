@@ -97,6 +97,7 @@ public:
     prf = 0; 
     plc = 0;
     prc = 0;
+    VelocityThres = VelocityThres_;
     firstContact = true;
   }
 
@@ -136,7 +137,7 @@ public:
   }
 
 
-  std::string getSupport()
+  std::string getSupportFrame()
   {
     return support_foot_frame;
   }
@@ -152,7 +153,7 @@ public:
     contactL = 0;
     contactR = 0;
     
-    p=rf+lf;
+    p = rf+lf;
     pl = 0;
     pr = 0;
 
@@ -162,8 +163,10 @@ public:
       pr = rf/p;
     }
 
-    if(firstContact){
-       if(lf>rf){
+    if(firstContact)
+    {
+       if(lf>rf)
+       {
             // Initial support leg
             support_leg = "LLeg";
             support_foot_frame = lfoot_frame;
