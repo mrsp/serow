@@ -237,12 +237,12 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     
     
     // Covariance Q with full state + biases
-    Qf(0, 0) = gyr_qx * gyr_qx ;
-    Qf(1, 1) = gyr_qy * gyr_qy ;
-    Qf(2, 2) = gyr_qz * gyr_qz ;
-    Qf(3, 3) = acc_qx * acc_qx ;
-    Qf(4, 4) = acc_qy * acc_qy ;
-    Qf(5, 5) = acc_qz * acc_qz ;
+    Qf(0, 0) = gyr_qx * gyr_qx  *dt;
+    Qf(1, 1) = gyr_qy * gyr_qy *dt;
+    Qf(2, 2) = gyr_qz * gyr_qz *dt ;
+    Qf(3, 3) = acc_qx * acc_qx *dt ;
+    Qf(4, 4) = acc_qy * acc_qy *dt ;
+    Qf(5, 5) = acc_qz * acc_qz *dt;
     
     Qc(0,0) = foot_contactx * foot_contacty;
     Qc(1,1) = foot_contacty * foot_contacty;
@@ -254,12 +254,12 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
 
 
 
-    Qf(15, 15) = gyrb_qx * gyrb_qx ;
-    Qf(16, 16) = gyrb_qy * gyrb_qy ;
-    Qf(17, 17) = gyrb_qz * gyrb_qz ;
-    Qf(18, 18) = accb_qx * accb_qx ;
-    Qf(19, 19) = accb_qy * accb_qy ;
-    Qf(20, 20) = accb_qz * accb_qz ;
+    Qf(15, 15) = gyrb_qx * gyrb_qx *dt ;
+    Qf(16, 16) = gyrb_qy * gyrb_qy *dt;
+    Qf(17, 17) = gyrb_qz * gyrb_qz *dt;
+    Qf(18, 18) = accb_qx * accb_qx *dt;
+    Qf(19, 19) = accb_qy * accb_qy *dt;
+    Qf(20, 20) = accb_qz * accb_qz *dt;
     
     
     Qff.noalias() =  Phi * Adj * Qf * Adj.transpose() * Phi.transpose() * dt ;
@@ -291,11 +291,7 @@ void IMUinEKF::updateStateSingleContact(Matrix<double,7,1> Y_, Matrix<double,7,1
 
     Matrix<double,21,3> K_ = P * H_.transpose() * S_.inverse();
 
-    Matrix<double,7,7> BigX = Matrix<double,7,7>::Zero();
-    BigX.block<7,7>(0,0) = X;
-  
-    
-    Matrix<double,7,1> Z_ =  BigX * Y_ - b_;
+    Matrix<double,7,1> Z_ =  X * Y_ - b_;
 
     std::cout<<"K * P "<<std::endl;
     std::cout<<K_ * PI_<<std::endl;
@@ -377,8 +373,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
        N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
 
-       N.block<3,3>(0,0) =   Qc;
-       N.block<3,3>(3,3) =  Qc;
+       //N.block<3,3>(0,0) =   Qc;
+       //N.block<3,3>(3,3) =  Qc;
        std::cout<<" NOISE COVARIANCE "<<std::endl;
        std::cout<<N<<std::endl;
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
