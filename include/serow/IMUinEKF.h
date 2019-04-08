@@ -89,7 +89,7 @@ public:
 			bias_ax, bias_ay, bias_az, ghat;
 
 	double accX, accY, accZ, velX, velY, velZ, rX, rY, rZ;
-	Matrix3d Rwb, Rib, Qc, R;
+	Matrix3d Rwb, Rib, Qc;
 
 	Affine3d  Tib;
 
@@ -154,14 +154,14 @@ public:
 	void setLeftContact(Vector3d bl)
 	{
 		dL = bl;
-		X.block<3,1>(0,5) = bl;
+		X.block<3,1>(0,6) = bl;
 
 	}
 
 	void setRightContact(Vector3d br)
 	{
 		dR = br;
-		X.block<3,1>(0,6) = br;
+		X.block<3,1>(0,5) = br;
 
 	}
 	/** @fn void Filter(Matrix<double,3,1> f, Matrix<double,3,1> omega, Matrix<double,3,1>  y_r, Matrix<double,3,1>  y_q)
