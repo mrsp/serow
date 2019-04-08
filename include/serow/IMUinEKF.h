@@ -66,8 +66,8 @@ private:
 	//State vector - with biases included
 
 	Matrix<double, 6, 1> theta;
-	void updateStateSingleContact(Matrix<double,7,1> Y, Matrix<double,7,1> b, Matrix<double,3,21> H, Matrix3d N, Matrix<double,3,7> PI);
-	void updateStateDoubleContact(Matrix<double,14,1> Y, Matrix<double,14,1> b, Matrix<double,6,21> H, Matrix<double,6,6> N, Matrix<double,6,14> PI);
+	void updateStateSingleContact(Matrix<double,7,1> Y_, Matrix<double,7,1> b_, Matrix<double,3,21> H_, Matrix3d N_, Matrix<double,3,7> PI_);
+	void updateStateDoubleContact(Matrix<double,14,1> Y_, Matrix<double,14,1> b_, Matrix<double,6,21> H_, Matrix<double,6,6> N_, Matrix<double,6,14> PI_);
 
 
 public:
