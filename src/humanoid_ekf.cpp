@@ -346,9 +346,9 @@ void humanoid_ekf::loadIMUEKFparams()
         n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qy,1.0e-05);
         n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qz,1.0e-05);
 
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactx,1.0e-05);
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty,1.0e-05);
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz,1.0e-05);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactx,1.0e-03);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty,1.0e-03);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz,1.0e-03);
 
         n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinx,1.0e-01);
         n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kiny,1.0e-01);

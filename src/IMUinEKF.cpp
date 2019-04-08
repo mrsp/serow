@@ -373,8 +373,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
        N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
 
-       //N.block<3,3>(0,0) =   Qc;
-       //N.block<3,3>(3,3) =  Qc;
+       N.block<3,3>(0,0) =   Qc;
+       N.block<3,3>(3,3) =  Qc;
        std::cout<<" NOISE COVARIANCE "<<std::endl;
        std::cout<<N<<std::endl;
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
@@ -399,7 +399,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
       
        Matrix3d N = Matrix3d::Zero();
        N = Rwb * JRQeJR * Rwb.transpose() +  Qc;
-       //N = R;
+       N = Qc;
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
@@ -421,7 +421,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
       
        Matrix3d N = Matrix3d::Zero();
        N = Rwb * JLQeJL * Rwb.transpose() +  Qc;
-       //N = R;
+       N = Qc;
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
