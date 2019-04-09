@@ -70,7 +70,7 @@ VelocityThres: 0.15
 
 #Joint Velocity Estimation
 joint_cutoff_freq: 6.0
-joint_noise_density: 0.1
+joint_noise_density: 0.0001
 #Mahony Filter for attitude
 useMahony: true
 Mahony_Kp: 0.9
@@ -95,7 +95,7 @@ mass: 5.4  #robot mass
 #Choose Integration Method
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
 useEuler: true
-useInIMUEKF: true
+useInIMUEKF: false
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
 # 3-D Body Position/Velocity
