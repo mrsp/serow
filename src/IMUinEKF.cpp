@@ -33,12 +33,16 @@
 
 #include <serow/IMUinEKF.h>
 
+using namespace std;
 
 IMUinEKF::IMUinEKF()
 {
     //Gravity Vector
     g = Vector3d::Zero();
     g(2) = -9.80;
+    P = Matrix<double, 21, 21>::Zero();
+    X = Matrix<double,7,7>::Identity();
+    theta = Matrix<double,6,1>::Zero();
 }
 
 void IMUinEKF::init() {
@@ -47,9 +51,7 @@ void IMUinEKF::init() {
     firstrun = true;
     If = Matrix<double, 21, 21>::Identity();
     I = Matrix3d::Identity();
-    P = Matrix<double, 21, 21>::Zero();
-    X = Matrix<double,7,7>::Identity();
-    theta = Matrix<double,6,1>::Zero();
+
 
     /* State is X where
     X(0:2,0:2) is Rwb 
@@ -100,6 +102,7 @@ void IMUinEKF::init() {
     Adj = Matrix<double, 21, 21>::Zero();
     Phi = Matrix<double, 21, 21>::Zero();
     Rwb = Matrix3d::Identity();
+    Rib = Rwb;
     pwb = Vector3d::Zero();
     vwb = Vector3d::Zero();
     dL = Vector3d::Zero();
@@ -109,6 +112,7 @@ void IMUinEKF::init() {
     gyro = Vector3d::Zero();
     acc = Vector3d::Zero();
     angle = Vector3d::Zero();
+    Tib = Affine3d::Identity();
     
 
     std::cout << "IMU Right-Invariant EKF Initialized Successfully" << std::endl;
@@ -121,7 +125,6 @@ void IMUinEKF::init() {
 
 void IMUinEKF::constructState(Matrix<double,7,7>&X_, Matrix<double,6,1> &theta_, Matrix3d R_, Vector3d v_, Vector3d  p_, Vector3d dR_,  Vector3d dL_, Vector3d bg_, Vector3d ba_)
 {
-    X_=  Matrix<double,7,7>::Identity();
     X_.block<3,3>(0,0) = R_;
     X_.block<3,1>(0,3) = v_;
     X_.block<3,1>(0,4) = p_;
@@ -212,7 +215,7 @@ Matrix<double,21,21> IMUinEKF::Adjoint(Matrix<double,7,7> X_)
 void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbr, Vector3d pbl,  Matrix3d hR_R, Matrix3d hR_L, int contactR, int contactL)
 {
 
-   seperateState(X,theta,Rib,vwb,pwb,dR,dL,bgyr,bacc);
+   seperateState(X,theta,Rwb,vwb,pwb,dR,dL,bgyr,bacc);
    w_ = angular_velocity;
    a_ = linear_acceleration;
 
@@ -220,8 +223,6 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
    w -= bgyr;   
    a -= bacc;
 
-   
-    
     Af.block<3,3>(0,15).noalias() = -Rwb;
     Af.block<3,3>(3,18).noalias() = -Rwb;
     Af.block<3,3>(3,15).noalias() = -skew(vwb) * Rwb;
@@ -237,7 +238,7 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     
     
     // Covariance Q with full state + biases
-    Qf(0, 0) = gyr_qx * gyr_qx  *dt;
+    Qf(0, 0) = gyr_qx * gyr_qx *dt;
     Qf(1, 1) = gyr_qy * gyr_qy *dt;
     Qf(2, 2) = gyr_qz * gyr_qz *dt ;
     Qf(3, 3) = acc_qx * acc_qx *dt ;
@@ -250,8 +251,6 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
 
     Qf.block<3,3>(9,9) = hR_R*(Qc+1e4*I*(1-contactR))*hR_R.transpose();
     Qf.block<3,3>(12,12) = hR_L*(Qc+1e4*I*(1-contactL))*hR_L.transpose();
-
-
 
 
     Qf(15, 15) = gyrb_qx * gyrb_qx *dt ;
@@ -267,17 +266,16 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     /** Predict Step: Propagate the Error Covariance  **/
     P = Phi * P * Phi.transpose();
     P.noalias() += Qff;
-    
+
     pwb += vwb* dt + 0.5 * (Rwb * a + g)*dt * dt;
     vwb += (Rwb*a + g)*dt;
     Rwb *= exp_SO3(w*dt);
     //Foot Position Dynamics
      dR = contactR*dR + (1-contactR)*(pwb + Rwb * pbr);
      dL = contactL*dL + (1-contactL)*(pwb + Rwb * pbl);
-   constructState(X,theta, Rwb, vwb, pwb, dR, dL, bgyr, bacc);
-   updateVars();
-   std::cout<<"STATE PREDICT "<<std::endl;
-   std::cout<<X<<std::endl;
+     constructState(X,theta, Rwb, vwb, pwb, dR, dL, bgyr, bacc);
+     updateVars();
+
 }
 
 
@@ -288,18 +286,14 @@ void IMUinEKF::updateStateSingleContact(Matrix<double,7,1> Y_, Matrix<double,7,1
 
     Matrix3d S_ = N_;
     S_ += H_ * P * H_.transpose();
-
     Matrix<double,21,3> K_ = P * H_.transpose() * S_.inverse();
-
     Matrix<double,7,1> Z_ =  X * Y_ - b_;
-
-    std::cout<<"K * P "<<std::endl;
-    std::cout<<K_ * PI_<<std::endl;
 
     //Update State
     Matrix<double,21,1> delta_ = K_ * PI_ * Z_;
     Matrix<double,7,7> dX_ = exp_SE3(delta_.segment<15>(0));
     Matrix<double,6,1> dtheta_ = delta_.segment<6>(15);
+    
     X = dX_ * X;
     theta += dtheta_;
 
@@ -322,12 +316,10 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,
 
     Matrix<double,14,1> Z_ =  BigX * Y_ - b_;
 
-    std::cout<<"K * P "<<std::endl;
-    std::cout<<K_ * PI_<<std::endl;
-
 
     //Update State
     Matrix<double,21,1> delta_ = K_ * PI_ * Z_;
+
     Matrix<double,7,7> dX_ = exp_SE3(delta_.segment<15>(0));
     Matrix<double,6,1> dtheta_ = delta_.segment<6>(15);
     X = dX_ * X;
@@ -341,11 +333,10 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,
 void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL)
 {
 
-   std::cout<<" CONTACT STATUS "<<std::endl;
+   std::cout<<" CONTACT STATUS R/L"<<std::endl;
    std::cout<<s_pR<<std::endl;
    std::cout<<s_pL<<std::endl;
    Rwb = X.block<3,3>(0,0);
-  
 
 
 	
@@ -373,10 +364,9 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
        N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
 
-       N.block<3,3>(0,0) =   Qc;
+       N.block<3,3>(0,0) =  Qc;
        N.block<3,3>(3,3) =  Qc;
-       std::cout<<" NOISE COVARIANCE "<<std::endl;
-       std::cout<<N<<std::endl;
+
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        PI.block<3,3>(3,3) = Matrix3d::Identity();  
@@ -399,7 +389,6 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
       
        Matrix3d N = Matrix3d::Zero();
        N = Rwb * JRQeJR * Rwb.transpose() +  Qc;
-       N = Qc;
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
@@ -443,13 +432,8 @@ void IMUinEKF::updateVars()
     qib = Quaterniond(Rwb);
     Rib = Rwb;
     
-    //Update the biases
-    bgyr = theta.segment<3>(0);
-    bacc = theta.segment<3>(3);
-    std::cout<<"bacc"<<std::endl;
-    std::cout<<bacc<<std::endl;
-    std::cout<<"bgyr"<<std::endl;
-    std::cout<<bgyr<<std::endl;
+  
+   
     bias_gx = bgyr(0);
     bias_gy = bgyr(1);
     bias_gz = bgyr(2);
