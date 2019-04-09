@@ -73,17 +73,17 @@ void IMUinEKF::init() {
     P(4,4) = 1e-1;
     P(5,5) = 1e-1;
     //Pos error
-    P(6,6)  = 1e-1;
-    P(7,7)  = 1e-1;
-    P(8,8)  = 1e-1;
+    P(6,6)  = 1e-4;
+    P(7,7)  = 1e-4;
+    P(8,8)  = 1e-4;
     //dR error
-    P(9,9)  = 1e-1;
-    P(10,10)  = 1e-1;
-    P(11,11)  = 1e-1;
+    P(9,9)  = 1e-4;
+    P(10,10)  = 1e-4;
+    P(11,11)  = 1e-4;
     //dL error
-    P(12,12)  = 1e-1;
-    P(13,13)  = 1e-1;
-    P(14,14)  = 1e-1;
+    P(12,12)  = 1e-4;
+    P(13,13)  = 1e-4;
+    P(14,14)  = 1e-4;
     //Biases
     P(15, 15) = 1e-1;
     P(16, 16) = 1e-1;
@@ -170,8 +170,6 @@ Matrix<double,7,7> IMUinEKF::exp_SE3(Matrix<double,15,1> v)
     dX_.block<3,1>(0,5).noalias() = Jr_ * v.segment<3>(9);
     dX_.block<3,1>(0,6).noalias() = Jr_ * v.segment<3>(12);
 
-    std::cout<<" DX "<<std::endl;
-    std::cout<<dX_<<std::endl;
     return dX_;
 }
 
@@ -222,6 +220,7 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
    //Bias removed gyro and acc
    w -= bgyr;   
    a -= bacc;
+
 
     Af.block<3,3>(0,15).noalias() = -Rwb;
     Af.block<3,3>(3,18).noalias() = -Rwb;
@@ -286,6 +285,7 @@ void IMUinEKF::updateStateSingleContact(Matrix<double,7,1> Y_, Matrix<double,7,1
 
     Matrix3d S_ = N_;
     S_ += H_ * P * H_.transpose();
+   
     Matrix<double,21,3> K_ = P * H_.transpose() * S_.inverse();
     Matrix<double,7,1> Z_ =  X * Y_ - b_;
 
@@ -306,8 +306,12 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,
     Matrix<double,6,6> S_ = N_;
     S_ += H_ * P * H_.transpose();
 
-    Matrix<double,21,6> K_ = P * H_.transpose() * S_.inverse();
+    cout<<"S "<<endl;
+    cout<<S_<<endl;
 
+    Matrix<double,21,6> K_ = P * H_.transpose() * S_.inverse();
+    cout<<"K "<<endl;
+    cout<<K_<<endl;
     Matrix<double,14,14> BigX = Matrix<double,14,14>::Zero();
     
 
@@ -315,6 +319,8 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,
     BigX.block<7,7>(7,7) = X;
 
     Matrix<double,14,1> Z_ =  BigX * Y_ - b_;
+    cout<<" Z"<<endl;
+    cout<<Z_<<endl;
 
 
     //Update State
@@ -364,9 +370,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
        N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
 
-       N.block<3,3>(0,0) =  Qc;
-       N.block<3,3>(3,3) =  Qc;
-
+      
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        PI.block<3,3>(3,3) = Matrix3d::Identity();  

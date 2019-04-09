@@ -666,8 +666,8 @@ void humanoid_ekf::estimateWithInIMUEKF()
     if(imuInEKF->firstrun == true)
     {
         imuInEKF->setdt(1.0/freq);
-        //imuInEKF->setBodyPos(Twb.translation());
-        //imuInEKF->setBodyOrientation(Twb.linear());
+        imuInEKF->setBodyPos(Twb.translation());
+        imuInEKF->setBodyOrientation(Twb.linear());
         imuInEKF->setLeftContact(Vector3d(dr->getLFootIMVPPosition()(0),dr->getLFootIMVPPosition()(1),0.00));
         imuInEKF->setRightContact(Vector3d(dr->getRFootIMVPPosition()(0),dr->getRFootIMVPPosition()(1),0.00));
         cout<<"Init "<<imuInEKF->X<<endl;
