@@ -49,7 +49,7 @@ void humanoid_ekf::loadparams() {
     n_p.param<double>("imu_topic_freq",freq,100.0);
     n_p.param<double>("fsr_topic_freq",fsr_freq,100.0);
 
-    n_p.param<bool>("useInIMUEKF",useInIMUEKF,true);
+    n_p.param<bool>("useInIMUEKF",useInIMUEKF,false);
     
 
 
@@ -346,13 +346,15 @@ void humanoid_ekf::loadIMUEKFparams()
         n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qy,1.0e-05);
         n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qz,1.0e-05);
 
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactx,1.0e-03);
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty,1.0e-03);
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz,1.0e-03);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactx,1.0e-05);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty,1.0e-05);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz,1.0e-05);
 
         n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinx,1.0e-01);
         n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kiny,1.0e-01);
         n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinz,1.0e-01);
+        imuInEKF->setAccBias(T_B_A.linear()*Vector3d(bias_ax,bias_ay,bias_az));
+        imuInEKF->setGyroBias(T_B_G.linear()*Vector3d(bias_gx,bias_gy,bias_gz));    
     }
     
 }
@@ -664,8 +666,8 @@ void humanoid_ekf::estimateWithInIMUEKF()
     if(imuInEKF->firstrun == true)
     {
         imuInEKF->setdt(1.0/freq);
-        imuInEKF->setBodyPos(Twb.translation());
-        imuInEKF->setBodyOrientation(Twb.linear());
+        //imuInEKF->setBodyPos(Twb.translation());
+        //imuInEKF->setBodyOrientation(Twb.linear());
         imuInEKF->setLeftContact(Vector3d(dr->getLFootIMVPPosition()(0),dr->getLFootIMVPPosition()(1),0.00));
         imuInEKF->setRightContact(Vector3d(dr->getRFootIMVPPosition()(0),dr->getRFootIMVPPosition()(1),0.00));
         cout<<"Init "<<imuInEKF->X<<endl;
