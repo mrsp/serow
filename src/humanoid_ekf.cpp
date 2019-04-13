@@ -304,9 +304,9 @@ void humanoid_ekf::loadIMUEKFparams()
         n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qy,1.0e-05);
         n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qz,1.0e-05);
         
-        n_p.param<double>("odom_position_noise_density", imuEKF->odom_px,1.0e-01);
-        n_p.param<double>("odom_position_noise_density", imuEKF->odom_py,1.0e-01);
-        n_p.param<double>("odom_position_noise_density", imuEKF->odom_pz,1.0e-01);
+        n_p.param<double>("odom_position_noise_density_x", imuEKF->odom_px,1.0e-01);
+        n_p.param<double>("odom_position_noise_density_y", imuEKF->odom_py,1.0e-01);
+        n_p.param<double>("odom_position_noise_density_z", imuEKF->odom_pz,1.0e-01);
         n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ax,1.0e-01);
         n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay,1.0e-01);
         n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az,1.0e-01);
@@ -1450,8 +1450,8 @@ void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg)
 {
     if(kinematicsInitialized){
         comp_odom0_msg = *msg;
-        temp = Vector3d(comp_odom0_msg.pose.pose.position.x,comp_odom0_msg.pose.pose.position.y,comp_odom0_msg.pose.pose.position.z);
-        tempq = Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
+        temp = T_B_P.linear()*Vector3d(comp_odom0_msg.pose.pose.position.x,comp_odom0_msg.pose.pose.position.y,comp_odom0_msg.pose.pose.position.z);
+        tempq = q_B_P * Quaterniond(comp_odom0_msg.pose.pose.orientation.w,comp_odom0_msg.pose.pose.orientation.x,comp_odom0_msg.pose.pose.orientation.y,comp_odom0_msg.pose.pose.orientation.z);
         if(firstCO){
                 qoffsetCO =  qwb  * tempq.inverse();
                 offsetCO = Twb.translation() - temp;

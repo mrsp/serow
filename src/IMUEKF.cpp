@@ -448,9 +448,9 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
     R(0, 0) = vel_px * vel_px;
     R(1, 1) = vel_py * vel_py;
     R(2, 2) = vel_pz * vel_pz;
-    R(3, 3) = leg_odom_ax * leg_odom_ax;
-    R(4, 4) =  R(3, 3);
-    R(5, 5) =  R(3, 3);
+    R(3, 3) =  leg_odom_ax * leg_odom_ax;
+    R(4, 4) =  leg_odom_ay * leg_odom_ay;
+    R(5, 5) =  leg_odom_az * leg_odom_az;
 
 
     v = x.segment<3>(0);
@@ -493,12 +493,12 @@ void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
 {
     //std::cout<<"Update with LO"<<std::endl;
     R(0, 0) = leg_odom_px * leg_odom_px;
-    R(1, 1) = R(0, 0);
-    R(2, 2) = R(0, 0);
+    R(1, 1) = leg_odom_py * leg_odom_py;
+    R(2, 2) = leg_odom_pz * leg_odom_pz;
     
-    R(3, 3) = leg_odom_ax * leg_odom_ax;
-    R(4, 4) =  R(3, 3);
-    R(5, 5) =  R(3, 3);
+    R(3, 3) =  leg_odom_ax * leg_odom_ax;
+    R(4, 4) =  leg_odom_ay * leg_odom_ay;
+    R(5, 5) =  leg_odom_az * leg_odom_az;
 
 
         r = x.segment<3>(6);
@@ -534,12 +534,12 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
 {
     //std::cout<<"Update with VO "<<std::endl;
     R(0, 0) = odom_px * odom_px;
-    R(1, 1) = R(0, 0);
-    R(2, 2) = R(0, 0);
+    R(1, 1) = odom_py * odom_py;
+    R(2, 2) = odom_pz * odom_pz;
     
-    R(3, 3) = odom_ax * odom_ax;
-    R(4, 4) =  R(3, 3);
-    R(5, 5) =  R(3, 3);
+    R(3, 3) =  odom_ax * odom_ax;
+    R(4, 4) =  odom_ay * odom_ay;
+    R(5, 5) =  odom_az * odom_az;
 
     outlier = false;
     if(!useOutlierDetection)
