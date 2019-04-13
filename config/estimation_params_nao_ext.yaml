@@ -3,11 +3,10 @@ base_link: "base_link"
 lfoot: "l_ankle"
 rfoot: "r_ankle"
 modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
-useLegOdom: true
+useLegOdom: false
 
 #ROS Topic Names
-odom_topic: "/svo/odom/0"
-#odom_topic: "/odom_rf2o"
+odom_topic: "/kfusion/odom"
 imu_topic: "/imu/data"
 #imu_topic: "/nao_robot/imu"
 joint_state_topic: "/joint_states"
@@ -15,13 +14,13 @@ lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
 rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
 
 #Ground-Truth
-ground_truth: true
+ground_truth: false
 ground_truth_odom_topic: "/orbslam2/odom"
 ground_truth_com_topic: "/gt_com"
 T_B_GT: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1]
 
 comp_with: true
-comp_with_odom0_topic: "/dvo/odom"
+comp_with_odom0_topic: "/kfusion/odom"
 #comp_with_odom0_topic: "/odom_rf2o"
 support_idx_provided: false
 support_idx_topic: "/sp"
@@ -87,9 +86,9 @@ bias_mgz: 0
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
-medianWindow: 6
+medianWindow: 7
 #mass: 6.6530  #robot mass
-mass: 5.4  #robot mass
+mass: 6.4  #robot mass
 
 
 #Choose Integration Method
@@ -117,7 +116,9 @@ leg_odom_orientation_noise_density: 5.0e-02
 mahalanobis_TH: 16.0
 #mahalanobis_TH: -1
 useOutlierDetection: false
-odom_position_noise_density: 8.0e-02 #2.0e-01
+odom_position_noise_density_x: 5.0e-02 #2.0e-01
+odom_position_noise_density_y: 5.0e-02
+odom_position_noise_density_z: 1.0
 odom_orientation_noise_density: 5.0e-02 #2.0e-01
 
 #RP Lidar Odom
