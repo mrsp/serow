@@ -185,8 +185,8 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
    a_ = linear_acceleration;
 
    //Bias removed gyro and acc
-   w -= bgyr;   
-   a -= bacc;
+   w = w_ - bgyr;   
+   a = a_ - bacc;
 
 
     Af.block<3,3>(0,15).noalias() = -Rwb;
