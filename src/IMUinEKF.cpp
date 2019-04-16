@@ -18,7 +18,10 @@ void IMUinEKF::init() {
     firstrun = true;
     If = Matrix<double, 21, 21>::Identity();
     I = Matrix3d::Identity();
-
+    w_ = Vector3d::Zero();
+    a_ = Vector3d::Zero();
+    a = Vector3d::Zero();
+    w = Vector3d::Zero();
 
     /* State is X where
     X(0:2,0:2) is Rwb 
@@ -335,8 +338,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        H.block<3,3>(3,12) = Matrix3d::Identity();
 
        Matrix<double,6,6> N = Matrix<double,6,6>::Zero();
-       N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() ;
-       N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() ;
+       N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
+       N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
 
       
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
@@ -360,7 +363,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        H.block<3,3>(0,9) = Matrix3d::Identity();
       
        Matrix3d N = Matrix3d::Zero();
-       N = Rwb * JRQeJR * Rwb.transpose();
+       N = Rwb * JRQeJR * Rwb.transpose() + Qc;
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
@@ -381,7 +384,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        H.block<3,3>(0,12) = Matrix3d::Identity();
       
        Matrix3d N = Matrix3d::Zero();
-       N = Rwb * JLQeJL * Rwb.transpose();
+       N = Rwb * JLQeJL * Rwb.transpose() + Qc;
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
