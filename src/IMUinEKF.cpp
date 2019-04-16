@@ -1,36 +1,3 @@
-/*
- * humanoid_state_estimation - a complete state estimation scheme for humanoid robots
- *
- * Copyright 2017-2018 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
- * License: BSD
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH)
- *	 nor the names of its contributors may be used to endorse or promote products derived from
- *       this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
-
-
-
 #include <serow/IMUinEKF.h>
 
 using namespace std;
@@ -73,17 +40,17 @@ void IMUinEKF::init() {
     P(4,4) = 1e-1;
     P(5,5) = 1e-1;
     //Pos error
-    P(6,6)  = 1e-4;
-    P(7,7)  = 1e-4;
-    P(8,8)  = 1e-4;
+    P(6,6)  = 1e-3;
+    P(7,7)  = 1e-3;
+    P(8,8)  = 1e-3;
     //dR error
-    P(9,9)  = 1e-4;
-    P(10,10)  = 1e-4;
-    P(11,11)  = 1e-4;
+    P(9,9)  = 1e-1;
+    P(10,10)  = 1e-1;
+    P(11,11)  = 1e-1;
     //dL error
-    P(12,12)  = 1e-4;
-    P(13,13)  = 1e-4;
-    P(14,14)  = 1e-4;
+    P(12,12)  = 1e-1;
+    P(13,13)  = 1e-1;
+    P(14,14)  = 1e-1;
     //Biases
     P(15, 15) = 1e-1;
     P(16, 16) = 1e-1;
@@ -237,12 +204,12 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     
     
     // Covariance Q with full state + biases
-    Qf(0, 0) = gyr_qx * gyr_qx *dt;
-    Qf(1, 1) = gyr_qy * gyr_qy *dt;
-    Qf(2, 2) = gyr_qz * gyr_qz *dt ;
-    Qf(3, 3) = acc_qx * acc_qx *dt ;
-    Qf(4, 4) = acc_qy * acc_qy *dt ;
-    Qf(5, 5) = acc_qz * acc_qz *dt;
+    Qf(0, 0) = gyr_qx * gyr_qx ;
+    Qf(1, 1) = gyr_qy * gyr_qy ;
+    Qf(2, 2) = gyr_qz * gyr_qz  ;
+    Qf(3, 3) = acc_qx * acc_qx  ;
+    Qf(4, 4) = acc_qy * acc_qy  ;
+    Qf(5, 5) = acc_qz * acc_qz ;
     
     Qc(0,0) = foot_contactx * foot_contacty;
     Qc(1,1) = foot_contacty * foot_contacty;
@@ -252,12 +219,12 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     Qf.block<3,3>(12,12) = hR_L*(Qc+1e4*I*(1-contactL))*hR_L.transpose();
 
 
-    Qf(15, 15) = gyrb_qx * gyrb_qx *dt ;
-    Qf(16, 16) = gyrb_qy * gyrb_qy *dt;
-    Qf(17, 17) = gyrb_qz * gyrb_qz *dt;
-    Qf(18, 18) = accb_qx * accb_qx *dt;
-    Qf(19, 19) = accb_qy * accb_qy *dt;
-    Qf(20, 20) = accb_qz * accb_qz *dt;
+    Qf(15, 15) = gyrb_qx * gyrb_qx  ;
+    Qf(16, 16) = gyrb_qy * gyrb_qy ;
+    Qf(17, 17) = gyrb_qz * gyrb_qz ;
+    Qf(18, 18) = accb_qx * accb_qx ;
+    Qf(19, 19) = accb_qy * accb_qy ;
+    Qf(20, 20) = accb_qz * accb_qz ;
     
     
     Qff.noalias() =  Phi * Adj * Qf * Adj.transpose() * Phi.transpose() * dt ;
@@ -306,8 +273,8 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,
     Matrix<double,6,6> S_ = N_;
     S_ += H_ * P * H_.transpose();
 
-    cout<<"S "<<endl;
-    cout<<S_<<endl;
+    cout<<"N_ "<<endl;
+    cout<<N_<<endl;
 
     Matrix<double,21,6> K_ = P * H_.transpose() * S_.inverse();
     cout<<"K "<<endl;
@@ -325,7 +292,8 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,
 
     //Update State
     Matrix<double,21,1> delta_ = K_ * PI_ * Z_;
-
+    cout<<"Delta "<<endl;
+    cout<<delta_<<endl;
     Matrix<double,7,7> dX_ = exp_SE3(delta_.segment<15>(0));
     Matrix<double,6,1> dtheta_ = delta_.segment<6>(15);
     X = dX_ * X;
@@ -367,8 +335,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        H.block<3,3>(3,12) = Matrix3d::Identity();
 
        Matrix<double,6,6> N = Matrix<double,6,6>::Zero();
-       N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
-       N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
+       N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() ;
+       N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() ;
 
       
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
@@ -392,7 +360,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        H.block<3,3>(0,9) = Matrix3d::Identity();
       
        Matrix3d N = Matrix3d::Zero();
-       N = Rwb * JRQeJR * Rwb.transpose() +  Qc;
+       N = Rwb * JRQeJR * Rwb.transpose();
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
@@ -413,8 +381,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        H.block<3,3>(0,12) = Matrix3d::Identity();
       
        Matrix3d N = Matrix3d::Zero();
-       N = Rwb * JLQeJL * Rwb.transpose() +  Qc;
-       N = Qc;
+       N = Rwb * JLQeJL * Rwb.transpose();
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
