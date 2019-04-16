@@ -288,7 +288,7 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,
     BigX.block<7,7>(0,0) = X;
     BigX.block<7,7>(7,7) = X;
 
-    Matrix<double,14,1> Z_ =  BigX * Y_ - b_;
+    Matrix<double,14,1> Z_ =  BigX * Y_;
     cout<<" Z"<<endl;
     cout<<Z_<<endl;
 
@@ -327,10 +327,10 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        Y(11) = 1.00;
        Y(13) = -1.00;
        Matrix<double,14,1> b = Matrix<double,14,1>::Zero();
-       b(4) = 1.00;
-       b(5) = -1.00;
-       b(11) = 1.00;
-       b(13) = -1.00;
+       //b(4) = 1.00;
+       //b(5) = -1.00;
+       //b(11) = 1.00;
+       //b(13) = -1.00;
        Matrix<double,6,21> H = Matrix<double,6,21>::Zero();
        H.block<3,3>(0,6) = -Matrix3d::Identity();
        H.block<3,3>(0,9) = Matrix3d::Identity();
@@ -355,8 +355,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        Y(4) = 1.00;
        Y(5) = -1.00;
        Matrix<double,7,1> b = Matrix<double,7,1>::Zero();
-       b(4) = 1.00;
-       b(5) = -1.00;
+       //b(4) = 1.00;
+       //b(5) = -1.00;
      
        Matrix<double,3,21> H = Matrix<double,3,21>::Zero();
        H.block<3,3>(0,6) = -Matrix3d::Identity();
@@ -376,8 +376,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        Y(4) = 1.00;
        Y(6) = -1.00;
        Matrix<double,7,1> b = Matrix<double,7,1>::Zero();
-       b(4) = 1.00;
-       b(6) = -1.00;
+       //b(4) = 1.00;
+       //b(6) = -1.00;
      
        Matrix<double,3,21> H = Matrix<double,3,21>::Zero();
        H.block<3,3>(0,6) = -Matrix3d::Identity();
