@@ -60,9 +60,9 @@ private:
       pl = 0;
       pr = 0;
     }
-    cout<<"PROB IN CONTACT"<<endl;
-    cout<<pl<<endl;
-    cout<<pr<<endl;
+    // cout<<"PROB IN CONTACT"<<endl;
+    // cout<<pl<<endl;
+    // cout<<pr<<endl;
     contactL=0;
     if(pl>=0.2)
       contactL=1;
