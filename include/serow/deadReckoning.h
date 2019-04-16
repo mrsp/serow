@@ -245,7 +245,7 @@ class deadReckoning
 
         RpRmb = Rbr * RpRm + pbr;
         LpLmb = Rbl * LpLm + pbl;
-
+     
         //Temp estimate of Leg position w.r.t Inertial Frame
         pwl = pwl_ - Rwl * LpLm + Rwl_ * LpLm;
         pwr = pwr_ - Rwr * RpRm + Rwr_ * RpRm;
