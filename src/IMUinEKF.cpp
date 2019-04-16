@@ -344,7 +344,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
       
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
-       PI.block<3,3>(3,3) = Matrix3d::Identity();  
+       PI.block<3,3>(3,7) = Matrix3d::Identity();  
        updateStateDoubleContact(Y,b,H,N,PI);
        updateVars();
    }
