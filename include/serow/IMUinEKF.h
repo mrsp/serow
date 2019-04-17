@@ -61,8 +61,8 @@ public:
 	Matrix3d exp_SO3(Vector3d v);
 	Matrix<double,21,21> Adjoint(Matrix<double,7,7> X_);
 
-
-
+	void updateWithTwist(Vector3d vy);
+	void updateVelocity(Matrix<double,7,1> Y_, Matrix<double,7,1> b_, Matrix<double,3,21> H_, Matrix3d N_, Matrix<double,3,7> PI_);
 
 
 	void updateVars();
@@ -119,13 +119,32 @@ public:
 		X.block<3,1>(0,5) = br;
 
 	}
+	inline Vector3d logMap(
+			Matrix<double, 3, 3> Rt) {
+
+		Vector3d res = Vector3d::Zero();
+		double costheta = (Rt.trace()-1.0)/2.0;
+		double theta = acos(costheta);
+
+		if (theta != 0.000) {
+			Matrix<double, 3, 3> lnR = Matrix<double, 3, 3>::Zero();
+			lnR.noalias() =  Rt - Rt.transpose();
+			lnR *= theta /(2.0*sin(theta));
+			res = vec(lnR); 			
+		}
+
+		return res;
+	}
 	/** @fn void Filter(Matrix<double,3,1> f, Matrix<double,3,1> omega, Matrix<double,3,1>  y_r, Matrix<double,3,1>  y_q)
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
 	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbr, Vector3d pbl, Matrix3d hR_R, Matrix3d hR_L, int contactR, int contactL);
 	void updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL);
 
-
+	void updatePositionOrientation(Matrix<double,14,1> Y_, Matrix<double,14,1> b_, Matrix<double,6,21> H_, Matrix<double,6,6> N_, Matrix<double,6,14> PI_);
+	void updateWithOdom(Vector3d py, Quaterniond qy);
+	void updateVelocityOrientation(Matrix<double,14,1> Y_, Matrix<double,14,1> b_, Matrix<double,6,21> H_, Matrix<double,6,6> N_, Matrix<double,6,14> PI_);
+	void updateWithTwistOrient(Vector3d vy, Quaterniond qy);
 	// Initializing Variables
 	void init();
 
