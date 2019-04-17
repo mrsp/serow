@@ -346,13 +346,13 @@ void humanoid_ekf::loadIMUEKFparams()
         n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qy,1.0e-05);
         n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qz,1.0e-05);
 
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactx,1.0e-01);
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty,1.0e-01);
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz,1.0e-01);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactx,5.0e-02);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty,5.0e-02);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz,5.0e-02);
 
-        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinx,1.0e-01);
-        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kiny,1.0e-01);
-        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinz,1.0e-01);
+        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinx,5.0e-02);
+        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kiny,5.0e-02);
+        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinz,5.0e-02);
         imuInEKF->setAccBias(T_B_A.linear()*Vector3d(bias_ax,bias_ay,bias_az));
         imuInEKF->setGyroBias(T_B_G.linear()*Vector3d(bias_gx,bias_gy,bias_gz));    
     }

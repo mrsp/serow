@@ -69,7 +69,7 @@ VelocityThres: 0.15
 
 #Joint Velocity Estimation
 joint_cutoff_freq: 6.0
-joint_noise_density: 0.0524
+joint_noise_density: 0.1
 #Mahony Filter for attitude
 useMahony: true
 Mahony_Kp: 0.9
