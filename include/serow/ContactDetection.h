@@ -64,11 +64,11 @@ private:
     // cout<<pl<<endl;
     // cout<<pr<<endl;
     contactL=0;
-    if(pl>=0.2)
+    if(pl>=0.35)
       contactL=1;
 
     contactR=0;
-    if(pr>=0.2)
+    if(pr>=0.35)
       contactR=1;
     
   }

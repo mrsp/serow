@@ -209,9 +209,9 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     // Covariance Q with full state + biases
     Qf(0, 0) = gyr_qx * gyr_qx ;
     Qf(1, 1) = gyr_qy * gyr_qy ;
-    Qf(2, 2) = gyr_qz * gyr_qz  ;
-    Qf(3, 3) = acc_qx * acc_qx  ;
-    Qf(4, 4) = acc_qy * acc_qy  ;
+    Qf(2, 2) = gyr_qz * gyr_qz ;
+    Qf(3, 3) = acc_qx * acc_qx ;
+    Qf(4, 4) = acc_qy * acc_qy ;
     Qf(5, 5) = acc_qz * acc_qz ;
     
     Qc(0,0) = foot_contactx * foot_contacty;
@@ -276,27 +276,20 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,
     Matrix<double,6,6> S_ = N_;
     S_ += H_ * P * H_.transpose();
 
-    cout<<"N_ "<<endl;
-    cout<<N_<<endl;
 
     Matrix<double,21,6> K_ = P * H_.transpose() * S_.inverse();
-    cout<<"K "<<endl;
-    cout<<K_<<endl;
+
     Matrix<double,14,14> BigX = Matrix<double,14,14>::Zero();
     
 
     BigX.block<7,7>(0,0) = X;
     BigX.block<7,7>(7,7) = X;
 
-    Matrix<double,14,1> Z_ =  BigX * Y_;
-    cout<<" Z"<<endl;
-    cout<<Z_<<endl;
-
+    Matrix<double,14,1> Z_ =  BigX * Y_ - b_;
 
     //Update State
     Matrix<double,21,1> delta_ = K_ * PI_ * Z_;
-    cout<<"Delta "<<endl;
-    cout<<delta_<<endl;
+  
     Matrix<double,7,7> dX_ = exp_SE3(delta_.segment<15>(0));
     Matrix<double,6,1> dtheta_ = delta_.segment<6>(15);
     X = dX_ * X;
@@ -305,7 +298,6 @@ void IMUinEKF::updateStateDoubleContact(Matrix<double,14,1>Y_, Matrix<double,14,
     Matrix<double,21,21> IKH = If - K_*H_;
     P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
 }
-
 
 void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL)
 {
@@ -316,6 +308,9 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
    Rwb = X.block<3,3>(0,0);
 
 
+   Qc(0,0) = foot_kinx * foot_kinx;
+   Qc(1,1) = foot_kiny * foot_kiny;
+   Qc(2,2) = foot_kinz * foot_kinz;
 	
    if(contactL && contactR)
    {
@@ -327,20 +322,21 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        Y(11) = 1.00;
        Y(13) = -1.00;
        Matrix<double,14,1> b = Matrix<double,14,1>::Zero();
-       //b(4) = 1.00;
-       //b(5) = -1.00;
-       //b(11) = 1.00;
-       //b(13) = -1.00;
+    //    b(4) = 1.00;
+    //    b(5) = -1.00;
+    //    b(11) = 1.00;
+    //    b(13) = -1.00;
        Matrix<double,6,21> H = Matrix<double,6,21>::Zero();
        H.block<3,3>(0,6) = -Matrix3d::Identity();
        H.block<3,3>(0,9) = Matrix3d::Identity();
        H.block<3,3>(3,6) = -Matrix3d::Identity();
        H.block<3,3>(3,12) = Matrix3d::Identity();
 
+
+
        Matrix<double,6,6> N = Matrix<double,6,6>::Zero();
        N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
        N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
-
       
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
@@ -355,8 +351,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        Y(4) = 1.00;
        Y(5) = -1.00;
        Matrix<double,7,1> b = Matrix<double,7,1>::Zero();
-       //b(4) = 1.00;
-       //b(5) = -1.00;
+    //    b(4) = 1.00;
+    //    b(5) = -1.00;
      
        Matrix<double,3,21> H = Matrix<double,3,21>::Zero();
        H.block<3,3>(0,6) = -Matrix3d::Identity();
@@ -376,8 +372,8 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
        Y(4) = 1.00;
        Y(6) = -1.00;
        Matrix<double,7,1> b = Matrix<double,7,1>::Zero();
-       //b(4) = 1.00;
-       //b(6) = -1.00;
+    //    b(4) = 1.00;
+    //    b(6) = -1.00;
      
        Matrix<double,3,21> H = Matrix<double,3,21>::Zero();
        H.block<3,3>(0,6) = -Matrix3d::Identity();
@@ -385,6 +381,7 @@ void IMUinEKF::updateKinematics(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, M
       
        Matrix3d N = Matrix3d::Zero();
        N = Rwb * JLQeJL * Rwb.transpose() + Qc;
+
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
