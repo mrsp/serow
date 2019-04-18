@@ -311,7 +311,7 @@ void IMUinEKF::updateWithOdom(Vector3d py, Quaterniond qy)
     b(11) = 1.000;
     Matrix<double,6,21> H = Matrix<double,6,21>::Zero();
     H.block<3,3>(0,0) = Matrix3d::Identity();
-    H.block<3,3>(6,6) = Matrix3d::Identity();
+    H.block<3,3>(3,6) = Matrix3d::Identity();
     
     Matrix<double,6,6> N = Matrix<double,6,6>::Zero();
     N(0,0) = 1.0e-4;
