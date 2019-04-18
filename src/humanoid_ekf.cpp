@@ -693,8 +693,8 @@ void humanoid_ekf::estimateWithInIMUEKF()
         if(leg_odom_inc){
             //imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(),dr->getLFootIMVPPosition(), JRQnJRt, JLQnJLt,  cd->isRLegContact(),cd->isLLegContact());
             //imuInEKF->updateWithTwist(vwb);
-            imuInEKF->updateWithTwistOrient(vwb,qwb);
-            //imuInEKF->updateWithOdom(Twb.translation(),qwb);
+            //imuInEKF->updateWithTwistOrient(vwb,qwb);
+            imuInEKF->updateWithOdom(Twb.translation(),qwb);
 
             leg_odom_inc = false;
         }
