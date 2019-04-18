@@ -108,7 +108,8 @@ gyroscope_noise_density: 0.0028 #rad/s 28 #MTI-300
 
 #VO Measuremets
 #Odometry Measurement Noise std:
-leg_odom_position_noise_density: 5.0e-04 #5.0e-04
+#leg_odom_position_noise_density: 5.0e-04 #5.0e-04
+leg_odom_position_noise_density: 0.01
 leg_odom_orientation_noise_density: 5.0e-02
 
 
