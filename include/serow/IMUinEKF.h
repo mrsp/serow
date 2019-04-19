@@ -40,6 +40,11 @@ public:
 	double  acc_qx,acc_qy,acc_qz,gyr_qx,gyr_qy,gyr_qz,gyrb_qx,gyrb_qy,gyrb_qz,
 	accb_qx,accb_qy,accb_qz, foot_contactx, foot_contacty, foot_contactz, foot_kinx, foot_kiny, foot_kinz;
 
+
+	double odom_px, odom_py, odom_pz, odom_ax, odom_ay,odom_az,
+	vel_px, vel_py, vel_pz, leg_odom_px, leg_odom_py, leg_odom_pz, leg_odom_ax,
+	leg_odom_ay, leg_odom_az;
+
 	double gyroX, gyroY, gyroZ, angleX, angleY, angleZ, bias_gx, bias_gy, bias_gz,
 			bias_ax, bias_ay, bias_az, ghat;
 

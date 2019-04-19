@@ -241,10 +241,16 @@ class deadReckoning
 
         //computeIMVP();
         computeIMVPFT(lf, rf, lt, rt);
+        std::cout<<" PBR "<<std::endl;
+        std::cout<<pbr<<std::endl;
+        std::cout<<pbl<<std::endl;
+        std::cout<<" IMVP "<<std::endl;
 
+        RpRmb = Rbr * RpRm + pbr;
+        LpLmb = Rbl * LpLm + pbl;
 
-       // RpRmb = Rbr * RpRm + pbr;
-       // LpLmb = Rbl * LpLm + pbl;
+        std::cout<<RpRmb<<std::endl;
+        std::cout<<LpLmb<<std::endl;
         RpRmb =  pbr;
         LpLmb =  pbl;
         //Temp estimate of Leg position w.r.t Inertial Frame

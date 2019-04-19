@@ -58,9 +58,20 @@ VelocityThres: 0.1
 medianWindow: 5
 
 #Compute Joint Velocities
-joint_cutoff_freq: 12
-joint_noise_density: 0.0463 # rad
+joint_cutoff_freq: 6
+joint_noise_density: 0.01 # rad
 
+
+useGEM: true
+foot_polygon_xmin: -0.1
+foot_polygon_xmax: 0.1
+foot_polygon_ymin: -0.05
+foot_polygon_ymax: 0.05
+lforce_sigma: 1.0
+rforce_sigma: 1.0
+lcop_sigma: 0.001
+rcop_sigma: 0.001
+VelocityThres: 0.15
 
 #Mahony Filter for attitude
 useMahony: true
@@ -81,6 +92,11 @@ Tau1: 1.0
 #Choose Integration Method
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
 useEuler: true
+useInIMUEKF: true
+
+
+
+
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
@@ -102,23 +118,37 @@ leg_odom_orientation_noise_density: 8.0e-03
 useOutlierDetection: false
 mahalanobis_TH: 22.0
 #mahalanobis_TH: -1.0
-odom_position_noise_density: 3.5e-02 #4 3.5
 odom_orientation_noise_density: 5.0e-02 #4
+odom_position_noise_density_x: 3.5e-02 #2.0e-01
+odom_position_noise_density_y: 3.5e-02
+odom_position_noise_density_z: 1.0
+
+
 
 velocity_noise_density_x: 0.035 #0.007
 velocity_noise_density_y: 0.035 #0.009
 velocity_noise_density_z: 0.035 #0.007
 
 
+
+
+
+
+
 #IMU Initial Biases in the IMU local frame - Biases are added!
-bias_ax: -0.42753
-bias_ay: 0.0543627
-bias_az: -0.0824804
+# bias_ax: -0.42753
+# bias_ay: 0.0543627
+# bias_az: -0.0824804
+# bias_gx: -1.24626e-07
+# bias_gy: -4.49618e-07
+# bias_gz: 2.82382e-08
+
+bias_ax: 0.42753
+bias_ay: -0.05
+bias_az: 0.08
 bias_gx: -1.24626e-07
 bias_gy: -4.49618e-07
 bias_gz: 2.82382e-08
-
-
 
 
 
@@ -130,7 +160,7 @@ gravity: 9.80665 #gravity constant (m/s^2)
 # To estimate:
 # CoM 3-D Position/Velocity
 # 3-D External Forces on the CoM
-estimateCoM: true   #Use the CoM EKF
+estimateCoM: false   #Use the CoM EKF
 
 #---------------------------------------------#
 #Specify the rest only if estimateCoM is true!!

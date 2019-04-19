@@ -370,7 +370,7 @@ Visualization Manager:
       Axes Radius: 0.00999999978
       Class: rviz/Pose
       Color: 255; 25; 0
-      Enabled: true
+      Enabled: false
       Head Length: 0.100000001
       Head Radius: 0.0500000007
       Name: VO_pose
@@ -379,7 +379,7 @@ Visualization Manager:
       Shape: Arrow
       Topic: /SERoW/comp/pose0
       Unreliable: false
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -472,18 +472,18 @@ Visualization Manager:
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.607969105
-        Y: -0.244324446
-        Z: 0.271056414
+        X: 0.166451126
+        Y: -0.25440082
+        Z: 0.312508374
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: -0.0245977193
+      Pitch: -0.0495977849
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.64169598
+      Yaw: 5.19171333
     Saved: ~
 Window Geometry:
   Displays:
