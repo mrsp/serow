@@ -54,6 +54,8 @@ private:
     {
       pl = pl / p;
       pr = pr / p;
+      pl += 0.5;
+      pr += 0.5;
     }
     else
     {
@@ -62,13 +64,13 @@ private:
     }
     // cout<<"PROB IN CONTACT"<<endl;
     // cout<<pl<<endl;
-    // cout<<pr<<endl;
+
     contactL=0;
-    if(pl>=0.35)
+    if(pl>=0.85)
       contactL=1;
 
     contactR=0;
-    if(pr>=0.35)
+    if(pr>=0.85)
       contactR=1;
     
   }

@@ -463,8 +463,8 @@ void IMUinEKF::updateWithContacts(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR,
 
 
        Matrix<double,6,6> N = Matrix<double,6,6>::Zero();
-       N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
-       N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
+       N.block<3,3>(0,0) = Rwb * JRQeJR * Rwb.transpose() ;
+       N.block<3,3>(3,3) = Rwb * JLQeJL * Rwb.transpose() ;
       
        Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
@@ -487,7 +487,7 @@ void IMUinEKF::updateWithContacts(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR,
        H.block<3,3>(0,9) = Matrix3d::Identity();
       
        Matrix3d N = Matrix3d::Zero();
-       N = Rwb * JRQeJR * Rwb.transpose() + Qc;
+       N = Rwb * JRQeJR * Rwb.transpose() ;
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
        updateStateSingleContact(Y,b,H,N,PI);
@@ -508,7 +508,7 @@ void IMUinEKF::updateWithContacts(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR,
        H.block<3,3>(0,12) = Matrix3d::Identity();
       
        Matrix3d N = Matrix3d::Zero();
-       N = Rwb * JLQeJL * Rwb.transpose() + Qc;
+       N = Rwb * JLQeJL * Rwb.transpose() ;
 
        Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
        PI.block<3,3>(0,0) = Matrix3d::Identity();
