@@ -350,9 +350,23 @@ void humanoid_ekf::loadIMUEKFparams()
         n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty,5.0e-02);
         n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz,5.0e-02);
 
-        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinx,5.0e-02);
-        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kiny,5.0e-02);
-        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->foot_kinz,5.0e-02);
+        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->leg_odom_px,5.0e-02);
+        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->leg_odom_py,5.0e-02);
+        n_p.param<double>("leg_odom_position_noise_density", imuInEKF->leg_odom_pz,5.0e-02);
+        n_p.param<double>("leg_odom_orientation_noise_density", imuInEKF->leg_odom_ax,1.0e-01);
+        n_p.param<double>("leg_odom_orientation_noise_density", imuInEKF->leg_odom_ay,1.0e-01);
+        n_p.param<double>("leg_odom_orientation_noise_density", imuInEKF->leg_odom_az,1.0e-01);
+    
+        n_p.param<double>("velocity_noise_density_x", imuInEKF->vel_px,1.0e-01);
+        n_p.param<double>("velocity_noise_density_y", imuInEKF->vel_py,1.0e-01);
+        n_p.param<double>("velocity_noise_density_z", imuInEKF->vel_pz,1.0e-01);
+
+        n_p.param<double>("odom_position_noise_density_x", imuInEKF->odom_px,1.0e-01);
+        n_p.param<double>("odom_position_noise_density_y", imuInEKF->odom_py,1.0e-01);
+        n_p.param<double>("odom_position_noise_density_z", imuInEKF->odom_pz,1.0e-01);
+        n_p.param<double>("odom_orientation_noise_density", imuInEKF->odom_ax,1.0e-01);
+        n_p.param<double>("odom_orientation_noise_density", imuInEKF->odom_ay,1.0e-01);
+        n_p.param<double>("odom_orientation_noise_density", imuInEKF->odom_az,1.0e-01);
         imuInEKF->setAccBias(T_B_A.linear()*Vector3d(bias_ax,bias_ay,bias_az));
         imuInEKF->setGyroBias(T_B_G.linear()*Vector3d(bias_gx,bias_gy,bias_gz));    
     }
@@ -634,7 +648,6 @@ void humanoid_ekf::run() {
                 if(useCoMEKF)
                     estimateWithCoMEKF();
                 
-
                 //Publish Data
                 publishJointEstimates();
                 publishBodyEstimates();
@@ -691,10 +704,13 @@ void humanoid_ekf::estimateWithInIMUEKF()
     if(predictWithImu)
     {
         if(leg_odom_inc){
-            //imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(),dr->getLFootIMVPPosition(), JRQnJRt, JLQnJLt,  cd->isRLegContact(),cd->isLLegContact());
+
+            imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(),dr->getLFootIMVPPosition(), JRQnJRt, JLQnJLt,  cd->isRLegContact(),cd->isLLegContact());
+
             //imuInEKF->updateWithTwist(vwb);
+
             //imuInEKF->updateWithTwistOrient(vwb,qwb);
-            imuInEKF->updateWithOdom(Twb.translation(),qwb);
+            //imuInEKF->updateWithOdom(Twb.translation(),qwb);
 
             leg_odom_inc = false;
         }
@@ -995,8 +1011,6 @@ void humanoid_ekf::computeKinTFs() {
         Tbs=Tbl;
         qbs=qbl;
         support_leg = cd->getSupportLeg();
-        cout<<"support leg"<<endl;
-        cout<<support_leg<<endl;
         if(support_leg.compare("RLeg"))
         {
             Tbs = Tbr;

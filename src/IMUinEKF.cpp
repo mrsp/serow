@@ -43,17 +43,17 @@ void IMUinEKF::init() {
     P(4,4) = 1e-1;
     P(5,5) = 1e-1;
     //Pos error
-    P(6,6)  = 1e-3;
-    P(7,7)  = 1e-3;
-    P(8,8)  = 1e-3;
+    P(6,6)  = 1e-2;
+    P(7,7)  = 1e-2;
+    P(8,8)  = 1e-2;
     //dR error
-    P(9,9)  = 1e-1;
-    P(10,10)  = 1e-1;
-    P(11,11)  = 1e-1;
+    P(9,9)  = 1e-2;
+    P(10,10)  = 1e-2;
+    P(11,11)  = 1e-2;
     //dL error
-    P(12,12)  = 1e-1;
-    P(13,13)  = 1e-1;
-    P(14,14)  = 1e-1;
+    P(12,12)  = 1e-2;
+    P(13,13)  = 1e-2;
+    P(14,14)  = 1e-2;
     //Biases
     P(15, 15) = 1e-1;
     P(16, 16) = 1e-1;
@@ -207,12 +207,12 @@ void IMUinEKF::predict(Vector3d angular_velocity, Vector3d linear_acceleration, 
     
     
     // Covariance Q with full state + biases
-    Qf(0, 0) = gyr_qx * gyr_qx ;
-    Qf(1, 1) = gyr_qy * gyr_qy ;
-    Qf(2, 2) = gyr_qz * gyr_qz ;
-    Qf(3, 3) = acc_qx * acc_qx ;
-    Qf(4, 4) = acc_qy * acc_qy ;
-    Qf(5, 5) = acc_qz * acc_qz ;
+    Qf(0, 0) = gyr_qx * gyr_qx *dt;
+    Qf(1, 1) = gyr_qy * gyr_qy *dt;
+    Qf(2, 2) = gyr_qz * gyr_qz *dt;
+    Qf(3, 3) = acc_qx * acc_qx *dt;
+    Qf(4, 4) = acc_qy * acc_qy *dt;
+    Qf(5, 5) = acc_qz * acc_qz *dt;
     
     Qc(0,0) = foot_contactx * foot_contacty;
     Qc(1,1) = foot_contacty * foot_contacty;
@@ -262,16 +262,15 @@ void IMUinEKF::updateWithTwist(Vector3d vy)
     H.block<3,3>(0,3) = Matrix3d::Identity();
     
     Matrix<double,3,3> N = Matrix<double,3,3>::Zero();
-    N(0,0) = foot_kinx * foot_kinx;
-    N(1,1) = foot_kiny * foot_kiny;
-    N(2,2) = foot_kinz * foot_kinz;
-
+    N(0,0) = vel_px * vel_px;
+    N(1,1) = vel_py * vel_py;
+    N(2,2) = vel_pz * vel_pz;
+    
     Matrix<double,3,7> PI = Matrix<double,3,7>::Zero();
     PI.block<3,3>(0,0) = Matrix3d::Identity();
     updateVelocity(Y, b, H,  N, PI);
     updateVars();
-    cout<<" X "<<endl;
-    cout<<X<<endl;
+  
 }
 void IMUinEKF::updateVelocity(Matrix<double,7,1> Y_, Matrix<double,7,1> b_, Matrix<double,3,21> H_, Matrix3d N_, Matrix<double,3,7> PI_)
 {
@@ -314,12 +313,12 @@ void IMUinEKF::updateWithOdom(Vector3d py, Quaterniond qy)
     H.block<3,3>(3,6) = Matrix3d::Identity();
     
     Matrix<double,6,6> N = Matrix<double,6,6>::Zero();
-    N(0,0) = 1.0e-4;
-    N(1,1) = 1.0e-4;
-    N(2,2) = 1.0e-4;
-    N(3,3) = foot_kinx * foot_kinx;
-    N(4,4) = foot_kiny * foot_kiny;
-    N(5,5) = foot_kinz * foot_kinz;
+    N(0,0) = odom_ax * odom_ax;
+    N(1,1) = odom_ay * odom_ay;
+    N(2,2) = odom_az * odom_az;
+    N(3,3) = odom_px * odom_px;
+    N(4,4) = odom_py * odom_py;
+    N(5,5) = odom_pz * odom_pz;
 
     Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
     PI.block<3,3>(0,0) = Matrix3d::Identity();
@@ -384,12 +383,12 @@ void IMUinEKF::updateWithTwistOrient(Vector3d vy, Quaterniond qy)
     H.block<3,3>(3,3) = Matrix3d::Identity();
     
     Matrix<double,6,6> N = Matrix<double,6,6>::Zero();
-    N(0,0) = 1.0e-4;
-    N(1,1) = 1.0e-4;
-    N(2,2) = 1.0e-4;
-    N(3,3) = foot_kinx * foot_kinx;
-    N(4,4) = foot_kiny * foot_kiny;
-    N(5,5) = foot_kinz * foot_kinz;
+    N(0,0) = leg_odom_ax * leg_odom_ax;
+    N(1,1) = leg_odom_ay * leg_odom_ay;
+    N(2,2) = leg_odom_az * leg_odom_az;
+    N(3,3) = vel_px * vel_px;
+    N(4,4) = vel_py * vel_py;
+    N(5,5) = vel_pz * vel_pz;
 
     Matrix<double,6,14> PI = Matrix<double,6,14>::Zero();
     PI.block<3,3>(0,0) = Matrix3d::Identity();
@@ -433,9 +432,7 @@ void IMUinEKF::updateVelocityOrientation(Matrix<double,14,1> Y_, Matrix<double,1
 void IMUinEKF::updateWithContacts(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL)
 {
 
-   std::cout<<" CONTACT STATUS R/L"<<std::endl;
-   std::cout<<s_pR<<std::endl;
-   std::cout<<s_pL<<std::endl;
+
    Rwb = X.block<3,3>(0,0);
 
 
@@ -518,8 +515,7 @@ void IMUinEKF::updateWithContacts(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR,
        updateStateSingleContact(Y,b,H,N,PI);
        updateVars();
    }
-   std::cout<<"STATE UPDATE "<<std::endl;
-   std::cout<<X<<std::endl;
+ 
 }
 
 
@@ -595,6 +591,7 @@ void IMUinEKF::updateVars()
     bias_ay = bacc(1);
     bias_az = bacc(2);
     
+
     
     w = w_ - bgyr;
     a = a_ - bacc;
