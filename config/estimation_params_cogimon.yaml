@@ -52,14 +52,14 @@ mass: 70.5957  #robot mass
 ##Schmitt Trigger - Contact Classifier
 LLegUpThres: 142 #Schmitt Trigger High Threshold in Newtons (N)
 LLegLowThres: 42.5 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 15.0
+LosingContact: 25.0
 StrikingContact: 800
 VelocityThres: 0.1
 medianWindow: 10
 
 #Compute Joint Velocities
 joint_cutoff_freq: 8
-joint_noise_density: 0.02 # rad
+joint_noise_density: 0.025 # rad
 
 
 useGEM: true
