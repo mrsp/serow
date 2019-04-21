@@ -2,28 +2,39 @@
 #include <string.h>
 
 
-namespace serow{
+
+
+namespace serow
+{
 class ContactDetection
 {
 private:
   Gaussian gs;
+  //Probabilistic Kinematic - Contact Wrench detection
   double sigmalf, sigmarf;
   double sigmalc, sigmarc;
+  double sigmalv, sigmarv;
   double xmin, xmax, ymin, ymax;
   double lfmin, rfmin;
-  double plf, prf, plc, prc;
+  double plf, prf, plc, prc, plv, prv;
   double pl, pr, p;
   double VelocityThres;
-  bool firstContact;
+  bool firstContact, useCOP, useKin;
   int contactL, contactR;
-
-  //Smidtt Trigger
-  double LegLowThres, LegHighThres, StrikingContact;
+  double prob_TH;
   std::string support_foot_frame, support_leg, lfoot_frame, rfoot_frame;
-  
+
+  //Smidtt Trigger detection
+  double LegLowThres, LegHighThres, StrikingContact;
+
   double computeForceContactProb(double fmin, double sigma, double f)
   {
     return 1.000 - gs.cdf(fmin, f, sigma);
+  }
+
+  double computeKinContactProb(double vel_min, double sigma, double v)
+  {
+    return gs.cdf(vel_min, v, sigma);
   }
 
   double computeCOPContactProb(double max, double min, double sigma, double cop)
@@ -38,17 +49,32 @@ private:
     }
   }
 
-  double computeContactProb(double lf, double rf, double coplx, double coply, double coprx, double copry)
+  double computeContactProb(double lf, double rf, double coplx, double coply, double coprx, double copry, double lv, double rv)
   {
 
     plf = computeForceContactProb(lfmin, sigmalf, lf);
-    prf = computeForceContactProb(rfmin, sigmarf, rf);
-    plc = computeCOPContactProb(xmax, xmin, sigmalc, coplx) * computeCOPContactProb(ymax, ymin, sigmalc, coply);
-    prc = computeCOPContactProb(xmax, xmin, sigmarc, coprx) * computeCOPContactProb(ymax, ymin, sigmarc, copry);
-    pr = prf * prc;
-    pl = plf * plc;
-    p = pl + pr;
+    pl = plf;
 
+    prf = computeForceContactProb(rfmin, sigmarf, rf);
+    pr = prf;
+
+    //To utilize the full contact-wrench - careful for non-coplanar contacts
+    if (useCOP)
+    {
+      plc = computeCOPContactProb(xmax, xmin, sigmalc, coplx) * computeCOPContactProb(ymax, ymin, sigmalc, coply);
+      prc = computeCOPContactProb(xmax, xmin, sigmarc, coprx) * computeCOPContactProb(ymax, ymin, sigmarc, copry);
+      pl *= plc;
+      pr *= prc;
+    }
+    if (useKin)
+    {
+      plv = computeKinContactProb(VelocityThres, sigmalv, lv);
+      prv = computeKinContactProb(VelocityThres, sigmarv, rv);
+      pl *= plv;
+      pr *= prv;
+    }
+
+    p = pl + pr;
 
     if (p != 0)
     {
@@ -62,22 +88,19 @@ private:
       pl = 0;
       pr = 0;
     }
-    // cout<<"PROB IN CONTACT"<<endl;
-    // cout<<pl<<endl;
 
-    contactL=0;
-    if(pl>=0.85)
-      contactL=1;
+    contactL = 0;
+    if (pl >= prob_TH)
+      contactL = 1;
 
-    contactR=0;
-    if(pr>=0.85)
-      contactR=1;
-    
+    contactR = 0;
+    if (pr >= prob_TH)
+      contactR = 1;
   }
 
 public:
   void init(std::string lfoot_frame_, std::string rfoot_frame_, double lfmin_, double rfmin_, double xmin_, double xmax_,
-            double ymin_, double ymax_, double sigmalf_, double sigmarf_, double sigmalc_, double sigmarc_, double VelocityThres_)
+            double ymin_, double ymax_, double sigmalf_, double sigmarf_, double sigmalc_, double sigmarc_, double VelocityThres_, double sigmalv_, double sigmarv_, bool useCOP_ = false, bool useKin_ = false, double prob_TH_ = 0.9)
   {
     lfoot_frame = lfoot_frame_;
     rfoot_frame = rfoot_frame_;
@@ -91,261 +114,46 @@ public:
     sigmarf = sigmarf_;
     sigmalc = sigmalc_;
     sigmarc = sigmarc_;
+    sigmalv = sigmalv_;
+    sigmarv = sigmarv_;
     contactL = 0;
     contactR = 0;
     pl = 0;
     pr = 0;
     plf = 0;
-    prf = 0; 
+    prf = 0;
     plc = 0;
     prc = 0;
+    plv = 0;
+    prv = 0;
     VelocityThres = VelocityThres_;
+    prob_TH = prob_TH_;
+    useCOP = useCOP_;
+    useKin = useKin_;
     firstContact = true;
   }
 
-  void init(std::string lfoot_frame_, std::string rfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_)
+  void init(std::string lfoot_frame_, std::string rfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_, double prob_TH_ = 0.9)
   {
 
     lfoot_frame = lfoot_frame_;
     rfoot_frame = rfoot_frame_;
-    LegHighThres = LegHighThres_; 
-    LegLowThres = LegLowThres_;  
-    StrikingContact = StrikingContact_; 
+    LegHighThres = LegHighThres_;
+    LegLowThres = LegLowThres_;
+    StrikingContact = StrikingContact_;
     VelocityThres = VelocityThres_;
     firstContact = true;
+    prob_TH = prob_TH_;
     pl = 0;
     pr = 0;
   }
 
-
-  double getLLegContactProb()
-  {
-    return pl;
-  }
-
-  double getRLegContactProb()
-  {
-    return pr;
-  }
-
-  int isLLegContact()
-  {
-    return contactL;
-  }
-
-  int isRLegContact()
-  {
-    return contactR;
-  }
-
-
-  std::string getSupportFrame()
-  {
-    return support_foot_frame;
-  }
-  std::string getSupportLeg()
-  {
-    return support_leg;
-  }
-
-
-
-  void SchmittTriggerWithKinematics(double lf, double rf, double lvnorm, double rvnorm)
-  {
-    contactL = 0;
-    contactR = 0;
-    
-    p = rf+lf;
-    pl = 0;
-    pr = 0;
-
-    if(p != 0)
-    {
-      pl = lf/p;
-      pr = rf/p;
-    }
-
-    if(firstContact)
-    {
-       if(lf>rf)
-       {
-            // Initial support leg
-            support_leg = "LLeg";
-            support_foot_frame = lfoot_frame;
-        }
-        else
-        {
-            support_leg = "RLeg";
-            support_foot_frame = rfoot_frame;
-        }
-        if(pl>=0.2)
-          contactL=1;
-
-        contactR=0;
-        if(pr>=0.2)
-          contactR=1;
-          
-        firstContact = false;
-    }
-    else
-    {
-            //Check if Left Leg is support
-            if (lvnorm<VelocityThres)
-            {
-                if ( lf > LegHighThres  && lf<StrikingContact)
-                {
-                    contactL = 1;
-                }
-            }
-            else
-            {
-                if (lf < LegLowThres)
-                {
-                    contactL = 0;
-                }
-            }
-
-            //Check if Right Leg is support
-            if (rvnorm<VelocityThres)
-            {
-                if ( rf > LegHighThres  && rf<StrikingContact)
-                {
-                    contactR = 1;
-                }
-            }
-            else
-            {
-                if (rf < LegLowThres)
-                {
-                    contactR = 0;
-                }
-            }
-            
-            //Determine support
-            if(contactL && contactR)
-            {
-                if(lf>rf)
-                {
-                    support_leg = "LLeg";
-                    support_foot_frame = lfoot_frame;
-                }
-                else
-                {
-                    support_leg = "RLeg";
-                    support_foot_frame = rfoot_frame;
-                }
-            }
-            else if(contactL)
-            {
-                support_leg = "LLeg";
-                support_foot_frame = lfoot_frame;
-            }
-            else if(contactR)
-            {
-                support_leg = "RLeg";
-                support_foot_frame = rfoot_frame;
-            }
-    }
-    
-
-  }
-
-
-
-
-
-  void SchmittTrigger(double lf, double rf)
-  {
-    contactL = 0;
-    contactR = 0;
-    
-    p=rf+lf;
-    pl = 0;
-    pr = 0;
-
-    if(p != 0)
-    {
-      pl = lf/p;
-      pr = rf/p;
-    }
-    // Initial support leg
-    if(firstContact)
-    {
-       if(lf>rf)
-       {
-            support_leg = "LLeg";
-            support_foot_frame = lfoot_frame;
-        }
-        else
-        {
-            support_leg = "RLeg";
-            support_foot_frame = rfoot_frame;
-        }
-        firstContact = false;
-    }
-    else
-    {
-                if ( lf > LegHighThres  && lf<StrikingContact)
-                {
-                    contactL = 1;
-                }
-                if (lf < LegLowThres)
-                {
-                    contactL = 0;
-                }
-           
-
-           
-                if ( rf > LegHighThres  && rf<StrikingContact)
-                {
-                    contactR = 1;
-                }
-            
-                if (rf < LegLowThres)
-                {
-                    contactR = 0;
-                }
-            
-            
-            //Determine support
-            if(contactL && contactR)
-            {
-                if(lf>rf)
-                {
-                    support_leg = "LLeg";
-                    support_foot_frame = lfoot_frame;
-                }
-                else
-                {
-                    support_leg = "RLeg";
-                    support_foot_frame = rfoot_frame;
-                }
-            }
-            else if(contactL)
-            {
-                support_leg = "LLeg";
-                support_foot_frame = lfoot_frame;
-            }
-            else if(contactR)
-            {
-                support_leg = "RLeg";
-                support_foot_frame = rfoot_frame;
-            }
-    }
-    
-
-  }
-
-
-
-
-
-  void computeSupportFoot(double lf, double rf, double coplx, double coply, double coprx, double copry, double lvnorm,double rvnorm)
+  void computeSupportFoot(double lf, double rf, double coplx, double coply, double coprx, double copry, double lvnorm, double rvnorm)
   {
 
-    computeContactProb(lf,  rf,  coplx,  coply,  coprx,  copry);
+    computeContactProb(lf, rf, coplx, coply, coprx, copry, lvnorm, rvnorm);
     //Choose Initial Support Foot based on Contact Force
-    if(firstContact)
+    if (firstContact)
     {
       if (pl > pr)
       {
@@ -374,5 +182,208 @@ public:
       }
     }
   }
+
+  double getLLegContactProb()
+  {
+    return pl;
+  }
+
+  double getRLegContactProb()
+  {
+    return pr;
+  }
+
+  int isLLegContact()
+  {
+    return contactL;
+  }
+
+  int isRLegContact()
+  {
+    return contactR;
+  }
+
+  std::string getSupportFrame()
+  {
+    return support_foot_frame;
+  }
+  std::string getSupportLeg()
+  {
+    return support_leg;
+  }
+
+  void SchmittTriggerWithKinematics(double lf, double rf, double lvnorm, double rvnorm)
+  {
+    contactL = 0;
+    contactR = 0;
+
+    p = rf + lf;
+    pl = 0;
+    pr = 0;
+
+    if (p != 0)
+    {
+      pl = lf / p + 0.5;
+      pr = rf / p + 0.5;
+    }
+
+    if (firstContact)
+    {
+      if (lf > rf)
+      {
+        // Initial support leg
+        support_leg = "LLeg";
+        support_foot_frame = lfoot_frame;
+      }
+      else
+      {
+        support_leg = "RLeg";
+        support_foot_frame = rfoot_frame;
+      }
+      if (pl >= prob_TH)
+        contactL = 1;
+
+      contactR = 0;
+      if (pr >= prob_TH)
+        contactR = 1;
+
+      firstContact = false;
+    }
+    else
+    {
+      //Check if Left Leg is support
+      if (lvnorm < VelocityThres)
+      {
+        if (lf > LegHighThres && lf < StrikingContact)
+        {
+          contactL = 1;
+        }
+      }
+      else
+      {
+        if (lf < LegLowThres)
+        {
+          contactL = 0;
+        }
+      }
+
+      //Check if Right Leg is support
+      if (rvnorm < VelocityThres)
+      {
+        if (rf > LegHighThres && rf < StrikingContact)
+        {
+          contactR = 1;
+        }
+      }
+      else
+      {
+        if (rf < LegLowThres)
+        {
+          contactR = 0;
+        }
+      }
+
+      //Determine support
+      if (contactL && contactR)
+      {
+        if (lf > rf)
+        {
+          support_leg = "LLeg";
+          support_foot_frame = lfoot_frame;
+        }
+        else
+        {
+          support_leg = "RLeg";
+          support_foot_frame = rfoot_frame;
+        }
+      }
+      else if (contactL)
+      {
+        support_leg = "LLeg";
+        support_foot_frame = lfoot_frame;
+      }
+      else if (contactR)
+      {
+        support_leg = "RLeg";
+        support_foot_frame = rfoot_frame;
+      }
+    }
+  }
+
+  void SchmittTrigger(double lf, double rf)
+  {
+    contactL = 0;
+    contactR = 0;
+
+    p = rf + lf;
+    pl = 0;
+    pr = 0;
+
+    if (p != 0)
+    {
+      pl = lf / p;
+      pr = rf / p;
+    }
+    // Initial support leg
+    if (firstContact)
+    {
+      if (lf > rf)
+      {
+        support_leg = "LLeg";
+        support_foot_frame = lfoot_frame;
+      }
+      else
+      {
+        support_leg = "RLeg";
+        support_foot_frame = rfoot_frame;
+      }
+      firstContact = false;
+    }
+    else
+    {
+      if (lf > LegHighThres && lf < StrikingContact)
+      {
+        contactL = 1;
+      }
+      if (lf < LegLowThres)
+      {
+        contactL = 0;
+      }
+
+      if (rf > LegHighThres && rf < StrikingContact)
+      {
+        contactR = 1;
+      }
+
+      if (rf < LegLowThres)
+      {
+        contactR = 0;
+      }
+
+      //Determine support
+      if (contactL && contactR)
+      {
+        if (lf > rf)
+        {
+          support_leg = "LLeg";
+          support_foot_frame = lfoot_frame;
+        }
+        else
+        {
+          support_leg = "RLeg";
+          support_foot_frame = rfoot_frame;
+        }
+      }
+      else if (contactL)
+      {
+        support_leg = "LLeg";
+        support_foot_frame = lfoot_frame;
+      }
+      else if (contactR)
+      {
+        support_leg = "RLeg";
+        support_foot_frame = rfoot_frame;
+      }
+    }
+  }
 };
-}
