@@ -168,9 +168,9 @@ private:
     double weightl, weightr;
 
 
-	bool useGEM;
+	bool useGEM, ContactDetectionWithCOP, ContactDetectionWithKinematics;
 	double foot_polygon_xmin, foot_polygon_xmax, foot_polygon_ymin, foot_polygon_ymax;
-	double lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma;
+	double lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, lvnorm_sigma, rvnorm_sigma, probabilisticContactThreshold;
 	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT, offsetGT,offsetGTCoM;
   	Vector3d copl, copr;
 	Affine3d Tws, Twb, Twb_; //From support s to world frame;
