@@ -36,7 +36,7 @@ using std::string;
 using std::cerr;
 using std::endl;
 
-int main( int argc, char** argv )
+int main(int argc, char** argv)
 {
     ros::init(argc, argv, "serow");
     ros::NodeHandle n;
