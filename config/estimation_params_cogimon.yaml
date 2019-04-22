@@ -52,13 +52,13 @@ mass: 70.5957  #robot mass
 ##Schmitt Trigger - Contact Classifier
 LLegUpThres: 142 #Schmitt Trigger High Threshold in Newtons (N)
 LLegLowThres: 42.5 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 40.0
+LosingContact: 30.0
 StrikingContact: 800
 VelocityThres: 0.1
 medianWindow: 10
 
 #Compute Joint Velocities
-joint_cutoff_freq: 14
+joint_cutoff_freq: 8
 joint_noise_density: 0.025 # rad
 
 
@@ -67,11 +67,17 @@ foot_polygon_xmin: -0.1
 foot_polygon_xmax: 0.1
 foot_polygon_ymin: -0.05
 foot_polygon_ymax: 0.05
-lforce_sigma: 2.0
-rforce_sigma: 2.0
-lcop_sigma: 0.02
-rcop_sigma: 0.02
-VelocityThres: 0.15
+lforce_sigma: 3.0
+rforce_sigma: 3.0
+lcop_sigma: 0.01
+rcop_sigma: 0.01
+VelocityThres: 0.1
+lvnorm_sigma: 0.05
+rvnorm_sigma: 0.05
+probabilisticContactThreshold: 0.95
+ContactDetectionWithCOP: true
+ContactDetectionWithKinematics: true
+
 
 #Mahony Filter for attitude
 useMahony: true
@@ -113,7 +119,7 @@ gyroscope_noise_density: 9.7738e-04 # rad/s  #Continuous Time
 #Odometry Measurement Noise std:
 #LO
 leg_odom_position_noise_density: 5.0e-04
-leg_odom_orientation_noise_density: 8.0e-03
+leg_odom_orientation_noise_density: 5.0e-02
 #VO
 useOutlierDetection: false
 mahalanobis_TH: 22.0

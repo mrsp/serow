@@ -24,6 +24,7 @@ private:
   double prob_TH;
   std::string support_foot_frame, support_leg, lfoot_frame, rfoot_frame;
 
+  double deltalfz, deltarfz, lf_, rf_;
   //Smidtt Trigger detection
   double LegLowThres, LegHighThres, StrikingContact;
 
@@ -36,6 +37,7 @@ private:
   {
     return gs.cdf(vel_min, v, sigma);
   }
+
 
   double computeCOPContactProb(double max, double min, double sigma, double cop)
   {
@@ -131,6 +133,9 @@ public:
     useCOP = useCOP_;
     useKin = useKin_;
     firstContact = true;
+    deltalfz = 0;
+    deltarfz = 0;
+
   }
 
   void init(std::string lfoot_frame_, std::string rfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_, double prob_TH_ = 0.9)
@@ -146,11 +151,20 @@ public:
     prob_TH = prob_TH_;
     pl = 0;
     pr = 0;
-  }
+    deltalfz = 0;
+    deltarfz = 0;
 
+  }
+  double getDiffForce()
+  {
+    cout<<"Delta FORCE"<<endl;
+    cout<<fabs(deltalfz + deltarfz)<<endl;
+    return fabs(deltalfz + deltarfz);
+  }
   void computeSupportFoot(double lf, double rf, double coplx, double coply, double coprx, double copry, double lvnorm, double rvnorm)
   {
 
+   
     computeContactProb(lf, rf, coplx, coply, coprx, copry, lvnorm, rvnorm);
     //Choose Initial Support Foot based on Contact Force
     if (firstContact)
@@ -181,6 +195,14 @@ public:
         support_foot_frame = rfoot_frame;
       }
     }
+
+    if(!firstContact)
+    {
+      deltalfz = lf - lf_;
+      deltarfz = rf - rf_;
+    }
+    lf_ = lf;
+    rf_ = rf;
   }
 
   double getLLegContactProb()
@@ -308,6 +330,13 @@ public:
         support_foot_frame = rfoot_frame;
       }
     }
+    if(!firstContact)
+    {
+      deltalfz = lf - lf_;
+      deltarfz = rf - rf_;
+    }
+    lf_ = lf;
+    rf_ = rf;
   }
 
   void SchmittTrigger(double lf, double rf)
@@ -385,5 +414,13 @@ public:
         support_foot_frame = rfoot_frame;
       }
     }
+    if(!firstContact)
+    {
+      deltalfz = lf - lf_;
+      deltarfz = rf - rf_;
+    }
+    lf_ = lf;
+    rf_ = rf;
   }
 };
+}

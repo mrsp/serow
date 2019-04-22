@@ -258,6 +258,8 @@ void humanoid_ekf::loadparams()
     n_p.param<double>("Tau1", Tau1, 0.01);
 
     n_p.param<double>("mass", m, 5.14);
+    n_p.param<double>("gravity", g, 9.81);
+
 }
 
 void humanoid_ekf::loadJointKFparams()
@@ -276,7 +278,6 @@ void humanoid_ekf::loadIMUEKFparams()
     n_p.param<double>("bias_gx", bias_gx, 0.0);
     n_p.param<double>("bias_gy", bias_gy, 0.0);
     n_p.param<double>("bias_gz", bias_gz, 0.0);
-    n_p.param<double>("gravity", g, 9.81);
 
     if (!useInIMUEKF)
     {
@@ -693,9 +694,10 @@ void humanoid_ekf::estimateWithInIMUEKF()
         if (leg_odom_inc)
         {
 
-            imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), (2.0 - cd->getRLegContactProb()) * JRQnJRt, (2.0 - cd->getLLegContactProb()) * JLQnJLt, cd->isRLegContact(), cd->isLLegContact());
-
-            //imuInEKF->updateWithTwist(vwb);
+            //imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), (2.0 - cd->getRLegContactProb()) * JRQnJRt + cd->getDiffForce()/2500.0*Matrix3d::Identity(),
+            // (2.0 - cd->getLLegContactProb()) * JLQnJLt + cd->getDiffForce()/2500.0*Matrix3d::Identity(), cd->isRLegContact(), cd->isLLegContact());
+            //imuInEKF->updateWithOrient(qwb);
+            imuInEKF->updateWithTwist(vwb,  0*cd->getDiffForce()/(m*g)*Matrix3d::Identity());
 
             //imuInEKF->updateWithTwistOrient(vwb,qwb);
             //imuInEKF->updateWithOdom(Twb.translation(),qwb);

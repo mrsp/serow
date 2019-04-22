@@ -11,8 +11,8 @@ class deadReckoning
     Eigen::Vector3d RpRm, LpLm, RpRmb, LpLmb;
 
     Eigen::Vector3d pwr, pwl, pwb, pwb_;
-    Eigen::Vector3d vwr, vwl, vwb;
-    Eigen::Matrix3d Rwr, Rwl;
+    Eigen::Vector3d vwr, vwl, vwb, vwb_r, vwb_l;
+    Eigen::Matrix3d Rwr, Rwl, vwb_cov;
     Eigen::Vector3d pwl_, pwr_;
     Eigen::Vector3d pb_l, pb_r;
     Eigen::Matrix3d Rwl_, Rwr_;
@@ -32,6 +32,10 @@ class deadReckoning
                   Eigen::Vector3d plf_ = Eigen::Vector3d::Zero(), Eigen::Vector3d prf_ = Eigen::Vector3d::Zero())
     {
         firstrun = true;
+        vwb_cov = Eigen::Matrix3d::Zero();
+        vwb_l = Eigen::Vector3d::Zero();
+        vwb_r = Eigen::Vector3d::Zero();
+
         pwl_ = pwl0;
         pwr_ = pwr0;
         Rwl_ = Rwl0;
@@ -84,19 +88,28 @@ class deadReckoning
                             Eigen::Vector3d vbl, Eigen::Vector3d vbr, double wl_, double wr_)
     {
 
-        /*
-            if(lfz>rfz)
-                vwbKCFS= -wedge(omegawb) * Rwb * pbl - Rwb * vbl;
-            else
-                vwbKCFS= -wedge(omegawb) * Rwb * pbr - Rwb * vbr;
-        */
+        
+        vwb_l.noalias() = -wedge(omegawb)  * pbl - vbl;
+        vwb_l =  Rwb * vwb_l;
+        vwb_r.noalias() = -wedge(omegawb)  * pbr - vbr;
+        vwb_r =  Rwb * vwb_r;
 
-       
-        vwbKCFS.noalias() = wl_ * (-wedge(omegawb) * Rwb * pbl - Rwb * vbl);
-        vwbKCFS.noalias() += wr_ * (-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
 
-        //if(!USE_CF)
-        vwb = vwbKCFS;
+
+         if(wl_ > wr_)
+            vwb= vwb_l;
+         else
+            vwb= vwb_r;
+        
+
+
+    }
+
+    Eigen::Matrix3d getVelocityCovariance()
+    {
+        cout<<"vwb_cov"<<endl;
+        cout<<vwb_cov<<endl;
+        return vwb_cov;
     }
 
     void computeLegKCFS(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr, Eigen::Vector3d omegawb, Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
@@ -241,10 +254,7 @@ class deadReckoning
 
         //computeIMVP();
         computeIMVPFT(lf, rf, lt, rt);
-        std::cout<<" PBR "<<std::endl;
-        std::cout<<pbr<<std::endl;
-        std::cout<<pbl<<std::endl;
-        std::cout<<" IMVP "<<std::endl;
+
 
         RpRmb = Rbr * RpRm + pbr;
         LpLmb = Rbl * LpLm + pbl;
@@ -282,8 +292,17 @@ class deadReckoning
             vwb = (pwb - pwb_) * freq;
         else
             firstrun = false;
-        //cout<<"DEAD RECKONING "<<endl;
-        //cout<<pwb<<endl;
+       
+       
+        if(wl>wr)
+            vwb_cov.noalias() =  (vwb_l - vwb) * (vwb_l - vwb).transpose();
+        else
+            vwb_cov.noalias() = (vwb_r - vwb) * (vwb_r - vwb).transpose();
+
+        
+
+
+ 
     }
 
 

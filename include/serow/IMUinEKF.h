@@ -60,9 +60,10 @@ class IMUinEKF
 	Matrix3d exp_SO3(Vector3d v);
 	Matrix<double, 21, 21> Adjoint(Matrix<double, 7, 7> X_);
 
-	void updateWithTwist(Vector3d vy);
+	void updateWithTwist(Vector3d vy, Matrix3d Rvy);
 	void updateVelocity(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix3d N_, Matrix<double, 3, 7> PI_);
-
+	void updateWithOrient(Quaterniond qy);
+	void updateOrientation(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix<double, 3, 3> N_, Matrix<double, 3, 7> PI_);
 	void updateVars();
 
 	void setdt(double dtt)
