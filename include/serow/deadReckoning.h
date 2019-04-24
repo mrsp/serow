@@ -84,14 +84,14 @@ class deadReckoning
         return vwb;
     }
 
-    void computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
+    void computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegab, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                             Eigen::Vector3d vbl, Eigen::Vector3d vbr, double wl_, double wr_)
     {
 
         
-        vwb_l.noalias() = -wedge(omegawb)  * pbl - vbl;
+        vwb_l.noalias() = -wedge(omegab)  * pbl - vbl;
         vwb_l =  Rwb * vwb_l;
-        vwb_r.noalias() = -wedge(omegawb)  * pbr - vbr;
+        vwb_r.noalias() = -wedge(omegab)  * pbr - vbr;
         vwb_r =  Rwb * vwb_r;
 
 
@@ -101,6 +101,8 @@ class deadReckoning
          else
             vwb= vwb_r;
         
+   
+       
 
 
     }
@@ -219,7 +221,7 @@ class deadReckoning
     }
 
     void computeDeadReckoning(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr,
-                              Eigen::Vector3d omegawb,
+                              Eigen::Vector3d omegawb, Eigen::Vector3d bomegab,
                               Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                               Eigen::Vector3d vbl, Eigen::Vector3d vbr,
                               Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
@@ -234,7 +236,7 @@ class deadReckoning
         wl = (lfz + ef) / (lfz + rfz + 2.0 * ef);
         wr = (rfz + ef) / (lfz + rfz + 2.0 * ef);
 
-        computeBodyVelKCFS(Rwb, omegawb, pbl, pbr, vbl, vbr, wl, wr);
+        computeBodyVelKCFS(Rwb, bomegab, pbl, pbr, vbl, vbr, wl, wr);
         /*
             if(USE_CF)
             {
@@ -293,14 +295,11 @@ class deadReckoning
         else
             firstrun = false;
        
-       
-        if(wl>wr)
-            vwb_cov.noalias() =  (vwb_l - vwb) * (vwb_l - vwb).transpose();
-        else
-            vwb_cov.noalias() = (vwb_r - vwb) * (vwb_r - vwb).transpose();
+    
+        vwb_cov.noalias() =  wl * (vwb_l - vwb) * (vwb_l - vwb).transpose();
+        vwb_cov.noalias() += wr * (vwb_r - vwb) * (vwb_r - vwb).transpose();
 
         
-
 
  
     }

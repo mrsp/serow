@@ -113,16 +113,16 @@ private:
 	int no_motion_it, no_motion_it_threshold;
 	double no_motion_threshold;
 	Quaterniond  q_update, q_update_, q_leg_update, q_now, q_prev;
-	Vector3d  pos_update, pos_update_, pos_leg_update, CoM_gt, temp;
+	Vector3d  pos_update, pos_update_, pos_leg_update, CoM_gt, temp, gt_odom;
 	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RL, T_FT_LL, T_B_GT;
-	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, qoffsetGT;
+	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, tempq_, gt_odomq; 
 	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM, useOutlierDetection;
     bool debug_mode;
 	//ROS Messages
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
 	sensor_msgs::Imu imu_msg;
 	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg, leftleg_odom_msg, rightleg_odom_msg,
-	ground_truth_com_odom_msg, CoM_odom_msg;
+	ground_truth_com_odom_msg, CoM_odom_msg, ground_truth_odom_msg_, ground_truth_odom_pub_msg;
 	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg, rel_supportPose_msg, rel_swingPose_msg;
 	std_msgs::String support_leg_msg;
 	geometry_msgs::WrenchStamped RLeg_est_msg, LLeg_est_msg, lfsr_msg, rfsr_msg, external_force_filt_msg;

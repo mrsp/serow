@@ -147,7 +147,7 @@ namespace serow
 
         //void updateJointConfig(const Eigen::VectorXd& q)
 
-        void updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap, double joint_std = 0.03)
+        void updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap, double joint_std)
         {
             mapJointNamesIDs(qmap,qdotmap);
             if (has_floating_base_)
