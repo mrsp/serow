@@ -337,9 +337,9 @@ void humanoid_ekf::loadIMUEKFparams()
         n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qy, 1.0e-05);
         n_p.param<double>("gyroscope_bias_random_walk", imuInEKF->gyrb_qz, 1.0e-05);
 
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactx, 5.0e-02);
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty, 5.0e-02);
-        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz, 5.0e-02);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactx, 1.0e-01);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contacty, 1.0e-01);
+        n_p.param<double>("contact_random_walk", imuInEKF->foot_contactz, 1.0e-01);
 
         n_p.param<double>("leg_odom_position_noise_density", imuInEKF->leg_odom_px, 5.0e-02);
         n_p.param<double>("leg_odom_position_noise_density", imuInEKF->leg_odom_py, 5.0e-02);
@@ -672,7 +672,6 @@ void humanoid_ekf::estimateWithInIMUEKF()
         imuInEKF->setBodyOrientation(Twb.linear());
         imuInEKF->setLeftContact(Vector3d(dr->getLFootIMVPPosition()(0), dr->getLFootIMVPPosition()(1), 0.00));
         imuInEKF->setRightContact(Vector3d(dr->getRFootIMVPPosition()(0), dr->getRFootIMVPPosition()(1), 0.00));
-        cout << "Init " << imuInEKF->X << endl;
         imuInEKF->firstrun = false;
     }
 
@@ -694,11 +693,10 @@ void humanoid_ekf::estimateWithInIMUEKF()
         if (leg_odom_inc)
         {
 
-            //imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), (2.0 - cd->getRLegContactProb()) * JRQnJRt + cd->getDiffForce()/2500.0*Matrix3d::Identity(),
-            // (2.0 - cd->getLLegContactProb()) * JLQnJLt + cd->getDiffForce()/2500.0*Matrix3d::Identity(), cd->isRLegContact(), cd->isLLegContact());
+            imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), (2.0 - cd->getRLegContactProb()) * JRQnJRt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(),
+             (2.0 - cd->getLLegContactProb()) * JLQnJLt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(), cd->isRLegContact(), cd->isLLegContact());
             //imuInEKF->updateWithOrient(qwb);
-            imuInEKF->updateWithTwist(vwb,  0*cd->getDiffForce()/(m*g)*Matrix3d::Identity());
-
+            //imuInEKF->updateWithTwist(vwb, dr->getVelocityCovariance() +  cd->getDiffForce()/(m*g)*Matrix3d::Identity());
             //imuInEKF->updateWithTwistOrient(vwb,qwb);
             //imuInEKF->updateWithOdom(Twb.translation(),qwb);
 
@@ -1016,8 +1014,9 @@ void humanoid_ekf::computeKinTFs()
     {
         if (useMahony)
         {
-            dr->computeDeadReckoning(mh->getR(), Tbl.linear(), Tbr.linear(), mh->getGyro(), Tbl.translation(), Tbr.translation(), vbl, vbr, omegabl, omegabr,
-                                     LLegForceFilt, RLegForceFilt, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            dr->computeDeadReckoning(mh->getR(), Tbl.linear(), Tbr.linear(), mh->getGyro(), T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
+                                    Tbl.translation(), Tbr.translation(), vbl, vbr, omegabl, omegabr,
+                                    LLegForceFilt, RLegForceFilt, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
 
             //dr->computeDeadReckoningGEM(mh->getR(),  Tbl.linear(),  Tbr.linear(), mh->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
             //                         cd->getLLegContactProb(),  cd->getRLegContactProb(), mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
@@ -1027,7 +1026,8 @@ void humanoid_ekf::computeKinTFs()
         }
         else
         {
-            dr->computeDeadReckoning(mw->getR(), Tbl.linear(), Tbr.linear(), mw->getGyro(), Tbl.translation(), Tbr.translation(), vbl, vbr, omegabl, omegabr,
+            dr->computeDeadReckoning(mw->getR(), Tbl.linear(), Tbr.linear(), mw->getGyro(),T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
+                                     Tbl.translation(), Tbr.translation(), vbl, vbr, omegabl, omegabr,
                                      LLegForceFilt, RLegForceFilt, mw->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
             //dr->computeDeadReckoningGEM(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
             //                        cd->getLLegContactProb(),  cd->getRLegContactProb(), mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
@@ -1375,28 +1375,41 @@ void humanoid_ekf::subscribeToGroundTruth()
 }
 void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr &msg)
 {
+    ground_truth_odom_msg = *msg;
     if (kinematicsInitialized)
     {
-        ground_truth_odom_msg = *msg;
-        temp = T_B_GT.linear() * Vector3d(ground_truth_odom_msg.pose.pose.position.x, ground_truth_odom_msg.pose.pose.position.y, ground_truth_odom_msg.pose.pose.position.z);
-        tempq = q_B_GT * Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w, ground_truth_odom_msg.pose.pose.orientation.x, ground_truth_odom_msg.pose.pose.orientation.y, ground_truth_odom_msg.pose.pose.orientation.z);
+       
+        
         if (firstGT)
         {
-            qoffsetGT = qwb * tempq.inverse();
-            offsetGT = Twb.translation() - temp;
+            gt_odomq = qwb;
+            gt_odom = Twb.translation();
             firstGT = false;
         }
-        tempq = qoffsetGT * tempq;
-        temp = offsetGT + temp;
+        else
+        {
+             gt_odom += T_B_GT.linear() * Vector3d(ground_truth_odom_msg.pose.pose.position.x - ground_truth_odom_msg_.pose.pose.position.x,
+              ground_truth_odom_msg.pose.pose.position.y - ground_truth_odom_msg_.pose.pose.position.y,
+              ground_truth_odom_msg.pose.pose.position.z -  ground_truth_odom_msg_.pose.pose.position.z);
 
-        ground_truth_odom_msg.pose.pose.position.x = temp(0);
-        ground_truth_odom_msg.pose.pose.position.y = temp(1);
-        ground_truth_odom_msg.pose.pose.position.z = temp(2);
-        ground_truth_odom_msg.pose.pose.orientation.w = tempq.w();
-        ground_truth_odom_msg.pose.pose.orientation.x = tempq.x();
-        ground_truth_odom_msg.pose.pose.orientation.y = tempq.y();
-        ground_truth_odom_msg.pose.pose.orientation.z = tempq.z();
+             tempq = q_B_GT * Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w, ground_truth_odom_msg.pose.pose.orientation.x, ground_truth_odom_msg.pose.pose.orientation.y, ground_truth_odom_msg.pose.pose.orientation.z);
+             tempq_ = q_B_GT * Quaterniond(ground_truth_odom_msg_.pose.pose.orientation.w, ground_truth_odom_msg_.pose.pose.orientation.x, ground_truth_odom_msg_.pose.pose.orientation.y, ground_truth_odom_msg_.pose.pose.orientation.z);
+             gt_odomq *= (tempq * tempq_.inverse());
+        }
+        
+
+
+        ground_truth_odom_pub_msg.pose.pose.position.x = gt_odom(0);
+        ground_truth_odom_pub_msg.pose.pose.position.y = gt_odom(1);
+        ground_truth_odom_pub_msg.pose.pose.position.z = gt_odom(2);
+        ground_truth_odom_pub_msg.pose.pose.orientation.w = gt_odomq.w();
+        ground_truth_odom_pub_msg.pose.pose.orientation.x = gt_odomq.x();
+        ground_truth_odom_pub_msg.pose.pose.orientation.y = gt_odomq.y();
+        ground_truth_odom_pub_msg.pose.pose.orientation.z = gt_odomq.z();
+
     }
+    ground_truth_odom_msg_ = ground_truth_odom_msg;
+
 }
 
 void humanoid_ekf::subscribeToGroundTruthCoM()
@@ -1613,10 +1626,10 @@ void humanoid_ekf::publishBodyEstimates()
         ground_truth_com_odom_msg.header.frame_id = "odom";
         ground_truth_com_pub.publish(ground_truth_com_odom_msg);
 
-        ground_truth_odom_msg.child_frame_id = base_link_frame;
-        ground_truth_odom_msg.header.stamp = ros::Time::now();
-        ground_truth_odom_msg.header.frame_id = "odom";
-        ground_truth_odom_pub.publish(ground_truth_odom_msg);
+        ground_truth_odom_pub_msg.child_frame_id = base_link_frame;
+        ground_truth_odom_pub_msg.header.stamp = ros::Time::now();
+        ground_truth_odom_pub_msg.header.frame_id = "odom";
+        ground_truth_odom_pub.publish(ground_truth_odom_pub_msg);
         ds_pub.publish(is_in_ds_msg);
     }
     //if(comp_odom0_inc){
