@@ -21,7 +21,6 @@ T_B_GT: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1]
 
 comp_with: true
 comp_with_odom0_topic: "/kfusion/odom"
-#comp_with_odom0_topic: "/odom_rf2o"
 support_idx_provided: false
 support_idx_topic: "/sp"
 
@@ -50,8 +49,9 @@ fsr_topic_freq: 100
 
 ##Schmitt Trigger - Contact Classifier
 LLegUpThres: 20 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 7
+#LLegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
+
+LosingContact: 17
 StrikingContact: 60
 
 
@@ -60,16 +60,24 @@ foot_polygon_xmin: -0.047
 foot_polygon_xmax: 0.11
 foot_polygon_ymin: -0.05
 foot_polygon_ymax: 0.038
-lforce_sigma: 1.5
-rforce_sigma: 1.5
-lcop_sigma: 0.015
-rcop_sigma: 0.015
-VelocityThres: 0.15
+lforce_sigma: 0.1
+rforce_sigma: 0.1
+lcop_sigma: 0.005
+rcop_sigma: 0.005
+VelocityThres: 0.12
+lvnorm_sigma: 0.02
+rvnorm_sigma: 0.02
+probabilisticContactThreshold: 0.9
+ContactDetectionWithCOP: true
+ContactDetectionWithKinematics: true
+
+
+
 
 
 #Joint Velocity Estimation
 joint_cutoff_freq: 6.0
-joint_noise_density: 0.1
+joint_noise_density: 0.5
 #Mahony Filter for attitude
 useMahony: true
 Mahony_Kp: 0.9
@@ -95,6 +103,8 @@ mass: 6.4  #robot mass
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
 useEuler: true
 useInIMUEKF: true
+contact_random_walk: 0.1
+
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
 # 3-D Body Position/Velocity
