@@ -31,9 +31,9 @@
 
 #include <iostream>
 #include <algorithm>
-#include <serow/humanoid_ekf.h>
+#include <serow/quadruped_ekf.h>
 
-void humanoid_ekf::loadparams()
+void quadruped_ekf::loadparams()
 {
 
     ros::NodeHandle n_p("~");
@@ -262,14 +262,14 @@ void humanoid_ekf::loadparams()
 
 }
 
-void humanoid_ekf::loadJointKFparams()
+void quadruped_ekf::loadJointKFparams()
 {
     ros::NodeHandle n_p("~");
     n_p.param<double>("joint_topic_freq", joint_freq, 100.0);
     n_p.param<double>("joint_cutoff_freq", joint_cutoff_freq, 10.0);
 }
 
-void humanoid_ekf::loadIMUEKFparams()
+void quadruped_ekf::loadIMUEKFparams()
 {
     ros::NodeHandle n_p("~");
     n_p.param<double>("bias_ax", bias_ax, 0.0);
@@ -363,7 +363,7 @@ void humanoid_ekf::loadIMUEKFparams()
     }
 }
 
-void humanoid_ekf::loadCoMEKFparams()
+void quadruped_ekf::loadCoMEKFparams()
 {
 
     ros::NodeHandle n_p("~");
@@ -386,7 +386,7 @@ void humanoid_ekf::loadCoMEKFparams()
     n_p.param<bool>("useEuler", nipmEKF->useEuler, true);
 }
 
-humanoid_ekf::humanoid_ekf()
+quadruped_ekf::quadruped_ekf()
 {
     useCoMEKF = true;
     useLegOdom = false;
@@ -395,13 +395,13 @@ humanoid_ekf::humanoid_ekf()
     odom_divergence = false;
 }
 
-humanoid_ekf::~humanoid_ekf()
+quadruped_ekf::~quadruped_ekf()
 {
     if (is_connected_)
         disconnect();
 }
 
-void humanoid_ekf::disconnect()
+void quadruped_ekf::disconnect()
 {
     if (!is_connected_)
         return;
@@ -409,7 +409,7 @@ void humanoid_ekf::disconnect()
     is_connected_ = false;
 }
 
-bool humanoid_ekf::connect(const ros::NodeHandle nh)
+bool quadruped_ekf::connect(const ros::NodeHandle nh)
 {
     ROS_INFO_STREAM("SERoW Initializing...");
 
@@ -432,7 +432,7 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh)
     //
     //ros::NodeHandle np("~")
     //dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<serow::VarianceControlConfig> >(np);
-    //dynamic_reconfigure::Server<serow::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
+    //dynamic_reconfigure::Server<serow::VarianceControlConfig>::CallbackType cb = boost::bind(&quadruped_ekf::reconfigureCB, this, _1, _2);
     // dynamic_recfg_->setCallback(cb);
     is_connected_ = true;
 
@@ -442,7 +442,7 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh)
     return true;
 }
 
-void humanoid_ekf::reconfigureCB(serow::VarianceControlConfig &config, uint32_t level)
+void quadruped_ekf::reconfigureCB(serow::VarianceControlConfig &config, uint32_t level)
 {
 
     imuEKF->accb_qx = config.accb_qx;
@@ -479,12 +479,12 @@ void humanoid_ekf::reconfigureCB(serow::VarianceControlConfig &config, uint32_t 
     }
 }
 
-bool humanoid_ekf::connected()
+bool quadruped_ekf::connected()
 {
     return is_connected_;
 }
 
-void humanoid_ekf::subscribe()
+void quadruped_ekf::subscribe()
 {
 
     subscribeToIMU();
@@ -507,7 +507,7 @@ void humanoid_ekf::subscribe()
         subscribeToCompOdom();
 }
 
-void humanoid_ekf::init()
+void quadruped_ekf::init()
 {
 
     /** Initialize Variables **/
@@ -604,7 +604,7 @@ void humanoid_ekf::init()
 }
 
 /** Main Loop **/
-void humanoid_ekf::run()
+void quadruped_ekf::run()
 {
 
     static ros::Rate rate(freq); //ROS Node Loop Rate
@@ -662,7 +662,7 @@ void humanoid_ekf::run()
     deAllocate();
 }
 
-void humanoid_ekf::estimateWithInIMUEKF()
+void quadruped_ekf::estimateWithInIMUEKF()
 {
     //Initialize the IMU EKF state
     if (imuInEKF->firstrun == true)
@@ -712,7 +712,7 @@ void humanoid_ekf::estimateWithInIMUEKF()
     qws = Quaterniond(Tws.linear());
 }
 
-void humanoid_ekf::estimateWithIMUEKF()
+void quadruped_ekf::estimateWithIMUEKF()
 {
     //Initialize the IMU EKF state
     if (imuEKF->firstrun)
@@ -853,7 +853,7 @@ void humanoid_ekf::estimateWithIMUEKF()
     qws = Quaterniond(Tws.linear());
 }
 
-void humanoid_ekf::estimateWithCoMEKF()
+void quadruped_ekf::estimateWithCoMEKF()
 {
 
     if (com_inc)
@@ -902,7 +902,7 @@ void humanoid_ekf::estimateWithCoMEKF()
     }
 }
 
-void humanoid_ekf::computeLGRF()
+void quadruped_ekf::computeLGRF()
 {
     LLegGRF(0) = lfsr_msg.wrench.force.x;
     LLegGRF(1) = lfsr_msg.wrench.force.y;
@@ -915,7 +915,7 @@ void humanoid_ekf::computeLGRF()
     MediatorInsert(lmdf, LLegGRF(2));
     LLegForceFilt = MediatorMedian(lmdf);
 }
-void humanoid_ekf::computeRGRF()
+void quadruped_ekf::computeRGRF()
 {
     RLegGRF(0) = rfsr_msg.wrench.force.x;
     RLegGRF(1) = rfsr_msg.wrench.force.y;
@@ -929,7 +929,7 @@ void humanoid_ekf::computeRGRF()
     RLegForceFilt = MediatorMedian(rmdf);
 }
 
-void humanoid_ekf::computeKinTFs()
+void quadruped_ekf::computeKinTFs()
 {
 
     //Update the Kinematic Structure
@@ -1058,7 +1058,7 @@ void humanoid_ekf::computeKinTFs()
     }
 }
 
-void humanoid_ekf::deAllocate()
+void quadruped_ekf::deAllocate()
 {
     for (unsigned int i = 0; i < number_of_joints; i++)
         delete[] JointVF[i];
@@ -1088,7 +1088,7 @@ void humanoid_ekf::deAllocate()
     delete cd;
 }
 
-void humanoid_ekf::filterGyrodot()
+void quadruped_ekf::filterGyrodot()
 {
     if (!firstGyrodot)
     {
@@ -1119,7 +1119,7 @@ void humanoid_ekf::filterGyrodot()
     Gyro_ = imuEKF->gyro;
 }
 
-void humanoid_ekf::publishGRF()
+void quadruped_ekf::publishGRF()
 {
 
     if (debug_mode)
@@ -1147,7 +1147,7 @@ void humanoid_ekf::publishGRF()
     }
 }
 
-void humanoid_ekf::computeLocalCOP()
+void quadruped_ekf::computeLocalCOP()
 {
     copl = Vector3d::Zero();
     if (LLegGRF(2) != 0)
@@ -1181,7 +1181,7 @@ void humanoid_ekf::computeLocalCOP()
     }
 }
 
-void humanoid_ekf::computeGlobalCOP(Affine3d Twl_, Affine3d Twr_)
+void quadruped_ekf::computeGlobalCOP(Affine3d Twl_, Affine3d Twr_)
 {
 
     // Compute the CoP wrt the Support Foot Frame
@@ -1194,7 +1194,7 @@ void humanoid_ekf::computeGlobalCOP(Affine3d Twl_, Affine3d Twr_)
     GRF_fsr += Twr_.linear() * RLegGRF;
 }
 
-void humanoid_ekf::publishCOP()
+void quadruped_ekf::publishCOP()
 {
     COP_msg.point.x = COP_fsr(0);
     COP_msg.point.y = COP_fsr(1);
@@ -1204,7 +1204,7 @@ void humanoid_ekf::publishCOP()
     COP_pub.publish(COP_msg);
 }
 
-void humanoid_ekf::publishCoMEstimates()
+void quadruped_ekf::publishCoMEstimates()
 {
     CoM_odom_msg.child_frame_id = "CoM_frame";
     CoM_odom_msg.header.stamp = ros::Time::now();
@@ -1249,7 +1249,7 @@ void humanoid_ekf::publishCoMEstimates()
     }
 }
 
-void humanoid_ekf::publishJointEstimates()
+void quadruped_ekf::publishJointEstimates()
 {
 
     joint_filt_msg.header.stamp = ros::Time::now();
@@ -1267,7 +1267,7 @@ void humanoid_ekf::publishJointEstimates()
     joint_filt_pub.publish(joint_filt_msg);
 }
 
-void humanoid_ekf::advertise()
+void quadruped_ekf::advertise()
 {
 
     supportPose_est_pub = n.advertise<geometry_msgs::PoseStamped>(
@@ -1315,14 +1315,14 @@ void humanoid_ekf::advertise()
         comp_odom0_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom0", 1000);
 }
 
-void humanoid_ekf::subscribeToJointState()
+void quadruped_ekf::subscribeToJointState()
 {
 
-    joint_state_sub = n.subscribe(joint_state_topic, 1, &humanoid_ekf::joint_stateCb, this, ros::TransportHints().tcpNoDelay());
+    joint_state_sub = n.subscribe(joint_state_topic, 1, &quadruped_ekf::joint_stateCb, this, ros::TransportHints().tcpNoDelay());
     firstJointStates = true;
 }
 
-void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr &msg)
+void quadruped_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr &msg)
 {
     joint_state_msg = *msg;
     joint_inc = true;
@@ -1350,14 +1350,14 @@ void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr &msg)
     }
 }
 
-void humanoid_ekf::subscribeToOdom()
+void quadruped_ekf::subscribeToOdom()
 {
 
-    odom_sub = n.subscribe(odom_topic, 1, &humanoid_ekf::odomCb, this, ros::TransportHints().tcpNoDelay());
+    odom_sub = n.subscribe(odom_topic, 1, &quadruped_ekf::odomCb, this, ros::TransportHints().tcpNoDelay());
     firstOdom = true;
 }
 
-void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr &msg)
+void quadruped_ekf::odomCb(const nav_msgs::Odometry::ConstPtr &msg)
 {
     odom_msg = *msg;
     odom_inc = true;
@@ -1368,12 +1368,12 @@ void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr &msg)
     }
 }
 
-void humanoid_ekf::subscribeToGroundTruth()
+void quadruped_ekf::subscribeToGroundTruth()
 {
-    ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic, 1, &humanoid_ekf::ground_truth_odomCb, this, ros::TransportHints().tcpNoDelay());
+    ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic, 1, &quadruped_ekf::ground_truth_odomCb, this, ros::TransportHints().tcpNoDelay());
     firstGT = true;
 }
-void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr &msg)
+void quadruped_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr &msg)
 {
     ground_truth_odom_msg = *msg;
     if (kinematicsInitialized)
@@ -1412,12 +1412,12 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr &msg)
 
 }
 
-void humanoid_ekf::subscribeToGroundTruthCoM()
+void quadruped_ekf::subscribeToGroundTruthCoM()
 {
-    ground_truth_com_sub = n.subscribe(ground_truth_com_topic, 1000, &humanoid_ekf::ground_truth_comCb, this, ros::TransportHints().tcpNoDelay());
+    ground_truth_com_sub = n.subscribe(ground_truth_com_topic, 1000, &quadruped_ekf::ground_truth_comCb, this, ros::TransportHints().tcpNoDelay());
     firstGTCoM = true;
 }
-void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr &msg)
+void quadruped_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr &msg)
 {
     if (kinematicsInitialized)
     {
@@ -1444,14 +1444,14 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr &msg)
     }
 }
 
-void humanoid_ekf::subscribeToCompOdom()
+void quadruped_ekf::subscribeToCompOdom()
 {
 
-    compodom0_sub = n.subscribe(comp_with_odom0_topic, 1000, &humanoid_ekf::compodom0Cb, this, ros::TransportHints().tcpNoDelay());
+    compodom0_sub = n.subscribe(comp_with_odom0_topic, 1000, &quadruped_ekf::compodom0Cb, this, ros::TransportHints().tcpNoDelay());
     firstCO = true;
 }
 
-void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr &msg)
+void quadruped_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr &msg)
 {
     if (kinematicsInitialized)
     {
@@ -1479,11 +1479,11 @@ void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr &msg)
     }
 }
 
-void humanoid_ekf::subscribeToSupportIdx()
+void quadruped_ekf::subscribeToSupportIdx()
 {
-    support_idx_sub = n.subscribe(support_idx_topic, 1, &humanoid_ekf::support_idxCb, this, ros::TransportHints().tcpNoDelay());
+    support_idx_sub = n.subscribe(support_idx_topic, 1, &quadruped_ekf::support_idxCb, this, ros::TransportHints().tcpNoDelay());
 }
-void humanoid_ekf::support_idxCb(const std_msgs::Int32::ConstPtr &msg)
+void quadruped_ekf::support_idxCb(const std_msgs::Int32::ConstPtr &msg)
 {
     support_idx_msg = *msg;
     if (support_idx_msg.data == 1)
@@ -1498,39 +1498,39 @@ void humanoid_ekf::support_idxCb(const std_msgs::Int32::ConstPtr &msg)
     }
 }
 
-void humanoid_ekf::subscribeToIMU()
+void quadruped_ekf::subscribeToIMU()
 {
-    imu_sub = n.subscribe(imu_topic, 1, &humanoid_ekf::imuCb, this, ros::TransportHints().tcpNoDelay());
+    imu_sub = n.subscribe(imu_topic, 1, &quadruped_ekf::imuCb, this, ros::TransportHints().tcpNoDelay());
 }
-void humanoid_ekf::imuCb(const sensor_msgs::Imu::ConstPtr &msg)
+void quadruped_ekf::imuCb(const sensor_msgs::Imu::ConstPtr &msg)
 {
     imu_msg = *msg;
     imu_inc = true;
 }
 
-void humanoid_ekf::subscribeToFSR()
+void quadruped_ekf::subscribeToFSR()
 {
     //Left Foot Wrench
-    lfsr_sub = n.subscribe(lfsr_topic, 1, &humanoid_ekf::lfsrCb, this, ros::TransportHints().tcpNoDelay());
+    lfsr_sub = n.subscribe(lfsr_topic, 1, &quadruped_ekf::lfsrCb, this, ros::TransportHints().tcpNoDelay());
     //Right Foot Wrench
-    rfsr_sub = n.subscribe(rfsr_topic, 1, &humanoid_ekf::rfsrCb, this, ros::TransportHints().tcpNoDelay());
+    rfsr_sub = n.subscribe(rfsr_topic, 1, &quadruped_ekf::rfsrCb, this, ros::TransportHints().tcpNoDelay());
 }
 
-void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
+void quadruped_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
     lfsr_msg = *msg;
     lfsr_inc = true;
     lft_inc = true;
 }
 
-void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
+void quadruped_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
     rfsr_msg = *msg;
     rft_inc = true;
     rfsr_inc = true;
 }
 
-void humanoid_ekf::publishBodyEstimates()
+void quadruped_ekf::publishBodyEstimates()
 {
 
     if (!useInIMUEKF)
@@ -1639,7 +1639,7 @@ void humanoid_ekf::publishBodyEstimates()
     //}
 }
 
-void humanoid_ekf::publishSupportEstimates()
+void quadruped_ekf::publishSupportEstimates()
 {
     supportPose_est_msg.header.stamp = ros::Time::now();
     supportPose_est_msg.header.frame_id = "odom";
@@ -1653,7 +1653,7 @@ void humanoid_ekf::publishSupportEstimates()
     supportPose_est_pub.publish(supportPose_est_msg);
 }
 
-void humanoid_ekf::publishLegEstimates()
+void quadruped_ekf::publishLegEstimates()
 {
     leftleg_odom_msg.child_frame_id = lfoot_frame;
     leftleg_odom_msg.header.stamp = ros::Time::now();
@@ -1718,7 +1718,7 @@ void humanoid_ekf::publishLegEstimates()
     }
 }
 
-void humanoid_ekf::publishContact()
+void quadruped_ekf::publishContact()
 {
     support_leg_msg.data = support_leg;
     support_leg_pub.publish(support_leg_msg);
