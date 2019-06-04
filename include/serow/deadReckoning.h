@@ -22,13 +22,13 @@ class deadReckoning
 
     Eigen::Matrix3d AL, AR, wedgerf, wedgelf, RRpRm, RLpLm;
     Eigen::Vector3d bL, bR, plf, prf; //FT w.r.t Foot Frame;
-    bool USE_CF, firstrun;
+    bool firstrun;
     bodyVelCF *bvcf;
 
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     deadReckoning(Eigen::Vector3d pwl0, Eigen::Vector3d pwr0, Eigen::Matrix3d Rwl0, Eigen::Matrix3d Rwr0,
-                  double mass_, double alpha1_ = 1.0, double alpha3_ = 0.01, double freq_ = 100.0, double g_ = 9.81, bool USE_CF_ = false, double freqvmin_ = 0.1, double freqvmax_ = 2.5,
+                  double mass_, double alpha1_ = 1.0, double alpha3_ = 0.01, double freq_ = 100.0, double g_ = 9.81,
                   Eigen::Vector3d plf_ = Eigen::Vector3d::Zero(), Eigen::Vector3d prf_ = Eigen::Vector3d::Zero())
     {
         firstrun = true;
@@ -64,7 +64,6 @@ class deadReckoning
         pb_l = Eigen::Vector3d::Zero();
         pb_r = Eigen::Vector3d::Zero();
         vwbKCFS = Eigen::Vector3d::Zero();
-        USE_CF = USE_CF_;
         plf = plf_;
         prf = prf_;
         RpRm = prf;
@@ -72,8 +71,7 @@ class deadReckoning
         alpha1 = alpha1_;
         alpha3 = alpha3_;
         Tm3 = (mass * mass * g * g) * Tm2;
-        if (USE_CF)
-            bvcf = new bodyVelCF(freq_, mass_, freqvmin_, freqvmax_, g_);
+
     }
     Eigen::Vector3d getOdom()
     {
@@ -109,8 +107,7 @@ class deadReckoning
 
     Eigen::Matrix3d getVelocityCovariance()
     {
-        cout<<"vwb_cov"<<endl;
-        cout<<vwb_cov<<endl;
+
         return vwb_cov;
     }
 
@@ -237,14 +234,7 @@ class deadReckoning
         wr = (rfz + ef) / (lfz + rfz + 2.0 * ef);
 
         computeBodyVelKCFS(Rwb, bomegab, pbl, pbr, vbl, vbr, wl, wr);
-        /*
-            if(USE_CF)
-            {
-                double GRF=lfz+rfz;
-                GRF = cropGRF(GRF);
-                vwb=bvcf->filter(vwbKCFS, acc, GRF);
-            }
-        */
+ 
 
 
         computeLegKCFS(Rwb, Rbl, Rbr, omegawb, omegabl, omegabr, pbl, pbr, vbl, vbr);
@@ -261,8 +251,7 @@ class deadReckoning
         RpRmb = Rbr * RpRm + pbr;
         LpLmb = Rbl * LpLm + pbl;
 
-        std::cout<<RpRmb<<std::endl;
-        std::cout<<LpLmb<<std::endl;
+ 
         RpRmb =  pbr;
         LpLmb =  pbl;
         //Temp estimate of Leg position w.r.t Inertial Frame
@@ -318,14 +307,7 @@ class deadReckoning
         wr = wr_;
 
         computeBodyVelKCFS(Rwb, omegawb, pbl, pbr, vbl, vbr, wl, wr);
-        /*
-            if(USE_CF)
-            {
-                double GRF=lfz+rfz;
-                GRF = cropGRF(GRF);
-                vwb=bvcf->filter(vwbKCFS, acc, GRF);
-            }
-        */
+
 
 
         computeLegKCFS(Rwb, Rbl, Rbr, omegawb, omegabl, omegabr, pbl, pbr, vbl, vbr);

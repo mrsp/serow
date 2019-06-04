@@ -38,12 +38,20 @@ void quadruped_ekf::loadparams()
 
     ros::NodeHandle n_p("~");
     // Load Server Parameters
-    n_p.param<std::string>("modelname", modelname, "nao.urdf");
+    n_p.param<std::string>("modelname", modelname, "centauro.urdf");
     rd = new serow::robotDyn(modelname, false);
 
     n_p.param<std::string>("base_link", base_link_frame, "base_link");
-    n_p.param<std::string>("lfoot", lfoot_frame, "l_ankle");
-    n_p.param<std::string>("rfoot", rfoot_frame, "r_ankle");
+    n_p.param<std::string>("LFfoot", LFfoot_frame, "lf_ankle");
+    n_p.param<std::string>("LHfoot", LHfoot_frame, "lh_ankle");
+    n_p.param<std::string>("RFfoot", RFfoot_frame, "rf_ankle");
+    n_p.param<std::string>("RHfoot", RHfoot_frame, "rh_ankle");
+
+    n_p.param<std::string>("LFfoot_force_torque_topic", LFfsr_topic, "force_torque/leftFront");
+    n_p.param<std::string>("LHfoot_force_torque_topic", LHfsr_topic, "force_torque/leftHind");
+    n_p.param<std::string>("RFfoot_force_torque_topic", RFfsr_topic, "force_torque/rightFront");
+    n_p.param<std::string>("RHfoot_force_torque_topic", RHfsr_topic, "force_torque/rightHind");
+
 
     n_p.param<double>("imu_topic_freq", freq, 100.0);
     n_p.param<double>("fsr_topic_freq", fsr_freq, 100.0);
@@ -71,8 +79,8 @@ void quadruped_ekf::loadparams()
     }
     else
     {
-        n_p.param<double>("LLegUpThres", LegHighThres, 20.0);
-        n_p.param<double>("LLegLowThres", LegLowThres, 15.0);
+        n_p.param<double>("LegUpThres", LegHighThres, 20.0);
+        n_p.param<double>("LegLowThres", LegLowThres, 15.0);
         n_p.param<double>("StrikingContact", StrikingContact, 5.0);
     }
 
@@ -85,51 +93,53 @@ void quadruped_ekf::loadparams()
     if (support_idx_provided)
         n_p.param<std::string>("support_idx_topic", support_idx_topic, "support_idx");
 
+
+
+    std::vector<double> affine_list;
+
     if (ground_truth)
     {
         n_p.param<std::string>("ground_truth_odom_topic", ground_truth_odom_topic, "ground_truth");
         n_p.param<std::string>("ground_truth_com_topic", ground_truth_com_topic, "ground_truth_com");
-        std::vector<double> gt_list;
-        n_p.getParam("T_B_GT", gt_list);
-        T_B_GT(0, 0) = gt_list[0];
-        T_B_GT(0, 1) = gt_list[1];
-        T_B_GT(0, 2) = gt_list[2];
-        T_B_GT(0, 3) = gt_list[3];
-        T_B_GT(1, 0) = gt_list[4];
-        T_B_GT(1, 1) = gt_list[5];
-        T_B_GT(1, 2) = gt_list[6];
-        T_B_GT(1, 3) = gt_list[7];
-        T_B_GT(2, 0) = gt_list[8];
-        T_B_GT(2, 1) = gt_list[9];
-        T_B_GT(2, 2) = gt_list[10];
-        T_B_GT(2, 3) = gt_list[11];
-        T_B_GT(3, 0) = gt_list[12];
-        T_B_GT(3, 1) = gt_list[13];
-        T_B_GT(3, 2) = gt_list[14];
-        T_B_GT(3, 3) = gt_list[15];
+        n_p.getParam("T_B_GT", affine_list);
+        T_B_GT(0, 0) = affine_list[0];
+        T_B_GT(0, 1) = affine_list[1];
+        T_B_GT(0, 2) = affine_list[2];
+        T_B_GT(0, 3) = affine_list[3];
+        T_B_GT(1, 0) = affine_list[4];
+        T_B_GT(1, 1) = affine_list[5];
+        T_B_GT(1, 2) = affine_list[6];
+        T_B_GT(1, 3) = affine_list[7];
+        T_B_GT(2, 0) = affine_list[8];
+        T_B_GT(2, 1) = affine_list[9];
+        T_B_GT(2, 2) = affine_list[10];
+        T_B_GT(2, 3) = affine_list[11];
+        T_B_GT(3, 0) = affine_list[12];
+        T_B_GT(3, 1) = affine_list[13];
+        T_B_GT(3, 2) = affine_list[14];
+        T_B_GT(3, 3) = affine_list[15];
         q_B_GT = Quaterniond(T_B_GT.linear());
     }
 
     if (!useLegOdom)
     {
-        std::vector<double> pose_list;
-        n_p.getParam("T_B_P", pose_list);
-        T_B_P(0, 0) = pose_list[0];
-        T_B_P(0, 1) = pose_list[1];
-        T_B_P(0, 2) = pose_list[2];
-        T_B_P(0, 3) = pose_list[3];
-        T_B_P(1, 0) = pose_list[4];
-        T_B_P(1, 1) = pose_list[5];
-        T_B_P(1, 2) = pose_list[6];
-        T_B_P(1, 3) = pose_list[7];
-        T_B_P(2, 0) = pose_list[8];
-        T_B_P(2, 1) = pose_list[9];
-        T_B_P(2, 2) = pose_list[10];
-        T_B_P(2, 3) = pose_list[11];
-        T_B_P(3, 0) = pose_list[12];
-        T_B_P(3, 1) = pose_list[13];
-        T_B_P(3, 2) = pose_list[14];
-        T_B_P(3, 3) = pose_list[15];
+        n_p.getParam("T_B_P", affine_list);
+        T_B_P(0, 0) = affine_list[0];
+        T_B_P(0, 1) = affine_list[1];
+        T_B_P(0, 2) = affine_list[2];
+        T_B_P(0, 3) = affine_list[3];
+        T_B_P(1, 0) = affine_list[4];
+        T_B_P(1, 1) = affine_list[5];
+        T_B_P(1, 2) = affine_list[6];
+        T_B_P(1, 3) = affine_list[7];
+        T_B_P(2, 0) = affine_list[8];
+        T_B_P(2, 1) = affine_list[9];
+        T_B_P(2, 2) = affine_list[10];
+        T_B_P(2, 3) = affine_list[11];
+        T_B_P(3, 0) = affine_list[12];
+        T_B_P(3, 1) = affine_list[13];
+        T_B_P(3, 2) = affine_list[14];
+        T_B_P(3, 3) = affine_list[15];
         q_B_P = Quaterniond(T_B_P.linear());
     }
     else
@@ -137,43 +147,41 @@ void quadruped_ekf::loadparams()
         T_B_P.Identity();
     }
 
-    std::vector<double> acc_list;
-    n_p.getParam("T_B_A", acc_list);
-    T_B_A(0, 0) = acc_list[0];
-    T_B_A(0, 1) = acc_list[1];
-    T_B_A(0, 2) = acc_list[2];
-    T_B_A(0, 3) = acc_list[3];
-    T_B_A(1, 0) = acc_list[4];
-    T_B_A(1, 1) = acc_list[5];
-    T_B_A(1, 2) = acc_list[6];
-    T_B_A(1, 3) = acc_list[7];
-    T_B_A(2, 0) = acc_list[8];
-    T_B_A(2, 1) = acc_list[9];
-    T_B_A(2, 2) = acc_list[10];
-    T_B_A(2, 3) = acc_list[11];
-    T_B_A(3, 0) = acc_list[12];
-    T_B_A(3, 1) = acc_list[13];
-    T_B_A(3, 2) = acc_list[14];
-    T_B_A(3, 3) = acc_list[15];
+    n_p.getParam("T_B_A", affine_list);
+    T_B_A(0, 0) = affine_list[0];
+    T_B_A(0, 1) = affine_list[1];
+    T_B_A(0, 2) = affine_list[2];
+    T_B_A(0, 3) = affine_list[3];
+    T_B_A(1, 0) = affine_list[4];
+    T_B_A(1, 1) = affine_list[5];
+    T_B_A(1, 2) = affine_list[6];
+    T_B_A(1, 3) = affine_list[7];
+    T_B_A(2, 0) = affine_list[8];
+    T_B_A(2, 1) = affine_list[9];
+    T_B_A(2, 2) = affine_list[10];
+    T_B_A(2, 3) = affine_list[11];
+    T_B_A(3, 0) = affine_list[12];
+    T_B_A(3, 1) = affine_list[13];
+    T_B_A(3, 2) = affine_list[14];
+    T_B_A(3, 3) = affine_list[15];
 
-    std::vector<double> gyro_list;
-    n_p.getParam("T_B_G", gyro_list);
-    T_B_G(0, 0) = gyro_list[0];
-    T_B_G(0, 1) = gyro_list[1];
-    T_B_G(0, 2) = gyro_list[2];
-    T_B_G(0, 3) = gyro_list[3];
-    T_B_G(1, 0) = gyro_list[4];
-    T_B_G(1, 1) = gyro_list[5];
-    T_B_G(1, 2) = gyro_list[6];
-    T_B_G(1, 3) = gyro_list[7];
-    T_B_G(2, 0) = gyro_list[8];
-    T_B_G(2, 1) = gyro_list[9];
-    T_B_G(2, 2) = gyro_list[10];
-    T_B_G(2, 3) = gyro_list[11];
-    T_B_G(3, 0) = gyro_list[12];
-    T_B_G(3, 1) = gyro_list[13];
-    T_B_G(3, 2) = gyro_list[14];
-    T_B_G(3, 3) = gyro_list[15];
+    n_p.getParam("T_B_G", affine_list);
+    T_B_G(0, 0) = affine_list[0];
+    T_B_G(0, 1) = affine_list[1];
+    T_B_G(0, 2) = affine_list[2];
+    T_B_G(0, 3) = affine_list[3];
+    T_B_G(1, 0) = affine_list[4];
+    T_B_G(1, 1) = affine_list[5];
+    T_B_G(1, 2) = affine_list[6];
+    T_B_G(1, 3) = affine_list[7];
+    T_B_G(2, 0) = affine_list[8];
+    T_B_G(2, 1) = affine_list[9];
+    T_B_G(2, 2) = affine_list[10];
+    T_B_G(2, 3) = affine_list[11];
+    T_B_G(3, 0) = affine_list[12];
+    T_B_G(3, 1) = affine_list[13];
+    T_B_G(3, 2) = affine_list[14];
+    T_B_G(3, 3) = affine_list[15];
 
     n_p.param<std::string>("odom_topic", odom_topic, "odom");
     n_p.param<std::string>("imu_topic", imu_topic, "imu");
@@ -181,56 +189,93 @@ void quadruped_ekf::loadparams()
     n_p.param<double>("joint_noise_density", joint_noise_density, 0.03);
 
 
-    n_p.param<std::string>("lfoot_force_torque_topic", lfsr_topic, "force_torque/left");
-    n_p.param<std::string>("rfoot_force_torque_topic", rfsr_topic, "force_torque/right");
 
-    std::vector<double> ftl_list;
-    n_p.getParam("T_FT_LL", ftl_list);
-    T_FT_LL(0, 0) = ftl_list[0];
-    T_FT_LL(0, 1) = ftl_list[1];
-    T_FT_LL(0, 2) = ftl_list[2];
-    T_FT_LL(0, 3) = ftl_list[3];
-    T_FT_LL(1, 0) = ftl_list[4];
-    T_FT_LL(1, 1) = ftl_list[5];
-    T_FT_LL(1, 2) = ftl_list[6];
-    T_FT_LL(1, 3) = ftl_list[7];
-    T_FT_LL(2, 0) = ftl_list[8];
-    T_FT_LL(2, 1) = ftl_list[9];
-    T_FT_LL(2, 2) = ftl_list[10];
-    T_FT_LL(2, 3) = ftl_list[11];
-    T_FT_LL(3, 0) = ftl_list[12];
-    T_FT_LL(3, 1) = ftl_list[13];
-    T_FT_LL(3, 2) = ftl_list[14];
-    T_FT_LL(3, 3) = ftl_list[15];
+    //GET TF from Left Front F/T sensor to Left Front Leg
+    n_p.getParam("T_FT_LF", affine_list);
+    T_FT_LF(0, 0) = affine_list[0];
+    T_FT_LF(0, 1) = affine_list[1];
+    T_FT_LF(0, 2) = affine_list[2];
+    T_FT_LF(0, 3) = affine_list[3];
+    T_FT_LF(1, 0) = affine_list[4];
+    T_FT_LF(1, 1) = affine_list[5];
+    T_FT_LF(1, 2) = affine_list[6];
+    T_FT_LF(1, 3) = affine_list[7];
+    T_FT_LF(2, 0) = affine_list[8];
+    T_FT_LF(2, 1) = affine_list[9];
+    T_FT_LF(2, 2) = affine_list[10];
+    T_FT_LF(2, 3) = affine_list[11];
+    T_FT_LF(3, 0) = affine_list[12];
+    T_FT_LF(3, 1) = affine_list[13];
+    T_FT_LF(3, 2) = affine_list[14];
+    T_FT_LF(3, 3) = affine_list[15];
+    p_FT_LF = Vector3d(T_FT_LF(0, 3), T_FT_LF(1, 3), T_FT_LF(2, 3));
 
-    p_FT_LL = Vector3d(T_FT_LL(0, 3), T_FT_LL(1, 3), T_FT_LL(2, 3));
-    std::vector<double> ftr_list;
-    n_p.getParam("T_FT_RL", ftr_list);
-    T_FT_RL(0, 0) = ftr_list[0];
-    T_FT_RL(0, 1) = ftr_list[1];
-    T_FT_RL(0, 2) = ftr_list[2];
-    T_FT_RL(0, 3) = ftr_list[3];
-    T_FT_RL(1, 0) = ftr_list[4];
-    T_FT_RL(1, 1) = ftr_list[5];
-    T_FT_RL(1, 2) = ftr_list[6];
-    T_FT_RL(1, 3) = ftr_list[7];
-    T_FT_RL(2, 0) = ftr_list[8];
-    T_FT_RL(2, 1) = ftr_list[9];
-    T_FT_RL(2, 2) = ftr_list[10];
-    T_FT_RL(2, 3) = ftr_list[11];
-    T_FT_RL(3, 0) = ftr_list[12];
-    T_FT_RL(3, 1) = ftr_list[13];
-    T_FT_RL(3, 2) = ftr_list[14];
-    T_FT_RL(3, 3) = ftr_list[15];
-    p_FT_RL = Vector3d(T_FT_RL(0, 3), T_FT_RL(1, 3), T_FT_RL(2, 3));
+    //GET TF from Left Hind F/T sensor to Left Hind Leg
+    n_p.getParam("T_FT_LH", affine_list);
+    T_FT_LH(0, 0) = affine_list[0];
+    T_FT_LH(0, 1) = affine_list[1];
+    T_FT_LH(0, 2) = affine_list[2];
+    T_FT_LH(0, 3) = affine_list[3];
+    T_FT_LH(1, 0) = affine_list[4];
+    T_FT_LH(1, 1) = affine_list[5];
+    T_FT_LH(1, 2) = affine_list[6];
+    T_FT_LH(1, 3) = affine_list[7];
+    T_FT_LH(2, 0) = affine_list[8];
+    T_FT_LH(2, 1) = affine_list[9];
+    T_FT_LH(2, 2) = affine_list[10];
+    T_FT_LH(2, 3) = affine_list[11];
+    T_FT_LH(3, 0) = affine_list[12];
+    T_FT_LH(3, 1) = affine_list[13];
+    T_FT_LH(3, 2) = affine_list[14];
+    T_FT_LH(3, 3) = affine_list[15];
+    p_FT_LH = Vector3d(T_FT_LH(0, 3), T_FT_LH(1, 3), T_FT_LH(2, 3));
 
-    //n_p.param<std::string>("copl_topic",copl_topic,"cop/left");
-    //n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
+
+    //GET TF from Right Front F/T sensor to Right Front Leg
+    n_p.getParam("T_FT_RF", affine_list);
+    T_FT_RF(0, 0) = affine_list[0];
+    T_FT_RF(0, 1) = affine_list[1];
+    T_FT_RF(0, 2) = affine_list[2];
+    T_FT_RF(0, 3) = affine_list[3];
+    T_FT_RF(1, 0) = affine_list[4];
+    T_FT_RF(1, 1) = affine_list[5];
+    T_FT_RF(1, 2) = affine_list[6];
+    T_FT_RF(1, 3) = affine_list[7];
+    T_FT_RF(2, 0) = affine_list[8];
+    T_FT_RF(2, 1) = affine_list[9];
+    T_FT_RF(2, 2) = affine_list[10];
+    T_FT_RF(2, 3) = affine_list[11];
+    T_FT_RF(3, 0) = affine_list[12];
+    T_FT_RF(3, 1) = affine_list[13];
+    T_FT_RF(3, 2) = affine_list[14];
+    T_FT_RF(3, 3) = affine_list[15];
+    p_FT_RF = Vector3d(T_FT_RF(0, 3), T_FT_RF(1, 3), T_FT_RF(2, 3));
+
+    //GET TF from Right Hind F/T sensor to Right Hind Leg
+    n_p.getParam("T_FT_RH", affine_list);
+    T_FT_RH(0, 0) = affine_list[0];
+    T_FT_RH(0, 1) = affine_list[1];
+    T_FT_RH(0, 2) = affine_list[2];
+    T_FT_RH(0, 3) = affine_list[3];
+    T_FT_RH(1, 0) = affine_list[4];
+    T_FT_RH(1, 1) = affine_list[5];
+    T_FT_RH(1, 2) = affine_list[6];
+    T_FT_RH(1, 3) = affine_list[7];
+    T_FT_RH(2, 0) = affine_list[8];
+    T_FT_RH(2, 1) = affine_list[9];
+    T_FT_RH(2, 2) = affine_list[10];
+    T_FT_RH(2, 3) = affine_list[11];
+    T_FT_RH(3, 0) = affine_list[12];
+    T_FT_RH(3, 1) = affine_list[13];
+    T_FT_RH(3, 2) = affine_list[14];
+    T_FT_RH(3, 3) = affine_list[15];
+    p_FT_RH = Vector3d(T_FT_RH(0, 3), T_FT_RH(1, 3), T_FT_RH(2, 3));
 
     n_p.param<bool>("comp_with", comp_with, false);
     comp_odom0_inc = false;
     if (comp_with)
         n_p.param<std::string>("comp_with_odom0_topic", comp_with_odom0_topic, "compare_with_odom0");
+
 
     n_p.param<bool>("estimateCoM", useCoMEKF, false);
     n_p.param<int>("medianWindow", medianWindow, 10);
@@ -251,12 +296,9 @@ void quadruped_ekf::loadparams()
         mw = new serow::Madgwick(freq, beta);
     }
 
-    n_p.param<bool>("useCF", useCF, false);
-    n_p.param<double>("freqvmax", cf_freqvmax, 2.5);
-    n_p.param<double>("freqvmin", cf_freqvmin, 0.1);
+
     n_p.param<double>("Tau0", Tau0, 0.5);
     n_p.param<double>("Tau1", Tau1, 0.01);
-
     n_p.param<double>("mass", m, 5.14);
     n_p.param<double>("gravity", g, 9.81);
 
@@ -279,49 +321,7 @@ void quadruped_ekf::loadIMUEKFparams()
     n_p.param<double>("bias_gy", bias_gy, 0.0);
     n_p.param<double>("bias_gz", bias_gz, 0.0);
 
-    if (!useInIMUEKF)
-    {
-        n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qx, 0.001);
-        n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qy, 0.001);
-        n_p.param<double>("accelerometer_noise_density", imuEKF->acc_qz, 0.001);
-
-        n_p.param<double>("gyroscope_noise_density", imuEKF->gyr_qx, 0.0001);
-        n_p.param<double>("gyroscope_noise_density", imuEKF->gyr_qy, 0.0001);
-        n_p.param<double>("gyroscope_noise_density", imuEKF->gyr_qz, 0.0001);
-
-        n_p.param<double>("accelerometer_bias_random_walk", imuEKF->accb_qx, 1.0e-04);
-        n_p.param<double>("accelerometer_bias_random_walk", imuEKF->accb_qy, 1.0e-04);
-        n_p.param<double>("accelerometer_bias_random_walk", imuEKF->accb_qz, 1.0e-04);
-        n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qx, 1.0e-05);
-        n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qy, 1.0e-05);
-        n_p.param<double>("gyroscope_bias_random_walk", imuEKF->gyrb_qz, 1.0e-05);
-
-        n_p.param<double>("odom_position_noise_density_x", imuEKF->odom_px, 1.0e-01);
-        n_p.param<double>("odom_position_noise_density_y", imuEKF->odom_py, 1.0e-01);
-        n_p.param<double>("odom_position_noise_density_z", imuEKF->odom_pz, 1.0e-01);
-        n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ax, 1.0e-01);
-        n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_ay, 1.0e-01);
-        n_p.param<double>("odom_orientation_noise_density", imuEKF->odom_az, 1.0e-01);
-
-        n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_px, 1.0e-01);
-        n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_py, 1.0e-01);
-        n_p.param<double>("leg_odom_position_noise_density", imuEKF->leg_odom_pz, 1.0e-01);
-        n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_ax, 1.0e-01);
-        n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_ay, 1.0e-01);
-        n_p.param<double>("leg_odom_orientation_noise_density", imuEKF->leg_odom_az, 1.0e-01);
-
-        n_p.param<double>("velocity_noise_density_x", imuEKF->vel_px, 1.0e-01);
-        n_p.param<double>("velocity_noise_density_y", imuEKF->vel_py, 1.0e-01);
-        n_p.param<double>("velocity_noise_density_z", imuEKF->vel_pz, 1.0e-01);
-        n_p.param<double>("gravity", imuEKF->ghat, 9.81);
-        n_p.param<bool>("useEuler", imuEKF->useEuler, true);
-        n_p.param<bool>("useOutlierDetection", useOutlierDetection, false);
-        n_p.param<double>("mahalanobis_TH", imuEKF->mahalanobis_TH, -1.0);
-        imuEKF->setAccBias(T_B_A.linear() * Vector3d(bias_ax, bias_ay, bias_az));
-        imuEKF->setGyroBias(T_B_G.linear() * Vector3d(bias_gx, bias_gy, bias_gz));
-    }
-    else
-    {
+ 
         n_p.param<double>("accelerometer_noise_density", imuInEKF->acc_qx, 0.001);
         n_p.param<double>("accelerometer_noise_density", imuInEKF->acc_qy, 0.001);
         n_p.param<double>("accelerometer_noise_density", imuInEKF->acc_qz, 0.001);
@@ -358,9 +358,8 @@ void quadruped_ekf::loadIMUEKFparams()
         n_p.param<double>("odom_orientation_noise_density", imuInEKF->odom_ax, 1.0e-01);
         n_p.param<double>("odom_orientation_noise_density", imuInEKF->odom_ay, 1.0e-01);
         n_p.param<double>("odom_orientation_noise_density", imuInEKF->odom_az, 1.0e-01);
-        imuInEKF->setAccBias(T_B_A.linear() * Vector3d(bias_ax, bias_ay, bias_az));
-        imuInEKF->setGyroBias(T_B_G.linear() * Vector3d(bias_gx, bias_gy, bias_gz));
-    }
+
+    
 }
 
 void quadruped_ekf::loadCoMEKFparams()
@@ -392,7 +391,6 @@ quadruped_ekf::quadruped_ekf()
     useLegOdom = false;
     firstUpdate = false;
     firstOdom = false;
-    odom_divergence = false;
 }
 
 quadruped_ekf::~quadruped_ekf()
@@ -442,42 +440,6 @@ bool quadruped_ekf::connect(const ros::NodeHandle nh)
     return true;
 }
 
-void quadruped_ekf::reconfigureCB(serow::VarianceControlConfig &config, uint32_t level)
-{
-
-    imuEKF->accb_qx = config.accb_qx;
-    imuEKF->accb_qy = config.accb_qy;
-    imuEKF->accb_qz = config.accb_qz;
-
-    imuEKF->gyrb_qx = config.gyrb_qx;
-    imuEKF->gyrb_qy = config.gyrb_qy;
-    imuEKF->gyrb_qz = config.gyrb_qz;
-
-    imuEKF->acc_qx = config.acc_qx;
-    imuEKF->acc_qy = config.acc_qy;
-    imuEKF->acc_qz = config.acc_qz;
-
-    imuEKF->gyr_qx = config.gyr_qx;
-    imuEKF->gyr_qy = config.gyr_qy;
-    imuEKF->gyr_qz = config.gyr_qz;
-
-    imuEKF->odom_px = config.odom_px;
-    imuEKF->odom_py = config.odom_py;
-    imuEKF->odom_pz = config.odom_pz;
-
-    imuEKF->odom_ax = config.odom_ax;
-    imuEKF->odom_ay = config.odom_ay;
-    imuEKF->odom_az = config.odom_az;
-
-    if (useCoMEKF)
-    {
-        nipmEKF->com_q = config.com_q;
-        nipmEKF->comd_q = config.comd_q;
-        nipmEKF->com_r = config.com_r;
-        nipmEKF->comdd_r = config.comdd_r;
-        nipmEKF->fd_q = config.fd_q;
-    }
-}
 
 bool quadruped_ekf::connected()
 {
@@ -512,54 +474,77 @@ void quadruped_ekf::init()
 
     /** Initialize Variables **/
     //Kinematic TFs
-    Tws = Affine3d::Identity();
-    Twb = Affine3d::Identity();
-    Twb_ = Twb;
-    Tbs = Affine3d::Identity();
-    LLegGRF = Vector3d::Zero();
-    RLegGRF = Vector3d::Zero();
-    LLegGRT = Vector3d::Zero();
-    RLegGRT = Vector3d::Zero();
-    copl = Vector3d::Zero();
-    copr = Vector3d::Zero();
+    Tws  = Affine3d::Identity();
+    Twb  = Affine3d::Identity();
+    Twb_ = Affine3d::Identity();
+    Tbs  = Affine3d::Identity();
+    TwLF = Affine3d::Identity();
+    TwLH = Affine3d::Identity();
+    TwRF = Affine3d::Identity();
+    TwRH = Affine3d::Identity();
+    TbLF = Affine3d::Identity();
+    TbLH = Affine3d::Identity();
+    TbRF = Affine3d::Identity();
+    TbRH = Affine3d::Identity();
+
+    //GRF
+    LFLegGRF = Vector3d::Zero();
+    LHLegGRF = Vector3d::Zero();
+    RFLegGRF = Vector3d::Zero();
+    RHLegGRF = Vector3d::Zero();
+    //GRT
+    LFLegGRT = Vector3d::Zero();
+    LHLegGRT = Vector3d::Zero();
+    RFLegGRT = Vector3d::Zero();
+    RHLegGRT = Vector3d::Zero();
+
+    //LOCAL COP
+    copLF = Vector3d::Zero();
+    copLH = Vector3d::Zero();
+    copRF = Vector3d::Zero();
+    copRH = Vector3d::Zero();
+
+    weightLF = 0.000;
+    weightLH = 0.000;
+    weightRF = 0.000;
+    weightRH = 0.000;
+
+    //GLOBAL COP
+    copwLF = Vector3d::Zero();
+    copwLH = Vector3d::Zero();
+    copwRF = Vector3d::Zero();
+    copwRH = Vector3d::Zero();
+
+    //Global Base/Leg Twist
     omegawb = Vector3d::Zero();
     vwb = Vector3d::Zero();
-    omegabl = Vector3d::Zero();
-    omegabr = Vector3d::Zero();
-    vbl = Vector3d::Zero();
-    vbr = Vector3d::Zero();
-    Twl = Affine3d::Identity();
-    Twr = Affine3d::Identity();
-    Tbl = Affine3d::Identity();
-    Tbr = Affine3d::Identity();
-    vwl = Vector3d::Zero();
-    vwr = Vector3d::Zero();
-    vbln = Vector3d::Zero();
-    vbrn = Vector3d::Zero();
+    vwLF = Vector3d::Zero();
+    vwLH = Vector3d::Zero();
+    vwRF = Vector3d::Zero();
+    vwRH = Vector3d::Zero();
+    vbLFn = Vector3d::Zero();
+    vbLHn = Vector3d::Zero();
+    vbRFn = Vector3d::Zero();
+    vbRHn = Vector3d::Zero();
 
-    coplw = Vector3d::Zero();
-    coprw = Vector3d::Zero();
-    weightl = 0.000;
-    weightr = 0.000;
-    no_motion_residual = Vector3d::Zero();
+    //Local Leg Twist
+    omegabLF= Vector3d::Zero();
+    omegabLH= Vector3d::Zero();
+    omegabRF = Vector3d::Zero();
+    omegabRH = Vector3d::Zero();
+    vbLF = Vector3d::Zero();
+    vbLH = Vector3d::Zero();
+    vbRF = Vector3d::Zero();
+    vbRH = Vector3d::Zero();
+
     kinematicsInitialized = false;
     firstUpdate = true;
     firstGyrodot = true;
     firstContact = true;
 
     // Initialize the IMU based EKF
-
-    if (!useInIMUEKF)
-    {
-        imuEKF = new IMUEKF;
-        imuEKF->init();
-    }
-    else
-    {
-        imuInEKF = new IMUinEKF;
-        imuInEKF->init();
-    }
-
+    imuInEKF = new IMUinEKF;
+    imuInEKF->init();
     if (useCoMEKF)
     {
         if (useGyroLPF)
@@ -577,11 +562,16 @@ void quadruped_ekf::init()
         nipmEKF = new CoMEKF;
         nipmEKF->init();
     }
+
     imu_inc = false;
-    lfsr_inc = false;
-    rfsr_inc = false;
-    lft_inc = false;
-    rft_inc = false;
+    LFfsr_inc = false;
+    RFfsr_inc = false;
+    LHfsr_inc = false;
+    RHfsr_inc = false;
+    LFft_inc = false;
+    RFft_inc = false;
+    LHft_inc = false;
+    RHft_inc = false;
 
     joint_inc = false;
     odom_inc = false;
@@ -589,18 +579,17 @@ void quadruped_ekf::init()
     leg_vel_inc = false;
     support_inc = false;
     com_inc = false;
+ 
+    LFmdf = MediatorNew(medianWindow);
+    RFmdf = MediatorNew(medianWindow);
+    LHmdf = MediatorNew(medianWindow);
+    RHmdf = MediatorNew(medianWindow);
 
-    no_motion_indicator = false;
-    no_motion_it = 0;
-    no_motion_threshold = 5e-4;
-    no_motion_it_threshold = 500;
-    outlier_count = 0;
-    lmdf = MediatorNew(medianWindow);
-    rmdf = MediatorNew(medianWindow);
-    //llmdf = new WindowMedian<double>(medianWindow);
-    //rrmdf = new WindowMedian<double>(medianWindow);
-    LLegForceFilt = 0;
-    RLegForceFilt = 0;
+    LFLegForceFilt = 0;
+    RFLegForceFilt = 0;
+    LHLegForceFilt = 0;
+    RHLegForceFilt = 0;
+
 }
 
 /** Main Loop **/
@@ -616,13 +605,13 @@ void quadruped_ekf::run()
             predictWithCoM = false;
             if (useMahony)
             {
-                mh->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z) + Vector3d(bias_gx, bias_gy, bias_gz)),
-                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z) + Vector3d(bias_ax, bias_ay, bias_az)));
+                mh->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z) - Vector3d(bias_gx, bias_gy, bias_gz)),
+                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z) - Vector3d(bias_ax, bias_ay, bias_az)));
             }
             else
             {
-                mw->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z) + Vector3d(bias_gx, bias_gy, bias_gz)),
-                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z) + Vector3d(bias_ax, bias_ay, bias_az)));
+                mw->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z) - Vector3d(bias_gx, bias_gy, bias_gz)),
+                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z) - Vector3d(bias_ax, bias_ay, bias_az)));
             }
 
             //Compute the required transformation matrices (tfs) with Kinematics
@@ -632,11 +621,8 @@ void quadruped_ekf::run()
             //Main Loop
             if (kinematicsInitialized)
             {
-                if (!useInIMUEKF)
-                    estimateWithIMUEKF();
-                else
-                    estimateWithInIMUEKF();
-
+                
+                estimateWithInIMUEKF();
                 if (useCoMEKF)
                     estimateWithCoMEKF();
 
@@ -670,6 +656,8 @@ void quadruped_ekf::estimateWithInIMUEKF()
         imuInEKF->setdt(1.0 / freq);
         imuInEKF->setBodyPos(Twb.translation());
         imuInEKF->setBodyOrientation(Twb.linear());
+        imuInEKF->setAccBias(T_B_A.linear() * Vector3d(bias_ax, bias_ay, bias_az));
+        imuInEKF->setGyroBias(T_B_G.linear() * Vector3d(bias_gx, bias_gy, bias_gz));
         imuInEKF->setLeftContact(Vector3d(dr->getLFootIMVPPosition()(0), dr->getLFootIMVPPosition()(1), 0.00));
         imuInEKF->setRightContact(Vector3d(dr->getRFootIMVPPosition()(0), dr->getRFootIMVPPosition()(1), 0.00));
         imuInEKF->firstrun = false;
@@ -692,164 +680,27 @@ void quadruped_ekf::estimateWithInIMUEKF()
     {
         if (leg_odom_inc)
         {
-
             imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), (2.0 - cd->getRLegContactProb()) * JRQnJRt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(),
              (2.0 - cd->getLLegContactProb()) * JLQnJLt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(), cd->isRLegContact(), cd->isLLegContact());
             //imuInEKF->updateWithOrient(qwb);
             //imuInEKF->updateWithTwist(vwb, dr->getVelocityCovariance() +  cd->getDiffForce()/(m*g)*Matrix3d::Identity());
             //imuInEKF->updateWithTwistOrient(vwb,qwb);
             //imuInEKF->updateWithOdom(Twb.translation(),qwb);
-
             leg_odom_inc = false;
         }
     }
     //Estimated TFs for Legs and Support foot
-    Twl = imuInEKF->Tib * Tbl;
-    Twr = imuInEKF->Tib * Tbr;
-    qwl = Quaterniond(Twl.linear());
-    qwr = Quaterniond(Twr.linear());
+    TwLF = imuInEKF->Tib * TbLF;
+    TwLH = imuInEKF->Tib * TbLH;
+    TwRF = imuInEKF->Tib * TbRF;
+    TwRH = imuInEKF->Tib * TbRH;
+
+    qwLF = Quaterniond(TwLF.linear());
+    qwLH = Quaterniond(TwLH.linear());
+    qwRF = Quaterniond(TwRF.linear());
+    qwRH = Quaterniond(TwRH.linear());
+
     Tws = imuInEKF->Tib * Tbs;
-    qws = Quaterniond(Tws.linear());
-}
-
-void quadruped_ekf::estimateWithIMUEKF()
-{
-    //Initialize the IMU EKF state
-    if (imuEKF->firstrun)
-    {
-        imuEKF->setdt(1.0 / freq);
-        imuEKF->setBodyPos(Twb.translation());
-        imuEKF->setBodyOrientation(Twb.linear());
-        imuEKF->firstrun = false;
-    }
-
-    //Compute the attitude and posture with the IMU-Kinematics Fusion
-    //Predict with the IMU gyro and acceleration
-    if (imu_inc && !predictWithImu && !imuEKF->firstrun)
-    {
-        imuEKF->predict(T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
-                        T_B_A.linear() * Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z));
-        imu_inc = false;
-        predictWithImu = true;
-    }
-
-    //Check for no motion
-    if (predictWithImu)
-    {
-        if (check_no_motion)
-        {
-            no_motion_residual = Twb.translation() - Twb_.translation();
-            if (no_motion_residual.norm() < no_motion_threshold)
-                no_motion_it++;
-            else
-            {
-                no_motion_indicator = false;
-                no_motion_it = 0;
-            }
-            if (no_motion_it > no_motion_it_threshold)
-            {
-                no_motion_indicator = true;
-                no_motion_it = 0;
-            }
-            check_no_motion = false;
-        }
-
-        //Update EKF
-        if (firstUpdate)
-        {
-            pos_update = Twb.translation();
-            q_update = qwb;
-            //First Update
-            firstUpdate = false;
-            imuEKF->updateWithLegOdom(pos_update, q_update);
-        }
-        else
-        {
-            //Update with the odometry
-            if (leg_odom_inc)
-            {
-                //Diff leg odom update
-                pos_leg_update = Twb.translation() - Twb_.translation();
-                q_leg_update = qwb * qwb_.inverse();
-            }
-            if (no_motion_indicator || useLegOdom && leg_odom_inc)
-            {
-
-                pos_update += pos_leg_update;
-                q_update *= q_leg_update;
-                imuEKF->updateWithTwistRotation(vwb, q_update);
-                leg_odom_inc = false;
-                //STORE POS
-                if (odom_inc)
-                {
-                    odom_msg_ = odom_msg;
-                    odom_inc = false;
-                }
-            }
-            else
-            {
-
-                if (odom_inc && !odom_divergence)
-                {
-                    if (outlier_count < 3)
-                    {
-                        pos_update_ = pos_update;
-                        pos_update += T_B_P.linear() * Vector3d(odom_msg.pose.pose.position.x - odom_msg_.pose.pose.position.x,
-                                                                odom_msg.pose.pose.position.y - odom_msg_.pose.pose.position.y, odom_msg.pose.pose.position.z - odom_msg_.pose.pose.position.z);
-
-                        q_now = q_B_P * Quaterniond(odom_msg.pose.pose.orientation.w, odom_msg.pose.pose.orientation.x,
-                                                    odom_msg.pose.pose.orientation.y, odom_msg.pose.pose.orientation.z);
-
-                        q_prev = q_B_P * Quaterniond(odom_msg_.pose.pose.orientation.w, odom_msg_.pose.pose.orientation.x,
-                                                     odom_msg_.pose.pose.orientation.y, odom_msg_.pose.pose.orientation.z);
-
-                        q_update_ = q_update;
-
-                        q_update *= (q_now * q_prev.inverse());
-                        odom_inc = false;
-                        odom_msg_ = odom_msg;
-                        outlier = imuEKF->updateWithOdom(pos_update, q_update, useOutlierDetection);
-
-                        if (outlier)
-                        {
-                            outlier_count++;
-                            pos_update = pos_update_;
-                            q_update = q_update_;
-                        }
-                        else
-                        {
-                            outlier_count = 0;
-                        }
-                    }
-                    else
-                    {
-                        odom_divergence = true;
-                    }
-                }
-
-                if (odom_divergence && leg_odom_inc)
-                {
-                    //std::cout<<"Odom divergence, updating only with leg odometry"<<std::endl;
-                    pos_update += pos_leg_update;
-                    q_update *= q_leg_update;
-                    imuEKF->updateWithTwistRotation(vwb, q_update);
-                    leg_odom_inc = false;
-                }
-                else if (leg_vel_inc)
-                {
-                    imuEKF->updateWithTwist(vwb);
-                    leg_vel_inc = false;
-                }
-            }
-        }
-    }
-
-    //Estimated TFs for Legs and Support foot
-    Twl = imuEKF->Tib * Tbl;
-    Twr = imuEKF->Tib * Tbr;
-    qwl = Quaterniond(Twl.linear());
-    qwr = Quaterniond(Twr.linear());
-    Tws = imuEKF->Tib * Tbs;
     qws = Quaterniond(Tws.linear());
 }
 
@@ -882,7 +733,7 @@ void quadruped_ekf::estimateWithCoMEKF()
     //Compute the COP in the Inertial Frame
     if (lfsr_inc && rfsr_inc && !predictWithCoM && !nipmEKF->firstrun)
     {
-        computeGlobalCOP(Twl, Twr);
+        computeGlobalCOP(TwLF, TwLH, TwRF, TwRH);
         //Numerically compute the Gyro acceleration in the Inertial Frame and use a 3-Point Low-Pass filter
         filterGyrodot();
         DiagonalMatrix<double, 3> Inertia(I_xx, I_yy, I_zz);
@@ -902,33 +753,7 @@ void quadruped_ekf::estimateWithCoMEKF()
     }
 }
 
-void quadruped_ekf::computeLGRF()
-{
-    LLegGRF(0) = lfsr_msg.wrench.force.x;
-    LLegGRF(1) = lfsr_msg.wrench.force.y;
-    LLegGRF(2) = lfsr_msg.wrench.force.z;
-    LLegGRT(0) = lfsr_msg.wrench.torque.x;
-    LLegGRT(1) = lfsr_msg.wrench.torque.y;
-    LLegGRT(2) = lfsr_msg.wrench.torque.z;
-    LLegGRF = T_FT_LL.linear() * LLegGRF;
-    LLegGRT = T_FT_LL.linear() * LLegGRT;
-    MediatorInsert(lmdf, LLegGRF(2));
-    LLegForceFilt = MediatorMedian(lmdf);
-}
-void quadruped_ekf::computeRGRF()
-{
-    RLegGRF(0) = rfsr_msg.wrench.force.x;
-    RLegGRF(1) = rfsr_msg.wrench.force.y;
-    RLegGRF(2) = rfsr_msg.wrench.force.z;
-    RLegGRT(0) = rfsr_msg.wrench.torque.x;
-    RLegGRT(1) = rfsr_msg.wrench.torque.y;
-    RLegGRT(2) = rfsr_msg.wrench.torque.z;
-    RLegGRF = T_FT_RL.linear() * RLegGRF;
-    RLegGRT = T_FT_RL.linear() * RLegGRT;
-    MediatorInsert(rmdf, RLegGRF(2));
-    RLegForceFilt = MediatorMedian(rmdf);
-}
-
+// OLO AYTO PREPEI NA ALLAKSEI
 void quadruped_ekf::computeKinTFs()
 {
 
@@ -955,7 +780,7 @@ void quadruped_ekf::computeKinTFs()
         Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
         Twr.linear() = Tbr.linear();
         dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                                      mass, Tau0, Tau1, joint_freq, g, useCF, cf_freqvmin, cf_freqvmax, p_FT_LL, p_FT_RL);
+                                      mass, Tau0, Tau1, joint_freq, g, p_FT_LL, p_FT_RL);
     }
 
     //Differential Kinematics with Pinnochio
@@ -972,8 +797,6 @@ void quadruped_ekf::computeKinTFs()
 
     if (lft_inc && rft_inc)
     {
-        computeLGRF();
-        computeRGRF();
         if (firstContact)
         {
             cd = new serow::ContactDetection();
@@ -990,7 +813,6 @@ void quadruped_ekf::computeKinTFs()
 
             firstContact = false;
         }
-        computeLocalCOP();
 
         if (useGEM)
             cd->computeSupportFoot(LLegForceFilt, RLegForceFilt, copl(0), copl(1), copr(0), copr(1), vwl.norm(), vwr.norm());
@@ -1147,51 +969,27 @@ void quadruped_ekf::publishGRF()
     }
 }
 
-void quadruped_ekf::computeLocalCOP()
-{
-    copl = Vector3d::Zero();
-    if (LLegGRF(2) != 0)
-    {
-        copl(0) = -LLegGRT(1) / LLegGRF(2);
-        copl(1) = LLegGRT(0) / LLegGRF(2);
-    }
-    copr = Vector3d::Zero();
-    if (RLegGRF(2) != 0)
-    {
-        copr(0) = -RLegGRT(1) / RLegGRF(2);
-        copr(1) = RLegGRT(0) / RLegGRF(2);
-    }
-
-    weightl = LLegGRF(2) / g;
-    weightr = RLegGRF(2) / g;
-
-    if (LLegGRF(2) < LosingContact)
-    {
-        copl = Vector3d::Zero();
-        LLegGRF = Vector3d::Zero();
-        LLegGRT = Vector3d::Zero();
-        weightl = 0.0;
-    }
-    if (RLegGRF(2) < LosingContact)
-    {
-        copr = Vector3d::Zero();
-        RLegGRF = Vector3d::Zero();
-        RLegGRT = Vector3d::Zero();
-        weightr = 0.0;
-    }
-}
-
-void quadruped_ekf::computeGlobalCOP(Affine3d Twl_, Affine3d Twr_)
+void quadruped_ekf::computeGlobalCOP(Affine3d TwLF_, Affine3d TwLH_, Affine3d TwRF_, Affine3d TwRH_)
 {
 
-    // Compute the CoP wrt the Support Foot Frame
-    coplw = Twl_ * copl;
-    coprw = Twr_ * copr;
+    copwLF = TwLF_ * copLF;
+    copwRF = TwRF_ * copRF;
+    copwLH = TwLH_ * copLH;
+    copwRH = TwRH_ * copRH;
 
-    COP_fsr = (weightl * coplw + weightr * coprw) / (weightl + weightr);
+    //Compute the CoP wrt world Frame
+    COP_fsr  = weightLF * copwLF;
+    COP_fsr += weightRF * copwRF;
+    COP_fsr += weightLH * copwLH;
+    COP_fsr += weightRH * copwRH;
+    COP_fsr  = COP_fsr /(weightLF + weightRF + weightLH + weightRH);
 
-    GRF_fsr = Twl_.linear() * LLegGRF;
-    GRF_fsr += Twr_.linear() * RLegGRF;
+    //Compute the GRF wrt world Frame
+    GRF_fsr  = TwLF_.linear() * LFLegGRF;
+    GRF_fsr += TwRF_.linear() * RFLegGRF;
+    GRF_fsr += TwLH_.linear() * LHLegGRF;
+    GRF_fsr += TwRF_.linear() * RHLegGRF;
+
 }
 
 void quadruped_ekf::publishCOP()
@@ -1511,65 +1309,130 @@ void quadruped_ekf::imuCb(const sensor_msgs::Imu::ConstPtr &msg)
 void quadruped_ekf::subscribeToFSR()
 {
     //Left Foot Wrench
-    lfsr_sub = n.subscribe(lfsr_topic, 1, &quadruped_ekf::lfsrCb, this, ros::TransportHints().tcpNoDelay());
+    LFft_sub = n.subscribe(LFfsr_topic, 1, &quadruped_ekf::LFfsrCb, this, ros::TransportHints().tcpNoDelay());
     //Right Foot Wrench
-    rfsr_sub = n.subscribe(rfsr_topic, 1, &quadruped_ekf::rfsrCb, this, ros::TransportHints().tcpNoDelay());
+    RFft_sub = n.subscribe(RFfsr_topic, 1, &quadruped_ekf::RFfsrCb, this, ros::TransportHints().tcpNoDelay());
+
+    //Left Foot Wrench
+    LHft_sub = n.subscribe(LHfsr_topic, 1, &quadruped_ekf::LHfsrCb, this, ros::TransportHints().tcpNoDelay());
+    //Right Foot Wrench
+    RHft_sub = n.subscribe(RHfsr_topic, 1, &quadruped_ekf::RHfsrCb, this, ros::TransportHints().tcpNoDelay());
+
+
 }
 
-void quadruped_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
+void quadruped_ekf::LFfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
-    lfsr_msg = *msg;
-    lfsr_inc = true;
-    lft_inc = true;
+    LFfsr_msg = *msg;
+    LFLegGRF(0) = LFfsr_msg.wrench.force.x;
+    LFLegGRF(1) = LFfsr_msg.wrench.force.y;
+    LFLegGRF(2) = LFfsr_msg.wrench.force.z;
+    LFLegGRT(0) = LFfsr_msg.wrench.torque.x;
+    LFLegGRT(1) = LFfsr_msg.wrench.torque.y;
+    LFLegGRT(2) = LFfsr_msg.wrench.torque.z;
+    LFLegGRF = T_FT_LF.linear() * LFLegGRF;
+    LFLegGRT = T_FT_LF.linear() * LFLegGRT;
+
+    MediatorInsert(LFmdf, LFLegGRF(2));
+    LFLegForceFilt = MediatorMedian(LFmdf);
+
+    copLF = Vector3d::Zero();
+    if (LFLegGRF(2) >= LosingContact)
+    {
+        copLF(0) = -LFLegGRT(1) / LFLegGRF(2);
+        copLF(1) = LFLegGRT(0) / LFLegGRF(2);
+    }
+    weightLF = LFLegGRF(2) / g;
+
+
+    LFfsr_inc = true;
+    LFft_inc = true;
 }
 
-void quadruped_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
+void quadruped_ekf::RFfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
-    rfsr_msg = *msg;
-    rft_inc = true;
-    rfsr_inc = true;
+    RFfsr_msg = *msg;
+    RFLegGRF(0) = RFfsr_msg.wrench.force.x;
+    RFLegGRF(1) = RFfsr_msg.wrench.force.y;
+    RFLegGRF(2) = RFfsr_msg.wrench.force.z;
+    RFLegGRT(0) = RFfsr_msg.wrench.torque.x;
+    RFLegGRT(1) = RFfsr_msg.wrench.torque.y;
+    RFLegGRT(2) = RFfsr_msg.wrench.torque.z;
+    RFLegGRF = T_FT_RF.linear() * RFLegGRF;
+    RFLegGRT = T_FT_RF.linear() * RFLegGRT;
+    
+    MediatorInsert(RFmdf, RFLegGRF(2));
+    RFLegForceFilt = MediatorMedian(RFmdf);
+
+    copRF = Vector3d::Zero();
+    if (RFLegGRF(2) >= LosingContact)
+    {
+        copRF(0) = -RFLegGRT(1) / RFLegGRF(2);
+        copRF(1) =  RFLegGRT(0) / RFLegGRF(2);
+    }
+    weightRF = RFLegGRF(2) / g;
+
+    RFfsr_inc = true;
+    RFft_inc = true;
+}
+
+void quadruped_ekf::LHfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
+{
+    LHfsr_msg = *msg;
+    LHLegGRF(0) = LHfsr_msg.wrench.force.x;
+    LHLegGRF(1) = LHfsr_msg.wrench.force.y;
+    LHLegGRF(2) = LHfsr_msg.wrench.force.z;
+    LHLegGRT(0) = LHfsr_msg.wrench.torque.x;
+    LHLegGRT(1) = LHfsr_msg.wrench.torque.y;
+    LHLegGRT(2) = LHfsr_msg.wrench.torque.z;
+    LHLegGRF = T_FT_LH.linear() * LHLegGRF;
+    LHLegGRT = T_FT_LH.linear() * LHLegGRT;
+    
+    MediatorInsert(LHmdf, LHLegGRF(2));
+    LHLegForceFilt = MediatorMedian(LHmdf);
+
+     
+    copLH = Vector3d::Zero();
+    if (LHLegGRF(2) >= LosingContact)
+    {
+        copLH(0) = -LHLegGRT(1) / LHLegGRF(2);
+        copLH(1) = LHLegGRT(0) / LHLegGRF(2);
+    }
+    weightLH = LHLegGRF(2) / g;
+
+    LHfsr_inc = true;
+    LHft_inc = true;
+}
+
+void quadruped_ekf::RHfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
+{
+    RHfsr_msg = *msg;
+    RHLegGRF(0) = RHfsr_msg.wrench.force.x;
+    RHLegGRF(1) = RHfsr_msg.wrench.force.y;
+    RHLegGRF(2) = RHfsr_msg.wrench.force.z;
+    RHLegGRT(0) = RHfsr_msg.wrench.torque.x;
+    RHLegGRT(1) = RHfsr_msg.wrench.torque.y;
+    RHLegGRT(2) = RHfsr_msg.wrench.torque.z;
+    RHLegGRF = T_FT_RH.linear() * RHLegGRF;
+    RHLegGRT = T_FT_RH.linear() * RHLegGRT;
+    
+    MediatorInsert(RHmdf, RHLegGRF(2));
+    RHLegForceFilt = MediatorMedian(RHmdf);
+
+    copRH = Vector3d::Zero();
+    if (RHLegGRF(2) >= LosingContact)
+    {
+        copRH(0) = -RHLegGRT(1) / RHLegGRF(2);
+        copRH(1) =  RHLegGRT(0) / RHLegGRF(2);
+    }
+    weightRH = RHLegGRF(2) / g;
+
+    RHfsr_inc = true;
+    RHft_inc = true;
 }
 
 void quadruped_ekf::publishBodyEstimates()
 {
-
-    if (!useInIMUEKF)
-    {
-        bodyAcc_est_msg.header.stamp = ros::Time::now();
-        bodyAcc_est_msg.header.frame_id = "odom";
-        bodyAcc_est_msg.linear_acceleration.x = imuEKF->accX;
-        bodyAcc_est_msg.linear_acceleration.y = imuEKF->accY;
-        bodyAcc_est_msg.linear_acceleration.z = imuEKF->accZ;
-
-        bodyAcc_est_msg.angular_velocity.x = imuEKF->gyroX;
-        bodyAcc_est_msg.angular_velocity.y = imuEKF->gyroY;
-        bodyAcc_est_msg.angular_velocity.z = imuEKF->gyroZ;
-        bodyAcc_est_pub.publish(bodyAcc_est_msg);
-
-        odom_est_msg.child_frame_id = base_link_frame;
-        odom_est_msg.header.stamp = ros::Time::now();
-        odom_est_msg.header.frame_id = "odom";
-        odom_est_msg.pose.pose.position.x = imuEKF->rX;
-        odom_est_msg.pose.pose.position.y = imuEKF->rY;
-        odom_est_msg.pose.pose.position.z = imuEKF->rZ;
-        odom_est_msg.pose.pose.orientation.x = imuEKF->qib.x();
-        odom_est_msg.pose.pose.orientation.y = imuEKF->qib.y();
-        odom_est_msg.pose.pose.orientation.z = imuEKF->qib.z();
-        odom_est_msg.pose.pose.orientation.w = imuEKF->qib.w();
-
-        odom_est_msg.twist.twist.linear.x = imuEKF->velX;
-        odom_est_msg.twist.twist.linear.y = imuEKF->velY;
-        odom_est_msg.twist.twist.linear.z = imuEKF->velZ;
-        odom_est_msg.twist.twist.angular.x = imuEKF->gyroX;
-        odom_est_msg.twist.twist.angular.y = imuEKF->gyroY;
-        odom_est_msg.twist.twist.angular.z = imuEKF->gyroZ;
-
-        //for(int i=0;i<36;i++)
-        //odom_est_msg.pose.covariance[i] = 0;
-        odom_est_pub.publish(odom_est_msg);
-    }
-    else
-    {
         bodyAcc_est_msg.header.stamp = ros::Time::now();
         bodyAcc_est_msg.header.frame_id = "odom";
         bodyAcc_est_msg.linear_acceleration.x = imuInEKF->accX;
@@ -1599,7 +1462,7 @@ void quadruped_ekf::publishBodyEstimates()
         odom_est_msg.twist.twist.angular.y = imuInEKF->gyroY;
         odom_est_msg.twist.twist.angular.z = imuInEKF->gyroZ;
         odom_est_pub.publish(odom_est_msg);
-    }
+    
 
     leg_odom_msg.child_frame_id = base_link_frame;
     leg_odom_msg.header.stamp = ros::Time::now();
@@ -1632,11 +1495,9 @@ void quadruped_ekf::publishBodyEstimates()
         ground_truth_odom_pub.publish(ground_truth_odom_pub_msg);
         ds_pub.publish(is_in_ds_msg);
     }
-    //if(comp_odom0_inc){
     comp_odom0_msg.header = odom_est_msg.header;
     comp_odom0_pub.publish(comp_odom0_msg);
     comp_odom0_inc = false;
-    //}
 }
 
 void quadruped_ekf::publishSupportEstimates()
