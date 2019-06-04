@@ -36,13 +36,12 @@
 #include <ros/ros.h>
 
 // Estimator Headers
-#include "serow/IMUEKF.h"
-#include "serow/IMUinEKF.h"
-
-#include "serow/CoMEKF.h"
-#include "serow/JointDF.h"
-#include "serow/butterworthLPF.h"
-#include "serow/MovingAverageFilter.h"
+#include <serow/IMUinEKF.h>
+#include <serow/IMUEKF.h>
+#include <serow/CoMEKF.h>
+#include <serow/JointDF.h>
+#include <serow/butterworthLPF.h>
+#include <serow/MovingAverageFilter.h>
 
 #include <eigen3/Eigen/Dense>
 // ROS Messages
@@ -59,14 +58,13 @@
 #include <nav_msgs/Odometry.h>
 
 #include <dynamic_reconfigure/server.h>
-#include "serow/VarianceControlConfig.h"
-#include "serow/mediator.h"
-#include "serow/differentiator.h"
-#include "serow/robotDyn.h"
-#include "serow/Madgwick.h"
-#include "serow/Mahony.h"
-#include "serow/deadReckoning.h"
-#include "serow/Median.h"
+#include <serow/VarianceControlConfig.h>
+#include <serow/mediator.h>
+#include <serow/differentiator.h>
+#include <serow/robotDyn.h>
+#include <serow/Madgwick.h>
+#include <serow/Mahony.h>
+#include <serow/deadReckoning.h>
 #include <serow/ContactDetection.h>
 
 using namespace Eigen;
@@ -95,20 +93,26 @@ private:
 	string base_link_frame, support_foot_frame, LFfoot_frame,  LHfoot_frame, RFfoot_frame, RHfoot_frame;
 
 
+	//Wrapper of Pinnochio
 	serow::robotDyn* rd;
+	//Orientation Estimators based on IMU
     bool useMahony;
 	serow::Madgwick* mw;
     serow::Mahony* mh;
-    double Kp, Ki, bias_max, bias_may, bias_maz, bias_mgx, bias_mgy, bias_mgz;
+    double Kp, Ki;
+
+	//Leg Odometry Computation
 	serow::deadReckoning* dr;
-
+	//Joint State Estimator 
   	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
+	JointDF** JointVF;
+	double jointFreq,joint_cutoff_freq;
 
-	bool useCF;
-	double cf_freqvmin, cf_freqvmax, Tau0, Tau1, VelocityThres;
+	double  Tau0, Tau1, VelocityThres;
 
 	double  freq, joint_freq, fsr_freq;
-	bool LFfsr_inc, LHfsr_inc, RHfsr_inc, RFfsr_inc, LFft_inc, LHft_inc, RFft_inc, RHft_inc,  imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
+	bool LFfsr_inc, LHfsr_inc, RHfsr_inc, RFfsr_inc, LFft_inc, LHft_inc, RFft_inc, RHft_inc;
+	bool imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
 	bool firstOdom, firstUpdate, odom_divergence;
 	int number_of_joints, outlier_count;
 	bool firstGyrodot;
@@ -125,6 +129,7 @@ private:
 	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, tempq_, gt_odomq; 
 	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM, useOutlierDetection;
     bool debug_mode;
+
 	//ROS Messages
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
 	sensor_msgs::Imu imu_msg;
@@ -132,7 +137,7 @@ private:
 	ground_truth_com_odom_msg, CoM_odom_msg, ground_truth_odom_msg_, ground_truth_odom_pub_msg;
 	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg, rel_supportPose_msg, rel_swingPose_msg;
 	std_msgs::String support_leg_msg;
-	geometry_msgs::WrenchStamped RLeg_est_msg, LLeg_est_msg, lfsr_msg, rfsr_msg, external_force_filt_msg;
+	geometry_msgs::WrenchStamped RLeg_est_msg, LLeg_est_msg, LFfsr_msg, LHfsr_msg, RFfsr_msg, RHfsr_msg, external_force_filt_msg;
    
     geometry_msgs::PoseStamped bodyPose_est_msg, supportPose_est_msg;
 	geometry_msgs::TwistStamped bodyVel_est_msg, CoM_vel_msg;
@@ -162,8 +167,7 @@ private:
 	double gyro_fx, gyro_fy, gyro_fz;
 	Vector3d COP_fsr, GRF_fsr, CoM_enc, Gyrodot, Gyro_, CoM_leg_odom;
 	double bias_fx,bias_fy,bias_fz;
-	JointDF** JointVF;
-	double jointFreq,joint_cutoff_freq;
+
 	Mediator *lmdf, *rmdf;
 
 	//WindowMedian<double> *llmdf, *rrmdf;
@@ -225,10 +229,8 @@ private:
 	 void RFfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void RHfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 
-	 void computeLGRF();
-	 void computeRGRF();
-	 void computeLocalCOP();
-	 void computeGlobalCOP(Affine3d Tis_, Affine3d Tssprime_);
+
+	void computeGlobalCOP(Affine3d TwLF_, Affine3d TwLH_, Affine3d TwRF_, Affine3d TwRH_);
 	 void filterGyrodot();
 	//private methods
 	void init();

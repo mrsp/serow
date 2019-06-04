@@ -251,9 +251,7 @@ void humanoid_ekf::loadparams()
         mw = new serow::Madgwick(freq, beta);
     }
 
-    n_p.param<bool>("useCF", useCF, false);
-    n_p.param<double>("freqvmax", cf_freqvmax, 2.5);
-    n_p.param<double>("freqvmin", cf_freqvmin, 0.1);
+
     n_p.param<double>("Tau0", Tau0, 0.5);
     n_p.param<double>("Tau1", Tau1, 0.01);
 
@@ -955,7 +953,7 @@ void humanoid_ekf::computeKinTFs()
         Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
         Twr.linear() = Tbr.linear();
         dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                                      mass, Tau0, Tau1, joint_freq, g, useCF, cf_freqvmin, cf_freqvmax, p_FT_LL, p_FT_RL);
+                                      mass, Tau0, Tau1, joint_freq, g, p_FT_LL, p_FT_RL);
     }
 
     //Differential Kinematics with Pinnochio

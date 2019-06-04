@@ -252,9 +252,9 @@ private:
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	// Constructor/Destructor
-	quadruped_ekf();
+	humanoid_ekf();
 
-	~quadruped_ekf();
+	~humanoid_ekf();
 
 	// Connect/Disconnet to ALProxies
 	bool connect(const ros::NodeHandle nh);
@@ -277,4 +277,4 @@ public:
 
 };
 
-#endif // QUADRUPED_EKF_H
+#endif // HUMANOID_EKF_H
