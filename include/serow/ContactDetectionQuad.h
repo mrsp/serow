@@ -503,21 +503,111 @@ public:
 
 
       //Determine support
-      if (contactL && contactR)
+      //Quad Support
+      if (contactLF && contactRF && contactLH && contactRH)
       {
-        if (lf > rf)
+        if (LFf >= LHf && LFf >= RFf && LFf >=RHf)
         {
-          support_leg = "LLeg";
-          support_foot_frame = lfoot_frame;
+          support_leg = "LFLeg";
+          support_foot_frame = LFfoot_frame;
         }
-        else
+        else if (LHf >= LFf && LHf >= RFf && LHf >= RHf)
         {
-          support_leg = "RLeg";
-          support_foot_frame = rfoot_frame;
+          support_leg = "LHLeg";
+          support_foot_frame = LHfoot_frame;
+        }
+        else if (RFf >= LFf && RFf >= LHf && RFf >= RHf)
+        {
+          support_leg = "RFLeg";
+          support_foot_frame = RFfoot_frame;
+        }
+        else 
+        {
+          support_leg = "RHLeg";
+          support_foot_frame = RHfoot_frame;
         }
       }
-      else if(contactLF && contactRF)
-      ////////////
+      //Triple Support
+      //LF-RH-RF --- no LH
+      else if(contactLF && contactRH && contactRF)
+      {
+        if (LFf >= RFf && LFf >=RHf)
+        {
+          support_leg = "LFLeg";
+          support_foot_frame = LFfoot_frame;
+        }
+        else if (RFf >= LFf && RFf >= RHf)
+        {
+          support_leg = "RFLeg";
+          support_foot_frame = RFfoot_frame;
+        }
+        else 
+        {
+          support_leg = "RHLeg";
+          support_foot_frame = RHfoot_frame;
+        }
+      }
+      //LF-LH-RF ---- no RH
+      else if(contactLF && contactLH && contactRF)
+      {
+        if (LFf >= RFf && LFf >=LHf)
+        {
+          support_leg = "LFLeg";
+          support_foot_frame = LFfoot_frame;
+        }
+        else if (RFf >= LFf && RFf >= LHf)
+        {
+          support_leg = "RFLeg";
+          support_foot_frame = RFfoot_frame;
+        }
+        else 
+        {
+          support_leg = "RHLeg";
+          support_foot_frame = RHfoot_frame;
+        }
+      }
+      //LF-RH-LH -- RF
+      else if(contactLF && contactLH && contactRH)
+      {
+        if (LFf >= RHf && LFf >=LHf)
+        {
+          support_leg = "LFLeg";
+          support_foot_frame = LFfoot_frame;
+        }
+        else if (RHf >= LFf && RHf >= LHf)
+        {
+          support_leg = "RHLeg";
+          support_foot_frame = RHfoot_frame;
+        }
+        else 
+        {
+          support_leg = "RFLeg";
+          support_foot_frame = RFfoot_frame;
+        }
+      }
+      //RF-RH-LH -- no LF
+      else if(contactRF && contactLH && contactRH)
+      {
+        if (RFf >= RHf && RFf >=LHf)
+        {
+          support_leg = "RFLeg";
+          support_foot_frame = RFfoot_frame;
+        }
+        else if (RHf >= RFf && RHf >= LHf)
+        {
+          support_leg = "RHLeg";
+          support_foot_frame = RHfoot_frame;
+        }
+        else 
+        {
+          support_leg = "LHLeg";
+          support_foot_frame = LHfoot_frame;
+        }
+      }
+      //Double Support
+      //TO DO
+
+      //Single Support
       else if (contactLF)
       {
         support_leg = "LFLeg";
@@ -543,94 +633,6 @@ public:
 
 
 
-    if(!firstContact)
-    {
-      deltaLFfz = LFf - LFf_;
-      deltaRFfz = RFf - RFf_;
-      deltaLHfz = LHf - LHf_;
-      deltaRHfz = RHf - RHf_;
-    }
-    LFf_ = LFf;
-    RFf_ = RFf;
-    LHf_ = LHf;
-    RHf_ = RHf;
-  }
-
-  void SchmittTrigger(double lf, double rf)
-  {
-    contactL = 0;
-    contactR = 0;
-
-    p = rf + lf;
-    pl = 0;
-    pr = 0;
-
-    if (p != 0)
-    {
-      pl = lf / p;
-      pr = rf / p;
-    }
-    // Initial support leg
-    if (firstContact)
-    {
-      if (lf > rf)
-      {
-        support_leg = "LLeg";
-        support_foot_frame = lfoot_frame;
-      }
-      else
-      {
-        support_leg = "RLeg";
-        support_foot_frame = rfoot_frame;
-      }
-      firstContact = false;
-    }
-    else
-    {
-      if (lf > LegHighThres && lf < StrikingContact)
-      {
-        contactL = 1;
-      }
-      if (lf < LegLowThres)
-      {
-        contactL = 0;
-      }
-
-      if (rf > LegHighThres && rf < StrikingContact)
-      {
-        contactR = 1;
-      }
-
-      if (rf < LegLowThres)
-      {
-        contactR = 0;
-      }
-
-      //Determine support
-      if (contactL && contactR)
-      {
-        if (lf > rf)
-        {
-          support_leg = "LLeg";
-          support_foot_frame = lfoot_frame;
-        }
-        else
-        {
-          support_leg = "RLeg";
-          support_foot_frame = rfoot_frame;
-        }
-      }
-      else if (contactL)
-      {
-        support_leg = "LLeg";
-        support_foot_frame = lfoot_frame;
-      }
-      else if (contactR)
-      {
-        support_leg = "RLeg";
-        support_foot_frame = rfoot_frame;
-      }
-    }
     if(!firstContact)
     {
       deltaLFfz = LFf - LFf_;
