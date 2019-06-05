@@ -657,8 +657,12 @@ void quadruped_ekf::estimateWithInIMUEKF()
         imuInEKF->setBodyOrientation(Twb.linear());
         imuInEKF->setAccBias(T_B_A.linear() * Vector3d(bias_ax, bias_ay, bias_az));
         imuInEKF->setGyroBias(T_B_G.linear() * Vector3d(bias_gx, bias_gy, bias_gz));
-        imuInEKF->setLeftContact(Vector3d(dr->getLFootIMVPPosition()(0), dr->getLFootIMVPPosition()(1), 0.00));
-        imuInEKF->setRightContact(Vector3d(dr->getRFootIMVPPosition()(0), dr->getRFootIMVPPosition()(1), 0.00));
+        imuInEKF->setLeftFrontContact(Vector3d(dr->getLFFootIMVPPosition()(0), dr->getLFFootIMVPPosition()(1), 0.00));
+        imuInEKF->setLeftHindContact(Vector3d(dr->getLHFootIMVPPosition()(0), dr->getLHFootIMVPPosition()(1), 0.00));
+
+        imuInEKF->setRightFrontContact(Vector3d(dr->getRFFootIMVPPosition()(0), dr->getRFFootIMVPPosition()(1), 0.00));
+        imuInEKF->setRightHindContact(Vector3d(dr->getRHFootIMVPPosition()(0), dr->getRHFootIMVPPosition()(1), 0.00));
+
         imuInEKF->firstrun = false;
     }
 
@@ -668,8 +672,9 @@ void quadruped_ekf::estimateWithInIMUEKF()
     {
         imuInEKF->predict(T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
                           T_B_A.linear() * Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z),
-                          dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), dr->getRFootIMVPOrientation(), dr->getLFootIMVPOrientation(),
-                          cd->isRLegContact(), cd->isLLegContact());
+                          dr->getRFFootIMVPPosition(), dr->getRHFootIMVPPosition(), dr->getLFFootIMVPPosition(),  dr->getLHFootIMVPPosition(),
+                          dr->getRFFootIMVPOrientation(),  dr->getRHFootIMVPOrientation(), dr->getLFFootIMVPOrientation(), dr->getLHFootIMVPOrientation(),
+                          cd->isRFLegContact(), cd->isRHLegContact(), cd->isLFLegContact(), cd->isLHLegContact());
         imu_inc = false;
         predictWithImu = true;
     }
@@ -679,8 +684,8 @@ void quadruped_ekf::estimateWithInIMUEKF()
     {
         if (leg_odom_inc)
         {
-            imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), (2.0 - cd->getRLegContactProb()) * JRQnJRt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(),
-             (2.0 - cd->getLLegContactProb()) * JLQnJLt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(), cd->isRLegContact(), cd->isLLegContact());
+            //imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), (2.0 - cd->getRLegContactProb()) * JRQnJRt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(),
+            // (2.0 - cd->getLLegContactProb()) * JLQnJLt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(), cd->isRLegContact(), cd->isLLegContact());
             //imuInEKF->updateWithOrient(qwb);
             //imuInEKF->updateWithTwist(vwb, dr->getVelocityCovariance() +  cd->getDiffForce()/(m*g)*Matrix3d::Identity());
             //imuInEKF->updateWithTwistOrient(vwb,qwb);
