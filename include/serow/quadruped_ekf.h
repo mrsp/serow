@@ -64,8 +64,8 @@
 #include <serow/robotDyn.h>
 #include <serow/Madgwick.h>
 #include <serow/Mahony.h>
-#include <serow/deadReckoning.h>
-#include <serow/ContactDetection.h>
+#include <serow/deadReckoningQuad.h>
+#include <serow/ContactDetectionQuad.h>
 
 using namespace Eigen;
 using namespace std;
@@ -102,7 +102,7 @@ private:
     double Kp, Ki;
 
 	//Leg Odometry Computation
-	serow::deadReckoning* dr;
+	serow::deadReckoningQuad* dr;
 	//Joint State Estimator 
   	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
 	JointDF** JointVF;
@@ -173,7 +173,7 @@ private:
 	//WindowMedian<double> *llmdf, *rrmdf;
 	string support_leg;
 
-	serow::ContactDetection* cd;
+	serow::ContactDetectionQuad* cd;
     Vector3d copwLF, copwLH, copwRF, copwRH;
 	Vector3d copLF, copLH, copRF, copRH;
 
