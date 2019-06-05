@@ -85,7 +85,6 @@ void quadruped_ekf::loadparams()
     }
 
     n_p.param<bool>("useLegOdom", useLegOdom, false);
-
     n_p.param<bool>("ground_truth", ground_truth, false);
     n_p.param<bool>("debug_mode", debug_mode, false);
 
@@ -737,7 +736,7 @@ void quadruped_ekf::estimateWithCoMEKF()
         //Numerically compute the Gyro acceleration in the Inertial Frame and use a 3-Point Low-Pass filter
         filterGyrodot();
         DiagonalMatrix<double, 3> Inertia(I_xx, I_yy, I_zz);
-        nipmEKF->predict(COP_fsr, GRF_fsr, imuEKF->Rib * Inertia * Gyrodot);
+        nipmEKF->predict(COP_fsr, GRF_fsr, imuInEKF->Rib * Inertia * Gyrodot);
         lfsr_inc = false;
         rfsr_inc = false;
         predictWithCoM = true;
@@ -746,9 +745,9 @@ void quadruped_ekf::estimateWithCoMEKF()
     if (com_inc && predictWithCoM)
     {
         nipmEKF->update(
-            imuEKF->acc + imuEKF->g,
-            imuEKF->Tib * CoM_enc,
-            imuEKF->gyro, Gyrodot);
+            imuInEKF->acc + imuInEKF->g,
+            imuInEKF->Tib * CoM_enc,
+            imuInEKF->gyro, Gyrodot);
         com_inc = false;
     }
 }
@@ -764,71 +763,116 @@ void quadruped_ekf::computeKinTFs()
     CoM_enc = rd->comPosition();
 
     mass = m;
-    Tbl.translation() = rd->linkPosition(lfoot_frame);
-    qbl = rd->linkOrientation(lfoot_frame);
-    Tbl.linear() = qbl.toRotationMatrix();
+    TbLF.translation() = rd->linkPosition(LFfoot_frame);
+    qbLF = rd->linkOrientation(LFfoot_frame);
+    TbLF.linear() = qbLF.toRotationMatrix();
 
-    Tbr.translation() = rd->linkPosition(rfoot_frame);
-    qbr = rd->linkOrientation(rfoot_frame);
-    Tbr.linear() = qbr.toRotationMatrix();
+    TbLH.translation() = rd->linkPosition(LHfoot_frame);
+    qbLH = rd->linkOrientation(LHfoot_frame);
+    TbLH.linear() = qbLH.toRotationMatrix();
+
+    TbRF.translation() = rd->linkPosition(RFfoot_frame);
+    qbRF = rd->linkOrientation(RFfoot_frame);
+    TbRF.linear() = qbRF.toRotationMatrix();
+
+    TbRH.translation() = rd->linkPosition(RHfoot_frame);
+    qbRH = rd->linkOrientation(RHfoot_frame);
+    TbRH.linear() = qbRH.toRotationMatrix();
 
     //TF Initialization
     if (!kinematicsInitialized)
     {
-        Twl.translation() << Tbl.translation()(0), Tbl.translation()(1), 0.00;
-        Twl.linear() = Tbl.linear();
-        Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
-        Twr.linear() = Tbr.linear();
-        dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                                      mass, Tau0, Tau1, joint_freq, g, p_FT_LL, p_FT_RL);
+        TwLF.translation() << TbLF.translation()(0), TbLF.translation()(1), 0.00;
+        TwLF.linear() = TbLF.linear();
+        TwRF.translation() << TbRF.translation()(0), TbRF.translation()(1), 0.00;
+        TwRF.linear() = TbRF.linear();
+
+        TwLH.translation() << TbLH.translation()(0), TbLH.translation()(1), 0.00;
+        TwLH.linear() = TbLH.linear();
+        TwRH.translation() << TbRH.translation()(0), TbRH.translation()(1), 0.00;
+        TwRH.linear() = TbRH.linear();
+
+
+        dr = new serow::deadReckoningQuad(TwLF.translation(), TwLH.translation(), TwRF.translation(), TwRH.translation(), 
+                                    TwLF.linear(), TwLH.linear(), TwRF.linear(), TwRH.linear(),
+                                    mass, Tau0, Tau1, joint_freq, g, p_FT_LF, p_FT_LH,  p_FT_RF, p_FT_RH);
     }
 
     //Differential Kinematics with Pinnochio
-    omegabl = rd->getAngularVelocity(lfoot_frame);
-    omegabr = rd->getAngularVelocity(rfoot_frame);
-    vbl = rd->getLinearVelocity(lfoot_frame);
-    vbr = rd->getLinearVelocity(rfoot_frame);
+    omegabLF = rd->getAngularVelocity(LFfoot_frame);
+    omegabLH = rd->getAngularVelocity(LHfoot_frame);
+
+    omegabRF = rd->getAngularVelocity(RFfoot_frame);
+    omegabRH = rd->getAngularVelocity(RHfoot_frame);
+
+    vbLF = rd->getLinearVelocity(LFfoot_frame);
+    vbLH = rd->getLinearVelocity(LHfoot_frame);
+
+    vbRF = rd->getLinearVelocity(RFfoot_frame);
+    vbRH = rd->getLinearVelocity(RHfoot_frame);
 
     //Noises for update
-    vbln = rd->getLinearVelocityNoise(lfoot_frame);
-    vbrn = rd->getLinearVelocityNoise(rfoot_frame);
-    JLQnJLt = vbln * vbln.transpose();
-    JRQnJRt = vbrn * vbrn.transpose();
+    vbLFn = rd->getLinearVelocityNoise(LFfoot_frame);
+    vbLHn = rd->getLinearVelocityNoise(LHfoot_frame);
+    vbRFn = rd->getLinearVelocityNoise(RFfoot_frame);
+    vbRHn = rd->getLinearVelocityNoise(RHfoot_frame);
 
-    if (lft_inc && rft_inc)
+    JLFQnJLFt = vbLFn * vbLFn.transpose();
+    JLHQnJLHt = vbLHn * vbLHn.transpose();
+
+    JRFQnJRFt = vbRFn * vbRFn.transpose();
+    JRHQnJRHt = vbRHn * vbRHn.transpose();
+
+    if (LFft_inc && RFft_inc && LHft_inc && RHft_inc)
     {
         if (firstContact)
         {
-            cd = new serow::ContactDetection();
+            cd = new serow::ContactDetectionQuad();
             if (useGEM)
             {
-                cd->init(lfoot_frame, rfoot_frame, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
-                         foot_polygon_ymin, foot_polygon_ymax, lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, VelocityThres,
-                         lvnorm_sigma, rvnorm_sigma,  ContactDetectionWithCOP, ContactDetectionWithKinematics,  probabilisticContactThreshold);
+                cd->init(LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, LosingContact, LosingContact, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
+                         foot_polygon_ymin, foot_polygon_ymax, LFforce_sigma, LHforce_sigma, RFforce_sigma,  RHforce_sigma, LFcop_sigma,  LHcop_sigma,
+                         RFcop_sigma, RHcop_sigma, VelocityThres, lvnorm_sigma, rvnorm_sigma,  ContactDetectionWithCOP, ContactDetectionWithKinematics,  probabilisticContactThreshold);
             }
             else
             {
-                cd->init(lfoot_frame, rfoot_frame, LegHighThres, LegLowThres, StrikingContact, VelocityThres);
+                cd->init(LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, LegHighThres, LegLowThres, StrikingContact, VelocityThres);
             }
 
             firstContact = false;
         }
 
-        if (useGEM)
-            cd->computeSupportFoot(LLegForceFilt, RLegForceFilt, copl(0), copl(1), copr(0), copr(1), vwl.norm(), vwr.norm());
+        if(useGEM)
+            cd->computeSupportFoot(LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt, 
+                                    copLF(0), copLF(1), copLH(0), copLH(1), copRF(0), copRF(1),  copRH(0), copRH(1),
+                                    vwLF.norm(), vwLH.norm(), vwRF.norm(), vwRH.norm());
         else
-            cd->SchmittTriggerWithKinematics(LLegForceFilt, RLegForceFilt, vwl.norm(), vwr.norm());
+            cd->SchmittTriggerWithKinematics(LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt, 
+                                    vwLF.norm(), vwLH.norm(), vwRF.norm(), vwRH.norm());
 
-        lft_inc = false;
-        rft_inc = false;
+        LFft_inc = false;
+        LHft_inc = false;
 
-        Tbs = Tbl;
-        qbs = qbl;
+        RFft_inc = false;
+        RHft_inc = false;
+
+        Tbs = TbLF;
+        qbs = qbLF;
         support_leg = cd->getSupportLeg();
-        if (support_leg.compare("RLeg"))
+        if(support_leg.compare("LHLeg"))
         {
-            Tbs = Tbr;
-            qbs = qbr;
+            Tbs = TbLH;
+            qbs = qbLH;
+        }
+        else if(support_leg.compare("RFLeg"))
+        {
+            Tbs = TbRF;
+            qbs = qbRF;
+        }
+        else if(support_leg.compare("RHLeg"))
+        {
+            Tbs = TbRH;
+            qbs = qbRH;
         }
     }
 
@@ -836,23 +880,36 @@ void quadruped_ekf::computeKinTFs()
     {
         if (useMahony)
         {
-            dr->computeDeadReckoning(mh->getR(), Tbl.linear(), Tbr.linear(), mh->getGyro(), T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
-                                    Tbl.translation(), Tbr.translation(), vbl, vbr, omegabl, omegabr,
-                                    LLegForceFilt, RLegForceFilt, mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            dr->computeDeadReckoning(mh->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),
+                                    TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
+                                    vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
+                                    LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt,  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF,
+                                    LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
 
-            //dr->computeDeadReckoningGEM(mh->getR(),  Tbl.linear(),  Tbr.linear(), mh->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
-            //                         cd->getLLegContactProb(),  cd->getRLegContactProb(), mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            //dr->computeDeadReckoningGEM(mh->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),
+            //                        TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
+            //                        vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
+            //                        cd->getLFLegContactProb(), cd->getLHLegContactProb(),  cd->getRFLegContactProb(), cd->getRHLegContactProb(),  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF,
+            //                        LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+           
             qwb_ = qwb;
             qwb = Quaterniond(mh->getR());
             omegawb = mh->getGyro();
         }
         else
         {
-            dr->computeDeadReckoning(mw->getR(), Tbl.linear(), Tbr.linear(), mw->getGyro(),T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
-                                     Tbl.translation(), Tbr.translation(), vbl, vbr, omegabl, omegabr,
-                                     LLegForceFilt, RLegForceFilt, mw->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
-            //dr->computeDeadReckoningGEM(mw->getR(),  Tbl.linear(),  Tbr.linear(), mw->getGyro(), Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
-            //                        cd->getLLegContactProb(),  cd->getRLegContactProb(), mh->getAcc(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+            dr->computeDeadReckoning(mw->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),
+                                    TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
+                                    vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
+                                    LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt,  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF,
+                                    LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+
+            //dr->computeDeadReckoningGEM(mw->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),
+            //                        TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
+            //                        vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
+            //                        cd->getLFLegContactProb(), cd->getLHLegContactProb(),  cd->getRFLegContactProb(), cd->getRHLegContactProb(),  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF,
+            //                        LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+           
             qwb_ = qwb;
             qwb = Quaterniond(mw->getR());
             omegawb = mw->getGyro();
@@ -862,12 +919,18 @@ void quadruped_ekf::computeKinTFs()
         Twb.translation() = dr->getOdom();
         Twb.linear() = qwb.toRotationMatrix();
 
-        vwb = dr->getLinearVel();
-        vwl = dr->getLFootLinearVel();
-        vwr = dr->getRFootLinearVel();
+        vwb  = dr->getLinearVel();
+        vwLF = dr->getLFFootLinearVel();
+        vwLH = dr->getLHFootLinearVel();
 
-        omegawl = dr->getLFootAngularVel();
-        omegawr = dr->getRFootAngularVel();
+        vwRF = dr->getRFFootLinearVel();
+        vwRH = dr->getRHFootLinearVel();
+
+        omegawLF = dr->getLFFootAngularVel();
+        omegawLH = dr->getLHFootAngularVel();
+
+        omegawRF = dr->getRFFootAngularVel();
+        omegawRH = dr->getRHFootAngularVel();
 
         CoM_leg_odom = Twb * CoM_enc;
         leg_odom_inc = true;
@@ -902,7 +965,7 @@ void quadruped_ekf::deAllocate()
             delete[] gyroMAF;
         }
     }
-    delete imuEKF;
+    delete imuInEKF;
     delete rd;
     delete mw;
     delete mh;
@@ -915,7 +978,7 @@ void quadruped_ekf::filterGyrodot()
     if (!firstGyrodot)
     {
         //Compute numerical derivative
-        Gyrodot = (imuEKF->gyro - Gyro_) * freq;
+        Gyrodot = (imuInEKF->gyro - Gyro_) * freq;
         if (useGyroLPF)
         {
             Gyrodot(0) = gyroLPF[0]->filter(Gyrodot(0));
@@ -938,7 +1001,7 @@ void quadruped_ekf::filterGyrodot()
         Gyrodot = Vector3d::Zero();
         firstGyrodot = false;
     }
-    Gyro_ = imuEKF->gyro;
+    Gyro_ = imuInEKF->gyro;
 }
 
 void quadruped_ekf::publishGRF()
