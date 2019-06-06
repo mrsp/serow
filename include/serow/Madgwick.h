@@ -1,3 +1,5 @@
+#ifndef MADGWICK_H
+#define MADGWICK_H
 #include <eigen3/Eigen/Dense>
 #include <iostream>
 
@@ -138,3 +140,4 @@ namespace serow{
         }
     };
 }
+#endif

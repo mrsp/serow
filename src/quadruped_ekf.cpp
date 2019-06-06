@@ -67,12 +67,21 @@ void quadruped_ekf::loadparams()
         n_p.param<double>("foot_polygon_xmax", foot_polygon_xmax, 0.107);
         n_p.param<double>("foot_polygon_ymin", foot_polygon_ymin, -0.055);
         n_p.param<double>("foot_polygon_ymax", foot_polygon_ymax, 0.055);
-        n_p.param<double>("lforce_sigma", lforce_sigma, 2.2734);
-        n_p.param<double>("rforce_sigma", rforce_sigma, 5.6421);
-        n_p.param<double>("lcop_sigma", lcop_sigma, 0.005);
-        n_p.param<double>("rcop_sigma", rcop_sigma, 0.005);
-        n_p.param<double>("lvnorm_sigma", lvnorm_sigma, 0.1);
-        n_p.param<double>("rvnorm_sigma", rvnorm_sigma, 0.1);
+        n_p.param<double>("LFforce_sigma", LFforce_sigma, 2.2734);
+        n_p.param<double>("LHforce_sigma", LHforce_sigma, 5.6421);
+        n_p.param<double>("RFforce_sigma", LFforce_sigma, 2.2734);
+        n_p.param<double>("RHforce_sigma", LHforce_sigma, 5.6421);
+
+        n_p.param<double>("LFcop_sigma", LFcop_sigma, 0.005);
+        n_p.param<double>("LHcop_sigma", LHcop_sigma, 0.005);
+        n_p.param<double>("RFcop_sigma", LFcop_sigma, 0.005);
+        n_p.param<double>("RHcop_sigma", LHcop_sigma, 0.005);
+
+        n_p.param<double>("LFvnorm_sigma", LFvnorm_sigma, 0.1);
+        n_p.param<double>("LHvnorm_sigma", LHvnorm_sigma, 0.1);
+        n_p.param<double>("RFvnorm_sigma", RFvnorm_sigma, 0.1);
+        n_p.param<double>("RHvnorm_sigma", RHvnorm_sigma, 0.1);
+
         n_p.param<double>("probabilisticContactThreshold", probabilisticContactThreshold, 0.95);
         n_p.param<bool>("ContactDetectionWithCOP", ContactDetectionWithCOP, false);
         n_p.param<bool>("ContactDetectionWithKinematics", ContactDetectionWithKinematics, false);
@@ -735,15 +744,17 @@ void quadruped_ekf::estimateWithCoMEKF()
     }
 
     //Compute the COP in the Inertial Frame
-    if (lfsr_inc && rfsr_inc && !predictWithCoM && !nipmEKF->firstrun)
+    if (LFfsr_inc && LHfsr_inc && RHfsr_inc && RFfsr_inc && !predictWithCoM && !nipmEKF->firstrun)
     {
         computeGlobalCOP(TwLF, TwLH, TwRF, TwRH);
         //Numerically compute the Gyro acceleration in the Inertial Frame and use a 3-Point Low-Pass filter
         filterGyrodot();
         DiagonalMatrix<double, 3> Inertia(I_xx, I_yy, I_zz);
         nipmEKF->predict(COP_fsr, GRF_fsr, imuInEKF->Rib * Inertia * Gyrodot);
-        lfsr_inc = false;
-        rfsr_inc = false;
+        LFfsr_inc = false;
+        LHfsr_inc = false;
+        RFfsr_inc = false;
+        RHfsr_inc = false;
         predictWithCoM = true;
     }
 
@@ -837,7 +848,7 @@ void quadruped_ekf::computeKinTFs()
             {
                 cd->init(LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, LosingContact, LosingContact, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
                          foot_polygon_ymin, foot_polygon_ymax, LFforce_sigma, LHforce_sigma, RFforce_sigma,  RHforce_sigma, LFcop_sigma,  LHcop_sigma,
-                         RFcop_sigma, RHcop_sigma, VelocityThres, lvnorm_sigma, rvnorm_sigma,  ContactDetectionWithCOP, ContactDetectionWithKinematics,  probabilisticContactThreshold);
+                         RFcop_sigma, RHcop_sigma, VelocityThres, LFvnorm_sigma, LHvnorm_sigma, RFvnorm_sigma, RHvnorm_sigma, ContactDetectionWithCOP, ContactDetectionWithKinematics,  probabilisticContactThreshold);
             }
             else
             {
@@ -885,11 +896,11 @@ void quadruped_ekf::computeKinTFs()
     {
         if (useMahony)
         {
-            dr->computeDeadReckoning(mh->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),
+            dr->computeDeadReckoning(mh->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),  T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
                                     TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
                                     vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
-                                    LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt,  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF,
-                                    LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+                                    LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt,  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+
 
             //dr->computeDeadReckoningGEM(mh->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),
             //                        TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
@@ -903,11 +914,10 @@ void quadruped_ekf::computeKinTFs()
         }
         else
         {
-            dr->computeDeadReckoning(mw->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),
+            dr->computeDeadReckoning(mw->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mw->getGyro(),  T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
                                     TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
                                     vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
-                                    LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt,  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF,
-                                    LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+                                    LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt,  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
 
             //dr->computeDeadReckoningGEM(mw->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),
             //                        TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
@@ -1014,26 +1024,47 @@ void quadruped_ekf::publishGRF()
 
     if (debug_mode)
     {
-        LLeg_est_msg.wrench.force.x = LLegGRF(0);
-        LLeg_est_msg.wrench.force.y = LLegGRF(1);
-        LLeg_est_msg.wrench.force.z = LLegGRF(2);
-        LLeg_est_msg.wrench.torque.x = LLegGRT(0);
-        LLeg_est_msg.wrench.torque.y = LLegGRT(1);
-        LLeg_est_msg.wrench.torque.z = LLegGRT(2);
+        LFLeg_est_msg.wrench.force.x = LFLegGRF(0);
+        LFLeg_est_msg.wrench.force.y = LFLegGRF(1);
+        LFLeg_est_msg.wrench.force.z = LFLegGRF(2);
+        LFLeg_est_msg.wrench.torque.x = LFLegGRT(0);
+        LFLeg_est_msg.wrench.torque.y = LFLegGRT(1);
+        LFLeg_est_msg.wrench.torque.z = LFLegGRT(2);
+        LFLeg_est_msg.header.frame_id = LFfoot_frame;
+        LFLeg_est_msg.header.stamp = ros::Time::now();
+        LFLeg_est_pub.publish(LFLeg_est_msg);
 
-        LLeg_est_msg.header.frame_id = lfoot_frame;
-        LLeg_est_msg.header.stamp = ros::Time::now();
-        LLeg_est_pub.publish(LLeg_est_msg);
+        LHLeg_est_msg.wrench.force.x = LHLegGRF(0);
+        LHLeg_est_msg.wrench.force.y = LHLegGRF(1);
+        LHLeg_est_msg.wrench.force.z = LHLegGRF(2);
+        LHLeg_est_msg.wrench.torque.x = LHLegGRT(0);
+        LHLeg_est_msg.wrench.torque.y = LHLegGRT(1);
+        LHLeg_est_msg.wrench.torque.z = LHLegGRT(2);
+        LHLeg_est_msg.header.frame_id = LHfoot_frame;
+        LHLeg_est_msg.header.stamp = ros::Time::now();
+        LHLeg_est_pub.publish(LHLeg_est_msg);
 
-        RLeg_est_msg.wrench.force.x = RLegGRF(0);
-        RLeg_est_msg.wrench.force.y = RLegGRF(1);
-        RLeg_est_msg.wrench.force.z = RLegGRF(2);
-        RLeg_est_msg.wrench.torque.x = RLegGRT(0);
-        RLeg_est_msg.wrench.torque.y = RLegGRT(1);
-        RLeg_est_msg.wrench.torque.z = RLegGRT(2);
-        RLeg_est_msg.header.frame_id = rfoot_frame;
-        RLeg_est_msg.header.stamp = ros::Time::now();
-        RLeg_est_pub.publish(RLeg_est_msg);
+
+        RFLeg_est_msg.wrench.force.x = RFLegGRF(0);
+        RFLeg_est_msg.wrench.force.y = RFLegGRF(1);
+        RFLeg_est_msg.wrench.force.z = RFLegGRF(2);
+        RFLeg_est_msg.wrench.torque.x = RFLegGRT(0);
+        RFLeg_est_msg.wrench.torque.y = RFLegGRT(1);
+        RFLeg_est_msg.wrench.torque.z = RFLegGRT(2);
+        RFLeg_est_msg.header.frame_id = RFfoot_frame;
+        RFLeg_est_msg.header.stamp = ros::Time::now();
+        RFLeg_est_pub.publish(RFLeg_est_msg);
+
+        RHLeg_est_msg.wrench.force.x = RHLegGRF(0);
+        RHLeg_est_msg.wrench.force.y = RHLegGRF(1);
+        RHLeg_est_msg.wrench.force.z = RHLegGRF(2);
+        RHLeg_est_msg.wrench.torque.x = RHLegGRT(0);
+        RHLeg_est_msg.wrench.torque.y = RHLegGRT(1);
+        RHLeg_est_msg.wrench.torque.z = RHLegGRT(2);
+        RHLeg_est_msg.header.frame_id = RHfoot_frame;
+        RHLeg_est_msg.header.stamp = ros::Time::now();
+        RHLeg_est_pub.publish(RHLeg_est_msg);
+
     }
 }
 
@@ -1142,11 +1173,18 @@ void quadruped_ekf::advertise()
     bodyAcc_est_pub = n.advertise<sensor_msgs::Imu>(
         "/SERoW/body/acc", 1000);
 
-    leftleg_odom_pub = n.advertise<nav_msgs::Odometry>(
-        "/SERoW/LLeg/odom", 1000);
+    LFLeg_odom_pub = n.advertise<nav_msgs::Odometry>(
+        "/SERoW/LFLeg/odom", 1000);
 
-    rightleg_odom_pub = n.advertise<nav_msgs::Odometry>(
-        "/SERoW/RLeg/odom", 1000);
+    RFLeg_odom_pub = n.advertise<nav_msgs::Odometry>(
+        "/SERoW/RFLeg/odom", 1000);
+
+
+    LHLeg_odom_pub = n.advertise<nav_msgs::Odometry>(
+        "/SERoW/LHLeg/odom", 1000);
+
+    RHLeg_odom_pub = n.advertise<nav_msgs::Odometry>(
+        "/SERoW/RHLeg/odom", 1000);
 
     support_leg_pub = n.advertise<std_msgs::String>("/SERoW/support/leg", 1000);
 
@@ -1171,11 +1209,18 @@ void quadruped_ekf::advertise()
 
     if (debug_mode)
     {
-        rel_leftlegPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_LLeg/pose", 1000);
-        rel_rightlegPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_RLeg/pose", 1000);
+        rel_LFLegPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_LFLeg/pose", 1000);
+        rel_RFLegPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_RFLeg/pose", 1000);
+        rel_LHLegPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_LHLeg/pose", 1000);
+        rel_RHLegPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_RHLeg/pose", 1000);
+
+
+
         rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_CoM/pose", 1000);
-        RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RLeg/GRF", 1000);
-        LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LLeg/GRF", 1000);
+        RFLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RFLeg/GRF", 1000);
+        LFLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LFLeg/GRF", 1000);
+        RHLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RHLeg/GRF", 1000);
+        LHLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LHLeg/GRF", 1000);        
     }
     if (comp_with)
         comp_odom0_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom0", 1000);
@@ -1352,15 +1397,25 @@ void quadruped_ekf::subscribeToSupportIdx()
 void quadruped_ekf::support_idxCb(const std_msgs::Int32::ConstPtr &msg)
 {
     support_idx_msg = *msg;
-    if (support_idx_msg.data == 1)
+    if (support_idx_msg.data == 0)
     {
-        support_leg = "LLeg";
-        support_foot_frame = lfoot_frame;
+        support_leg = "LFLeg";
+        support_foot_frame = LFfoot_frame;
     }
-    else
+    else if(support_idx_msg.data == 1)
     {
-        support_leg = "RLeg";
-        support_foot_frame = rfoot_frame;
+        support_leg = "LHLeg";
+        support_foot_frame = LHfoot_frame;
+    }
+    else if(support_idx_msg.data == 2)
+    {
+        support_leg = "RFLeg";
+        support_foot_frame = RFfoot_frame;
+    }
+    else if(support_idx_msg.data == 3)
+    {
+        support_leg = "RHLeg";
+        support_foot_frame = RHfoot_frame;
     }
 }
 
@@ -1584,66 +1639,132 @@ void quadruped_ekf::publishSupportEstimates()
 
 void quadruped_ekf::publishLegEstimates()
 {
-    leftleg_odom_msg.child_frame_id = lfoot_frame;
-    leftleg_odom_msg.header.stamp = ros::Time::now();
-    leftleg_odom_msg.header.frame_id = "odom";
-    leftleg_odom_msg.pose.pose.position.x = Twl.translation()(0);
-    leftleg_odom_msg.pose.pose.position.y = Twl.translation()(1);
-    leftleg_odom_msg.pose.pose.position.z = Twl.translation()(2);
-    leftleg_odom_msg.pose.pose.orientation.x = qwl.x();
-    leftleg_odom_msg.pose.pose.orientation.y = qwl.y();
-    leftleg_odom_msg.pose.pose.orientation.z = qwl.z();
-    leftleg_odom_msg.pose.pose.orientation.w = qwl.w();
-    leftleg_odom_msg.twist.twist.linear.x = vwl(0);
-    leftleg_odom_msg.twist.twist.linear.y = vwl(1);
-    leftleg_odom_msg.twist.twist.linear.z = vwl(2);
-    leftleg_odom_msg.twist.twist.angular.x = omegawl(0);
-    leftleg_odom_msg.twist.twist.angular.y = omegawl(1);
-    leftleg_odom_msg.twist.twist.angular.z = omegawl(2);
-    leftleg_odom_pub.publish(leftleg_odom_msg);
 
-    rightleg_odom_msg.child_frame_id = rfoot_frame;
-    rightleg_odom_msg.header.stamp = ros::Time::now();
-    rightleg_odom_msg.header.frame_id = "odom";
-    rightleg_odom_msg.pose.pose.position.x = Twr.translation()(0);
-    rightleg_odom_msg.pose.pose.position.y = Twr.translation()(1);
-    rightleg_odom_msg.pose.pose.position.z = Twr.translation()(2);
-    rightleg_odom_msg.pose.pose.orientation.x = qwr.x();
-    rightleg_odom_msg.pose.pose.orientation.y = qwr.y();
-    rightleg_odom_msg.pose.pose.orientation.z = qwr.z();
-    rightleg_odom_msg.pose.pose.orientation.w = qwr.w();
-    rightleg_odom_msg.twist.twist.linear.x = vwr(0);
-    rightleg_odom_msg.twist.twist.linear.y = vwr(1);
-    rightleg_odom_msg.twist.twist.linear.z = vwr(2);
-    rightleg_odom_msg.twist.twist.angular.x = omegawr(0);
-    rightleg_odom_msg.twist.twist.angular.y = omegawr(1);
-    rightleg_odom_msg.twist.twist.angular.z = omegawr(2);
-    rightleg_odom_pub.publish(rightleg_odom_msg);
+    LFLeg_odom_msg.child_frame_id = LFfoot_frame;
+    LFLeg_odom_msg.header.stamp = ros::Time::now();
+    LFLeg_odom_msg.header.frame_id = "odom";
+    LFLeg_odom_msg.pose.pose.position.x = TwLF.translation()(0);
+    LFLeg_odom_msg.pose.pose.position.y = TwLF.translation()(1);
+    LFLeg_odom_msg.pose.pose.position.z = TwLF.translation()(2);
+    LFLeg_odom_msg.pose.pose.orientation.x = qwLF.x();
+    LFLeg_odom_msg.pose.pose.orientation.y = qwLF.y();
+    LFLeg_odom_msg.pose.pose.orientation.z = qwLF.z();
+    LFLeg_odom_msg.pose.pose.orientation.w = qwLF.w();
+    LFLeg_odom_msg.twist.twist.linear.x = vwLF(0);
+    LFLeg_odom_msg.twist.twist.linear.y = vwLF(1);
+    LFLeg_odom_msg.twist.twist.linear.z = vwLF(2);
+    LFLeg_odom_msg.twist.twist.angular.x = omegawLF(0);
+    LFLeg_odom_msg.twist.twist.angular.y = omegawLF(1);
+    LFLeg_odom_msg.twist.twist.angular.z = omegawLF(2);
+    LFLeg_odom_pub.publish(LFLeg_odom_msg);
+
+
+
+    LHLeg_odom_msg.child_frame_id = LHfoot_frame;
+    LHLeg_odom_msg.header.stamp = ros::Time::now();
+    LHLeg_odom_msg.header.frame_id = "odom";
+    LHLeg_odom_msg.pose.pose.position.x = TwLH.translation()(0);
+    LHLeg_odom_msg.pose.pose.position.y = TwLH.translation()(1);
+    LHLeg_odom_msg.pose.pose.position.z = TwLH.translation()(2);
+    LHLeg_odom_msg.pose.pose.orientation.x = qwLH.x();
+    LHLeg_odom_msg.pose.pose.orientation.y = qwLH.y();
+    LHLeg_odom_msg.pose.pose.orientation.z = qwLH.z();
+    LHLeg_odom_msg.pose.pose.orientation.w = qwLH.w();
+    LHLeg_odom_msg.twist.twist.linear.x = vwLH(0);
+    LHLeg_odom_msg.twist.twist.linear.y = vwLH(1);
+    LHLeg_odom_msg.twist.twist.linear.z = vwLH(2);
+    LHLeg_odom_msg.twist.twist.angular.x = omegawLH(0);
+    LHLeg_odom_msg.twist.twist.angular.y = omegawLH(1);
+    LHLeg_odom_msg.twist.twist.angular.z = omegawLH(2);
+    LHLeg_odom_pub.publish(LHLeg_odom_msg);
+
+    RFLeg_odom_msg.child_frame_id = RFfoot_frame;
+    RFLeg_odom_msg.header.stamp = ros::Time::now();
+    RFLeg_odom_msg.header.frame_id = "odom";
+    RFLeg_odom_msg.pose.pose.position.x = TwRF.translation()(0);
+    RFLeg_odom_msg.pose.pose.position.y = TwRF.translation()(1);
+    RFLeg_odom_msg.pose.pose.position.z = TwRF.translation()(2);
+    RFLeg_odom_msg.pose.pose.orientation.x = qwRF.x();
+    RFLeg_odom_msg.pose.pose.orientation.y = qwRF.y();
+    RFLeg_odom_msg.pose.pose.orientation.z = qwRF.z();
+    RFLeg_odom_msg.pose.pose.orientation.w = qwRF.w();
+    RFLeg_odom_msg.twist.twist.linear.x = vwRF(0);
+    RFLeg_odom_msg.twist.twist.linear.y = vwRF(1);
+    RFLeg_odom_msg.twist.twist.linear.z = vwRF(2);
+    RFLeg_odom_msg.twist.twist.angular.x = omegawRF(0);
+    RFLeg_odom_msg.twist.twist.angular.y = omegawRF(1);
+    RFLeg_odom_msg.twist.twist.angular.z = omegawRF(2);
+    RFLeg_odom_pub.publish(RFLeg_odom_msg);
+
+
+
+    RHLeg_odom_msg.child_frame_id = RHfoot_frame;
+    RHLeg_odom_msg.header.stamp = ros::Time::now();
+    RHLeg_odom_msg.header.frame_id = "odom";
+    RHLeg_odom_msg.pose.pose.position.x = TwRH.translation()(0);
+    RHLeg_odom_msg.pose.pose.position.y = TwRH.translation()(1);
+    RHLeg_odom_msg.pose.pose.position.z = TwRH.translation()(2);
+    RHLeg_odom_msg.pose.pose.orientation.x = qwRH.x();
+    RHLeg_odom_msg.pose.pose.orientation.y = qwRH.y();
+    RHLeg_odom_msg.pose.pose.orientation.z = qwRH.z();
+    RHLeg_odom_msg.pose.pose.orientation.w = qwRH.w();
+    RHLeg_odom_msg.twist.twist.linear.x = vwRH(0);
+    RHLeg_odom_msg.twist.twist.linear.y = vwRH(1);
+    RHLeg_odom_msg.twist.twist.linear.z = vwRH(2);
+    RHLeg_odom_msg.twist.twist.angular.x = omegawRH(0);
+    RHLeg_odom_msg.twist.twist.angular.y = omegawRH(1);
+    RHLeg_odom_msg.twist.twist.angular.z = omegawRH(2);
+    RHLeg_odom_pub.publish(RHLeg_odom_msg);
+
 
     if (debug_mode)
     {
-        temp_pose_msg.pose.position.x = Tbl.translation()(0);
-        temp_pose_msg.pose.position.y = Tbl.translation()(1);
-        temp_pose_msg.pose.position.z = Tbl.translation()(2);
-        temp_pose_msg.pose.orientation.x = qbl.x();
-        temp_pose_msg.pose.orientation.y = qbl.y();
-        temp_pose_msg.pose.orientation.z = qbl.z();
-        temp_pose_msg.pose.orientation.w = qbl.w();
+        temp_pose_msg.pose.position.x = TbLF.translation()(0);
+        temp_pose_msg.pose.position.y = TbLF.translation()(1);
+        temp_pose_msg.pose.position.z = TbLF.translation()(2);
+        temp_pose_msg.pose.orientation.x = qbLF.x();
+        temp_pose_msg.pose.orientation.y = qbLF.y();
+        temp_pose_msg.pose.orientation.z = qbLF.z();
+        temp_pose_msg.pose.orientation.w = qbLF.w();
         temp_pose_msg.header.stamp = ros::Time::now();
         temp_pose_msg.header.frame_id = base_link_frame;
-        rel_leftlegPose_pub.publish(temp_pose_msg);
+        rel_LFLegPose_pub.publish(temp_pose_msg);
 
-        temp_pose_msg.pose.position.x = Tbr.translation()(0);
-        temp_pose_msg.pose.position.y = Tbr.translation()(1);
-        temp_pose_msg.pose.position.z = Tbr.translation()(2);
-        temp_pose_msg.pose.orientation.x = qbr.x();
-        temp_pose_msg.pose.orientation.y = qbr.y();
-        temp_pose_msg.pose.orientation.z = qbr.z();
-        temp_pose_msg.pose.orientation.w = qbr.w();
 
+        temp_pose_msg.pose.position.x = TbLH.translation()(0);
+        temp_pose_msg.pose.position.y = TbLH.translation()(1);
+        temp_pose_msg.pose.position.z = TbLH.translation()(2);
+        temp_pose_msg.pose.orientation.x = qbLH.x();
+        temp_pose_msg.pose.orientation.y = qbLH.y();
+        temp_pose_msg.pose.orientation.z = qbLH.z();
+        temp_pose_msg.pose.orientation.w = qbLH.w();
         temp_pose_msg.header.stamp = ros::Time::now();
         temp_pose_msg.header.frame_id = base_link_frame;
-        rel_rightlegPose_pub.publish(temp_pose_msg);
+        rel_LHLegPose_pub.publish(temp_pose_msg);
+
+
+        temp_pose_msg.pose.position.x = TbRF.translation()(0);
+        temp_pose_msg.pose.position.y = TbRF.translation()(1);
+        temp_pose_msg.pose.position.z = TbRF.translation()(2);
+        temp_pose_msg.pose.orientation.x = qbRF.x();
+        temp_pose_msg.pose.orientation.y = qbRF.y();
+        temp_pose_msg.pose.orientation.z = qbRF.z();
+        temp_pose_msg.pose.orientation.w = qbRF.w();
+        temp_pose_msg.header.stamp = ros::Time::now();
+        temp_pose_msg.header.frame_id = base_link_frame;
+        rel_RFLegPose_pub.publish(temp_pose_msg);
+
+        temp_pose_msg.pose.position.x = TbRH.translation()(0);
+        temp_pose_msg.pose.position.y = TbRH.translation()(1);
+        temp_pose_msg.pose.position.z = TbRH.translation()(2);
+        temp_pose_msg.pose.orientation.x = qbRH.x();
+        temp_pose_msg.pose.orientation.y = qbRH.y();
+        temp_pose_msg.pose.orientation.z = qbRH.z();
+        temp_pose_msg.pose.orientation.w = qbRH.w();
+        temp_pose_msg.header.stamp = ros::Time::now();
+        temp_pose_msg.header.frame_id = base_link_frame;
+        rel_RHLegPose_pub.publish(temp_pose_msg);
+
     }
 }
 

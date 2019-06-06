@@ -1,3 +1,5 @@
+#ifndef GAUSSIAN_H
+#define GAUSSIAN_H
 #include <cmath>
 class Gaussian {
   public:
@@ -28,3 +30,4 @@ class Gaussian {
         return cdf((z - mu) / sigma);
     } 
 };
+#endif
