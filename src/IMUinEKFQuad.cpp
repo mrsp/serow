@@ -7,8 +7,8 @@ IMUinEKFQuad::IMUinEKFQuad()
     //Gravity Vector
     g = Vector3d::Zero();
     g(2) = -9.80;
-    P = Matrix<double, 21, 21>::Zero();
-    X = Matrix<double, 7, 7>::Identity();
+    P = Matrix<double, 27, 27>::Zero();
+    X = Matrix<double, 9, 9>::Identity();
     theta = Matrix<double, 6, 1>::Zero();
 }
 
@@ -16,7 +16,7 @@ void IMUinEKFQuad::init()
 {
 
     firstrun = true;
-    If = Matrix<double, 21, 21>::Identity();
+    If = Matrix<double, 27, 27>::Identity();
     I = Matrix3d::Identity();
     w_ = Vector3d::Zero();
     a_ = Vector3d::Zero();
@@ -130,7 +130,7 @@ void IMUinEKFQuad::seperateState(Matrix<double, 9, 9> X_, Matrix<double, 6, 1> t
     ba_ = theta_.segment<3>(3);
 }
 
-Matrix<double, 9, 9> IMUinEKFQuad::exp_SE3(Matrix<double, 21, 1> v)
+Matrix<double, 9, 9> IMUinEKFQuad::exp_SE3(Matrix<double, 27, 1> v)
 {
     Matrix<double, 9, 9> dX_ = Matrix<double, 9, 9>::Identity();
     double phi = v.segment<3>(0).norm();
@@ -197,10 +197,10 @@ Matrix<double, 27, 27> IMUinEKFQuad::Adjoint(Matrix<double, 9, 9> X_)
     return AdjX;
 }
 
-void IMUinEKFQuad::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbr, Vector3d pbl, Matrix3d hR_R, Matrix3d hR_L, int contactR, int contactL)
+void IMUinEKFQuad::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbRF, Vector3d pbRH, Vector3d pbLF, Vector3d pbLH, Matrix3d hR_RF, Matrix3d hR_RH,  Matrix3d hR_LF, Matrix3d hR_LH, int contactRF, int contactRH, int contactLF, int contactLH)
 {
 
-    seperateState(X, theta, Rwb, vwb, pwb, dR, dL, bgyr, bacc);
+    seperateState(X, theta, Rwb, vwb, pwb, dRF, dRH, dLF, dLH, bgyr, bacc);
     w_ = angular_velocity;
     a_ = linear_acceleration;
 
@@ -263,357 +263,357 @@ void IMUinEKFQuad::predict(Vector3d angular_velocity, Vector3d linear_accelerati
     dRF = contactRF * dRF + (1 - contactRF) * (pwb + Rwb * pbRF);
     dRH = contactRH * dRH + (1 - contactRH) * (pwb + Rwb * pbRH);
 
-    dLF = contactL * dLF + (1 - contactLF) * (pwb + Rwb * pbLF);
-    dLH = contactL * dLH + (1 - contactLH) * (pwb + Rwb * pbLH);
+    dLF = contactLF * dLF + (1 - contactLF) * (pwb + Rwb * pbLF);
+    dLH = contactLH * dLH + (1 - contactLH) * (pwb + Rwb * pbLH);
 
     constructState(X, theta, Rwb, vwb, pwb, dRF, dRH, dLF, dLH, bgyr, bacc);
     updateVars();
 }
 
-void IMUinEKFQuad::updateWithTwist(Vector3d vy, Matrix3d Rvy)
-{
-    Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
-    Y.segment<3>(0) = vy;
-    Y(3) = 1.00;
-
-    Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
-    b(3) = 1.00;
-    Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
-    H.block<3, 3>(0, 3) = Matrix3d::Identity();
-
-    Matrix<double, 3, 3> N = Matrix<double, 3, 3>::Zero();
-    N = Rvy;
-    N(0, 0) += vel_px * vel_px;
-    N(1, 1) += vel_py * vel_py;
-    N(2, 2) += vel_pz * vel_pz;
-
-    Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
-    PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-    updateVelocity(Y, b, H, N, PI);
-    updateVars();
-}
-void IMUinEKFQuad::updateVelocity(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix3d N_, Matrix<double, 3, 7> PI_)
-{
-    //Transform P to Left Invariant in order to perform the update
-    Adj = Adjoint(X);
-    P = Adj.inverse() * P * (Adj.inverse()).transpose();
-
-    Matrix3d S_ = N_;
-    S_ += H_ * P * H_.transpose();
-
-    Matrix<double, 21, 3> K_ = P * H_.transpose() * S_.inverse();
-    Matrix<double, 7, 1> Z_ = X.inverse() * Y_ - b_;
-
-    //Update State
-    Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
-    Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
-    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
-
-    X = X * dX_;
-    theta += dtheta_;
-
-    Matrix<double, 21, 21> IKH = If - K_ * H_;
-    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-    //Transform P to Right Invariant
-    P = Adj * P * Adj.transpose();
-}
-
-void IMUinEKFQuad::updateWithOdom(Vector3d py, Quaterniond qy)
-{
-    Matrix<double, 14, 1> Y = Matrix<double, 14, 1>::Zero();
-    Y.segment<3>(0) = logMap(X.block<3, 3>(0, 0).inverse() * qy.toRotationMatrix());
-    Y.segment<3>(7) = py;
-    Y(11) = 1.000;
-
-    Matrix<double, 14, 1> b = Matrix<double, 14, 1>::Zero();
-    b(11) = 1.000;
-    Matrix<double, 6, 21> H = Matrix<double, 6, 21>::Zero();
-    H.block<3, 3>(0, 0) = Matrix3d::Identity();
-    H.block<3, 3>(3, 6) = Matrix3d::Identity();
-
-    Matrix<double, 6, 6> N = Matrix<double, 6, 6>::Zero();
-    N(0, 0) = odom_ax * odom_ax;
-    N(1, 1) = odom_ay * odom_ay;
-    N(2, 2) = odom_az * odom_az;
-    N(3, 3) = odom_px * odom_px;
-    N(4, 4) = odom_py * odom_py;
-    N(5, 5) = odom_pz * odom_pz;
-
-    Matrix<double, 6, 14> PI = Matrix<double, 6, 14>::Zero();
-    PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-    PI.block<3, 3>(3, 7) = Matrix3d::Identity();
-
-    updatePositionOrientation(Y, b, H, N, PI);
-    updateVars();
-}
-
-void IMUinEKFQuad::updatePositionOrientation(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_)
-{
-    //Transform P to Left Invariant in order to perform the update
-    Adj = Adjoint(X);
-    P = Adj.inverse() * P * (Adj.inverse()).transpose();
-
-    Matrix<double, 6, 6> S_ = N_;
-    S_ += H_ * P * H_.transpose();
-
-    Matrix<double, 21, 6> K_ = P * H_.transpose() * S_.inverse();
-
-    Matrix<double, 14, 14> BigX = Matrix<double, 14, 14>::Zero();
-
-    BigX.block<7, 7>(0, 0) = X;
-    BigX.block<7, 7>(7, 7) = X;
-
-    Matrix<double, 14, 1> Z_ = BigX.inverse() * Y_ - b_;
-    Z_.segment<3>(0) = Y_.segment<3>(0);
-
-    //Update State
-    Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
-    Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
-    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
-
-    X = X * dX_;
-    theta += dtheta_;
-
-    Matrix<double, 21, 21> IKH = If - K_ * H_;
-    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-    //Transform P to Right Invariant
-    P = Adj * P * Adj.transpose();
-}
-
-void IMUinEKFQuad::updateWithOrient(Quaterniond qy)
-{
-    Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
-
-    Y.segment<3>(0) = logMap(X.block<3, 3>(0, 0).inverse() * qy.toRotationMatrix());
-    Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
-    H.block<3, 3>(0, 0) = Matrix3d::Identity();
-    Matrix<double, 3, 3> N = Matrix<double, 3, 3>::Zero();
-    N(0, 0) = leg_odom_ax * leg_odom_ax;
-    N(1, 1) = leg_odom_ay * leg_odom_ay;
-    N(2, 2) = leg_odom_az * leg_odom_az;
-    Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
-    Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
-    PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-    updateOrientation(Y, b, H, N, PI);
-    updateVars();
-}
-
-
-void IMUinEKFQuad::updateOrientation(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix<double, 3, 3> N_, Matrix<double, 3, 7> PI_)
-{
-    //Transform P to Left Invariant in order to perform the update
-    Adj = Adjoint(X);
-    P = Adj.inverse() * P * (Adj.inverse()).transpose();
-    Matrix<double, 3, 3> S_ = N_;
-    S_ += H_ * P * H_.transpose();
-    Matrix<double, 21, 3> K_ = P * H_.transpose() * S_.inverse();
-
-    Matrix<double, 7, 1> Z_;
-    Z_.segment<3>(0) = Y_.segment<3>(0);
-    //Update State
-    Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
-    Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
-    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
-
-    X = X * dX_;
-    theta += dtheta_;
-
-    Matrix<double, 21, 21> IKH = If - K_ * H_;
-    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-    //Transform P to Right Invariant
-    P = Adj * P * Adj.transpose();
-}
-
-
-
-
-void IMUinEKFQuad::updateWithTwistOrient(Vector3d vy, Quaterniond qy)
-{
-    Matrix<double, 14, 1> Y = Matrix<double, 14, 1>::Zero();
-    Y.segment<3>(0) = logMap(X.block<3, 3>(0, 0).inverse() * qy.toRotationMatrix());
-    Y.segment<3>(7) = vy;
-    Y(10) = 1.00;
-
-    Matrix<double, 14, 1> b = Matrix<double, 14, 1>::Zero();
-
-    b(10) = 1.00;
-    Matrix<double, 6, 21> H = Matrix<double, 6, 21>::Zero();
-    H.block<3, 3>(0, 0) = Matrix3d::Identity();
-    H.block<3, 3>(3, 3) = Matrix3d::Identity();
-
-    Matrix<double, 6, 6> N = Matrix<double, 6, 6>::Zero();
-    N(0, 0) = leg_odom_ax * leg_odom_ax;
-    N(1, 1) = leg_odom_ay * leg_odom_ay;
-    N(2, 2) = leg_odom_az * leg_odom_az;
-    N(3, 3) = vel_px * vel_px;
-    N(4, 4) = vel_py * vel_py;
-    N(5, 5) = vel_pz * vel_pz;
-
-    Matrix<double, 6, 14> PI = Matrix<double, 6, 14>::Zero();
-    PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-    PI.block<3, 3>(3, 7) = Matrix3d::Identity();
-
-    updateVelocityOrientation(Y, b, H, N, PI);
-    updateVars();
-}
-
-void IMUinEKFQuad::updateVelocityOrientation(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_)
-{
-    //Transform P to Left Invariant in order to perform the update
-    Adj = Adjoint(X);
-    P = Adj.inverse() * P * (Adj.inverse()).transpose();
-    Matrix<double, 6, 6> S_ = N_;
-    S_ += H_ * P * H_.transpose();
-    Matrix<double, 21, 6> K_ = P * H_.transpose() * S_.inverse();
-    Matrix<double, 14, 14> BigX = Matrix<double, 14, 14>::Zero();
-    BigX.block<7, 7>(0, 0) = X;
-    BigX.block<7, 7>(7, 7) = X;
-    Matrix<double, 14, 1> Z_ = BigX.inverse() * Y_ - b_;
-    Z_.segment<3>(0) = Y_.segment<3>(0);
-    //Update State
-    Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
-    Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
-    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
-
-    X = X * dX_;
-    theta += dtheta_;
-
-    Matrix<double, 21, 21> IKH = If - K_ * H_;
-    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-    //Transform P to Right Invariant
-    P = Adj * P * Adj.transpose();
-}
-
-void IMUinEKFQuad::updateWithContacts(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL)
-{
-
-    Rwb = X.block<3, 3>(0, 0);
-
-    Qc(0, 0) = leg_odom_px * leg_odom_px;
-    Qc(1, 1) = leg_odom_py * leg_odom_py;
-    Qc(2, 2) = leg_odom_pz * leg_odom_pz;
-
-    if (contactL && contactR)
-    {
-        Matrix<double, 14, 1> Y = Matrix<double, 14, 1>::Zero();
-        Y.segment<3>(0) = s_pR;
-        Y(4) = 1.00;
-        Y(5) = -1.00;
-        Y.segment<3>(7) = s_pL;
-        Y(11) = 1.00;
-        Y(13) = -1.00;
-        Matrix<double, 14, 1> b = Matrix<double, 14, 1>::Zero();
-        b(4) = 1.00;
-        b(5) = -1.00;
-        b(11) = 1.00;
-        b(13) = -1.00;
-        Matrix<double, 6, 21> H = Matrix<double, 6, 21>::Zero();
-        H.block<3, 3>(0, 6) = -Matrix3d::Identity();
-        H.block<3, 3>(0, 9) = Matrix3d::Identity();
-        H.block<3, 3>(3, 6) = -Matrix3d::Identity();
-        H.block<3, 3>(3, 12) = Matrix3d::Identity();
-
-        Matrix<double, 6, 6> N = Matrix<double, 6, 6>::Zero();
-        N.block<3, 3>(0, 0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
-        N.block<3, 3>(3, 3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
-
-        Matrix<double, 6, 14> PI = Matrix<double, 6, 14>::Zero();
-        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-        PI.block<3, 3>(3, 7) = Matrix3d::Identity();
-        updateStateDoubleContact(Y, b, H, N, PI);
-        updateVars();
-    }
-    else if (contactR)
-    {
-        Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
-        Y.segment<3>(0) = s_pR;
-        Y(4) = 1.00;
-        Y(5) = -1.00;
-        Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
-        b(4) = 1.00;
-        b(5) = -1.00;
-
-        Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
-        H.block<3, 3>(0, 6) = -Matrix3d::Identity();
-        H.block<3, 3>(0, 9) = Matrix3d::Identity();
-
-        Matrix3d N = Matrix3d::Zero();
-        N = Rwb * JRQeJR * Rwb.transpose() + Qc;
-        Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
-        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-        updateStateSingleContact(Y, b, H, N, PI);
-        updateVars();
-    }
-    else if (contactL)
-    {
-        Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
-        Y.segment<3>(0) = s_pL;
-        Y(4) = 1.00;
-        Y(6) = -1.00;
-        Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
-        b(4) = 1.00;
-        b(6) = -1.00;
-
-        Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
-        H.block<3, 3>(0, 6) = -Matrix3d::Identity();
-        H.block<3, 3>(0, 12) = Matrix3d::Identity();
-
-        Matrix3d N = Matrix3d::Zero();
-        N = Rwb * JLQeJL * Rwb.transpose()+ Qc;
-
-        Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
-        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-        updateStateSingleContact(Y, b, H, N, PI);
-        updateVars();
-    }
-}
-
-void IMUinEKFQuad::updateStateSingleContact(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix3d N_, Matrix<double, 3, 7> PI_)
-{
-
-    Matrix3d S_ = N_;
-    S_ += H_ * P * H_.transpose();
-
-    Matrix<double, 21, 3> K_ = P * H_.transpose() * S_.inverse();
-    Matrix<double, 7, 1> Z_ = X * Y_ - b_;
-
-    //Update State
-    Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
-    Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
-    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
-
-    X = dX_ * X;
-    theta += dtheta_;
-
-    Matrix<double, 21, 21> IKH = If - K_ * H_;
-    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-}
-
-void IMUinEKFQuad::updateStateDoubleContact(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_)
-{
-    Matrix<double, 6, 6> S_ = N_;
-    S_ += H_ * P * H_.transpose();
-
-    Matrix<double, 21, 6> K_ = P * H_.transpose() * S_.inverse();
-
-    Matrix<double, 14, 14> BigX = Matrix<double, 14, 14>::Zero();
-
-    BigX.block<7, 7>(0, 0) = X;
-    BigX.block<7, 7>(7, 7) = X;
-
-    Matrix<double, 14, 1> Z_ = BigX * Y_ - b_;
-
-    //Update State
-    Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
-
-    Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
-    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
-    X = dX_ * X;
-    theta += dtheta_;
-
-    Matrix<double, 21, 21> IKH = If - K_ * H_;
-    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-}
+// void IMUinEKFQuad::updateWithTwist(Vector3d vy, Matrix3d Rvy)
+// {
+//     Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
+//     Y.segment<3>(0) = vy;
+//     Y(3) = 1.00;
+
+//     Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
+//     b(3) = 1.00;
+//     Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
+//     H.block<3, 3>(0, 3) = Matrix3d::Identity();
+
+//     Matrix<double, 3, 3> N = Matrix<double, 3, 3>::Zero();
+//     N = Rvy;
+//     N(0, 0) += vel_px * vel_px;
+//     N(1, 1) += vel_py * vel_py;
+//     N(2, 2) += vel_pz * vel_pz;
+
+//     Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
+//     PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+//     updateVelocity(Y, b, H, N, PI);
+//     updateVars();
+// }
+// void IMUinEKFQuad::updateVelocity(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix3d N_, Matrix<double, 3, 7> PI_)
+// {
+//     //Transform P to Left Invariant in order to perform the update
+//     Adj = Adjoint(X);
+//     P = Adj.inverse() * P * (Adj.inverse()).transpose();
+
+//     Matrix3d S_ = N_;
+//     S_ += H_ * P * H_.transpose();
+
+//     Matrix<double, 21, 3> K_ = P * H_.transpose() * S_.inverse();
+//     Matrix<double, 7, 1> Z_ = X.inverse() * Y_ - b_;
+
+//     //Update State
+//     Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
+//     Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
+//     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
+
+//     X = X * dX_;
+//     theta += dtheta_;
+
+//     Matrix<double, 21, 21> IKH = If - K_ * H_;
+//     P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+//     //Transform P to Right Invariant
+//     P = Adj * P * Adj.transpose();
+// }
+
+// void IMUinEKFQuad::updateWithOdom(Vector3d py, Quaterniond qy)
+// {
+//     Matrix<double, 14, 1> Y = Matrix<double, 14, 1>::Zero();
+//     Y.segment<3>(0) = logMap(X.block<3, 3>(0, 0).inverse() * qy.toRotationMatrix());
+//     Y.segment<3>(7) = py;
+//     Y(11) = 1.000;
+
+//     Matrix<double, 14, 1> b = Matrix<double, 14, 1>::Zero();
+//     b(11) = 1.000;
+//     Matrix<double, 6, 21> H = Matrix<double, 6, 21>::Zero();
+//     H.block<3, 3>(0, 0) = Matrix3d::Identity();
+//     H.block<3, 3>(3, 6) = Matrix3d::Identity();
+
+//     Matrix<double, 6, 6> N = Matrix<double, 6, 6>::Zero();
+//     N(0, 0) = odom_ax * odom_ax;
+//     N(1, 1) = odom_ay * odom_ay;
+//     N(2, 2) = odom_az * odom_az;
+//     N(3, 3) = odom_px * odom_px;
+//     N(4, 4) = odom_py * odom_py;
+//     N(5, 5) = odom_pz * odom_pz;
+
+//     Matrix<double, 6, 14> PI = Matrix<double, 6, 14>::Zero();
+//     PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+//     PI.block<3, 3>(3, 7) = Matrix3d::Identity();
+
+//     updatePositionOrientation(Y, b, H, N, PI);
+//     updateVars();
+// }
+
+// void IMUinEKFQuad::updatePositionOrientation(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_)
+// {
+//     //Transform P to Left Invariant in order to perform the update
+//     Adj = Adjoint(X);
+//     P = Adj.inverse() * P * (Adj.inverse()).transpose();
+
+//     Matrix<double, 6, 6> S_ = N_;
+//     S_ += H_ * P * H_.transpose();
+
+//     Matrix<double, 21, 6> K_ = P * H_.transpose() * S_.inverse();
+
+//     Matrix<double, 14, 14> BigX = Matrix<double, 14, 14>::Zero();
+
+//     BigX.block<7, 7>(0, 0) = X;
+//     BigX.block<7, 7>(7, 7) = X;
+
+//     Matrix<double, 14, 1> Z_ = BigX.inverse() * Y_ - b_;
+//     Z_.segment<3>(0) = Y_.segment<3>(0);
+
+//     //Update State
+//     Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
+//     Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
+//     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
+
+//     X = X * dX_;
+//     theta += dtheta_;
+
+//     Matrix<double, 21, 21> IKH = If - K_ * H_;
+//     P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+//     //Transform P to Right Invariant
+//     P = Adj * P * Adj.transpose();
+// }
+
+// void IMUinEKFQuad::updateWithOrient(Quaterniond qy)
+// {
+//     Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
+
+//     Y.segment<3>(0) = logMap(X.block<3, 3>(0, 0).inverse() * qy.toRotationMatrix());
+//     Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
+//     H.block<3, 3>(0, 0) = Matrix3d::Identity();
+//     Matrix<double, 3, 3> N = Matrix<double, 3, 3>::Zero();
+//     N(0, 0) = leg_odom_ax * leg_odom_ax;
+//     N(1, 1) = leg_odom_ay * leg_odom_ay;
+//     N(2, 2) = leg_odom_az * leg_odom_az;
+//     Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
+//     Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
+//     PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+//     updateOrientation(Y, b, H, N, PI);
+//     updateVars();
+// }
+
+
+// void IMUinEKFQuad::updateOrientation(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix<double, 3, 3> N_, Matrix<double, 3, 7> PI_)
+// {
+//     //Transform P to Left Invariant in order to perform the update
+//     Adj = Adjoint(X);
+//     P = Adj.inverse() * P * (Adj.inverse()).transpose();
+//     Matrix<double, 3, 3> S_ = N_;
+//     S_ += H_ * P * H_.transpose();
+//     Matrix<double, 21, 3> K_ = P * H_.transpose() * S_.inverse();
+
+//     Matrix<double, 7, 1> Z_;
+//     Z_.segment<3>(0) = Y_.segment<3>(0);
+//     //Update State
+//     Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
+//     Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
+//     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
+
+//     X = X * dX_;
+//     theta += dtheta_;
+
+//     Matrix<double, 21, 21> IKH = If - K_ * H_;
+//     P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+//     //Transform P to Right Invariant
+//     P = Adj * P * Adj.transpose();
+// }
+
+
+
+
+// void IMUinEKFQuad::updateWithTwistOrient(Vector3d vy, Quaterniond qy)
+// {
+//     Matrix<double, 14, 1> Y = Matrix<double, 14, 1>::Zero();
+//     Y.segment<3>(0) = logMap(X.block<3, 3>(0, 0).inverse() * qy.toRotationMatrix());
+//     Y.segment<3>(7) = vy;
+//     Y(10) = 1.00;
+
+//     Matrix<double, 14, 1> b = Matrix<double, 14, 1>::Zero();
+
+//     b(10) = 1.00;
+//     Matrix<double, 6, 21> H = Matrix<double, 6, 21>::Zero();
+//     H.block<3, 3>(0, 0) = Matrix3d::Identity();
+//     H.block<3, 3>(3, 3) = Matrix3d::Identity();
+
+//     Matrix<double, 6, 6> N = Matrix<double, 6, 6>::Zero();
+//     N(0, 0) = leg_odom_ax * leg_odom_ax;
+//     N(1, 1) = leg_odom_ay * leg_odom_ay;
+//     N(2, 2) = leg_odom_az * leg_odom_az;
+//     N(3, 3) = vel_px * vel_px;
+//     N(4, 4) = vel_py * vel_py;
+//     N(5, 5) = vel_pz * vel_pz;
+
+//     Matrix<double, 6, 14> PI = Matrix<double, 6, 14>::Zero();
+//     PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+//     PI.block<3, 3>(3, 7) = Matrix3d::Identity();
+
+//     updateVelocityOrientation(Y, b, H, N, PI);
+//     updateVars();
+// }
+
+// void IMUinEKFQuad::updateVelocityOrientation(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_)
+// {
+//     //Transform P to Left Invariant in order to perform the update
+//     Adj = Adjoint(X);
+//     P = Adj.inverse() * P * (Adj.inverse()).transpose();
+//     Matrix<double, 6, 6> S_ = N_;
+//     S_ += H_ * P * H_.transpose();
+//     Matrix<double, 21, 6> K_ = P * H_.transpose() * S_.inverse();
+//     Matrix<double, 14, 14> BigX = Matrix<double, 14, 14>::Zero();
+//     BigX.block<7, 7>(0, 0) = X;
+//     BigX.block<7, 7>(7, 7) = X;
+//     Matrix<double, 14, 1> Z_ = BigX.inverse() * Y_ - b_;
+//     Z_.segment<3>(0) = Y_.segment<3>(0);
+//     //Update State
+//     Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
+//     Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
+//     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
+
+//     X = X * dX_;
+//     theta += dtheta_;
+
+//     Matrix<double, 21, 21> IKH = If - K_ * H_;
+//     P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+//     //Transform P to Right Invariant
+//     P = Adj * P * Adj.transpose();
+// }
+
+// void IMUinEKFQuad::updateWithContacts(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL)
+// {
+
+//     Rwb = X.block<3, 3>(0, 0);
+
+//     Qc(0, 0) = leg_odom_px * leg_odom_px;
+//     Qc(1, 1) = leg_odom_py * leg_odom_py;
+//     Qc(2, 2) = leg_odom_pz * leg_odom_pz;
+
+//     if (contactL && contactR)
+//     {
+//         Matrix<double, 14, 1> Y = Matrix<double, 14, 1>::Zero();
+//         Y.segment<3>(0) = s_pR;
+//         Y(4) = 1.00;
+//         Y(5) = -1.00;
+//         Y.segment<3>(7) = s_pL;
+//         Y(11) = 1.00;
+//         Y(13) = -1.00;
+//         Matrix<double, 14, 1> b = Matrix<double, 14, 1>::Zero();
+//         b(4) = 1.00;
+//         b(5) = -1.00;
+//         b(11) = 1.00;
+//         b(13) = -1.00;
+//         Matrix<double, 6, 21> H = Matrix<double, 6, 21>::Zero();
+//         H.block<3, 3>(0, 6) = -Matrix3d::Identity();
+//         H.block<3, 3>(0, 9) = Matrix3d::Identity();
+//         H.block<3, 3>(3, 6) = -Matrix3d::Identity();
+//         H.block<3, 3>(3, 12) = Matrix3d::Identity();
+
+//         Matrix<double, 6, 6> N = Matrix<double, 6, 6>::Zero();
+//         N.block<3, 3>(0, 0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
+//         N.block<3, 3>(3, 3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
+
+//         Matrix<double, 6, 14> PI = Matrix<double, 6, 14>::Zero();
+//         PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+//         PI.block<3, 3>(3, 7) = Matrix3d::Identity();
+//         updateStateDoubleContact(Y, b, H, N, PI);
+//         updateVars();
+//     }
+//     else if (contactR)
+//     {
+//         Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
+//         Y.segment<3>(0) = s_pR;
+//         Y(4) = 1.00;
+//         Y(5) = -1.00;
+//         Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
+//         b(4) = 1.00;
+//         b(5) = -1.00;
+
+//         Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
+//         H.block<3, 3>(0, 6) = -Matrix3d::Identity();
+//         H.block<3, 3>(0, 9) = Matrix3d::Identity();
+
+//         Matrix3d N = Matrix3d::Zero();
+//         N = Rwb * JRQeJR * Rwb.transpose() + Qc;
+//         Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
+//         PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+//         updateStateSingleContact(Y, b, H, N, PI);
+//         updateVars();
+//     }
+//     else if (contactL)
+//     {
+//         Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
+//         Y.segment<3>(0) = s_pL;
+//         Y(4) = 1.00;
+//         Y(6) = -1.00;
+//         Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
+//         b(4) = 1.00;
+//         b(6) = -1.00;
+
+//         Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
+//         H.block<3, 3>(0, 6) = -Matrix3d::Identity();
+//         H.block<3, 3>(0, 12) = Matrix3d::Identity();
+
+//         Matrix3d N = Matrix3d::Zero();
+//         N = Rwb * JLQeJL * Rwb.transpose()+ Qc;
+
+//         Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
+//         PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+//         updateStateSingleContact(Y, b, H, N, PI);
+//         updateVars();
+//     }
+// }
+
+// void IMUinEKFQuad::updateStateSingleContact(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix3d N_, Matrix<double, 3, 7> PI_)
+// {
+
+//     Matrix3d S_ = N_;
+//     S_ += H_ * P * H_.transpose();
+
+//     Matrix<double, 21, 3> K_ = P * H_.transpose() * S_.inverse();
+//     Matrix<double, 7, 1> Z_ = X * Y_ - b_;
+
+//     //Update State
+//     Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
+//     Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
+//     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
+
+//     X = dX_ * X;
+//     theta += dtheta_;
+
+//     Matrix<double, 21, 21> IKH = If - K_ * H_;
+//     P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+// }
+
+// void IMUinEKFQuad::updateStateDoubleContact(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_)
+// {
+//     Matrix<double, 6, 6> S_ = N_;
+//     S_ += H_ * P * H_.transpose();
+
+//     Matrix<double, 21, 6> K_ = P * H_.transpose() * S_.inverse();
+
+//     Matrix<double, 14, 14> BigX = Matrix<double, 14, 14>::Zero();
+
+//     BigX.block<7, 7>(0, 0) = X;
+//     BigX.block<7, 7>(7, 7) = X;
+
+//     Matrix<double, 14, 1> Z_ = BigX * Y_ - b_;
+
+//     //Update State
+//     Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
+
+//     Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
+//     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
+//     X = dX_ * X;
+//     theta += dtheta_;
+
+//     Matrix<double, 21, 21> IKH = If - K_ * H_;
+//     P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+// }
 
 void IMUinEKFQuad::updateVars()
 {
