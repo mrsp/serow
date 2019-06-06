@@ -1,3 +1,5 @@
+#ifndef MAHONY_H
+#define MAHONY_H
 #include <eigen3/Eigen/Dense>
 #include <iostream>
 
@@ -137,3 +139,4 @@ namespace serow{
         }
     };
 }
+#endif

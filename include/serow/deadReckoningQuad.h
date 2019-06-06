@@ -7,17 +7,16 @@ class deadReckoningQuad
   private:
     double Tm, Tm2, ef, wLF, wLH, wRF, wRH, mass, g, freq, Tm3, alpha1, alpha3;
     Eigen::Matrix3d C1l, C2l, C1r, C2r;
-    Eigen::Vector3d RFpRm, RHpRm, LFpLm, LHpLm;
-
+    Eigen::Vector3d RFpRm, RHpRm, LFpLm, LHpLm, LFpLmb,  RHpRmb, LHpLmb, RFpRmb;
     Eigen::Vector3d pwRF, pwRH, pwLF, pwLH, pwb, pwb_;
     Eigen::Vector3d vwRF, vwRH, vwLF, vwLH, vwb, vwb_RF, vwb_RH, vwb_LF, vwb_LH;
     Eigen::Matrix3d RwRF, RwRH, RwLF, RwLH, vwb_cov;
-    Eigen::Vector3d pwLF_, pwbLH_, pwRF_, pwRH_;
+    Eigen::Vector3d pwLF_, pwLH_, pwRF_, pwRH_;
     Eigen::Vector3d pb_LF, pb_RF, pb_LH, pb_RH;
     Eigen::Matrix3d RwLF_, RwLH_, RwRF_, RwRH_;
     Eigen::Vector3d vwbKCFS;
     Eigen::Vector3d LFomega, LHomega, RFomega, RHomega;
-    Eigen::Vector3d omegawLH, omegawRH, omegaLF, omegaRF;
+    Eigen::Vector3d omegawLH, omegawRH, omegawLF, omegawRF;
 
     Eigen::Matrix3d AL, AR, wedgeLFf, wedgeLHf, wedgeRHf, wedgeRFf, RRFpRm, RRHpRm, RLFpLm, RLHpLm;
     Eigen::Vector3d bL, bR, pLFf, pLHf, pRFf, pRHf; //FT w.r.t Foot Frame;
@@ -113,7 +112,7 @@ class deadReckoningQuad
     void computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegab, Eigen::Vector3d pbLF, Eigen::Vector3d pbLH,
                             Eigen::Vector3d pbRF, Eigen::Vector3d pbRH, 
                             Eigen::Vector3d vbLF, Eigen::Vector3d vbLH,
-                            Eigen::Vector3d vbLF, Eigen::Vector3d vbLH,
+                            Eigen::Vector3d vbRF, Eigen::Vector3d vbRH,
                             double wLF_, double wLH_, double wRF_, double wRH_)
     {
 
@@ -229,7 +228,7 @@ class deadReckoningQuad
 
     Eigen::Matrix3d getLHFootIMVPOrientation()
     {
-        return RLHFpLm;
+        return RLHpLm;
     }
 
     Eigen::Matrix3d getRFFootIMVPOrientation()
@@ -344,7 +343,7 @@ class deadReckoningQuad
                               Eigen::Vector3d omegawb, Eigen::Vector3d bomegab, 
                               Eigen::Vector3d pbLF, Eigen::Vector3d pbRF, Eigen::Vector3d pbLH, Eigen::Vector3d pbRH,
                               Eigen::Vector3d vbLF, Eigen::Vector3d vbLH, Eigen::Vector3d vbRF, Eigen::Vector3d vbRH,
-                              Eigen::Vector3d omegabLF, Eigen::Vector3d omegabLH, Eigen::Vector3d omegabLH, Eigen::Vector3d omegabRH,
+                              Eigen::Vector3d omegabLF, Eigen::Vector3d omegabLH, Eigen::Vector3d omegabRF, Eigen::Vector3d omegabRH,
                               double LFfz, double LHfz, double RFfz, double RHfz, 
                               Eigen::Vector3d LFf, Eigen::Vector3d LHf, Eigen::Vector3d RFf, Eigen::Vector3d RHf,
                               Eigen::Vector3d LFt, Eigen::Vector3d LHt, Eigen::Vector3d RFt, Eigen::Vector3d RHt )
@@ -362,15 +361,17 @@ class deadReckoningQuad
         wRH = (RHfz + ef) / (LFfz + LHfz + RFfz + RHfz + 4.0 * ef);
         wRF = (RFfz + ef) / (LFfz + LHfz + RFfz + RHfz + 4.0 * ef);
 
-        computeBodyVelKCFS(Rwb,  bomegab, pbLF,  pbLH, pbRF, pbRH, vbLF, vbLH, vbLF,  vbLH, wLF,  wLH,  wRF,  wRH)
+        computeBodyVelKCFS(Rwb,  bomegab, pbLF,  pbLH, pbRF, pbRH, vbLF, vbLH, vbLF,  vbLH, wLF,  wLH,  wRF,  wRH);
  
 
 
-        computeLegKCFS(Rwb, Rbl, Rbr, omegawb, omegabl, omegabr, pbl, pbr, vbl, vbr);
+        computeLegKCFS(Rwb, RbLF, RbLH, RbRF, RbRH, omegawb, omegabLF, omegabLH, omegabRF, omegabRH, pbLF, pbLH, pbRF, pbRH, vbLF, vbLH, vbRF, vbRH);
 
 
-        RLpLm = Rbl;
-        RRpRm = Rbr;
+        RLFpLm = RbLF;
+        RRFpRm = RbRF;
+        RLHpLm = RbLH;
+        RRHpRm = RbRH;
 
 
         //computeIMVP();
@@ -449,10 +450,10 @@ class deadReckoningQuad
                               Eigen::Vector3d omegawb, Eigen::Vector3d bomegab, 
                               Eigen::Vector3d pbLF, Eigen::Vector3d pbRF, Eigen::Vector3d pbLH, Eigen::Vector3d pbRH,
                               Eigen::Vector3d vbLF, Eigen::Vector3d vbLH, Eigen::Vector3d vbRF, Eigen::Vector3d vbRH,
-                              Eigen::Vector3d omegabLF, Eigen::Vector3d omegabLH, Eigen::Vector3d omegabLH, Eigen::Vector3d omegabRH,
+                              Eigen::Vector3d omegabLF, Eigen::Vector3d omegabLH, Eigen::Vector3d omegabRF, Eigen::Vector3d omegabRH,
                               double wLF_, double wLH_, double wRF_, double wRH_, 
                               Eigen::Vector3d LFf, Eigen::Vector3d LHf, Eigen::Vector3d RFf, Eigen::Vector3d RHf,
-                              Eigen::Vector3d LFt, Eigen::Vector3d LHt, Eigen::Vector3d RFt, Eigen::Vector3d RHt )
+                              Eigen::Vector3d LFt, Eigen::Vector3d LHt, Eigen::Vector3d RFt, Eigen::Vector3d RHt)
     {
 
         
@@ -460,15 +461,17 @@ class deadReckoningQuad
         wRF = wRF_;
         wLH = wLH_;
         wRH = wRH_;
-       computeBodyVelKCFS(Rwb,  bomegab, pbLF,  pbLH, pbRF, pbRH, vbLF, vbLH, vbLF,  vbLH, wLF,  wLH,  wRF,  wRH)
+       computeBodyVelKCFS(Rwb,  bomegab, pbLF,  pbLH, pbRF, pbRH, vbLF, vbLH, vbLF,  vbLH, wLF,  wLH,  wRF,  wRH);
  
 
 
-        computeLegKCFS(Rwb, Rbl, Rbr, omegawb, omegabl, omegabr, pbl, pbr, vbl, vbr);
+        computeLegKCFS(Rwb, RbLF, RbLH, RbRF, RbRH, omegawb, omegabLF, omegabLH, omegabRF, omegabRH, pbLF, pbLH, pbRF, pbRH,vbLF, vbLH, vbRF, vbRH);
 
 
-        RLpLm = Rbl;
-        RRpRm = Rbr;
+        RLFpLm = RbLF;
+        RRFpRm = RbRF;
+        RLHpLm = RbLH;
+        RRHpRm = RbRH;
 
 
         //computeIMVP();

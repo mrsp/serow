@@ -133,11 +133,11 @@ private:
 	//ROS Messages
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
 	sensor_msgs::Imu imu_msg;
-	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg, LFleg_odom_msg, LHleg_odom_msg, RFleg_odom_msg, RHleg_odom_msg,
+	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg, LFLeg_odom_msg, LHLeg_odom_msg, RFLeg_odom_msg, RHLeg_odom_msg,
 	ground_truth_com_odom_msg, CoM_odom_msg, ground_truth_odom_msg_, ground_truth_odom_pub_msg;
 	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg, rel_supportPose_msg, rel_swingPose_msg;
 	std_msgs::String support_leg_msg;
-	geometry_msgs::WrenchStamped RLeg_est_msg, LLeg_est_msg, LFfsr_msg, LHfsr_msg, RFfsr_msg, RHfsr_msg, external_force_filt_msg;
+	geometry_msgs::WrenchStamped RFLeg_est_msg, LFLeg_est_msg, RHLeg_est_msg, LHLeg_est_msg, LFfsr_msg, LHfsr_msg, RFfsr_msg, RHfsr_msg, external_force_filt_msg;
    
     geometry_msgs::PoseStamped bodyPose_est_msg, supportPose_est_msg;
 	geometry_msgs::TwistStamped bodyVel_est_msg, CoM_vel_msg;
@@ -168,9 +168,8 @@ private:
 	Vector3d COP_fsr, GRF_fsr, CoM_enc, Gyrodot, Gyro_, CoM_leg_odom;
 	double bias_fx,bias_fy,bias_fz;
 
-	Mediator *lmdf, *rmdf;
+	Mediator *LFmdf, *RFmdf, *RHmdf, *LHmdf;
 
-	//WindowMedian<double> *llmdf, *rrmdf;
 	string support_leg;
 
 	serow::ContactDetectionQuad* cd;
@@ -182,14 +181,14 @@ private:
 
 	bool useGEM, ContactDetectionWithCOP, ContactDetectionWithKinematics;
 	double foot_polygon_xmin, foot_polygon_xmax, foot_polygon_ymin, foot_polygon_ymax;
-	double lforce_sigma, rforce_sigma, lcop_sigma, rcop_sigma, lvnorm_sigma, rvnorm_sigma, probabilisticContactThreshold;
-	Vector3d LLegGRF, RLegGRF, LLegGRT, RLegGRT, offsetGT,offsetGTCoM;
+	double LFforce_sigma, LHforce_sigma, RFforce_sigma, RHforce_sigma, LFcop_sigma, LHcop_sigma, RFcop_sigma, RHcop_sigma, LFvnorm_sigma, LHvnorm_sigma, RFvnorm_sigma, RHvnorm_sigma, probabilisticContactThreshold;
+	Vector3d LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT, offsetGT,offsetGTCoM;
 	Affine3d Tws, Twb, Twb_; //From support s to world frame;
 	Affine3d Tbs, Tsb, Tssw, Tbsw;
 	Vector3d no_motion_residual;
 	/****/
 	bool  kinematicsInitialized, firstContact;
-	double LLegForceFilt, RLegForceFilt;
+	double LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt;
 	double LegHighThres, LegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
@@ -261,9 +260,9 @@ private:
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	// Constructor/Destructor
-	humanoid_ekf();
+	quadruped_ekf();
 
-	~humanoid_ekf();
+	~quadruped_ekf();
 
 	// Connect/Disconnet to ALProxies
 	bool connect(const ros::NodeHandle nh);

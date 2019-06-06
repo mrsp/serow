@@ -32,6 +32,8 @@
 
 #include <iostream>
 #include <serow/humanoid_ekf.h>
+#include <serow/quadruped_ekf.h>
+
 using std::string;
 using std::cerr;
 using std::endl;
@@ -47,6 +49,8 @@ int main(int argc, char** argv)
     }
 
     humanoid_ekf* hse = new humanoid_ekf();
+    quadruped_ekf* qse = new quadruped_ekf();
+
     hse->connect(n);
     if(!hse->connected())
     {
