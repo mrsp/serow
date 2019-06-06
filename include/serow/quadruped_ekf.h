@@ -36,8 +36,7 @@
 #include <ros/ros.h>
 
 // Estimator Headers
-#include <serow/IMUinEKF.h>
-#include <serow/IMUEKF.h>
+#include <serow/IMUinEKFQuad.h>
 #include <serow/CoMEKF.h>
 #include <serow/JointDF.h>
 #include <serow/butterworthLPF.h>
@@ -157,8 +156,7 @@ private:
     boost::shared_ptr< dynamic_reconfigure::Server<serow::VarianceControlConfig> > dynamic_recfg_;
 
 	double mass;
-	IMUEKF* imuEKF;
-	IMUinEKF* imuInEKF;
+	IMUinEKFQuad* imuInEKF;
 	bool useInIMUEKF;
 	CoMEKF* nipmEKF;
 	butterworthLPF** gyroLPF;

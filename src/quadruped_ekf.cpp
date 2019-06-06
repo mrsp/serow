@@ -551,7 +551,7 @@ void quadruped_ekf::init()
     firstContact = true;
 
     // Initialize the IMU based EKF
-    imuInEKF = new IMUinEKF;
+    imuInEKF = new IMUinEKFQuad;
     imuInEKF->init();
     if (useCoMEKF)
     {
