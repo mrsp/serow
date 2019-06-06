@@ -48,19 +48,35 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    humanoid_ekf* hse = new humanoid_ekf();
-    quadruped_ekf* qse = new quadruped_ekf();
-
-    hse->connect(n);
-    if(!hse->connected())
+    ros::NodeHandle n_p("~");
+    bool isQuadruped;
+    n_p.param<bool>("isQuadruped", isQuadruped, false);
+    if(!isQuadruped)
     {
-        ROS_ERROR("Could not connect to Humanoid robot!");
-        return -1;
+        humanoid_ekf* hse = new humanoid_ekf();
+        hse->connect(n);
+        if(!hse->connected())
+        {
+            ROS_ERROR("Could not connect to Humanoid robot!");
+            return -1;
+        }
+
+        // Run the spinner in a separate thread to prevent lockups
+        hse->run();
     }
+    else
+    {
+        quadruped_ekf* qse = new quadruped_ekf();
+        qse->connect(n);
+        if(!qse->connected())
+        {
+            ROS_ERROR("Could not connect to Humanoid robot!");
+            return -1;
+        }
 
-    // Run the spinner in a separate thread to prevent lockups
-    hse->run();
-
+        // Run the spinner in a separate thread to prevent lockups
+        qse->run();
+    }
     //Done here
     ROS_INFO( "Quitting... " );
 
