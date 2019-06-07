@@ -89,6 +89,8 @@ namespace serow
             {
                 jnames_.erase(jnames_.begin());
             }
+
+            
             
             qmin_.resize(jnames_.size());
             qmax_.resize(jnames_.size());
