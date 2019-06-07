@@ -130,7 +130,7 @@ void IMUinEKFQuad::seperateState(Matrix<double, 9, 9> X_, Matrix<double, 6, 1> t
     ba_ = theta_.segment<3>(3);
 }
 
-Matrix<double, 9, 9> IMUinEKFQuad::exp_SE3(Matrix<double, 27, 1> v)
+Matrix<double, 9, 9> IMUinEKFQuad::exp_SE3(Matrix<double, 21, 1> v)
 {
     Matrix<double, 9, 9> dX_ = Matrix<double, 9, 9>::Identity();
     double phi = v.segment<3>(0).norm();
@@ -484,136 +484,257 @@ void IMUinEKFQuad::predict(Vector3d angular_velocity, Vector3d linear_accelerati
 //     P = Adj * P * Adj.transpose();
 // }
 
-// void IMUinEKFQuad::updateWithContacts(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL)
-// {
+void IMUinEKFQuad::updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s_pLF, Vector3d s_pLH, Matrix3d JRFQeJRF, Matrix3d JRHQeJRH, Matrix3d JLFQeJLF,  Matrix3d JLHQeJLH, int contactRF, int contactRH, int contactLF, int contactLH)
+{
 
-//     Rwb = X.block<3, 3>(0, 0);
+    Rwb = X.block<3, 3>(0, 0);
 
-//     Qc(0, 0) = leg_odom_px * leg_odom_px;
-//     Qc(1, 1) = leg_odom_py * leg_odom_py;
-//     Qc(2, 2) = leg_odom_pz * leg_odom_pz;
+    Qc(0, 0) = leg_odom_px * leg_odom_px;
+    Qc(1, 1) = leg_odom_py * leg_odom_py;
+    Qc(2, 2) = leg_odom_pz * leg_odom_pz;
 
-//     if (contactL && contactR)
-//     {
-//         Matrix<double, 14, 1> Y = Matrix<double, 14, 1>::Zero();
-//         Y.segment<3>(0) = s_pR;
-//         Y(4) = 1.00;
-//         Y(5) = -1.00;
-//         Y.segment<3>(7) = s_pL;
-//         Y(11) = 1.00;
-//         Y(13) = -1.00;
-//         Matrix<double, 14, 1> b = Matrix<double, 14, 1>::Zero();
-//         b(4) = 1.00;
-//         b(5) = -1.00;
-//         b(11) = 1.00;
-//         b(13) = -1.00;
-//         Matrix<double, 6, 21> H = Matrix<double, 6, 21>::Zero();
-//         H.block<3, 3>(0, 6) = -Matrix3d::Identity();
-//         H.block<3, 3>(0, 9) = Matrix3d::Identity();
-//         H.block<3, 3>(3, 6) = -Matrix3d::Identity();
-//         H.block<3, 3>(3, 12) = Matrix3d::Identity();
+    // if (contactLF && contactRF && contactLH && contactRH)
+    // {
+    //     Matrix<double, 36, 1> Y = Matrix<double, 36, 1>::Zero();
+    //     Y.segment<3>(0) = s_pRF;
+    //     Y(4) = 1.00;
+    //     Y(5) = -1.00;
+        
+    //     Y.segment<3>(9) = s_pRH;
+    //     Y(13) = 1.00;
+    //     Y(15) = -1.00;
 
-//         Matrix<double, 6, 6> N = Matrix<double, 6, 6>::Zero();
-//         N.block<3, 3>(0, 0) = Rwb * JRQeJR * Rwb.transpose() + Qc;
-//         N.block<3, 3>(3, 3) = Rwb * JLQeJL * Rwb.transpose() + Qc;
+    //     Y.segment<3>(0) = s_pLF;
+    //     Y(22) = 1.00;
+    //     Y(25) = -1.00;
+        
+    //     Y.segment<3>(9) = s_pLH;
+    //     Y(31) = 1.00;
+    //     Y(35) = -1.00;
 
-//         Matrix<double, 6, 14> PI = Matrix<double, 6, 14>::Zero();
-//         PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-//         PI.block<3, 3>(3, 7) = Matrix3d::Identity();
-//         updateStateDoubleContact(Y, b, H, N, PI);
-//         updateVars();
-//     }
-//     else if (contactR)
-//     {
-//         Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
-//         Y.segment<3>(0) = s_pR;
-//         Y(4) = 1.00;
-//         Y(5) = -1.00;
-//         Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
-//         b(4) = 1.00;
-//         b(5) = -1.00;
 
-//         Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
-//         H.block<3, 3>(0, 6) = -Matrix3d::Identity();
-//         H.block<3, 3>(0, 9) = Matrix3d::Identity();
 
-//         Matrix3d N = Matrix3d::Zero();
-//         N = Rwb * JRQeJR * Rwb.transpose() + Qc;
-//         Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
-//         PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-//         updateStateSingleContact(Y, b, H, N, PI);
-//         updateVars();
-//     }
-//     else if (contactL)
-//     {
-//         Matrix<double, 7, 1> Y = Matrix<double, 7, 1>::Zero();
-//         Y.segment<3>(0) = s_pL;
-//         Y(4) = 1.00;
-//         Y(6) = -1.00;
-//         Matrix<double, 7, 1> b = Matrix<double, 7, 1>::Zero();
-//         b(4) = 1.00;
-//         b(6) = -1.00;
+    //     Matrix<double, 36, 1> b = Matrix<double, 36, 1>::Zero();
+    //     b(4) = 1.00;
+    //     b(5) = -1.00;
+    //     b(13) = 1.00;
+    //     b(15) = -1.00;
+    //     b(22) = 1.00;
+    //     b(25) = -1.00;
+    //     b(31) = 1.00;
+    //     b(35) = -1.00;
 
-//         Matrix<double, 3, 21> H = Matrix<double, 3, 21>::Zero();
-//         H.block<3, 3>(0, 6) = -Matrix3d::Identity();
-//         H.block<3, 3>(0, 12) = Matrix3d::Identity();
+    //     Matrix<double, 12, 27> H = Matrix<double, 12, 27>::Zero();
+    //     H.block<3, 3>(0, 6) = -Matrix3d::Identity();
+    //     H.block<3, 3>(0, 9) = Matrix3d::Identity();
+    //     H.block<3, 3>(3, 6) = -Matrix3d::Identity();
+    //     H.block<3, 3>(3, 12) = Matrix3d::Identity();
 
-//         Matrix3d N = Matrix3d::Zero();
-//         N = Rwb * JLQeJL * Rwb.transpose()+ Qc;
+    //     Matrix<double, 12, 12> N = Matrix<double, 12, 12>::Zero();
+    //     N.block<3, 3>(0, 0) = Rwb * JRFQeJRF * Rwb.transpose() + Qc;
+    //     N.block<3, 3>(3, 3) = Rwb * JRHQeJRH * Rwb.transpose() + Qc;
+    //     N.block<3, 3>(6, 6) = Rwb * JLFQeJLF * Rwb.transpose() + Qc;
+    //     N.block<3, 3>(9, 9) = Rwb * JLHQeJLH * Rwb.transpose() + Qc;
 
-//         Matrix<double, 3, 7> PI = Matrix<double, 3, 7>::Zero();
-//         PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-//         updateStateSingleContact(Y, b, H, N, PI);
-//         updateVars();
-//     }
-// }
+    //     Matrix<double, 12, 36> PI = Matrix<double, 12, 36>::Zero();
+    //     PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+    //     PI.block<3, 3>(3, 9) = Matrix3d::Identity();
+    //     PI.block<3, 3>(6, 18) = Matrix3d::Identity();
+    //     PI.block<3, 3>(9, 27) = Matrix3d::Identity();
 
-// void IMUinEKFQuad::updateStateSingleContact(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix3d N_, Matrix<double, 3, 7> PI_)
-// {
+    //     updateStateQuadContact(Y, b, H, N, PI);
+    //     updateVars();
+    // }
+    if (contactRF)
+    {
+        Matrix<double, 9, 1> Y = Matrix<double, 9, 1>::Zero();
+        Y.segment<3>(0) = s_pRF;
+        Y(4) = 1.00;
+        Y(5) = -1.00;
+        Matrix<double, 9, 1> b = Matrix<double, 9, 1>::Zero();
+        b(4) = 1.00;
+        b(5) = -1.00;
 
-//     Matrix3d S_ = N_;
-//     S_ += H_ * P * H_.transpose();
+        Matrix<double, 3, 27> H = Matrix<double, 3, 27>::Zero();
+        H.block<3, 3>(0, 6) = -Matrix3d::Identity();
+        H.block<3, 3>(0, 9) = Matrix3d::Identity();
 
-//     Matrix<double, 21, 3> K_ = P * H_.transpose() * S_.inverse();
-//     Matrix<double, 7, 1> Z_ = X * Y_ - b_;
+        Matrix3d N = Matrix3d::Zero();
+        N = Rwb * JRFQeJRF * Rwb.transpose() + Qc;
+        Matrix<double, 3, 9> PI = Matrix<double, 3, 9>::Zero();
+        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+        updateStateSingleContact(Y, b, H, N, PI);
+        updateVars();
+    }
+    if (contactRH)
+    {
+        Matrix<double, 9, 1> Y = Matrix<double, 9, 1>::Zero();
+        Y.segment<3>(0) = s_pRH;
+        Y(4) = 1.00;
+        Y(6) = -1.00;
+        Matrix<double, 9, 1> b = Matrix<double, 9, 1>::Zero();
+        b(4) = 1.00;
+        b(6) = -1.00;
 
-//     //Update State
-//     Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
-//     Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
-//     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
+        Matrix<double, 3, 27> H = Matrix<double, 3, 27>::Zero();
+        H.block<3, 3>(0, 6) = -Matrix3d::Identity();
+        H.block<3, 3>(0, 12) = Matrix3d::Identity();
 
-//     X = dX_ * X;
-//     theta += dtheta_;
+        Matrix3d N = Matrix3d::Zero();
+        N = Rwb * JRHQeJRH * Rwb.transpose()+ Qc;
 
-//     Matrix<double, 21, 21> IKH = If - K_ * H_;
-//     P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-// }
+        Matrix<double, 3, 9> PI = Matrix<double, 3, 9>::Zero();
+        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+        updateStateSingleContact(Y, b, H, N, PI);
+        updateVars();
+    }
+    if (contactLF)
+    {
+        Matrix<double, 9, 1> Y = Matrix<double, 9, 1>::Zero();
+        Y.segment<3>(0) = s_pLF;
+        Y(4) = 1.00;
+        Y(7) = -1.00;
+        Matrix<double, 9, 1> b = Matrix<double, 9, 1>::Zero();
+        b(4) = 1.00;
+        b(7) = -1.00;
 
-// void IMUinEKFQuad::updateStateDoubleContact(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_)
-// {
-//     Matrix<double, 6, 6> S_ = N_;
-//     S_ += H_ * P * H_.transpose();
+        Matrix<double, 3, 27> H = Matrix<double, 3, 27>::Zero();
+        H.block<3, 3>(0, 6) = -Matrix3d::Identity();
+        H.block<3, 3>(0, 15) = Matrix3d::Identity();
 
-//     Matrix<double, 21, 6> K_ = P * H_.transpose() * S_.inverse();
+        Matrix3d N = Matrix3d::Zero();
+        N = Rwb * JLFQeJLF * Rwb.transpose() + Qc;
+        Matrix<double, 3, 9> PI = Matrix<double, 3, 9>::Zero();
+        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+        updateStateSingleContact(Y, b, H, N, PI);
+        updateVars();
+    }
+    if (contactLH)
+    {
+        Matrix<double, 9, 1> Y = Matrix<double, 9, 1>::Zero();
+        Y.segment<3>(0) = s_pLH;
+        Y(4) = 1.00;
+        Y(8) = -1.00;
+        Matrix<double, 9, 1> b = Matrix<double, 9, 1>::Zero();
+        b(4) = 1.00;
+        b(8) = -1.00;
 
-//     Matrix<double, 14, 14> BigX = Matrix<double, 14, 14>::Zero();
+        Matrix<double, 3, 27> H = Matrix<double, 3, 27>::Zero();
+        H.block<3, 3>(0, 6) = -Matrix3d::Identity();
+        H.block<3, 3>(0, 18) = Matrix3d::Identity();
 
-//     BigX.block<7, 7>(0, 0) = X;
-//     BigX.block<7, 7>(7, 7) = X;
+        Matrix3d N = Matrix3d::Zero();
+        N = Rwb * JLHQeJLH * Rwb.transpose()+ Qc;
 
-//     Matrix<double, 14, 1> Z_ = BigX * Y_ - b_;
+        Matrix<double, 3, 9> PI = Matrix<double, 3, 9>::Zero();
+        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+        updateStateSingleContact(Y, b, H, N, PI);
+        updateVars();
+    }
+}
 
-//     //Update State
-//     Matrix<double, 21, 1> delta_ = K_ * PI_ * Z_;
+void IMUinEKFQuad::updateStateSingleContact(Matrix<double, 9, 1> Y_, Matrix<double, 9, 1> b_, Matrix<double, 3, 27> H_, Matrix3d N_, Matrix<double, 3, 9> PI_)
+{
 
-//     Matrix<double, 7, 7> dX_ = exp_SE3(delta_.segment<15>(0));
-//     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(15);
-//     X = dX_ * X;
-//     theta += dtheta_;
+    Matrix3d S_ = N_;
+    S_ += H_ * P * H_.transpose();
 
-//     Matrix<double, 21, 21> IKH = If - K_ * H_;
-//     P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-// }
+    Matrix<double, 27, 3> K_ = P * H_.transpose() * S_.inverse();
+    Matrix<double, 9, 1> Z_ = X * Y_ - b_;
+
+    //Update State
+    Matrix<double, 27, 1> delta_ = K_ * PI_ * Z_;
+    Matrix<double, 9, 9> dX_ = exp_SE3(delta_.segment<21>(0));
+    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(21);
+
+    X = dX_ * X;
+    theta += dtheta_;
+
+    Matrix<double, 27, 27> IKH = If - K_ * H_;
+    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+}
+
+void IMUinEKFQuad::updateStateDoubleContact(Matrix<double, 18, 1> Y_, Matrix<double, 18, 1> b_, Matrix<double, 6, 27> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 18> PI_)
+{
+    Matrix<double, 6, 6> S_ = N_;
+    S_ += H_ * P * H_.transpose();
+
+    Matrix<double, 27, 6> K_ = P * H_.transpose() * S_.inverse();
+
+    Matrix<double, 18, 18> BigX = Matrix<double, 18, 18>::Zero();
+
+    BigX.block<9, 9>(0, 0) = X;
+    BigX.block<9, 9>(9, 9) = X;
+
+    Matrix<double, 18, 1> Z_ = BigX * Y_ - b_;
+
+    //Update State
+    Matrix<double, 27, 1> delta_ = K_ * PI_ * Z_;
+
+    Matrix<double, 9, 9> dX_ = exp_SE3(delta_.segment<21>(0));
+    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(21);
+    X = dX_ * X;
+    theta += dtheta_;
+
+    Matrix<double, 27, 27> IKH = If - K_ * H_;
+    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+}
+
+void IMUinEKFQuad::updateStateTripleContact(Matrix<double, 27, 1> Y_, Matrix<double, 27, 1> b_, Matrix<double, 9, 27> H_, Matrix<double, 9, 9> N_, Matrix<double, 9, 27> PI_)
+{
+    Matrix<double, 9, 9> S_ = N_;
+    S_ += H_ * P * H_.transpose();
+
+    Matrix<double, 27, 9> K_ = P * H_.transpose() * S_.inverse();
+
+    Matrix<double, 27, 27> BigX = Matrix<double, 27, 27>::Zero();
+
+    BigX.block<9, 9>(0, 0) = X;
+    BigX.block<9, 9>(9, 9) = X;
+    BigX.block<9, 9>(18, 18) = X;
+
+    Matrix<double, 27, 1> Z_ = BigX * Y_ - b_;
+
+    //Update State
+    Matrix<double, 27, 1> delta_ = K_ * PI_ * Z_;
+
+    Matrix<double, 9, 9> dX_ = exp_SE3(delta_.segment<21>(0));
+    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(21);
+    X = dX_ * X;
+    theta += dtheta_;
+
+    Matrix<double, 27, 27> IKH = If - K_ * H_;
+    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+}
+
+void IMUinEKFQuad::updateStateQuadContact(Matrix<double, 36, 1> Y_, Matrix<double, 36, 1> b_, Matrix<double, 12, 27> H_, Matrix<double, 12, 12> N_, Matrix<double, 12, 36> PI_)
+{
+    Matrix<double, 12, 12> S_ = N_;
+    S_ += H_ * P * H_.transpose();
+
+    Matrix<double, 27, 12> K_ = P * H_.transpose() * S_.inverse();
+
+    Matrix<double, 36, 36> BigX = Matrix<double, 36, 36>::Zero();
+
+    BigX.block<9, 9>(0, 0) = X;
+    BigX.block<9, 9>(9, 9) = X;
+    BigX.block<9, 9>(18, 18) = X;
+    BigX.block<9, 9>(27, 27) = X;
+
+    Matrix<double, 36, 1> Z_ = BigX * Y_ - b_;
+
+    //Update State
+    Matrix<double, 27, 1> delta_ = K_ * PI_ * Z_;
+
+    Matrix<double, 9, 9> dX_ = exp_SE3(delta_.segment<21>(0));
+    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(21);
+    X = dX_ * X;
+    theta += dtheta_;
+
+    Matrix<double, 27, 27> IKH = If - K_ * H_;
+    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
+}
+
 
 void IMUinEKFQuad::updateVars()
 {

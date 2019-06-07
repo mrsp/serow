@@ -18,8 +18,15 @@ class IMUinEKFQuad
 	//State vector - with biases included
 
 	Matrix<double, 6, 1> theta;
-	void updateStateSingleContact(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix3d N_, Matrix<double, 3, 7> PI_);
-	void updateStateDoubleContact(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_);
+	void updateStateSingleContact(Matrix<double, 9, 1> Y_, Matrix<double, 9, 1> b_, Matrix<double, 3, 27> H_, Matrix3d N_, Matrix<double, 3, 9> PI_);
+	void updateStateDoubleContact(Matrix<double, 18, 1> Y_, Matrix<double, 18, 1> b_, Matrix<double, 6, 27> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 18> PI_);
+	void updateStateTripleContact(Matrix<double, 27, 1> Y_, Matrix<double, 27, 1> b_, Matrix<double, 9, 27> H_, Matrix<double, 9, 9> N_, Matrix<double, 9, 27> PI_);
+	void updateStateQuadContact(Matrix<double, 36, 1> Y_, Matrix<double, 36, 1> b_, Matrix<double, 12, 27> H_, Matrix<double, 12, 12> N_, Matrix<double, 12, 36> PI_);
+
+	void updateVelocityOrientation(Matrix<double, 18, 1> Y_, Matrix<double, 18, 1> b_, Matrix<double, 6, 18> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 18> PI_);
+	void updateOrientation(Matrix<double, 9, 1> Y_, Matrix<double, 9, 1> b_, Matrix<double, 3, 27> H_, Matrix<double, 3, 3> N_, Matrix<double, 3, 9> PI_);
+	void updatePositionOrientation(Matrix<double, 18, 1> Y_, Matrix<double, 18, 1> b_, Matrix<double, 6, 18> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 18> PI_);
+	void updateVelocity(Matrix<double, 9, 1> Y_, Matrix<double, 9, 1> b_, Matrix<double, 3, 27> H_, Matrix3d N_, Matrix<double, 3, 9> PI_);
 
   public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -56,14 +63,13 @@ class IMUinEKFQuad
 
 	void constructState(Matrix<double, 9, 9> &X_, Matrix<double, 6, 1> &theta_, Matrix3d R_, Vector3d v_, Vector3d p_, Vector3d dRF_, Vector3d dRH_, Vector3d dLF_, Vector3d dLH_, Vector3d bg_, Vector3d ba_);
 	void seperateState(Matrix<double, 9, 9> X_, Matrix<double, 6, 1> theta_, Matrix3d &R_, Vector3d &v_, Vector3d &p_, Vector3d &dRF_, Vector3d &dRH_, Vector3d &dLF_, Vector3d &dLH_, Vector3d &bg_, Vector3d &ba_);
-	Matrix<double, 9, 9> exp_SE3(Matrix<double, 27, 1> v);
+	Matrix<double, 9, 9> exp_SE3(Matrix<double, 21, 1> v);
 	Matrix3d exp_SO3(Vector3d v);
 	Matrix<double, 27, 27> Adjoint(Matrix<double, 9, 9> X_);
 
 	void updateWithTwist(Vector3d vy, Matrix3d Rvy);
-	void updateVelocity(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix3d N_, Matrix<double, 3, 7> PI_);
 	void updateWithOrient(Quaterniond qy);
-	void updateOrientation(Matrix<double, 7, 1> Y_, Matrix<double, 7, 1> b_, Matrix<double, 3, 21> H_, Matrix<double, 3, 3> N_, Matrix<double, 3, 7> PI_);
+
 	void updateVars();
 
 	void setdt(double dtt)
@@ -153,11 +159,9 @@ class IMUinEKFQuad
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
 	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbRF, Vector3d pbRH, Vector3d pbLF, Vector3d pbLH, Matrix3d hR_RF, Matrix3d hR_RH,  Matrix3d hR_LF, Matrix3d hR_LH, int contactRF, int contactRH, int contactLF, int contactLH);
-	void updateWithContacts(Vector3d s_pR, Vector3d s_pL, Matrix3d JRQeJR, Matrix3d JLQeJL, int contactR, int contactL);
+	void updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s_pLF, Vector3d s_pLH, Matrix3d JRFQeJRF, Matrix3d JRHQeJRH, Matrix3d JLFQeJLF,  Matrix3d JLHQeJLH, int contactRF, int contactRH, int contactLF, int contactLH);
 
-	void updatePositionOrientation(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_);
 	void updateWithOdom(Vector3d py, Quaterniond qy);
-	void updateVelocityOrientation(Matrix<double, 14, 1> Y_, Matrix<double, 14, 1> b_, Matrix<double, 6, 21> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 14> PI_);
 	void updateWithTwistOrient(Vector3d vy, Quaterniond qy);
 	// Initializing Variables
 	void init();

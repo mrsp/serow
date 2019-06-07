@@ -70,7 +70,7 @@ int main(int argc, char** argv)
         qse->connect(n);
         if(!qse->connected())
         {
-            ROS_ERROR("Could not connect to Humanoid robot!");
+            ROS_ERROR("Could not connect to Quadruped robot!");
             return -1;
         }
 

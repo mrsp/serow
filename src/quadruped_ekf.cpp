@@ -56,7 +56,6 @@ void quadruped_ekf::loadparams()
     n_p.param<double>("imu_topic_freq", freq, 100.0);
     n_p.param<double>("fsr_topic_freq", fsr_freq, 100.0);
 
-    n_p.param<bool>("useInIMUEKF", useInIMUEKF, false);
 
     n_p.param<double>("VelocityThres", VelocityThres, 0.5);
     n_p.param<double>("LosingContact", LosingContact, 5.0);
@@ -794,6 +793,7 @@ void quadruped_ekf::computeKinTFs()
     TbRH.translation() = rd->linkPosition(RHfoot_frame);
     qbRH = rd->linkOrientation(RHfoot_frame);
     TbRH.linear() = qbRH.toRotationMatrix();
+
 
     //TF Initialization
     if (!kinematicsInitialized)
