@@ -1,7 +1,6 @@
 #Robot Frames (CHECK URDF)
 
 isQuadruped: true
-
 base_link: "pelvis"
 LFfoot: "wheel_1"
 RFfoot: "wheel_2"
@@ -64,28 +63,28 @@ imu_topic_freq: 200
 joint_topic_freq: 200
 fsr_topic_freq: 25  
 
-mass: 70.5957  #robot mass
+mass: 31.8  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
-LegUpThres: 142 #Schmitt Trigger High Threshold in Newtons (N)
-LegLowThres: 42.5 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 20.0
-StrikingContact: 800
-medianWindow: 10
+LegUpThres: 72 #Schmitt Trigger High Threshold in Newtons (N)
+LegLowThres: 22.5 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 15.0
+StrikingContact: 400
+medianWindow: 11
 
 #Compute Joint Velocities
-joint_cutoff_freq: 16
-joint_noise_density: 0.025  # rad
+joint_cutoff_freq: 40
+joint_noise_density: 0.005  # rad
 
 
 useGEM: true
-LFforce_sigma: 3.0
-LHforce_sigma: 3.0
-RFforce_sigma: 3.0
-RHforce_sigma: 3.0
+LFforce_sigma: 1.0801
+LHforce_sigma: 0.9539
+RFforce_sigma: 0.9490
+RHforce_sigma: 1.1127
 
 probabilisticContactThreshold: 0.95
-ContactDetectionWithCOP: true
+ContactDetectionWithCOP: false
 foot_polygon_xmin: -0.1
 foot_polygon_xmax: 0.1
 foot_polygon_ymin: -0.05
@@ -102,10 +101,10 @@ LHvnorm_sigma: 0.05
 RHvnorm_sigma: 0.05
 #Mahony Filter for attitude
 useMahony: true
-Mahony_Kp: 0.001
+Mahony_Kp: 2.5
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
-Madgwick_gain: 0.00001
+Madgwick_gain: 0.01
 
 
 
@@ -131,9 +130,9 @@ contact_random_walk: 0.05
 
 #Process Noise STDs
 accelerometer_bias_random_walk:  2.4336e-05 #m/s^2/sqrt(s)
-gyroscope_bias_random_walk: 1.0e-6 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.5 # m/s^2  #Continuous Time
-gyroscope_noise_density: 5.0e-02 # rad/s  #Continuous Time
+gyroscope_bias_random_walk: 1.0e-06 # rad/s/sqrt(s)
+accelerometer_noise_density: 0.0429 # m/s^2  #Continuous Time
+gyroscope_noise_density: 6.3066e-04 # rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
@@ -161,12 +160,12 @@ velocity_noise_density_z: 0.035 #0.007
 
 #IMU Initial Biases in the IMU local frame - Biases are added!
 
-bias_ax: 0.35753
-bias_ay: 0.00
-bias_az: 0.00
-bias_gx: -1.24626e-07
-bias_gy: -4.49618e-07
-bias_gz: 2.82382e-08
+bias_ax: 0.2875
+bias_ay: -0.0481
+bias_az: 0.2420
+bias_gx: -1.24626e-05
+bias_gy: 3.49618e-05
+bias_gz: -1.82382e-05
 
 
 
