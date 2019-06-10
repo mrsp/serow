@@ -163,6 +163,8 @@ class deadReckoningQuad
 
         vwRF = vwb + wedge(omegawb) * Rwb * pbRF + Rwb * vbRF;
         vwRH = vwb + wedge(omegawb) * Rwb * pbRH + Rwb * vbRH;
+
+
     }
 
     Eigen::Vector3d getLFFootLinearVel()
@@ -373,11 +375,12 @@ class deadReckoningQuad
         RLHpLm = RbLH;
         RRHpRm = RbRH;
 
+        if(alpha3>0)
+            computeIMVPFT(LFf, LHf, RFf, RHf, LFt, LHt,  RFt, RHt);
+        else
+            computeIMVP();
 
-        //computeIMVP();
-        computeIMVPFT(LFf, LHf, RFf, RHf, LFt, LHt,  RFt, RHt);
-
-
+     
         RFpRmb = RbRF * RFpRm + pbRF;
         RHpRmb = RbRH * RHpRm + pbRH;
 
@@ -457,10 +460,18 @@ class deadReckoningQuad
     {
 
         
-        wLF = wLF_;
-        wRF = wRF_;
-        wLH = wLH_;
-        wRH = wRH_;
+
+        wLF = (wLF_ + ef) / (wLF_ + wRF_ + wLH_ + wRH_ + 4.0 * ef);
+        wLH = (wLH_ + ef) / (wLF_ + wRF_ + wLH_ + wRH_ + 4.0 * ef);
+        wRH = (wRH_ + ef) / (wLF_ + wRF_ + wLH_ + wRH_ + 4.0 * ef);
+        wRF = (wRF_ + ef) / (wLF_ + wRF_ + wLH_ + wRH_ + 4.0 * ef);
+
+        // cout<<"weights"<<endl;
+        // cout<<wLF_<<endl;
+        // cout<<wLH_<<endl;
+        // cout<<wRH_<<endl;
+        // cout<<wRF_<<endl;
+
        computeBodyVelKCFS(Rwb,  bomegab, pbLF,  pbLH, pbRF, pbRH, vbLF, vbLH, vbLF,  vbLH, wLF,  wLH,  wRF,  wRH);
  
 
@@ -474,15 +485,16 @@ class deadReckoningQuad
         RRHpRm = RbRH;
 
 
-        //computeIMVP();
-        computeIMVPFT(LFf, LHf, RFf, RHf, LFt, LHt,  RFt, RHt);
+        if(alpha3>0)
+            computeIMVPFT(LFf, LHf, RFf, RHf, LFt, LHt,  RFt, RHt);
+        else
+            computeIMVP();
 
+       // RFpRmb = RbRF * RFpRm + pbRF;
+        // RHpRmb = RbRH * RHpRm + pbRH;
 
-        RFpRmb = RbRF * RFpRm + pbRF;
-        RHpRmb = RbRH * RHpRm + pbRH;
-
-        LFpLmb = RbLF * LFpLm + pbLF;
-        LHpLmb = RbLH * LHpLm + pbLH;
+        // LFpLmb = RbLF * LFpLm + pbLF;
+        // LHpLmb = RbLH * LHpLm + pbLH; 
 
  
         RFpRmb =  pbRF;

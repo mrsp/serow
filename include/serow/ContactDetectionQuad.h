@@ -69,6 +69,13 @@ private:
     pRHf = computeForceContactProb(RHfmin, sigmaRHf, RHf);
     pRH = pRHf;
 
+    cout<<"VEL NORM"<<endl;
+    cout<<LFvnorm<<endl;
+    cout<<RFvnorm<<endl;
+    cout<<LHvnorm<<endl;
+    cout<<RHvnorm<<endl;
+
+
     //To utilize the full contact-wrench - careful for non-coplanar contacts
     if (useCOP)
     {
@@ -83,13 +90,14 @@ private:
       pLH *= pLHc;
       pRH *= pRHc;
     }
+
     if (useKin)
     {
       pLFv = computeKinContactProb(VelocityThres, sigmaLFv, LFvnorm);
       pLHv = computeKinContactProb(VelocityThres, sigmaLHv, LHvnorm);
 
       pRFv = computeKinContactProb(VelocityThres, sigmaRFv, RFvnorm);
-      pRHv = computeKinContactProb(VelocityThres, sigmaRFv, RHvnorm);
+      pRHv = computeKinContactProb(VelocityThres, sigmaRHv, RHvnorm);
 
       pLF *= pLFv;
       pLH *= pLHv;
@@ -98,26 +106,29 @@ private:
       pRH *= pRHv;
     }
 
-    p = pLF + pLH + pRF + pRH;
 
-    if (p != 0)
-    {
-      pLF = pLF / p;
-      pRF = pRF / p;
-      pLH = pLH / p;
-      pRH = pRH / p;
-      pLF += 0.5;
-      pRF += 0.5;
-      pLH += 0.5;
-      pRH += 0.5;
-    }
-    else
-    {
-      pLF = 0;
-      pRF = 0;
-      pLH = 0;
-      pRH = 0;
-    }
+
+    // p = pLF + pLH + pRF + pRH;
+
+    // if (p != 0)
+    // {
+    //   pLF = pLF / p;
+    //   pRF = pRF / p;
+    //   pLH = pLH / p;
+    //   pRH = pRH / p;
+    //   pLF += 0.75;
+    //   pRF += 0.75;
+    //   pLH += 0.75;
+    //   pRH += 0.75;
+    // }
+    // else
+    // {
+    //   pLF = 0;
+    //   pRF = 0;
+    //   pLH = 0;
+    //   pRH = 0;
+    // }
+
 
     contactLH = 0;
     if (pLF >= prob_TH)
@@ -126,8 +137,9 @@ private:
     contactRF = 0;
     if (pRF >= prob_TH)
       contactRF = 1;
-        contactLH = 0;
-
+    
+    
+    contactLH = 0;
     if (pLH >= prob_TH)
       contactLH = 1;
 
@@ -207,7 +219,7 @@ public:
     pRHv = 0;
 
     VelocityThres = VelocityThres_;
-    prob_TH = prob_TH_;
+    prob_TH = prob_TH_-0.75;
     useCOP = useCOP_;
     useKin = useKin_;
     firstContact = true;

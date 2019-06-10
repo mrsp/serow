@@ -121,7 +121,7 @@ class IMUinEKFQuad
 	void setLeftHindContact(Vector3d bl)
 	{
 		dLH = bl;
-		X.block<3, 1>(0, 7) = bl;
+		X.block<3, 1>(0, 8) = bl;
 	}
 
 	void setRightFrontContact(Vector3d br)

@@ -63,18 +63,18 @@ imu_topic_freq: 200
 joint_topic_freq: 200
 fsr_topic_freq: 25  
 
-mass: 31.8  #robot mass
+mass: 92.0  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
 LegUpThres: 72 #Schmitt Trigger High Threshold in Newtons (N)
 LegLowThres: 22.5 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 15.0
+LosingContact: 35.0
 StrikingContact: 400
-medianWindow: 11
+medianWindow: 3
 
 #Compute Joint Velocities
 joint_cutoff_freq: 40
-joint_noise_density: 0.005  # rad
+joint_noise_density: 0.01  # rad
 
 
 useGEM: true
@@ -83,7 +83,7 @@ LHforce_sigma: 0.9539
 RFforce_sigma: 0.9490
 RHforce_sigma: 1.1127
 
-probabilisticContactThreshold: 0.95
+probabilisticContactThreshold: 0.85
 ContactDetectionWithCOP: false
 foot_polygon_xmin: -0.1
 foot_polygon_xmax: 0.1
@@ -93,8 +93,8 @@ LFcop_sigma: 0.005
 RFcop_sigma: 0.005
 LHcop_sigma: 0.005
 RHcop_sigma: 0.005
-ContactDetectionWithKinematics: true
-VelocityThres: 0.2
+ContactDetectionWithKinematics: false
+VelocityThres: 0.35
 LFvnorm_sigma: 0.05
 RFvnorm_sigma: 0.05
 LHvnorm_sigma: 0.05
@@ -110,8 +110,9 @@ Madgwick_gain: 0.01
 
 
 #Leg Odometry Coefficients
-Tau0: 1.0
-Tau1: 1.0
+Tau0: 0.01
+Tau1: 0.0 #No F/T for Centauro :(
+
 
 
 
