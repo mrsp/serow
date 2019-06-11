@@ -933,17 +933,17 @@ void quadruped_ekf::computeKinTFs()
 
        
 
-        dr->computeDeadReckoningGEM(Twb.linear(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  omegawb, T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
-                                   TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
-                                   vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
-                                   cd->getLFLegContactProb(), cd->getLHLegContactProb(),  cd->getRFLegContactProb(), cd->getRHLegContactProb(), 
-                                   LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+        // dr->computeDeadReckoningGEM(Twb.linear(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  omegawb, T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
+        //                            TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
+        //                            vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
+        //                            cd->getLFLegContactProb(), cd->getLHLegContactProb(),  cd->getRFLegContactProb(), cd->getRHLegContactProb(), 
+        //                            LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
  
      
-        // dr->computeDeadReckoning(Twb.linear(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  omegawb,  T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
-        //                             TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
-        //                             vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
-        //                             LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2),  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+        dr->computeDeadReckoning(Twb.linear(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  omegawb,  T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
+                                    TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
+                                    vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
+                                    LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2),  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
 
        
         Twb_ = Twb;
