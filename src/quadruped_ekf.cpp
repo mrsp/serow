@@ -499,6 +499,11 @@ void quadruped_ekf::init()
     LHLegGRF = Vector3d::Zero();
     RFLegGRF = Vector3d::Zero();
     RHLegGRF = Vector3d::Zero();
+
+    LFLegForceFilt =  Vector3d::Zero();
+    RFLegForceFilt =  Vector3d::Zero();
+    LHLegForceFilt =  Vector3d::Zero();
+    RHLegForceFilt =  Vector3d::Zero();
     //GRT
     LFLegGRT = Vector3d::Zero();
     LHLegGRT = Vector3d::Zero();
@@ -592,10 +597,6 @@ void quadruped_ekf::init()
     LHmdf = MediatorNew(medianWindow);
     RHmdf = MediatorNew(medianWindow);
 
-    LFLegForceFilt = 0;
-    RFLegForceFilt = 0;
-    LHLegForceFilt = 0;
-    RHLegForceFilt = 0;
 
 }
 
@@ -775,7 +776,6 @@ void quadruped_ekf::estimateWithCoMEKF()
     }
 }
 
-// OLO AYTO PREPEI NA ALLAKSEI
 void quadruped_ekf::computeKinTFs()
 {
 
@@ -847,9 +847,40 @@ void quadruped_ekf::computeKinTFs()
     JRFQnJRFt = vbRFn * vbRFn.transpose();
     JRHQnJRHt = vbRHn * vbRHn.transpose();
 
+    if(useMahony)
+    {
+        qwb_ = qwb;
+        qwb = Quaterniond(mh->getR());
+        omegawb = mh->getGyro();
+    }
+    else
+    {
+        qwb_ = qwb;
+        qwb = Quaterniond(mw->getR());
+        omegawb = mw->getGyro();
+    }
+    Twb.linear() = qwb.toRotationMatrix();
+
+
+
     if (LFft_inc && RFft_inc && LHft_inc && RHft_inc)
     {
-        if (firstContact)
+        RFLegForceFilt = Twb.linear()*TbRF.linear()*RFLegForceFilt;
+        RHLegForceFilt = Twb.linear()*TbRH.linear()*RHLegForceFilt;
+        LFLegForceFilt = Twb.linear()*TbLF.linear()*LFLegForceFilt;
+        LHLegForceFilt = Twb.linear()*TbLH.linear()*LHLegForceFilt;
+        
+        RFLegGRF = Twb.linear()*TbRF.linear()*RFLegGRF;
+        RHLegGRF = Twb.linear()*TbRH.linear()*RHLegGRF;
+        LFLegGRF = Twb.linear()*TbLF.linear()*LFLegGRF;
+        LHLegGRF = Twb.linear()*TbLH.linear()*LHLegGRF;
+
+        RFLegGRT = Twb.linear()*TbRF.linear()*RFLegGRT;
+        RHLegGRT = Twb.linear()*TbRH.linear()*RHLegGRT;
+        LFLegGRT = Twb.linear()*TbLF.linear()*LFLegGRT;
+        LHLegGRT = Twb.linear()*TbLH.linear()*LHLegGRT;
+
+        if(firstContact)
         {
             cd = new serow::ContactDetectionQuad();
             if (useGEM)
@@ -865,13 +896,12 @@ void quadruped_ekf::computeKinTFs()
 
             firstContact = false;
         }
-
         if(useGEM)
-            cd->computeSupportFoot(LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt, 
+            cd->computeSupportFoot(LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2), 
                                     copLF(0), copLF(1), copLH(0), copLH(1), copRF(0), copRF(1),  copRH(0), copRH(1),
                                     vwLF.norm(), vwLH.norm(), vwRF.norm(), vwRH.norm());
         else
-            cd->SchmittTriggerWithKinematics(LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt, 
+            cd->SchmittTriggerWithKinematics(LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2), 
                                     vwLF.norm(), vwLH.norm(), vwRF.norm(), vwRH.norm());
 
         LFft_inc = false;
@@ -898,49 +928,26 @@ void quadruped_ekf::computeKinTFs()
             Tbs = TbRH;
             qbs = qbRH;
         }
-    }
-
-    if (!firstContact)
-    {
-        if (useMahony)
-        {
-            // dr->computeDeadReckoning(mh->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(),  T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
-            //                         TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
-            //                         vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
-            //                         LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt,  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+    
 
 
-            dr->computeDeadReckoningGEM(mh->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(), T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
+       
+
+        dr->computeDeadReckoningGEM(Twb.linear(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  omegawb, T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
                                    TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
                                    vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
                                    cd->getLFLegContactProb(), cd->getLHLegContactProb(),  cd->getRFLegContactProb(), cd->getRHLegContactProb(), 
                                    LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
  
-            qwb_ = qwb;
-            qwb = Quaterniond(mh->getR());
-            omegawb = mh->getGyro();
-        }
-        else
-        {
-            dr->computeDeadReckoning(mw->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mw->getGyro(),  T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
-                                    TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
-                                    vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
-                                    LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt,  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
+     
+        // dr->computeDeadReckoning(Twb.linear(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  omegawb,  T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),
+        //                             TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
+        //                             vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
+        //                             LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2),  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
 
-            //dr->computeDeadReckoningGEM(mw->getR(), TbLF.linear(), TbLH.linear(), TbRF.linear(), TbRH.linear(),  mh->getGyro(), T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z),                                   
-            //                        TbLF.translation(),  TbLH.translation(), TbRF.translation(),  TbRH.translation(), 
-            //                        vbLF, vbLH, vbRF, vbRH, omegabLF, omegabLH, omegabRF, omegabRH,
-            //                        cd->getLFLegContactProb(), cd->getLHLegContactProb(),  cd->getRFLegContactProb(), cd->getRHLegContactProb(),  LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF,
-            //                        LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT);
-           
-            qwb_ = qwb;
-            qwb = Quaterniond(mw->getR());
-            omegawb = mw->getGyro();
-        }
+       
         Twb_ = Twb;
-
         Twb.translation() = dr->getOdom();
-        Twb.linear() = qwb.toRotationMatrix();
 
         vwb  = dr->getLinearVel();
         vwLF = dr->getLFFootLinearVel();
@@ -963,7 +970,9 @@ void quadruped_ekf::computeKinTFs()
         check_no_motion = false;
         if (!kinematicsInitialized)
             kinematicsInitialized = true;
+    
     }
+    
 }
 
 void quadruped_ekf::deAllocate()
@@ -1463,9 +1472,9 @@ void quadruped_ekf::LFfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
     LFLegGRT(2) = LFfsr_msg.wrench.torque.z;
     LFLegGRF = T_FT_LF.linear() * LFLegGRF;
     LFLegGRT = T_FT_LF.linear() * LFLegGRT;
-
+    LFLegForceFilt = LFLegGRF;
     MediatorInsert(LFmdf, LFLegGRF(2));
-    LFLegForceFilt = MediatorMedian(LFmdf);
+    LFLegForceFilt(2) = MediatorMedian(LFmdf);
 
     copLF = Vector3d::Zero();
     if (LFLegGRF(2) >= LosingContact)
@@ -1491,9 +1500,10 @@ void quadruped_ekf::RFfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
     RFLegGRT(2) = RFfsr_msg.wrench.torque.z;
     RFLegGRF = T_FT_RF.linear() * RFLegGRF;
     RFLegGRT = T_FT_RF.linear() * RFLegGRT;
-    
+    RFLegForceFilt = RFLegGRF;
+
     MediatorInsert(RFmdf, RFLegGRF(2));
-    RFLegForceFilt = MediatorMedian(RFmdf);
+    RFLegForceFilt(2) = MediatorMedian(RFmdf);
 
     copRF = Vector3d::Zero();
     if (RFLegGRF(2) >= LosingContact)
@@ -1518,9 +1528,10 @@ void quadruped_ekf::LHfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
     LHLegGRT(2) = LHfsr_msg.wrench.torque.z;
     LHLegGRF = T_FT_LH.linear() * LHLegGRF;
     LHLegGRT = T_FT_LH.linear() * LHLegGRT;
-    
+    LHLegForceFilt = LHLegGRF;
+
     MediatorInsert(LHmdf, LHLegGRF(2));
-    LHLegForceFilt = MediatorMedian(LHmdf);
+    LHLegForceFilt(2) = MediatorMedian(LHmdf);
 
      
     copLH = Vector3d::Zero();
@@ -1546,9 +1557,10 @@ void quadruped_ekf::RHfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
     RHLegGRT(2) = RHfsr_msg.wrench.torque.z;
     RHLegGRF = T_FT_RH.linear() * RHLegGRF;
     RHLegGRT = T_FT_RH.linear() * RHLegGRT;
-    
+    RHLegForceFilt = RHLegGRF;
+
     MediatorInsert(RHmdf, RHLegGRF(2));
-    RHLegForceFilt = MediatorMedian(RHmdf);
+    RHLegForceFilt(2) = MediatorMedian(RHmdf);
 
     copRH = Vector3d::Zero();
     if (RHLegGRF(2) >= LosingContact)

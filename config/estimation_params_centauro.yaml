@@ -25,8 +25,8 @@ RHfoot_force_torque_topic: "/cartesian/force_estimation/wheel_4"
 
 #Ground-Truth #Not Mandatory - For comparison only
 ground_truth: true
-ground_truth_odom_topic: "/vrpn_client_node/centauro/pose"
-ground_truth_com_topic: "/cogimon/ground_truth/com/odom"
+ground_truth_odom_topic: "/centauro/ground_truth/odom"
+ground_truth_com_topic: "/centauro/ground_truth/com/odom"
 is_in_ds_topic: "/ds"
 T_B_GT: [0, 0, 1, 0, 1, 0, 0, 0, 0, 1 , 0, 0, 0, 0 ,0, 1]
 
@@ -63,18 +63,18 @@ imu_topic_freq: 200
 joint_topic_freq: 200
 fsr_topic_freq: 25  
 
-mass: 92.0  #robot mass
+mass: 108.4  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
-LegUpThres: 72 #Schmitt Trigger High Threshold in Newtons (N)
-LegLowThres: 22.5 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 35.0
+LegUpThres: 142 #Schmitt Trigger High Threshold in Newtons (N)
+LegLowThres: 72.5 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 80.0
 StrikingContact: 400
-medianWindow: 3
+medianWindow: 7
 
 #Compute Joint Velocities
 joint_cutoff_freq: 40
-joint_noise_density: 0.01  # rad
+joint_noise_density: 0.001  # rad
 
 
 useGEM: true
@@ -84,7 +84,7 @@ RFforce_sigma: 0.9490
 RHforce_sigma: 1.1127
 
 probabilisticContactThreshold: 0.85
-ContactDetectionWithCOP: false
+ContactDetectionWithCOP: false #For Flat Feet only
 foot_polygon_xmin: -0.1
 foot_polygon_xmax: 0.1
 foot_polygon_ymin: -0.05
@@ -93,12 +93,14 @@ LFcop_sigma: 0.005
 RFcop_sigma: 0.005
 LHcop_sigma: 0.005
 RHcop_sigma: 0.005
-ContactDetectionWithKinematics: false
+ContactDetectionWithKinematics: false #Kinematic contribution to contact detection
 VelocityThres: 0.35
 LFvnorm_sigma: 0.05
 RFvnorm_sigma: 0.05
 LHvnorm_sigma: 0.05
 RHvnorm_sigma: 0.05
+
+
 #Mahony Filter for attitude
 useMahony: true
 Mahony_Kp: 2.5
@@ -119,7 +121,7 @@ Tau1: 0.0 #No F/T for Centauro :(
 #Choose Integration Method
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
 useEuler: true
-contact_random_walk: 0.05
+contact_random_walk: 0.01
 
 
 
@@ -132,8 +134,8 @@ contact_random_walk: 0.05
 #Process Noise STDs
 accelerometer_bias_random_walk:  2.4336e-05 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 1.0e-06 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.0429 # m/s^2  #Continuous Time
-gyroscope_noise_density: 6.3066e-04 # rad/s  #Continuous Time
+accelerometer_noise_density: 0.1 # m/s^2  #Continuous Time
+gyroscope_noise_density: 6.3066e-03 # rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
