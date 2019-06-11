@@ -61,20 +61,20 @@ T_B_P: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1] #SVO without imu
 #ROS Topic Frequencies in Hz
 imu_topic_freq: 200
 joint_topic_freq: 200
-fsr_topic_freq: 25  
+fsr_topic_freq: 200  
 
-mass: 108.4  #robot mass
+mass: 108.0  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
 LegUpThres: 142 #Schmitt Trigger High Threshold in Newtons (N)
 LegLowThres: 72.5 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 80.0
+LosingContact: 100.0
 StrikingContact: 400
-medianWindow: 7
+medianWindow: 9
 
 #Compute Joint Velocities
 joint_cutoff_freq: 40
-joint_noise_density: 0.001  # rad
+joint_noise_density: 0.05  # rad
 
 
 useGEM: true
@@ -83,7 +83,7 @@ LHforce_sigma: 0.9539
 RFforce_sigma: 0.9490
 RHforce_sigma: 1.1127
 
-probabilisticContactThreshold: 0.85
+probabilisticContactThreshold: 0.9
 ContactDetectionWithCOP: false #For Flat Feet only
 foot_polygon_xmin: -0.1
 foot_polygon_xmax: 0.1
@@ -94,7 +94,7 @@ RFcop_sigma: 0.005
 LHcop_sigma: 0.005
 RHcop_sigma: 0.005
 ContactDetectionWithKinematics: false #Kinematic contribution to contact detection
-VelocityThres: 0.35
+VelocityThres: 0.25
 LFvnorm_sigma: 0.05
 RFvnorm_sigma: 0.05
 LHvnorm_sigma: 0.05

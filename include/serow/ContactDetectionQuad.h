@@ -69,11 +69,11 @@ private:
     pRHf = computeForceContactProb(RHfmin, sigmaRHf, RHf);
     pRH = pRHf;
 
-    cout<<"VEL NORM"<<endl;
-    cout<<LFvnorm<<endl;
-    cout<<RFvnorm<<endl;
-    cout<<LHvnorm<<endl;
-    cout<<RHvnorm<<endl;
+    cout<<"PROB LF RF LH RH"<<endl;
+    cout<<pLF<<endl;
+    cout<<pRF<<endl;
+    cout<<pLH<<endl;
+    cout<<pRH<<endl;
 
 
     //To utilize the full contact-wrench - careful for non-coplanar contacts
@@ -219,7 +219,7 @@ public:
     pRHv = 0;
 
     VelocityThres = VelocityThres_;
-    prob_TH = prob_TH_-0.75;
+    prob_TH = prob_TH_;
     useCOP = useCOP_;
     useKin = useKin_;
     firstContact = true;
@@ -281,8 +281,8 @@ public:
    
     computeContactProb(LFf, LHf, RFf, RHf, copLFx, copLFy,  copLHx, copLHy, copRFx, copRFy, copRHx, copRHy, LFvnorm, LHvnorm, RFvnorm, RHvnorm);
     //Choose Initial Support Foot based on Contact Force
-    if (firstContact)
-    {
+    // if (firstContact)
+    // {
       if (pLF >= pLH && pLF >= pRF && pLF >= pRH)
       {
         // Initial support leg
@@ -304,31 +304,31 @@ public:
         support_leg = "RHLeg";
         support_foot_frame = RHfoot_frame;
       }
-      firstContact = false;
-    }
-    else
-    {
-      if ((pLF >= pLH && pLF >= pRF && pLF >= pRH) && (LFvnorm < VelocityThres && LHvnorm > VelocityThres && RFvnorm > VelocityThres && RHvnorm > VelocityThres))
-      {
-        support_leg = "LFLeg";
-        support_foot_frame = LFfoot_frame;
-      }
-      else if ((pLH >= pLF && pLH >= pRF && pLH >= pRH) && (LHvnorm < VelocityThres && LFvnorm > VelocityThres && RFvnorm > VelocityThres && RHvnorm > VelocityThres))
-      {
-        support_leg = "LHLeg";
-        support_foot_frame = LHfoot_frame;
-      }
-      else if (pRF >= pLF && pRF >= pLH && pRF >= pRH && (RFvnorm < VelocityThres && LFvnorm > VelocityThres && LHvnorm > VelocityThres && RHvnorm > VelocityThres))
-      {
-        support_leg = "RFLeg";
-        support_foot_frame = RFfoot_frame;
-      }
-      else if(pRH >= pLF && pRH >= pLH && pRH >= pRF && (RHvnorm < VelocityThres && LFvnorm > VelocityThres && LHvnorm > VelocityThres && RFvnorm > VelocityThres))
-      {
-        support_leg = "RHLeg";
-        support_foot_frame = RHfoot_frame;
-      }
-    }
+     firstContact = false;
+    // }
+    // else
+    // {
+    //   if ((pLF >= pLH && pLF >= pRF && pLF >= pRH) && (LFvnorm < VelocityThres && LHvnorm > VelocityThres && RFvnorm > VelocityThres && RHvnorm > VelocityThres))
+    //   {
+    //     support_leg = "LFLeg";
+    //     support_foot_frame = LFfoot_frame;
+    //   }
+    //   else if ((pLH >= pLF && pLH >= pRF && pLH >= pRH) && (LHvnorm < VelocityThres && LFvnorm > VelocityThres && RFvnorm > VelocityThres && RHvnorm > VelocityThres))
+    //   {
+    //     support_leg = "LHLeg";
+    //     support_foot_frame = LHfoot_frame;
+    //   }
+    //   else if (pRF >= pLF && pRF >= pLH && pRF >= pRH && (RFvnorm < VelocityThres && LFvnorm > VelocityThres && LHvnorm > VelocityThres && RHvnorm > VelocityThres))
+    //   {
+    //     support_leg = "RFLeg";
+    //     support_foot_frame = RFfoot_frame;
+    //   }
+    //   else if(pRH >= pLF && pRH >= pLH && pRH >= pRF && (RHvnorm < VelocityThres && LFvnorm > VelocityThres && LHvnorm > VelocityThres && RFvnorm > VelocityThres))
+    //   {
+    //     support_leg = "RHLeg";
+    //     support_foot_frame = RHfoot_frame;
+    //   }
+    // }
 
     if(!firstContact)
     {
