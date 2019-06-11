@@ -186,7 +186,7 @@ private:
 	Vector3d no_motion_residual;
 	/****/
 	bool  kinematicsInitialized, firstContact;
-	double LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt;
+	Vector3d LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt;
 	double LegHighThres, LegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
