@@ -268,9 +268,22 @@ public:
     deltaRHfz = 0;
 
   }
-  double getDiffForce()
+  double getLFDiffForce()
   {
-    return fabs(deltaLFfz + deltaRFfz + deltaLHfz + deltaRHfz);
+     return fabs(deltaLFfz);
+  }
+
+  double getRFDiffForce()
+  {
+     return fabs(deltaRFfz);
+  }
+  double getLHDiffForce()
+  {
+     return fabs(deltaLHfz);
+  }
+  double getRHDiffForce()
+  {
+     return fabs(deltaRHfz);
   }
   void computeSupportFoot(double LFf, double LHf, double RFf, double RHf, 
                           double copLFx, double copLFy, double copLHx, double copLHy,
@@ -304,7 +317,6 @@ public:
         support_leg = "RHLeg";
         support_foot_frame = RHfoot_frame;
       }
-     firstContact = false;
     // }
     // else
     // {
@@ -330,17 +342,28 @@ public:
     //   }
     // }
 
-    if(!firstContact)
+    if(firstContact)
+    {
+      deltaLFfz = 0;
+      deltaRFfz = 0;
+      deltaLHfz = 0;
+      deltaRHfz = 0;
+      firstContact = false;
+
+    }
+    else
     {
       deltaLFfz = LFf - LFf_;
       deltaRFfz = RFf - RFf_;
       deltaLHfz = LHf - LHf_;
       deltaRHfz = RHf - RHf_;
     }
+    
     LFf_ = LFf;
     RFf_ = RFf;
     LHf_ = LHf;
     RHf_ = RHf;
+
   }
 
   double getLFLegContactProb()
