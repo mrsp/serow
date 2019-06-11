@@ -701,8 +701,10 @@ void quadruped_ekf::estimateWithInIMUEKF()
         {
             //imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), (2.0 - cd->getRLegContactProb()) * JRQnJRt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(),
             // (2.0 - cd->getLLegContactProb()) * JLQnJLt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(), cd->isRLegContact(), cd->isLLegContact());
-            imuInEKF->updateWithContacts(dr->getRFFootIMVPPosition(), dr->getRHFootIMVPPosition(), dr->getLFFootIMVPPosition(), dr->getLHFootIMVPPosition(),  JRFQnJRFt ,  JRHQnJRHt,
-             JLFQnJLFt, JLHQnJLHt, cd->isRFLegContact(), cd->isRHLegContact(), cd->isLFLegContact(), cd->isLHLegContact());
+            imuInEKF->updateWithContacts(dr->getRFFootIMVPPosition(), dr->getRHFootIMVPPosition(), dr->getLFFootIMVPPosition(), dr->getLHFootIMVPPosition(),
+             JRFQnJRFt + cd->getRFDiffForce()/(4*m*g)*Matrix3d::Identity(),  JRHQnJRHt + cd->getRHDiffForce()/(4*m*g)*Matrix3d::Identity(),
+             JLFQnJLFt + cd->getLFDiffForce()/(4*m*g)*Matrix3d::Identity(),  JLHQnJLHt + cd->getLHDiffForce()/(4*m*g)*Matrix3d::Identity(), 
+             cd->isRFLegContact(), cd->isRHLegContact(), cd->isLFLegContact(), cd->isLHLegContact());
             //imuInEKF->updateWithOrient(qwb);
             //imuInEKF->updateWithTwist(vwb, dr->getVelocityCovariance() +  cd->getDiffForce()/(m*g)*Matrix3d::Identity());
             //imuInEKF->updateWithTwistOrient(vwb,qwb);
