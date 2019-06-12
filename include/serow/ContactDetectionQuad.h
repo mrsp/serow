@@ -543,11 +543,8 @@ public:
   }
   void SchmittTrigger(double LFf, double LHf, double RFf, double RHf)
   {
-    contactLF = 0;
-    contactLH = 0;
 
-    contactRF = 0;
-    contactRH = 0;
+
 
     if (LFf >= LHf && LFf >= RFf && LFf >= RHf)
     {
