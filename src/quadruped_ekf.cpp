@@ -902,10 +902,10 @@ void quadruped_ekf::computeKinTFs()
             cd->computeSupportFoot(LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2), 
                                     copLF(0), copLF(1), copLH(0), copLH(1), copRF(0), copRF(1),  copRH(0), copRH(1),
                                     vwLF.norm(), vwLH.norm(), vwRF.norm(), vwRH.norm());
-        else
-            cd->SchmittTriggerWithKinematics(LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2), 
-                                    vwLF.norm(), vwLH.norm(), vwRF.norm(), vwRH.norm());
-
+        else{
+            cd->computeForceWeights(LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2));
+            cd->SchmittTrigger(LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2));
+        }
         LFft_inc = false;
         LHft_inc = false;
 

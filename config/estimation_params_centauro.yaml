@@ -66,8 +66,8 @@ fsr_topic_freq: 200
 mass: 108.0  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
-LegUpThres: 142 #Schmitt Trigger High Threshold in Newtons (N)
-LegLowThres: 72.5 #Schmitt Trigger Low Threshold in Newtons (N)
+LegUpThres: 150.0 #Schmitt Trigger High Threshold in Newtons (N)
+LegLowThres: 100.0 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 100.0
 StrikingContact: 400
 medianWindow: 9
@@ -77,7 +77,7 @@ joint_cutoff_freq: 40
 joint_noise_density: 0.05  # rad
 
 
-useGEM: true
+useGEM: false
 LFforce_sigma: 1.0801
 LHforce_sigma: 0.9539
 RFforce_sigma: 0.9490
