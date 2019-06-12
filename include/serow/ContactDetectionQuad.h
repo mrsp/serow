@@ -14,10 +14,10 @@ private:
   double xmin, xmax, ymin, ymax;
   double LFfmin, LHfmin, RFfmin, RHfmin;
   double pLFf, pLHf, pRFf, pRHf, pLFc, pLHc, pRFc, pRHc, pLFv, pLHv, pRFv, pRHv;
-  double pLF, pLH, pRF, pRH, p, sum;
+  double pLF, pLH, pRF, pRH, p;
   double VelocityThres;
   bool firstContact, useCOP, useKin;
-  int contactLF, contactLH, contactRF, contactRH;
+  int contactLF, contactLH, contactRF, contactRH, sum;
   double prob_TH;
   std::string support_foot_frame, support_leg, LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, phase;
 
@@ -300,7 +300,7 @@ public:
 
     sum = contactRH + contactRF + contactLF + contactRH;
 
-    switch (sum)
+    switch(sum)
     {
     case 0:
       phase = "None";
@@ -415,7 +415,7 @@ public:
 
     if (LFvnorm <= VelocityThres)
     {
-      if (contaLF == 0)
+      if (contactLF == 0)
       {
         if (LFf > LegHighThres && LFf < StrikingContact)
         {
@@ -487,7 +487,7 @@ public:
 
     sum = contactRH + contactRF + contactLF + contactRH;
 
-    switch (sum)
+    switch(sum)
     {
     case 0:
       phase = "None";
@@ -570,7 +570,7 @@ public:
       support_foot_frame = RHfoot_frame;
     }
 
-    if (contaLF == 0)
+    if (contactLF == 0)
     {
       if (LFf > LegHighThres && LFf < StrikingContact)
       {
@@ -632,7 +632,7 @@ public:
 
     sum = contactRH + contactRF + contactLF + contactRH;
 
-    switch (sum)
+    switch(sum)
     {
     case 0:
       phase = "None";
