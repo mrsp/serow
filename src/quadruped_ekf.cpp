@@ -625,7 +625,7 @@ void quadruped_ekf::run()
             //Compute the required transformation matrices (tfs) with Kinematics
             if (joint_inc)
                 computeKinTFs();
-
+        
             //Main Loop
             if (kinematicsInitialized)
             {
@@ -668,10 +668,8 @@ void quadruped_ekf::estimateWithInIMUEKF()
         imuInEKF->setGyroBias(T_B_G.linear() * Vector3d(bias_gx, bias_gy, bias_gz));
         imuInEKF->setLeftFrontContact(Vector3d(dr->getLFFootIMVPPosition()(0), dr->getLFFootIMVPPosition()(1), 0.00));
         imuInEKF->setLeftHindContact(Vector3d(dr->getLHFootIMVPPosition()(0), dr->getLHFootIMVPPosition()(1), 0.00));
-
         imuInEKF->setRightFrontContact(Vector3d(dr->getRFFootIMVPPosition()(0), dr->getRFFootIMVPPosition()(1), 0.00));
         imuInEKF->setRightHindContact(Vector3d(dr->getRHFootIMVPPosition()(0), dr->getRHFootIMVPPosition()(1), 0.00));
-
         imuInEKF->firstrun = false;
     }
 
@@ -699,11 +697,10 @@ void quadruped_ekf::estimateWithInIMUEKF()
     {
         if (leg_odom_inc)
         {
-            //imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(), (2.0 - cd->getRLegContactProb()) * JRQnJRt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(),
-            // (2.0 - cd->getLLegContactProb()) * JLQnJLt + cd->getDiffForce()/(2*m*g)*Matrix3d::Identity(), cd->isRLegContact(), cd->isLLegContact());
+          
             imuInEKF->updateWithContacts(dr->getRFFootIMVPPosition(), dr->getRHFootIMVPPosition(), dr->getLFFootIMVPPosition(), dr->getLHFootIMVPPosition(),
-             JRFQnJRFt + cd->getRFDiffForce()/(4*m*g)*Matrix3d::Identity(),  JRHQnJRHt + cd->getRHDiffForce()/(4*m*g)*Matrix3d::Identity(),
-             JLFQnJLFt + cd->getLFDiffForce()/(4*m*g)*Matrix3d::Identity(),  JLHQnJLHt + cd->getLHDiffForce()/(4*m*g)*Matrix3d::Identity(), 
+             JRFQnJRFt ,  JRHQnJRHt,
+             JLFQnJLFt,   JLHQnJLHt, 
              cd->isRFLegContact(), cd->isRHLegContact(), cd->isLFLegContact(), cd->isLHLegContact());
             //imuInEKF->updateWithOrient(qwb);
             //imuInEKF->updateWithTwist(vwb, dr->getVelocityCovariance() +  cd->getDiffForce()/(m*g)*Matrix3d::Identity());
@@ -713,6 +710,7 @@ void quadruped_ekf::estimateWithInIMUEKF()
         }
     }
     //Estimated TFs for Legs and Support foot
+
     TwLF = imuInEKF->Tib * TbLF;
     TwLH = imuInEKF->Tib * TbLH;
     TwRF = imuInEKF->Tib * TbRF;
@@ -889,11 +887,11 @@ void quadruped_ekf::computeKinTFs()
             {
                 cd->init(LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, LosingContact, LosingContact, LosingContact, LosingContact, foot_polygon_xmin, foot_polygon_xmax,
                          foot_polygon_ymin, foot_polygon_ymax, LFforce_sigma, LHforce_sigma, RFforce_sigma,  RHforce_sigma, LFcop_sigma,  LHcop_sigma,
-                         RFcop_sigma, RHcop_sigma, VelocityThres, LFvnorm_sigma, LHvnorm_sigma, RFvnorm_sigma, RHvnorm_sigma, ContactDetectionWithCOP, ContactDetectionWithKinematics,  probabilisticContactThreshold);
+                         RFcop_sigma, RHcop_sigma, VelocityThres, LFvnorm_sigma, LHvnorm_sigma, RFvnorm_sigma, RHvnorm_sigma, ContactDetectionWithCOP, ContactDetectionWithKinematics,  probabilisticContactThreshold,medianWindow);
             }
             else
             {
-                cd->init(LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, LegHighThres, LegLowThres, StrikingContact, VelocityThres);
+                cd->init(LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, LegHighThres, LegLowThres, StrikingContact, VelocityThres,medianWindow);
             }
 
             firstContact = false;

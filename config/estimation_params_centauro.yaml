@@ -63,18 +63,18 @@ imu_topic_freq: 200
 joint_topic_freq: 200
 fsr_topic_freq: 200  
 
-mass: 108.0  #robot mass
+mass: 92.0  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
 LegUpThres: 150.0 #Schmitt Trigger High Threshold in Newtons (N)
-LegLowThres: 100.0 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 100.0
-StrikingContact: 400
-medianWindow: 9
+LegLowThres: 80.0 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 50.0
+StrikingContact: 320
+medianWindow: 13
 
 #Compute Joint Velocities
 joint_cutoff_freq: 40
-joint_noise_density: 0.05  # rad
+joint_noise_density: 0.1  # rad
 
 
 useGEM: false
@@ -118,10 +118,7 @@ Tau1: 0.0 #No F/T for Centauro :(
 
 
 
-#Choose Integration Method
-#Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
-useEuler: true
-contact_random_walk: 0.01
+
 
 
 
@@ -130,12 +127,12 @@ contact_random_walk: 0.01
 #To estimate:
 # 3-D Body Position/Velocity
 # 3-D IMU-Biases
-
+contact_random_walk: 0.1
 #Process Noise STDs
 accelerometer_bias_random_walk:  2.4336e-05 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 1.0e-06 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.1 # m/s^2  #Continuous Time
-gyroscope_noise_density: 6.3066e-03 # rad/s  #Continuous Time
+accelerometer_noise_density: 0.05 # m/s^2  #Continuous Time
+gyroscope_noise_density: 5.0e-03 # rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
@@ -163,9 +160,9 @@ velocity_noise_density_z: 0.035 #0.007
 
 #IMU Initial Biases in the IMU local frame - Biases are added!
 
-bias_ax: 0.2875
-bias_ay: -0.0481
-bias_az: 0.2420
+bias_ax: 0.12
+bias_ay: 0.09
+bias_az: 0.24
 bias_gx: -1.24626e-05
 bias_gy: 3.49618e-05
 bias_gz: -1.82382e-05
@@ -180,7 +177,7 @@ gravity: 9.80665 #gravity constant (m/s^2)
 # To estimate:
 # CoM 3-D Position/Velocity
 # 3-D External Forces on the CoM
-estimateCoM: false   #Use the CoM EKF
+estimateCoM: true   #Use the CoM EKF
 
 #---------------------------------------------#
 #Specify the rest only if estimateCoM is true!!

@@ -98,6 +98,7 @@ class IMUinEKFQuad
 	{
 		pwb = bp;
 		X.block<3, 1>(0, 4) = bp;
+		Tib.translation() = pwb;
 	}
 
 	//Initialize the Rotation Matrix and the Orientation Error
@@ -105,6 +106,7 @@ class IMUinEKFQuad
 	{
 		Rwb = bR;
 		X.block<3, 3>(0, 0) = bR;
+		Tib.linear() = Rwb;
 	}
 
 	void setBodyVel(Vector3d bv)
