@@ -1,5 +1,6 @@
 #include <serow/Gaussian.h>
 #include <string.h>
+#include <serow/mediator.h>
 
 namespace serow
 {
@@ -17,9 +18,13 @@ private:
   double pLF, pLH, pRF, pRH, p;
   double VelocityThres;
   bool firstContact, useCOP, useKin;
-  int contactLF, contactLH, contactRF, contactRH, sum;
+  int contactLF, contactLH, contactRF, contactRH, sum, contactRFFilt, contactRHFilt, contactLFFilt, contactLHFilt;
   double prob_TH;
   std::string support_foot_frame, support_leg, LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, phase;
+  int medianWindow;
+	Mediator *LFmdf, *RFmdf, *RHmdf, *LHmdf;
+
+
 
   double deltaLFfz, deltaLHfz, deltaRFfz, deltaRHfz, LFf_, LHf_, RFf_, RHf_;
   //Smidtt Trigger detection
@@ -135,12 +140,16 @@ private:
     contactRH = 0;
     if (pRH >= prob_TH)
       contactRH = 1;
+
+
+
+
   }
 
 public:
   void init(std::string LFfoot_frame_, std::string LHfoot_frame_, std::string RFfoot_frame_, std::string RHfoot_frame_, double LFfmin_, double LHfmin_, double RFfmin_, double RHfmin_, double xmin_, double xmax_,
             double ymin_, double ymax_, double sigmaLFf_, double sigmaLHf_, double sigmaRFf_, double sigmaRHf_, double sigmaLFc_, double sigmaLHc_, double sigmaRFc_, double sigmaRHc_, double VelocityThres_,
-            double sigmaLFv_, double sigmaLHv_, double sigmaRFv_, double sigmaRHv_, bool useCOP_ = false, bool useKin_ = false, double prob_TH_ = 0.9)
+            double sigmaLFv_, double sigmaLHv_, double sigmaRFv_, double sigmaRHv_, bool useCOP_ = false, bool useKin_ = false, double prob_TH_ = 0.9, int medianWindow_=  10)
   {
     LFfoot_frame = LFfoot_frame_;
     LHfoot_frame = LHfoot_frame_;
@@ -217,7 +226,7 @@ public:
     deltaRHfz = 0;
   }
 
-  void init(std::string LFfoot_frame_, std::string LHfoot_frame_, std::string RFfoot_frame_, std::string RHfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_, double prob_TH_ = 0.9)
+  void init(std::string LFfoot_frame_, std::string LHfoot_frame_, std::string RFfoot_frame_, std::string RHfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_, double prob_TH_ = 0.9, int medianWindow_=  10)
   {
 
     LFfoot_frame = LFfoot_frame_;
@@ -242,15 +251,26 @@ public:
 
     contactLF = 0;
     contactLH = 0;
-
     contactRF = 0;
     contactRH = 0;
+    contactLFFilt = 0;
+    contactRFFilt = 0;
+    contactRHFilt = 0;
+    contactLHFilt = 0;
+
+
 
     deltaLFfz = 0;
     deltaLHfz = 0;
 
     deltaRFfz = 0;
     deltaRHfz = 0;
+    medianWindow = medianWindow_;
+    LFmdf = MediatorNew(medianWindow);
+    LHmdf = MediatorNew(medianWindow);
+    RFmdf = MediatorNew(medianWindow);
+    RHmdf = MediatorNew(medianWindow);
+    cout<<"Gait-Phase Estimation Module Initialized"<<endl;
   }
   double getLFDiffForce()
   {
@@ -357,22 +377,22 @@ public:
   }
   int isLFLegContact()
   {
-    return contactLF;
+    return contactLFFilt;
   }
 
   int isRFLegContact()
   {
-    return contactRF;
+    return contactRFFilt;
   }
 
   int isLHLegContact()
   {
-    return contactLH;
+    return contactLHFilt;
   }
 
   int isRHLegContact()
   {
-    return contactRH;
+    return contactRHFilt;
   }
 
   std::string getSupportFrame()
@@ -627,7 +647,23 @@ public:
       }
     }
 
-    sum = contactRH + contactRF + contactLF + contactRH;
+
+    MediatorInsert(LFmdf, contactLF);
+    contactLFFilt = MediatorMedian(LFmdf);
+    MediatorInsert(LHmdf, contactLH);
+    contactLHFilt = MediatorMedian(LHmdf);
+    MediatorInsert(RFmdf, contactRF);
+    contactRFFilt = MediatorMedian(RFmdf);
+    MediatorInsert(RHmdf, contactRH);
+    contactRHFilt =  MediatorMedian(RHmdf);
+
+    cout<<"Contact"<<endl;
+    cout<<contactRFFilt<<endl;
+    cout<<contactRHFilt<<endl;
+    cout<<contactLFFilt<<endl;
+    cout<<contactLHFilt<<endl;
+
+    sum = contactRHFilt + contactRFFilt + contactLFFilt + contactRHFilt;
 
     switch(sum)
     {

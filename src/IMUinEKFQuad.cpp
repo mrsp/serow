@@ -45,9 +45,9 @@ void IMUinEKFQuad::init()
     P(4, 4) = 1e-2;
     P(5, 5) = 1e-2;
     //Pos error
-    P(6, 6) = 1e-3;
-    P(7, 7) = 1e-3;
-    P(8, 8) = 1e-3;
+    P(6, 6) = 1e-4;
+    P(7, 7) = 1e-4;
+    P(8, 8) = 1e-4;
     //dRF error
     P(9, 9) = 1e-3;
     P(10, 10) = 1e-3;
@@ -197,7 +197,9 @@ Matrix<double, 27, 27> IMUinEKFQuad::Adjoint(Matrix<double, 9, 9> X_)
     return AdjX;
 }
 
-void IMUinEKFQuad::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbRF, Vector3d pbRH, Vector3d pbLF, Vector3d pbLH, Matrix3d hR_RF, Matrix3d hR_RH,  Matrix3d hR_LF, Matrix3d hR_LH, int contactRF, int contactRH, int contactLF, int contactLH)
+void IMUinEKFQuad::predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbRF, 
+                            Vector3d pbRH, Vector3d pbLF, Vector3d pbLH, Matrix3d hR_RF, Matrix3d hR_RH, 
+                            Matrix3d hR_LF, Matrix3d hR_LH, int contactRF, int contactRH, int contactLF, int contactLH)
 {
 
     seperateState(X, theta, Rwb, vwb, pwb, dRF, dRH, dLF, dLH, bgyr, bacc);
@@ -208,14 +210,14 @@ void IMUinEKFQuad::predict(Vector3d angular_velocity, Vector3d linear_accelerati
     w = w_ - bgyr;
     a = a_ - bacc;
 
-    Af.block<3, 3>(0, 15).noalias() = -Rwb;
-    Af.block<3, 3>(3, 18).noalias() = -Rwb;
-    Af.block<3, 3>(3, 15).noalias() = -skew(vwb) * Rwb;
-    Af.block<3, 3>(6, 15).noalias() = -skew(pwb) * Rwb;
-    Af.block<3, 3>(9, 15).noalias() = -skew(dRF) * Rwb;
-    Af.block<3, 3>(12, 15).noalias() = -skew(dRH) * Rwb;
-    Af.block<3, 3>(15, 15).noalias() = -skew(dLF) * Rwb;
-    Af.block<3, 3>(18, 15).noalias() = -skew(dLH) * Rwb;
+    Af.block<3, 3>(0, 21).noalias() = -Rwb;
+    Af.block<3, 3>(3, 24).noalias() = -Rwb;
+    Af.block<3, 3>(3, 21).noalias() = -skew(vwb) * Rwb;
+    Af.block<3, 3>(6, 21).noalias() = -skew(pwb) * Rwb;
+    Af.block<3, 3>(9, 21).noalias() = -skew(dRF) * Rwb;
+    Af.block<3, 3>(12, 21).noalias() = -skew(dRH) * Rwb;
+    Af.block<3, 3>(15, 21).noalias() = -skew(dLF) * Rwb;
+    Af.block<3, 3>(18, 21).noalias() = -skew(dLH) * Rwb;
 
 
 
@@ -223,12 +225,12 @@ void IMUinEKFQuad::predict(Vector3d angular_velocity, Vector3d linear_accelerati
     Adj = Adjoint(X);
 
     // Covariance Q with full state + biases
-    Qf(0, 0) = gyr_qx * gyr_qx ;
-    Qf(1, 1) = gyr_qy * gyr_qy ;
-    Qf(2, 2) = gyr_qz * gyr_qz ;
-    Qf(3, 3) = acc_qx * acc_qx ;
-    Qf(4, 4) = acc_qy * acc_qy ;
-    Qf(5, 5) = acc_qz * acc_qz ;
+    Qf(0, 0) = gyr_qx * gyr_qx;
+    Qf(1, 1) = gyr_qy * gyr_qy;
+    Qf(2, 2) = gyr_qz * gyr_qz;
+    Qf(3, 3) = acc_qx * acc_qx;
+    Qf(4, 4) = acc_qy * acc_qy;
+    Qf(5, 5) = acc_qz * acc_qz;
 
     Qc(0, 0) = foot_contactx * foot_contacty;
     Qc(1, 1) = foot_contacty * foot_contacty;
@@ -493,58 +495,6 @@ void IMUinEKFQuad::updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s
     Qc(1, 1) = leg_odom_py * leg_odom_py;
     Qc(2, 2) = leg_odom_pz * leg_odom_pz;
 
-    // if (contactLF && contactRF && contactLH && contactRH)
-    // {
-    //     Matrix<double, 36, 1> Y = Matrix<double, 36, 1>::Zero();
-    //     Y.segment<3>(0) = s_pRF;
-    //     Y(4) = 1.00;
-    //     Y(5) = -1.00;
-        
-    //     Y.segment<3>(9) = s_pRH;
-    //     Y(13) = 1.00;
-    //     Y(15) = -1.00;
-
-    //     Y.segment<3>(0) = s_pLF;
-    //     Y(22) = 1.00;
-    //     Y(25) = -1.00;
-        
-    //     Y.segment<3>(9) = s_pLH;
-    //     Y(31) = 1.00;
-    //     Y(35) = -1.00;
-
-
-
-    //     Matrix<double, 36, 1> b = Matrix<double, 36, 1>::Zero();
-    //     b(4) = 1.00;
-    //     b(5) = -1.00;
-    //     b(13) = 1.00;
-    //     b(15) = -1.00;
-    //     b(22) = 1.00;
-    //     b(25) = -1.00;
-    //     b(31) = 1.00;
-    //     b(35) = -1.00;
-
-    //     Matrix<double, 12, 27> H = Matrix<double, 12, 27>::Zero();
-    //     H.block<3, 3>(0, 6) = -Matrix3d::Identity();
-    //     H.block<3, 3>(0, 9) = Matrix3d::Identity();
-    //     H.block<3, 3>(3, 6) = -Matrix3d::Identity();
-    //     H.block<3, 3>(3, 12) = Matrix3d::Identity();
-
-    //     Matrix<double, 12, 12> N = Matrix<double, 12, 12>::Zero();
-    //     N.block<3, 3>(0, 0) = Rwb * JRFQeJRF * Rwb.transpose() + Qc;
-    //     N.block<3, 3>(3, 3) = Rwb * JRHQeJRH * Rwb.transpose() + Qc;
-    //     N.block<3, 3>(6, 6) = Rwb * JLFQeJLF * Rwb.transpose() + Qc;
-    //     N.block<3, 3>(9, 9) = Rwb * JLHQeJLH * Rwb.transpose() + Qc;
-
-    //     Matrix<double, 12, 36> PI = Matrix<double, 12, 36>::Zero();
-    //     PI.block<3, 3>(0, 0) = Matrix3d::Identity();
-    //     PI.block<3, 3>(3, 9) = Matrix3d::Identity();
-    //     PI.block<3, 3>(6, 18) = Matrix3d::Identity();
-    //     PI.block<3, 3>(9, 27) = Matrix3d::Identity();
-
-    //     updateStateQuadContact(Y, b, H, N, PI);
-    //     updateVars();
-    // }
     if (contactRF)
     {
         Matrix<double, 9, 1> Y = Matrix<double, 9, 1>::Zero();
@@ -640,94 +590,13 @@ void IMUinEKFQuad::updateStateSingleContact(Matrix<double, 9, 1> Y_, Matrix<doub
     S_ += H_ * P * H_.transpose();
 
     Matrix<double, 27, 3> K_ = P * H_.transpose() * S_.inverse();
-    Matrix<double, 9, 1> Z_ = X * Y_ - b_;
+    Matrix<double, 9, 1> Z_ = X * Y_;
 
     //Update State
     Matrix<double, 27, 1> delta_ = K_ * PI_ * Z_;
     Matrix<double, 9, 9> dX_ = exp_SE3(delta_.segment<21>(0));
     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(21);
 
-    X = dX_ * X;
-    theta += dtheta_;
-
-    Matrix<double, 27, 27> IKH = If - K_ * H_;
-    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-}
-
-void IMUinEKFQuad::updateStateDoubleContact(Matrix<double, 18, 1> Y_, Matrix<double, 18, 1> b_, Matrix<double, 6, 27> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 18> PI_)
-{
-    Matrix<double, 6, 6> S_ = N_;
-    S_ += H_ * P * H_.transpose();
-
-    Matrix<double, 27, 6> K_ = P * H_.transpose() * S_.inverse();
-
-    Matrix<double, 18, 18> BigX = Matrix<double, 18, 18>::Zero();
-
-    BigX.block<9, 9>(0, 0) = X;
-    BigX.block<9, 9>(9, 9) = X;
-
-    Matrix<double, 18, 1> Z_ = BigX * Y_ - b_;
-
-    //Update State
-    Matrix<double, 27, 1> delta_ = K_ * PI_ * Z_;
-
-    Matrix<double, 9, 9> dX_ = exp_SE3(delta_.segment<21>(0));
-    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(21);
-    X = dX_ * X;
-    theta += dtheta_;
-
-    Matrix<double, 27, 27> IKH = If - K_ * H_;
-    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-}
-
-void IMUinEKFQuad::updateStateTripleContact(Matrix<double, 27, 1> Y_, Matrix<double, 27, 1> b_, Matrix<double, 9, 27> H_, Matrix<double, 9, 9> N_, Matrix<double, 9, 27> PI_)
-{
-    Matrix<double, 9, 9> S_ = N_;
-    S_ += H_ * P * H_.transpose();
-
-    Matrix<double, 27, 9> K_ = P * H_.transpose() * S_.inverse();
-
-    Matrix<double, 27, 27> BigX = Matrix<double, 27, 27>::Zero();
-
-    BigX.block<9, 9>(0, 0) = X;
-    BigX.block<9, 9>(9, 9) = X;
-    BigX.block<9, 9>(18, 18) = X;
-
-    Matrix<double, 27, 1> Z_ = BigX * Y_ - b_;
-
-    //Update State
-    Matrix<double, 27, 1> delta_ = K_ * PI_ * Z_;
-
-    Matrix<double, 9, 9> dX_ = exp_SE3(delta_.segment<21>(0));
-    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(21);
-    X = dX_ * X;
-    theta += dtheta_;
-
-    Matrix<double, 27, 27> IKH = If - K_ * H_;
-    P = IKH * P * IKH.transpose() + K_ * N_ * K_.transpose();
-}
-
-void IMUinEKFQuad::updateStateQuadContact(Matrix<double, 36, 1> Y_, Matrix<double, 36, 1> b_, Matrix<double, 12, 27> H_, Matrix<double, 12, 12> N_, Matrix<double, 12, 36> PI_)
-{
-    Matrix<double, 12, 12> S_ = N_;
-    S_ += H_ * P * H_.transpose();
-
-    Matrix<double, 27, 12> K_ = P * H_.transpose() * S_.inverse();
-
-    Matrix<double, 36, 36> BigX = Matrix<double, 36, 36>::Zero();
-
-    BigX.block<9, 9>(0, 0) = X;
-    BigX.block<9, 9>(9, 9) = X;
-    BigX.block<9, 9>(18, 18) = X;
-    BigX.block<9, 9>(27, 27) = X;
-
-    Matrix<double, 36, 1> Z_ = BigX * Y_ - b_;
-
-    //Update State
-    Matrix<double, 27, 1> delta_ = K_ * PI_ * Z_;
-
-    Matrix<double, 9, 9> dX_ = exp_SE3(delta_.segment<21>(0));
-    Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(21);
     X = dX_ * X;
     theta += dtheta_;
 
@@ -754,6 +623,7 @@ void IMUinEKFQuad::updateVars()
     bias_ax = bacc(0);
     bias_ay = bacc(1);
     bias_az = bacc(2);
+
 
     w = w_ - bgyr;
     a = a_ - bacc;

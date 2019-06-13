@@ -388,10 +388,10 @@ class deadReckoningQuad
         LHpLmb = RbLH * LHpLm + pbLH;
 
  
-        RFpRmb =  pbRF;
-        RHpRmb =  pbRH;
-        LHpLmb =  pbLH;
-        LFpLmb =  pbLF;
+        // RFpRmb =  pbRF;
+        // RHpRmb =  pbRH;
+        // LHpLmb =  pbLH;
+        // LFpLmb =  pbLF;
 
 
         //Temp estimate of Leg position w.r.t Inertial Frame
