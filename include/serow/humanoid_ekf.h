@@ -178,7 +178,7 @@ private:
 	Vector3d no_motion_residual;
 	/****/
 	bool  kinematicsInitialized, firstContact;
-	double LLegForceFilt, RLegForceFilt;
+	Vector3d LLegForceFilt, RLegForceFilt;
 	double LegHighThres, LegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
 	double g, m, I_xx, I_yy, I_zz;
@@ -218,9 +218,7 @@ private:
 	 void rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 
 
-	 void computeLGRF();
-	 void computeRGRF();
-	 void computeLocalCOP();
+
 	 void computeGlobalCOP(Affine3d Tis_, Affine3d Tssprime_);
 	 void filterGyrodot();
 	//private methods

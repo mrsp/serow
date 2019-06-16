@@ -7,14 +7,14 @@ modelname: "/home/master/dp_ws/src/serow/share/urdf/cogimon.urdf"
 useLegOdom: true
 #ROS Topic Names
 odom_topic: "/svo/odom0" #only if usePoseUpdate is false and useLegOdom is false
-#imu_topic: "/xbotcore/cogimon/imu/imu_link"
-imu_topic: "/xbotcore/imu/imu_link"
-#joint_state_topic: "/cogimon/joint_states"
-joint_state_topic: "/xbotcore/ros_joint_states"
-#lfoot_force_torque_topic: "/xbotcore/cogimon/ft/l_leg_ft"
-#rfoot_force_torque_topic: "/xbotcore/cogimon/ft/r_leg_ft"
-lfoot_force_torque_topic: "/xbotcore/ft/l_leg_ft"
-rfoot_force_torque_topic: "/xbotcore/ft/r_leg_ft"
+imu_topic: "/xbotcore/cogimon/imu/imu_link"
+#imu_topic: "/xbotcore/imu/imu_link"
+joint_state_topic: "/cogimon/joint_states"
+#joint_state_topic: "/xbotcore/ros_joint_states"
+lfoot_force_torque_topic: "/xbotcore/cogimon/ft/l_leg_ft"
+rfoot_force_torque_topic: "/xbotcore/cogimon/ft/r_leg_ft"
+#lfoot_force_torque_topic: "/xbotcore/ft/l_leg_ft"
+#rfoot_force_torque_topic: "/xbotcore/ft/r_leg_ft"
 
 
 #Ground-Truth #Not Mandatory - For comparison only
@@ -34,7 +34,7 @@ support_idx_provided: false
 support_idx_topic: "/sp"
 
 #To publish relative data
-debug_mode: false
+debug_mode: true
 
 #TF from IMU to Body
 T_B_A: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
@@ -54,18 +54,18 @@ fsr_topic_freq: 200
 mass: 70.5957  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 142 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 42.5 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 20.0
-StrikingContact: 800
-medianWindow: 10
+LLegUpThres: 82 #Schmitt Trigger High Threshold in Newtons (N)
+LLegLowThres: 25.5 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 24.0
+StrikingContact: 600
+medianWindow: 9
 
 #Compute Joint Velocities
-joint_cutoff_freq: 16
-joint_noise_density: 0.025  # rad
+joint_cutoff_freq: 32
+joint_noise_density: 0.1  # rad
 
 
-useGEM: true
+useGEM: false
 foot_polygon_xmin: -0.1
 foot_polygon_xmax: 0.1
 foot_polygon_ymin: -0.05
@@ -102,7 +102,7 @@ Tau1: 1.0
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
 useEuler: true
 useInIMUEKF: true
-contact_random_walk: 0.05
+contact_random_walk: 0.1
 
 
 
@@ -115,8 +115,8 @@ contact_random_walk: 0.05
 #Process Noise STDs
 accelerometer_bias_random_walk:  2.4336e-05 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 1.0e-6 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.5 # m/s^2  #Continuous Time
-gyroscope_noise_density: 5.0e-02 # rad/s  #Continuous Time
+accelerometer_noise_density: 0.05 # m/s^2  #Continuous Time
+gyroscope_noise_density: 5.0e-03 # rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
@@ -137,9 +137,6 @@ odom_position_noise_density_z: 1.0
 velocity_noise_density_x: 0.035 #0.007
 velocity_noise_density_y: 0.035 #0.009
 velocity_noise_density_z: 0.035 #0.007
-
-
-
 
 
 
@@ -169,7 +166,7 @@ gravity: 9.80665 #gravity constant (m/s^2)
 # To estimate:
 # CoM 3-D Position/Velocity
 # 3-D External Forces on the CoM
-estimateCoM: false   #Use the CoM EKF
+estimateCoM: true   #Use the CoM EKF
 
 #---------------------------------------------#
 #Specify the rest only if estimateCoM is true!!
