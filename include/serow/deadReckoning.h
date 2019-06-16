@@ -229,23 +229,14 @@ class deadReckoning
         computeLegKCFS(Rwb, Rbl, Rbr, omegawb, omegabl, omegabr, pbl, pbr, vbl, vbr);
 
 
-        RLpLm = Rbl;
-        RRpRm = Rbr;
 
         if(alpha3>0)
             computeIMVPFT(lf, rf, lt, rt);
         else
             computeIMVP();
 
+      
  
-
-
-        RpRmb = Rbr * RpRm + pbr;
-        LpLmb = Rbl * LpLm + pbl;
-
- 
-        RpRmb =  pbr;
-        LpLmb =  pbl;
         //Temp estimate of Leg position w.r.t Inertial Frame
         pwl = pwl_ - Rwl * LpLm + Rwl_ * LpLm;
         pwr = pwr_ - Rwr * RpRm + Rwr_ * RpRm;
@@ -264,7 +255,13 @@ class deadReckoning
         pwr += pwb - pb_r;
 
         
+        RpRmb =  pbr;
+        LpLmb =  pbl;
 
+        // RpRmb =  Rwb.transpose()*(pwr-pwb);
+        // LpLmb =  Rwb.transpose()*(pwl-pwb);
+        RLpLm = Rbl;
+        RRpRm = Rbr;
 
         //Needed in the next iteration
         Rwl_ = Rwl;
