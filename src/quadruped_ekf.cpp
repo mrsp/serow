@@ -879,7 +879,12 @@ void quadruped_ekf::computeKinTFs()
         RHLegGRT = Twb.linear()*TbRH.linear()*RHLegGRT;
         LFLegGRT = Twb.linear()*TbLF.linear()*LFLegGRT;
         LHLegGRT = Twb.linear()*TbLH.linear()*LHLegGRT;
-
+	
+	//Compute the GRF wrt world Frame, Forces are alread in the world frame
+	GRF_fsr  =  LFLegGRF;
+	GRF_fsr +=  RFLegGRF;
+	GRF_fsr +=  LHLegGRF;
+	GRF_fsr +=  RHLegGRF;
         if(firstContact)
         {
             cd = new serow::ContactDetectionQuad();
@@ -1099,13 +1104,6 @@ void quadruped_ekf::computeGlobalCOP(Affine3d TwLF_, Affine3d TwLH_, Affine3d Tw
     COP_fsr += weightLH * copwLH;
     COP_fsr += weightRH * copwRH;
     COP_fsr  = COP_fsr /(weightLF + weightRF + weightLH + weightRH);
-
-    //Compute the GRF wrt world Frame
-    GRF_fsr  = TwLF_.linear() * LFLegGRF;
-    GRF_fsr += TwRF_.linear() * RFLegGRF;
-    GRF_fsr += TwLH_.linear() * LHLegGRF;
-    GRF_fsr += TwRF_.linear() * RHLegGRF;
-
 }
 
 void quadruped_ekf::publishCOP()

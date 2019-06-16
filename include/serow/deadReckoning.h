@@ -1,5 +1,4 @@
 #include <eigen3/Eigen/Dense>
-#include "serow/bodyVelCF.h"
 namespace serow
 {
 
@@ -23,7 +22,6 @@ class deadReckoning
     Eigen::Matrix3d AL, AR, wedgerf, wedgelf, RRpRm, RLpLm;
     Eigen::Vector3d bL, bR, plf, prf; //FT w.r.t Foot Frame;
     bool firstrun;
-    bodyVelCF *bvcf;
 
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -92,17 +90,8 @@ class deadReckoning
         vwb_r.noalias() = -wedge(omegab)  * pbr - vbr;
         vwb_r =  Rwb * vwb_r;
 
-
-
-         if(wl_ > wr_)
-            vwb= vwb_l;
-         else
-            vwb= vwb_r;
-        
-   
-       
-
-
+        vwb = wl_ * vwb_l;
+        vwb += wr_ * vwb_r;
     }
 
     Eigen::Matrix3d getVelocityCovariance()
@@ -222,7 +211,7 @@ class deadReckoning
                               Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                               Eigen::Vector3d vbl, Eigen::Vector3d vbr,
                               Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
-                              double lfz, double rfz, Eigen::Vector3d acc, Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
+                              double lfz, double rfz,  Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
     {
 
         //Compute Body position
@@ -243,9 +232,12 @@ class deadReckoning
         RLpLm = Rbl;
         RRpRm = Rbr;
 
+        if(alpha3>0)
+            computeIMVPFT(lf, rf, lt, rt);
+        else
+            computeIMVP();
 
-        //computeIMVP();
-        computeIMVPFT(lf, rf, lt, rt);
+ 
 
 
         RpRmb = Rbr * RpRm + pbr;
@@ -299,21 +291,23 @@ class deadReckoning
                               Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                               Eigen::Vector3d vbl, Eigen::Vector3d vbr,
                               Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
-                              double wl_, double wr_, Eigen::Vector3d acc, Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
+                              double wl_, double wr_, Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
     {
 
         
-        wl = wl_;
-        wr = wr_;
+        wl = (wl_ + ef)/(wl_ + wr_ + 2.0 *ef);
+        wr = (wr_ + ef)/(wl_ + wr_ + 2.0 *ef);
 
         computeBodyVelKCFS(Rwb, omegawb, pbl, pbr, vbl, vbr, wl, wr);
 
 
 
         computeLegKCFS(Rwb, Rbl, Rbr, omegawb, omegabl, omegabr, pbl, pbr, vbl, vbr);
-        //computeIMVP();
-        computeIMVPFT(lf, rf, lt, rt);
-
+       
+        if(alpha3>0)
+            computeIMVPFT(lf, rf, lt, rt);
+        else
+            computeIMVP();
         //Temp estimate of Leg position w.r.t Inertial Frame
         pwl = pwl_ - Rwl * LpLm + Rwl_ * LpLm;
         pwr = pwr_ - Rwr * RpRm + Rwr_ * RpRm;

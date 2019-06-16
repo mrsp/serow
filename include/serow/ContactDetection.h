@@ -20,10 +20,11 @@ private:
   double pl, pr, p;
   double VelocityThres;
   bool firstContact, useCOP, useKin;
-  int contactL, contactR;
+  int contactL, contactR, sum, contactRFilt, contactLFilt;
   double prob_TH;
-  std::string support_foot_frame, support_leg, lfoot_frame, rfoot_frame;
-
+  std::string support_foot_frame, support_leg, lfoot_frame, rfoot_frame, phase;
+  int medianWindow;
+	Mediator *lmdf, *rmdf;
   double deltalfz, deltarfz, lf_, rf_;
   //Smidtt Trigger detection
   double LegLowThres, LegHighThres, StrikingContact;
@@ -82,8 +83,6 @@ private:
     {
       pl = pl / p;
       pr = pr / p;
-      pl += 0.5;
-      pr += 0.5;
     }
     else
     {
@@ -98,11 +97,33 @@ private:
     contactR = 0;
     if (pr >= prob_TH)
       contactR = 1;
+
+    MediatorInsert(lmdf, contactL);
+    contactLFilt = MediatorMedian(lmdf); 
+    MediatorInsert(rmdf, contactR);
+    contactRFilt = MediatorMedian(rmdf);
+
+
+    sum = contactRFilt + contactLFilt;
+
+    switch(sum)
+    {
+    case 0:
+      phase = "None";
+      break;
+    case 1:
+      phase = "Single Support";
+      break;
+    case 2:
+      phase = "Double Support";
+      break;
+    }
+
   }
 
 public:
   void init(std::string lfoot_frame_, std::string rfoot_frame_, double lfmin_, double rfmin_, double xmin_, double xmax_,
-            double ymin_, double ymax_, double sigmalf_, double sigmarf_, double sigmalc_, double sigmarc_, double VelocityThres_, double sigmalv_, double sigmarv_, bool useCOP_ = false, bool useKin_ = false, double prob_TH_ = 0.9)
+            double ymin_, double ymax_, double sigmalf_, double sigmarf_, double sigmalc_, double sigmarc_, double VelocityThres_, double sigmalv_, double sigmarv_, bool useCOP_ = false, bool useKin_ = false, double prob_TH_ = 0.9 , int medianWindow_=  10)
   {
     lfoot_frame = lfoot_frame_;
     rfoot_frame = rfoot_frame_;
@@ -120,6 +141,8 @@ public:
     sigmarv = sigmarv_;
     contactL = 0;
     contactR = 0;
+    contactRFilt = 0;
+    contactLFilt = 0;
     pl = 0;
     pr = 0;
     plf = 0;
@@ -129,16 +152,20 @@ public:
     plv = 0;
     prv = 0;
     VelocityThres = VelocityThres_;
-    prob_TH = prob_TH_;
+    prob_TH = prob_TH_ - 0.75;
     useCOP = useCOP_;
     useKin = useKin_;
     firstContact = true;
     deltalfz = 0;
     deltarfz = 0;
+    medianWindow = medianWindow_;
+    rmdf = MediatorNew(medianWindow);
+    lmdf = MediatorNew(medianWindow);
 
+    cout<<"Gait-Phase Estimation Module Initialized"<<endl;
   }
 
-  void init(std::string lfoot_frame_, std::string rfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_, double prob_TH_ = 0.9)
+  void init(std::string lfoot_frame_, std::string rfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_, double prob_TH_ = 0.9, int medianWindow_=  10)
   {
 
     lfoot_frame = lfoot_frame_;
@@ -153,7 +180,14 @@ public:
     pr = 0;
     deltalfz = 0;
     deltarfz = 0;
-
+    contactL = 0;
+    contactR = 0;
+    contactRFilt = 0;
+    contactLFilt = 0;
+    medianWindow = medianWindow_;
+    rmdf = MediatorNew(medianWindow);
+    lmdf = MediatorNew(medianWindow);
+    cout<<"Gait-Phase Estimation Module Initialized"<<endl;
   }
   double getDiffForce()
   {
@@ -167,40 +201,47 @@ public:
    
     computeContactProb(lf, rf, coplx, coply, coprx, copry, lvnorm, rvnorm);
     //Choose Initial Support Foot based on Contact Force
-    if (firstContact)
-    {
-      if (pl > pr)
+      if (contactLFilt ==1 && contactRFilt == 0)
       {
-        // Initial support leg
         support_leg = "LLeg";
         support_foot_frame = lfoot_frame;
+      }
+      else if (contactRFilt ==1 && contactLFilt == 0)
+      {
+        support_leg = "RLeg";
+        support_foot_frame = rfoot_frame;
+      }
+      else if (contactRFilt == 1 && contactLFilt == 1)
+      {
+        if(pl>pr)
+        {
+          support_leg = "LLeg";
+          support_foot_frame = lfoot_frame;
+        }
+        else
+        {
+         support_leg = "RLeg";
+         support_foot_frame = rfoot_frame;
+        }
+        
       }
       else
       {
-        support_leg = "RLeg";
-        support_foot_frame = rfoot_frame;
+        support_leg = "None";
+         support_foot_frame = "None";
       }
-      firstContact = false;
-    }
-    else
-    {
-      if ((pl >= pr) && (lvnorm < VelocityThres && rvnorm > VelocityThres))
-      {
-        support_leg = "LLeg";
-        support_foot_frame = lfoot_frame;
-      }
-      else if ((pr >= pl) && (rvnorm < VelocityThres && lvnorm > VelocityThres))
-      {
-        support_leg = "RLeg";
-        support_foot_frame = rfoot_frame;
-      }
-    }
+    
 
     if(!firstContact)
     {
       deltalfz = lf - lf_;
       deltarfz = rf - rf_;
     }
+    else
+    {
+      firstContact = false; 
+    }
+    
     lf_ = lf;
     rf_ = rf;
   }
@@ -217,12 +258,12 @@ public:
 
   int isLLegContact()
   {
-    return contactL;
+    return contactLFilt;
   }
 
   int isRLegContact()
   {
-    return contactR;
+    return contactRFilt;
   }
 
   std::string getSupportFrame()
@@ -233,118 +274,14 @@ public:
   {
     return support_leg;
   }
-
-  void SchmittTriggerWithKinematics(double lf, double rf, double lvnorm, double rvnorm)
+  std::string getSupportPhase()
   {
-    contactL = 0;
-    contactR = 0;
-
-    p = rf + lf;
-    pl = 0;
-    pr = 0;
-
-    if (p != 0)
-    {
-      pl = lf / p + 0.5;
-      pr = rf / p + 0.5;
-    }
-
-    if (firstContact)
-    {
-      if (lf > rf)
-      {
-        // Initial support leg
-        support_leg = "LLeg";
-        support_foot_frame = lfoot_frame;
-      }
-      else
-      {
-        support_leg = "RLeg";
-        support_foot_frame = rfoot_frame;
-      }
-      if (pl >= prob_TH)
-        contactL = 1;
-
-      contactR = 0;
-      if (pr >= prob_TH)
-        contactR = 1;
-
-      firstContact = false;
-    }
-    else
-    {
-      //Check if Left Leg is support
-      if (lvnorm < VelocityThres)
-      {
-        if (lf > LegHighThres && lf < StrikingContact)
-        {
-          contactL = 1;
-        }
-      }
-      else
-      {
-        if (lf < LegLowThres)
-        {
-          contactL = 0;
-        }
-      }
-
-      //Check if Right Leg is support
-      if (rvnorm < VelocityThres)
-      {
-        if (rf > LegHighThres && rf < StrikingContact)
-        {
-          contactR = 1;
-        }
-      }
-      else
-      {
-        if (rf < LegLowThres)
-        {
-          contactR = 0;
-        }
-      }
-
-      //Determine support
-      if (contactL && contactR)
-      {
-        if (lf > rf)
-        {
-          support_leg = "LLeg";
-          support_foot_frame = lfoot_frame;
-        }
-        else
-        {
-          support_leg = "RLeg";
-          support_foot_frame = rfoot_frame;
-        }
-      }
-      else if (contactL)
-      {
-        support_leg = "LLeg";
-        support_foot_frame = lfoot_frame;
-      }
-      else if (contactR)
-      {
-        support_leg = "RLeg";
-        support_foot_frame = rfoot_frame;
-      }
-    }
-    if(!firstContact)
-    {
-      deltalfz = lf - lf_;
-      deltarfz = rf - rf_;
-    }
-    lf_ = lf;
-    rf_ = rf;
+    return phase;
   }
 
-  void SchmittTrigger(double lf, double rf)
+  void computeForceWeights(double lf, double rf)
   {
-    contactL = 0;
-    contactR = 0;
-
-    p = rf + lf;
+    p = lf + rf;
     pl = 0;
     pr = 0;
 
@@ -353,74 +290,91 @@ public:
       pl = lf / p;
       pr = rf / p;
     }
-    // Initial support leg
-    if (firstContact)
+
+  }
+  void SchmittTrigger(double lf, double rf)
+  {
+  
+
+    if (lf > rf)
     {
-      if (lf > rf)
-      {
-        support_leg = "LLeg";
-        support_foot_frame = lfoot_frame;
-      }
-      else
-      {
-        support_leg = "RLeg";
-        support_foot_frame = rfoot_frame;
-      }
-      firstContact = false;
+      support_leg = "LLeg";
+      support_foot_frame = lfoot_frame;
     }
-    else
+    else 
+    {
+      support_leg = "RLeg";
+      support_foot_frame = rfoot_frame;
+    }
+   
+
+    if (contactL == 0)
     {
       if (lf > LegHighThres && lf < StrikingContact)
       {
         contactL = 1;
       }
+    }
+    else
+    {
       if (lf < LegLowThres)
       {
         contactL = 0;
       }
+    }
 
+    if (contactR == 0)
+    {
       if (rf > LegHighThres && rf < StrikingContact)
       {
         contactR = 1;
       }
-
+    }
+    else
+    {
       if (rf < LegLowThres)
       {
         contactR = 0;
       }
-
-      //Determine support
-      if (contactL && contactR)
-      {
-        if (lf > rf)
-        {
-          support_leg = "LLeg";
-          support_foot_frame = lfoot_frame;
-        }
-        else
-        {
-          support_leg = "RLeg";
-          support_foot_frame = rfoot_frame;
-        }
-      }
-      else if (contactL)
-      {
-        support_leg = "LLeg";
-        support_foot_frame = lfoot_frame;
-      }
-      else if (contactR)
-      {
-        support_leg = "RLeg";
-        support_foot_frame = rfoot_frame;
-      }
     }
-    if(!firstContact)
+
+
+
+    MediatorInsert(lmdf, contactL);
+    contactLFilt = MediatorMedian(lmdf); 
+    MediatorInsert(rmdf, contactR);
+    contactRFilt = MediatorMedian(rmdf);
+
+
+
+
+    sum = contactRFilt + contactLFilt;
+
+    switch(sum)
+    {
+    case 0:
+      phase = "None";
+      break;
+    case 1:
+      phase = "Single Support";
+      break;
+    case 2:
+      phase = "Double Support";
+      break;
+    }
+
+    if (!firstContact)
     {
       deltalfz = lf - lf_;
       deltarfz = rf - rf_;
     }
+    else
+    {
+      firstContact = false;
+    }
+
     lf_ = lf;
     rf_ = rf;
   }
-};
+ };
 }
