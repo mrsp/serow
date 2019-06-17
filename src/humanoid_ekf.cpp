@@ -1154,7 +1154,7 @@ void humanoid_ekf::publishCoMEstimates()
 
     if (debug_mode)
     {
-        temp_pose3d = Rwb*CoM_enc;
+        temp_pose3d = Twb.linear()*CoM_enc;
         temp_pose_msg.pose.position.x = temp_pose3d(0);
         temp_pose_msg.pose.position.y = temp_pose3d(1);
         temp_pose_msg.pose.position.z = temp_pose3d(2);
@@ -1446,7 +1446,7 @@ void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
     MediatorInsert(lmdf, LLegGRF(2));
     LLegForceFilt(2) = MediatorMedian(lmdf);
 
-
+    weightl = 0;
     copl = Vector3d::Zero();
     if (LLegGRF(2) >= LosingContact)
     {
@@ -1485,16 +1485,20 @@ void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
     MediatorInsert(rmdf, RLegGRF(2));
     RLegForceFilt(2) = MediatorMedian(rmdf);
     copr = Vector3d::Zero();
-    RLegGRF = Vector3d::Zero();
-    RLegGRT = Vector3d::Zero();
     weightr = 0.0;
-
     if (RLegGRF(2) >= LosingContact)
     {
         copr(0) = -RLegGRT(1) / RLegGRF(2);
         copr(1) = RLegGRT(0) / RLegGRF(2);
         weightr = RLegGRF(2) / g;
 
+    }
+    if (RLegGRF(2) < LosingContact)
+    {
+        copr = Vector3d::Zero();
+        RLegGRF = Vector3d::Zero();
+        RLegGRT = Vector3d::Zero();
+        weightr = 0.0;
     }
     rft_inc = true;
     rfsr_inc = true;

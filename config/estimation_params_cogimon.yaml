@@ -34,7 +34,7 @@ support_idx_provided: false
 support_idx_topic: "/sp"
 
 #To publish relative data
-debug_mode: false
+debug_mode: true
 
 #TF from IMU to Body
 T_B_A: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
