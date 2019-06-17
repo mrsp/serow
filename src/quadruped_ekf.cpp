@@ -880,11 +880,11 @@ void quadruped_ekf::computeKinTFs()
         LFLegGRT = Twb.linear()*TbLF.linear()*LFLegGRT;
         LHLegGRT = Twb.linear()*TbLH.linear()*LHLegGRT;
 	
-	//Compute the GRF wrt world Frame, Forces are alread in the world frame
-	GRF_fsr  =  LFLegGRF;
-	GRF_fsr +=  RFLegGRF;
-	GRF_fsr +=  LHLegGRF;
-	GRF_fsr +=  RHLegGRF;
+        //Compute the GRF wrt world Frame, Forces are alread in the world frame
+        GRF_fsr  =  LFLegGRF;
+        GRF_fsr +=  RFLegGRF;
+        GRF_fsr +=  LHLegGRF;
+        GRF_fsr +=  RHLegGRF;
         if(firstContact)
         {
             cd = new serow::ContactDetectionQuad();
@@ -902,10 +902,13 @@ void quadruped_ekf::computeKinTFs()
             firstContact = false;
         }
         if(useGEM)
+        {
             cd->computeSupportFoot(LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2), 
                                     copLF(0), copLF(1), copLH(0), copLH(1), copRF(0), copRF(1),  copRH(0), copRH(1),
                                     vwLF.norm(), vwLH.norm(), vwRF.norm(), vwRH.norm());
-        else{
+        }
+        else
+        {
             cd->computeForceWeights(LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2));
             cd->SchmittTrigger(LFLegForceFilt(2), LHLegForceFilt(2), RFLegForceFilt(2), RHLegForceFilt(2));
         }

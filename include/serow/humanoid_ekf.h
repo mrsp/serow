@@ -97,8 +97,7 @@ private:
 
   	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
 
-	bool useCF;
-	double cf_freqvmin, cf_freqvmax, Tau0, Tau1, VelocityThres;
+	double Tau0, Tau1, VelocityThres;
 	double  freq, joint_freq, fsr_freq;
 	bool lfsr_inc, rfsr_inc, lft_inc, rft_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
 	bool firstOdom, firstUpdate, odom_divergence;
@@ -143,7 +142,6 @@ private:
 	string base_link_frame, support_foot_frame, lfoot_frame, rfoot_frame;
 	
 
-    boost::shared_ptr< dynamic_reconfigure::Server<serow::VarianceControlConfig> > dynamic_recfg_;
 
 	double mass;
 	IMUEKF* imuEKF;
@@ -160,7 +158,7 @@ private:
 	double jointFreq,joint_cutoff_freq;
 	Mediator *lmdf, *rmdf;
 
-	WindowMedian<double> *llmdf, *rrmdf;
+	//WindowMedian<double> *llmdf, *rrmdf;
 	string support_leg;
 
 	serow::ContactDetection* cd;
@@ -175,7 +173,7 @@ private:
   	Vector3d copl, copr;
 	Affine3d Tws, Twb, Twb_; //From support s to world frame;
 	Affine3d Tbs, Tsb, Tssw, Tbsw;
-	Vector3d no_motion_residual;
+	Vector3d no_motion_residual, temp_pose3d;
 	/****/
 	bool  kinematicsInitialized, firstContact;
 	Vector3d LLegForceFilt, RLegForceFilt;
@@ -199,7 +197,6 @@ private:
 	 string ground_truth_odom_topic, ground_truth_com_topic, support_idx_topic;
      string modelname;
 	 bool usePoseUpdate;
-
 	//Odometry, from supportleg to inertial, transformation from support leg to other leg
      void subscribeToIMU();
 	 void subscribeToFSR();
@@ -216,21 +213,13 @@ private:
 	 void odomCb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
-	 
-
-
 	 void computeGlobalCOP(Affine3d Tis_, Affine3d Tssprime_);
 	 void filterGyrodot();
 	//private methods
 	void init();
-
 	void estimateWithCoMEKF();
 	void estimateWithIMUEKF();
 	void estimateWithInIMUEKF();
-
-
-
-
 	void computeKinTFs();
 	//publish functions
 	void publishGRF();
@@ -239,40 +228,26 @@ private:
 	void deAllocate();
 	void publishLegEstimates();
 	void publishSupportEstimates();
-
 	void publishBodyEstimates();
 	void publishContact();
 	void publishCOP();
 	// Advertise to ROS Topics
 	void advertise();
 	void subscribe();
-
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	// Constructor/Destructor
 	humanoid_ekf();
-
 	~humanoid_ekf();
-
-	// Connect/Disconnet to ALProxies
 	bool connect(const ros::NodeHandle nh);
-
 	void disconnect();
-
-
-
 	// Parameter Server
 	void loadparams();
 	void loadIMUEKFparams();
 	void loadCoMEKFparams();
 	void loadJointKFparams();
-	// General Methods
-	void reconfigureCB(serow::VarianceControlConfig& config, uint32_t level);
 	void run();
-
 	bool connected();
-
-
 };
 
 #endif // HUMANOID_EKF_H

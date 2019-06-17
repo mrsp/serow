@@ -35,21 +35,16 @@
 
 void humanoid_ekf::loadparams()
 {
-
     ros::NodeHandle n_p("~");
     // Load Server Parameters
     n_p.param<std::string>("modelname", modelname, "nao.urdf");
     rd = new serow::robotDyn(modelname, false);
-
     n_p.param<std::string>("base_link", base_link_frame, "base_link");
     n_p.param<std::string>("lfoot", lfoot_frame, "l_ankle");
     n_p.param<std::string>("rfoot", rfoot_frame, "r_ankle");
-
     n_p.param<double>("imu_topic_freq", freq, 100.0);
     n_p.param<double>("fsr_topic_freq", fsr_freq, 100.0);
-
     n_p.param<bool>("useInIMUEKF", useInIMUEKF, false);
-
     n_p.param<double>("VelocityThres", VelocityThres, 0.5);
     n_p.param<double>("LosingContact", LosingContact, 5.0);
     n_p.param<bool>("useGEM", useGEM, true);
@@ -84,11 +79,7 @@ void humanoid_ekf::loadparams()
     if (support_idx_provided)
         n_p.param<std::string>("support_idx_topic", support_idx_topic, "support_idx");
 
-
-
-
     std::vector<double> affine_list;
-
     if (ground_truth)
     {
         n_p.param<std::string>("ground_truth_odom_topic", ground_truth_odom_topic, "ground_truth");
@@ -179,53 +170,46 @@ void humanoid_ekf::loadparams()
     n_p.param<std::string>("imu_topic", imu_topic, "imu");
     n_p.param<std::string>("joint_state_topic", joint_state_topic, "joint_states");
     n_p.param<double>("joint_noise_density", joint_noise_density, 0.03);
-
-
     n_p.param<std::string>("lfoot_force_torque_topic", lfsr_topic, "force_torque/left");
     n_p.param<std::string>("rfoot_force_torque_topic", rfsr_topic, "force_torque/right");
 
-    std::vector<double> ftl_list;
-    n_p.getParam("T_FT_LL", ftl_list);
-    T_FT_LL(0, 0) = ftl_list[0];
-    T_FT_LL(0, 1) = ftl_list[1];
-    T_FT_LL(0, 2) = ftl_list[2];
-    T_FT_LL(0, 3) = ftl_list[3];
-    T_FT_LL(1, 0) = ftl_list[4];
-    T_FT_LL(1, 1) = ftl_list[5];
-    T_FT_LL(1, 2) = ftl_list[6];
-    T_FT_LL(1, 3) = ftl_list[7];
-    T_FT_LL(2, 0) = ftl_list[8];
-    T_FT_LL(2, 1) = ftl_list[9];
-    T_FT_LL(2, 2) = ftl_list[10];
-    T_FT_LL(2, 3) = ftl_list[11];
-    T_FT_LL(3, 0) = ftl_list[12];
-    T_FT_LL(3, 1) = ftl_list[13];
-    T_FT_LL(3, 2) = ftl_list[14];
-    T_FT_LL(3, 3) = ftl_list[15];
-
+    n_p.getParam("T_FT_LL", affine_list);
+    T_FT_LL(0, 0) = affine_list[0];
+    T_FT_LL(0, 1) = affine_list[1];
+    T_FT_LL(0, 2) = affine_list[2];
+    T_FT_LL(0, 3) = affine_list[3];
+    T_FT_LL(1, 0) = affine_list[4];
+    T_FT_LL(1, 1) = affine_list[5];
+    T_FT_LL(1, 2) = affine_list[6];
+    T_FT_LL(1, 3) = affine_list[7];
+    T_FT_LL(2, 0) = affine_list[8];
+    T_FT_LL(2, 1) = affine_list[9];
+    T_FT_LL(2, 2) = affine_list[10];
+    T_FT_LL(2, 3) = affine_list[11];
+    T_FT_LL(3, 0) = affine_list[12];
+    T_FT_LL(3, 1) = affine_list[13];
+    T_FT_LL(3, 2) = affine_list[14];
+    T_FT_LL(3, 3) = affine_list[15];
     p_FT_LL = Vector3d(T_FT_LL(0, 3), T_FT_LL(1, 3), T_FT_LL(2, 3));
-    std::vector<double> ftr_list;
-    n_p.getParam("T_FT_RL", ftr_list);
-    T_FT_RL(0, 0) = ftr_list[0];
-    T_FT_RL(0, 1) = ftr_list[1];
-    T_FT_RL(0, 2) = ftr_list[2];
-    T_FT_RL(0, 3) = ftr_list[3];
-    T_FT_RL(1, 0) = ftr_list[4];
-    T_FT_RL(1, 1) = ftr_list[5];
-    T_FT_RL(1, 2) = ftr_list[6];
-    T_FT_RL(1, 3) = ftr_list[7];
-    T_FT_RL(2, 0) = ftr_list[8];
-    T_FT_RL(2, 1) = ftr_list[9];
-    T_FT_RL(2, 2) = ftr_list[10];
-    T_FT_RL(2, 3) = ftr_list[11];
-    T_FT_RL(3, 0) = ftr_list[12];
-    T_FT_RL(3, 1) = ftr_list[13];
-    T_FT_RL(3, 2) = ftr_list[14];
-    T_FT_RL(3, 3) = ftr_list[15];
-    p_FT_RL = Vector3d(T_FT_RL(0, 3), T_FT_RL(1, 3), T_FT_RL(2, 3));
 
-    //n_p.param<std::string>("copl_topic",copl_topic,"cop/left");
-    //n_p.param<std::string>("copr_topic",copr_topic,"cor/right");
+    n_p.getParam("T_FT_RL", affine_list);
+    T_FT_RL(0, 0) = affine_list[0];
+    T_FT_RL(0, 1) = affine_list[1];
+    T_FT_RL(0, 2) = affine_list[2];
+    T_FT_RL(0, 3) = affine_list[3];
+    T_FT_RL(1, 0) = affine_list[4];
+    T_FT_RL(1, 1) = affine_list[5];
+    T_FT_RL(1, 2) = affine_list[6];
+    T_FT_RL(1, 3) = affine_list[7];
+    T_FT_RL(2, 0) = affine_list[8];
+    T_FT_RL(2, 1) = affine_list[9];
+    T_FT_RL(2, 2) = affine_list[10];
+    T_FT_RL(2, 3) = affine_list[11];
+    T_FT_RL(3, 0) = affine_list[12];
+    T_FT_RL(3, 1) = affine_list[13];
+    T_FT_RL(3, 2) = affine_list[14];
+    T_FT_RL(3, 3) = affine_list[15];
+    p_FT_RL = Vector3d(T_FT_RL(0, 3), T_FT_RL(1, 3), T_FT_RL(2, 3));
 
     n_p.param<bool>("comp_with", comp_with, false);
     comp_odom0_inc = false;
@@ -250,11 +234,8 @@ void humanoid_ekf::loadparams()
         n_p.param<double>("Madgwick_gain", beta, 0.012f);
         mw = new serow::Madgwick(freq, beta);
     }
-
-
     n_p.param<double>("Tau0", Tau0, 0.5);
     n_p.param<double>("Tau1", Tau1, 0.01);
-
     n_p.param<double>("mass", m, 5.14);
     n_p.param<double>("gravity", g, 9.81);
 
@@ -363,7 +344,6 @@ void humanoid_ekf::loadIMUEKFparams()
 
 void humanoid_ekf::loadCoMEKFparams()
 {
-
     ros::NodeHandle n_p("~");
     n_p.param<double>("com_position_random_walk", nipmEKF->com_q, 1.0e-04);
     n_p.param<double>("com_velocity_random_walk", nipmEKF->comd_q, 1.0e-03);
@@ -403,14 +383,12 @@ void humanoid_ekf::disconnect()
 {
     if (!is_connected_)
         return;
-
     is_connected_ = false;
 }
 
 bool humanoid_ekf::connect(const ros::NodeHandle nh)
 {
     ROS_INFO_STREAM("SERoW Initializing...");
-
     // Initialize ROS nodes
     n = nh;
     // Load ROS Parameters
@@ -420,61 +398,20 @@ bool humanoid_ekf::connect(const ros::NodeHandle nh)
     loadJointKFparams();
     // Load IMU parameters
     loadIMUEKFparams();
-
     if (useCoMEKF)
         loadCoMEKFparams();
 
     //Subscribe/Publish ROS Topics/Services
     subscribe();
     advertise();
-    //
     //ros::NodeHandle np("~")
     //dynamic_recfg_ = boost::make_shared< dynamic_reconfigure::Server<serow::VarianceControlConfig> >(np);
     //dynamic_reconfigure::Server<serow::VarianceControlConfig>::CallbackType cb = boost::bind(&humanoid_ekf::reconfigureCB, this, _1, _2);
     // dynamic_recfg_->setCallback(cb);
     is_connected_ = true;
-
     ros::Duration(1.0).sleep();
     ROS_INFO_STREAM("SERoW Initialized");
-
     return true;
-}
-
-void humanoid_ekf::reconfigureCB(serow::VarianceControlConfig &config, uint32_t level)
-{
-
-    imuEKF->accb_qx = config.accb_qx;
-    imuEKF->accb_qy = config.accb_qy;
-    imuEKF->accb_qz = config.accb_qz;
-
-    imuEKF->gyrb_qx = config.gyrb_qx;
-    imuEKF->gyrb_qy = config.gyrb_qy;
-    imuEKF->gyrb_qz = config.gyrb_qz;
-
-    imuEKF->acc_qx = config.acc_qx;
-    imuEKF->acc_qy = config.acc_qy;
-    imuEKF->acc_qz = config.acc_qz;
-
-    imuEKF->gyr_qx = config.gyr_qx;
-    imuEKF->gyr_qy = config.gyr_qy;
-    imuEKF->gyr_qz = config.gyr_qz;
-
-    imuEKF->odom_px = config.odom_px;
-    imuEKF->odom_py = config.odom_py;
-    imuEKF->odom_pz = config.odom_pz;
-
-    imuEKF->odom_ax = config.odom_ax;
-    imuEKF->odom_ay = config.odom_ay;
-    imuEKF->odom_az = config.odom_az;
-
-    if (useCoMEKF)
-    {
-        nipmEKF->com_q = config.com_q;
-        nipmEKF->comd_q = config.comd_q;
-        nipmEKF->com_r = config.com_r;
-        nipmEKF->comdd_r = config.comdd_r;
-        nipmEKF->fd_q = config.fd_q;
-    }
 }
 
 bool humanoid_ekf::connected()
@@ -484,7 +421,6 @@ bool humanoid_ekf::connected()
 
 void humanoid_ekf::subscribe()
 {
-
     subscribeToIMU();
     subscribeToFSR();
     subscribeToJointState();
@@ -507,7 +443,6 @@ void humanoid_ekf::subscribe()
 
 void humanoid_ekf::init()
 {
-
     /** Initialize Variables **/
     //Kinematic TFs
     Tws = Affine3d::Identity();
@@ -534,7 +469,6 @@ void humanoid_ekf::init()
     vwr = Vector3d::Zero();
     vbln = Vector3d::Zero();
     vbrn = Vector3d::Zero();
-
     coplw = Vector3d::Zero();
     coprw = Vector3d::Zero();
     weightl = 0.000;
@@ -545,8 +479,7 @@ void humanoid_ekf::init()
     firstGyrodot = true;
     firstContact = true;
 
-    // Initialize the IMU based EKF
-
+    //Initialize the IMU based EKF
     if (!useInIMUEKF)
     {
         imuEKF = new IMUEKF;
@@ -595,8 +528,6 @@ void humanoid_ekf::init()
     outlier_count = 0;
     lmdf = MediatorNew(medianWindow);
     rmdf = MediatorNew(medianWindow);
-    //llmdf = new WindowMedian<double>(medianWindow);
-    //rrmdf = new WindowMedian<double>(medianWindow);
     LLegForceFilt = Vector3d::Zero();
     RLegForceFilt = Vector3d::Zero();
 }
@@ -690,7 +621,9 @@ void humanoid_ekf::estimateWithInIMUEKF()
     {
         if (leg_odom_inc)
         {
-            imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(),  JRQnJRt, JLQnJLt , cd->isRLegContact(), cd->isLLegContact());
+            imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(),  
+                                            JRQnJRt, JLQnJLt,
+                                            cd->isRLegContact(), cd->isLLegContact());
             //imuInEKF->updateWithOrient(qwb);
             //imuInEKF->updateWithTwist(vwb, dr->getVelocityCovariance() +  cd->getDiffForce()/(m*g)*Matrix3d::Identity());
             //imuInEKF->updateWithTwistOrient(vwb,qwb);
@@ -901,10 +834,12 @@ void humanoid_ekf::estimateWithCoMEKF()
                 imuEKF->gyro, Gyrodot);
         }
         else
+        {
             nipmEKF->update(
                 imuInEKF->acc + imuInEKF->g,
                 imuInEKF->Tib * CoM_enc,
                 imuInEKF->gyro, Gyrodot);
+        }
         com_inc = false;
     }
 }
@@ -967,8 +902,6 @@ void humanoid_ekf::computeKinTFs()
     Twb.linear() = qwb.toRotationMatrix();
 
 
-
-
     if (lft_inc && rft_inc)
     {
         RLegForceFilt = Twb.linear()*Tbr.linear()*RLegForceFilt;
@@ -979,6 +912,7 @@ void humanoid_ekf::computeKinTFs()
 
         RLegGRT = Twb.linear()*Tbr.linear()*RLegGRT;
         LLegGRT = Twb.linear()*Tbl.linear()*LLegGRT;
+
         //Compute the GRF wrt world Frame, Forces are alread in the world frame
         GRF_fsr  =  RLegGRF;
         GRF_fsr +=  LLegGRF;
@@ -1001,10 +935,13 @@ void humanoid_ekf::computeKinTFs()
         }
 
         if(useGEM)
+        {
             cd->computeSupportFoot(LLegForceFilt(2), RLegForceFilt(2), 
                                     copl(0), copl(1), copr(0), copr(1), 
                                     vwl.norm(), vwr.norm());
-        else{
+        }
+        else
+        {
             cd->computeForceWeights(LLegForceFilt(2), RLegForceFilt(2));
             cd->SchmittTrigger(LLegForceFilt(2), RLegForceFilt(2));
         }
@@ -1030,18 +967,14 @@ void humanoid_ekf::computeKinTFs()
 
         //dr->computeDeadReckoningGEM(Twb.linear(),  Tbl.linear(),  Tbr.linear(),omegawb, Tbl.translation(),  Tbr.translation(), vbl,  vbr, omegabl,  omegabr,
         //                        cd->getLLegContactProb(),  cd->getRLegContactProb(), LLegGRF, RLegGRF, LLegGRT, RLegGRT);
+        
         Twb_ = Twb;
         Twb.translation() = dr->getOdom();
-
-        vwb  = dr->getLinearVel();
+        vwb = dr->getLinearVel();
         vwl = dr->getLFootLinearVel();
         vwr = dr->getRFootLinearVel();
-
-  
         omegawl = dr->getLFootAngularVel();
         omegawr = dr->getRFootAngularVel();
-
-       
 
         CoM_leg_odom = Twb * CoM_enc;
         leg_odom_inc = true;
@@ -1077,6 +1010,7 @@ void humanoid_ekf::deAllocate()
             delete[] gyroMAF;
         }
     }
+
     delete imuEKF;
     delete imuInEKF;
     delete rd;
@@ -1134,25 +1068,24 @@ void humanoid_ekf::publishGRF()
 
     if (debug_mode)
     {
-        LLeg_est_msg.wrench.force.x = LLegGRF(0);
-        LLeg_est_msg.wrench.force.y = LLegGRF(1);
-        LLeg_est_msg.wrench.force.z = LLegGRF(2);
+        LLeg_est_msg.wrench.force.x  = LLegGRF(0);
+        LLeg_est_msg.wrench.force.y  = LLegGRF(1);
+        LLeg_est_msg.wrench.force.z  = LLegGRF(2);
         LLeg_est_msg.wrench.torque.x = LLegGRT(0);
         LLeg_est_msg.wrench.torque.y = LLegGRT(1);
         LLeg_est_msg.wrench.torque.z = LLegGRT(2);
-
         LLeg_est_msg.header.frame_id = lfoot_frame;
-        LLeg_est_msg.header.stamp = ros::Time::now();
+        LLeg_est_msg.header.stamp    = ros::Time::now();
         LLeg_est_pub.publish(LLeg_est_msg);
 
-        RLeg_est_msg.wrench.force.x = RLegGRF(0);
-        RLeg_est_msg.wrench.force.y = RLegGRF(1);
-        RLeg_est_msg.wrench.force.z = RLegGRF(2);
+        RLeg_est_msg.wrench.force.x  = RLegGRF(0);
+        RLeg_est_msg.wrench.force.y  = RLegGRF(1);
+        RLeg_est_msg.wrench.force.z  = RLegGRF(2);
         RLeg_est_msg.wrench.torque.x = RLegGRT(0);
         RLeg_est_msg.wrench.torque.y = RLegGRT(1);
         RLeg_est_msg.wrench.torque.z = RLegGRT(2);
         RLeg_est_msg.header.frame_id = rfoot_frame;
-        RLeg_est_msg.header.stamp = ros::Time::now();
+        RLeg_est_msg.header.stamp    = ros::Time::now();
         RLeg_est_pub.publish(RLeg_est_msg);
     }
 }
@@ -1161,13 +1094,18 @@ void humanoid_ekf::publishGRF()
 void humanoid_ekf::computeGlobalCOP(Affine3d Twl_, Affine3d Twr_)
 {
 
-    // Compute the CoP wrt the Support Foot Frame
+    //Compute the CoP wrt the Support Foot Frame
     coplw = Twl_ * copl;
     coprw = Twr_ * copr;
+
     if(weightl+weightr > 0.0)
+    {
         COP_fsr = (weightl * coplw + weightr * coprw) / (weightl + weightr);
+    }
     else
+    {
         COP_fsr = Vector3d::Zero();
+    }
 }
 
 void humanoid_ekf::publishCOP()
@@ -1216,9 +1154,10 @@ void humanoid_ekf::publishCoMEstimates()
 
     if (debug_mode)
     {
-        temp_pose_msg.pose.position.x = CoM_enc(0);
-        temp_pose_msg.pose.position.y = CoM_enc(1);
-        temp_pose_msg.pose.position.z = CoM_enc(2);
+        temp_pose3d = Rwb*CoM_enc;
+        temp_pose_msg.pose.position.x = temp_pose3d(0);
+        temp_pose_msg.pose.position.y = temp_pose3d(1);
+        temp_pose_msg.pose.position.z = temp_pose3d(2);
         temp_pose_msg.header.stamp = ros::Time::now();
         temp_pose_msg.header.frame_id = base_link_frame;
         rel_CoMPose_pub.publish(temp_pose_msg);
