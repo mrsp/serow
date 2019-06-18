@@ -53,14 +53,15 @@ joint_topic_freq: 100
 fsr_topic_freq: 100  
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 20 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
+LegUpThres: 20 #Schmitt Trigger High Threshold in Newtons (N)
+LegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 7
 StrikingContact: 60
 
 #Steady State Joint Kalman Filter (KF)
-estimateJoints: true #Use a Steady State KF in every joint
 joint_cutoff_freq: 12
+joint_noise_density: 0.5
+
 
 #Mahony Filter for attitude
 useMahony: true
@@ -68,12 +69,7 @@ Mahony_Kp: 0.5
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.3
-bias_max: 0.239618
-bias_may: -0.1934
-bias_maz: 0.0
-bias_mgx: -0.000817362
-bias_mgy: -0.00178242
-bias_mgz: -0.000158554
+
 
 #Leg Odometry Coefficients
 Tau0: 1.0
@@ -82,8 +78,6 @@ medianWindow: 10
 #mass: 5.182530  #robot mass
 mass: 6.6530  #robot mass
 #Choose Integration Method
-#Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
-useEuler: true
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
@@ -119,13 +113,13 @@ velocity_noise_density_z: 0.013
 
 
 #IMU Initial Biases - Biases are substracted!
-bias_ax: -0.639618
-bias_ay: 0.1934
+bias_ax: 0.639618
+bias_ay: -0.1934
 #bias_ay: -0.0751756
 bias_az:  0.0
-bias_gx: 0.000817362
-bias_gy: 0.00178242
-bias_gz: 0.000158554
+bias_gx: -0.000817362
+bias_gy: -0.00178242
+bias_gz: -0.000158554
 
 
 

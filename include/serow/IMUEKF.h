@@ -59,28 +59,19 @@ private:
 
 
 	Matrix<double, 15, 12> Lcf;
-
 	Matrix<double, 15, 15> P, Af, Acf, If, Qff;
-
 	Matrix<double, 6, 15> Hf, Hvf;
 	Matrix<double, 3, 15> Hv;
-
 	Matrix<double, 12, 12> Qf;
-
 	Matrix<double, 15, 6> Kf;
 	Matrix<double, 15, 3> Kv;
-
 	//Correction vector
 	Matrix<double, 15, 1> dxf;
-
 	//General variables
 	Matrix<double, 6, 6> s, R;
-
 	Matrix<double, 3, 3> sv, Rv, tempM;
-
-
 	//innovation, position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
-	Vector3d r, v, omega, f, fhat, omegahat, temp, omega_p, f_p;
+	Vector3d r, v, omega, f, fhat, omegahat, temp;
 
 	Matrix<double, 6, 1> z;
 	Vector3d zv;
@@ -93,15 +84,11 @@ private:
     Eigen::Matrix3d Rib_i;
     double efpsi, lnp, ln1_p, pzeta_1, pzeta_0, norm_factor;
     bool outlier;
-    //RK4 Integration
-    Matrix<double,15,1> computeDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
-	void RK4(Vector3d omega_, Vector3d f_, Vector3d omega0, Vector3d f0);
 	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
-
 	void euler(Vector3d omega_, Vector3d f_);
 	void updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> B);
 	double computePsi(double xx);
-     Matrix<double,15,1> computeDiscreteDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
+    Matrix<double,15,1> computeDiscreteDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW

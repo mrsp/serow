@@ -54,15 +54,15 @@ fsr_topic_freq: 200
 mass: 70.5957  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 200 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 155.5 #Schmitt Trigger Low Threshold in Newtons (N)
+LegUpThres: 150 #Schmitt Trigger High Threshold in Newtons (N)
+LegLowThres: 75.5 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 30.0
 StrikingContact: 600
-medianWindow: 9
+medianWindow: 7
 
 #Compute Joint Velocities
 joint_cutoff_freq: 16
-joint_noise_density: 0.1  # rad
+joint_noise_density: 0.02  # rad
 
 
 useGEM: false
@@ -98,9 +98,6 @@ Tau1: 1.0
 
 
 
-#Choose Integration Method
-#Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
-useEuler: true
 useInIMUEKF: false
 contact_random_walk: 0.05
 
@@ -141,14 +138,7 @@ velocity_noise_density_z: 0.035 #0.007
 
 
 
-#IMU Initial Biases in the IMU local frame - Biases are added!
-# bias_ax: -0.42753
-# bias_ay: 0.0543627
-# bias_az: -0.0824804
-# bias_gx: -1.24626e-07
-# bias_gy: -4.49618e-07
-# bias_gz: 2.82382e-08
-
+#IMU Initial Biases in the IMU local frame - Biases are substracted!
 bias_ax: 0.35753
 bias_ay: 0.00
 bias_az: 0.00

@@ -48,9 +48,8 @@ joint_topic_freq: 100
 fsr_topic_freq: 100  
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 20 #Schmitt Trigger High Threshold in Newtons (N)
-#LLegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
-
+LegUpThres: 20 #Schmitt Trigger High Threshold in Newtons (N)
+LegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 17
 StrikingContact: 60
 
@@ -84,12 +83,7 @@ Mahony_Kp: 0.9
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.3
-bias_max: 0
-bias_may: 0
-bias_maz: 0
-bias_mgx: 0
-bias_mgy: 0
-bias_mgz: 0
+
 
 #Leg Odometry Coefficients
 Tau0: 1.0
@@ -102,7 +96,7 @@ mass: 6.4  #robot mass
 #Choose Integration Method
 #Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
 useEuler: true
-useInIMUEKF: true
+useInIMUEKF: false
 contact_random_walk: 0.1
 
 #Rigid body Extended Kalman Filter (EKF)
@@ -140,7 +134,7 @@ velocity_noise_density_x: 1.0
 velocity_noise_density_y: 1.0
 velocity_noise_density_z: 0.5
 
-#IMU Initial Biases - Biases are additive and are in the IMU !
+#IMU Initial Biases - Biases are substracted and are in the IMU !
 bias_ax: 0.0
 bias_ay: 0.0
 bias_az: 0.0
