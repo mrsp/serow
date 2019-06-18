@@ -62,7 +62,7 @@ fsr_topic_freq: 200
 mass: 92.0  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
-LegUpThres: 280.0 #Schmitt Trigger High Threshold in Newtons (N)
+LegUpThres: 270.0 #Schmitt Trigger High Threshold in Newtons (N)
 LegLowThres: 120.0 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 50.0
 StrikingContact: 320
@@ -70,7 +70,7 @@ medianWindow: 13
 
 #Compute Joint Velocities
 joint_cutoff_freq: 40
-joint_noise_density: 0.5  # rad
+joint_noise_density: 0.2  # rad
 
 
 useGEM: false
@@ -123,7 +123,7 @@ Tau1: 0.0 #No F/T for Centauro :(
 #To estimate:
 # 3-D Body Position/Velocity
 # 3-D IMU-Biases
-contact_random_walk: 0.5
+contact_random_walk: 0.1
 #Process Noise STDs
 accelerometer_bias_random_walk:  2.4336e-05 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 1.0e-06 # rad/s/sqrt(s)
