@@ -4,11 +4,9 @@ lfoot: "leftFoot"
 rfoot: "rightFoot"
 modelname: "/home/master/dp_ws/src/serow/share/urdf/valkyrie_sim.urdf"
 
-useLegOdom: false
+useLegOdom: true
 #ROS Topic Names
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
-usePoseUpdate: false  #if true specify pose_topic / Do not use if odom_topic is set
-pose_topic: "" #only if usePoseUpdate is true
 imu_topic: "/pelvisMiddleImu/imu"
 joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
 lfoot_force_torque_topic: "/ihmc_ros/valkyrie/output/foot_force_sensor/left"
@@ -28,7 +26,7 @@ support_idx_provided: false
 support_idx_topic: "/ihmc_ros/valkyrie/output/support_idx"
 
 #To publish relative data
-debug_mode: false
+debug_mode: true
 
 #TF from IMU to Body
 T_B_A: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
@@ -47,16 +45,16 @@ joint_topic_freq: 500
 fsr_topic_freq: 500  
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 250 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 80 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 20
-StrikingContact: 1500
+LegUpThres: 250 #Schmitt Trigger High Threshold in Newtons (N)
+LegLowThres: 125 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 80
+StrikingContact: 1200
 VelocityThres: 0.07
 medianWindow: 13
-
+useGEM: false
 #Steady State Joint Kalman Filter (KF)
-estimateJoints: true #Use a Steady State KF in every joint
 joint_cutoff_freq: 20
+joint_noise_density: 0.25
 
 
 #Mahony Filter for attitude
@@ -67,26 +65,10 @@ Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.012
 
-bias_max: 0.0
-bias_may: 0.0
-bias_maz: -9.7997
-bias_mgx: 1.60298e-05
-bias_mgy: 1.24745e-05
-bias_mgz: 2.60968e-05
-
-
-
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
-#Complimentary Filter for Body Velocity  //Used in Leg Odometry
-useCF: false
-freqvmin: 0.1
-freqvmax: 2.5
 
-#Choose Integration Method
-#Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
-useEuler: true
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
@@ -98,20 +80,30 @@ accelerometer_bias_random_walk:  0.5 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 4.1884e-2 # rad/s/sqrt(s)
 accelerometer_noise_density: 1.7 #m/s^2  #Continuous Time
 gyroscope_noise_density: 0.2 #rad/s  #Continuous Time
-
+useInIMUEKF: false
+contact_random_walk: 0.2
 #Measuremets
+leg_odom_position_noise_density: 5.0e-03
+leg_odom_orientation_noise_density: 5.0e-03
+
 #Odometry Measurement Noise std:
-odom_position_noise_density: 1.0e-2
+odom_position_noise_density_x: 1.0e-2
+odom_position_noise_density_y: 1.0e-2
+odom_position_noise_density_z: 1.0e-2
+
 odom_orientation_noise_density: 1.0e-2
-velocity_noise_density: 2.5
+
+velocity_noise_density_x: 2.5 #0.007
+velocity_noise_density_y: 2.5 #0.009
+velocity_noise_density_z: 2.5 #0.007
 
 #IMU Initial Biases - Biases are substracted!
 bias_ax: 0.0
 bias_ay: 0.0
-bias_az: -9.7997
-bias_gx: 1.60298e-05
-bias_gy: 1.24745e-05
-bias_gz: 2.60968e-05
+bias_az: 9.7997
+bias_gx: -1.60298e-05
+bias_gy: -1.24745e-05
+bias_gz: -2.60968e-05
 
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)

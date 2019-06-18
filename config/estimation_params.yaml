@@ -1,81 +1,154 @@
 #Robot Frames (CHECK URDF)
 base_link: "base_link"
-lfoot: "l_sole"
-rfoot: "r_sole"
+lfoot: "l_ankle"
+rfoot: "r_ankle"
+modelname: "/home/master/dp_ws/src/serow/share/urdf/cogimon.urdf"
 
+useLegOdom: true
 #ROS Topic Names
-usePoseUpdate: false  #if true specify camera_vo_topic otherwise use odom
-pose_topic: "/orbslam2/pose" #only if usePoseUpdate is true
-useLegOdom: false
-odom_topic: "/vins_estimator/odometry" #only if usePoseUpdate is false and useLegOdom is false
-imu_topic: "/imu0"
-joint_state_topic: "/joint_states"
-lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
-rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
-copl_topic: "/nao_robot/LLeg/COP"
-copr_topic: "/nao_robot/RLeg/COP"
+odom_topic: "/svo/odom0" #only if usePoseUpdate is false and useLegOdom is false
+imu_topic: "/xbotcore/cogimon/imu/imu_link"
+#imu_topic: "/xbotcore/imu/imu_link"
+joint_state_topic: "/cogimon/joint_states"
+#joint_state_topic: "/xbotcore/ros_joint_states"
+lfoot_force_torque_topic: "/xbotcore/cogimon/ft/l_leg_ft"
+rfoot_force_torque_topic: "/xbotcore/cogimon/ft/r_leg_ft"
+#lfoot_force_torque_topic: "/xbotcore/ft/l_leg_ft"
+#rfoot_force_torque_topic: "/xbotcore/ft/r_leg_ft"
 
 
-visualize_with_rviz: true
-ground_truth: false
-ground_truth_odom_topic: " "
+#Ground-Truth #Not Mandatory - For comparison only
+ground_truth: true
+ground_truth_odom_topic: "/cogimon/ground_truth/odom"
+ground_truth_com_topic: "/cogimon/ground_truth/com/odom"
+is_in_ds_topic: "/ds"
+T_B_GT: [0, 0, 1, 0, 1, 0, 0, 0, 0, 1 , 0, 0, 0, 0 ,0, 1]
 
+
+comp_with: false
+comp_with_odom0_topic: "/svo/odom0"
+
+
+#If external Support Foot Detection is provided
+support_idx_provided: false
+support_idx_topic: "/sp"
+
+#To publish relative data
+debug_mode: true
 
 #TF from IMU to Body
-T_B_I: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,0, 1]
-#T_B_I: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 ,0, 1]
+T_B_A: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
+T_B_G: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
+#TF from F/T to Left Foot
+T_FT_LL: [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0 , -1 , -0.035, 0, 0, 0, 1]
+#TF from F/T to Right Foot
+T_FT_RL: [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0 , -1 , -0.035, 0, 0, 0, 1]
 #TF from External Pose to Body only if useLegOdom is false
-T_B_P: [0, 1, 0, 0, -1, 0, 0, 0, 0, 0 ,1 ,0, 0, 0, 0, 1]
-#T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 , 1]
-#T_B_P: [0.0025,   -0.0256,   -0.9997, 0,0.9999,   -0.0098,    0.0027, 0, -0.0098,   -0.9996,    0.0256, 0, 0, 0, 0, 1]
+T_B_P: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1] #SVO without imu
 
 #ROS Topic Frequencies in Hz
-imu_topic_freq: 400
-joint_topic_freq: 100
-fsr_topic_freq: 100  
+imu_topic_freq: 200
+joint_topic_freq: 200
+fsr_topic_freq: 200  
+
+mass: 70.5957  #robot mass
 
 ##Schmitt Trigger - Contact Classifier
-LLegUpThres: 35 #Schmitt Trigger High Threshold in Newtons (N)
-LLegLowThres: 25 #Schmitt Trigger Low Threshold in Newtons (N)
-LosingContact: 10
-StrikingContact: 30
+LegUpThres: 150 #Schmitt Trigger High Threshold in Newtons (N)
+LegLowThres: 75.5 #Schmitt Trigger Low Threshold in Newtons (N)
+LosingContact: 30.0
+StrikingContact: 600
+medianWindow: 7
 
-#Steady State Joint Kalman Filter (KF)
-estimateJoints: false #Use a Steady State KF in every joint
+#Compute Joint Velocities
+joint_cutoff_freq: 16
+joint_noise_density: 0.02  # rad
+
+
+useGEM: false
+foot_polygon_xmin: -0.1
+foot_polygon_xmax: 0.1
+foot_polygon_ymin: -0.05
+foot_polygon_ymax: 0.05
+lforce_sigma: 3.0
+rforce_sigma: 3.0
+lcop_sigma: 0.005
+rcop_sigma: 0.005
+VelocityThres: 0.2
+lvnorm_sigma: 0.05
+rvnorm_sigma: 0.05
+probabilisticContactThreshold: 0.95
+ContactDetectionWithCOP: true
+ContactDetectionWithKinematics: true
+
+
+#Mahony Filter for attitude
+useMahony: true
+Mahony_Kp: 0.001
+Mahony_Ki: 0.0
+#Madgwick Filter for attitude if useMahony is false
+Madgwick_gain: 0.00001
+
+
+
+
+#Leg Odometry Coefficients
+Tau0: 1.0
+Tau1: 1.0
+
+
+
+#Choose Integration Method
+useInIMUEKF: false
+contact_random_walk: 0.05
+
+
+
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
 # 3-D Body Position/Velocity
-# 3-D Support Foot Position/Orientation
 # 3-D IMU-Biases
 
 #Process Noise STDs
-accelerometer_bias_random_walk:  0.0000001 #continous
-gyroscope_bias_random_walk: 4.1884e-08 #continous
-accelerometer_noise_density: 0.000751446 #m/s^2/sqrt(Hz) #continous
-gyroscope_noise_density: 0.0000139556 #rad/s/sqrt(Hz) #continous
-#Support Foot/Orientation STD w.r.t World Frame
-support_position_random_walk: 1.0e-04  #m
-support_orientation_random_walk: 1.0e-04  #rad
-
+accelerometer_bias_random_walk:  2.4336e-05 #m/s^2/sqrt(s)
+gyroscope_bias_random_walk: 1.0e-6 # rad/s/sqrt(s)
+accelerometer_noise_density: 0.5 # m/s^2  #Continuous Time
+gyroscope_noise_density: 5.0e-02 # rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
-odom_position_noise_density: 1.0e-05
-odom_orientation_noise_density: 1.0e-05
+#LO
+leg_odom_position_noise_density: 5.0e-04
+leg_odom_orientation_noise_density: 5.0e-02
+#VO
+useOutlierDetection: false
+mahalanobis_TH: 22.0
+#mahalanobis_TH: -1.0
+odom_orientation_noise_density: 5.0e-02 #4
+odom_position_noise_density_x: 3.5e-02 #2.0e-01
+odom_position_noise_density_y: 3.5e-02
+odom_position_noise_density_z: 1.0
 
 
-#Support Foot/Orientation STD w.r.t Body Frame
-support_position_noise_density: 5.0e-05
-support_orientation_noise_density: 5.0e-05
 
-#IMU Initial Biases
-bias_ax: 0.0896076
-bias_ay: 0.517021
-bias_az: 0.00821103
-bias_gx:  0.0073031 
-bias_gy:  -0.0106267
-bias_gz:  -0.0149457
+velocity_noise_density_x: 0.035 #0.007
+velocity_noise_density_y: 0.035 #0.009
+velocity_noise_density_z: 0.035 #0.007
+
+
+
+
+#IMU Initial Biases in the IMU local frame - Biases are subsctracted!
+
+bias_ax: 0.35753
+bias_ay: 0.00
+bias_az: 0.00
+bias_gx: -1.24626e-07
+bias_gy: -4.49618e-07
+bias_gz: 2.82382e-08
+
+
 
 #Filter Params
 gravity: 9.80665 #gravity constant (m/s^2)
@@ -91,26 +164,24 @@ estimateCoM: true   #Use the CoM EKF
 #Specify the rest only if estimateCoM is true!!
 #---------------------------------------------#
 
-
 #Process Noise
-com_position_random_walk: 1.0e-5 #in m
-com_velocity_random_walk: 5.0e-3 #in m/s
-external_force_random_walk: 1.0      #in Newtons
+com_position_random_walk: 1.0e-3 #in m
+com_velocity_random_walk: 5.0e-1 #in m/s
+external_force_random_walk: 5.0  #in Newtons
 #Measurment Noise
-com_position_noise_density: 1.0e-05  #CoM position in m
-com_acceleration_noise_density: 2.5.0e-02 #CoM Acceleration in m/s^2
+com_position_noise_density: 1.0e-03  #CoM position in m
+com_acceleration_noise_density: 1.9519 #CoM Acceleration in m/s^2
 #Initial errors in External Forces
-bias_fx: 23.678  #in Newtons
-bias_fy: -5.5658
-bias_fz: 1.94869
+bias_fx: 0.0  #in Newtons
+bias_fy: 0.0
+bias_fz: 0.0
 #Gyro LPF
 useGyroLPF: false
 #Cutt-off Frequencies
 gyro_cut_off_freq: 10.0  #Only if useGyroLPF is true
 #Gyro Moving Average Filter
-maWindow: 10 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
+maWindow: 5 #buffer size, the larger the smoother and delayed the signal, only if useGyroLPF is false
 #Filter Params
-mass: 5.182530  #robot mass
-Ixx : 0.0050623407587  #torso inertia around x
-Iyy : 0.0048801358789  #torso inetria around y
-Izz : 0.001610300038   #torso inertia around z
+Ixx : 0.038130318  #torso inertia around x
+Iyy : 0.0089760596  #torso inetria around y
+Izz : 0.039650845  #torso inertia around z

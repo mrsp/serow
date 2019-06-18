@@ -47,7 +47,7 @@ void humanoid_ekf::loadparams()
     n_p.param<bool>("useInIMUEKF", useInIMUEKF, false);
     n_p.param<double>("VelocityThres", VelocityThres, 0.5);
     n_p.param<double>("LosingContact", LosingContact, 5.0);
-    n_p.param<bool>("useGEM", useGEM, true);
+    n_p.param<bool>("useGEM", useGEM, false);
     if (useGEM)
     {
         n_p.param<double>("foot_polygon_xmin", foot_polygon_xmin, -0.103);
@@ -66,8 +66,8 @@ void humanoid_ekf::loadparams()
     }
     else
     {
-        n_p.param<double>("LLegUpThres", LegHighThres, 20.0);
-        n_p.param<double>("LLegLowThres", LegLowThres, 15.0);
+        n_p.param<double>("LegUpThres", LegHighThres, 20.0);
+        n_p.param<double>("LegLowThres", LegLowThres, 15.0);
         n_p.param<double>("StrikingContact", StrikingContact, 5.0);
     }
 
@@ -952,7 +952,7 @@ void humanoid_ekf::computeKinTFs()
         Tbs = Tbl;
         qbs = qbl;
         support_leg = cd->getSupportLeg();
-        if (support_leg.compare("RLeg"))
+        if (support_leg.compare("RLeg") == 0)
         {
             Tbs = Tbr;
             qbs = qbr;
@@ -1010,9 +1010,11 @@ void humanoid_ekf::deAllocate()
             delete[] gyroMAF;
         }
     }
+    if(!useInIMUEKF)
+        delete imuEKF;
+    else
+        delete imuInEKF;
 
-    delete imuEKF;
-    delete imuInEKF;
     delete rd;
     delete mw;
     delete mh;
@@ -1454,9 +1456,7 @@ void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
         copl(1) = LLegGRT(0) / LLegGRF(2);
         weightl = LLegGRF(2) / g;
     }
-
-
-    if (LLegGRF(2) < LosingContact)
+    else
     {
         copl = Vector3d::Zero();
         LLegGRF = Vector3d::Zero();
@@ -1493,7 +1493,7 @@ void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
         weightr = RLegGRF(2) / g;
 
     }
-    if (RLegGRF(2) < LosingContact)
+    else
     {
         copr = Vector3d::Zero();
         RLegGRF = Vector3d::Zero();

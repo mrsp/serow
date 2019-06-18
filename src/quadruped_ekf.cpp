@@ -921,17 +921,17 @@ void quadruped_ekf::computeKinTFs()
         Tbs = TbLF;
         qbs = qbLF;
         support_leg = cd->getSupportLeg();
-        if(support_leg.compare("LHLeg"))
+        if(support_leg.compare("LHLeg")==0)
         {
             Tbs = TbLH;
             qbs = qbLH;
         }
-        else if(support_leg.compare("RFLeg"))
+        else if(support_leg.compare("RFLeg")==0)
         {
             Tbs = TbRF;
             qbs = qbRF;
         }
-        else if(support_leg.compare("RHLeg"))
+        else if(support_leg.compare("RHLeg")==0)
         {
             Tbs = TbRH;
             qbs = qbRH;
