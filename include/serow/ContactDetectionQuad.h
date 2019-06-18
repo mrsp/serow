@@ -553,14 +553,32 @@ public:
     pLH = 0;
     pRH = 0;
 
-    if (p != 0)
+    if (p > 0)
     {
       pLF = LFf / p;
       pRF = RFf / p;
       pLH = LHf / p;
       pRH = RHf / p;
     }
+
+    pLF=normalizeProb(pLF);
+    pRF=normalizeProb(pRF);
+    pLH=normalizeProb(pLH);
+    pRH=normalizeProb(pRH);
   }
+
+  double normalizeProb(double s_)
+  {
+    double res = s_;
+    if(s_<0)
+      res=0;
+
+    if(s_>1)
+      res=1;
+    
+    return res;
+  }
+
   void SchmittTrigger(double LFf, double LHf, double RFf, double RHf)
   {
 
@@ -657,11 +675,11 @@ public:
     MediatorInsert(RHmdf, contactRH);
     contactRHFilt =  MediatorMedian(RHmdf);
 
-    cout<<"Contact"<<endl;
-    cout<<contactRFFilt<<endl;
-    cout<<contactRHFilt<<endl;
-    cout<<contactLFFilt<<endl;
-    cout<<contactLHFilt<<endl;
+    cout<<"Contact -- LF -- LH -- RF -- RH"<<endl;
+    cout<<pLF<<endl;
+    cout<<pLH<<endl;
+    cout<<pRF<<endl;
+    cout<<pRH<<endl;
 
     sum = contactRHFilt + contactRFFilt + contactLFFilt + contactRHFilt;
 
