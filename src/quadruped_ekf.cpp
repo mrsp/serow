@@ -699,9 +699,10 @@ void quadruped_ekf::estimateWithInIMUEKF()
         {
           
             imuInEKF->updateWithContacts(dr->getRFFootIMVPPosition(), dr->getRHFootIMVPPosition(), dr->getLFFootIMVPPosition(), dr->getLHFootIMVPPosition(),
-             JRFQnJRFt ,  JRHQnJRHt,
-             JLFQnJLFt,   JLHQnJLHt, 
-             cd->isRFLegContact(), cd->isRHLegContact(), cd->isLFLegContact(), cd->isLHLegContact());
+             JRFQnJRFt  +  cd->getRFDiffForce()/(m*g)*Matrix3d::Identity(),  JRHQnJRHt +  cd->getRHDiffForce()/(m*g)*Matrix3d::Identity(),
+             JLFQnJLFt  +  cd->getLFDiffForce()/(m*g)*Matrix3d::Identity(),  JLHQnJLHt +  cd->getLHDiffForce()/(m*g)*Matrix3d::Identity(), 
+             cd->isRFLegContact(), cd->isRHLegContact(), cd->isLFLegContact(), cd->isLHLegContact(),
+             cd->getRFLegContactProb(), cd->getRHLegContactProb(), cd->getLFLegContactProb(), cd->getLHLegContactProb());
             //imuInEKF->updateWithOrient(qwb);
             //imuInEKF->updateWithTwist(vwb, dr->getVelocityCovariance() +  cd->getDiffForce()/(m*g)*Matrix3d::Identity());
             //imuInEKF->updateWithTwistOrient(vwb,qwb);

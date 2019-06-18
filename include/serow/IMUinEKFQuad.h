@@ -19,9 +19,9 @@ class IMUinEKFQuad
 
 	Matrix<double, 6, 1> theta;
 	void updateStateSingleContact(Matrix<double, 9, 1> Y_, Matrix<double, 9, 1> b_, Matrix<double, 3, 27> H_, Matrix3d N_, Matrix<double, 3, 9> PI_);
-	void updateStateDoubleContact(Matrix<double, 18, 1> Y_, Matrix<double, 18, 1> b_, Matrix<double, 6, 27> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 18> PI_);
-	void updateStateTripleContact(Matrix<double, 27, 1> Y_, Matrix<double, 27, 1> b_, Matrix<double, 9, 27> H_, Matrix<double, 9, 9> N_, Matrix<double, 9, 27> PI_);
-	void updateStateQuadContact(Matrix<double, 36, 1> Y_, Matrix<double, 36, 1> b_, Matrix<double, 12, 27> H_, Matrix<double, 12, 12> N_, Matrix<double, 12, 36> PI_);
+	// void updateStateDoubleContact(Matrix<double, 18, 1> Y_, Matrix<double, 18, 1> b_, Matrix<double, 6, 27> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 18> PI_);
+	// void updateStateTripleContact(Matrix<double, 27, 1> Y_, Matrix<double, 27, 1> b_, Matrix<double, 9, 27> H_, Matrix<double, 9, 9> N_, Matrix<double, 9, 27> PI_);
+	// void updateStateQuadContact(Matrix<double, 36, 1> Y_, Matrix<double, 36, 1> b_, Matrix<double, 12, 27> H_, Matrix<double, 12, 12> N_, Matrix<double, 12, 36> PI_);
 
 	void updateVelocityOrientation(Matrix<double, 18, 1> Y_, Matrix<double, 18, 1> b_, Matrix<double, 6, 18> H_, Matrix<double, 6, 6> N_, Matrix<double, 6, 18> PI_);
 	void updateOrientation(Matrix<double, 9, 1> Y_, Matrix<double, 9, 1> b_, Matrix<double, 3, 27> H_, Matrix<double, 3, 3> N_, Matrix<double, 3, 9> PI_);
@@ -161,7 +161,7 @@ class IMUinEKFQuad
 	 *  @brief filters the acceleration measurements from the IMU
 	 */
 	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbRF, Vector3d pbRH, Vector3d pbLF, Vector3d pbLH, Matrix3d hR_RF, Matrix3d hR_RH,  Matrix3d hR_LF, Matrix3d hR_LH, int contactRF, int contactRH, int contactLF, int contactLH);
-	void updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s_pLF, Vector3d s_pLH, Matrix3d JRFQeJRF, Matrix3d JRHQeJRH, Matrix3d JLFQeJLF,  Matrix3d JLHQeJLH, int contactRF, int contactRH, int contactLF, int contactLH);
+	void updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s_pLF, Vector3d s_pLH, Matrix3d JRFQeJRF, Matrix3d JRHQeJRH, Matrix3d JLFQeJLF,  Matrix3d JLHQeJLH, int contactRF, int contactRH, int contactLF, int contactLH, double weightRF, double weightRH, double weightLF, double weightLH);
 
 	void updateWithOdom(Vector3d py, Quaterniond qy);
 	void updateWithTwistOrient(Vector3d vy, Quaterniond qy);

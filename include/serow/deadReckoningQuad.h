@@ -381,17 +381,17 @@ class deadReckoningQuad
             computeIMVP();
 
      
-        RFpRmb = RbRF * RFpRm + pbRF;
-        RHpRmb = RbRH * RHpRm + pbRH;
+        // RFpRmb = RbRF * RFpRm + pbRF;
+        // RHpRmb = RbRH * RHpRm + pbRH;
 
-        LFpLmb = RbLF * LFpLm + pbLF;
-        LHpLmb = RbLH * LHpLm + pbLH;
+        // LFpLmb = RbLF * LFpLm + pbLF;
+        // LHpLmb = RbLH * LHpLm + pbLH;
 
  
-        // RFpRmb =  pbRF;
-        // RHpRmb =  pbRH;
-        // LHpLmb =  pbLH;
-        // LFpLmb =  pbLF;
+        RFpRmb =  pbRF;
+        RHpRmb =  pbRH;
+        LHpLmb =  pbLH;
+        LFpLmb =  pbLF;
 
 
         //Temp estimate of Leg position w.r.t Inertial Frame

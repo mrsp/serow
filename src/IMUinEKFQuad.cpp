@@ -486,11 +486,13 @@ void IMUinEKFQuad::predict(Vector3d angular_velocity, Vector3d linear_accelerati
 //     P = Adj * P * Adj.transpose();
 // }
 
-void IMUinEKFQuad::updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s_pLF, Vector3d s_pLH, Matrix3d JRFQeJRF, Matrix3d JRHQeJRH, Matrix3d JLFQeJLF,  Matrix3d JLHQeJLH, int contactRF, int contactRH, int contactLF, int contactLH)
+void IMUinEKFQuad::updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s_pLF, Vector3d s_pLH, 
+                                        Matrix3d JRFQeJRF, Matrix3d JRHQeJRH, Matrix3d JLFQeJLF,  Matrix3d JLHQeJLH, 
+                                        int contactRF, int contactRH, int contactLF, int contactLH,
+                                        double weightRF, double weightRH, double weightLF, double weightLH)
 {
 
     Rwb = X.block<3, 3>(0, 0);
-
     Qc(0, 0) = leg_odom_px * leg_odom_px;
     Qc(1, 1) = leg_odom_py * leg_odom_py;
     Qc(2, 2) = leg_odom_pz * leg_odom_pz;
@@ -512,7 +514,7 @@ void IMUinEKFQuad::updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s
         Matrix3d N = Matrix3d::Zero();
         N = Rwb * JRFQeJRF * Rwb.transpose() + Qc;
         Matrix<double, 3, 9> PI = Matrix<double, 3, 9>::Zero();
-        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+        PI.block<3, 3>(0, 0) = Matrix3d::Identity() * weightRF;
         updateStateSingleContact(Y, b, H, N, PI);
         updateVars();
     }
@@ -534,7 +536,7 @@ void IMUinEKFQuad::updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s
         N = Rwb * JRHQeJRH * Rwb.transpose()+ Qc;
 
         Matrix<double, 3, 9> PI = Matrix<double, 3, 9>::Zero();
-        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+        PI.block<3, 3>(0, 0) = Matrix3d::Identity() * weightRH;
         updateStateSingleContact(Y, b, H, N, PI);
         updateVars();
     }
@@ -555,7 +557,7 @@ void IMUinEKFQuad::updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s
         Matrix3d N = Matrix3d::Zero();
         N = Rwb * JLFQeJLF * Rwb.transpose() + Qc;
         Matrix<double, 3, 9> PI = Matrix<double, 3, 9>::Zero();
-        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+        PI.block<3, 3>(0, 0) = Matrix3d::Identity() * weightLF;
         updateStateSingleContact(Y, b, H, N, PI);
         updateVars();
     }
@@ -577,7 +579,7 @@ void IMUinEKFQuad::updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s
         N = Rwb * JLHQeJLH * Rwb.transpose()+ Qc;
 
         Matrix<double, 3, 9> PI = Matrix<double, 3, 9>::Zero();
-        PI.block<3, 3>(0, 0) = Matrix3d::Identity();
+        PI.block<3, 3>(0, 0) = Matrix3d::Identity() * weightLH;
         updateStateSingleContact(Y, b, H, N, PI);
         updateVars();
     }
@@ -590,10 +592,10 @@ void IMUinEKFQuad::updateStateSingleContact(Matrix<double, 9, 1> Y_, Matrix<doub
     S_ += H_ * P * H_.transpose();
 
     Matrix<double, 27, 3> K_ = P * H_.transpose() * S_.inverse();
-    Matrix<double, 9, 1> Z_ = X * Y_;
+    Matrix<double, 9, 1> Z_ =   X * Y_;
 
     //Update State
-    Matrix<double, 27, 1> delta_ = K_ * PI_ * Z_;
+    Matrix<double, 27, 1> delta_ = K_ * PI_  * Z_;
     Matrix<double, 9, 9> dX_ = exp_SE3(delta_.segment<21>(0));
     Matrix<double, 6, 1> dtheta_ = delta_.segment<6>(21);
 
@@ -628,6 +630,9 @@ void IMUinEKFQuad::updateVars()
     w = w_ - bgyr;
     a = a_ - bacc;
 
+    cout<<"Biases"<<endl;
+    cout<<bgyr<<endl;
+    cout<<bacc<<endl;
     gyro = Rwb * w;
     gyroX = gyro(0);
     gyroY = gyro(1);
