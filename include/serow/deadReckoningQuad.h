@@ -485,10 +485,10 @@ class deadReckoningQuad
         RRHpRm = RbRH;
 
 
-        if(alpha3>0)
+        //if(alpha3>0)
             computeIMVPFT(LFf, LHf, RFf, RHf, LFt, LHt,  RFt, RHt);
-        else
-            computeIMVP();
+        //else
+        //    computeIMVP();
 
        // RFpRmb = RbRF * RFpRm + pbRF;
         // RHpRmb = RbRH * RHpRm + pbRH;
