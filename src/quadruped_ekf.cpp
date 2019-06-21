@@ -897,7 +897,7 @@ void quadruped_ekf::computeKinTFs()
             }
             else
             {
-                cd->init(LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, LegHighThres, LegLowThres, StrikingContact, VelocityThres,medianWindow);
+                cd->init(LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, LegHighThres, LegLowThres, StrikingContact, VelocityThres, mass, g, medianWindow);
             }
 
             firstContact = false;

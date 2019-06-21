@@ -24,7 +24,7 @@ ground_truth: true
 ground_truth_odom_topic: "/centauro/ground_truth/odom"
 ground_truth_com_topic: "/centauro/ground_truth/com/odom"
 is_in_ds_topic: "/ds"
-T_B_GT: [0, 0, 1, 0, 1, 0, 0, 0, 0, 1 , 0, 0, 0, 0 ,0, 1]
+T_B_GT: [0, 0, 1, 0, 1, 0, 0, 0, 0, -1 , 0, 0, 0, 0 ,0, 1]
 
 
 comp_with: false
@@ -66,11 +66,11 @@ LegUpThres: 250.0 #Schmitt Trigger High Threshold in Newtons (N)
 LegLowThres: 125.0 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 50.0
 StrikingContact: 320
-medianWindow: 13
+medianWindow: 9
 
 #Compute Joint Velocities
 joint_cutoff_freq: 50
-joint_noise_density: 0.25  # rad
+joint_noise_density: 0.2  # rad
 
 
 useGEM: false
@@ -106,7 +106,7 @@ Madgwick_gain: 0.01
 
 
 #Leg Odometry Coefficients
-Tau0: 0.01
+Tau0: 1.0
 Tau1: 0.0 #No F/T for Centauro :(
 
 
@@ -119,8 +119,8 @@ contact_random_walk: 0.5
 #Process Noise STDs
 accelerometer_bias_random_walk:  2.4336e-04 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 1.0e-05 # rad/s/sqrt(s)
-accelerometer_noise_density: 1.0 # m/s^2  #Continuous Time
-gyroscope_noise_density: 0.1 # rad/s  #Continuous Time
+accelerometer_noise_density: 0.5 # m/s^2  #Continuous Time
+gyroscope_noise_density: 0.05 # rad/s  #Continuous Time
 
 #Measuremets
 #Odometry Measurement Noise std:
@@ -148,8 +148,8 @@ velocity_noise_density_z: 0.035 #0.007
 
 #IMU Initial Biases in the IMU local frame - Biases are added!
 
-bias_ax: 0.00
-bias_ay: 0.00
+bias_ax: 0.000
+bias_ay: 0.000
 bias_az: 0.26
 bias_gx: -1.24626e-05
 bias_gy: 3.49618e-05

@@ -23,7 +23,7 @@ private:
   std::string support_foot_frame, support_leg, LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, phase;
   int medianWindow;
 	Mediator *LFmdf, *RFmdf, *RHmdf, *LHmdf;
-
+  double mass, g;
 
 
   double deltaLFfz, deltaLHfz, deltaRFfz, deltaRHfz, LFf_, LHf_, RFf_, RHf_;
@@ -226,7 +226,7 @@ public:
     deltaRHfz = 0;
   }
 
-  void init(std::string LFfoot_frame_, std::string LHfoot_frame_, std::string RFfoot_frame_, std::string RHfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_, double prob_TH_ = 0.9, int medianWindow_=  10)
+  void init(std::string LFfoot_frame_, std::string LHfoot_frame_, std::string RFfoot_frame_, std::string RHfoot_frame_, double LegHighThres_, double LegLowThres_, double StrikingContact_, double VelocityThres_, double prob_TH_ = 0.9, double mass_ = 1, double g_=9.81, int medianWindow_=  10)
   {
 
     LFfoot_frame = LFfoot_frame_;
@@ -248,7 +248,8 @@ public:
 
     pRF = 0;
     pRH = 0;
-
+    mass = mass_;
+    g = g_;
     contactLF = 0;
     contactLH = 0;
     contactRF = 0;
@@ -547,7 +548,13 @@ public:
   }
   void computeForceWeights(double LFf, double LHf, double RFf, double RHf)
   {
-    p = LFf + LFf + RFf + RHf;
+    p = LFf + LHf + RFf + RHf;
+
+    LFf = cropGRF(LFf);
+    LHf = cropGRF(LHf);
+    RFf = cropGRF(RFf);
+    RHf = cropGRF(RHf);
+
     pLF = 0;
     pRF = 0;
     pLH = 0;
@@ -561,10 +568,18 @@ public:
       pRH = RHf / p;
     }
 
-    pLF=normalizeProb(pLF);
-    pRF=normalizeProb(pRF);
-    pLH=normalizeProb(pLH);
-    pRH=normalizeProb(pRH);
+    // pLF=normalizeProb(pLF);
+    // pRF=normalizeProb(pRF);
+    // pLH=normalizeProb(pLH);
+    // pRH=normalizeProb(pRH);
+  }
+
+
+
+
+  double cropGRF(double f_)
+  {
+      return max(0.0, min(f_, mass * g));
   }
 
   double normalizeProb(double s_)
