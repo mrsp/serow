@@ -49,7 +49,7 @@ These instructions will get you a copy of the project up and running on your loc
 ### Requirements
 * Robot State Publisher (e.g. topic: /joint_states)
 * IMU (e.g. topic /imu0)
-* Feet Force Sensors for detecting contact (e.g. topic: /left_leg/force_torque_states, /right_leg/force_torque_states)
+* Feet Pressure or Force/Torque Sensors for detecting contact (e.g. topic: /left_leg/force_torque_states, /right_leg/force_torque_states)
 
 ### Using the full cascade framework (Rigid Body Estimator + CoM Estimator) to estimate:
 * 3D-Body Position/Orientation/Velocity
@@ -60,14 +60,7 @@ These instructions will get you a copy of the project up and running on your loc
 ### Requirements:
 * Robot State Publisher (e.g. topic: /joint_states)
 * IMU(e.g. topic /imu0)
-* Feet Force Sensors  + Center of Pressure (COP) measurements in the local foot frame (e.g. topics /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP)
-
-### Using our humanoid_fsr package
-If your robot is employed with feet force sensors and you have available a measurement for each sensor, then you can use our [humanoid_fsr](https://github.com/mrsp/humanoid_fsr) package to compute the COP and 3D - Force/Torque measurements in each leg.  This package automatically generates the required by SEROW /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP topics.
-
-### Using our humanoid_cop package
-If your robot is employed with F/T sensors and you have available a 6D wrench measurement for each leg, then you can use our [humanoid_cop](https://github.com/mrsp/humanoid_cop) package to compute the COP in each leg.  This package automatically generates the required by SEROW  /left_leg/COP, /right_leg/COP topics.
-
+* Feet Pressure or Force/Torque Sensors  for Center of Pressure (COP) measurements in the local foot frame (e.g. topics /left_leg/force_torque_states, /right_leg/force_torque_states)
 
 ### Using our serow_utils package
 Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the estimated trajectories and to contrast them with other trajectories (e.g. ground_truth).
