@@ -1,7 +1,10 @@
-SEROW V2.0
+
 
 # README
-SEROW (State Estimation RObot Walking) Framework for Humanoid Robot Walking Estimation.  The code is open-source (BSD License). Please note that this work is an on-going research and thus some parts are not fully developed yet. Furthermore, the code will be subject to changes in the future which could include greater re-factoring.
+SEROW (State Estimation RObot Walking) Framework for Humanoid/Quadruped Robot Walking Estimation.  The code is open-source (BSD License). Please note that this work is an on-going research and thus some parts are not fully developed yet. Furthermore, the code will be subject to changes in the future which could include greater re-factoring.
+
+# NEW
+SEROW now supports Quadruped Robots also.
 
 Video: https://www.youtube.com/watch?v=nkzqNhf3_F4
 
