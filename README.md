@@ -3,9 +3,6 @@
 # README
 SEROW (State Estimation RObot Walking) Framework for Humanoid/Quadruped Robot Walking Estimation.  The code is open-source (BSD License). Please note that this work is an on-going research and thus some parts are not fully developed yet. Furthermore, the code will be subject to changes in the future which could include greater re-factoring.
 
-# NEW
-SEROW now supports Quadruped Robots also.
-
 Video: https://www.youtube.com/watch?v=nkzqNhf3_F4
 
 Papers:
@@ -27,6 +24,12 @@ Upon usage in an academic work kindly cite: <br/>
     doi={10.1109/LRA.2018.2852788}, <br/>
     month={Oct},<br/>
 }<br/>
+
+# NEW Feature
+SEROW now supports Quadruped Robots also. The base estimator used in the latter case is a variant of:
+R. Hartley, M. G. Jadidi, J. Grizzle, and R. M. Eustice, “Contact-aided invariant extended kalman filtering for legged robot state estimation,” in Proceedings of Robotics: Science and Systems, Pittsburgh, Pennsylvania, June 2018. 
+
+The 3D-CoM estimator is the one proposed in "Nonlinear State Estimation for Humanoid Robot Walking" (https://ieeexplore.ieee.org/document/8403285). Although originality presented for Humanoids, the same principles apply in Quadrupeds.
 
 
 ## Getting Started
