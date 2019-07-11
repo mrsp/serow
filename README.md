@@ -25,11 +25,11 @@ Upon usage in an academic work kindly cite: <br/>
     month={Oct},<br/>
 }<br/>
 
-# NEW Feature
-SEROW now supports Quadruped Robots also. The base estimator used in the latter case is a variant of:
+# New Feature
+SEROW now also supports quadruped robot state estimation. The base estimator used in the latter case is a variant of the one presented in: 
 R. Hartley, M. G. Jadidi, J. Grizzle, and R. M. Eustice, “Contact-aided invariant extended kalman filtering for legged robot state estimation,” in Proceedings of Robotics: Science and Systems, Pittsburgh, Pennsylvania, June 2018. 
 
-The 3D-CoM estimator is the one proposed in "Nonlinear State Estimation for Humanoid Robot Walking" (https://ieeexplore.ieee.org/document/8403285). Although originality presented for Humanoids, the same principles apply in Quadrupeds.
+The 3D-CoM estimator is the one proposed in "Nonlinear State Estimation for Humanoid Robot Walking" (https://ieeexplore.ieee.org/document/8403285). Although originality presented for humanoids, the same principles apply in quadrupeds.
 
 
 ## Getting Started
