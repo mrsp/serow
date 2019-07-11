@@ -10,20 +10,20 @@ Papers:
 * Nonlinear State Estimation for Humanoid Robot Walking, https://ieeexplore.ieee.org/document/8403285 (RA-L + IROS 2018)
 * Outlier-Robust State Estimation for Humanoid Robots (to appear IROS2019)
 
-#Citation
-Upon usage in an academic work kindly cite:
+# Citation
+Upon usage in an academic work kindly cite: <br/>
 
-@ARTICLE{PiperakisRAL18, 
-    author={S. {Piperakis} and M. {Koskinopoulou} and P. {Trahanias}}, 
-    journal={IEEE Robotics and Automation Letters}, 
-    title={{Nonlinear State Estimation for Humanoid Robot Walking}}, 
-    year={2018}, 
-    volume={3}, 
-    number={4}, 
-    pages={3347-3354}, 
-    doi={10.1109/LRA.2018.2852788}, 
-    month={Oct},
-}
+@ARTICLE{PiperakisRAL18, <br/>
+    author={S. {Piperakis} and M. {Koskinopoulou} and P. {Trahanias}}, <br/>
+    journal={IEEE Robotics and Automation Letters}, <br/>
+    title={{Nonlinear State Estimation for Humanoid Robot Walking}}, <br/>
+    year={2018}, <br/>
+    volume={3}, <br/>
+    number={4}, <br/>
+    pages={3347-3354}, <br/>
+    doi={10.1109/LRA.2018.2852788}, <br/>
+    month={Oct},<br/>
+}<br/>
 
 ## Getting Started
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
