@@ -8,9 +8,23 @@ Video: https://www.youtube.com/watch?v=nkzqNhf3_F4
 Papers:
 * Non-linear ZMP based State Estimation for Humanoid Robot Locomotion, https://ieeexplore.ieee.org/document/7803278 (Humanoids 2016 - nominated for the best interactive paper award)
 * Nonlinear State Estimation for Humanoid Robot Walking, https://ieeexplore.ieee.org/document/8403285 (RA-L + IROS 2018)
-* Robust Gaussian Error-State Kalman Filtering for Humanoid Robot Walking
+* Outlier-Robust State Estimation for Humanoid Robots (to appear IROS2019)
 
-Upon requests a matlab version will be released shortly.
+# Citation
+Upon usage in an academic work kindly cite: <br/>
+
+@ARTICLE{PiperakisRAL18, <br/>
+    author={S. {Piperakis} and M. {Koskinopoulou} and P. {Trahanias}}, <br/>
+    journal={IEEE Robotics and Automation Letters}, <br/>
+    title={{Nonlinear State Estimation for Humanoid Robot Walking}}, <br/>
+    year={2018}, <br/>
+    volume={3}, <br/>
+    number={4}, <br/>
+    pages={3347-3354}, <br/>
+    doi={10.1109/LRA.2018.2852788}, <br/>
+    month={Oct},<br/>
+}<br/>
+
 
 ## Getting Started
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
