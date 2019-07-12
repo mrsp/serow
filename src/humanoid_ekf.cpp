@@ -623,7 +623,7 @@ void humanoid_ekf::estimateWithInIMUEKF()
         {
             imuInEKF->updateWithContacts(dr->getRFootIMVPPosition(), dr->getLFootIMVPPosition(),  
                                             JRQnJRt, JLQnJLt,
-                                            cd->isRLegContact(), cd->isLLegContact());
+                                            cd->isRLegContact(), cd->isLLegContact(), cd->getRLegContactProb(), cd->getLLegContactProb());
             //imuInEKF->updateWithOrient(qwb);
             //imuInEKF->updateWithTwist(vwb, dr->getVelocityCovariance() +  cd->getDiffForce()/(m*g)*Matrix3d::Identity());
             //imuInEKF->updateWithTwistOrient(vwb,qwb);
