@@ -96,6 +96,10 @@ Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the esti
 ### Launch on your Robot in real time
 * Specify topics on config/estimation_params.yaml
 * roslaunch serow serow.launch
+
+### Quadruped State Estimation
+* Specify similar parameters as in config/estimation_params_centauro.yaml
+
 ## License
 [BSD](LICENSE) 
 
