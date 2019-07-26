@@ -630,9 +630,9 @@ void IMUinEKFQuad::updateVars()
     w = w_ - bgyr;
     a = a_ - bacc;
 
-    cout<<"Biases"<<endl;
-    cout<<bgyr<<endl;
-    cout<<bacc<<endl;
+    // cout<<"Biases"<<endl;
+    // cout<<bgyr<<endl;
+    // cout<<bacc<<endl;
     gyro = Rwb * w;
     gyroX = gyro(0);
     gyroY = gyro(1);

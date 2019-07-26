@@ -119,12 +119,7 @@ private:
       pLH = 0;
       pRH = 0;
     }
-    cout << "PROB LF RF LH RH" << endl;
-    cout << pLF << endl;
-    cout << pRF << endl;
-    cout << pLH << endl;
-    cout << pRH << endl;
-    
+
     contactLH = 0;
     if (pLF >= prob_TH)
       contactLF = 1;
@@ -690,11 +685,11 @@ public:
     MediatorInsert(RHmdf, contactRH);
     contactRHFilt =  MediatorMedian(RHmdf);
 
-    cout<<"Contact -- LF -- LH -- RF -- RH"<<endl;
-    cout<<pLF<<endl;
-    cout<<pLH<<endl;
-    cout<<pRF<<endl;
-    cout<<pRH<<endl;
+    // cout<<"Contact -- LF -- LH -- RF -- RH"<<endl;
+    // cout<<pLF<<endl;
+    // cout<<pLH<<endl;
+    // cout<<pRF<<endl;
+    // cout<<pRH<<endl;
 
     sum = contactRHFilt + contactRFFilt + contactLFFilt + contactRHFilt;
 
