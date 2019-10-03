@@ -81,7 +81,7 @@ ContactDetectionWithKinematics: true
 
 #Mahony Filter for attitude
 useMahony: true
-Mahony_Kp: 0.05
+Mahony_Kp: 0.0008
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.00001
@@ -136,7 +136,7 @@ velocity_noise_density_z: 0.035 #0.007
 
 
 #IMU Initial Biases in the IMU local frame - Biases are substracted!
-bias_ax: 0
+bias_ax: 0.590860509841
 bias_ay: 0
 bias_az: 0
 bias_gx: 0
@@ -160,11 +160,11 @@ estimateCoM: true   #Use the CoM EKF
 #---------------------------------------------#
 
 #Process Noise
-com_position_random_walk: 1.0e-5 #in m
-com_velocity_random_walk: 5.0e-4 #in m/s
-external_force_random_walk: 2.5   #in Newtons
+com_position_random_walk: 1.0e-4 #in m
+com_velocity_random_walk: 5.0e-2 #in m/s
+external_force_random_walk: 1.0   #in Newtons
 #Measurment Noise
-com_position_noise_density: 1.0e-04  #CoM position in m
+com_position_noise_density: 1.0e-03  #CoM position in m
 com_acceleration_noise_density: 0.5 #CoM Acceleration in m/s^2
 #Initial errors in External Forces
 bias_fx: 0.0  #in Newtons
