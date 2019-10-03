@@ -80,15 +80,18 @@ class deadReckoning
         return vwb;
     }
 
-    void computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegab, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
+    void computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                             Eigen::Vector3d vbl, Eigen::Vector3d vbr, double wl_, double wr_)
     {
 
         
-        vwb_l.noalias() = -wedge(omegab)  * pbl - vbl;
-        vwb_l =  Rwb * vwb_l;
-        vwb_r.noalias() = -wedge(omegab)  * pbr - vbr;
-        vwb_r =  Rwb * vwb_r;
+        //vwb_l.noalias() = -wedge(omegab)  * pbl - vbl;
+        //vwb_l =  Rwb * vwb_l;
+        //vwb_r.noalias() = -wedge(omegab)  * pbr - vbr;
+        //vwb_r =  Rwb * vwb_r;
+
+        vwb_l = wl*(-wedge(omegawb) * Rwb * pbl - Rwb * vbl);
+        vwb_r = wr*(-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
 
         vwb = wl_ * vwb_l;
         vwb += wr_ * vwb_r;
@@ -222,7 +225,7 @@ class deadReckoning
         wl = (lfz + ef) / (lfz + rfz + 2.0 * ef);
         wr = (rfz + ef) / (lfz + rfz + 2.0 * ef);
 
-        computeBodyVelKCFS(Rwb, bomegab, pbl, pbr, vbl, vbr, wl, wr);
+        computeBodyVelKCFS(Rwb, omegawb, pbl, pbr, vbl, vbr, wl, wr);
  
 
 

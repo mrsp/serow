@@ -173,6 +173,26 @@ void IMUEKF::euler(Vector3d omega_, Vector3d f_)
     Af = If;
     Af.noalias() += Acf * dt;
     x = computeDiscreteDyn(x,Rib,omega_,f_);
+    //x.noalias() += computeContinuousDyn(x,Rib,omega_,f_)*dt; 
+}
+
+
+Matrix<double,15,1> IMUEKF::computeContinuousDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
+{
+    Matrix<double,15,1> res = Matrix<double,15,1>::Zero();
+    
+    //Inputs without bias
+    omega_ -= x_.segment<3>(9);
+    f_ -= x_.segment<3>(12);
+    
+    //Nonlinear Process Model
+    v = x_.segment<3>(0);
+    res.segment<3>(0).noalias() = v.cross(omega_);
+    res.segment<3>(0).noalias() += Rib_.transpose()*g;
+    res.segment<3>(0) += f_;
+    res.segment<3>(6).noalias() = Rib_ * v;
+    
+    return res;
 }
 
 Matrix<double,15,1> IMUEKF::computeDiscreteDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
@@ -211,7 +231,6 @@ Matrix<double,15,1> IMUEKF::computeDiscreteDyn(Matrix<double,15,1> x_, Matrix<do
 /** IMU EKF filter to  deal with the Noise **/
 void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 {
-    //std::cout<<"Predict with IMU"<<std::endl;
     omega = omega_;
     f = f_;
     //Used in updating Rib with the Rodriquez formula
@@ -270,7 +289,6 @@ void IMUEKF::updateWithTwist(Vector3d y)
     Rv(2, 2) = vel_pz * vel_pz;
 
     v = x.segment<3>(0);
-    //std::cout<<" Update with Twist " <<std::endl;
     //std::cout<<y<<std::endl;
     //Innovetion vector
     zv = y;
@@ -285,7 +303,7 @@ void IMUEKF::updateWithTwist(Vector3d y)
     dxf.noalias() = Kv * zv;
    
     //Update the mean estimate
-    x += dxf;
+    x.noalias() += dxf;
     
     //Update the error covariance
     P = (If - Kv * Hv) * P * (If - Hv.transpose()*Kv.transpose());
@@ -316,6 +334,7 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
     R(5, 5) =  leg_odom_az * leg_odom_az;
 
 
+
     v = x.segment<3>(0);
     //std::cout<<" Update with Twist Rot" <<std::endl;
     //std::cout<<y<<std::endl;
@@ -334,7 +353,7 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
     dxf.noalias() = Kf * z;
    
     //Update the mean estimate
-    x += dxf;
+    x.noalias() += dxf;
     
     //Update the error covariance
     P = (If - Kf * Hvf) * P * (If - Hvf.transpose()*Kf.transpose());
@@ -354,7 +373,6 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
 
 void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
 {
-    //std::cout<<"Update with LO"<<std::endl;
     R(0, 0) = leg_odom_px * leg_odom_px;
     R(1, 1) = leg_odom_py * leg_odom_py;
     R(2, 2) = leg_odom_pz * leg_odom_pz;
@@ -380,7 +398,7 @@ void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
         P.noalias() += Kf * R * Kf.transpose();
         
         dxf.noalias() = Kf * z;
-        x += dxf;
+        x.noalias() += dxf;
         if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
         {
              Rib *=  expMap(dxf.segment<3>(3));
@@ -395,7 +413,6 @@ void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
 
 bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection)
 {
-    //std::cout<<"Update with VO "<<std::endl;
     R(0, 0) = odom_px * odom_px;
     R(1, 1) = odom_py * odom_py;
     R(2, 2) = odom_pz * odom_pz;
@@ -617,8 +634,8 @@ void IMUEKF::updateVars()
     bias_az = x(14);
     
     
-    omegahat = omega + bgyr;
-    fhat = f + bacc;
+    omegahat = omega - bgyr;
+    fhat = f - bacc;
 
     gyro  = Rib * omegahat;
     gyroX = gyro(0);

@@ -705,7 +705,10 @@ void humanoid_ekf::estimateWithIMUEKF()
 
                 pos_update += pos_leg_update;
                 q_update *= q_leg_update;
-                imuEKF->updateWithTwistRotation(vwb, q_update);
+                //imuEKF->updateWithTwistRotation(vwb, q_update);
+                //imuEKF->updateWithLegOdom(pos_update, q_update);
+                imuEKF->updateWithTwist(vwb);
+
                 leg_odom_inc = false;
                 //STORE POS
                 if (odom_inc)
