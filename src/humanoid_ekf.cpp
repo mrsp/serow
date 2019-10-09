@@ -1191,48 +1191,48 @@ void humanoid_ekf::advertise()
 {
 
     supportPose_est_pub = n.advertise<geometry_msgs::PoseStamped>(
-        "/SERoW/support/pose", 1000);
+        "SERoW/support/pose", 1000);
 
     bodyAcc_est_pub = n.advertise<sensor_msgs::Imu>(
-        "/SERoW/body/acc", 1000);
+        "SERoW/body/acc", 1000);
 
     leftleg_odom_pub = n.advertise<nav_msgs::Odometry>(
-        "/SERoW/LLeg/odom", 1000);
+        "SERoW/LLeg/odom", 1000);
 
     rightleg_odom_pub = n.advertise<nav_msgs::Odometry>(
-        "/SERoW/RLeg/odom", 1000);
+        "SERoW/RLeg/odom", 1000);
 
-    support_leg_pub = n.advertise<std_msgs::String>("/SERoW/support/leg", 1000);
+    support_leg_pub = n.advertise<std_msgs::String>("SERoW/support/leg", 1000);
 
-    odom_est_pub = n.advertise<nav_msgs::Odometry>("/SERoW/odom", 1000);
+    odom_est_pub = n.advertise<nav_msgs::Odometry>("SERoW/odom", 1000);
 
     COP_pub = n.advertise<geometry_msgs::PointStamped>("SERoW/COP", 1000);
 
-    CoM_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/CoM/odom", 1000);
-    CoM_leg_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/CoM/leg_odom", 1000);
+    CoM_odom_pub = n.advertise<nav_msgs::Odometry>("SERoW/CoM/odom", 1000);
+    CoM_leg_odom_pub = n.advertise<nav_msgs::Odometry>("SERoW/CoM/leg_odom", 1000);
 
-    joint_filt_pub = n.advertise<sensor_msgs::JointState>("/SERoW/joint_states", 1000);
+    joint_filt_pub = n.advertise<sensor_msgs::JointState>("SERoW/joint_states", 1000);
 
-    external_force_filt_pub = n.advertise<geometry_msgs::WrenchStamped>("/SERoW/CoM/forces", 1000);
-    leg_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/leg_odom", 1000);
+    external_force_filt_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/CoM/forces", 1000);
+    leg_odom_pub = n.advertise<nav_msgs::Odometry>("SERoW/leg_odom", 1000);
 
     if (ground_truth)
     {
-        ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/CoM/odom", 1000);
-        ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("/SERoW/ground_truth/odom", 1000);
-        ds_pub = n.advertise<std_msgs::Int32>("/SERoW/is_in_ds", 1000);
+        ground_truth_com_pub = n.advertise<nav_msgs::Odometry>("SERoW/ground_truth/CoM/odom", 1000);
+        ground_truth_odom_pub = n.advertise<nav_msgs::Odometry>("SERoW/ground_truth/odom", 1000);
+        ds_pub = n.advertise<std_msgs::Int32>("SERoW/is_in_ds", 1000);
     }
 
     if (debug_mode)
     {
-        rel_leftlegPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_LLeg/pose", 1000);
-        rel_rightlegPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_RLeg/pose", 1000);
-        rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("/SERoW/rel_CoM/pose", 1000);
+        rel_leftlegPose_pub = n.advertise<geometry_msgs::PoseStamped>("SERoW/rel_LLeg/pose", 1000);
+        rel_rightlegPose_pub = n.advertise<geometry_msgs::PoseStamped>("SERoW/rel_RLeg/pose", 1000);
+        rel_CoMPose_pub = n.advertise<geometry_msgs::PoseStamped>("SERoW/rel_CoM/pose", 1000);
         RLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/RLeg/GRF", 1000);
         LLeg_est_pub = n.advertise<geometry_msgs::WrenchStamped>("SERoW/LLeg/GRF", 1000);
     }
     if (comp_with)
-        comp_odom0_pub = n.advertise<nav_msgs::Odometry>("/SERoW/comp/odom0", 1000);
+        comp_odom0_pub = n.advertise<nav_msgs::Odometry>("SERoW/comp/odom0", 1000);
 }
 
 void humanoid_ekf::subscribeToJointState()
