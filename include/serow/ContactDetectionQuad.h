@@ -563,10 +563,10 @@ public:
       pRH = RHf / p;
     }
 
-    // pLF=normalizeProb(pLF);
-    // pRF=normalizeProb(pRF);
-    // pLH=normalizeProb(pLH);
-    // pRH=normalizeProb(pRH);
+     pLF=normalizeProb(pLF);
+     pRF=normalizeProb(pRF);
+     pLH=normalizeProb(pLH);
+     pRH=normalizeProb(pRH);
   }
 
 
