@@ -1608,11 +1608,12 @@ void humanoid_ekf::publishBodyEstimates()
         ground_truth_odom_pub_msg.header.frame_id = "odom";
         ground_truth_odom_pub.publish(ground_truth_odom_pub_msg);
     }
-    //if(comp_odom0_inc){
-    // comp_odom0_msg.header = odom_est_msg.header;
-    // comp_odom0_pub.publish(comp_odom0_msg);
-    // comp_odom0_inc = false;
-    //}
+    if(comp_odom0_inc)
+    {
+        comp_odom0_msg.header = odom_est_msg.header;
+        comp_odom0_pub.publish(comp_odom0_msg);
+        comp_odom0_inc = false;
+    }
 }
 
 void humanoid_ekf::publishSupportEstimates()
