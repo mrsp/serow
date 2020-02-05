@@ -33,6 +33,7 @@
 #define QUADRUPED_EKF_H
 
 // ROS Headers
+#include <serow/robotDyn.h>
 #include <ros/ros.h>
 
 // Estimator Headers
@@ -60,7 +61,6 @@
 #include <serow/VarianceControlConfig.h>
 #include <serow/mediator.h>
 #include <serow/differentiator.h>
-#include <serow/robotDyn.h>
 #include <serow/Madgwick.h>
 #include <serow/Mahony.h>
 #include <serow/deadReckoningQuad.h>
