@@ -42,7 +42,7 @@ These instructions will get you a copy of the project up and running on your loc
 * Ubuntu 16.04 and later
 * ROS kinetic and later
 * Eigen 3.2.0 and later
-* [Pinocchio] 2.2.1 (https://github.com/stack-of-tasks/pinocchio) 
+* [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 2.2.1
 
 ## Installing
 * sudo apt-get install ros-kinetic-pinocchio
