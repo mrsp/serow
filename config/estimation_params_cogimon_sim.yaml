@@ -142,7 +142,8 @@ bias_az: 0
 bias_gx: 0
 bias_gy: 0
 bias_gz: 0
-
+calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 1000
 
 
 #Filter Params

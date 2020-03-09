@@ -154,7 +154,8 @@ bias_az: 0.26
 bias_gx: -1.24626e-05
 bias_gy: 3.49618e-05
 bias_gz: -1.82382e-05
-
+calibrateIMUbiases: false #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 1000
 
 
 #Filter Params

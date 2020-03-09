@@ -48,6 +48,11 @@ void humanoid_ekf::loadparams()
     n_p.param<double>("VelocityThres", VelocityThres, 0.5);
     n_p.param<double>("LosingContact", LosingContact, 5.0);
     n_p.param<bool>("useGEM", useGEM, false);
+    n_p.param<bool>("calibrateIMUbiases", imuCalibrated, true);
+    n_p.param<int>("maxImuCalibrationCycles", maxImuCalibrationCycles, 500);
+
+
+    
     if (useGEM)
     {
         n_p.param<double>("foot_polygon_xmin", foot_polygon_xmin, -0.103);
@@ -296,8 +301,7 @@ void humanoid_ekf::loadIMUEKFparams()
         n_p.param<bool>("useEuler", imuEKF->useEuler, true);
         n_p.param<bool>("useOutlierDetection", useOutlierDetection, false);
         n_p.param<double>("mahalanobis_TH", imuEKF->mahalanobis_TH, -1.0);
-        imuEKF->setAccBias(T_B_A.linear() * Vector3d(bias_ax, bias_ay, bias_az));
-        imuEKF->setGyroBias(T_B_G.linear() * Vector3d(bias_gx, bias_gy, bias_gz));
+
     }
     else
     {
@@ -337,8 +341,6 @@ void humanoid_ekf::loadIMUEKFparams()
         n_p.param<double>("odom_orientation_noise_density", imuInEKF->odom_ax, 1.0e-01);
         n_p.param<double>("odom_orientation_noise_density", imuInEKF->odom_ay, 1.0e-01);
         n_p.param<double>("odom_orientation_noise_density", imuInEKF->odom_az, 1.0e-01);
-        imuInEKF->setAccBias(T_B_A.linear() * Vector3d(bias_ax, bias_ay, bias_az));
-        imuInEKF->setGyroBias(T_B_G.linear() * Vector3d(bias_gx, bias_gy, bias_gz));
     }
 }
 
@@ -530,13 +532,16 @@ void humanoid_ekf::init()
     rmdf = MediatorNew(medianWindow);
     LLegForceFilt = Vector3d::Zero();
     RLegForceFilt = Vector3d::Zero();
+    imuCalibrationCycles = 0;
+
+    
 }
 
 /** Main Loop **/
 void humanoid_ekf::run()
 {
 
-    static ros::Rate rate(freq); //ROS Node Loop Rate
+    static ros::Rate rate(2.0*freq); //ROS Node Loop Rate
     while (ros::ok())
     {
         if (imu_inc)
@@ -545,15 +550,38 @@ void humanoid_ekf::run()
             predictWithCoM = false;
             if (useMahony)
             {
-                mh->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z) + Vector3d(bias_gx, bias_gy, bias_gz)),
-                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z) + Vector3d(bias_ax, bias_ay, bias_az)));
+                mh->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z)),
+                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z)));
+                Rwb = mh->getR();
             }
             else
             {
-                mw->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z) + Vector3d(bias_gx, bias_gy, bias_gz)),
-                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z) + Vector3d(bias_ax, bias_ay, bias_az)));
+                mw->updateIMU(T_B_G.linear() * (Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z)),
+                              T_B_A.linear() * (Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z)));
+
+                Rwb = mw->getR();
             }
 
+            if(imuCalibrationCycles < maxImuCalibrationCycles && imuCalibrated)
+            {
+                bias_g = T_B_G.linear() * Vector3d(imu_msg.angular_velocity.x, imu_msg.angular_velocity.y, imu_msg.angular_velocity.z);
+                bias_a = T_B_A.linear() * Vector3d(imu_msg.linear_acceleration.x, imu_msg.linear_acceleration.y, imu_msg.linear_acceleration.z) -  Rwb.transpose() * Vector3d(0,0,g); 
+                imuCalibrationCycles++;
+                continue;
+            }
+            else if(imuCalibrated)
+            {
+                bias_ax = bias_a(0)/imuCalibrationCycles;
+                bias_ay = bias_a(1)/imuCalibrationCycles;
+                bias_az = bias_a(2)/imuCalibrationCycles;
+                bias_gx = bias_g(0)/imuCalibrationCycles;
+                bias_gy = bias_g(1)/imuCalibrationCycles;
+                bias_gz = bias_g(2)/imuCalibrationCycles;
+                imuCalibrated = false;
+                std::cout<<"Calibration finished at "<<imuCalibrationCycles<<std::endl;
+                std::cout<<"Gyro biases "<<bias_gx<<" "<<bias_gy<<" "<<bias_gz<<std::endl;
+                std::cout<<"Acc biases "<<bias_ax<<" "<<bias_ay<<" "<<bias_az<<std::endl;
+            }
             //Compute the required transformation matrices (tfs) with Kinematics
             if (joint_inc)
                 computeKinTFs();
@@ -561,14 +589,16 @@ void humanoid_ekf::run()
             //Main Loop
             if (kinematicsInitialized)
             {
-                if (!useInIMUEKF)
-                    estimateWithIMUEKF();
-                else
-                    estimateWithInIMUEKF();
 
-                if (useCoMEKF)
-                    estimateWithCoMEKF();
+                    if (!useInIMUEKF)
+                        estimateWithIMUEKF();
+                    else
+                        estimateWithInIMUEKF();
 
+                    if (useCoMEKF)
+                        estimateWithCoMEKF();
+            
+                
                 //Publish Data
                 publishJointEstimates();
                 publishBodyEstimates();
@@ -601,6 +631,8 @@ void humanoid_ekf::estimateWithInIMUEKF()
         imuInEKF->setBodyOrientation(Twb.linear());
         imuInEKF->setLeftContact(Vector3d(dr->getLFootIMVPPosition()(0), dr->getLFootIMVPPosition()(1), 0.00));
         imuInEKF->setRightContact(Vector3d(dr->getRFootIMVPPosition()(0), dr->getRFootIMVPPosition()(1), 0.00));
+        imuInEKF->setAccBias(Vector3d(bias_ax, bias_ay, bias_az));
+        imuInEKF->setGyroBias(Vector3d(bias_gx, bias_gy, bias_gz));
         imuInEKF->firstrun = false;
     }
 
@@ -648,6 +680,8 @@ void humanoid_ekf::estimateWithIMUEKF()
         imuEKF->setdt(1.0 / freq);
         imuEKF->setBodyPos(Twb.translation());
         imuEKF->setBodyOrientation(Twb.linear());
+        imuEKF->setAccBias(Vector3d(bias_ax, bias_ay, bias_az));
+        imuEKF->setGyroBias(Vector3d(bias_gx, bias_gy, bias_gz));
         imuEKF->firstrun = false;
     }
 

@@ -92,10 +92,12 @@ private:
     bool useMahony;
 	serow::Madgwick* mw;
     serow::Mahony* mh;
-    double Kp, Ki, bias_max, bias_may, bias_maz, bias_mgx, bias_mgy, bias_mgz;
+    double Kp, Ki;
 	serow::deadReckoning* dr;
-
-  	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
+	Vector3d bias_a,bias_g;
+	int imuCalibrationCycles,maxImuCalibrationCycles;
+	bool imuCalibrated;
+   	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
 
 	double Tau0, Tau1, VelocityThres;
 	double  freq, joint_freq, fsr_freq;
@@ -137,7 +139,7 @@ private:
 	// Helper
 	bool is_connected_, ground_truth, support_idx_provided;
 
-
+	Matrix3d Rwb;
 	Quaterniond qbs, qbl, qbr, qwb, qwb_, qws, qwl, qwr;
 	string base_link_frame, support_foot_frame, lfoot_frame, rfoot_frame;
 	

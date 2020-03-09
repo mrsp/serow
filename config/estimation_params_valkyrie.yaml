@@ -104,7 +104,8 @@ bias_az: 9.7997
 bias_gx: -1.60298e-05
 bias_gy: -1.24745e-05
 bias_gz: -2.60968e-05
-
+calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 1000
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
 

@@ -67,8 +67,8 @@ VelocityThres: 0.12
 lvnorm_sigma: 0.02
 rvnorm_sigma: 0.02
 probabilisticContactThreshold: 0.9
-ContactDetectionWithCOP: true
-ContactDetectionWithKinematics: true
+ContactDetectionWithCOP: false
+ContactDetectionWithKinematics: false
 
 
 
@@ -79,16 +79,16 @@ joint_cutoff_freq: 16.0
 joint_noise_density: 0.5
 #Mahony Filter for attitude
 useMahony: true
-Mahony_Kp: 0.9
+Mahony_Kp: 0.4
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
-Madgwick_gain: 0.3
+Madgwick_gain: 0.1
 
 
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
-medianWindow: 8
+medianWindow: 7
 #mass: 6.6530  #robot mass
 mass: 5.6  #robot mass with realsense and IMU
 
@@ -132,14 +132,15 @@ velocity_noise_density_x: 0.12
 velocity_noise_density_y: 0.12
 velocity_noise_density_z: 0.12
 
-#IMU Initial Biases - Biases are substracted and are in the IMU !
-bias_ax:  0.0257647
-bias_ay:  -0.01495003
-bias_az:  0.0164397
-bias_gx: 0.00110214
-bias_gy: 0.00208557
-bias_gz: 0.000242836
-
+#IMU Initial Biases - Biases are substracted and are in the Body Frame!
+bias_ax: 0
+bias_ay: 0
+bias_az: 0
+bias_gx: 0
+bias_gy: 0
+bias_gz: 0
+calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 1000
 
 
 

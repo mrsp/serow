@@ -2,7 +2,7 @@
 base_link: "base_link"
 lfoot: "l_ankle"
 rfoot: "r_ankle"
-modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
+modelname: "/home/master/ros_ws/src/serow/share/urdf/nao.urdf"
 
 #ROS Topic Names
 
@@ -54,14 +54,13 @@ LegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 7
 StrikingContact: 60
 
-#Steady State Joint Kalman Filter (KF)
-joint_cutoff_freq: 12
+
+#Joint Velocity Estimation
+joint_cutoff_freq: 16.0
 joint_noise_density: 0.5
-
-
 #Mahony Filter for attitude
 useMahony: true
-Mahony_Kp: 0.5
+Mahony_Kp: 0.9
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.3
@@ -70,8 +69,10 @@ Madgwick_gain: 0.3
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
-medianWindow: 10
-mass: 5.182530  #robot mass with ASUS XTION
+medianWindow: 8
+#mass: 6.6530  #robot mass
+mass: 5.6  #robot mass with realsense and IMU
+
 #mass: 6.6530  #robot mass with RP-LIDAR
 
 #Rigid body Extended Kalman Filter (EKF)
@@ -115,7 +116,8 @@ bias_az:  0.0 #m/s^2
 bias_gx: -0.000817362 #rad
 bias_gy: -0.00178242  #rad
 bias_gz: -0.000158554 #rad
-
+calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 2000
 
 
 
