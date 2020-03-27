@@ -513,8 +513,9 @@ namespace serow
         void printJointNames()
         const
         {
-            for (int i=0; i<jnames_.size(); ++i)
-                std::cout << jnames_[i] <<std::endl;
+            // for (int i=0; i<jnames_.size(); ++i)
+            //     std::cout << jnames_[i] <<std::endl;
+                std::cout << *pmodel_ <<std::endl;
 
 
         }
