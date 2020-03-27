@@ -99,7 +99,9 @@ private:
 	serow::Madgwick* mw;
     serow::Mahony* mh;
     double Kp, Ki;
-
+	Vector3d bias_a,bias_g;
+	int imuCalibrationCycles,maxImuCalibrationCycles;
+	bool imuCalibrated;
 	//Leg Odometry Computation
 	serow::deadReckoningQuad* dr;
 	//Joint State Estimator 
@@ -184,6 +186,7 @@ private:
 	Affine3d Tws, Twb, Twb_; //From support s to world frame;
 	Affine3d Tbs, Tsb, Tssw, Tbsw;
 	Vector3d no_motion_residual;
+	Matrix3d Rwb;
 	/****/
 	bool  kinematicsInitialized, firstContact;
 	Vector3d LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt;

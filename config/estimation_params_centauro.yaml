@@ -6,7 +6,7 @@ LFfoot: "wheel_1"
 RFfoot: "wheel_2"
 LHfoot: "wheel_3"
 RHfoot: "wheel_4"
-modelname: "/home/master/dp_ws/src/serow/share/urdf/centauro.urdf"
+modelname: "/home/master/ros_ws/src/serow/share/urdf/centauro.urdf"
 
 useLegOdom: true
 #ROS Topic Names
@@ -23,7 +23,6 @@ RHfoot_force_torque_topic: "/cartesian/force_estimation/wheel_4"
 ground_truth: true
 ground_truth_odom_topic: "/centauro/ground_truth/odom"
 ground_truth_com_topic: "/centauro/ground_truth/com/odom"
-is_in_ds_topic: "/ds"
 T_B_GT: [0, 0, 1, 0, 1, 0, 0, 0, 0, -1 , 0, 0, 0, 0 ,0, 1]
 
 
@@ -109,7 +108,8 @@ Madgwick_gain: 0.01
 Tau0: 1.0
 Tau1: 0.0 #No F/T for Centauro :(
 
-
+calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 10000
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
@@ -146,16 +146,13 @@ velocity_noise_density_z: 0.035 #0.007
 
 
 
-#IMU Initial Biases in the IMU local frame - Biases are added!
-
-bias_ax: 0.000
-bias_ay: 0.000
-bias_az: 0.26
-bias_gx: -1.24626e-05
-bias_gy: 3.49618e-05
-bias_gz: -1.82382e-05
-calibrateIMUbiases: false #otherwise specify accurate initial values for bias_a, bias_g
-maxImuCalibrationCycles: 1000
+#IMU Initial Biases in the IMU local frame - Biases are substracted and are in the Body Frame!
+bias_ax: 0
+bias_ay: 0
+bias_az: 0
+bias_gx: 0
+bias_gy: 0
+bias_gz: 0
 
 
 #Filter Params
