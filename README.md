@@ -3,7 +3,17 @@
 # README
 SEROW (State Estimation RObot Walking) Framework for Humanoid/Quadruped Robot Walking Estimation.  The code is open-source (BSD License). Please note that this work is an on-going research and thus some parts are not fully developed yet. Furthermore, the code will be subject to changes in the future which could include greater re-factoring.
 
-[![Cogimon and SEROW](https://img.youtube.com/vi/MLmfgADDjj0/0.jpg)](https://www.youtube.com/watch?v=MLmfgADDjj0)[![Centauro and SEROW](https://img.youtube.com/vi/cVWS8oopr_M/0.jpg)](https://www.youtube.com/watch?v=cVWS8oopr_M)
+
+## SEROW in real-time
+------------------------------------------------------------------ 
+
+| Cogimon and SEROW  | Centauro and SEROW |
+| ------------- | ------------- |
+| [![YouTube Link](https://img.youtube.com/vi/MLmfgADDjj0/0.jpg)  ](https://www.youtube.com/watch?v=MLmfgADDjj0)  | [![YouTube Link](https://img.youtube.com/vi/cVWS8oopr_M/0.jpg)  ](https://www.youtube.com/watch?v=cVWS8oopr_M) |
+
+------------------------------------------------------------------ 
+
+
 
 Relevant Papers:
 * Non-linear ZMP based State Estimation for Humanoid Robot Locomotion, https://ieeexplore.ieee.org/document/7803278 (Humanoids 2016 - nominated for the best interactive paper award)
