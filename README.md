@@ -9,7 +9,7 @@ SEROW (State Estimation RObot Walking) Framework for Humanoid/Quadruped Robot Wa
 
 | Cogimon and SEROW  | Centauro and SEROW |
 | ------------- | ------------- |
-| [![YouTube Link](https://img.youtube.com/vi/MLmfgADDjj0/0.jpg)  ](https://www.youtube.com/watch?v=MLmfgADDjj0)  | [![YouTube Link](https://img.youtube.com/vi/cVWS8oopr_M/0.jpg)  ](https://www.youtube.com/watch?v=cVWS8oopr_M) |
+| [![YouTube Link](img/cogimon.png)  ](https://www.youtube.com/watch?v=MLmfgADDjj0)  | [![YouTube Link](img/centauro.png)  ](https://www.youtube.com/watch?v=cVWS8oopr_M) |
 
 ------------------------------------------------------------------ 
 
