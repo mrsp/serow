@@ -82,15 +82,18 @@ namespace serow
             data_ = new pinocchio::Data(*pmodel_);
             
             jnames_.clear();
-            jnames_ = pmodel_->names;
+            int names_size=pmodel_->names.size();
+            jnames_.reserve(names_size);
             
-            // Remove the first joint "universe", if it exists
-            if (jnames_[0].compare("universe")==0)
+            for(int i=0;i<names_size;i++)
             {
-                jnames_.erase(jnames_.begin());
-            }
-
-            
+                const std::string &jname=pmodel_->names[i];
+                //Do not insert "universe" joint
+                if (jname.compare("universe")!=0)
+                {
+                    jnames_.push_back(jname);
+                }
+            }                        
             
             qmin_.resize(jnames_.size());
             qmax_.resize(jnames_.size());
@@ -169,11 +172,10 @@ namespace serow
 
             }
             else
-            {
-                //pinocchio::forwardKinematics(*pmodel_, *data_, q_);
+            {                
                 pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
                 pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
-
+                
             }
              qn.setOnes();
              qn *= joint_std;
@@ -191,61 +193,74 @@ namespace serow
 
         }
         
+        //TODO
         void mapJointNamesIDs(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
         {
-            q_.resize(jnames_.size());
-            qdot_.resize(jnames_.size());
+            q_.resize(pmodel_->nq);
+            qdot_.resize(pmodel_->nv);
 
             for(int i = 0; i<jnames_.size();i++)
             {
-                q_[i] = qmap[jnames_[i]];
-                qdot_[i] = qdotmap[jnames_[i]];
+                int jidx=pmodel_->getJointId(jnames_[i]);
+                int qidx=pmodel_->idx_qs[jidx];
+                int vidx=pmodel_->idx_vs[jidx];
+                
+                //this value is equal to 2 for continuous joints
+                if(pmodel_->nqs[jidx]==2)
+                {
+                    q_[qidx] = cos(qmap[jnames_[i]]);
+                    q_[qidx+1] = sin(qmap[jnames_[i]]);
+                    qdot_[vidx] = qdotmap[jnames_[i]];  
+                }
+                else
+                {
+                    q_[qidx] = qmap[jnames_[i]];
+                    qdot_[vidx] = qdotmap[jnames_[i]];
+                }
 
-            }
+            }         
         }
         
         
         Eigen::MatrixXd geometricJacobian(const std::string& frame_name)
         {
-            try{
-		    pinocchio::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
-		    // Jacobian in pinocchio::LOCAL (link) frame
+            try
+            {
+                pinocchio::Data::Matrix6x J(6,pmodel_->nv); J.fill(0);
+                // Jacobian in pinocchio::LOCAL (link) frame
+                pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
 
+                pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
 
-            	    pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
-
-		    pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-
-		    if (has_floating_base_)
-		    {
-		        Eigen::MatrixXd Jg; Jg.resize(6, this->ndof()); Jg.setZero();
-		        Eigen::Matrix3d Rbase; Rbase = quaternionToRotation(q_.segment(3,4));
-		        Jg.topLeftCorner(3,3) =
-		        Rbase.transpose()*data_->oMf[link_number].rotation()*J.block(0,0,3,3);
-		        Jg.topRightCorner(3,ndofActuated()) =
-		        (data_->oMf[link_number].rotation())*J.block(0,6,3,ndofActuated());
-		        Jg.bottomRightCorner(3,ndofActuated()) =
-		        (data_->oMf[link_number].rotation())*J.block(3,6,3,ndofActuated());
-		        
-		        Eigen::MatrixXd T; T.resize(3,4);
-		        T <<
-		        -2.0*q_(4),  2.0*q_(3), -2.0*q_(6),  2.0*q_(5),
-		        -2.0*q_(5),  2.0*q_(6),  2.0*q_(3), -2.0*q_(4),
-		        -2.0*q_(6), -2.0*q_(5),  2.0*q_(4),  2.0*q_(3);
-		        Jg.block(0,3,3,4) =
-		        data_->oMf[link_number].rotation()*J.block(0,3,3,3)*Rbase.transpose()*T;
-		        Jg.block(3,3,3,4) = T;
-		        
-                		return Jg;
-            		}
-		    	else
-		    	{
-				// Transform Jacobians from pinocchio::LOCAL frame to base frame
-				J.topRows(3) = (data_->oMf[link_number].rotation())*J.topRows(3);
-				J.bottomRows(3) = (data_->oMf[link_number].rotation())*J.bottomRows(3);
-				return J;
-		  	}
-
+                if (has_floating_base_)
+                {
+                    Eigen::MatrixXd Jg; Jg.resize(6, this->ndof()); Jg.setZero();
+                    Eigen::Matrix3d Rbase; Rbase = quaternionToRotation(q_.segment(3,4));
+                    Jg.topLeftCorner(3,3) =
+                    Rbase.transpose()*data_->oMf[link_number].rotation()*J.block(0,0,3,3);
+                    Jg.topRightCorner(3,ndofActuated()) =
+                    (data_->oMf[link_number].rotation())*J.block(0,6,3,ndofActuated());
+                    Jg.bottomRightCorner(3,ndofActuated()) =
+                    (data_->oMf[link_number].rotation())*J.block(3,6,3,ndofActuated());
+                    
+                    Eigen::MatrixXd T; T.resize(3,4);
+                    T <<
+                    -2.0*q_(4),  2.0*q_(3), -2.0*q_(6),  2.0*q_(5),
+                    -2.0*q_(5),  2.0*q_(6),  2.0*q_(3), -2.0*q_(4),
+                    -2.0*q_(6), -2.0*q_(5),  2.0*q_(4),  2.0*q_(3);
+                    Jg.block(0,3,3,4) =
+                    data_->oMf[link_number].rotation()*J.block(0,3,3,3)*Rbase.transpose()*T;
+                    Jg.block(3,3,3,4) = T;
+                    
+                            return Jg;
+                        }
+                    else
+                    {
+                    // Transform Jacobians from pinocchio::LOCAL frame to base frame
+                    J.topRows(3) = (data_->oMf[link_number].rotation())*J.topRows(3);
+                    J.bottomRows(3) = (data_->oMf[link_number].rotation())*J.bottomRows(3);
+                    return J;
+                }
             }
             catch (std::exception& e)
             {
@@ -331,42 +346,40 @@ namespace serow
        
         Eigen::MatrixXd linearJacobian(const std::string& frame_name)
         {
-		pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
+            pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
             pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
 
             pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-            try{
- 		
-
-            
-            if (has_floating_base_)
+            try
             {
-                // Structure of J is:
-                // [ Rworld_wrt_link*Rbase_wrt_world |
-                //   Rworld_wrt_link*skew(Pbase_wrt_world-Plink_wrt_world)*R_base_wrt_world |
-                //   Jq_wrt_link]
-                Eigen::MatrixXd Jlin; Jlin.resize(3, this->ndof()); Jlin.setZero();
-                Eigen::Matrix3d Rbase; Rbase = quaternionToRotation(q_.segment(3,4));
-                Jlin.leftCols(3) =
-                Rbase.transpose()*data_->oMf[link_number].rotation()*J.block(0,0,3,3);
-                Jlin.rightCols(ndofActuated()) =
-                (data_->oMf[link_number].rotation())*J.block(0,6,3,ndofActuated());
-                
-                Eigen::MatrixXd T; T.resize(3,4);
-                T <<
-                -2.0*q_(4),  2.0*q_(3), -2.0*q_(6),  2.0*q_(5),
-                -2.0*q_(5),  2.0*q_(6),  2.0*q_(3), -2.0*q_(4),
-                -2.0*q_(6), -2.0*q_(5),  2.0*q_(4),  2.0*q_(3);
-                Jlin.middleCols(3,4) =
-                data_->oMf[link_number].rotation()*J.block(0,3,3,3)*Rbase.transpose()*T;
-                
-                return Jlin;
-            }
-            else
-            {
-                // Transform Jacobian from pinocchio::LOCAL frame to base frame
-                return (data_->oMf[link_number].rotation())*J.topRows(3);
-            }
+                if (has_floating_base_)
+                {
+                    // Structure of J is:
+                    // [ Rworld_wrt_link*Rbase_wrt_world |
+                    //   Rworld_wrt_link*skew(Pbase_wrt_world-Plink_wrt_world)*R_base_wrt_world |
+                    //   Jq_wrt_link]
+                    Eigen::MatrixXd Jlin; Jlin.resize(3, this->ndof()); Jlin.setZero();
+                    Eigen::Matrix3d Rbase; Rbase = quaternionToRotation(q_.segment(3,4));
+                    Jlin.leftCols(3) =
+                    Rbase.transpose()*data_->oMf[link_number].rotation()*J.block(0,0,3,3);
+                    Jlin.rightCols(ndofActuated()) =
+                    (data_->oMf[link_number].rotation())*J.block(0,6,3,ndofActuated());
+                    
+                    Eigen::MatrixXd T; T.resize(3,4);
+                    T <<
+                    -2.0*q_(4),  2.0*q_(3), -2.0*q_(6),  2.0*q_(5),
+                    -2.0*q_(5),  2.0*q_(6),  2.0*q_(3), -2.0*q_(4),
+                    -2.0*q_(6), -2.0*q_(5),  2.0*q_(4),  2.0*q_(3);
+                    Jlin.middleCols(3,4) =
+                    data_->oMf[link_number].rotation()*J.block(0,3,3,3)*Rbase.transpose()*T;
+                    
+                    return Jlin;
+                }
+                else
+                {
+                    // Transform Jacobian from pinocchio::LOCAL frame to base frame
+                    return (data_->oMf[link_number].rotation())*J.topRows(3);
+                }
             }
             catch (std::exception& e)
             {
@@ -379,40 +392,41 @@ namespace serow
 
         Eigen::MatrixXd angularJacobian(const std::string& frame_name)
         {
-		pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
-            	pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
+            pinocchio::Data::Matrix6x J(6, pmodel_->nv); J.fill(0);
+            pinocchio::Model::FrameIndex link_number =  pmodel_->getFrameId(frame_name);
 
 
-            try{
+            try
+            {
+                if (has_floating_base_)
+                {
 
-		    if (has_floating_base_)
-		    {
+                    Eigen::MatrixXd Jang; 
+                    Jang.resize(3, this->ndof()); Jang.setZero();
+                    Eigen::Vector4d q;
+                    
+                    // Jacobian in global frame
+                    pinocchio::getFrameJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
+                    
+                    // The structure of J is: [0 | Rot_ff_wrt_world | Jq_wrt_world]
+                    Jang.rightCols(ndofActuated()) = J.block(3,6,3,ndofActuated());
+                    q = rotationToQuaternion(J.block(3,3,3,3));
+                    Jang.middleCols(3,4) <<
+                    -2.0*q(1),  2.0*q(0), -2.0*q(3),  2.0*q(2),
+                    -2.0*q(2),  2.0*q(3),  2.0*q(0), -2.0*q(1),
+                    -2.0*q(3), -2.0*q(2),  2.0*q(1),  2.0*q(0);
+                    return Jang;
 
-		        Eigen::MatrixXd Jang; Jang.resize(3, this->ndof()); Jang.setZero();
-		        Eigen::Vector4d q;
-		        
-		        // Jacobian in global frame
-		        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
-		        
-		        // The structure of J is: [0 | Rot_ff_wrt_world | Jq_wrt_world]
-		        Jang.rightCols(ndofActuated()) = J.block(3,6,3,ndofActuated());
-		        q = rotationToQuaternion(J.block(3,3,3,3));
-		        Jang.middleCols(3,4) <<
-		        -2.0*q(1),  2.0*q(0), -2.0*q(3),  2.0*q(2),
-		        -2.0*q(2),  2.0*q(3),  2.0*q(0), -2.0*q(1),
-		        -2.0*q(3), -2.0*q(2),  2.0*q(1),  2.0*q(0);
-		        return Jang;
+                }
+                else
+                {
 
-		    }
-		    else
-		    {
+                    // Jacobian in pinocchio::LOCAL frame
+                    pinocchio::getFrameJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
 
-		        // Jacobian in pinocchio::LOCAL frame
-		        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number,pinocchio::LOCAL, J);
-
-		        // Transform Jacobian from pinocchio::LOCAL frame to base frame
-		        return (data_->oMf[link_number].rotation())*J.bottomRows(3);
-		    }
+                    // Transform Jacobian from pinocchio::LOCAL frame to base frame
+                    return (data_->oMf[link_number].rotation())*J.bottomRows(3);
+                }
             }
             catch (std::exception& e)
             {

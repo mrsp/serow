@@ -77,7 +77,7 @@
     <mu1>0.9</mu1>
     <mu2>0.9</mu2>
   </gazebo>
-  <joint name="hokuyo_joint" type="fixed">
+  <joint name="hokuyo_joint" type="continuous">
     <origin rpy="0 0 0" xyz="-0.0446 0 0.0880"/>
     <parent link="head"/>
     <child link="hokuyo_link"/>
@@ -893,7 +893,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
   </link>
-  <joint name="rightThumbRoll" type="fixed">
+  <joint name="rightThumbRoll" type="revolute">
     <origin rpy="0.3491 0.0 0.0" xyz="0.0049 -0.0351 0.0228"/>
     <axis xyz="0 1 0"/>
     <parent link="rightPalm"/>
@@ -906,7 +906,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="rightThumbPitch1" type="fixed">
+  <joint name="rightThumbPitch1" type="revolute">
     <origin rpy="-0.3491 0.0 0.0" xyz="0.0 0.0 0.0229"/>
     <axis xyz="1 0 0"/>
     <parent link="rightThumbRollLink"/>
@@ -919,7 +919,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="rightThumbPitch2" type="fixed">
+  <joint name="rightThumbPitch2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0066 0.0375"/>
     <axis xyz="1 0 0"/>
     <parent link="rightThumbPitch1Link"/>
@@ -932,7 +932,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="rightThumbPitch3" type="fixed">
+  <joint name="rightThumbPitch3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0049 0.0275"/>
     <axis xyz="1 0 0"/>
     <parent link="rightThumbPitch2Link"/>
@@ -1002,7 +1002,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
   </link>
-  <joint name="rightIndexFingerPitch1" type="fixed">
+  <joint name="rightIndexFingerPitch1" type="revolute">
     <origin rpy="-0.1745 0.0 0.0" xyz="0.0022 -0.0976 0.0235"/>
     <axis xyz="0 0 1"/>
     <parent link="rightPalm"/>
@@ -1015,7 +1015,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="rightIndexFingerPitch2" type="fixed">
+  <joint name="rightIndexFingerPitch2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0381 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="rightIndexFingerPitch1Link"/>
@@ -1028,7 +1028,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="rightIndexFingerPitch3" type="fixed">
+  <joint name="rightIndexFingerPitch3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0229 0"/>
     <axis xyz="0 0 1"/>
     <parent link="rightIndexFingerPitch2Link"/>
@@ -1098,7 +1098,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
   </link>
-  <joint name="rightMiddleFingerPitch1" type="fixed">
+  <joint name="rightMiddleFingerPitch1" type="revolute">
     <origin rpy="0.1222 0.0 0.0" xyz="0.0022 -0.097 -0.0119"/>
     <axis xyz="0 0 1"/>
     <parent link="rightPalm"/>
@@ -1111,7 +1111,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="rightMiddleFingerPitch2" type="fixed">
+  <joint name="rightMiddleFingerPitch2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0381 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="rightMiddleFingerPitch1Link"/>
@@ -1124,7 +1124,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="rightMiddleFingerPitch3" type="fixed">
+  <joint name="rightMiddleFingerPitch3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0229 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="rightMiddleFingerPitch2Link"/>
@@ -1194,7 +1194,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
   </link>
-  <joint name="rightPinkyPitch1" type="fixed">
+  <joint name="rightPinkyPitch1" type="revolute">
     <origin rpy="0.1222 0.0 0.0" xyz="0.0022 -0.0838 -0.041"/>
     <axis xyz="0 0 1"/>
     <parent link="rightPalm"/>
@@ -1207,7 +1207,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="rightPinkyPitch2" type="fixed">
+  <joint name="rightPinkyPitch2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0381 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="rightPinkyPitch1Link"/>
@@ -1220,7 +1220,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="rightPinkyPitch3" type="fixed">
+  <joint name="rightPinkyPitch3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 -0.0229 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="rightPinkyPitch2Link"/>
@@ -1533,7 +1533,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
   </link>
-  <joint name="leftThumbRoll" type="fixed">
+  <joint name="leftThumbRoll" type="revolute">
     <origin rpy="-0.3491 0.0 0.0" xyz="0.0049 0.0351 0.0228"/>
     <axis xyz="0 1 0"/>
     <parent link="leftPalm"/>
@@ -1546,7 +1546,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="leftThumbPitch1" type="fixed">
+  <joint name="leftThumbPitch1" type="revolute">
     <origin rpy="0.3491 0.0 0.0" xyz="0.0 0.0 0.0229"/>
     <axis xyz="1 0 0"/>
     <parent link="leftThumbRollLink"/>
@@ -1559,7 +1559,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="leftThumbPitch2" type="fixed">
+  <joint name="leftThumbPitch2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0066 0.0375"/>
     <axis xyz="1 0 0"/>
     <parent link="leftThumbPitch1Link"/>
@@ -1572,7 +1572,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="leftThumbPitch3" type="fixed">
+  <joint name="leftThumbPitch3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0049 0.0275"/>
     <axis xyz="1 0 0"/>
     <parent link="leftThumbPitch2Link"/>
@@ -1642,7 +1642,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
   </link>
-  <joint name="leftIndexFingerPitch1" type="fixed">
+  <joint name="leftIndexFingerPitch1" type="revolute">
     <origin rpy="0.1745 0.0 0.0" xyz="0.0022 0.0976 0.0235"/>
     <axis xyz="0 0 1"/>
     <parent link="leftPalm"/>
@@ -1655,7 +1655,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="leftIndexFingerPitch2" type="fixed">
+  <joint name="leftIndexFingerPitch2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0381 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="leftIndexFingerPitch1Link"/>
@@ -1668,7 +1668,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="leftIndexFingerPitch3" type="fixed">
+  <joint name="leftIndexFingerPitch3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0229 0"/>
     <axis xyz="0 0 1"/>
     <parent link="leftIndexFingerPitch2Link"/>
@@ -1738,7 +1738,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
   </link>
-  <joint name="leftMiddleFingerPitch1" type="fixed">
+  <joint name="leftMiddleFingerPitch1" type="revolute">
     <origin rpy="-0.1222 0.0 0.0" xyz="0.0022 0.097 -0.0119"/>
     <axis xyz="0 0 1"/>
     <parent link="leftPalm"/>
@@ -1751,7 +1751,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="leftMiddleFingerPitch2" type="fixed">
+  <joint name="leftMiddleFingerPitch2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0381 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="leftMiddleFingerPitch1Link"/>
@@ -1764,7 +1764,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="leftMiddleFingerPitch3" type="fixed">
+  <joint name="leftMiddleFingerPitch3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0229 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="leftMiddleFingerPitch2Link"/>
@@ -1834,7 +1834,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </collision>
   </link>
-  <joint name="leftPinkyPitch1" type="fixed">
+  <joint name="leftPinkyPitch1" type="revolute">
     <origin rpy="-0.1222 0.0 0.0" xyz="0.0022 0.0838 -0.041"/>
     <axis xyz="0 0 1"/>
     <parent link="leftPalm"/>
@@ -1847,7 +1847,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="leftPinkyPitch2" type="fixed">
+  <joint name="leftPinkyPitch2" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0381 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="leftPinkyPitch1Link"/>
@@ -1860,7 +1860,7 @@
     <provideFeedback>1</provideFeedback>
     <implicitSpringDamper>1</implicitSpringDamper>
   </gazebo>
-  <joint name="leftPinkyPitch3" type="fixed">
+  <joint name="leftPinkyPitch3" type="revolute">
     <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0229 0.0"/>
     <axis xyz="0 0 1"/>
     <parent link="leftPinkyPitch2Link"/>
