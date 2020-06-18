@@ -31,27 +31,28 @@
  * @author Stylianos Piperakis
  * @details to remove constant (low frequency) bias  in certain sensor measurements
  */
-
-
 #ifndef  __butHPF_H__
 #define  __butHPF_H__
-
-
 #include <string.h>
 #include <math.h>
 #include <iostream>
+
 using namespace std;
 
 class butterworthHPF
 {
     
 private:
-    double x_p, x_pp, y_p,y_pp;
+    /// state at t-1, t-2, measurement at t-1, t-2
+    double x_p, x_pp, y_p,y_pp; 
+    /// 2nd order coefficients
     double a1, a2, b0, b1, b2, ff, ita, q, a;
+    /// frequency ration and sampling frequency
     double fx, fs;
     int i;
     
 public:
+    /// the name of the filter e.g. "LHipPitch"
     string name;
     /** @fn void reset()
      *  @brief resets the 2nd order High Pass Butterworth filter state
@@ -63,7 +64,9 @@ public:
      *  @param y  measurement to be filtered
      */
     double filter(double y);
-    
+    /** @fn butterworthHPF()
+     *  @brief constructor of 2nd order High Pass Butterworth filter
+     */
     butterworthHPF();
     /** @fn void init(string name_ ,double fsampling, double fcutoff)
      *  @brief initializes the 2nd order High Pass Butterworth filter
