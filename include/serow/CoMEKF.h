@@ -70,7 +70,8 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	/// state and nonlinear dynamics vectors
 	Matrix<double, 9, 1> x, f;
-	/// com position, com velocity, external force, measured com position, measured com acceleration uncertainty
+	/// com position, com velocity, external force, measured com position, measured com acceleration uncertainty 
+	/// more info in Nonlinear State Estimation for Humanoid Robot Walking https://www.researchgate.net/publication/326194869_Nonlinear_State_Estimation_for_Humanoid_Robot_Walking
 	double com_q, comd_q, fd_q, com_r, comdd_r;
 	/// sampling time, robot's mass, gravity, Inertia in x and y axes
 	double dt, m, g, I_xx,I_yy;

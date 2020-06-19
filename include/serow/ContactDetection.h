@@ -27,9 +27,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * @brief Nonlinear CoM Estimation based on encoder, force/torque or pressure, and IMU measurements
+ * @brief Contact Detection for Bipeds based on force/torque or pressure, and encoder measurement
  * @author Stylianos Piperakis
- * @details Estimates the 3D CoM Position and Velocity
+ * @details Estimates the feet contact state and the gait-phase
  */
 #include <serow/Gaussian.h>
 #include <string.h>
@@ -66,9 +66,9 @@ private:
   int contactL, contactR, contactRFilt, contactLFilt, sum;
   ///probabistic threshold on contact
   double prob_TH;
-  ///support foot frame name, support leg name, left foot frame name, right foot frame name
+  ///support foot frame name, support leg name, left foot frame name, right foot frame name, gait-phase
   std::string support_foot_frame, support_leg, lfoot_frame, rfoot_frame, phase;
-  ///median filter buffer for contactLFilt/contactRFilt
+  ///median filter buffer size for contactLFilt/contactRFilt
   int medianWindow;
   ///median filters for left and right foot
 	Mediator *lmdf, *rmdf;
@@ -102,6 +102,7 @@ private:
     *   @brief computes the contact probability assuming a Gaussian distribution on the measured COP
     *   @param max max foot polygon length
     *   @param min min foot polygon length
+    *   @param sigma uncertaintiy in COP
     *   @param cop measured cop
   */
   double computeCOPContactProb(double max, double min, double sigma, double cop)

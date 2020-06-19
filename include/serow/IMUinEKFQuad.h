@@ -157,9 +157,7 @@ class IMUinEKFQuad
 
 		return res;
 	}
-	/** @fn void Filter(Matrix<double,3,1> f, Matrix<double,3,1> omega, Matrix<double,3,1>  y_r, Matrix<double,3,1>  y_q)
-	 *  @brief filters the acceleration measurements from the IMU
-	 */
+
 	void predict(Vector3d angular_velocity, Vector3d linear_acceleration, Vector3d pbRF, Vector3d pbRH, Vector3d pbLF, Vector3d pbLH, Matrix3d hR_RF, Matrix3d hR_RH,  Matrix3d hR_LF, Matrix3d hR_LH, int contactRF, int contactRH, int contactLF, int contactLH);
 	void updateWithContacts(Vector3d s_pRF, Vector3d s_pRH, Vector3d s_pLF, Vector3d s_pLH, Matrix3d JRFQeJRF, Matrix3d JRHQeJRH, Matrix3d JLFQeJLF,  Matrix3d JLHQeJLH, int contactRF, int contactRH, int contactLF, int contactLH, double weightRF, double weightRH, double weightLF, double weightLH);
 

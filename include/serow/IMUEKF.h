@@ -52,30 +52,42 @@ using namespace Eigen;
 class IMUEKF {
 
 private:
+	///Linearized state-input model
 	Matrix<double, 15, 12> Lcf;
+	///Error Covariance, Linearized state transition model, Identity matrix, state uncertainty matrix
 	Matrix<double, 15, 15> P, Af, Acf, If, Qff;
+	///Linearized Measurement model 
 	Matrix<double, 6, 15> Hf, Hvf;
 	Matrix<double, 3, 15> Hv;
+	///State-Input Uncertainty matrix
 	Matrix<double, 12, 12> Qf;
+	///Kalman Gain
 	Matrix<double, 15, 6> Kf;
 	Matrix<double, 15, 3> Kv;
-	//Correction state vector
+	///Correction state vector
 	Matrix<double, 15, 1> dxf;
-	//General variables
+	/// Update error covariance and Measurement noise
 	Matrix<double, 6, 6> s, R;
 	Matrix<double, 3, 3> sv, Rv, tempM;
-	//position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
+	///position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
 	Vector3d r, v, omega, f, fhat, omegahat, temp;
+	///Innovation vectors
 	Matrix<double, 6, 1> z;
 	Vector3d zv;
     
-    //Robust Gaussian ESKF
+    ///Robust Gaussian ESKF
+	///Beta distribution parameters 
+	///more info in Outlier-Robust State Estimation for Humanoid Robots https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
     double tau, zeta, f0, e0, e_t, f_t;
-    Eigen::Matrix<double, 6,6> R_z;
-    Eigen::Matrix<double, 15,15> P_i;
-    Eigen::Matrix<double, 15,1> x_i, x_i_;
-    Eigen::Matrix3d Rib_i;
     double efpsi, lnp, ln1_p, pzeta_1, pzeta_0, norm_factor;
+	///Updated Measurement noise matrix
+    Eigen::Matrix<double, 6,6> R_z;
+	///Updated Error Covariance matrix
+    Eigen::Matrix<double, 15,15> P_i;
+	///Corrected state
+    Eigen::Matrix<double, 15,1> x_i, x_i_;
+	///Corrected Rotation matrix from base to world frame
+    Eigen::Matrix3d Rib_i;
     bool outlier;
 
 
