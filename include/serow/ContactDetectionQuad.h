@@ -1,3 +1,37 @@
+/* 
+ * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+ * License: BSD
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
+ *		 nor the names of its contributors may be used to endorse or promote products derived from
+ *       this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+/**
+ * @brief Contact Detection for Quadrupeds based on force/torque or pressure, and encoder measurement
+ * @author Stylianos Piperakis
+ * @details Estimates the feet contact state and the gait-phase
+ */
+
 #include <serow/Gaussian.h>
 #include <string.h>
 #include <serow/mediator.h>
@@ -7,39 +41,71 @@ namespace serow
 class ContactDetectionQuad
 {
 private:
+  ///instance for Gaussian distribution operations
   Gaussian gs;
-  //Probabilistic Kinematic - Contact Wrench detection
+  ///uncertainty in left front / left hind/ right front / left hind GRF
   double sigmaLFf, sigmaLHf, sigmaRFf, sigmaRHf;
+  ///uncertainty in left front / left hind/ right front / left hind COP
   double sigmaLFc, sigmaLHc, sigmaRFc, sigmaRHc;
+  ///uncertainty in left front / left hind/ right front / left hind foot velocity
   double sigmaLFv, sigmaLHv, sigmaRFv, sigmaRHv;
+  ///min/max foot polygon length/width (assuming identical left front/ left hind/right front/right hind foot)
   double xmin, xmax, ymin, ymax;
+  ///min/max contact force
   double LFfmin, LHfmin, RFfmin, RHfmin;
+  ///probability of left front / left hind/ right front / left hind contact based on a) force, b) cop c) foot velocity
   double pLFf, pLHf, pRFf, pRHf, pLFc, pLHc, pRFc, pRHc, pLFv, pLHv, pRFv, pRHv;
+  ///probability of contact for left front / left hind/ right front / left hind leg
   double pLF, pLH, pRF, pRH, p;
+  ///minimum foot velocity threshold
   double VelocityThres;
+  ///flags for first detected contact/consider COP in estimation/consider kinematics
   bool firstContact, useCOP, useKin;
+  ///instantenous indicator of left front / left hind/ right front / left hind leg contact - filtered with a median filter
   int contactLF, contactLH, contactRF, contactRH, sum, contactRFFilt, contactRHFilt, contactLFFilt, contactLHFilt;
+  ///probabistic threshold on contact
   double prob_TH;
+  ///support foot frame name, support leg name, left front foot frame name, left hind foot frame name, right front foot frame name, right hind foot frame name, gait-phase
   std::string support_foot_frame, support_leg, LFfoot_frame, LHfoot_frame, RFfoot_frame, RHfoot_frame, phase;
+  ///median filter buffer size 
   int medianWindow;
-	Mediator *LFmdf, *RFmdf, *RHmdf, *LHmdf;
+  ///median filters for left front, left hind, right front, right hind,foot
+	Mediator *LFmdf, *LHmdf, *RFmdf, *RHmdf;
+  ///mass of the robot and gravity constant
   double mass, g;
 
 
   double deltaLFfz, deltaLHfz, deltaRFfz, deltaRHfz, LFf_, LHf_, RFf_, RHf_;
-  //Smidtt Trigger detection
+  ///Smidtt Trigger detection thresholds
   double LegLowThres, LegHighThres, StrikingContact;
 
+  /** @fn double computeForceContactProb(double fmin, double sigma, double f)
+    *   @brief computes the contact probability assuming a Gaussian distribution on the measured force
+    *   @param fmin min contact force
+    *   @param sigma measured force uncertainty
+    *   @param f measured force
+  */
   double computeForceContactProb(double fmin, double sigma, double f)
   {
     return 1.000 - gs.cdf(fmin, f, sigma);
   }
-
+  /** @fn double computeKinContactProb(double vel_min, double sigma, double v)
+    *   @brief computes the contact probability assuming a Gaussian distribution on the foot velocity
+    *   @param vel_min min velocity 
+    *   @param sigma velocity uncertainty
+    *   @param v velocity
+  */
   double computeKinContactProb(double vel_min, double sigma, double v)
   {
     return gs.cdf(vel_min, v, sigma);
   }
-
+  /** @fn double computeCOPContactProb(double max, double min, double sigma, double cop)
+    *   @brief computes the contact probability assuming a Gaussian distribution on the measured COP
+    *   @param max max foot polygon length
+    *   @param min min foot polygon length
+    *   @param sigma uncertaintiy in COP
+    *   @param cop measured cop
+  */
   double computeCOPContactProb(double max, double min, double sigma, double cop)
   {
     if (cop != 0)
@@ -51,7 +117,29 @@ private:
       return 0;
     }
   }
-
+  /** @fn double  computeContactProb(double LFf, double LHf, double RFf, double RHf,
+                            double copLFx, double copLFy, double copLHx,
+                            double copLHy, double copRFx, double copRFy,
+                            double copRHx, double copRHy, double LFvnorm,
+                            double LHvnorm, double RFvnorm, double RHvnorm)
+    *   @brief computes the contact probability assuming a Gaussian distribution on the measured COP/force/foot velocity
+    *   @param LFf  left front foot vertical force
+    *   @param LHf  left hind foot vertical force
+    *   @param RFf  right front foot vertical force
+    *   @param RHf  right hind foot vertical force
+    *   @param copLFx  cop in left front foot - x axis
+    *   @param copLFy  cop in left front foot - y axis
+    *   @param copLHx  cop in left hind foot - x axis
+    *   @param copLHy  cop in left hind foot - y axis
+    *   @param copRFx  cop in right front foot - x axis
+    *   @param copRFy  cop in right front foot - y axis
+    *   @param copRHx  cop in right hind foot - x axis
+    *   @param copRHy  cop in right hind foot - y axis
+    *   @param LFvnorm  left foot front velocity norm
+    *   @param LHvnorm  left foot hind velocity norm
+    *   @param RFvnorm  right foot front velocity norm
+    *   @param RHvnorm  right foot hind velocity norm
+  */
   double computeContactProb(double LFf, double LHf, double RFf, double RHf,
                             double copLFx, double copLFy, double copLHx,
                             double copLHy, double copRFx, double copRFy,
@@ -119,12 +207,7 @@ private:
       pLH = 0;
       pRH = 0;
     }
-    cout << "PROB LF RF LH RH" << endl;
-    cout << pLF << endl;
-    cout << pRF << endl;
-    cout << pLH << endl;
-    cout << pRH << endl;
-    
+
     contactLH = 0;
     if (pLF >= prob_TH)
       contactLF = 1;
@@ -568,10 +651,10 @@ public:
       pRH = RHf / p;
     }
 
-    // pLF=normalizeProb(pLF);
-    // pRF=normalizeProb(pRF);
-    // pLH=normalizeProb(pLH);
-    // pRH=normalizeProb(pRH);
+     pLF=normalizeProb(pLF);
+     pRF=normalizeProb(pRF);
+     pLH=normalizeProb(pLH);
+     pRH=normalizeProb(pRH);
   }
 
 
@@ -690,11 +773,11 @@ public:
     MediatorInsert(RHmdf, contactRH);
     contactRHFilt =  MediatorMedian(RHmdf);
 
-    cout<<"Contact -- LF -- LH -- RF -- RH"<<endl;
-    cout<<pLF<<endl;
-    cout<<pLH<<endl;
-    cout<<pRF<<endl;
-    cout<<pRH<<endl;
+    // cout<<"Contact -- LF -- LH -- RF -- RH"<<endl;
+    // cout<<pLF<<endl;
+    // cout<<pLH<<endl;
+    // cout<<pRF<<endl;
+    // cout<<pRH<<endl;
 
     sum = contactRHFilt + contactRFFilt + contactLFFilt + contactRHFilt;
 

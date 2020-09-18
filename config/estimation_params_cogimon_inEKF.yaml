@@ -61,7 +61,6 @@ StrikingContact: 600
 medianWindow: 10
 
 #Compute Joint Velocities
-computeJointVelocity: True
 joint_cutoff_freq: 16
 joint_noise_density: 0.17  # rad
 

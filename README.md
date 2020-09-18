@@ -1,15 +1,29 @@
-SEROW V2.0
+
 
 # README
-SEROW (State Estimation RObot Walking) Framework for Humanoid Robot Walking Estimation.  The code is open-source (BSD License). Please note that this work is an on-going research and thus some parts are not fully developed yet. Furthermore, the code will be subject to changes in the future which could include greater re-factoring.
+SEROW (State Estimation RObot Walking) Framework for Humanoid/Quadruped Robot Walking Estimation.  The code is open-source (BSD License). Please note that this work is an on-going research and thus some parts are not fully developed yet. Furthermore, the code will be subject to changes in the future which could include greater re-factoring.
 
-Video: https://www.youtube.com/watch?v=nkzqNhf3_F4
 
-Papers:
+## SEROW in real-time
+------------------------------------------------------------------ 
+
+| Cogimon and SEROW  | Centauro and SEROW |
+| ------------- | ------------- |
+| [![YouTube Link](img/cogimon.png)  ](https://www.youtube.com/watch?v=MLmfgADDjj0)  | [![YouTube Link](img/centauro.png)  ](https://www.youtube.com/watch?v=cVWS8oopr_M) |
+
+------------------------------------------------------------------ 
+
+
+
+Relevant Papers:
 * Non-linear ZMP based State Estimation for Humanoid Robot Locomotion, https://ieeexplore.ieee.org/document/7803278 (Humanoids 2016 - nominated for the best interactive paper award)
 * Nonlinear State Estimation for Humanoid Robot Walking, https://ieeexplore.ieee.org/document/8403285 (RA-L + IROS 2018)
 * Outlier-Robust State Estimation for Humanoid Robots (to appear IROS2019)
 
+More Videos: 
+* https://www.youtube.com/watch?v=nkzqNhf3_F4
+* https://www.youtube.com/watch?v=9OvIBg8tn54
+* https://www.youtube.com/watch?v=ojogeY3xSsw
 # Citation
 Upon usage in an academic work kindly cite: <br/>
 
@@ -25,6 +39,12 @@ Upon usage in an academic work kindly cite: <br/>
     month={Oct},<br/>
 }<br/>
 
+# New Feature
+SEROW now also supports quadruped robot state estimation. The base estimator used in the latter case is a variant of the one presented in: 
+R. Hartley, M. G. Jadidi, J. Grizzle, and R. M. Eustice, “Contact-aided invariant extended kalman filtering for legged robot state estimation,” in Proceedings of Robotics: Science and Systems, Pittsburgh, Pennsylvania, June 2018. 
+
+The 3D-CoM estimator is the one proposed in "Nonlinear State Estimation for Humanoid Robot Walking" (https://ieeexplore.ieee.org/document/8403285). Although originality presented for humanoids, the same principles apply in quadrupeds.
+
 
 ## Getting Started
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
@@ -33,7 +53,7 @@ These instructions will get you a copy of the project up and running on your loc
 * Ubuntu 16.04 and later
 * ROS kinetic and later
 * Eigen 3.2.0 and later
-* [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 
+* [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 2.2.1
 
 ## Installing
 * sudo apt-get install ros-kinetic-pinocchio
@@ -49,7 +69,7 @@ These instructions will get you a copy of the project up and running on your loc
 ### Requirements
 * Robot State Publisher (e.g. topic: /joint_states)
 * IMU (e.g. topic /imu0)
-* Feet Force Sensors for detecting contact (e.g. topic: /left_leg/force_torque_states, /right_leg/force_torque_states)
+* Feet Pressure or Force/Torque Sensors for detecting contact (e.g. topic: /left_leg/force_torque_states, /right_leg/force_torque_states)
 
 ### Using the full cascade framework (Rigid Body Estimator + CoM Estimator) to estimate:
 * 3D-Body Position/Orientation/Velocity
@@ -60,14 +80,7 @@ These instructions will get you a copy of the project up and running on your loc
 ### Requirements:
 * Robot State Publisher (e.g. topic: /joint_states)
 * IMU(e.g. topic /imu0)
-* Feet Force Sensors  + Center of Pressure (COP) measurements in the local foot frame (e.g. topics /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP)
-
-### Using our humanoid_fsr package
-If your robot is employed with feet force sensors and you have available a measurement for each sensor, then you can use our [humanoid_fsr](https://github.com/mrsp/humanoid_fsr) package to compute the COP and 3D - Force/Torque measurements in each leg.  This package automatically generates the required by SEROW /left_leg/force_torque_states, /right_leg/force_torque_states, /left_leg/COP, /right_leg/COP topics.
-
-### Using our humanoid_cop package
-If your robot is employed with F/T sensors and you have available a 6D wrench measurement for each leg, then you can use our [humanoid_cop](https://github.com/mrsp/humanoid_cop) package to compute the COP in each leg.  This package automatically generates the required by SEROW  /left_leg/COP, /right_leg/COP topics.
-
+* Feet Pressure or Force/Torque Sensors  for Center of Pressure (COP) measurements in the local foot frame (e.g. topics /left_leg/force_torque_states, /right_leg/force_torque_states)
 
 ### Using our serow_utils package
 Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the estimated trajectories and to contrast them with other trajectories (e.g. ground_truth).
@@ -94,6 +107,10 @@ Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the esti
 ### Launch on your Robot in real time
 * Specify topics on config/estimation_params.yaml
 * roslaunch serow serow.launch
+
+### Quadruped State Estimation
+* Specify similar parameters as in config/estimation_params_centauro.yaml
+
 ## License
 [BSD](LICENSE) 
 
