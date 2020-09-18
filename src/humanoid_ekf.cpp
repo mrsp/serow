@@ -87,87 +87,100 @@ void humanoid_ekf::loadparams()
         n_p.param<std::string>("ground_truth_odom_topic", ground_truth_odom_topic, "ground_truth");
         n_p.param<std::string>("ground_truth_com_topic", ground_truth_com_topic, "ground_truth_com");
         n_p.getParam("T_B_GT", affine_list);
-        T_B_GT(0, 0) = affine_list[0];
-        T_B_GT(0, 1) = affine_list[1];
-        T_B_GT(0, 2) = affine_list[2];
-        T_B_GT(0, 3) = affine_list[3];
-        T_B_GT(1, 0) = affine_list[4];
-        T_B_GT(1, 1) = affine_list[5];
-        T_B_GT(1, 2) = affine_list[6];
-        T_B_GT(1, 3) = affine_list[7];
-        T_B_GT(2, 0) = affine_list[8];
-        T_B_GT(2, 1) = affine_list[9];
-        T_B_GT(2, 2) = affine_list[10];
-        T_B_GT(2, 3) = affine_list[11];
-        T_B_GT(3, 0) = affine_list[12];
-        T_B_GT(3, 1) = affine_list[13];
-        T_B_GT(3, 2) = affine_list[14];
-        T_B_GT(3, 3) = affine_list[15];
+        T_B_GT.setIdentity();
+        if (affine_list.size() == 16)
+        {
+            T_B_GT(0, 0) = affine_list[0];
+            T_B_GT(0, 1) = affine_list[1];
+            T_B_GT(0, 2) = affine_list[2];
+            T_B_GT(0, 3) = affine_list[3];
+            T_B_GT(1, 0) = affine_list[4];
+            T_B_GT(1, 1) = affine_list[5];
+            T_B_GT(1, 2) = affine_list[6];
+            T_B_GT(1, 3) = affine_list[7];
+            T_B_GT(2, 0) = affine_list[8];
+            T_B_GT(2, 1) = affine_list[9];
+            T_B_GT(2, 2) = affine_list[10];
+            T_B_GT(2, 3) = affine_list[11];
+            T_B_GT(3, 0) = affine_list[12];
+            T_B_GT(3, 1) = affine_list[13];
+            T_B_GT(3, 2) = affine_list[14];
+            T_B_GT(3, 3) = affine_list[15];
+        }
         q_B_GT = Quaterniond(T_B_GT.linear());
-    }
 
+    }
+    
+    T_B_P.setIdentity();
     if (!useLegOdom)
     {
         n_p.getParam("T_B_P", affine_list);
-        T_B_P(0, 0) = affine_list[0];
-        T_B_P(0, 1) = affine_list[1];
-        T_B_P(0, 2) = affine_list[2];
-        T_B_P(0, 3) = affine_list[3];
-        T_B_P(1, 0) = affine_list[4];
-        T_B_P(1, 1) = affine_list[5];
-        T_B_P(1, 2) = affine_list[6];
-        T_B_P(1, 3) = affine_list[7];
-        T_B_P(2, 0) = affine_list[8];
-        T_B_P(2, 1) = affine_list[9];
-        T_B_P(2, 2) = affine_list[10];
-        T_B_P(2, 3) = affine_list[11];
-        T_B_P(3, 0) = affine_list[12];
-        T_B_P(3, 1) = affine_list[13];
-        T_B_P(3, 2) = affine_list[14];
-        T_B_P(3, 3) = affine_list[15];
+        if (affine_list.size() == 16)
+        {
+            T_B_P(0, 0) = affine_list[0];
+            T_B_P(0, 1) = affine_list[1];
+            T_B_P(0, 2) = affine_list[2];
+            T_B_P(0, 3) = affine_list[3];
+            T_B_P(1, 0) = affine_list[4];
+            T_B_P(1, 1) = affine_list[5];
+            T_B_P(1, 2) = affine_list[6];
+            T_B_P(1, 3) = affine_list[7];
+            T_B_P(2, 0) = affine_list[8];
+            T_B_P(2, 1) = affine_list[9];
+            T_B_P(2, 2) = affine_list[10];
+            T_B_P(2, 3) = affine_list[11];
+            T_B_P(3, 0) = affine_list[12];
+            T_B_P(3, 1) = affine_list[13];
+            T_B_P(3, 2) = affine_list[14];
+            T_B_P(3, 3) = affine_list[15];
+        }
         q_B_P = Quaterniond(T_B_P.linear());
     }
-    else
+
+
+    T_B_A.setIdentity();
+    n_p.getParam("T_B_A", affine_list);
+    if (affine_list.size() == 16)
     {
-        T_B_P.Identity();
+        T_B_A(0, 0) = affine_list[0];
+        T_B_A(0, 1) = affine_list[1];
+        T_B_A(0, 2) = affine_list[2];
+        T_B_A(0, 3) = affine_list[3];
+        T_B_A(1, 0) = affine_list[4];
+        T_B_A(1, 1) = affine_list[5];
+        T_B_A(1, 2) = affine_list[6];
+        T_B_A(1, 3) = affine_list[7];
+        T_B_A(2, 0) = affine_list[8];
+        T_B_A(2, 1) = affine_list[9];
+        T_B_A(2, 2) = affine_list[10];
+        T_B_A(2, 3) = affine_list[11];
+        T_B_A(3, 0) = affine_list[12];
+        T_B_A(3, 1) = affine_list[13];
+        T_B_A(3, 2) = affine_list[14];
+        T_B_A(3, 3) = affine_list[15];
     }
 
-    n_p.getParam("T_B_A", affine_list);
-    T_B_A(0, 0) = affine_list[0];
-    T_B_A(0, 1) = affine_list[1];
-    T_B_A(0, 2) = affine_list[2];
-    T_B_A(0, 3) = affine_list[3];
-    T_B_A(1, 0) = affine_list[4];
-    T_B_A(1, 1) = affine_list[5];
-    T_B_A(1, 2) = affine_list[6];
-    T_B_A(1, 3) = affine_list[7];
-    T_B_A(2, 0) = affine_list[8];
-    T_B_A(2, 1) = affine_list[9];
-    T_B_A(2, 2) = affine_list[10];
-    T_B_A(2, 3) = affine_list[11];
-    T_B_A(3, 0) = affine_list[12];
-    T_B_A(3, 1) = affine_list[13];
-    T_B_A(3, 2) = affine_list[14];
-    T_B_A(3, 3) = affine_list[15];
-
+    T_B_G.setIdentity();
     n_p.getParam("T_B_G", affine_list);
-    T_B_G(0, 0) = affine_list[0];
-    T_B_G(0, 1) = affine_list[1];
-    T_B_G(0, 2) = affine_list[2];
-    T_B_G(0, 3) = affine_list[3];
-    T_B_G(1, 0) = affine_list[4];
-    T_B_G(1, 1) = affine_list[5];
-    T_B_G(1, 2) = affine_list[6];
-    T_B_G(1, 3) = affine_list[7];
-    T_B_G(2, 0) = affine_list[8];
-    T_B_G(2, 1) = affine_list[9];
-    T_B_G(2, 2) = affine_list[10];
-    T_B_G(2, 3) = affine_list[11];
-    T_B_G(3, 0) = affine_list[12];
-    T_B_G(3, 1) = affine_list[13];
-    T_B_G(3, 2) = affine_list[14];
-    T_B_G(3, 3) = affine_list[15];
-
+    if (affine_list.size() == 16)
+    {
+        T_B_G(0, 0) = affine_list[0];
+        T_B_G(0, 1) = affine_list[1];
+        T_B_G(0, 2) = affine_list[2];
+        T_B_G(0, 3) = affine_list[3];
+        T_B_G(1, 0) = affine_list[4];
+        T_B_G(1, 1) = affine_list[5];
+        T_B_G(1, 2) = affine_list[6];
+        T_B_G(1, 3) = affine_list[7];
+        T_B_G(2, 0) = affine_list[8];
+        T_B_G(2, 1) = affine_list[9];
+        T_B_G(2, 2) = affine_list[10];
+        T_B_G(2, 3) = affine_list[11];
+        T_B_G(3, 0) = affine_list[12];
+        T_B_G(3, 1) = affine_list[13];
+        T_B_G(3, 2) = affine_list[14];
+        T_B_G(3, 3) = affine_list[15];
+    }
     n_p.param<std::string>("odom_topic", odom_topic, "odom");
     n_p.param<std::string>("imu_topic", imu_topic, "imu");
     n_p.param<std::string>("joint_state_topic", joint_state_topic, "joint_states");
@@ -175,42 +188,50 @@ void humanoid_ekf::loadparams()
     n_p.param<std::string>("lfoot_force_torque_topic", lfsr_topic, "force_torque/left");
     n_p.param<std::string>("rfoot_force_torque_topic", rfsr_topic, "force_torque/right");
 
+    T_FT_LL.setIdentity();
     n_p.getParam("T_FT_LL", affine_list);
-    T_FT_LL(0, 0) = affine_list[0];
-    T_FT_LL(0, 1) = affine_list[1];
-    T_FT_LL(0, 2) = affine_list[2];
-    T_FT_LL(0, 3) = affine_list[3];
-    T_FT_LL(1, 0) = affine_list[4];
-    T_FT_LL(1, 1) = affine_list[5];
-    T_FT_LL(1, 2) = affine_list[6];
-    T_FT_LL(1, 3) = affine_list[7];
-    T_FT_LL(2, 0) = affine_list[8];
-    T_FT_LL(2, 1) = affine_list[9];
-    T_FT_LL(2, 2) = affine_list[10];
-    T_FT_LL(2, 3) = affine_list[11];
-    T_FT_LL(3, 0) = affine_list[12];
-    T_FT_LL(3, 1) = affine_list[13];
-    T_FT_LL(3, 2) = affine_list[14];
-    T_FT_LL(3, 3) = affine_list[15];
+    if (affine_list.size() == 16)
+    {
+        T_FT_LL(0, 0) = affine_list[0];
+        T_FT_LL(0, 1) = affine_list[1];
+        T_FT_LL(0, 2) = affine_list[2];
+        T_FT_LL(0, 3) = affine_list[3];
+        T_FT_LL(1, 0) = affine_list[4];
+        T_FT_LL(1, 1) = affine_list[5];
+        T_FT_LL(1, 2) = affine_list[6];
+        T_FT_LL(1, 3) = affine_list[7];
+        T_FT_LL(2, 0) = affine_list[8];
+        T_FT_LL(2, 1) = affine_list[9];
+        T_FT_LL(2, 2) = affine_list[10];
+        T_FT_LL(2, 3) = affine_list[11];
+        T_FT_LL(3, 0) = affine_list[12];
+        T_FT_LL(3, 1) = affine_list[13];
+        T_FT_LL(3, 2) = affine_list[14];
+        T_FT_LL(3, 3) = affine_list[15];
+    }
     p_FT_LL = Vector3d(T_FT_LL(0, 3), T_FT_LL(1, 3), T_FT_LL(2, 3));
 
+    T_FT_RL.setIdentity();
     n_p.getParam("T_FT_RL", affine_list);
-    T_FT_RL(0, 0) = affine_list[0];
-    T_FT_RL(0, 1) = affine_list[1];
-    T_FT_RL(0, 2) = affine_list[2];
-    T_FT_RL(0, 3) = affine_list[3];
-    T_FT_RL(1, 0) = affine_list[4];
-    T_FT_RL(1, 1) = affine_list[5];
-    T_FT_RL(1, 2) = affine_list[6];
-    T_FT_RL(1, 3) = affine_list[7];
-    T_FT_RL(2, 0) = affine_list[8];
-    T_FT_RL(2, 1) = affine_list[9];
-    T_FT_RL(2, 2) = affine_list[10];
-    T_FT_RL(2, 3) = affine_list[11];
-    T_FT_RL(3, 0) = affine_list[12];
-    T_FT_RL(3, 1) = affine_list[13];
-    T_FT_RL(3, 2) = affine_list[14];
-    T_FT_RL(3, 3) = affine_list[15];
+    if (affine_list.size() == 16)
+    {
+        T_FT_RL(0, 0) = affine_list[0];
+        T_FT_RL(0, 1) = affine_list[1];
+        T_FT_RL(0, 2) = affine_list[2];
+        T_FT_RL(0, 3) = affine_list[3];
+        T_FT_RL(1, 0) = affine_list[4];
+        T_FT_RL(1, 1) = affine_list[5];
+        T_FT_RL(1, 2) = affine_list[6];
+        T_FT_RL(1, 3) = affine_list[7];
+        T_FT_RL(2, 0) = affine_list[8];
+        T_FT_RL(2, 1) = affine_list[9];
+        T_FT_RL(2, 2) = affine_list[10];
+        T_FT_RL(2, 3) = affine_list[11];
+        T_FT_RL(3, 0) = affine_list[12];
+        T_FT_RL(3, 1) = affine_list[13];
+        T_FT_RL(3, 2) = affine_list[14];
+        T_FT_RL(3, 3) = affine_list[15];
+    }
     p_FT_RL = Vector3d(T_FT_RL(0, 3), T_FT_RL(1, 3), T_FT_RL(2, 3));
 
     n_p.param<bool>("comp_with", comp_with, false);
@@ -238,7 +259,7 @@ void humanoid_ekf::loadparams()
     }
     n_p.param<double>("Tau0", Tau0, 0.5);
     n_p.param<double>("Tau1", Tau1, 0.01);
-    n_p.param<double>("mass", m, 5.14);
+    n_p.param<double>("mass", mass, 5.14);
     n_p.param<double>("gravity", g, 9.81);
 }
 
@@ -606,25 +627,25 @@ void humanoid_ekf::estimateWithIMUEKF()
     //Compute the attitude and posture with the IMU-Kinematics Fusion
     //Predict with the IMU gyro and acceleration
     imuEKF->predict(wbb, abb);
+    
     //Check for no motion
-
-    // if (check_no_motion)
-    // {
-    //     no_motion_residual = Twb.translation() - Twb_.translation();
-    //     if (no_motion_residual.norm() < no_motion_threshold)
-    //         no_motion_it++;
-    //     else
-    //     {
-    //         no_motion_indicator = false;
-    //         no_motion_it = 0;
-    //     }
-    //     if (no_motion_it > no_motion_it_threshold)
-    //     {
-    //         no_motion_indicator = true;
-    //         no_motion_it = 0;
-    //     }
-    //     check_no_motion = false;
-    // }
+    if (check_no_motion)
+    {
+        no_motion_residual = Twb.translation() - Twb_.translation();
+        if (no_motion_residual.norm() < no_motion_threshold)
+            no_motion_it++;
+        else
+        {
+            no_motion_indicator = false;
+            no_motion_it = 0;
+        }
+        if (no_motion_it > no_motion_it_threshold)
+        {
+            no_motion_indicator = true;
+            no_motion_it = 0;
+        }
+        check_no_motion = false;
+    }
 
     //Update EKF
     if (firstUpdate)
@@ -766,7 +787,6 @@ void humanoid_ekf::computeKinTFs()
     //Get the CoM w.r.t Body Frame
     CoM_enc = rd->comPosition();
 
-    mass = m;
     Tbl.translation() = rd->linkPosition(lfoot_frame);
     qbl = rd->linkOrientation(lfoot_frame);
     Tbl.linear() = qbl.toRotationMatrix();
@@ -881,9 +901,6 @@ void humanoid_ekf::computeKinTFs()
     omegawr = dr->getRFootAngularVel();
 
     CoM_leg_odom = Twb * CoM_enc;
-    leg_odom_inc = true;
-    leg_vel_inc = true;
-    com_inc = true;
     check_no_motion = false;
     if (!kinematicsInitialized)
         kinematicsInitialized = true;
@@ -1041,14 +1058,16 @@ void humanoid_ekf::advertise()
 void humanoid_ekf::subscribeToJointState()
 {
 
-    joint_state_sub = n.subscribe(joint_state_topic, 1, &humanoid_ekf::joint_stateCb, this, ros::TransportHints().tcpNoDelay());
+    joint_state_sub = n.subscribe(joint_state_topic, 1000, &humanoid_ekf::joint_stateCb, this, ros::TransportHints().tcpNoDelay());
     firstJointStates = true;
 }
 
 void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr &msg)
 {
     joint_data.push(*msg);
-    if (joint_data.size() > 10)
+    cout<<"Buffer Size joint_data "<<joint_data.size()<<endl;
+
+    if (joint_data.size() > 6)
         joint_data.pop();
 }
 
@@ -1097,7 +1116,7 @@ void humanoid_ekf::joints(const sensor_msgs::JointState &msg)
 void humanoid_ekf::subscribeToOdom()
 {
 
-    odom_sub = n.subscribe(odom_topic, 1, &humanoid_ekf::odomCb, this, ros::TransportHints().tcpNoDelay());
+    odom_sub = n.subscribe(odom_topic, 1000, &humanoid_ekf::odomCb, this, ros::TransportHints().tcpNoDelay());
     firstOdom = true;
 }
 
@@ -1114,7 +1133,7 @@ void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr &msg)
 
 void humanoid_ekf::subscribeToGroundTruth()
 {
-    ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic, 1, &humanoid_ekf::ground_truth_odomCb, this, ros::TransportHints().tcpNoDelay());
+    ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic, 1000, &humanoid_ekf::ground_truth_odomCb, this, ros::TransportHints().tcpNoDelay());
     firstGT = true;
 }
 void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr &msg)
@@ -1221,19 +1240,21 @@ void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr &msg)
 
 void humanoid_ekf::subscribeToIMU()
 {
-    imu_sub = n.subscribe(imu_topic, 1, &humanoid_ekf::imuCb, this, ros::TransportHints().tcpNoDelay());
+    imu_sub = n.subscribe(imu_topic, 1000, &humanoid_ekf::imuCb, this, ros::TransportHints().tcpNoDelay());
 }
 void humanoid_ekf::imuCb(const sensor_msgs::Imu::ConstPtr &msg)
 {
     base_imu_data.push(*msg);
-    if (base_imu_data.size() > 10)
+    cout<<"Buffer Size imu "<<base_imu_data.size()<<endl;
+    if (base_imu_data.size() > 6)
         base_imu_data.pop();
 }
 void humanoid_ekf::baseIMU(const sensor_msgs::Imu &msg)
 {
     wbb = T_B_G.linear() * Vector3d(msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z);
     abb = T_B_A.linear() * Vector3d(msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z);
-    if (useMahony)
+    
+    if(useMahony)
     {
         mh->updateIMU(wbb, abb);
         Rwb = mh->getR();
@@ -1241,14 +1262,13 @@ void humanoid_ekf::baseIMU(const sensor_msgs::Imu &msg)
     else
     {
         mw->updateIMU(wbb, abb);
-
         Rwb = mw->getR();
     }
 
     if (imuCalibrationCycles < maxImuCalibrationCycles && calibrateIMU)
     {
         bias_g += wbb;
-        bias_a += abb;
+        bias_a += abb -  Rwb.transpose() * Vector3d(0,0,g); 
         imuCalibrationCycles++;
         return;
     }
@@ -1270,15 +1290,17 @@ void humanoid_ekf::baseIMU(const sensor_msgs::Imu &msg)
 void humanoid_ekf::subscribeToFSR()
 {
     //Left Foot Wrench
-    lfsr_sub = n.subscribe(lfsr_topic, 1, &humanoid_ekf::lfsrCb, this, ros::TransportHints().tcpNoDelay());
+    lfsr_sub = n.subscribe(lfsr_topic, 1000, &humanoid_ekf::lfsrCb, this, ros::TransportHints().tcpNoDelay());
     //Right Foot Wrench
-    rfsr_sub = n.subscribe(rfsr_topic, 1, &humanoid_ekf::rfsrCb, this, ros::TransportHints().tcpNoDelay());
+    rfsr_sub = n.subscribe(rfsr_topic, 1000, &humanoid_ekf::rfsrCb, this, ros::TransportHints().tcpNoDelay());
 }
 
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
     LLeg_FT_data.push(*msg);
-    if (LLeg_FT_data.size() > 10)
+    cout<<"Buffer Size LLeg "<<LLeg_FT_data.size()<<endl;
+
+    if (LLeg_FT_data.size() > 6)
         LLeg_FT_data.pop();
 }
 
@@ -1316,7 +1338,9 @@ void humanoid_ekf::LLeg_FT(const geometry_msgs::WrenchStamped &msg)
 void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
     RLeg_FT_data.push(*msg);
-    if (RLeg_FT_data.size() > 10)
+    cout<<"Buffer Size RLeg "<<RLeg_FT_data.size()<<endl;
+
+    if (RLeg_FT_data.size() > 6)
         RLeg_FT_data.pop();
 
     //rfsr_msg = *msg;
@@ -1350,8 +1374,6 @@ void humanoid_ekf::RLeg_FT(const geometry_msgs::WrenchStamped &msg)
         RLegGRT = Vector3d::Zero();
         weightr = 0.0;
     }
-    rft_inc = true;
-    rfsr_inc = true;
 }
 void humanoid_ekf::publishBodyEstimates()
 {
@@ -1658,15 +1680,15 @@ void humanoid_ekf::publishCoMEstimates()
 
 void humanoid_ekf::run()
 {
-    output_thread = std::thread([this] { this->outputPublishThread(); });
     filtering_thread = std::thread([this] { this->filteringThread(); });
+    output_thread = std::thread([this] { this->outputPublishThread(); });
     ros::spin();
 }
 
 void humanoid_ekf::outputPublishThread()
 {
 
-    ros::Rate rate(4.0 * freq);
+    ros::Rate rate(4.0*freq);
     while (ros::ok())
     {
         if (!data_inc)

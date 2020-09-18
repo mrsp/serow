@@ -41,13 +41,13 @@
 #include <ros/ros.h>
 
 // Estimator Headers
-#include "serow/IMUEKF.h"
-#include "serow/IMUinEKF.h"
+#include <serow/IMUEKF.h>
+#include <serow/IMUinEKF.h>
 
-#include "serow/CoMEKF.h"
-#include "serow/JointDF.h"
-#include "serow/butterworthLPF.h"
-#include "serow/MovingAverageFilter.h"
+#include <serow/CoMEKF.h>
+#include <serow/JointDF.h>
+#include <serow/butterworthLPF.h>
+#include <serow/MovingAverageFilter.h>
 
 #include <eigen3/Eigen/Dense>
 // ROS Messages
@@ -64,13 +64,13 @@
 #include <nav_msgs/Odometry.h>
 
 #include <dynamic_reconfigure/server.h>
-#include "serow/VarianceControlConfig.h"
-#include "serow/mediator.h"
-#include "serow/differentiator.h"
-#include "serow/Madgwick.h"
-#include "serow/Mahony.h"
-#include "serow/deadReckoning.h"
-#include "serow/Median.h"
+#include <serow/VarianceControlConfig.h>
+#include <serow/mediator.h>
+#include <serow/differentiator.h>
+#include <serow/Madgwick.h>
+#include <serow/Mahony.h>
+#include <serow/deadReckoning.h>
+#include <serow/Median.h>
 #include <serow/ContactDetection.h>
 #include <serow/Queue.h>
 using namespace Eigen;
@@ -78,11 +78,11 @@ using namespace std;
 
 class humanoid_ekf{
 private:
-	// ROS Standard Variables
+	//ROS Standard Variables
 	ros::NodeHandle n;
+	//ROS Publishers
 	ros::Publisher rel_LLegPose_pub, rel_RLegPose_pub, rel_CoMPose_pub, RLegWrench_pub, LLegWrench_pub, ground_truth_com_pub, ground_truth_odom_pub, legOdom_pub, 
 	CoMLegOdom_pub, CoMOdom_pub, COP_pub, baseOdom_pub, RLegOdom_pub, LLegOdom_pub, baseIMU_pub,  ExternalWrench_pub, SupportPose_pub, joint_pub, comp_odom0_pub, SupportLegId_pub;
-    
 	//ROS Messages
 	sensor_msgs::JointState  tmp_joint_msg;
 	nav_msgs::Odometry tmp_odom_msg, ground_truth_odom_msg, ground_truth_com_odom_msg, ground_truth_odom_pub_msg, comp_odom0_msg, odom_msg, odom_msg_, ground_truth_odom_msg_;
@@ -91,18 +91,16 @@ private:
 	geometry_msgs::PointStamped tmp_point_msg;
 	std_msgs::String tmp_string_msg;
 	geometry_msgs::WrenchStamped tmp_wrench_msg;
-   
-
-
-
+	//ROS Subscribers
 	ros::Subscriber imu_sub, joint_state_sub, lfsr_sub, rfsr_sub, odom_sub, ground_truth_odom_sub, ground_truth_com_sub, compodom0_sub;
+	//Buffers for topic data
 	Queue<sensor_msgs::JointState> joint_data;
 	Queue<sensor_msgs::Imu> base_imu_data;
 	Queue<geometry_msgs::WrenchStamped> LLeg_FT_data, RLeg_FT_data;
 	std::thread output_thread, filtering_thread;
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
-	Eigen::Vector3d wbb, abb, omegabl, omegabr, vbl, vbr, vbln, vbrn, vwb, omegawb, vwl, vwr, omegawr, omegawl, 	p_FT_LL, p_FT_RL;
+	Eigen::Vector3d wbb, abb, omegabl, omegabr, vbl, vbr, vbln, vbrn, vwb, omegawb, vwl, vwr, omegawr, omegawl, p_FT_LL, p_FT_RL;
 	Eigen::Matrix3d JLQnJLt, JRQnJRt;
 	Affine3d Twl, Twr, Tbl, Tbr;
 	serow::robotDyn* rd;
@@ -118,20 +116,17 @@ private:
 
 	double Tau0, Tau1, VelocityThres;
 	double  freq, joint_freq, fsr_freq;
-	bool lfsr_inc, rfsr_inc, lft_inc, rft_inc, imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
-	bool firstOdom, firstUpdate, odom_divergence;
+	bool odom_inc, check_no_motion;
+	bool firstOdom, firstGyrodot, firstJointStates, firstUpdate;
+	bool no_motion_indicator, outlier, odom_divergence;
 	int number_of_joints, outlier_count;
-	bool firstGyrodot;
 	bool useGyroLPF;
 	int  maWindow;
 	int medianWindow;
-	bool firstJointStates;
-	bool predictWithImu, predictWithCoM;
-	bool no_motion_indicator, outlier;
 	int no_motion_it, no_motion_it_threshold;
 	double no_motion_threshold;
 	Quaterniond  q_update, q_update_, q_leg_update, q_now, q_prev;
-	Vector3d  pos_update, pos_update_, pos_leg_update, CoM_gt, temp, gt_odom;
+	Vector3d  pos_update, pos_update_, pos_leg_update, temp, gt_odom;
 	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RL, T_FT_LL, T_B_GT;
 	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, tempq_, gt_odomq; 
 	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM, useOutlierDetection;
@@ -179,13 +174,13 @@ private:
   	Vector3d copl, copr;
 	Affine3d Tws, Twb, Twb_; //From support s to world frame;
 	Affine3d Tbs, Tsb, Tssw, Tbsw;
-	Vector3d no_motion_residual, temp_pose3d;
+	Vector3d no_motion_residual;
 	/****/
 	bool  kinematicsInitialized, firstContact;
 	Vector3d LLegForceFilt, RLegForceFilt;
 	double LegHighThres, LegLowThres, LosingContact, StrikingContact;
 	double bias_ax, bias_ay, bias_az, bias_gx, bias_gy, bias_gz;
-	double g, m, I_xx, I_yy, I_zz;
+	double g, I_xx, I_yy, I_zz;
 	double joint_noise_density;
 
 	bool comp_with, comp_odom0_inc, firstCO;
@@ -199,9 +194,8 @@ private:
 	 string imu_topic;
 	 string joint_state_topic;
 	 string odom_topic;
-	 string ground_truth_odom_topic, ground_truth_com_topic, support_idx_topic;
+	 string ground_truth_odom_topic, ground_truth_com_topic;
      string modelname;
-	 bool usePoseUpdate;
 	//Odometry, from supportleg to inertial, transformation from support leg to other leg
      void subscribeToIMU();
 	 void subscribeToFSR();
@@ -210,8 +204,6 @@ private:
 	 void subscribeToGroundTruth();
 	 void subscribeToGroundTruthCoM();
 	 void ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg);
-	 void subscribeToSupportIdx();
-	 void support_idxCb(const std_msgs::Int32::ConstPtr& msg);
 	 void ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void imuCb(const sensor_msgs::Imu::ConstPtr& msg);
 	 void joint_stateCb(const sensor_msgs::JointState::ConstPtr& msg);

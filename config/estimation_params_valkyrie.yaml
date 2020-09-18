@@ -2,7 +2,7 @@
 base_link: "pelvis"
 lfoot: "leftFoot"
 rfoot: "rightFoot"
-modelname: "/home/master/ros_ws/src/serow/share/urdf/valkyrie_sim.urdf"
+modelname: "/home/master/talos_walk_ws/src/serow/share/urdf/valkyrie_sim.urdf"
 #modelname: "/home/master/ros_ws/src/serow/share/urdf/valkyrie_sim_gazebo_sync.urdf"
 
 useLegOdom: false
@@ -21,10 +21,6 @@ ground_truth_com_topic: "/valkyrie/ground_truth/CoM"
 is_in_ds_topic: "/ihmc_ros/valkyrie/output/capturability/is_in_double_support"
 T_B_GT: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 
-
-#If external Support Foot Detection is provided
-support_idx_provided: false
-support_idx_topic: "/ihmc_ros/valkyrie/output/support_idx"
 
 #To publish relative data
 debug_mode: true
@@ -54,6 +50,7 @@ VelocityThres: 0.07
 medianWindow: 13
 useGEM: false
 #Steady State Joint Kalman Filter (KF)
+computeJointVelocity: False #True if not included in the joint_state msg
 joint_cutoff_freq: 20
 joint_noise_density: 0.25
 
@@ -105,8 +102,8 @@ bias_az: 9.7997
 bias_gx: -1.60298e-05
 bias_gy: -1.24745e-05
 bias_gz: -2.60968e-05
-calibrateIMUbiases: false #otherwise specify accurate initial values for bias_a, bias_g
-maxImuCalibrationCycles: 1000
+calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 200
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
 
