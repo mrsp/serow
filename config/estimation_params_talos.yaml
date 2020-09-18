@@ -2,46 +2,30 @@
 base_link: "base_link"
 lfoot: "left_sole_link"
 rfoot: "right_sole_link"
-modelname: "/home/master/talos_walk_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf"
-
-useLegOdom: true
+modelname: "/home/master/talos_walk_ws/src/serow/share/urdf/talos_full_v2.urdf"
+useLegOdom: false
 #ROS Topic Names
 odom_topic: "/floating_base_pose_simulated" 
 imu_topic: "/base_imu"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/left_ankle_ft"
 rfoot_force_torque_topic: "/right_ankle_ft"
-
-
-
 #Ground-Truth #Not Mandatory - For comparison only
 ground_truth: true
 ground_truth_odom_topic: "/ground_truth/base"
 ground_truth_com_topic: "/ground_truth/CoM"
 T_B_GT: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
-
-
 comp_with: false
 comp_with_odom0_topic: "/svo/odom0"
-
-
-#If external Support Foot Detection is provided
-support_idx_provided: false
-support_idx_topic: "/sp"
-
 #To publish relative data
-debug_mode: true
-
+debug_mode: false
 #TF from IMU to Body
 T_B_A: [0, 1, 0, 0, 1, 0, 0, 0, 0, 0 , -1, 0, 0, 0 ,0, 1]
 T_B_G: [0, 1, 0, 0, 1, 0, 0, 0, 0, 0 , -1, 0, 0, 0 ,0, 1]
-
 #TF from F/T to Left Foot
 T_FT_LL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
-
 #TF from F/T to Right Foot
 T_FT_RL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
-
 #TF from External Pose to Body only if useLegOdom is false
 T_B_P: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
 
@@ -51,7 +35,7 @@ joint_topic_freq: 1000
 fsr_topic_freq: 1000  
 
 #Joint Velocity Estimation
-computeJointVelocity: False
+computeJointVelocity: False #True if not included in the joint_state msg
 joint_cutoff_freq: 16.0
 joint_noise_density: 0.5
 #Mahony Filter for attitude
@@ -60,8 +44,6 @@ Mahony_Kp: 0.001
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.3
-
-
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
@@ -69,38 +51,31 @@ medianWindow: 8
 mass: 90.2377  #robot mass 
 ##Schmitt Trigger - Contact Classifier
 LegUpThres: 250 #Schmitt Trigger High Threshold in Newtons (N)
-LegLowThres: 175.5 #Schmitt Trigger Low Threshold in Newtons (N)
+LegLowThres: 100.0 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 50.0
 StrikingContact: 600
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
 # 3-D Body Position/Velocity
 # 3-D IMU-Biases
-
 #Process Noise STDs
-accelerometer_bias_random_walk:  1.0e-2 #m/s^2
-gyroscope_bias_random_walk: 1.0e-3 # rad/s
-accelerometer_noise_density: 1.7e-2 #m/s^2 
-gyroscope_noise_density: 2.0e-3 #rad/s 
-
-
+accelerometer_bias_random_walk:  1.0e-1 #m/s^2
+gyroscope_bias_random_walk: 1.0e-2 # rad/s
+accelerometer_noise_density: 1.7e-1 #m/s^2 
+gyroscope_noise_density: 2.0e-2 #rad/s 
 #VO Measuremets
 #Odometry Measurement Noise std:
-leg_odom_position_noise_density: 5.0e-04 #m
-leg_odom_orientation_noise_density: 5.0e-02 #rad
-
+leg_odom_position_noise_density: 1.0e-02 #m
+leg_odom_orientation_noise_density: 1.0e-02 #rad
 useOutlierDetection: false
 #mahalanobis_TH: 9
 mahalanobis_TH: -1
 #Odom Measurements
-odom_position_noise_density: 1.0e-04 #m 
-odom_orientation_noise_density: 1.0e-04 #rad
-
+odom_position_noise_density: 1.0e-02 #m 
+odom_orientation_noise_density: 1.0e-02 #rad
 velocity_noise_density_x: 0.013 #m/s
 velocity_noise_density_y: 0.013 #m/s
 velocity_noise_density_z: 0.013 #m/s
-
-
 #IMU Initial Biases - Biases are substracted!
 bias_ax: 0 #m/s^2
 bias_ay: 0  #m/s^2
@@ -110,24 +85,16 @@ bias_gy: 0  #rad
 bias_gz: 0 #rad
 calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
 maxImuCalibrationCycles: 2000
-
-
-
 #Filter Params
 gravity: 9.81 #gravity constant (m/s^2)
-
-
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
 # CoM 3-D Position/Velocity
 # 3-D External Forces on the CoM
 estimateCoM: true   #Use the CoM EKF
-
 #---------------------------------------------#
 #Specify the rest only if estimateCoM is true!!
 #---------------------------------------------#
-
-
 #Process Noise
 com_position_random_walk: 1.0e-4 #in m
 com_velocity_random_walk: 5.0e-3 #in m/s
