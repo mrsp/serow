@@ -1,7 +1,5 @@
 /*
- * humanoid_state_estimation - a complete state estimation scheme for humanoid robots
- *
- * Copyright 2017-2018 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+ * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,6 +30,8 @@
 #include <serow/IMUEKF.h>
 
 
+
+
 IMUEKF::IMUEKF()
 {
     //Gravity Vector
@@ -40,25 +40,27 @@ IMUEKF::IMUEKF()
     mahalanobis_TH = -1;
 }
 
+
+
 void IMUEKF::init() {
     
     firstrun = true;
     useEuler = true;
     If = Matrix<double, 15, 15>::Identity();
     P = Matrix<double, 15, 15>::Zero();
-    //vel
+    //  velocity error in base coordinates
     P(0,0) = 1e-3;
     P(1,1) = 1e-3;
     P(2,2) = 1e-3;
-    //Rot error
+    //  Rotetional error in base coordinates
     P(3,3) = 1e-3;
     P(4,4) = 1e-3;
     P(5,5) = 1e-3;
-    //Pos
+    //  Positional error in world coordinates
     P(6,6)  = 1e-5;
     P(7,7)  = 1e-5;
     P(8,8)  = 1e-5;
-    //Biases
+    //  Gyro and Acc Biases
     P(9, 9) = 1e-3;
     P(10, 10) = 1e-3;
     P(11, 11) = 1e-3;
@@ -66,10 +68,11 @@ void IMUEKF::init() {
     P(13, 13) = 1e-3;
     P(14, 14) = 1e-3;
     
-    //For outlier detection
+    //  Beta-Bernoulli  parameters for outlier detection
     f0 = 0.1;
     e0 = 0.9;
-    //Construct C
+
+    // Construct Measurement Model Linerazition
     Hf = Matrix<double, 6, 15>::Zero();
     Hf.block<3,3>(0,6) = Matrix3d::Identity();
     Hf.block<3,3>(3,3) = Matrix3d::Identity();
@@ -77,16 +80,17 @@ void IMUEKF::init() {
     Hvf.block<3,3>(3,3) = Matrix3d::Identity();
     Hv = Matrix<double, 3, 15>::Zero();
     
-    /*Initialize the state **/
-    //Rotation Matrix from Inertial to body frame
+    //   Rotation Matrix from base to world frame initialization
     Rib = Matrix3d::Identity();
     x = Matrix<double,15,1>::Zero();
     
-    //Innovation Vector
-    z = Matrix<double, 6, 1>::Zero(); //For Odometry
-    zv = Vector3d::Zero(); //For Twist
+    //  Innovation Vector
+    //  For Odometry Update
+    z = Matrix<double, 6, 1>::Zero(); 
+    //  For Twist Update
+    zv = Vector3d::Zero(); 
     
-    //Initializing vectors and matrices
+    // Initializing rest vectors and matrices needed by the filter
     v = Vector3d::Zero();
     dxf = Matrix<double, 15, 1>::Zero();    
     temp = Vector3d::Zero();
@@ -110,41 +114,43 @@ void IMUEKF::init() {
     acc = Vector3d::Zero();
     angle = Vector3d::Zero();
     
-    
-    //bias removed acceleration and gyro rate
+    //  bias removed acceleration and gyro rate
     fhat = Vector3d::Zero();
     omegahat = Vector3d::Zero();
-    Tib = Affine3d::Identity();
     
-    
-    
-    //Compute some parts of the Input-Noise Jacobian once since they are constants
-    //gyro (0),acc (3),gyro_bias (6),acc_bias (9)
+    //  Compute some parts of the Input-Noise Jacobian once since they are constants
+    //  gyro (0),acc (3),gyro_bias (6),acc_bias (9)
     Lcf = Matrix<double, 15, 12>::Zero();
     Lcf.block<3,3>(0,3) = -Matrix3d::Identity();
     Lcf.block<3,3>(3,0) = -Matrix3d::Identity();
     Lcf.block<3,3>(9,6) = Matrix3d::Identity();
     Lcf.block<3,3>(12,9) = Matrix3d::Identity();
     
-    
-    //Output Variables
+    //  Output Variables
+    //  roll-pitch-yaw in world coordinates
     angleX = 0.000;
     angleY = 0.000;
     angleZ = 0.000;
+    //  angular velocity in world coordinates
     gyroX = 0.000;
     gyroY = 0.000;
     gyroZ = 0.000;
+    //  absolute linear acceleration in world coordinates
     accX = 0.000;
     accY = 0.000;
     accZ = 0.000;
+    //  base position in world coordinates
     rX = 0.000;
     rY = 0.000;
     rZ = 0.000;
+    //  base velocity in world coordinates
     velX = 0.000;
     velY = 0.000;
     velZ = 0.000;
-    
-    std::cout << "IMU EKF Initialized Successfully" << std::endl;
+    //  base transformation to the world frame
+    Tib = Affine3d::Identity();
+
+    std::cout << "Base EKF Initialized Successfully" << std::endl;
 }
 
 
@@ -173,6 +179,26 @@ void IMUEKF::euler(Vector3d omega_, Vector3d f_)
     Af = If;
     Af.noalias() += Acf * dt;
     x = computeDiscreteDyn(x,Rib,omega_,f_);
+    //x.noalias() += computeContinuousDyn(x,Rib,omega_,f_)*dt; 
+}
+
+
+Matrix<double,15,1> IMUEKF::computeContinuousDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
+{
+    Matrix<double,15,1> res = Matrix<double,15,1>::Zero();
+    
+    // Inputs without bias
+    omega_ -= x_.segment<3>(9);
+    f_ -= x_.segment<3>(12);
+    
+    // Nonlinear Process Model
+    v = x_.segment<3>(0);
+    res.segment<3>(0).noalias() = v.cross(omega_);
+    res.segment<3>(0).noalias() += Rib_.transpose()*g;
+    res.segment<3>(0) += f_;
+    res.segment<3>(6).noalias() = Rib_ * v;
+    
+    return res;
 }
 
 Matrix<double,15,1> IMUEKF::computeDiscreteDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_)
@@ -208,10 +234,8 @@ Matrix<double,15,1> IMUEKF::computeDiscreteDyn(Matrix<double,15,1> x_, Matrix<do
 }
 
 
-/** IMU EKF filter to  deal with the Noise **/
 void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 {
-    //std::cout<<"Predict with IMU"<<std::endl;
     omega = omega_;
     f = f_;
     //Used in updating Rib with the Rodriquez formula
@@ -270,7 +294,6 @@ void IMUEKF::updateWithTwist(Vector3d y)
     Rv(2, 2) = vel_pz * vel_pz;
 
     v = x.segment<3>(0);
-    //std::cout<<" Update with Twist " <<std::endl;
     //std::cout<<y<<std::endl;
     //Innovetion vector
     zv = y;
@@ -285,7 +308,7 @@ void IMUEKF::updateWithTwist(Vector3d y)
     dxf.noalias() = Kv * zv;
    
     //Update the mean estimate
-    x += dxf;
+    x.noalias() += dxf;
     
     //Update the error covariance
     P = (If - Kv * Hv) * P * (If - Hv.transpose()*Kv.transpose());
@@ -304,7 +327,6 @@ void IMUEKF::updateWithTwist(Vector3d y)
 }
 
 
-/** Update **/
 void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
 {
 
@@ -314,6 +336,7 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
     R(3, 3) =  leg_odom_ax * leg_odom_ax;
     R(4, 4) =  leg_odom_ay * leg_odom_ay;
     R(5, 5) =  leg_odom_az * leg_odom_az;
+
 
 
     v = x.segment<3>(0);
@@ -334,7 +357,7 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
     dxf.noalias() = Kf * z;
    
     //Update the mean estimate
-    x += dxf;
+    x.noalias() += dxf;
     
     //Update the error covariance
     P = (If - Kf * Hvf) * P * (If - Hvf.transpose()*Kf.transpose());
@@ -354,7 +377,6 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
 
 void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
 {
-    //std::cout<<"Update with LO"<<std::endl;
     R(0, 0) = leg_odom_px * leg_odom_px;
     R(1, 1) = leg_odom_py * leg_odom_py;
     R(2, 2) = leg_odom_pz * leg_odom_pz;
@@ -380,7 +402,7 @@ void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
         P.noalias() += Kf * R * Kf.transpose();
         
         dxf.noalias() = Kf * z;
-        x += dxf;
+        x.noalias() += dxf;
         if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
         {
              Rib *=  expMap(dxf.segment<3>(3));
@@ -395,7 +417,6 @@ void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
 
 bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection)
 {
-    //std::cout<<"Update with VO "<<std::endl;
     R(0, 0) = odom_px * odom_px;
     R(1, 1) = odom_py * odom_py;
     R(2, 2) = odom_pz * odom_pz;
@@ -497,7 +518,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
             if(zeta>1.0e-5)
             {
                 //Compute the Kalman Gain
-	        R_z = R/zeta;
+	            R_z = R/zeta;
                 s = R_z;
                 s.noalias() += Hf * P * Hf.transpose();
                 Kf.noalias() = P * Hf.transpose() * s.inverse();
@@ -617,8 +638,8 @@ void IMUEKF::updateVars()
     bias_az = x(14);
     
     
-    omegahat = omega + bgyr;
-    fhat = f + bacc;
+    omegahat = omega - bgyr;
+    fhat = f - bacc;
 
     gyro  = Rib * omegahat;
     gyroX = gyro(0);
@@ -639,7 +660,6 @@ void IMUEKF::updateVars()
     
     //ROLL - PITCH - YAW
     angle = getEulerAngles(Rib);
-    
     angleX = angle(0);
     angleY = angle(1);
     angleZ = angle(2);

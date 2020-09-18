@@ -1,7 +1,5 @@
-/*
- * humanoid_state_estimation - a complete state estimation scheme for humanoid robots
- *
- * Copyright 2017-2018 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/* 
+ * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -13,7 +11,7 @@
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
  *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
- *	 nor the names of its contributors may be used to endorse or promote products derived from
+ *		 nor the names of its contributors may be used to endorse or promote products derived from
  *       this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -28,7 +26,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
- 
+ /**
+ * @brief Joint angular velocity estimation with numerical differentiation and 2nd order Low Pass Butterworth Filter
+ * @author Stylianos Piperakis
+ * @details estimates the joint angular velocity from joint encoder measurements
+ */
+
 #ifndef  __JOINTDF_H__
 #define  __JOINTDF_H__
 
@@ -48,11 +51,17 @@ public:
     double JointVelocity;
     string JointName;
 
-    /** @fn void Filter(double JointPosMeasurement);
+    /** @fn double filter(double JointPosMeasurement);
      *  @brief estimates the Joint Velocity using the Joint Position measurement by the encoders
      */
     double filter(double JointPosMeasurement);
     void reset();
+    /** @fn void init(string JointName_,double fsampling, double fcutoff);
+     *  @brief initializes the differentiator filter
+     *  @param JointName_ the name of the filter e.g. "LHipPitch"
+     *  @param fsampling the sampling frequency of the sensor e.g. 100hz
+     *  @param fcutoff the cut-off frequency of the  2nd order Low Pass Butterworth Filter filter e.g. 10hz
+     */
     void init(string JointName_,double fsampling, double fcutoff);
 
 };

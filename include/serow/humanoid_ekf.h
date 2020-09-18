@@ -1,7 +1,5 @@
-/*
- * SEROW - a complete state estimation scheme for humanoid robots
- *
- * Copyright 2017-2018 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/* 
+ * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -13,7 +11,7 @@
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
  *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
- *	 nor the names of its contributors may be used to endorse or promote products derived from
+ *		 nor the names of its contributors may be used to endorse or promote products derived from
  *       this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -28,11 +26,18 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+/**
+ * @brief Humanoid robot State Estimation
+ * @author Stylianos Piperakis
+ * @details 3D base and CoM estimation utilyzing IMU, encoder, force/torque or pressure and (optional) LIDAR/Visual Odometry
+ */
+
 
 #ifndef HUMANOID_EKF_H
 #define HUMANOID_EKF_H
 
 // ROS Headers
+#include <serow/robotDyn.h>
 #include <ros/ros.h>
 
 // Estimator Headers
@@ -62,13 +67,12 @@
 #include "serow/VarianceControlConfig.h"
 #include "serow/mediator.h"
 #include "serow/differentiator.h"
-#include "serow/robotDyn.h"
 #include "serow/Madgwick.h"
 #include "serow/Mahony.h"
 #include "serow/deadReckoning.h"
 #include "serow/Median.h"
 #include <serow/ContactDetection.h>
-
+#include <serow/Queue.h>
 using namespace Eigen;
 using namespace std;
 
@@ -76,26 +80,41 @@ class humanoid_ekf{
 private:
 	// ROS Standard Variables
 	ros::NodeHandle n;
-	ros::Publisher supportPose_est_pub, bodyAcc_est_pub,leftleg_odom_pub, rightleg_odom_pub, support_leg_pub, RLeg_est_pub, LLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
-	external_force_filt_pub, odom_est_pub, leg_odom_pub, ground_truth_com_pub, CoM_odom_pub, CoM_leg_odom_pub, ground_truth_odom_pub,ds_pub, 
-	rel_leftlegPose_pub,rel_rightlegPose_pub, comp_odom0_pub;
+	ros::Publisher rel_LLegPose_pub, rel_RLegPose_pub, rel_CoMPose_pub, RLegWrench_pub, LLegWrench_pub, ground_truth_com_pub, ground_truth_odom_pub, legOdom_pub, 
+	CoMLegOdom_pub, CoMOdom_pub, COP_pub, baseOdom_pub, RLegOdom_pub, LLegOdom_pub, baseIMU_pub,  ExternalWrench_pub, SupportPose_pub, joint_pub, comp_odom0_pub, SupportLegId_pub;
     
-	ros::Subscriber imu_sub, joint_state_sub, lfsr_sub, rfsr_sub, odom_sub, 
-	ground_truth_odom_sub,ds_sub, ground_truth_com_sub,support_idx_sub, compodom0_sub;
-	
+	//ROS Messages
+	sensor_msgs::JointState  tmp_joint_msg;
+	nav_msgs::Odometry tmp_odom_msg, ground_truth_odom_msg, ground_truth_com_odom_msg, ground_truth_odom_pub_msg, comp_odom0_msg, odom_msg, odom_msg_, ground_truth_odom_msg_;
+	sensor_msgs::Imu tmp_imu_msg;
+	geometry_msgs::PoseStamped tmp_pose_msg;
+	geometry_msgs::PointStamped tmp_point_msg;
+	std_msgs::String tmp_string_msg;
+	geometry_msgs::WrenchStamped tmp_wrench_msg;
+   
+
+
+
+	ros::Subscriber imu_sub, joint_state_sub, lfsr_sub, rfsr_sub, odom_sub, ground_truth_odom_sub, ground_truth_com_sub, compodom0_sub;
+	Queue<sensor_msgs::JointState> joint_data;
+	Queue<sensor_msgs::Imu> base_imu_data;
+	Queue<geometry_msgs::WrenchStamped> LLeg_FT_data, RLeg_FT_data;
+	std::thread output_thread, filtering_thread;
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
-	Eigen::Vector3d omegabl, omegabr, vbl, vbr, vbln, vbrn, vwb, omegawb, vwl, vwr, omegawr, omegawl, 	p_FT_LL, p_FT_RL;
+	Eigen::Vector3d wbb, abb, omegabl, omegabr, vbl, vbr, vbln, vbrn, vwb, omegawb, vwl, vwr, omegawr, omegawl, 	p_FT_LL, p_FT_RL;
 	Eigen::Matrix3d JLQnJLt, JRQnJRt;
 	Affine3d Twl, Twr, Tbl, Tbr;
 	serow::robotDyn* rd;
     bool useMahony;
 	serow::Madgwick* mw;
     serow::Mahony* mh;
-    double Kp, Ki, bias_max, bias_may, bias_maz, bias_mgx, bias_mgy, bias_mgz;
+    double Kp, Ki;
 	serow::deadReckoning* dr;
-
-  	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
+	Vector3d bias_a,bias_g;
+	int imuCalibrationCycles,maxImuCalibrationCycles;
+	bool calibrateIMU, computeJointVelocity, data_inc;
+   	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
 
 	double Tau0, Tau1, VelocityThres;
 	double  freq, joint_freq, fsr_freq;
@@ -117,27 +136,14 @@ private:
 	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, tempq_, gt_odomq; 
 	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM, useOutlierDetection;
     bool debug_mode;
-	//ROS Messages
-	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
-	sensor_msgs::Imu imu_msg;
-	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg, leftleg_odom_msg, rightleg_odom_msg,
-	ground_truth_com_odom_msg, CoM_odom_msg, ground_truth_odom_msg_, ground_truth_odom_pub_msg;
-	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg, rel_supportPose_msg, rel_swingPose_msg;
-	std_msgs::String support_leg_msg;
-	geometry_msgs::WrenchStamped RLeg_est_msg, LLeg_est_msg, lfsr_msg, rfsr_msg, external_force_filt_msg;
-   
-    geometry_msgs::PoseStamped bodyPose_est_msg, supportPose_est_msg;
-	geometry_msgs::TwistStamped bodyVel_est_msg, CoM_vel_msg;
-	sensor_msgs::Imu  bodyAcc_est_msg;
-	std_msgs::Int32 is_in_ds_msg, support_idx_msg;
-	geometry_msgs::PointStamped COP_msg, copl_msg, copr_msg, CoM_pos_msg;
+
 
 	//Madgwick gain
 	double beta;
 	// Helper
 	bool is_connected_, ground_truth, support_idx_provided;
 
-
+	Matrix3d Rwb;
 	Quaterniond qbs, qbl, qbr, qwb, qwb_, qws, qwl, qwr;
 	string base_link_frame, support_foot_frame, lfoot_frame, rfoot_frame;
 	
@@ -186,7 +192,6 @@ private:
 	std::string comp_with_odom0_topic;
 	Vector3d offsetCO;
 	Quaterniond qoffsetCO;
-	nav_msgs::Odometry comp_odom0_msg;
 	void subscribeToCompOdom();
 	void compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg);
 	/** Real odometry Data **/
@@ -234,6 +239,12 @@ private:
 	// Advertise to ROS Topics
 	void advertise();
 	void subscribe();
+	void outputPublishThread();
+	void filteringThread();
+	void joints(const sensor_msgs::JointState &msg);
+	void baseIMU(const sensor_msgs::Imu &msg);
+	void LLeg_FT(const geometry_msgs::WrenchStamped &msg);
+	void RLeg_FT(const geometry_msgs::WrenchStamped &msg);
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	// Constructor/Destructor

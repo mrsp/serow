@@ -1,3 +1,37 @@
+/* 
+ * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+ * License: BSD
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
+ *		 nor the names of its contributors may be used to endorse or promote products derived from
+ *       this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
+/**
+ * @brief leg odometry for Bipeds based on force/torque or pressure, and encoder measurement
+ * @author Stylianos Piperakis
+ * @details Estimates the 3D leg odometry of the base and the corresponding relative leg measurements
+ */
+
 #include <eigen3/Eigen/Dense>
 namespace serow
 {
@@ -25,6 +59,12 @@ class deadReckoning
 
   public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    
+    /** @fn deadReckoning(Eigen::Vector3d pwl0, Eigen::Vector3d pwr0, Eigen::Matrix3d Rwl0, Eigen::Matrix3d Rwr0,
+                  double mass_, double alpha1_ = 1.0, double alpha3_ = 0.01, double freq_ = 100.0, double g_ = 9.81,
+                  Eigen::Vector3d plf_ = Eigen::Vector3d::Zero(), Eigen::Vector3d prf_ = Eigen::Vector3d::Zero())
+    * @brief initializes the leg odometry module
+    */
     deadReckoning(Eigen::Vector3d pwl0, Eigen::Vector3d pwr0, Eigen::Matrix3d Rwl0, Eigen::Matrix3d Rwr0,
                   double mass_, double alpha1_ = 1.0, double alpha3_ = 0.01, double freq_ = 100.0, double g_ = 9.81,
                   Eigen::Vector3d plf_ = Eigen::Vector3d::Zero(), Eigen::Vector3d prf_ = Eigen::Vector3d::Zero())
@@ -80,15 +120,18 @@ class deadReckoning
         return vwb;
     }
 
-    void computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegab, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
+    void computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                             Eigen::Vector3d vbl, Eigen::Vector3d vbr, double wl_, double wr_)
     {
 
         
-        vwb_l.noalias() = -wedge(omegab)  * pbl - vbl;
-        vwb_l =  Rwb * vwb_l;
-        vwb_r.noalias() = -wedge(omegab)  * pbr - vbr;
-        vwb_r =  Rwb * vwb_r;
+        //vwb_l.noalias() = -wedge(omegab)  * pbl - vbl;
+        //vwb_l =  Rwb * vwb_l;
+        //vwb_r.noalias() = -wedge(omegab)  * pbr - vbr;
+        //vwb_r =  Rwb * vwb_r;
+
+        vwb_l = wl*(-wedge(omegawb) * Rwb * pbl - Rwb * vbl);
+        vwb_r = wr*(-wedge(omegawb) * Rwb * pbr - Rwb * vbr);
 
         vwb = wl_ * vwb_l;
         vwb += wr_ * vwb_r;
@@ -222,7 +265,7 @@ class deadReckoning
         wl = (lfz + ef) / (lfz + rfz + 2.0 * ef);
         wr = (rfz + ef) / (lfz + rfz + 2.0 * ef);
 
-        computeBodyVelKCFS(Rwb, bomegab, pbl, pbr, vbl, vbr, wl, wr);
+        computeBodyVelKCFS(Rwb, omegawb, pbl, pbr, vbl, vbr, wl, wr);
  
 
 

@@ -2,7 +2,7 @@
 base_link: "base_link"
 lfoot: "l_ankle"
 rfoot: "r_ankle"
-modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
+modelname: "/home/master/ros_ws/src/serow/share/urdf/nao.urdf"
 useLegOdom: true
 
 #ROS Topic Names
@@ -67,22 +67,22 @@ VelocityThres: 0.12
 lvnorm_sigma: 0.02
 rvnorm_sigma: 0.02
 probabilisticContactThreshold: 0.9
-ContactDetectionWithCOP: true
-ContactDetectionWithKinematics: true
+ContactDetectionWithCOP: false
+ContactDetectionWithKinematics: false
 
 
 
 
 
 #Joint Velocity Estimation
-joint_cutoff_freq: 6.0
+joint_cutoff_freq: 16.0
 joint_noise_density: 0.5
 #Mahony Filter for attitude
 useMahony: true
-Mahony_Kp: 0.9
+Mahony_Kp: 0.4
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
-Madgwick_gain: 0.3
+Madgwick_gain: 0.1
 
 
 #Leg Odometry Coefficients
@@ -90,12 +90,10 @@ Tau0: 1.0
 Tau1: 1.0
 medianWindow: 7
 #mass: 6.6530  #robot mass
-mass: 6.4  #robot mass
+mass: 5.6  #robot mass with realsense and IMU
 
 
-#Choose Integration Method
-#Euler Method for faster execution if false the Runge-Kutta 4 method will be used 
-useEuler: true
+
 useInIMUEKF: false
 contact_random_walk: 0.1
 
@@ -113,7 +111,7 @@ gyroscope_noise_density: 0.0028 #rad/s 28 #MTI-300
 #VO Measuremets
 #Odometry Measurement Noise std:
 #leg_odom_position_noise_density: 5.0e-04 #5.0e-04
-leg_odom_position_noise_density: 0.1
+leg_odom_position_noise_density: 5.0e-04
 leg_odom_orientation_noise_density: 5.0e-02
 
 
@@ -130,18 +128,19 @@ odom_orientation_noise_density: 5.0e-02 #2.0e-01
 #odom_position_noise_density: 0.015
 #odom_orientation_noise_density: 0.01
 
-velocity_noise_density_x: 1.0
-velocity_noise_density_y: 1.0
-velocity_noise_density_z: 0.5
+velocity_noise_density_x: 0.12
+velocity_noise_density_y: 0.12
+velocity_noise_density_z: 0.12
 
-#IMU Initial Biases - Biases are substracted and are in the IMU !
-bias_ax: 0.0
-bias_ay: 0.0
-bias_az: 0.0
-bias_gx: 0.0
-bias_gy: 0.0
-bias_gz: 0.0
-
+#IMU Initial Biases - Biases are substracted and are in the Body Frame!
+bias_ax: 0
+bias_ay: 0
+bias_az: 0
+bias_gx: 0
+bias_gy: 0
+bias_gz: 0
+calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 1000
 
 
 

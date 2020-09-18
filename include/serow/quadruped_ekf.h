@@ -1,7 +1,5 @@
-/*
- * SEROW - a complete state estimation scheme for humanoid robots
- *
- * Copyright 2017-2018 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/* 
+ * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -13,7 +11,7 @@
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
  *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
- *	 nor the names of its contributors may be used to endorse or promote products derived from
+ *		 nor the names of its contributors may be used to endorse or promote products derived from
  *       this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -28,11 +26,17 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+/**
+ * @brief Quadruped robot State Estimation
+ * @author Stylianos Piperakis
+ * @details 3D base and CoM estimation utilyzing IMU, encoder, force/torque or pressure and (optional) LIDAR/Visual Odometry
+ */
 
 #ifndef QUADRUPED_EKF_H
 #define QUADRUPED_EKF_H
 
 // ROS Headers
+#include <serow/robotDyn.h>
 #include <ros/ros.h>
 
 // Estimator Headers
@@ -60,7 +64,6 @@
 #include <serow/VarianceControlConfig.h>
 #include <serow/mediator.h>
 #include <serow/differentiator.h>
-#include <serow/robotDyn.h>
 #include <serow/Madgwick.h>
 #include <serow/Mahony.h>
 #include <serow/deadReckoningQuad.h>
@@ -71,7 +74,7 @@ using namespace std;
 
 class quadruped_ekf{
 private:
-	// ROS Standard Variables
+	///ROS Standard Variables
 	ros::NodeHandle n;
 	ros::Publisher supportPose_est_pub, bodyAcc_est_pub, LFLeg_odom_pub, LHLeg_odom_pub, RFLeg_odom_pub, RHLeg_odom_pub,
 	support_leg_pub, RFLeg_est_pub, RHLeg_est_pub, LFLeg_est_pub, LHLeg_est_pub, COP_pub, joint_filt_pub, rel_CoMPose_pub,
@@ -92,17 +95,19 @@ private:
 	string base_link_frame, support_foot_frame, LFfoot_frame,  LHfoot_frame, RFfoot_frame, RHfoot_frame;
 
 
-	//Wrapper of Pinnochio
+	///Wrapper of Pinnochio
 	serow::robotDyn* rd;
-	//Orientation Estimators based on IMU
+	///Orientation Estimators based on IMU
     bool useMahony;
 	serow::Madgwick* mw;
     serow::Mahony* mh;
     double Kp, Ki;
-
-	//Leg Odometry Computation
+	Vector3d bias_a,bias_g;
+	int imuCalibrationCycles,maxImuCalibrationCycles;
+	bool imuCalibrated;
+	///Leg Odometry Computation
 	serow::deadReckoningQuad* dr;
-	//Joint State Estimator 
+	///Joint State Estimator 
   	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
 	JointDF** JointVF;
 	double jointFreq,joint_cutoff_freq;
@@ -144,9 +149,9 @@ private:
 	std_msgs::Int32 is_in_ds_msg, support_idx_msg;
 	geometry_msgs::PointStamped COP_msg, copl_msg, copr_msg, CoM_pos_msg;
 
-	//Madgwick gain
+	///Madgwick gain
 	double beta;
-	// Helper
+	///Helper
 	bool is_connected_, ground_truth, support_idx_provided;
 
 
@@ -161,7 +166,7 @@ private:
 	CoMEKF* nipmEKF;
 	butterworthLPF** gyroLPF;
 	MovingAverageFilter** gyroMAF;
-	//Cuttoff Freqs for LPF
+	///Cuttoff Freqs for LPF
 	double gyro_fx, gyro_fy, gyro_fz;
 	Vector3d COP_fsr, GRF_fsr, CoM_enc, Gyrodot, Gyro_, CoM_leg_odom;
 	double bias_fx,bias_fy,bias_fz;
@@ -181,9 +186,10 @@ private:
 	double foot_polygon_xmin, foot_polygon_xmax, foot_polygon_ymin, foot_polygon_ymax;
 	double LFforce_sigma, LHforce_sigma, RFforce_sigma, RHforce_sigma, LFcop_sigma, LHcop_sigma, RFcop_sigma, RHcop_sigma, LFvnorm_sigma, LHvnorm_sigma, RFvnorm_sigma, RHvnorm_sigma, probabilisticContactThreshold;
 	Vector3d LFLegGRF, LHLegGRF, RFLegGRF, RHLegGRF, LFLegGRT, LHLegGRT, RFLegGRT, RHLegGRT, offsetGT,offsetGTCoM;
-	Affine3d Tws, Twb, Twb_; //From support s to world frame;
+	Affine3d Tws, Twb, Twb_; ///From support s to world frame;
 	Affine3d Tbs, Tsb, Tssw, Tbsw;
 	Vector3d no_motion_residual;
+	Matrix3d Rwb;
 	/****/
 	bool  kinematicsInitialized, firstContact;
 	Vector3d LFLegForceFilt, LHLegForceFilt, RFLegForceFilt, RHLegForceFilt;
@@ -199,7 +205,6 @@ private:
 	nav_msgs::Odometry comp_odom0_msg;
 	void subscribeToCompOdom();
 	void compodom0Cb(const nav_msgs::Odometry::ConstPtr& msg);
-	/** Real odometry Data **/
      string LFfsr_topic,LHfsr_topic, RFfsr_topic, RHfsr_topic;
 	 string imu_topic;
 	 string joint_state_topic;
@@ -207,7 +212,6 @@ private:
 	 string ground_truth_odom_topic, ground_truth_com_topic, support_idx_topic;
      string modelname;
 
-	//Odometry, from supportleg to inertial, transformation from support leg to other leg
      void subscribeToIMU();
 	 void subscribeToFSR();
 	 void subscribeToJointState();

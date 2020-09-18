@@ -2,9 +2,10 @@
 base_link: "pelvis"
 lfoot: "leftFoot"
 rfoot: "rightFoot"
-modelname: "/home/master/dp_ws/src/serow/share/urdf/valkyrie_sim.urdf"
+modelname: "/home/master/ros_ws/src/serow/share/urdf/valkyrie_sim.urdf"
+#modelname: "/home/master/ros_ws/src/serow/share/urdf/valkyrie_sim_gazebo_sync.urdf"
 
-useLegOdom: true
+useLegOdom: false
 #ROS Topic Names
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/pelvisMiddleImu/imu"
@@ -93,9 +94,9 @@ odom_position_noise_density_z: 1.0e-2
 
 odom_orientation_noise_density: 1.0e-2
 
-velocity_noise_density_x: 2.5 #0.007
-velocity_noise_density_y: 2.5 #0.009
-velocity_noise_density_z: 2.5 #0.007
+velocity_noise_density_x: 1.5 #0.007
+velocity_noise_density_y: 1.5 #0.009
+velocity_noise_density_z: 1.5 #0.007
 
 #IMU Initial Biases - Biases are substracted!
 bias_ax: 0.0
@@ -104,7 +105,8 @@ bias_az: 9.7997
 bias_gx: -1.60298e-05
 bias_gy: -1.24745e-05
 bias_gz: -2.60968e-05
-
+calibrateIMUbiases: false #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 1000
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
 

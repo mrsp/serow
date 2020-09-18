@@ -1,7 +1,5 @@
-/*
- * humanoid_state_estimation - a complete state estimation scheme for humanoid robots
- *
- * Copyright 2017-2018 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/* 
+ * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -13,7 +11,7 @@
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
  *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
- *	 nor the names of its contributors may be used to endorse or promote products derived from
+ *		 nor the names of its contributors may be used to endorse or promote products derived from
  *       this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -27,6 +25,11 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
+ */
+ /**
+ * @brief Numerical Differentiation with the First Order Euler Method 
+ * @author Stylianos Piperakis
+ * @details to numerical compute the derivative of a signal
  */
 
 #ifndef  __DIFFERENTIATOR_H__
@@ -47,15 +50,31 @@ private:
 public:
     double x;
     double xdot;
+
+    /** @fn void setParams(double dt_)
+     *  @brief differentiates the measurement with finite differences
+     *  @param dt_ Sampling time in seconds e.g. 0.01s
+    */  
     void setParams(double dt_)
     {
         dt=dt_;
     }
     /** @fn void diff(double x)
      *  @brief differentiates the measurement with finite differences
+     *  @param x signal to be differentiatied
     */
     double diff(double x);
+
+    /** @fn void init(string name_,double dt_);
+     *  @brief initializes the numerical differentiator
+     *  @param name_ name of the signal e.g LHipYawPitch
+     *  @param dt_ Sampling time in seconds e.g. 0.01s
+    */  
     void init(string name_,double dt_);
+
+    /** @fn void reset();
+     *  @brief  resets the the numerical differentiator's state
+    */    
     void reset();
 };
 #endif

@@ -2,15 +2,14 @@
 base_link: "base_link"
 lfoot: "l_ankle"
 rfoot: "r_ankle"
-modelname: "/home/master/dp_ws/src/serow/share/urdf/nao.urdf"
+modelname: "/home/master/ros_ws/src/serow/share/urdf/nao.urdf"
 
 #ROS Topic Names
 
-useLegOdom: true
+useLegOdom: false
 #odom_topic: "/svo/odom/0"
 odom_topic: "/odom_rf2o"
 imu_topic: "/nao_robot/imu"
-#imu_topic: "/imu0"
 joint_state_topic: "/joint_states"
 lfoot_force_torque_topic: "/nao_robot/LLeg/force_torque_states"
 rfoot_force_torque_topic: "/nao_robot/RLeg/force_torque_states"
@@ -22,22 +21,19 @@ ground_truth_odom_topic: "/nao/ground_truth/odom"
 ground_truth_com_topic: "/gt_com"
 T_B_GT: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0 ,0, 1]
 
-comp_with: false
+comp_with: true
 #comp_with_odom0_topic: "/svo/odom/0"
 comp_with_odom0_topic: "/odom_rf2o"
 support_idx_provided: false
 support_idx_topic: "/sp"
 
 #To publish relative data
-debug_mode: false
+debug_mode: true
 
 
 #TF from IMU to Body 
-#For imu0 (external IMU)
-#T_B_A: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,0, 1]
-#T_B_G: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,0, 1]
 #For nao imu (onboard IMU)
-T_B_A: [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,-1 ,0, 0, 0, 0 ,0, 1]
+T_B_A: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 ,0, 1]
 T_B_G: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 ,0, 1]
 #TF from F/T to Left Foot
 T_FT_LL: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
@@ -58,14 +54,13 @@ LegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 7
 StrikingContact: 60
 
-#Steady State Joint Kalman Filter (KF)
-joint_cutoff_freq: 12
+
+#Joint Velocity Estimation
+joint_cutoff_freq: 16.0
 joint_noise_density: 0.5
-
-
 #Mahony Filter for attitude
 useMahony: true
-Mahony_Kp: 0.5
+Mahony_Kp: 0.9
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.3
@@ -74,10 +69,11 @@ Madgwick_gain: 0.3
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
-medianWindow: 10
-#mass: 5.182530  #robot mass
-mass: 6.6530  #robot mass
-#Choose Integration Method
+medianWindow: 8
+#mass: 6.6530  #robot mass
+mass: 5.6  #robot mass with realsense and IMU
+
+#mass: 6.6530  #robot mass with RP-LIDAR
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
@@ -93,8 +89,8 @@ gyroscope_noise_density: 0.00968 #rad/s
 
 #VO Measuremets
 #Odometry Measurement Noise std:
-leg_odom_position_noise_density: 5.0e-04
-leg_odom_orientation_noise_density: 5.0e-02
+leg_odom_position_noise_density: 5.0e-04 #m
+leg_odom_orientation_noise_density: 5.0e-02 #rad
 
 useOutlierDetection: false
 #mahalanobis_TH: 9
@@ -104,23 +100,24 @@ mahalanobis_TH: -1
 #odom_orientation_noise_density: 5.0e-02 #2.0e-01
 
 #RP Lidar Odom
-odom_position_noise_density: 0.012
-odom_orientation_noise_density: 5.0e-02
+odom_position_noise_density: 0.012 #m 
+odom_orientation_noise_density: 5.0e-02 #rad
 
-velocity_noise_density_x: 0.013
-velocity_noise_density_y: 0.013
-velocity_noise_density_z: 0.013
+velocity_noise_density_x: 0.013 #m/s
+velocity_noise_density_y: 0.013 #m/s
+velocity_noise_density_z: 0.013 #m/s
 
 
 #IMU Initial Biases - Biases are substracted!
-bias_ax: 0.639618
-bias_ay: -0.1934
+bias_ax: 0.639618 #m/s^2
+bias_ay: -0.1934  #m/s^2
 #bias_ay: -0.0751756
-bias_az:  0.0
-bias_gx: -0.000817362
-bias_gy: -0.00178242
-bias_gz: -0.000158554
-
+bias_az:  0.0 #m/s^2
+bias_gx: -0.000817362 #rad
+bias_gy: -0.00178242  #rad
+bias_gz: -0.000158554 #rad
+calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
+maxImuCalibrationCycles: 2000
 
 
 
