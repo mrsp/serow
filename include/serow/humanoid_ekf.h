@@ -58,7 +58,8 @@
 #include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Bool.h>
-
+#include <mutex>          
+#include <thread>        
 #include <sensor_msgs/JointState.h>
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
@@ -84,13 +85,7 @@ private:
 	ros::Publisher rel_LLegPose_pub, rel_RLegPose_pub, rel_CoMPose_pub, RLegWrench_pub, LLegWrench_pub, ground_truth_com_pub, ground_truth_odom_pub, legOdom_pub, 
 	CoMLegOdom_pub, CoMOdom_pub, COP_pub, baseOdom_pub, RLegOdom_pub, LLegOdom_pub, baseIMU_pub,  ExternalWrench_pub, SupportPose_pub, joint_pub, comp_odom0_pub, SupportLegId_pub;
 	//ROS Messages
-	sensor_msgs::JointState  tmp_joint_msg;
-	nav_msgs::Odometry tmp_odom_msg, ground_truth_odom_msg, ground_truth_com_odom_msg, ground_truth_odom_pub_msg, comp_odom0_msg, odom_msg, odom_msg_, ground_truth_odom_msg_;
-	sensor_msgs::Imu tmp_imu_msg;
-	geometry_msgs::PoseStamped tmp_pose_msg;
-	geometry_msgs::PointStamped tmp_point_msg;
-	std_msgs::String tmp_string_msg;
-	geometry_msgs::WrenchStamped tmp_wrench_msg;
+	nav_msgs::Odometry ground_truth_odom_msg, ground_truth_com_odom_msg, ground_truth_odom_pub_msg, comp_odom0_msg, odom_msg, odom_msg_, ground_truth_odom_msg_;
 	//ROS Subscribers
 	ros::Subscriber imu_sub, joint_state_sub, lfsr_sub, rfsr_sub, odom_sub, ground_truth_odom_sub, ground_truth_com_sub, compodom0_sub;
 	//Buffers for topic data
@@ -98,6 +93,8 @@ private:
 	Queue<sensor_msgs::Imu> base_imu_data;
 	Queue<geometry_msgs::WrenchStamped> LLeg_FT_data, RLeg_FT_data;
 	std::thread output_thread, filtering_thread;
+	std::mutex output_lock;
+
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
 	Eigen::Vector3d wbb, abb, omegabl, omegabr, vbl, vbr, vbln, vbrn, vwb, omegawb, vwl, vwr, omegawr, omegawl, p_FT_LL, p_FT_RL;
