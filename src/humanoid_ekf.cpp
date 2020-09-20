@@ -43,7 +43,11 @@ void humanoid_ekf::loadparams()
     n_p.param<std::string>("lfoot", lfoot_frame, "l_ankle");
     n_p.param<std::string>("rfoot", rfoot_frame, "r_ankle");
     n_p.param<double>("imu_topic_freq", freq, 100.0);
-    n_p.param<double>("fsr_topic_freq", fsr_freq, 100.0);
+    n_p.param<double>("ft_topic_freq", ft_freq, freq);
+    n_p.param<double>("joint_topic_freq", joint_freq, 100.0);
+    
+    freq = min(min(freq,ft_freq),joint_freq);
+
     n_p.param<bool>("useInIMUEKF", useInIMUEKF, false);
     n_p.param<double>("VelocityThres", VelocityThres, 0.5);
     n_p.param<double>("LosingContact", LosingContact, 5.0);
@@ -266,7 +270,6 @@ void humanoid_ekf::loadparams()
 void humanoid_ekf::loadJointKFparams()
 {
     ros::NodeHandle n_p("~");
-    n_p.param<double>("joint_topic_freq", joint_freq, 100.0);
     n_p.param<double>("joint_cutoff_freq", joint_cutoff_freq, 10.0);
 }
 
@@ -737,7 +740,7 @@ void humanoid_ekf::estimateWithCoMEKF()
 {
     if (nipmEKF->firstrun)
     {
-        nipmEKF->setdt(1.0 / fsr_freq);
+        nipmEKF->setdt(1.0 / freq);
         nipmEKF->setParams(mass, I_xx, I_yy, g);
         nipmEKF->setCoMPos(CoM_leg_odom);
         nipmEKF->setCoMExternalForce(Vector3d(bias_fx, bias_fy, bias_fz));
@@ -803,7 +806,7 @@ void humanoid_ekf::computeKinTFs()
         Twr.translation() << Tbr.translation()(0), Tbr.translation()(1), 0.00;
         Twr.linear() = Tbr.linear();
         dr = new serow::deadReckoning(Twl.translation(), Twr.translation(), Twl.linear(), Twr.linear(),
-                                      mass, Tau0, Tau1, joint_freq, g, p_FT_LL, p_FT_RL);
+                                      mass, Tau0, Tau1, freq, g, p_FT_LL, p_FT_RL);
     }
 
     //Differential Kinematics with Pinnochio
@@ -1065,8 +1068,6 @@ void humanoid_ekf::subscribeToJointState()
 void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr &msg)
 {
     joint_data.push(*msg);
-    cout<<"Buffer Size joint_data "<<joint_data.size()<<endl;
-
     if (joint_data.size() > 6)
         joint_data.pop();
 }
@@ -1085,7 +1086,7 @@ void humanoid_ekf::joints(const sensor_msgs::JointState &msg)
             for (unsigned int i = 0; i < number_of_joints; i++)
             {
                 JointVF[i] = new JointDF();
-                JointVF[i]->init(msg.name[i], joint_freq, joint_cutoff_freq);
+                JointVF[i]->init(msg.name[i], freq, joint_cutoff_freq);
             }
         }
         firstJointStates = false;
@@ -1245,7 +1246,6 @@ void humanoid_ekf::subscribeToIMU()
 void humanoid_ekf::imuCb(const sensor_msgs::Imu::ConstPtr &msg)
 {
     base_imu_data.push(*msg);
-    cout<<"Buffer Size imu "<<base_imu_data.size()<<endl;
     if (base_imu_data.size() > 6)
         base_imu_data.pop();
 }
@@ -1298,8 +1298,6 @@ void humanoid_ekf::subscribeToFSR()
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
     LLeg_FT_data.push(*msg);
-    cout<<"Buffer Size LLeg "<<LLeg_FT_data.size()<<endl;
-
     if (LLeg_FT_data.size() > 6)
         LLeg_FT_data.pop();
 }
@@ -1338,8 +1336,6 @@ void humanoid_ekf::LLeg_FT(const geometry_msgs::WrenchStamped &msg)
 void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
     RLeg_FT_data.push(*msg);
-    cout<<"Buffer Size RLeg "<<RLeg_FT_data.size()<<endl;
-
     if (RLeg_FT_data.size() > 6)
         RLeg_FT_data.pop();
 

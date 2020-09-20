@@ -2,10 +2,10 @@
 base_link: "pelvis"
 lfoot: "leftFoot"
 rfoot: "rightFoot"
-modelname: "/home/master/talos_walk_ws/src/serow/share/urdf/valkyrie_sim.urdf"
+modelname: "/home/master/serow_ws/src/serow/share/urdf/valkyrie_sim.urdf"
 #modelname: "/home/master/ros_ws/src/serow/share/urdf/valkyrie_sim_gazebo_sync.urdf"
 
-useLegOdom: false
+useLegOdom: true
 #ROS Topic Names
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/pelvisMiddleImu/imu"

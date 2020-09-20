@@ -196,8 +196,8 @@ namespace serow
         //TODO
         void mapJointNamesIDs(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
         {
-            q_.resize(pmodel_->nq);
-            qdot_.resize(pmodel_->nv);
+            q_.setZero(pmodel_->nq);
+            qdot_.setZero(pmodel_->nv);
 
             for(int i = 0; i<jnames_.size();i++)
             {

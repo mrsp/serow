@@ -115,7 +115,7 @@ private:
    	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
 
 	double Tau0, Tau1, VelocityThres;
-	double  freq, joint_freq, fsr_freq;
+	double  freq, joint_freq, ft_freq;
 	bool odom_inc, check_no_motion;
 	bool firstOdom, firstGyrodot, firstJointStates, firstUpdate;
 	bool no_motion_indicator, outlier, odom_divergence;
