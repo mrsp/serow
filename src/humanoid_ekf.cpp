@@ -1376,17 +1376,19 @@ void humanoid_ekf::publishBodyEstimates()
 
     if (!useInIMUEKF)
     {
+        sensor_msgs::Imu tmp_imu_msg;
         tmp_imu_msg.header.stamp = ros::Time::now();
         tmp_imu_msg.header.frame_id = "odom";
         tmp_imu_msg.linear_acceleration.x = imuEKF->accX;
         tmp_imu_msg.linear_acceleration.y = imuEKF->accY;
         tmp_imu_msg.linear_acceleration.z = imuEKF->accZ;
-
         tmp_imu_msg.angular_velocity.x = imuEKF->gyroX;
         tmp_imu_msg.angular_velocity.y = imuEKF->gyroY;
         tmp_imu_msg.angular_velocity.z = imuEKF->gyroZ;
         baseIMU_pub.publish(tmp_imu_msg);
 
+
+	    nav_msgs::Odometry tmp_odom_msg;
         tmp_odom_msg.child_frame_id = base_link_frame;
         tmp_odom_msg.header.stamp = ros::Time::now();
         tmp_odom_msg.header.frame_id = "odom";
@@ -1411,6 +1413,7 @@ void humanoid_ekf::publishBodyEstimates()
     }
     else
     {
+        sensor_msgs::Imu tmp_imu_msg;
         tmp_imu_msg.header.stamp = ros::Time::now();
         tmp_imu_msg.header.frame_id = "odom";
         tmp_imu_msg.linear_acceleration.x = imuInEKF->accX;
@@ -1422,6 +1425,7 @@ void humanoid_ekf::publishBodyEstimates()
         tmp_imu_msg.angular_velocity.z = imuInEKF->gyroZ;
         baseIMU_pub.publish(tmp_imu_msg);
 
+	    nav_msgs::Odometry tmp_odom_msg;
         tmp_odom_msg.child_frame_id = base_link_frame;
         tmp_odom_msg.header.stamp = ros::Time::now();
         tmp_odom_msg.header.frame_id = "odom";
@@ -1442,6 +1446,7 @@ void humanoid_ekf::publishBodyEstimates()
         baseOdom_pub.publish(tmp_odom_msg);
     }
 
+	nav_msgs::Odometry tmp_odom_msg;
     tmp_odom_msg.child_frame_id = base_link_frame;
     tmp_odom_msg.header.stamp = ros::Time::now();
     tmp_odom_msg.header.frame_id = "odom";
@@ -1484,6 +1489,7 @@ void humanoid_ekf::publishBodyEstimates()
 
 void humanoid_ekf::publishSupportEstimates()
 {
+	geometry_msgs::PoseStamped tmp_pose_msg;
     tmp_pose_msg.header.stamp = ros::Time::now();
     tmp_pose_msg.header.frame_id = "odom";
     tmp_pose_msg.pose.position.x = Tws.translation()(0);
@@ -1498,66 +1504,69 @@ void humanoid_ekf::publishSupportEstimates()
 
 void humanoid_ekf::publishLegEstimates()
 {
-    tmp_odom_msg.child_frame_id = lfoot_frame;
-    tmp_odom_msg.header.stamp = ros::Time::now();
-    tmp_odom_msg.header.frame_id = "odom";
-    tmp_odom_msg.pose.pose.position.x = Twl.translation()(0);
-    tmp_odom_msg.pose.pose.position.y = Twl.translation()(1);
-    tmp_odom_msg.pose.pose.position.z = Twl.translation()(2);
-    tmp_odom_msg.pose.pose.orientation.x = qwl.x();
-    tmp_odom_msg.pose.pose.orientation.y = qwl.y();
-    tmp_odom_msg.pose.pose.orientation.z = qwl.z();
-    tmp_odom_msg.pose.pose.orientation.w = qwl.w();
-    tmp_odom_msg.twist.twist.linear.x = vwl(0);
-    tmp_odom_msg.twist.twist.linear.y = vwl(1);
-    tmp_odom_msg.twist.twist.linear.z = vwl(2);
-    tmp_odom_msg.twist.twist.angular.x = omegawl(0);
-    tmp_odom_msg.twist.twist.angular.y = omegawl(1);
-    tmp_odom_msg.twist.twist.angular.z = omegawl(2);
-    LLegOdom_pub.publish(tmp_odom_msg);
+	nav_msgs::Odometry tmp_LLeg_odom_msg;
+    tmp_LLeg_odom_msg.child_frame_id = lfoot_frame;
+    tmp_LLeg_odom_msg.header.stamp = ros::Time::now();
+    tmp_LLeg_odom_msg.header.frame_id = "odom";
+    tmp_LLeg_odom_msg.pose.pose.position.x = Twl.translation()(0);
+    tmp_LLeg_odom_msg.pose.pose.position.y = Twl.translation()(1);
+    tmp_LLeg_odom_msg.pose.pose.position.z = Twl.translation()(2);
+    tmp_LLeg_odom_msg.pose.pose.orientation.x = qwl.x();
+    tmp_LLeg_odom_msg.pose.pose.orientation.y = qwl.y();
+    tmp_LLeg_odom_msg.pose.pose.orientation.z = qwl.z();
+    tmp_LLeg_odom_msg.pose.pose.orientation.w = qwl.w();
+    tmp_LLeg_odom_msg.twist.twist.linear.x = vwl(0);
+    tmp_LLeg_odom_msg.twist.twist.linear.y = vwl(1);
+    tmp_LLeg_odom_msg.twist.twist.linear.z = vwl(2);
+    tmp_LLeg_odom_msg.twist.twist.angular.x = omegawl(0);
+    tmp_LLeg_odom_msg.twist.twist.angular.y = omegawl(1);
+    tmp_LLeg_odom_msg.twist.twist.angular.z = omegawl(2);
+    LLegOdom_pub.publish(tmp_LLeg_odom_msg);
 
-    tmp_odom_msg.child_frame_id = rfoot_frame;
-    tmp_odom_msg.header.stamp = ros::Time::now();
-    tmp_odom_msg.header.frame_id = "odom";
-    tmp_odom_msg.pose.pose.position.x = Twr.translation()(0);
-    tmp_odom_msg.pose.pose.position.y = Twr.translation()(1);
-    tmp_odom_msg.pose.pose.position.z = Twr.translation()(2);
-    tmp_odom_msg.pose.pose.orientation.x = qwr.x();
-    tmp_odom_msg.pose.pose.orientation.y = qwr.y();
-    tmp_odom_msg.pose.pose.orientation.z = qwr.z();
-    tmp_odom_msg.pose.pose.orientation.w = qwr.w();
-    tmp_odom_msg.twist.twist.linear.x = vwr(0);
-    tmp_odom_msg.twist.twist.linear.y = vwr(1);
-    tmp_odom_msg.twist.twist.linear.z = vwr(2);
-    tmp_odom_msg.twist.twist.angular.x = omegawr(0);
-    tmp_odom_msg.twist.twist.angular.y = omegawr(1);
-    tmp_odom_msg.twist.twist.angular.z = omegawr(2);
-    RLegOdom_pub.publish(tmp_odom_msg);
+	nav_msgs::Odometry tmp_RLeg_odom_msg;
+    tmp_RLeg_odom_msg.child_frame_id = rfoot_frame;
+    tmp_RLeg_odom_msg.header.stamp = ros::Time::now();
+    tmp_RLeg_odom_msg.header.frame_id = "odom";
+    tmp_RLeg_odom_msg.pose.pose.position.x = Twr.translation()(0);
+    tmp_RLeg_odom_msg.pose.pose.position.y = Twr.translation()(1);
+    tmp_RLeg_odom_msg.pose.pose.position.z = Twr.translation()(2);
+    tmp_RLeg_odom_msg.pose.pose.orientation.x = qwr.x();
+    tmp_RLeg_odom_msg.pose.pose.orientation.y = qwr.y();
+    tmp_RLeg_odom_msg.pose.pose.orientation.z = qwr.z();
+    tmp_RLeg_odom_msg.pose.pose.orientation.w = qwr.w();
+    tmp_RLeg_odom_msg.twist.twist.linear.x = vwr(0);
+    tmp_RLeg_odom_msg.twist.twist.linear.y = vwr(1);
+    tmp_RLeg_odom_msg.twist.twist.linear.z = vwr(2);
+    tmp_RLeg_odom_msg.twist.twist.angular.x = omegawr(0);
+    tmp_RLeg_odom_msg.twist.twist.angular.y = omegawr(1);
+    tmp_RLeg_odom_msg.twist.twist.angular.z = omegawr(2);
+    RLegOdom_pub.publish(tmp_RLeg_odom_msg);
 
     if (debug_mode)
     {
-        tmp_pose_msg.pose.position.x = Tbl.translation()(0);
-        tmp_pose_msg.pose.position.y = Tbl.translation()(1);
-        tmp_pose_msg.pose.position.z = Tbl.translation()(2);
-        tmp_pose_msg.pose.orientation.x = qbl.x();
-        tmp_pose_msg.pose.orientation.y = qbl.y();
-        tmp_pose_msg.pose.orientation.z = qbl.z();
-        tmp_pose_msg.pose.orientation.w = qbl.w();
-        tmp_pose_msg.header.stamp = ros::Time::now();
-        tmp_pose_msg.header.frame_id = base_link_frame;
-        rel_LLegPose_pub.publish(tmp_pose_msg);
+        geometry_msgs::PoseStamped tmp_LLeg_pose_msg;
+        tmp_LLeg_pose_msg.pose.position.x = Tbl.translation()(0);
+        tmp_LLeg_pose_msg.pose.position.y = Tbl.translation()(1);
+        tmp_LLeg_pose_msg.pose.position.z = Tbl.translation()(2);
+        tmp_LLeg_pose_msg.pose.orientation.x = qbl.x();
+        tmp_LLeg_pose_msg.pose.orientation.y = qbl.y();
+        tmp_LLeg_pose_msg.pose.orientation.z = qbl.z();
+        tmp_LLeg_pose_msg.pose.orientation.w = qbl.w();
+        tmp_LLeg_pose_msg.header.stamp = ros::Time::now();
+        tmp_LLeg_pose_msg.header.frame_id = base_link_frame;
+        rel_LLegPose_pub.publish(tmp_LLeg_pose_msg);
 
-        tmp_pose_msg.pose.position.x = Tbr.translation()(0);
-        tmp_pose_msg.pose.position.y = Tbr.translation()(1);
-        tmp_pose_msg.pose.position.z = Tbr.translation()(2);
-        tmp_pose_msg.pose.orientation.x = qbr.x();
-        tmp_pose_msg.pose.orientation.y = qbr.y();
-        tmp_pose_msg.pose.orientation.z = qbr.z();
-        tmp_pose_msg.pose.orientation.w = qbr.w();
-
-        tmp_pose_msg.header.stamp = ros::Time::now();
-        tmp_pose_msg.header.frame_id = base_link_frame;
-        rel_RLegPose_pub.publish(tmp_pose_msg);
+        geometry_msgs::PoseStamped tmp_RLeg_pose_msg;
+        tmp_RLeg_pose_msg.pose.position.x = Tbr.translation()(0);
+        tmp_RLeg_pose_msg.pose.position.y = Tbr.translation()(1);
+        tmp_RLeg_pose_msg.pose.position.z = Tbr.translation()(2);
+        tmp_RLeg_pose_msg.pose.orientation.x = qbr.x();
+        tmp_RLeg_pose_msg.pose.orientation.y = qbr.y();
+        tmp_RLeg_pose_msg.pose.orientation.z = qbr.z();
+        tmp_RLeg_pose_msg.pose.orientation.w = qbr.w();
+        tmp_RLeg_pose_msg.header.stamp = ros::Time::now();
+        tmp_RLeg_pose_msg.header.frame_id = base_link_frame;
+        rel_RLegPose_pub.publish(tmp_RLeg_pose_msg);
     }
 }
 
@@ -1566,6 +1575,7 @@ void humanoid_ekf::publishLegEstimates()
 void humanoid_ekf::publishJointEstimates()
 {
 
+	sensor_msgs::JointState  tmp_joint_msg;
     tmp_joint_msg.header.stamp = ros::Time::now();
     tmp_joint_msg.name.resize(number_of_joints);
     tmp_joint_msg.position.resize(number_of_joints);
@@ -1585,35 +1595,39 @@ void humanoid_ekf::publishJointEstimates()
 
 void humanoid_ekf::publishContact()
 {
+    std_msgs::String tmp_string_msg;
     tmp_string_msg.data = support_leg;
     SupportLegId_pub.publish(tmp_string_msg);
 }
 
 void humanoid_ekf::publishGRF()
 {
-    tmp_wrench_msg.wrench.force.x = LLegGRF(0);
-    tmp_wrench_msg.wrench.force.y = LLegGRF(1);
-    tmp_wrench_msg.wrench.force.z = LLegGRF(2);
-    tmp_wrench_msg.wrench.torque.x = LLegGRT(0);
-    tmp_wrench_msg.wrench.torque.y = LLegGRT(1);
-    tmp_wrench_msg.wrench.torque.z = LLegGRT(2);
-    tmp_wrench_msg.header.frame_id = lfoot_frame;
-    tmp_wrench_msg.header.stamp = ros::Time::now();
-    LLegWrench_pub.publish(tmp_wrench_msg);
+    geometry_msgs::WrenchStamped tmp_LLeg_wrench_msg;
+    tmp_LLeg_wrench_msg.wrench.force.x = LLegGRF(0);
+    tmp_LLeg_wrench_msg.wrench.force.y = LLegGRF(1);
+    tmp_LLeg_wrench_msg.wrench.force.z = LLegGRF(2);
+    tmp_LLeg_wrench_msg.wrench.torque.x = LLegGRT(0);
+    tmp_LLeg_wrench_msg.wrench.torque.y = LLegGRT(1);
+    tmp_LLeg_wrench_msg.wrench.torque.z = LLegGRT(2);
+    tmp_LLeg_wrench_msg.header.frame_id = lfoot_frame;
+    tmp_LLeg_wrench_msg.header.stamp = ros::Time::now();
+    LLegWrench_pub.publish(tmp_LLeg_wrench_msg);
 
-    tmp_wrench_msg.wrench.force.x = RLegGRF(0);
-    tmp_wrench_msg.wrench.force.y = RLegGRF(1);
-    tmp_wrench_msg.wrench.force.z = RLegGRF(2);
-    tmp_wrench_msg.wrench.torque.x = RLegGRT(0);
-    tmp_wrench_msg.wrench.torque.y = RLegGRT(1);
-    tmp_wrench_msg.wrench.torque.z = RLegGRT(2);
-    tmp_wrench_msg.header.frame_id = rfoot_frame;
-    tmp_wrench_msg.header.stamp = ros::Time::now();
-    RLegWrench_pub.publish(tmp_wrench_msg);
+    geometry_msgs::WrenchStamped tmp_RLeg_wrench_msg;
+    tmp_RLeg_wrench_msg.wrench.force.x = RLegGRF(0);
+    tmp_RLeg_wrench_msg.wrench.force.y = RLegGRF(1);
+    tmp_RLeg_wrench_msg.wrench.force.z = RLegGRF(2);
+    tmp_RLeg_wrench_msg.wrench.torque.x = RLegGRT(0);
+    tmp_RLeg_wrench_msg.wrench.torque.y = RLegGRT(1);
+    tmp_RLeg_wrench_msg.wrench.torque.z = RLegGRT(2);
+    tmp_RLeg_wrench_msg.header.frame_id = rfoot_frame;
+    tmp_RLeg_wrench_msg.header.stamp = ros::Time::now();
+    RLegWrench_pub.publish(tmp_RLeg_wrench_msg);
 }
 
 void humanoid_ekf::publishCOP()
 {
+	geometry_msgs::PointStamped tmp_point_msg;
     tmp_point_msg.point.x = COP_fsr(0);
     tmp_point_msg.point.y = COP_fsr(1);
     tmp_point_msg.point.z = COP_fsr(2);
@@ -1624,31 +1638,36 @@ void humanoid_ekf::publishCOP()
 
 void humanoid_ekf::publishCoMEstimates()
 {
-    tmp_odom_msg.child_frame_id = "CoM_frame";
-    tmp_odom_msg.header.stamp = ros::Time::now();
-    tmp_odom_msg.header.frame_id = "odom";
-    tmp_odom_msg.pose.pose.position.x = nipmEKF->comX;
-    tmp_odom_msg.pose.pose.position.y = nipmEKF->comY;
-    tmp_odom_msg.pose.pose.position.z = nipmEKF->comZ;
-    tmp_odom_msg.twist.twist.linear.x = nipmEKF->velX;
-    tmp_odom_msg.twist.twist.linear.y = nipmEKF->velY;
-    tmp_odom_msg.twist.twist.linear.z = nipmEKF->velZ;
-    //for(int i=0;i<36;i++)
-    //odom_est_msg.pose.covariance[i] = 0;
-    CoMOdom_pub.publish(tmp_odom_msg);
-    tmp_odom_msg.child_frame_id = "CoM_frame";
-    tmp_odom_msg.header.stamp = ros::Time::now();
-    tmp_odom_msg.header.frame_id = "odom";
-    tmp_odom_msg.pose.pose.position.x = CoM_leg_odom(0);
-    tmp_odom_msg.pose.pose.position.y = CoM_leg_odom(1);
-    tmp_odom_msg.pose.pose.position.z = CoM_leg_odom(2);
-    tmp_odom_msg.twist.twist.linear.x = 0;
-    tmp_odom_msg.twist.twist.linear.y = 0;
-    tmp_odom_msg.twist.twist.linear.z = 0;
-    //for(int i=0;i<36;i++)
-    //odom_est_msg.pose.covariance[i] = 0;
-    CoMLegOdom_pub.publish(tmp_odom_msg);
 
+	nav_msgs::Odometry tmp_CoM_odom_msg;
+    tmp_CoM_odom_msg.child_frame_id = "CoM_frame";
+    tmp_CoM_odom_msg.header.stamp = ros::Time::now();
+    tmp_CoM_odom_msg.header.frame_id = "odom";
+    tmp_CoM_odom_msg.pose.pose.position.x = nipmEKF->comX;
+    tmp_CoM_odom_msg.pose.pose.position.y = nipmEKF->comY;
+    tmp_CoM_odom_msg.pose.pose.position.z = nipmEKF->comZ;
+    tmp_CoM_odom_msg.twist.twist.linear.x = nipmEKF->velX;
+    tmp_CoM_odom_msg.twist.twist.linear.y = nipmEKF->velY;
+    tmp_CoM_odom_msg.twist.twist.linear.z = nipmEKF->velZ;
+    //for(int i=0;i<36;i++)
+    //odom_est_msg.pose.covariance[i] = 0;
+    CoMOdom_pub.publish(tmp_CoM_odom_msg);
+
+	nav_msgs::Odometry tmp_Leg_CoM_odom_msg;
+    tmp_Leg_CoM_odom_msg.child_frame_id = "CoM_frame";
+    tmp_Leg_CoM_odom_msg.header.stamp = ros::Time::now();
+    tmp_Leg_CoM_odom_msg.header.frame_id = "odom";
+    tmp_Leg_CoM_odom_msg.pose.pose.position.x = CoM_leg_odom(0);
+    tmp_Leg_CoM_odom_msg.pose.pose.position.y = CoM_leg_odom(1);
+    tmp_Leg_CoM_odom_msg.pose.pose.position.z = CoM_leg_odom(2);
+    tmp_Leg_CoM_odom_msg.twist.twist.linear.x = 0;
+    tmp_Leg_CoM_odom_msg.twist.twist.linear.y = 0;
+    tmp_Leg_CoM_odom_msg.twist.twist.linear.z = 0;
+    //for(int i=0;i<36;i++)
+    //odom_est_msg.pose.covariance[i] = 0;
+    CoMLegOdom_pub.publish(tmp_Leg_CoM_odom_msg);
+
+    geometry_msgs::WrenchStamped tmp_wrench_msg;
     tmp_wrench_msg.header.frame_id = "odom";
     tmp_wrench_msg.header.stamp = ros::Time::now();
     tmp_wrench_msg.wrench.force.x = nipmEKF->fX;
@@ -1658,6 +1677,7 @@ void humanoid_ekf::publishCoMEstimates()
 
     if (debug_mode)
     {
+        geometry_msgs::PoseStamped tmp_pose_msg;
         tmp_pose_msg.pose.position.x = CoM_enc(0);
         tmp_pose_msg.pose.position.y = CoM_enc(1);
         tmp_pose_msg.pose.position.z = CoM_enc(2);
@@ -1684,27 +1704,30 @@ void humanoid_ekf::run()
 void humanoid_ekf::outputPublishThread()
 {
 
-    ros::Rate rate(4.0*freq);
+    ros::Rate rate(2.0*freq);
     while (ros::ok())
     {
         if (!data_inc)
             continue;
-
+        output_lock.lock();
         //Publish Data
         if (computeJointVelocity)
             publishJointEstimates();
+        
         publishBodyEstimates();
         publishLegEstimates();
         publishSupportEstimates();
         publishContact();
         publishGRF();
 
-        if (useCoMEKF)
-        {
-            publishCoMEstimates();
-            publishCOP();
-        }
+        // if (useCoMEKF)
+        // {
+        //     publishCoMEstimates();
+        //     publishCOP();
+        // }
         data_inc = false;
+        output_lock.unlock();
+
         rate.sleep();
     }
 }
