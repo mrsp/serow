@@ -1720,11 +1720,11 @@ void humanoid_ekf::outputPublishThread()
         publishContact();
         publishGRF();
 
-        // if (useCoMEKF)
-        // {
-        //     publishCoMEstimates();
-        //     publishCOP();
-        // }
+        if (useCoMEKF)
+        {
+            publishCoMEstimates();
+            publishCOP();
+        }
         data_inc = false;
         output_lock.unlock();
 

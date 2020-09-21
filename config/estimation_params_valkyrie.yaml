@@ -2,7 +2,7 @@
 base_link: "pelvis"
 lfoot: "leftFoot"
 rfoot: "rightFoot"
-modelname: "/home/master/serow_ws/src/serow/share/urdf/valkyrie_sim.urdf"
+modelname: "/home/master/talos_walk_ws/src/serow/share/urdf/valkyrie_sim.urdf"
 #modelname: "/home/master/ros_ws/src/serow/share/urdf/valkyrie_sim_gazebo_sync.urdf"
 
 useLegOdom: true
