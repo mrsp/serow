@@ -71,8 +71,8 @@ useOutlierDetection: false
 #mahalanobis_TH: 9
 mahalanobis_TH: -1
 #Odom Measurements
-odom_position_noise_density: 1.0e-02 #m 
-odom_orientation_noise_density: 1.0e-02 #rad
+odom_position_noise_density: 1.0e-05 #m 
+odom_orientation_noise_density: 5.0e-03 #rad
 velocity_noise_density_x: 0.013 #m/s
 velocity_noise_density_y: 0.013 #m/s
 velocity_noise_density_z: 0.013 #m/s

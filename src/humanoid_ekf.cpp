@@ -1061,7 +1061,7 @@ void humanoid_ekf::advertise()
 void humanoid_ekf::subscribeToJointState()
 {
 
-    joint_state_sub = n.subscribe(joint_state_topic, 1000, &humanoid_ekf::joint_stateCb, this, ros::TransportHints().tcpNoDelay());
+    joint_state_sub = n.subscribe(joint_state_topic, 1000, &humanoid_ekf::joint_stateCb, this);
     firstJointStates = true;
 }
 
@@ -1117,7 +1117,7 @@ void humanoid_ekf::joints(const sensor_msgs::JointState &msg)
 void humanoid_ekf::subscribeToOdom()
 {
 
-    odom_sub = n.subscribe(odom_topic, 1000, &humanoid_ekf::odomCb, this, ros::TransportHints().tcpNoDelay());
+    odom_sub = n.subscribe(odom_topic, 1000, &humanoid_ekf::odomCb, this);
     firstOdom = true;
 }
 
@@ -1134,7 +1134,7 @@ void humanoid_ekf::odomCb(const nav_msgs::Odometry::ConstPtr &msg)
 
 void humanoid_ekf::subscribeToGroundTruth()
 {
-    ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic, 1000, &humanoid_ekf::ground_truth_odomCb, this, ros::TransportHints().tcpNoDelay());
+    ground_truth_odom_sub = n.subscribe(ground_truth_odom_topic, 1000, &humanoid_ekf::ground_truth_odomCb, this);
     firstGT = true;
 }
 void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr &msg)
@@ -1173,7 +1173,7 @@ void humanoid_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr &msg)
 
 void humanoid_ekf::subscribeToGroundTruthCoM()
 {
-    ground_truth_com_sub = n.subscribe(ground_truth_com_topic, 1000, &humanoid_ekf::ground_truth_comCb, this, ros::TransportHints().tcpNoDelay());
+    ground_truth_com_sub = n.subscribe(ground_truth_com_topic, 1000, &humanoid_ekf::ground_truth_comCb, this);
     firstGTCoM = true;
 }
 void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr &msg)
@@ -1206,7 +1206,7 @@ void humanoid_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr &msg)
 void humanoid_ekf::subscribeToCompOdom()
 {
 
-    compodom0_sub = n.subscribe(comp_with_odom0_topic, 1000, &humanoid_ekf::compodom0Cb, this, ros::TransportHints().tcpNoDelay());
+    compodom0_sub = n.subscribe(comp_with_odom0_topic, 1000, &humanoid_ekf::compodom0Cb, this);
     firstCO = true;
 }
 
@@ -1241,7 +1241,7 @@ void humanoid_ekf::compodom0Cb(const nav_msgs::Odometry::ConstPtr &msg)
 
 void humanoid_ekf::subscribeToIMU()
 {
-    imu_sub = n.subscribe(imu_topic, 1000, &humanoid_ekf::imuCb, this, ros::TransportHints().tcpNoDelay());
+    imu_sub = n.subscribe(imu_topic, 1000, &humanoid_ekf::imuCb, this);
 }
 void humanoid_ekf::imuCb(const sensor_msgs::Imu::ConstPtr &msg)
 {
@@ -1290,9 +1290,9 @@ void humanoid_ekf::baseIMU(const sensor_msgs::Imu &msg)
 void humanoid_ekf::subscribeToFSR()
 {
     //Left Foot Wrench
-    lfsr_sub = n.subscribe(lfsr_topic, 1000, &humanoid_ekf::lfsrCb, this, ros::TransportHints().tcpNoDelay());
+    lfsr_sub = n.subscribe(lfsr_topic, 1000, &humanoid_ekf::lfsrCb, this);
     //Right Foot Wrench
-    rfsr_sub = n.subscribe(rfsr_topic, 1000, &humanoid_ekf::rfsrCb, this, ros::TransportHints().tcpNoDelay());
+    rfsr_sub = n.subscribe(rfsr_topic, 1000, &humanoid_ekf::rfsrCb, this);
 }
 
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
@@ -1707,6 +1707,7 @@ void humanoid_ekf::outputPublishThread()
     ros::Rate rate(2.0*freq);
     while (ros::ok())
     {
+
         if (!data_inc)
             continue;
         output_lock.lock();
