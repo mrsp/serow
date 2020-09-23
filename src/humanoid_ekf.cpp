@@ -546,8 +546,7 @@ void humanoid_ekf::init()
 /** Main Loop **/
 void humanoid_ekf::filteringThread()
 {
-
-    static ros::Rate rate(2.0 * freq); //ROS Node Loop Rate
+    static ros::Rate rate(freq); //ROS Node Loop Rate
     while (ros::ok())
     {
         if (joint_data.size() > 0 && base_imu_data.size() > 0 && LLeg_FT_data.size() > 0 && RLeg_FT_data.size() > 0)
@@ -1068,7 +1067,7 @@ void humanoid_ekf::subscribeToJointState()
 void humanoid_ekf::joint_stateCb(const sensor_msgs::JointState::ConstPtr &msg)
 {
     joint_data.push(*msg);
-    if (joint_data.size() > 6)
+    if (joint_data.size() > (int) freq/20)
         joint_data.pop();
 }
 
@@ -1246,7 +1245,7 @@ void humanoid_ekf::subscribeToIMU()
 void humanoid_ekf::imuCb(const sensor_msgs::Imu::ConstPtr &msg)
 {
     base_imu_data.push(*msg);
-    if (base_imu_data.size() > 6)
+    if (base_imu_data.size() > (int) freq/20)
         base_imu_data.pop();
 }
 void humanoid_ekf::baseIMU(const sensor_msgs::Imu &msg)
@@ -1298,7 +1297,7 @@ void humanoid_ekf::subscribeToFSR()
 void humanoid_ekf::lfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
     LLeg_FT_data.push(*msg);
-    if (LLeg_FT_data.size() > 6)
+    if (LLeg_FT_data.size() > (int) freq/20)
         LLeg_FT_data.pop();
 }
 
@@ -1336,7 +1335,7 @@ void humanoid_ekf::LLeg_FT(const geometry_msgs::WrenchStamped &msg)
 void humanoid_ekf::rfsrCb(const geometry_msgs::WrenchStamped::ConstPtr &msg)
 {
     RLeg_FT_data.push(*msg);
-    if (RLeg_FT_data.size() > 6)
+    if (RLeg_FT_data.size() > (int) freq/20)
         RLeg_FT_data.pop();
 
     //rfsr_msg = *msg;
