@@ -6,7 +6,7 @@ LFfoot: "wheel_1"
 RFfoot: "wheel_2"
 LHfoot: "wheel_3"
 RHfoot: "wheel_4"
-modelname: "/home/master/ros_ws/src/serow/share/urdf/centauro.urdf"
+modelname: "/home/master/catkin_ws/src/serow/share/urdf/centauro.urdf"
 
 useLegOdom: true
 #ROS Topic Names
@@ -30,12 +30,10 @@ comp_with: false
 comp_with_odom0_topic: "/svo/odom0"
 
 
-#If external Support Foot Detection is provided
-support_idx_provided: false
-support_idx_topic: "/sp"
+
 
 #To publish relative data
-debug_mode: true
+debug_mode: false
 
 #TF from IMU to Body
 T_B_A: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
@@ -56,7 +54,7 @@ T_B_P: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1 ,0 ,0, 0, 0, 0, 1] #SVO without imu
 #ROS Topic Frequencies in Hz
 imu_topic_freq: 200
 joint_topic_freq: 200
-fsr_topic_freq: 200  
+ft_topic_freq: 200  
 
 mass: 92.0  #robot mass
 
@@ -67,33 +65,10 @@ LosingContact: 50.0
 StrikingContact: 320
 medianWindow: 9
 
-#Compute Joint Velocities
+#Use the joint velocities in the ros joint states if available or numerically compute them from joint positions
+computeJointVelocity: false
+#Or Compute Joint Velocities/Only if computeJointVelocity is true
 joint_cutoff_freq: 50
-joint_noise_density: 0.2  # rad
-
-
-useGEM: false
-LFforce_sigma: 1.0801
-LHforce_sigma: 0.9539
-RFforce_sigma: 0.9490
-RHforce_sigma: 1.1127
-
-probabilisticContactThreshold: 0.9
-ContactDetectionWithCOP: false #For Flat Feet only
-foot_polygon_xmin: -0.1
-foot_polygon_xmax: 0.1
-foot_polygon_ymin: -0.05
-foot_polygon_ymax: 0.05
-LFcop_sigma: 0.005
-RFcop_sigma: 0.005
-LHcop_sigma: 0.005
-RHcop_sigma: 0.005
-ContactDetectionWithKinematics: false #Kinematic contribution to contact detection
-VelocityThres: 0.25
-LFvnorm_sigma: 0.05
-RFvnorm_sigma: 0.05
-LHvnorm_sigma: 0.05
-RHvnorm_sigma: 0.05
 
 
 #Mahony Filter for attitude
@@ -109,7 +84,7 @@ Tau0: 1.0
 Tau1: 0.0 #No F/T for Centauro :(
 
 calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
-maxImuCalibrationCycles: 10000
+maxImuCalibrationCycles: 1000
 
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
@@ -119,26 +94,17 @@ contact_random_walk: 0.5
 #Process Noise STDs
 accelerometer_bias_random_walk:  2.4336e-04 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 1.0e-05 # rad/s/sqrt(s)
-accelerometer_noise_density: 0.5 # m/s^2  #Continuous Time
-gyroscope_noise_density: 0.05 # rad/s  #Continuous Time
+accelerometer_noise_density: 0.05 # m/s^2  #Continuous Time
+gyroscope_noise_density: 0.005 # rad/s  #Continuous Time
 
 #Measuremets
-#Odometry Measurement Noise std:
-#LO
-leg_odom_position_noise_density: 5.0e-04
-leg_odom_orientation_noise_density: 5.0e-02
-#VO
-
 odom_orientation_noise_density: 5.0e-02 #4
 odom_position_noise_density_x: 3.5e-02 #2.0e-01
 odom_position_noise_density_y: 3.5e-02
 odom_position_noise_density_z: 1.0
 
 
-
-velocity_noise_density_x: 0.035 #0.007
-velocity_noise_density_y: 0.035 #0.009
-velocity_noise_density_z: 0.035 #0.007
+joint_noise_density: 0.2  # rad
 
 
 

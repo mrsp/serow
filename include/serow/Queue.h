@@ -1,8 +1,11 @@
+#ifndef QUEUE_ROS_H
+#define QUEUE_ROS_H
 #include <queue>
 #include <thread>
 #include <mutex>
 #include <vector>
 #include <condition_variable>
+
  template <typename T>
 class Queue
 {
@@ -60,3 +63,4 @@ class Queue
   std::mutex mutex_;
   std::condition_variable cond_;
 };
+#endif

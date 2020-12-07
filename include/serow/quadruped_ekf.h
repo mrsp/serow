@@ -68,6 +68,9 @@
 #include <serow/Mahony.h>
 #include <serow/deadReckoningQuad.h>
 #include <serow/ContactDetectionQuad.h>
+#include <mutex>          
+#include <thread>  
+#include <serow/Queue.h>
 
 using namespace Eigen;
 using namespace std;
@@ -84,10 +87,14 @@ private:
     
 	ros::Subscriber imu_sub, joint_state_sub, LFft_sub, LHft_sub, RFft_sub, RHft_sub, odom_sub, 
 	ground_truth_odom_sub, ds_sub, ground_truth_com_sub, support_idx_sub, compodom0_sub;
-	
+	Queue<sensor_msgs::JointState> joint_data;
+	Queue<sensor_msgs::Imu> base_imu_data;
+	Queue<geometry_msgs::WrenchStamped> LFLeg_FT_data, RFLeg_FT_data,LHLeg_FT_data, RHLeg_FT_data;
+	std::thread output_thread, filtering_thread;
+	std::mutex output_lock;
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
-	Eigen::Vector3d omegabLF, omegabLH, omegabRF, omegabRH, vbLF, vbLH, vbRF, vbRH, vbLFn, vbRFn, vbLHn, vbRHn, vwb, omegawb, vwLF, vwLH, vwRF, vwRH, omegawLF, omegawLH, omegawRF, omegawRH, p_FT_LH, p_FT_RH, p_FT_LF, p_FT_RF;
+	Eigen::Vector3d wbb, abb, omegabLF, omegabLH, omegabRF, omegabRH, vbLF, vbLH, vbRF, vbRH, vbLFn, vbRFn, vbLHn, vbRHn, vwb, omegawb, vwLF, vwLH, vwRF, vwRH, omegawLF, omegawLH, omegawRF, omegawRH, p_FT_LH, p_FT_RH, p_FT_LF, p_FT_RF;
 	Eigen::Matrix3d JLFQnJLFt, JLHQnJLHt,  JRFQnJRFt, JRHQnJRHt;
 	Affine3d TwLF, TwLH, TwRF, TwRH, TbLF, TbLH,  TbRF, TbRH;
 	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RH, T_FT_RF, T_FT_LF, T_FT_LH, T_B_GT;
@@ -104,19 +111,20 @@ private:
     double Kp, Ki;
 	Vector3d bias_a,bias_g;
 	int imuCalibrationCycles,maxImuCalibrationCycles;
-	bool imuCalibrated;
+	bool calibrateIMU;
+	bool data_inc;
 	///Leg Odometry Computation
 	serow::deadReckoningQuad* dr;
 	///Joint State Estimator 
   	std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
 	JointDF** JointVF;
+	bool computeJointVelocity;
 	double jointFreq,joint_cutoff_freq;
 
 	double  Tau0, Tau1, VelocityThres;
 
-	double  freq, joint_freq, fsr_freq;
-	bool LFfsr_inc, LHfsr_inc, RHfsr_inc, RFfsr_inc, LFft_inc, LHft_inc, RFft_inc, RHft_inc;
-	bool imu_inc, joint_inc, odom_inc, leg_odom_inc, leg_vel_inc, support_inc, check_no_motion, com_inc, ground_truth_odom_inc;
+	double  freq, joint_freq, ft_freq;
+	bool odom_inc,  check_no_motion,  ground_truth_odom_inc;
 	bool firstOdom, firstUpdate, odom_divergence;
 	int number_of_joints, outlier_count;
 	bool firstGyrodot;
@@ -219,7 +227,6 @@ private:
 	 void subscribeToGroundTruth();
 	 void subscribeToGroundTruthCoM();
 	 void ground_truth_comCb(const nav_msgs::Odometry::ConstPtr& msg);
-	 void subscribeToSupportIdx();
 	 void support_idxCb(const std_msgs::Int32::ConstPtr& msg);
 	 void ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr& msg);
 	 void imuCb(const sensor_msgs::Imu::ConstPtr& msg);
@@ -229,8 +236,14 @@ private:
 	 void LHfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void RFfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
 	 void RHfsrCb(const geometry_msgs::WrenchStamped::ConstPtr& msg);
-
-
+	void LHLeg_FT(const geometry_msgs::WrenchStamped &msg);
+	void LFLeg_FT(const geometry_msgs::WrenchStamped &msg);
+	void RHLeg_FT(const geometry_msgs::WrenchStamped &msg);
+	void RFLeg_FT(const geometry_msgs::WrenchStamped &msg);
+	void baseIMU(const sensor_msgs::Imu &msg);
+	void joints(const sensor_msgs::JointState &msg);
+	void filteringThread();
+	void outputPublishThread();
 	void computeGlobalCOP(Affine3d TwLF_, Affine3d TwLH_, Affine3d TwRF_, Affine3d TwRH_);
 	 void filterGyrodot();
 	//private methods
