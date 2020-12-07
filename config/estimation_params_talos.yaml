@@ -2,7 +2,7 @@
 base_link: "base_link"
 lfoot: "left_sole_link"
 rfoot: "right_sole_link"
-modelname: "/home/master/talos_walk_ws/src/serow/share/urdf/talos_full_v2.urdf"
+modelname: "/home/master/catkin_ws/src/serow/share/urdf/talos_full_v2.urdf"
 useLegOdom: false
 #ROS Topic Names
 odom_topic: "/floating_base_pose_simulated" 
@@ -18,7 +18,7 @@ T_B_GT: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1, 0, 0, 0 ,0, 1]
 comp_with: false
 comp_with_odom0_topic: "/svo/odom0"
 #To publish relative data
-debug_mode: false
+debug_mode: true
 #TF from IMU to Body
 T_B_A: [0, 1, 0, 0, 1, 0, 0, 0, 0, 0 , -1, 0, 0, 0 ,0, 1]
 T_B_G: [0, 1, 0, 0, 1, 0, 0, 0, 0, 0 , -1, 0, 0, 0 ,0, 1]
