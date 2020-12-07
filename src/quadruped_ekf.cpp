@@ -57,7 +57,7 @@ void quadruped_ekf::loadparams()
     n_p.param<double>("ft_topic_freq", ft_freq, freq);
     n_p.param<double>("joint_topic_freq", joint_freq, 100.0);
     freq = min(min(freq,ft_freq),joint_freq);
-    cout<<"Freq "<<freq<<endl;
+    cout<<"Estimation Rate is "<<freq<<endl;
     n_p.param<double>("VelocityThres", VelocityThres, 0.5);
     n_p.param<double>("LosingContact", LosingContact, 5.0);
     n_p.param<bool>("useGEM", useGEM, false);
