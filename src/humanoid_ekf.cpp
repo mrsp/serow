@@ -47,6 +47,7 @@ void humanoid_ekf::loadparams()
     n_p.param<double>("joint_topic_freq", joint_freq, 100.0);
     
     freq = min(min(freq,ft_freq),joint_freq);
+    cout<<"Estimation Rate is "<<freq<<endl;
 
     n_p.param<bool>("useInIMUEKF", useInIMUEKF, false);
     n_p.param<double>("VelocityThres", VelocityThres, 0.5);
