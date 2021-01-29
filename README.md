@@ -18,8 +18,7 @@ SEROW (State Estimation RObot Walking) Framework for Humanoid/Quadruped Robot Wa
 Relevant Papers:
 * Non-linear ZMP based State Estimation for Humanoid Robot Locomotion, https://ieeexplore.ieee.org/document/7803278 (Humanoids 2016 - nominated for the best interactive paper award)
 * Nonlinear State Estimation for Humanoid Robot Walking, https://ieeexplore.ieee.org/document/8403285 (RA-L + IROS 2018)
-* Outlier-Robust State Estimation for Humanoid Robots (to appear IROS2019)
-
+* Outlier-Robust State Estimation for Humanoid Robots, https://ieeexplore.ieee.org/document/8968152 (IROS 2019)
 More Videos: 
 * https://www.youtube.com/watch?v=nkzqNhf3_F4
 * https://www.youtube.com/watch?v=9OvIBg8tn54
@@ -38,13 +37,6 @@ Upon usage in an academic work kindly cite: <br/>
     doi={10.1109/LRA.2018.2852788}, <br/>
     month={Oct},<br/>
 }<br/>
-
-# New Feature
-SEROW now also supports quadruped robot state estimation. The base estimator used in the latter case is a variant of the one presented in: 
-R. Hartley, M. G. Jadidi, J. Grizzle, and R. M. Eustice, “Contact-aided invariant extended kalman filtering for legged robot state estimation,” in Proceedings of Robotics: Science and Systems, Pittsburgh, Pennsylvania, June 2018. 
-
-The 3D-CoM estimator is the one proposed in "Nonlinear State Estimation for Humanoid Robot Walking" (https://ieeexplore.ieee.org/document/8403285). Although originality presented for humanoids, the same principles apply in quadrupeds.
-
 
 ## Getting Started
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
