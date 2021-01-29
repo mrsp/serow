@@ -19,6 +19,7 @@ Relevant Papers:
 * Non-linear ZMP based State Estimation for Humanoid Robot Locomotion, https://ieeexplore.ieee.org/document/7803278 (Humanoids 2016 - nominated for the best interactive paper award)
 * Nonlinear State Estimation for Humanoid Robot Walking, https://ieeexplore.ieee.org/document/8403285 (RA-L + IROS 2018)
 * Outlier-Robust State Estimation for Humanoid Robots, https://ieeexplore.ieee.org/document/8968152 (IROS 2019)
+
 More Videos: 
 * https://www.youtube.com/watch?v=nkzqNhf3_F4
 * https://www.youtube.com/watch?v=9OvIBg8tn54
