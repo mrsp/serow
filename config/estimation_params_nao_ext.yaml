@@ -2,7 +2,7 @@
 base_link: "base_link"
 lfoot: "l_ankle"
 rfoot: "r_ankle"
-modelname: "/home/master/ros_ws/src/serow/share/urdf/nao.urdf"
+modelname: "/home/master/catkin_ws/src/serow/share/urdf/nao.urdf"
 useLegOdom: true
 
 #ROS Topic Names
@@ -29,8 +29,11 @@ debug_mode: false
 
 #TF from IMU to Body 
 #For imu0 (external IMU)
-T_B_A: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 1]
-T_B_G: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,0, 1]
+#T_B_A: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 1]
+#T_B_G: [0, 0, 1, 0, -1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,0, 1]
+T_B_A: [0, 0, -1, 0,  -1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 0, 1] 
+T_B_G: [0, 0, -1, 0,  -1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 0, 1] 
+
 #T_B_A: [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,-1 ,0, 0, 0, 0 ,0, 1] #onboard imu
 #T_B_G: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 ,1 ,0, 0, 0, 0 ,0, 1] #onboard imu
 #TF from F/T to Left Foot
@@ -52,29 +55,8 @@ LegUpThres: 20 #Schmitt Trigger High Threshold in Newtons (N)
 LegLowThres: 12 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 17
 StrikingContact: 60
-
-
-useGEM: true
-foot_polygon_xmin: -0.047
-foot_polygon_xmax: 0.11
-foot_polygon_ymin: -0.05
-foot_polygon_ymax: 0.038
-lforce_sigma: 0.1
-rforce_sigma: 0.1
-lcop_sigma: 0.005
-rcop_sigma: 0.005
-VelocityThres: 0.12
-lvnorm_sigma: 0.02
-rvnorm_sigma: 0.02
-probabilisticContactThreshold: 0.9
-ContactDetectionWithCOP: false
-ContactDetectionWithKinematics: false
-
-
-
-
-
 #Joint Velocity Estimation
+computeJointVelocity: True #True if not included in the joint_state msg
 joint_cutoff_freq: 16.0
 joint_noise_density: 0.5
 #Mahony Filter for attitude
@@ -83,17 +65,12 @@ Mahony_Kp: 0.4
 Mahony_Ki: 0.0
 #Madgwick Filter for attitude if useMahony is false
 Madgwick_gain: 0.1
-
-
 #Leg Odometry Coefficients
 Tau0: 1.0
 Tau1: 1.0
-medianWindow: 7
+medianWindow: 1
 #mass: 6.6530  #robot mass
-mass: 5.6  #robot mass with realsense and IMU
-
-
-
+mass: 5.3  #robot mass with realsense and IMU
 useInIMUEKF: false
 contact_random_walk: 0.1
 
@@ -107,7 +84,6 @@ accelerometer_bias_random_walk: 0.00433 #m/s^2
 gyroscope_bias_random_walk: 2.66e-04 # rad/s
 accelerometer_noise_density:  0.0150 #m/s^2 or 150 #MTI-300
 gyroscope_noise_density: 0.0028 #rad/s 28 #MTI-300
-
 #VO Measuremets
 #Odometry Measurement Noise std:
 #leg_odom_position_noise_density: 5.0e-04 #5.0e-04
@@ -116,8 +92,8 @@ leg_odom_orientation_noise_density: 5.0e-02
 
 
 #Odom Measurements
-mahalanobis_TH: 16.0
-#mahalanobis_TH: -1
+#mahalanobis_TH: 16.0
+mahalanobis_TH: -1
 useOutlierDetection: false
 odom_position_noise_density_x: 5.0e-02 #2.0e-01
 odom_position_noise_density_y: 5.0e-02
@@ -140,25 +116,17 @@ bias_gx: 0
 bias_gy: 0
 bias_gz: 0
 calibrateIMUbiases: true #otherwise specify accurate initial values for bias_a, bias_g
-maxImuCalibrationCycles: 1000
-
-
-
+maxImuCalibrationCycles: 100
 #Filter Params
 gravity: 9.80 #gravity constant (m/s^2)
-
-
 # CoM Extended Kalman Filter (EKF)
 # To estimate:
 # CoM 3-D Position/Velocity
 # 3-D External Forces on the CoM
-estimateCoM: false   #Use the CoM EKF
-
+estimateCoM: true   #Use the CoM EKF
 #---------------------------------------------#
 #Specify the rest only if estimateCoM is true!!
 #---------------------------------------------#
-
-
 #Process Noise
 com_position_random_walk: 1.0e-4 #in m
 com_velocity_random_walk: 5.0e-3 #in m/s
