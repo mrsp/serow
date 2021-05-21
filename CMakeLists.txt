@@ -37,7 +37,7 @@ include_directories(
 link_directories(  
 ${PINOCCHIO_LIBRARY_DIRS})
 
-add_executable(serow src/serow_driver.cpp src/humanoid_ekf.cpp  src/quadruped_ekf.cpp src/IMUEKF.cpp src/JointSSKF.cpp src/MovingAverageFilter.cpp src/CoMEKF.cpp src/differentiator.cpp src/butterworthLPF.cpp src/JointDF.cpp src/butterworthHPF.cpp src/IMUinEKFQuad.cpp src/IMUinEKF.cpp)
+add_executable(serow src/serow_driver.cpp src/humanoid_ekf.cpp  src/quadruped_ekf.cpp src/IMUEKF.cpp  src/MovingAverageFilter.cpp src/CoMEKF.cpp src/differentiator.cpp src/butterworthLPF.cpp src/JointDF.cpp src/butterworthHPF.cpp src/IMUinEKFQuad.cpp src/IMUinEKF.cpp src/ContactEKF.cpp)
 target_link_libraries(serow ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
 

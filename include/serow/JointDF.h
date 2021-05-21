@@ -1,5 +1,5 @@
 /* 
- * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+ * Copyright 2017-2021MA Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,11 +44,16 @@ class JointDF
 {
 
 private:
+    /// 2nd order butterworth filter to smooth the angular velocity
     butterworthLPF bw;
+    /// linear differentiator filter to compute the angular velocity
     Differentiator df;
 public:
+    /// Joint angular position
     double JointPosition;
+    /// Joint angular velocity
     double JointVelocity;
+    /// Joint name
     string JointName;
 
     /** @fn double filter(double JointPosMeasurement);

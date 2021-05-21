@@ -1,3 +1,5 @@
+
+
 #Robot Frames (CHECK URDF)
 base_link: "pelvis"
 lfoot: "leftFoot"
@@ -5,7 +7,7 @@ rfoot: "rightFoot"
 modelname: "/home/master/catkin_ws/src/serow/share/urdf/valkyrie_sim.urdf"
 #modelname: "/home/master/ros_ws/src/serow/share/urdf/valkyrie_sim_gazebo_sync.urdf"
 
-useLegOdom: false
+useLegOdom: true
 #ROS Topic Names
 odom_topic: "/ihmc_ros/valkyrie/output/visual_odom" #only if usePoseUpdate is false and useLegOdom is false
 imu_topic: "/pelvisMiddleImu/imu"
@@ -23,7 +25,7 @@ T_B_GT: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0 , 1 , 0, 0, 0 ,0, 1]
 
 
 #To publish relative data
-debug_mode: true
+debug_mode: false
 
 #TF from IMU to Body
 T_B_A: [1, 0, 0, 0, 0, -1, 0, 0, 0, 0 ,-1 ,-0.108, 0, 0 ,0, 1]
@@ -42,7 +44,7 @@ joint_topic_freq: 500
 fsr_topic_freq: 500  
 
 ##Schmitt Trigger - Contact Classifier
-LegUpThres: 250 #Schmitt Trigger High Threshold in Newtons (N)
+LegUpThres: 350 #Schmitt Trigger High Threshold in Newtons (N)
 LegLowThres: 125 #Schmitt Trigger Low Threshold in Newtons (N)
 LosingContact: 80
 StrikingContact: 1200
@@ -68,6 +70,15 @@ Tau0: 1.0
 Tau1: 1.0
 
 
+useInIMUEKF: false
+useContactEKF: true
+useIMUEKF: false
+
+contact_position_random_walk: 0.01
+contact_orientation_random_walk: 0.01
+contact_position_noise_density: 0.05
+contact_orientation_noise_density: 0.05
+
 #Rigid body Extended Kalman Filter (EKF)
 #To estimate:
 # 3-D Body Position/Velocity
@@ -78,10 +89,7 @@ accelerometer_bias_random_walk:  0.5 #m/s^2/sqrt(s)
 gyroscope_bias_random_walk: 4.1884e-2 # rad/s/sqrt(s)
 accelerometer_noise_density: 1.7 #m/s^2  #Continuous Time
 gyroscope_noise_density: 0.2 #rad/s  #Continuous Time
-useIMUEKF: true
-
 useInIMUEKF: false
-useContactEKF: false
 contact_random_walk: 0.2
 #Measuremets
 leg_odom_position_noise_density: 5.0e-03
@@ -115,7 +123,7 @@ gravity: 9.80 #gravity constant (m/s^2)
 # To estimate:
 # CoM 3-D Position/Velocity
 # 3-D External Forces on the CoM
-estimateCoM: true   #Use the CoM EKF
+estimateCoM: false   #Use the CoM EKF
 
 #---------------------------------------------#
 #Specify the rest only if estimateCoM is true!!

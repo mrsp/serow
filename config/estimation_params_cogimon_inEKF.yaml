@@ -97,7 +97,7 @@ Tau0: 1.0
 Tau1: 1.0
 
 
-
+useIMUEKF: false
 useInIMUEKF: true
 contact_random_walk: 0.2
 

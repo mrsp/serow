@@ -1,7 +1,7 @@
 #Robot Frames (CHECK URDF)
 base_link: "base_link"
-lfoot: "left_sole_link"
-rfoot: "right_sole_link"
+lfoot: "leg_left_6_link"
+rfoot: "leg_right_6_link"
 modelname: "/home/master/catkin_ws/src/serow/share/urdf/talos_full_v2.urdf"
 useLegOdom: false
 #ROS Topic Names

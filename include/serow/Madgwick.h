@@ -1,5 +1,5 @@
 /* 
- * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+ * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@
  * @brief IMU Orientation Estimation with the Madgwick Filter
  * @author Stylianos Piperakis
  * @details estimates the IMU frame orientation with respect to a world frame of reference with IMU measurements
+ * @note updateIMU() is based on the https://x-io.co.uk/open-source-imu-and-ahrs-algorithms/ repository
  */
 
 
@@ -42,16 +43,28 @@ namespace serow{
     class Madgwick
     {
     private:
+        // IMU orientation w.r.t the world frame as a quaternion
         Eigen::Quaterniond q;
-        Eigen::Vector3d acc,gyro;
+        // IMU orientation w.r.t the world frame as a rotation matrix
         Eigen::Matrix3d R;
-        double beta;				// algorithm gain
-        double freq;
-        double q0, q1, q2, q3;	// quaternion of sensor frame relative to auxiliary frame
+        // IMU linear acceleration and angular velocity in the world frame
+        Eigen::Vector3d acc,gyro;
+        /// Algorithm gain
+        double beta;				
+        /// Sampling frequency
+        double freq;          
+        /// Quaternion of sensor frame relative to auxiliary frame
+        double q0, q1, q2, q3;	
         
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         
+
+        /** @fn   Madgwick(double freq_, double beta_)
+        *  @brief Initializes parameters and sets the sampling frequency and gain of the algorithm
+        *  @param sampleFreq_ sampling frequency
+        *  @param beta_ Proportional gain
+        */
         Madgwick(double freq_, double beta_)
         {
             R.Identity();
@@ -65,28 +78,48 @@ namespace serow{
             q2 = 0.0f;
             q3 = 0.0f;
         }
-        
+        /** @fn Eigen::Quaterniond getQ()
+         *  @returns the orientation of IMU  w.r.t the world frame as a quaternion
+         */
         Eigen::Quaterniond getQ()
         {
             return q;
         }
-        
+        /** @fn  Eigen::Vector3d getAcc()
+         *  @returns the linear acceleration of IMU  in the world frame 
+         */    
         Eigen::Vector3d getAcc()
         {
             return acc;
         }
+        /** @fn  Eigen::Vector3d getGyro()
+         *  @returns the angular velocity  of IMU  in the world frame 
+         */   
         Eigen::Vector3d getGyro()
         {
             return gyro;
         }
+         /** @fn Eigen::Matrix3d getR()
+         *  @returns the orientation of IMU  w.r.t the world frame as a rotation matrix
+         */
         Eigen::Matrix3d getR()
         {
             return R;
         }
+        /** @fn Eigen::Matrix3d getEuler()
+         *  @returns the orientation of IMU  w.r.t the world frame as  euler angles in the RPY convention
+         */
         Eigen::Vector3d getEuler()
         {
             return q.toRotationMatrix().eulerAngles(0, 1, 2);
         }
+
+
+        /** @fn updateIMU(Eigen::Vector3d gyro_, Eigen::Vector3d acc_)
+         *  @brief Computes the IMU orientation w.r.t the world frame of reference
+         *  @param gyro_ angular velocity as measured by the IMU
+         *  @param acc_ linea acceleration as measured by the IMU
+         */
         void updateIMU(Eigen::Vector3d gyro_, Eigen::Vector3d acc_)
         {
             

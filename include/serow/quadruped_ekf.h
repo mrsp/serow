@@ -1,5 +1,5 @@
 /* 
- * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+ * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -93,11 +93,13 @@ private:
 	std::thread output_thread, filtering_thread;
 	std::mutex output_lock;
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
-
+	
+	Eigen::Affine3d Twv0, Twvc0;
+	
 	Eigen::Vector3d wbb, abb, omegabLF, omegabLH, omegabRF, omegabRH, vbLF, vbLH, vbRF, vbRH, vbLFn, vbRFn, vbLHn, vbRHn, vwb, omegawb, vwLF, vwLH, vwRF, vwRH, omegawLF, omegawLH, omegawRF, omegawRH, p_FT_LH, p_FT_RH, p_FT_LF, p_FT_RF;
 	Eigen::Matrix3d JLFQnJLFt, JLHQnJLHt,  JRFQnJRFt, JRHQnJRHt;
 	Affine3d TwLF, TwLH, TwRF, TwRH, TbLF, TbLH,  TbRF, TbRH;
-	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RH, T_FT_RF, T_FT_LF, T_FT_LH, T_B_GT;
+	Affine3d T_B_A, T_B_G, T_B_P, T_FT_RH, T_FT_RF, T_FT_LF, T_FT_LH, T_B_GT, T_CoM_GT;
 	Quaterniond qbs, qbLF, qbLH, qbRF, qbRH, qwb, qwb_, qws, qwLF, qwLH, qwRF, qwRH;
 	string base_link_frame, support_foot_frame, LFfoot_frame,  LHfoot_frame, RFfoot_frame, RHfoot_frame;
 
@@ -124,7 +126,7 @@ private:
 	double  Tau0, Tau1, VelocityThres;
 
 	double  freq, joint_freq, ft_freq;
-	bool odom_inc,  check_no_motion,  ground_truth_odom_inc;
+	bool odom_inc,  check_no_motion,  ground_truth_odom_inc, ground_truth_com_odom_inc;
 	bool firstOdom, firstUpdate, odom_divergence;
 	int number_of_joints, outlier_count;
 	bool firstGyrodot;
@@ -137,8 +139,8 @@ private:
 	int no_motion_it, no_motion_it_threshold;
 	double no_motion_threshold;
 	Quaterniond  q_update, q_update_, q_leg_update, q_now, q_prev;
-	Vector3d  pos_update, pos_update_, pos_leg_update, CoM_gt, temp, gt_odom;
-	Quaterniond  q_B_P, q_B_GT, tempq, qoffsetGTCoM, tempq_, gt_odomq; 
+	Vector3d  pos_update, pos_update_, pos_leg_update, temp;
+	Quaterniond  q_B_P , tempq; 
 	bool useCoMEKF, useLegOdom, firstGT,firstGTCoM, useOutlierDetection;
     bool debug_mode;
 
@@ -146,7 +148,7 @@ private:
 	sensor_msgs::JointState joint_state_msg, joint_filt_msg;
 	sensor_msgs::Imu imu_msg;
 	nav_msgs::Odometry odom_msg, odom_msg_, odom_est_msg, leg_odom_msg, ground_truth_odom_msg, LFLeg_odom_msg, LHLeg_odom_msg, RFLeg_odom_msg, RHLeg_odom_msg,
-	ground_truth_com_odom_msg, CoM_odom_msg, ground_truth_odom_msg_, ground_truth_odom_pub_msg;
+	ground_truth_com_odom_pub_msg, CoM_odom_msg, ground_truth_odom_pub_msg;
 	geometry_msgs::PoseStamped pose_msg, pose_msg_, temp_pose_msg, rel_supportPose_msg, rel_swingPose_msg;
 	std_msgs::String support_leg_msg;
 	geometry_msgs::WrenchStamped RFLeg_est_msg, LFLeg_est_msg, RHLeg_est_msg, LHLeg_est_msg, LFfsr_msg, LHfsr_msg, RFfsr_msg, RHfsr_msg, external_force_filt_msg;

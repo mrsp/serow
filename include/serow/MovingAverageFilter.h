@@ -1,5 +1,5 @@
 /* 
- * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+ * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,13 +43,16 @@ class MovingAverageFilter
 {
 
 private:
+    /// Moving average window
     int windowSize;
     unsigned currentstep;
+    /// Moving average buffer
     std::queue<float> windowBuffer;
 public:
+    /// Moving average cuurent state
     float x;
 
-    /** @fn setParams(int windowSize_)
+    /** @fn void setParams(int windowSize_)
      *  @brief sets the buffer size of the moving average filter
     */
     void setParams(int windowSize_)
@@ -61,6 +64,9 @@ public:
      *  @brief filters the measurement with a cummulative moving average filter
     */
     void filter(float y);
+    /** fn MovingAverageFilter()
+     *  @brief initializes the moving average filter
+     */
     MovingAverageFilter();
     /** @fn void reset()
      *  @brief resets the state of the moving average filter

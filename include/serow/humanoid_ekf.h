@@ -1,5 +1,5 @@
 /* 
- * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+ * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,7 @@
 // Estimator Headers
 #include <serow/IMUEKF.h>
 #include <serow/IMUinEKF.h>
-
+#include <serow/ContactEKF.h>
 #include <serow/CoMEKF.h>
 #include <serow/JointDF.h>
 #include <serow/butterworthLPF.h>
@@ -71,7 +71,6 @@
 #include <serow/Madgwick.h>
 #include <serow/Mahony.h>
 #include <serow/deadReckoning.h>
-#include <serow/Median.h>
 #include <serow/ContactDetection.h>
 #include <serow/Queue.h>
 using namespace Eigen;
@@ -95,6 +94,8 @@ private:
 	std::thread output_thread, filtering_thread;
 	std::mutex output_lock;
 
+
+	Eigen::Affine3d Twv0;
 	Eigen::VectorXd joint_state_pos,joint_state_vel;
 
 	Eigen::Vector3d wbb, abb, omegabl, omegabr, vbl, vbr, vbln, vbrn, vwb, omegawb, vwl, vwr, omegawr, omegawl, p_FT_LL, p_FT_RL;
@@ -144,7 +145,8 @@ private:
 	double mass;
 	IMUEKF* imuEKF;
 	IMUinEKF* imuInEKF;
-	bool useInIMUEKF;
+	ContactEKF* conEKF;
+	bool useIMUEKF, useInIMUEKF, useContactEKF;
 	CoMEKF* nipmEKF;
 	butterworthLPF** gyroLPF;
 	MovingAverageFilter** gyroMAF;
@@ -214,6 +216,7 @@ private:
 	void estimateWithCoMEKF();
 	void estimateWithIMUEKF();
 	void estimateWithInIMUEKF();
+	void estimateWithContactEKF();
 	void computeKinTFs();
 	//publish functions
 	void publishGRF();
@@ -244,6 +247,7 @@ public:
 	// Parameter Server
 	void loadparams();
 	void loadIMUEKFparams();
+	void loadContactEKFparams();
 	void loadCoMEKFparams();
 	void loadJointKFparams();
 	void run();
