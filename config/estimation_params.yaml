@@ -99,6 +99,7 @@ Tau1: 1.0
 
 
 #Choose Integration Method
+useIMUEKF: true
 useInIMUEKF: false
 contact_random_walk: 0.05
 

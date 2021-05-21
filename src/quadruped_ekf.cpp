@@ -1,7 +1,5 @@
-/*
- * SERoW - a complete state estimation scheme for Legged robots
- *
- * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/* 
+ * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -12,8 +10,8 @@
  *     * Redistributions in binary form must reproduce the above copyright
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH)
- *	 nor the names of its contributors may be used to endorse or promote products derived from
+ *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
+ *		 nor the names of its contributors may be used to endorse or promote products derived from
  *       this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -28,7 +26,6 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
 #include <iostream>
 #include <algorithm>
 #include <serow/quadruped_ekf.h>
@@ -133,8 +130,29 @@ void quadruped_ekf::loadparams()
             T_B_GT(3, 2) = affine_list[14];
             T_B_GT(3, 3) = affine_list[15];
         }
-        q_B_GT = Quaterniond(T_B_GT.linear());
 
+
+        n_p.getParam("T_CoM_GT", affine_list);
+        T_CoM_GT.setIdentity();
+        if (affine_list.size() == 16)
+        {
+            T_CoM_GT(0, 0) = affine_list[0];
+            T_CoM_GT(0, 1) = affine_list[1];
+            T_CoM_GT(0, 2) = affine_list[2];
+            T_CoM_GT(0, 3) = affine_list[3];
+            T_CoM_GT(1, 0) = affine_list[4];
+            T_CoM_GT(1, 1) = affine_list[5];
+            T_CoM_GT(1, 2) = affine_list[6];
+            T_CoM_GT(1, 3) = affine_list[7];
+            T_CoM_GT(2, 0) = affine_list[8];
+            T_CoM_GT(2, 1) = affine_list[9];
+            T_CoM_GT(2, 2) = affine_list[10];
+            T_CoM_GT(2, 3) = affine_list[11];
+            T_CoM_GT(3, 0) = affine_list[12];
+            T_CoM_GT(3, 1) = affine_list[13];
+            T_CoM_GT(3, 2) = affine_list[14];
+            T_CoM_GT(3, 3) = affine_list[15];
+        }
     }
     
     T_B_P.setIdentity();
@@ -1426,40 +1444,34 @@ void quadruped_ekf::subscribeToGroundTruth()
 }
 void quadruped_ekf::ground_truth_odomCb(const nav_msgs::Odometry::ConstPtr &msg)
 {
-    ground_truth_odom_msg = *msg;
+
     if (kinematicsInitialized)
     {
-       
-        
+        ground_truth_odom_inc = true;
+        Eigen::Affine3d Tvb, Twbv;
+        Tvb.translation() = Vector3d(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
+        Tvb.linear() =  Quaterniond(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z).toRotationMatrix();
         if (firstGT)
         {
-            gt_odomq = qwb;
-            gt_odom = Twb.translation();
+
+            Twv0 = Twb *  T_B_GT * (Tvb).inverse();
             firstGT = false;
         }
-        else
-        {
-             gt_odom += T_B_GT.linear() * Vector3d(ground_truth_odom_msg.pose.pose.position.x - ground_truth_odom_msg_.pose.pose.position.x,
-              ground_truth_odom_msg.pose.pose.position.y - ground_truth_odom_msg_.pose.pose.position.y,
-              ground_truth_odom_msg.pose.pose.position.z -  ground_truth_odom_msg_.pose.pose.position.z);
 
-             tempq = q_B_GT * Quaterniond(ground_truth_odom_msg.pose.pose.orientation.w, ground_truth_odom_msg.pose.pose.orientation.x, ground_truth_odom_msg.pose.pose.orientation.y, ground_truth_odom_msg.pose.pose.orientation.z);
-             tempq_ = q_B_GT * Quaterniond(ground_truth_odom_msg_.pose.pose.orientation.w, ground_truth_odom_msg_.pose.pose.orientation.x, ground_truth_odom_msg_.pose.pose.orientation.y, ground_truth_odom_msg_.pose.pose.orientation.z);
-             gt_odomq *= (tempq * tempq_.inverse());
-        }
+        Twbv =   Twv0 * Tvb;
+        temp = Twbv.translation();
+        tempq = Quaterniond(Twbv.linear());
+
         
-
-
-        ground_truth_odom_pub_msg.pose.pose.position.x = gt_odom(0);
-        ground_truth_odom_pub_msg.pose.pose.position.y = gt_odom(1);
-        ground_truth_odom_pub_msg.pose.pose.position.z = gt_odom(2);
-        ground_truth_odom_pub_msg.pose.pose.orientation.w = gt_odomq.w();
-        ground_truth_odom_pub_msg.pose.pose.orientation.x = gt_odomq.x();
-        ground_truth_odom_pub_msg.pose.pose.orientation.y = gt_odomq.y();
-        ground_truth_odom_pub_msg.pose.pose.orientation.z = gt_odomq.z();
+        ground_truth_odom_pub_msg.pose.pose.position.x = temp(0);
+        ground_truth_odom_pub_msg.pose.pose.position.y = temp(1);
+        ground_truth_odom_pub_msg.pose.pose.position.z = temp(2);
+        ground_truth_odom_pub_msg.pose.pose.orientation.w = tempq.w();
+        ground_truth_odom_pub_msg.pose.pose.orientation.x = tempq.x();
+        ground_truth_odom_pub_msg.pose.pose.orientation.y = tempq.y();
+        ground_truth_odom_pub_msg.pose.pose.orientation.z = tempq.z();
 
     }
-    ground_truth_odom_msg_ = ground_truth_odom_msg;
 
 }
 
@@ -1470,28 +1482,36 @@ void quadruped_ekf::subscribeToGroundTruthCoM()
 }
 void quadruped_ekf::ground_truth_comCb(const nav_msgs::Odometry::ConstPtr &msg)
 {
+
     if (kinematicsInitialized)
     {
-        ground_truth_com_odom_msg = *msg;
-        temp = T_B_GT.linear() * Vector3d(ground_truth_com_odom_msg.pose.pose.position.x, ground_truth_com_odom_msg.pose.pose.position.y, ground_truth_com_odom_msg.pose.pose.position.z);
-        tempq = q_B_GT * Quaterniond(ground_truth_com_odom_msg.pose.pose.orientation.w, ground_truth_com_odom_msg.pose.pose.orientation.x, ground_truth_com_odom_msg.pose.pose.orientation.y, ground_truth_com_odom_msg.pose.pose.orientation.z);
+        ground_truth_com_odom_inc = true;
+        Eigen::Affine3d Tvb, Twbv;
+        Tvb.translation() = Vector3d(msg->pose.pose.position.x, msg->pose.pose.position.y, msg->pose.pose.position.z);
+        Tvb.linear() =  Quaterniond(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z).toRotationMatrix();   
         if (firstGTCoM)
         {
-            Vector3d tempCoMOffset = Twb * CoM_enc;
-            offsetGTCoM = tempCoMOffset - temp;
-            qoffsetGTCoM = qwb * tempq.inverse();
+            Eigen::Affine3d TwCoM;
+            temp = Twb * CoM_enc;
+            tempq = qwb; 
+            TwCoM.translation() = temp;
+            TwCoM.linear() = qwb.toRotationMatrix();
+            Twvc0 = TwCoM *  T_CoM_GT * (Tvb).inverse();
             firstGTCoM = false;
         }
-        tempq = qoffsetGTCoM * tempq;
-        temp = offsetGTCoM + temp;
-        ground_truth_com_odom_msg.pose.pose.position.x = temp(0);
-        ground_truth_com_odom_msg.pose.pose.position.y = temp(1);
-        ground_truth_com_odom_msg.pose.pose.position.z = temp(2);
+       
+        Twbv = Twvc0 * Tvb;
+        temp = Twbv.translation();
+        tempq = Quaterniond(Twbv.linear());
 
-        ground_truth_com_odom_msg.pose.pose.orientation.w = tempq.w();
-        ground_truth_com_odom_msg.pose.pose.orientation.x = tempq.x();
-        ground_truth_com_odom_msg.pose.pose.orientation.y = tempq.y();
-        ground_truth_com_odom_msg.pose.pose.orientation.z = tempq.z();
+        ground_truth_com_odom_pub_msg.pose.pose.position.x = temp(0);
+        ground_truth_com_odom_pub_msg.pose.pose.position.y = temp(1);
+        ground_truth_com_odom_pub_msg.pose.pose.position.z = temp(2);
+
+        ground_truth_com_odom_pub_msg.pose.pose.orientation.w = tempq.w();
+        ground_truth_com_odom_pub_msg.pose.pose.orientation.x = tempq.x();
+        ground_truth_com_odom_pub_msg.pose.pose.orientation.y = tempq.y();
+        ground_truth_com_odom_pub_msg.pose.pose.orientation.z = tempq.z();
     }
 }
 
@@ -1771,16 +1791,23 @@ void quadruped_ekf::publishBodyEstimates()
 
     if (ground_truth)
     {
-        ground_truth_com_odom_msg.child_frame_id = "CoM_frame";
-        ground_truth_com_odom_msg.header.stamp = ros::Time::now();
-        ground_truth_com_odom_msg.header.frame_id = "odom";
-        ground_truth_com_pub.publish(ground_truth_com_odom_msg);
+        if(ground_truth_com_odom_inc)
+        {
 
-        ground_truth_odom_pub_msg.child_frame_id = base_link_frame;
-        ground_truth_odom_pub_msg.header.stamp = ros::Time::now();
-        ground_truth_odom_pub_msg.header.frame_id = "odom";
-        ground_truth_odom_pub.publish(ground_truth_odom_pub_msg);
-        ds_pub.publish(is_in_ds_msg);
+            ground_truth_com_odom_pub_msg.child_frame_id = "CoM_frame";
+            ground_truth_com_odom_pub_msg.header.stamp = ros::Time::now();
+            ground_truth_com_odom_pub_msg.header.frame_id = "odom";
+            ground_truth_com_pub.publish(ground_truth_com_odom_pub_msg);
+            ground_truth_com_odom_inc = false;
+        }
+        if(ground_truth_odom_inc)
+        {
+            ground_truth_odom_pub_msg.child_frame_id = base_link_frame;
+            ground_truth_odom_pub_msg.header.stamp = ros::Time::now();
+            ground_truth_odom_pub_msg.header.frame_id = "odom";
+            ground_truth_odom_pub.publish(ground_truth_odom_pub_msg);
+            ground_truth_odom_inc = false;
+        }
     }
     comp_odom0_msg.header = odom_est_msg.header;
     comp_odom0_pub.publish(comp_odom0_msg);

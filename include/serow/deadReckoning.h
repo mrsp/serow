@@ -1,5 +1,5 @@
 /* 
- * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+ * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,8 @@ class deadReckoning
     double Tm, Tm2, ef, wl, wr, mass, g, freq, GRF, Tm3, alpha1, alpha3;
     Eigen::Matrix3d C1l, C2l, C1r, C2r;
     Eigen::Vector3d RpRm, LpLm, RpRmb, LpLmb;
-
+    Eigen::Vector3d LLegContactPoint, RLegContactPoint;
+    Eigen::Matrix3d LLegContactOrientation, RLegContactOrientation;
     Eigen::Vector3d pwr, pwl, pwb, pwb_;
     Eigen::Vector3d vwr, vwl, vwb, vwb_r, vwb_l;
     Eigen::Matrix3d Rwr, Rwl, vwb_cov;
@@ -104,12 +105,13 @@ class deadReckoning
         vwbKCFS = Eigen::Vector3d::Zero();
         plf = plf_;
         prf = prf_;
-        RpRm = prf;
-        LpLm = plf;
+        RpRm = Eigen::Vector3d::Zero();
+        LpLm = Eigen::Vector3d::Zero();
+        LLegContactPoint = Eigen::Vector3d::Zero();
+        RLegContactPoint = Eigen::Vector3d::Zero();
         alpha1 = alpha1_;
         alpha3 = alpha3_;
         Tm3 = (mass * mass * g * g) * Tm2;
-
     }
     Eigen::Vector3d getOdom()
     {
@@ -120,6 +122,18 @@ class deadReckoning
         return vwb;
     }
 
+	/** @fn computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr, Eigen::Vector3d vbl, Eigen::Vector3d vbr, double wl_, double wr_)
+     *  @brief Computes the 3D linear base velocity in the world frame with kinematic-inertial measurements
+	 *  @param Rwb Rotation of the base w.r.t the world frame (can be readily computed with base IMU measurements)
+     *  @param omegawb 3D angular velocity of the base in the world frame
+     *  @param pbl Relative to base left leg 3D position measurement
+     *  @param pbr Relative to base right leg 3D position measurement
+     *  @param vbl Relative to base left leg 3D linear velocity measurement
+     *  @param vbr Relative to base right leg 3D linear velocity measurement
+     *  @param wl_ Left leg contact probability
+     *  @param wr_ Right leg contact probability
+     *  @note Rwb, omegawb can be readily computed with base IMU measurements
+     */
     void computeBodyVelKCFS(Eigen::Matrix3d Rwb, Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr,
                             Eigen::Vector3d vbl, Eigen::Vector3d vbr, double wl_, double wr_)
     {
@@ -136,13 +150,30 @@ class deadReckoning
         vwb = wl_ * vwb_l;
         vwb += wr_ * vwb_r;
     }
-
+	/** @fn Eigen::Matrix3d getVelocityCovariance()
+     *  @brief Method to get the  3D Base velocity covariance in the world frame
+	 *  @return   3D Base velocity covariance in the world frame
+	 */
     Eigen::Matrix3d getVelocityCovariance()
     {
 
         return vwb_cov;
     }
 
+	/** @fn  void computeLegKCFS(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr, Eigen::Vector3d omegawb, Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,Eigen::Vector3d pbl, Eigen::Vector3d pbr, Eigen::Vector3d vbl, Eigen::Vector3d vbr)
+     *  @brief Computes the left/right leg orientation, 3D angular velocity and 3D linear velocity w.r.t the world frame
+	 *  @param Rwb Rotation of the base w.r.t the world frame 
+     *  @param Rbl Relative rotation matrix of the left leg to the base frame
+     *  @param Rbr Relative rotation matrix of the right leg to the base frame
+     *  @param omegawb 3D angular velocity of the base in the world frame
+     *  @param omegabl Relative to base left leg 3D angular velocity measurement
+     *  @param omegabr Relative to base right leg 3D angular velocity measurement
+     *  @param pbl Relative to base left leg 3D position measurement
+     *  @param pbr Relative to base right leg 3D position measurement
+     *  @param vbl Relative to base left leg 3D linear velocity measurement
+     *  @param vbr Relative to base right leg 3D linear velocity measurement
+     *  @note computeBodyVelKCFS() must be called first 
+    */
     void computeLegKCFS(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr, Eigen::Vector3d omegawb, Eigen::Vector3d omegabl, Eigen::Vector3d omegabr,
                         Eigen::Vector3d pbl, Eigen::Vector3d pbr, Eigen::Vector3d vbl, Eigen::Vector3d vbr)
     {
@@ -155,45 +186,94 @@ class deadReckoning
         vwr = vwb + wedge(omegawb) * Rwb * pbr + Rwb * vbr;
     }
 
+
+	/** @fn  Eigen::Vector3d getLFootLinearVel()
+     *  @brief Method to get the  3D left leg linear velocity  in the world frame
+	 *  @return   3D left leg linear velocity  in the world frame
+	 */
     Eigen::Vector3d getLFootLinearVel()
     {
         return vwl;
     }
+
+	/** @fn  Eigen::Vector3d getRFootLinearVel()
+     *  @brief Method to get the  3D right leg linear velocity  in the world frame
+	 *  @return   3D right leg linear velocity  in the world frame
+	 */
     Eigen::Vector3d getRFootLinearVel()
     {
         return vwr;
     }
-
+	/** @fn   Eigen::Vector3d getLFootAngularVel()
+     *  @brief Method to get the  3D left leg angular velocity  in the world frame
+	 *  @return   3D left leg angular velocity  in the world frame
+	 */
     Eigen::Vector3d getLFootAngularVel()
     {
         return omegawl;
     }
+	/** @fn   Eigen::Vector3d getRFootAngularVel()
+     *  @brief Method to get the  3D right leg angular velocity  in the world frame
+	 *  @return   3D right leg angular velocity  in the world frame
+	 */
     Eigen::Vector3d getRFootAngularVel()
     {
         return omegawr;
     }
-
+	/** @fn   Eigen::Vector3d getLFootIMVPPosition()
+     *  @brief Method to get the  3D left leg contact point (instantaneous pivot) in the world frame
+	 *  @return   3D left leg contact point in the world frame
+	 */
     Eigen::Vector3d getLFootIMVPPosition()
     {
-        return LpLmb;
+        return LLegContactPoint;
     }
-
+	/** @fn   Eigen::Vector3d getRFootIMVPPosition()
+     *  @brief Method to get the  3D right leg contact point (instantaneous pivot) in the world frame
+	 *  @return   3D right leg contact point in the world frame
+	 */
     Eigen::Vector3d getRFootIMVPPosition()
     {
-        return RpRmb;
+        return RLegContactPoint;
     }
 
+	/** @fn    Eigen::Matrix3d getLFootIMVPOrientation()
+     *  @brief Method to get the  3D left leg contact  (instantaneous pivot) orientation in the world frame
+	 *  @return   3D left leg contact orientation in the world frame
+	 */
     Eigen::Matrix3d getLFootIMVPOrientation()
     {
-        return RLpLm;
+        return LLegContactOrientation;
     }
 
+	/** @fn    Eigen::Matrix3d getRFootIMVPOrientation()
+     *  @brief Method to get the  3D right leg contact  (instantaneous pivot) orientation in the world frame
+	 *  @return   3D right leg contact orientation in the world frame
+	 */
     Eigen::Matrix3d getRFootIMVPOrientation()
     {
-        return RRpRm;
+        return RLegContactOrientation;
+    }
+	/** @fn    double getRLegContactProb()
+     *  @brief Method to get right leg contact probability
+	 *  @return   Right leg contact probability
+	 */
+    double getRLegContactProb()
+    {
+        return wr;
+    }
+	/** @fn    double getLLegContactProb()
+     *  @brief Method to get left leg contact probability
+	 *  @return   Left leg contact probability
+	 */
+    double getLLegContactProb()
+    {
+        return wl;
     }
 
-
+	/** @fn    void computeIMVP()
+     *  @brief Method to compute the left and right leg contact points (instantaneous pivot)
+	 */
     void computeIMVP()
     {
         Lomega = Rwl.transpose() * omegawl;
@@ -218,6 +298,14 @@ class deadReckoning
 
         RpRm = RpRm + C1r * Rwr.transpose() * vwr;
     }
+
+	/** @fn    void computeIMVPFT(Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
+     *  @brief Method to compute the left and right leg contact points (instantaneous pivot) taking into account the left/right leg contact wrenches
+     *  @param lf Left leg 3D contact force
+     *  @param rf Right leg 3D contact force
+     *  @param lt Left leg 3D contact torque
+     *  @param rt Right leg 3D contact torque
+	 */
     void computeIMVPFT(Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
     {
         Lomega = Rwl.transpose() * omegawl;
@@ -249,6 +337,26 @@ class deadReckoning
 
     }
 
+	/** @fn computeDeadReckoning(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr, Eigen::Vector3d omegawb, Eigen::Vector3d bomegab,Eigen::Vector3d pbl, Eigen::Vector3d pbr,Eigen::Vector3d vbl, Eigen::Vector3d vbr,Eigen::Vector3d omegabl, Eigen::Vector3d omegabr, double lfz, double rfz,  Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
+     *  @brief Computes the 3D Leg odometry 
+	 *  @param Rwb Rotation of the base w.r.t the world frame 
+     *  @param Rbl Rotation of the left leg w.r.t to the base frame
+     *  @param Rbr Rotation of the right leg w.r.t to the base frame
+     *  @param omegawb 3D angular velocity of the base in the world frame
+     *  @param bomegab 3D angular velocity of the base in the base frame
+     *  @param pbl Relative to base left leg 3D position measurement
+     *  @param pbr Relative to base right leg 3D position measurement
+     *  @param vbl Relative to base left leg 3D linear velocity measurement
+     *  @param vbr Relative to base right leg 3D linear velocity measurement
+     *  @param omegabl Relative to base left leg 3D angular velocity measurement
+     *  @param omegabr Relative to base right leg 3D angular velocity measurement
+     *  @param lfz left leg vertical GRF
+     *  @param rfz right leg vertical GRF
+     *  @param lf Left leg 3D contact force
+     *  @param rf Right leg 3D contact force
+     *  @param lt Left leg 3D contact torque
+     *  @param rt Right leg 3D contact torque
+    */
     void computeDeadReckoning(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr,
                               Eigen::Vector3d omegawb, Eigen::Vector3d bomegab,
                               Eigen::Vector3d pbl, Eigen::Vector3d pbr,
@@ -298,13 +406,15 @@ class deadReckoning
         pwr += pwb - pb_r;
 
         
-        RpRmb =  pbr;
-        LpLmb =  pbl;
+        // RpRmb =  pbr;
+        // LpLmb =  pbl;
 
         // RpRmb =  Rwb.transpose()*(pwr-pwb);
         // LpLmb =  Rwb.transpose()*(pwl-pwb);
-        RLpLm = Rbl;
-        RRpRm = Rbr;
+        LLegContactOrientation = Rbl;
+        RLegContactOrientation = Rbr;
+        LLegContactPoint = pbl + LpLm;
+        RLegContactPoint = pbr + RpRm;
 
         //Needed in the next iteration
         Rwl_ = Rwl;
@@ -320,11 +430,28 @@ class deadReckoning
         vwb_cov.noalias() =  wl * (vwb_l - vwb) * (vwb_l - vwb).transpose();
         vwb_cov.noalias() += wr * (vwb_r - vwb) * (vwb_r - vwb).transpose();
 
-        
-
- 
+    
     }
-
+	/** @fn computeDeadReckoningGEM(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr,Eigen::Vector3d omegawb, Eigen::Vector3d pbl, Eigen::Vector3d pbr, Eigen::Vector3d vbl, Eigen::Vector3d vbr, Eigen::Vector3d omegabl, Eigen::Vector3d omegabr, double wl_, double wr_, Eigen::Vector3d lf, Eigen::Vector3d rf, Eigen::Vector3d lt, Eigen::Vector3d rt)
+     *  @brief Computes the 3D Leg odometry 
+	 *  @param Rwb Rotation of the base w.r.t the world frame 
+     *  @param Rbl Rotation of the left leg w.r.t to the base frame
+     *  @param Rbr Rotation of the right leg w.r.t to the base frame
+     *  @param omegawb 3D angular velocity of the base in the world frame
+     *  @param pbl Relative to base left leg 3D position measurement
+     *  @param pbr Relative to base right leg 3D position measurement
+     *  @param vbl Relative to base left leg 3D linear velocity measurement
+     *  @param vbr Relative to base right leg 3D linear velocity measurement
+     *  @param omegabl Relative to base left leg 3D angular velocity measurement
+     *  @param omegabr Relative to base right leg 3D angular velocity measurement
+     *  @param wl_ left leg contact probability
+     *  @param wr_ right leg contact probability
+     *  @param lf Left leg 3D contact force
+     *  @param rf Right leg 3D contact force
+     *  @param lt Left leg 3D contact torque
+     *  @param rt Right leg 3D contact torque
+     *  @note this method exists to facilitate interoperation the Gait-phase Estimation Module (GEM)
+    */
 
     void computeDeadReckoningGEM(Eigen::Matrix3d Rwb, Eigen::Matrix3d Rbl, Eigen::Matrix3d Rbr,
                               Eigen::Vector3d omegawb,
@@ -377,11 +504,20 @@ class deadReckoning
         //cout<<pwb<<endl;
     }
 
+	/** @fn     double cropGRF(double f_)
+	 *  @brief  Crops the measured vertical ground reaction force (GRF) in the margins [0, mass * g]
+	 *  @param  f_ Measured GRF
+	 *  @return  The cropped GRF
+	 */
     double cropGRF(double f_)
     {
         return max(0.0, min(f_, mass * g));
     }
-    //Computes the skew symmetric matrix of a 3-D vector
+	/** @fn Matrix3d wedge(Vector3d v)
+	 * 	@brief Computes the skew symmetric matrix of a 3-D vector
+	 *  @param v  3D Twist vector 
+	 *  @return   3x3 skew symmetric representation
+	 */
     Eigen::Matrix3d wedge(Eigen::Vector3d v)
     {
         Eigen::Matrix3d res = Eigen::Matrix3d::Zero();

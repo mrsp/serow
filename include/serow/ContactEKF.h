@@ -38,8 +38,8 @@
  * Measurements are: Base Position/Orinetation in World frame by Leg Odometry or Visual Odometry (VO) or Lidar Odometry (LO),
  * when VO/LO is considered the kinematically computed base velocity (Twist) is also employed for update.
  */
-#ifndef  __IMUEKF_H__
-#define  __IMUEKF_H__
+#ifndef  __ContactEKF_H__
+#define  __ContactEKF_H__
 
 #include <iostream>
 #include <eigen3/Eigen/Dense>
@@ -49,117 +49,102 @@
  
 using namespace Eigen;
 
-class IMUEKF {
+class ContactEKF {
 
 private:
-	///Linearized state-input model
-	Matrix<double, 15, 12> Lcf;
-	///Error Covariance, Linearized state transition model, Identity matrix, state uncertainty matrix
-	Matrix<double, 15, 15> P, Af, Acf, If, Qff;
-	///Linearized Measurement model 
-	Matrix<double, 6, 15> Hf, Hvf;
-	Matrix<double, 3, 15> Hv;
-	///State-Input Uncertainty matrix
-	Matrix<double, 12, 12> Qf;
-	///Kalman Gain
-	Matrix<double, 15, 6> Kf;
-	Matrix<double, 15, 3> Kv;
-	///Correction state vector
-	Matrix<double, 15, 1> dxf;
+	/// Linearized state-input model
+	Matrix<double, 27, 24> Lcf;
+	/// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty matrix
+	Matrix<double, 27, 27> P, Af, Acf, If, Qff;
+	/// Linearized Measurement model 
+	Matrix<double, 6, 27> Hf, Hvf;
+	Matrix<double, 12, 27> Hcf;
+	Matrix<double, 3, 27> Hv;
+	/// State-Input Uncertainty matrix
+	Matrix<double, 24, 24> Qf;
+	/// Kalman Gain
+	Matrix<double, 27, 6> Kf;
+	Matrix<double, 27, 3> Kv;
+	Matrix<double, 27, 12> Kcf;
+	/// Correction state vector
+	Matrix<double, 27, 1> dxf;
 	/// Update error covariance and Measurement noise
 	Matrix<double, 6, 6> s, R;
-	Matrix<double, 3, 3> sv, Rv, tempM;
-	///position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr, temp vectors
-	Vector3d r, v, omega, f, fhat, omegahat, temp;
-	///Innovation vectors
-	Matrix<double, 6, 1> z;
-	Vector3d zv;
-    
-    ///Robust Gaussian ESKF
-	///Beta distribution parameters 
-	///more info in Outlier-Robust State Estimation for Humanoid Robots https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
-    double tau, zeta, f0, e0, e_t, f_t;
-    double efpsi, lnp, ln1_p, pzeta_1, pzeta_0, norm_factor;
-	///Updated Measurement noise matrix
-    Eigen::Matrix<double, 6,6> R_z;
-	///Updated Error Covariance matrix
-    Eigen::Matrix<double, 15,15> P_i;
-	///Corrected state
-    Eigen::Matrix<double, 15,1> x_i, x_i_;
-	///Corrected Rotation matrix from base to world frame
-    Eigen::Matrix3d Rib_i;
-    bool outlier;
+	Matrix<double, 12, 12> sc, Rc;
 
+	Matrix<double, 3, 3> sv, Rv;
+	/// position, velocity , acc bias, gyro bias, bias corrected acc, bias corrected gyr vectors
+	Vector3d r, v, omega, f, fhat, omegahat;
+	/// Innovation vectors
+	Vector3d zv;
+	Matrix<double, 6, 1> z;
+    Matrix<double, 12, 1> zf;
+
+    
 
 	/**
 	 *  @brief computes the state transition matrix for linearized error state dynamics
      *  
 	*/
-	Matrix<double,15,15> computeTrans(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
+	Matrix<double,27,27> computeTrans(Matrix<double,27,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 	/**
 	 *  @brief performs euler (first-order) discretization to the nonlinear state-space dynamics
      *  
 	*/
-	void euler(Vector3d omega_, Vector3d f_);
-	/**
-	 *  @brief updates the parameters for the outlier detection on odometry measurements
-     *  
-	*/
-	void updateOutlierDetectionParams(Eigen::Matrix<double, 3,3> B);
-	/**
-	 *  @brief computes the digamma Function Approximation
-     *  
-	*/
-	double computePsi(double xx);
+	void euler(Vector3d omega_, Vector3d f_,Vector3d pbl_,Vector3d  pbr_,int  contactL_,int  contactR_);
+	
 	/**
 	 *  @brief computes the discrete-time nonlinear state-space dynamics
      *  
 	*/
-    Matrix<double,15,1> computeDiscreteDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
+    Matrix<double,27,1> computeDiscreteDyn(Matrix<double,27,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_, Vector3d pbl_, Vector3d pbr_, int contactL_, int contactR_);
 	/**
 	 *  @brief computes the continuous-time nonlinear state-space dynamics
      *  
 	*/
-	Matrix<double,15,1> computeContinuousDyn(Matrix<double,15,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
+	Matrix<double,27,1> computeContinuousDyn(Matrix<double,27,1> x_, Matrix<double,3,3> Rib_, Vector3d omega_, Vector3d f_);
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
              
-	//State vector - with biases included
-	Matrix<double, 15, 1> x;
+	/// Filter's State vector - with biases included
+	Matrix<double, 27, 1> x;
 
 	bool firstrun;
 	bool useEuler;
 
-	// Gravity vector
+	/// Gravity vector, gyro bias/acceleration bias vector,  estimated acceleration/velocity/position/RPY vector
     Vector3d g, bgyr, bacc, gyro, acc, vel, pos, angle;
 
 	//Noise Stds
 	double  acc_qx,acc_qy,acc_qz,gyr_qx,gyr_qy,gyr_qz,gyrb_qx,gyrb_qy,gyrb_qz,
 	accb_qx,accb_qy,accb_qz, odom_px, odom_py, odom_pz, odom_ax, odom_ay,odom_az,
 	vel_px, vel_py, vel_pz, leg_odom_px, leg_odom_py, leg_odom_pz, leg_odom_ax,
-	leg_odom_ay, leg_odom_az;
+	leg_odom_ay, leg_odom_az, lp_qx, lp_qy, lp_qz, lo_qx, lo_qy, lo_qz, rp_qx, 
+	rp_qy, rp_qz, ro_qx, ro_qy, ro_qz, lp_px, lp_py, lp_pz, lo_px, lo_py, lo_pz,
+	rp_px, rp_py, rp_pz, ro_px, ro_py, ro_pz;
 
 	double gyroX, gyroY, gyroZ, angleX, angleY, angleZ, bias_gx, bias_gy, bias_gz,
 			bias_ax, bias_ay, bias_az, ghat;
 
 	double accX, accY, accZ, velX, velY, velZ, rX, rY, rZ;
-    double mahalanobis_TH;
-	Matrix3d Rib;
 
-	Affine3d  Tib;
+	/// Rotation of base/left leg/right left w.r.t the world frame reference
+	Matrix3d Rib, Ril, Rir;
+	/// Homogeneous transformation of base/left leg/right left w.r.t the world frame reference
+	Affine3d  Tib, Til, Tir;
+	/// Quaternion of base/left leg/right left w.r.t the world frame reference
+	Quaterniond qib, qil, qir;
 
-	Quaterniond qib;
-
-	//Sampling time = 1.0/Sampling Frequency
+	/// Sampling time = 1.0/Sampling Frequency
 	double dt;
 
 	/**
 	 *  @brief Constructor of the Base Estimator
      *  @details
-     *   Initializes the gravity vector and sets Outlier detection to false
+     *   Initializes the gravity vector 
 	*/
-	IMUEKF();
+	ContactEKF();
 	/** @fn void setdt(double dtt)
 	 *  @brief sets the discretization of the Error State Kalman Filter (ESKF)
 	 *  @param dtt sampling time in seconds
@@ -200,6 +185,46 @@ public:
 		bias_ay = bacc_(1);
 		bias_az = bacc_(2);
 	}
+	/** @fn void setLeftContact bp)
+	 *  @brief initializes the left leg contact state of the Error State Kalman Filter (ESKF)
+	 *  @param bp Contact position of the left leg in the world frame
+	 */
+	void setLeftContact(Vector3d bp){
+
+		x.segment<3>(15) = bp;
+	}
+	
+	/** @fn void setLeftFootOrientation(Matrix3d Rot_)
+	 *  @brief initializes the left leg orientation state of the Error State Kalman Filter (ESKF)
+	 *  @param Rot_ Rotation matrix of the left leg in the world frame
+	 */
+
+	void setLeftFootOrientation(Matrix3d Rot_)
+	{
+		Ril = Rot_;
+		qil = Quaterniond(Ril);
+	}
+
+	/** @fn void setRightContactVector3d bp)
+	 *  @brief initializes the right leg contact state of the Error State Kalman Filter (ESKF)
+	 *  @param bp Contact position of the right leg in the world frame
+	 */
+	void setRightContact(Vector3d bp){
+
+		x.segment<3>(21) = bp;
+	}
+	
+
+	/** @fn void setRightFootOrientation(Matrix3d Rot_)
+	 *  @brief initializes the right leg orientation state of the Error State Kalman Filter (ESKF)
+	 *  @param Rot_ Rotation matrix of the right leg in the world frame
+	 */
+	void setRightFootOrientation(Matrix3d Rot_)
+	{
+		Rir = Rot_;
+		qir = Quaterniond(Rir);
+	}
+
 	/** @fn void setBodyPos(Vector3d bp)
 	 *  @brief initializes the base position state of the Error State Kalman Filter (ESKF)
 	 *  @param bp Position of the base in the world frame
@@ -228,15 +253,45 @@ public:
 	 *  @brief realises the predict step of the Error State Kalman Filter (ESKF)
 	 *  @param omega_ angular velocity of the base in the base frame
 	 *  @param f_ linear acceleration of the base in the base frame
+	 *  @param pbl_ 3D relative left leg position measurement in the base frame
+	 *  @param pbr_ 3D relative right leg position measurement in the base frame
+	 *  @param Rbl_ Rotation matrix of the left leg w.r.t the base frame 
+	 *  @param Rbr_ Rotation matrix of the right leg w.r.t the base frame 
+	 *  @param contactL_ Left Leg contact status (true/false)
+	 *  @param contactR_ Right Leg contact status (true/false)
 	 */
-	void predict(Vector3d omega_, Vector3d f_);
+	void predict(Vector3d omega_, Vector3d f_ , Vector3d pbl_, Vector3d pbr_, Matrix3d Rbl_, Matrix3d Rbr_, int contactL_, int contactR_);
 	/** @fn void updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection);
 	 *  @brief realises the pose update step of the Error State Kalman Filter (ESKF)
 	 *  @param y 3D base position measurement in the world frame
 	 *  @param qy orientation of the base w.r.t the world frame in quaternion
-	 *  @param useOutlierDetection check if the measurement is an outlier
 	 */
-	bool updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection);
+
+
+	/** @fn void updateWithLegContacts(Vector3d yl, Quaterniond qyl, Vector3d yr, Quaterniond qyr, Matrix3d JLQeJL, Matrix3d JRQeJR,  double probL_, double probR_, int contactL_, int contactR_);
+	 *  @brief realises the pose update step of the Error State Kalman Filter (ESKF) with two (Right/Left) leg relative kinematic measurements
+	 *  @param yl 3D relative left leg position measurement in the base frame
+	 *  @param qyl  orientation of the left leg w.r.t the base frame in quaternion
+	 *  @param yr 3D relative right leg position measurement in the base frame
+	 *  @param qyr  orientation of the right leg w.r.t the base frame in quaternion
+	 *  @param JLQeJL Relative left leg Jacobian
+	 *  @param JRQeJR Relative right leg Jacobian
+	 *  @param probL_ Left leg contact probability
+	 *	@param probR_ Right leg contact probability
+	 *  @param contactL_ Left Leg contact status (true/false)
+	 *  @param contactR_ Right Leg contact status (true/false)
+	 *  @note  Visual/Lidar odometry can be subject to outlier measurements that negatively affect the filter state 
+	 */
+	void updateWithLegContacts(Vector3d yl, Quaterniond qyl, Vector3d yr, Quaterniond qyr, Matrix3d JLQeJL, Matrix3d JRQeJR,  double probL_, double probR_, int contactL_, int contactR_);
+	
+	
+	/** @fn void updateWithOdom(Vector3d y, Quaterniond qy);
+	 *  @brief realises the pose update step of the Error State Kalman Filter (ESKF) with an Odometry measurement
+	 *  @param y 3D base position measurement in the world frame
+	 *  @param qy orientation of the base w.r.t the world frame in quaternion
+	 *  @note  Visual/Lidar odometry can be subject to outlier measurements that negatively affect the filter state 
+	 */
+	void updateWithOdom(Vector3d y, Quaterniond qy);
 	/** @fn void updateWithLegOdom(Vector3d y, Quaterniond qy);
 	 *  @brief realises the pose update step of the Error State Kalman Filter (ESKF) with Leg Odometry
 	 *  @param y 3D base position measurement in the world frame
@@ -297,7 +352,8 @@ public:
 		return v;
 	}
 
-	/** @brief Computes the exponential map according to the Rodriquez Formula for component in so(3)
+	/** @fn  Matrix<double, 3, 3> expMap(Vector3d omega)
+	 *  @brief Computes the exponential map according to the Rodriquez Formula for component in so(3)
 	 *  @param omega 3D twist in so(3) algebra
 	 *  @return   3x3 Rotation in  SO(3) group
 	 */
@@ -323,7 +379,8 @@ public:
 
 		return res;
 	}
-	/** @brief Computes the logarithmic map for a component in SO(3) group
+	/** @fn Vector3d logMap(Matrix<double, 3, 3> Rt)
+	 *  @brief Computes the logarithmic map for a component in SO(3) group
 	 *  @param Rt 3x3 Rotation in SO(3) group
 	 *  @return   3D twist in so(3) algebra
 	 */
@@ -343,7 +400,8 @@ public:
 
 		return res;
 	}
-	/** @brief Computes the logarithmic map for a component in SO(3) group
+	/** @fn Vector3d logMap(Quaterniond q)
+	 *  @brief Computes the logarithmic map for a component in SO(3) group
 	 *  @param q Quaternion in SO(3) group
 	 *  @return   3D twist in so(3) algebra
 	 */
@@ -358,17 +416,17 @@ public:
 		Vector3d tempV = Vector3d(q.x(), q.y(), q.z());
 
 		double temp_ = tempV.norm();
-		tempV *= (1.000 / temp_);
+		if (temp_ > std::numeric_limits<double>::epsilon()) 
+		{
+			tempV *= (1.000 / temp_);
+			omega = tempV * (2.0 * acos(q.w() / temp));
+		}
 
-
-		omega = tempV * (2.0 * acos(q.w() / temp));
-		//omega = tempV * (2.0 * atan2(temp_,q.w()));
-		if(std::isnan(omega(0) + omega(1) + omega(2)))
-			omega = Vector3d::Zero();
 
 		return omega;
 	}
-	/** @brief Computes Euler Angles from a Rotation Matrix
+	/** @fn Vector3d getEulerAngles(Matrix3d Rt)
+	 *  @brief Computes Euler Angles from a Rotation Matrix
 	 *  @param Rt 3x3 Rotation in SO(3) group
 	 *  @return   3D Vector with Roll-Pitch-Yaw
 	 */
@@ -382,7 +440,8 @@ public:
 		res(2) = atan2(Rt(1, 0), Rt(0, 0));
 		return res;
 	}
-	/** @brief Computes Rotation Matrix from Euler Angles according to YPR convention
+	/** @fn  Matrix3d getRotationMatrix(Vector3d angles_)
+	 *  @brief Computes Rotation Matrix from Euler Angles according to YPR convention
 	 *  @param angles_ 3D Vector with Roll-Pitch-Yaw
 	 *  @return  3x3 Rotation in SO(3) group
 	 */

@@ -79,6 +79,7 @@ mass: 5.6  #robot mass with realsense and IMU
 #To estimate:
 # 3-D Body Position/Velocity
 # 3-D IMU-Biases
+useIMUEKF: true
 
 #Process Noise STDs
 accelerometer_bias_random_walk:  0.00499 #m/s^2

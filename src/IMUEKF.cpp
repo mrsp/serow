@@ -1,5 +1,5 @@
-/*
- * Copyright 2017-2020 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/* 
+ * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,8 +10,8 @@
  *     * Redistributions in binary form must reproduce the above copyright
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH)
- *	 nor the names of its contributors may be used to endorse or promote products derived from
+ *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
+ *		 nor the names of its contributors may be used to endorse or promote products derived from
  *       this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
@@ -275,7 +275,7 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
     
     //Propagate only if non-zero input
     
-    if (omegahat(0) != 0 && omegahat(1) != 0 && omegahat(2) != 0)
+    if (omegahat(0) != 0 || omegahat(1) != 0 || omegahat(2) || 0)
     {
         Rib  *=  expMap(omegahat*dt);
     }
@@ -315,7 +315,7 @@ void IMUEKF::updateWithTwist(Vector3d y)
     P.noalias()+= Kv * Rv * Kv.transpose();
     
     
-    if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+    if (dxf(3) != 0 || dxf(4) != 0 || dxf(5) != 0)
     {
         Rib *=  expMap(dxf.segment<3>(3));
     }
@@ -346,6 +346,7 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
     z.segment<3>(0) = y;
     z.segment<3>(0).noalias() -= Rib * v;
     z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
+    //z.segment<3>(3) = logMap((qy.toRotationMatrix() * Rib.transpose() ));
 
 
     Hvf.block<3,3>(0,0) = Rib;
@@ -364,7 +365,7 @@ void IMUEKF::updateWithTwistRotation(Vector3d y,Quaterniond qy)
     P.noalias()+= Kf * R * Kf.transpose();
     
     
-    if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+    if (dxf(3) != 0 || dxf(4) != 0 || dxf(5) != 0)
     {
         Rib *=  expMap(dxf.segment<3>(3));
     }
@@ -391,7 +392,7 @@ void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
         z.segment<3>(0) = y - r;
         z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
         //z.segment<3>(3) = logMap(qy.toRotationMatrix().transpose() * Rib);
-        
+
         //Compute the Kalman Gain
         s = R;
         s.noalias() += Hf * P * Hf.transpose();
@@ -403,7 +404,7 @@ void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
         
         dxf.noalias() = Kf * z;
         x.noalias() += dxf;
-        if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+        if (dxf(3) != 0 || dxf(4) != 0 || dxf(5) != 0)
         {
              Rib *=  expMap(dxf.segment<3>(3));
         }
@@ -448,7 +449,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
             dxf.noalias() = Kf * z;
             //Update the mean estimate
             x += dxf;
-            if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+            if (dxf(3) != 0 || dxf(4) != 0 || dxf(5) != 0)
             {
                  Rib *=  expMap(dxf.segment<3>(3));
             }
@@ -474,7 +475,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
             //Update the mean estimate
             x_i  = x + dxf;
             
-            if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+            if (dxf(3) != 0 || dxf(4) != 0 || dxf(5) != 0)
             {
                 Rib_i =  Rib*expMap(dxf.segment<3>(3));
             }
@@ -532,7 +533,7 @@ bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection
                 x_i_ = x_i;
                 x_i  = x + dxf;
                 
-                if (dxf(3) != 0 && dxf(4) != 0 && dxf(5) != 0)
+                if (dxf(3) != 0 || dxf(4) != 0 || dxf(5) != 0)
                 {
                     Rib_i =  Rib *expMap(dxf.segment<3>(3));
                 }
