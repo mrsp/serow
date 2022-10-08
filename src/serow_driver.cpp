@@ -1,5 +1,6 @@
-/* 
- * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/*
+ * Copyright 2017-2023 Stylianos Piperakis,
+ * Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,9 +11,10 @@
  *     * Redistributions in binary form must reproduce the above copyright
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
- *		 nor the names of its contributors may be used to endorse or promote products derived from
- *       this software without specific prior written permission.
+ *     * Neither the name of the Foundation for Research and Technology Hellas
+ *       (FORTH) nor the names of its contributors may be used to endorse or
+ *       promote products derived from this software without specific prior
+ *       written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -27,7 +29,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 #include <iostream>
 #include <serow/humanoid_ekf.h>
 #include <serow/quadruped_ekf.h>
@@ -40,8 +41,7 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, "serow");
     ros::NodeHandle n;
-    if(!ros::master::check())
-    {
+    if(!ros::master::check()) {
         cerr<<"Could not contact master!\nQuitting... "<<endl;
         return -1;
     }
@@ -49,25 +49,20 @@ int main(int argc, char** argv)
     ros::NodeHandle n_p("~");
     bool isQuadruped;
     n_p.param<bool>("isQuadruped", isQuadruped, false);
-    if(!isQuadruped)
-    {
+    if(!isQuadruped) {
         humanoid_ekf* hse = new humanoid_ekf();
         hse->connect(n);
-        if(!hse->connected())
-        {
+        if(!hse->connected()) {
             ROS_ERROR("Could not connect to Humanoid robot!");
             return -1;
         }
 
         // Run the spinner in a separate thread to prevent lockups
         hse->run();
-    }
-    else
-    {
+    } else {
         quadruped_ekf* qse = new quadruped_ekf();
         qse->connect(n);
-        if(!qse->connected())
-        {
+        if(!qse->connected()) {
             ROS_ERROR("Could not connect to Quadruped robot!");
             return -1;
         }

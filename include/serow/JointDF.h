@@ -1,5 +1,6 @@
-/* 
- * Copyright 2017-2021MA Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/*
+ * Copyright 2017-2023 Stylianos Piperakis,
+ * Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,9 +11,10 @@
  *     * Redistributions in binary form must reproduce the above copyright
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
- *		 nor the names of its contributors may be used to endorse or promote products derived from
- *       this software without specific prior written permission.
+ *     * Neither the name of the Foundation for Research and Technology Hellas
+ *       (FORTH) nor the names of its contributors may be used to endorse or
+ *       promote products derived from this software without specific prior
+ *       written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -27,14 +29,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
  /**
- * @brief Joint angular velocity estimation with numerical differentiation and 2nd order Low Pass Butterworth Filter
+ * @brief Joint angular velocity estimation with numerical differentiation and
+ * 2nd order Low Pass Butterworth Filter
  * @author Stylianos Piperakis
  * @details estimates the joint angular velocity from joint encoder measurements
  */
 
-#ifndef  __JOINTDF_H__
-#define  __JOINTDF_H__
-
+#pragma once
 #include <serow/differentiator.h>
 #include <serow/butterworthLPF.h>
 #include <iostream>
@@ -48,6 +49,7 @@ private:
     butterworthLPF bw;
     /// linear differentiator filter to compute the angular velocity
     Differentiator df;
+
 public:
     /// Joint angular position
     double JointPosition;
@@ -57,7 +59,8 @@ public:
     string JointName;
 
     /** @fn double filter(double JointPosMeasurement);
-     *  @brief estimates the Joint Velocity using the Joint Position measurement by the encoders
+     *  @brief estimates the Joint Velocity using the Joint Position measurement
+     *  by the encoders
      */
     double filter(double JointPosMeasurement);
     void reset();
@@ -65,9 +68,8 @@ public:
      *  @brief initializes the differentiator filter
      *  @param JointName_ the name of the filter e.g. "LHipPitch"
      *  @param fsampling the sampling frequency of the sensor e.g. 100hz
-     *  @param fcutoff the cut-off frequency of the  2nd order Low Pass Butterworth Filter filter e.g. 10hz
+     *  @param fcutoff the cut-off frequency of the  2nd order Low Pass
+     *  Butterworth Filter filter e.g. 10hz
      */
-    void init(string JointName_,double fsampling, double fcutoff);
-
+    void init(string JointName_, double fsampling, double fcutoff);
 };
-#endif

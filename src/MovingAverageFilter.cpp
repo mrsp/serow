@@ -1,5 +1,6 @@
-/* 
- * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/*
+ * Copyright 2017-2023 Stylianos Piperakis,
+ * Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,9 +11,10 @@
  *     * Redistributions in binary form must reproduce the above copyright
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
- *		 nor the names of its contributors may be used to endorse or promote products derived from
- *       this software without specific prior written permission.
+ *     * Neither the name of the Foundation for Research and Technology Hellas
+ *       (FORTH) nor the names of its contributors may be used to endorse or
+ *       promote products derived from this software without specific prior
+ *       written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -26,46 +28,41 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#include <serow/MovingAverageFilter.h>
 
+#include <serow/MovingAverageFilter.h>
 
 MovingAverageFilter::MovingAverageFilter()
 {
     x = 0.000;
-    //Window Size
+    // Window Size
     windowSize = 10;
     currentstep = 0;
-    std::cout<<"Moving Average Filter Initialized Successfully"<<std::endl;
+    std::cout << "Moving average filter initialized successfully" << std::endl;
 }
-
-
 
 void MovingAverageFilter::reset()
 {
     x = 0.000;
     currentstep = 0;
-    while(windowBuffer.size()>0)
+    while (windowBuffer.size() > 0)
         windowBuffer.pop();
-    std::cout<<"Moving Average Filter Reseted"<<std::endl;
+    std::cout << "Moving average filter reset" << std::endl;
 }
 
-
-/** MovingAverageFilter filter to  deal with the Noise **/
-void MovingAverageFilter::filter(float  y)
+void MovingAverageFilter::filter(float y)
 {
 
-    if(currentstep<windowSize)
+    if (currentstep < windowSize)
     {
-        //Moving Window
-        x = (x*currentstep + y) /(currentstep + 1);
+        // Moving Window
+        x = (x * currentstep + y) / (currentstep + 1);
         currentstep++;
     }
     else
     {
-        x+=(y-windowBuffer.front())/windowSize;
-        if(windowBuffer.size()>=windowSize)
+        x += (y - windowBuffer.front()) / windowSize;
+        if (windowBuffer.size() >= windowSize)
             windowBuffer.pop();
     }
     windowBuffer.push(y);
-    /** ------------------------------------------------------------- **/
 }
