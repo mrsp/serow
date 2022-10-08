@@ -1,5 +1,6 @@
-/* 
- * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/*
+ * Copyright 2017-2023 Stylianos Piperakis,
+ * Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,9 +11,10 @@
  *     * Redistributions in binary form must reproduce the above copyright
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
- *		 nor the names of its contributors may be used to endorse or promote products derived from
- *       this software without specific prior written permission.
+ *     * Neither the name of the Foundation for Research and Technology Hellas
+ *       (FORTH) nor the names of its contributors may be used to endorse or
+ *       promote products derived from this software without specific prior
+ *       written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -26,41 +28,42 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
  /**
  * @brief A 2nd order High Pass Butterworth Filter
  * @author Stylianos Piperakis
- * @details to remove constant (low frequency) bias  in certain sensor measurements
+ * @details to remove constant (low frequency) bias  in certain sensor
+ * measurements
  */
-#ifndef  __butHPF_H__
-#define  __butHPF_H__
+
+#pragma once
 #include <string.h>
 #include <math.h>
 #include <iostream>
 
-using namespace std;
-
 class butterworthHPF
 {
-    
+
 private:
     /// state at t-1, t-2, measurement at t-1, t-2
-    double x_p, x_pp, y_p,y_pp; 
+    double x_p, x_pp, y_p, y_pp;
     /// 2nd order coefficients
     double a1, a2, b0, b1, b2, ff, ita, q, a;
     /// frequency ration and sampling frequency
     double fx, fs;
     int i;
-    
+
 public:
     /// the name of the filter e.g. "LHipPitch"
-    string name;
+    std::string name;
     /** @fn void reset()
      *  @brief resets the 2nd order High Pass Butterworth filter state
      */
     void reset();
-    
+
     /** @fn double filter(double y)
-     *  @brief recursively filters a measurement with a 2nd order High Pass Butterworth filter
+     *  @brief recursively filters a measurement with a 2nd order High Pass
+     *  Butterworth filter
      *  @param y  measurement to be filtered
      */
     double filter(double y);
@@ -74,7 +77,5 @@ public:
      *  @param fsampling the sampling frequency of the sensor e.g. 100hz
      *  @param fcutoff the cut-off frequency of the filter e.g. 0.01hz
      */
-    void init(string name_ ,double fsampling, double fcutoff);
-    
+    void init(std::string name_, double fsampling, double fcutoff);
 };
-#endif

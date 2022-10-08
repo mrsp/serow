@@ -1,5 +1,6 @@
-/* 
- * Copyright 2017-2021 Stylianos Piperakis, Foundation for Research and Technology Hellas (FORTH)
+/*
+ * Copyright 2017-2023 Stylianos Piperakis,
+ * Foundation for Research and Technology Hellas (FORTH)
  * License: BSD
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10,9 +11,10 @@
  *     * Redistributions in binary form must reproduce the above copyright
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of the Foundation for Research and Technology Hellas (FORTH) 
- *		 nor the names of its contributors may be used to endorse or promote products derived from
- *       this software without specific prior written permission.
+ *     * Neither the name of the Foundation for Research and Technology Hellas
+ *       (FORTH) nor the names of its contributors may be used to endorse or
+ *       promote products derived from this software without specific prior
+ *       written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -32,12 +34,9 @@
  * @details to smooth out/filter a sensor measurement signal
  */
 
-#ifndef  __MOVINGAVERAGEFILTER_H__
-#define  __MOVINGAVERAGEFILTER_H__
-
+#pragma once
 #include <queue>
 #include <iostream>
-
 
 class MovingAverageFilter
 {
@@ -48,21 +47,22 @@ private:
     unsigned currentstep;
     /// Moving average buffer
     std::queue<float> windowBuffer;
+
 public:
     /// Moving average cuurent state
     float x;
 
     /** @fn void setParams(int windowSize_)
      *  @brief sets the buffer size of the moving average filter
-    */
+     */
     void setParams(int windowSize_)
     {
-        windowSize=windowSize_;
+        windowSize = windowSize_;
     }
 
     /** @fn void filter(float y)
      *  @brief filters the measurement with a cummulative moving average filter
-    */
+     */
     void filter(float y);
     /** fn MovingAverageFilter()
      *  @brief initializes the moving average filter
@@ -70,7 +70,6 @@ public:
     MovingAverageFilter();
     /** @fn void reset()
      *  @brief resets the state of the moving average filter
-    */
+     */
     void reset();
 };
-#endif
