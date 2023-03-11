@@ -14,7 +14,6 @@ SEROW (State Estimation RObot Walking) Framework for Humanoid/Quadruped Robot Wa
 ------------------------------------------------------------------ 
 
 
-
 Relevant Papers:
 * Non-linear ZMP based State Estimation for Humanoid Robot Locomotion, https://ieeexplore.ieee.org/document/7803278 (Humanoids 2016 - nominated for the best interactive paper award)
 * Nonlinear State Estimation for Humanoid Robot Walking, https://ieeexplore.ieee.org/document/8403285 (RA-L + IROS 2018)
