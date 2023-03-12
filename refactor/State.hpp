@@ -4,6 +4,7 @@
  */
 #pragma once
 #include <map>
+#include <optional>
 #include <string>
 
 #include <eigen3/Eigen/Dense>
@@ -26,17 +27,17 @@ public:
     Eigen::Vector3d getBaseAngularVelocity() const;
     Eigen::Vector3d getImuAccelBias() const;
     Eigen::Vector3d getImuGyroBias() const;
-    std::optional<Eigen::Isometry3d> getFootPose(const string &frame_name) const;
+    std::optional<Eigen::Isometry3d> getFootPose(const std::string &frame_name) const;
 
     // State covariance getter
-    Eigen::Matrix6d getBasePoseCov() const;
+    Eigen::Matrix<double, 6, 6> getBasePoseCov() const;
     Eigen::Matrix3d getBasePositionCov() const;
     Eigen::Matrix3d getBaseOrientationCov() const;
     Eigen::Matrix3d getBaseLinearVelocityCov() const;
     Eigen::Matrix3d getBaseAngularVelocityCov() const;
     Eigen::Matrix3d getImuAccelBiasCov() const;
     Eigen::Matrix3d getImuGyroBiasCov() const;
-    std::optional<Eigen::Matrix6d> getFootPoseCovariance(const string &frame_name) const;
+    std::optional<Eigen::Matrix<double, 6, 6>> getFootPoseCovariance(const std::string &frame_name) const;
 
     // State setter
     void update(State state);
@@ -49,10 +50,10 @@ private:
     // Base position in the world frame
     Eigen::Vector3d base_pos_{Eigen::Vector3d::Zero()};
     // Base orientation in the world frame
-    Eigen::Quaterniond base_orientation_{Eigen::Quaternion::Identity()};
+    Eigen::Quaterniond base_orientation_{Eigen::Quaterniond::Identity()};
     // Base linear velocity in the world frame
     Eigen::Vector3d base_linear_vel_{Eigen::Vector3d::Zero()};
-    // Base angular velocity in the world frame
+    // Base angular velocity in the world frame 
     Eigen::Vector3d base_angular_vel_{Eigen::Vector3d::Zero()};
     // Feet state: frame_name to foot pose in the world frame
     std::optional<std::map<std::string, Eigen::Isometry3d>> foot_pose_;
@@ -63,7 +64,7 @@ private:
 
     // Covariances
     // Base pose covariance in the world frame
-    Eigen::Matrix6d base_pose_cov_{Eigen::Matrix6d::Zero()};
+    Eigen::Matrix<double, 6, 6> base_pose_cov_{Eigen::Matrix<double, 6, 6>::Zero()};
     // Base position covariance in the world frame
     Eigen::Matrix3d base_pos_cov_{Eigen::Matrix3d::Zero()};
     // Base orientation covariance in the world frame
@@ -77,6 +78,6 @@ private:
     // Imu gyro rate bias covariance in the local imu frame
     Eigen::Matrix3d imu_gyro_bias_cov_{Eigen::Matrix3d::Zero()};
     // Feet state: frame_name to foot pose covariance in the world frame
-    std::optional<std::map<std::string, Eigen::Matrix6d>> foot_pose_cov_;
+    std::optional<std::map<std::string, Eigen::Matrix<double, 6, 6>>> foot_pose_cov_;
 
-}
+};
