@@ -24,12 +24,12 @@ Eigen::Vector3d State::getBaseAngularVelocity() const {
     return base_angular_velocity_;
 }
 
-Eigen::Vector3d State::getImuAccelarationBias() const {
-    return imu_accelaration_bias_;
+Eigen::Vector3d State::getImuLinearAccelarationBias() const {
+    return imu_linear_acceleration_bias_;
 }
 
-Eigen::Vector3d State::getImuGyroRateBias() const {
-    return imu_gyro_rate_bias_;
+Eigen::Vector3d State::getImuAngularVelocityBias() const {
+    return imu_angular_velocity_bias_;
 }
 
 std::optional<Eigen::Isometry3d> State::getFootPose(const std::string &frame_name) const {
@@ -59,12 +59,12 @@ Eigen::Matrix3d State::getBaseAngularVelocityCov() const {
     return base_angular_velocity_cov_;
 }
 
-Eigen::Matrix3d State::getImuAccelarationBiasCov() const {
-    return imu_accelaration_bias_cov_;
+Eigen::Matrix3d State::getImuLinearAccelarationBiasCov() const {
+    return imu_linear_acceleration_bias_cov_;
 }
 
-Eigen::Matrix3d State::getImuGyroRateBiasCov() const {
-    return imu_gyro_rate_bias_cov_;
+Eigen::Matrix3d State::getImuAngularVelocityBiasCov() const {
+    return imu_angular_velocity_bias_cov_;
 }
 
 std::optional<Eigen::Matrix<double, 6, 6>>
