@@ -40,7 +40,6 @@ class State {
     // State setter
     void update(State state);
 
-   private:
     // Flag to indicate if the robot is in contact with the ground
     bool is_in_contact_{};
     // Base pose as an transformation from world to base
