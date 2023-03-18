@@ -4,22 +4,17 @@
  */
 
 
-#include "IMUEKF.h"
+#include "IMUEKF.hpp"
 
-IMUEKF::IMUEKF()
-{
+IMUEKF::IMUEKF() {
     // Gravity Vector
     g = Vector3d::Zero();
     g(2) = -9.80;
     mahalanobis_TH = -1;
 }
 
-void IMUEKF::init()
-{
-
+void IMUEKF::init() {
     firstrun = true;
-    useEuler = true;
-    I_ = Matrix<double, 15, 15>::Identity();
     P_ = Matrix<double, 15, 15>::Zero();
     //  velocity error in base coordinates
     P_(0, 0) = 1e-3;
@@ -45,130 +40,52 @@ void IMUEKF::init()
     f0_ = 0.1;
     e0_ = 0.9;
 
-    // Construct Measurement Model Linerazition
-    Hf = Matrix<double, 6, 15>::Zero();
-    Hf.block<3, 3>(0, 6) = Matrix3d::Identity();
-    Hf.block<3, 3>(3, 3) = Matrix3d::Identity();
-    Hvf = Matrix<double, 6, 15>::Zero();
-    Hvf.block<3, 3>(3, 3) = Matrix3d::Identity();
-    Hv = Matrix<double, 3, 15>::Zero();
-
-    //   Rotation Matrix from base to world frame initialization
-    Rib = Matrix3d::Identity();
-    x = Matrix<double, 15, 1>::Zero();
-
-    //  Innovation Vector
-    //  For Odometry Update
-    z = Matrix<double, 6, 1>::Zero();
-    //  For Twist Update
-    zv = Vector3d::Zero();
-
-    // Initializing rest vectors and matrices needed by the filter
-    v = Vector3d::Zero();
-    dxf = Matrix<double, 15, 1>::Zero();
-    temp = Vector3d::Zero();
-    Kf = Matrix<double, 15, 6>::Zero();
-    Kv = Matrix<double, 15, 3>::Zero();
-
-    s = Matrix<double, 6, 6>::Zero();
-    sv = Matrix<double, 3, 3>::Zero();
-
-    R = Matrix<double, 6, 6>::Zero();
-    Rv = Matrix<double, 3, 3>::Zero();
-
-    Af = Matrix<double, 15, 15>::Zero();
-
-    bgyr = Vector3d::Zero();
-    bacc = Vector3d::Zero();
-    gyro = Vector3d::Zero();
-    acc = Vector3d::Zero();
-    angle = Vector3d::Zero();
-
-    //  bias removed acceleration and gyro rate
-    fhat = Vector3d::Zero();
-    omegahat = Vector3d::Zero();
-
     //  Compute some parts of the Input-Noise Jacobian once since they are
     // constants gyro (0), acc (3), gyro_bias (6), acc_bias (9)
-    Lcf_ = Matrix<double, 15, 12>::Zero();
-    Lcf_.block<3, 3>(0, 3) = -Matrix3d::Identity();
-    Lcf_.block<3, 3>(3, 0) = -Matrix3d::Identity();
-    Lcf_.block<3, 3>(9, 6) = Matrix3d::Identity();
-    Lcf_.block<3, 3>(12, 9) = Matrix3d::Identity();
+    Lc_ = Matrix<double, 15, 12>::Zero();
+    Lc_.block<3, 3>(0, 3) = -Matrix3d::Identity();
+    Lc_.block<3, 3>(3, 0) = -Matrix3d::Identity();
+    Lc_.block<3, 3>(9, 6) = Matrix3d::Identity();
+    Lc_.block<3, 3>(12, 9) = Matrix3d::Identity();
 
-    //  Output Variables
-    //  roll-pitch-yaw in world coordinates
-    angleX = 0.000;
-    angleY = 0.000;
-    angleZ = 0.000;
-    //  angular velocity in world coordinates
-    gyroX = 0.000;
-    gyroY = 0.000;
-    gyroZ = 0.000;
-    //  absolute linear acceleration in world coordinates
-    accX = 0.000;
-    accY = 0.000;
-    accZ = 0.000;
-    //  base position in world coordinates
-    rX = 0.000;
-    rY = 0.000;
-    rZ = 0.000;
-    //  base velocity in world coordinates
-    velX = 0.000;
-    velY = 0.000;
-    velZ = 0.000;
-    //  base transformation to the world frame
-    Tib = Affine3d::Identity();
-
-    std::cout << "Base EKF Initialized Successfully" << std::endl;
+    std::cout << "Floating Base Imu EKF Initialized Successfully" << std::endl;
 }
 
 Eigen::Matrix<double, 15, 15> IMUEKF::computeTransitionMatrix(const Eigen::Matrix<double, 15, 1>& x,
                                                               const Eigen::Matrix<double, 3, 3>& Rib,
-                                                              Eigen::Vector3d angular_velocity,
-                                                              Eigen::Vector3d linear_acceleration) {
-    angular_velocity.noalias() -= x.segment<3>(9);
-    linear_acceleration.noalias() -= x.segment<3>(12);
+                                                              Eigen::Vector3d imu_angular_velocity,
+                                                              Eigen::Vector3d imu_linear_acceleration) {
+    imu_angular_velocity -= x.segment<3>(9);
+    imu_linear_acceleration -= x.segment<3>(12);
     const Eigen::Vector3d& v = x.segment<3>(0);
     Eigen::Matrix<double, 15, 15> res = Eigen::Matrix<double, 15, 15>::Zero();
-    res.block<3, 3>(0, 0).noalias() = -wedge(angular_velocity);
+    res.block<3, 3>(0, 0).noalias() = -wedge(imu_angular_velocity);
     res.block<3, 3>(0, 3).noalias() = wedge(Rib.transpose() * this->g_);
     res.block<3, 3>(0, 12).noalias() = -Eigen::Matrix3d::Identity();
     res.block<3, 3>(0, 9).noalias() = -wedge(v);
-    res.block<3, 3>(3, 3).noalias() = -wedge(angular_velocity);
+    res.block<3, 3>(3, 3).noalias() = -wedge(imu_angular_velocity);
     res.block<3, 3>(3, 9).noalias() = -Eigen::Matrix3d::Identity();
     res.block<3, 3>(6, 0) = Rib;
     res.block<3, 3>(6, 3).noalias() = -Rib * wedge(v);
     return res;
 }
 
-void IMUEKF::euler(Eigen::Vector3d angular_velocity,
-                   Eigen::Vector3d linear_acceleration,
-                   double dt) {
-    Eigen::Matrix<double, 15, 15> Acf =
-        computeTransitionMatrix(x, Rib, angular_velocity, linear_acceleration);
-    // Euler Discretization - First order Truncation
-    Eigen::Matrix<double, 15, 15> Af = If;
-    Af.noalias() += Acf * dt;
-    x = computeDynamics(x, Rib, angular_velocity, linear_acceleration);
-}
-
 Eigen::Matrix<double, 15, 1> IMUEKF::computeDynamics(const Eigen::Matrix<double, 15, 1> x,
                                                      const Eigen::Matrix3d& Rib,
-                                                     Eigen::Vector3d angular_velocity,
-                                                     Eigen::Vector3d linear_acceleration,
+                                                     Eigen::Vector3d imu_angular_velocity,
+                                                     Eigen::Vector3d imu_linear_acceleration,
                                                      double dt) {
     Eigen::Matrix<double, 15, 1> res = Eigen::Matrix<double, 15, 1>::Zero();
 
-    angular_velocity -= x.segment<3>(9);
-    linear_acceleration -= x.segment<3>(12);
+    imu_angular_velocity -= x.segment<3>(9);
+    imu_linear_acceleration -= x.segment<3>(12);
 
     // Nonlinear Process Model
     // Compute \dot{v}_b @ k
     const Eigen::Vector3d& v = x.segment<3>(0);
-    res.segment<3>(0) = v.cross(angular_velocity);
+    res.segment<3>(0) = v.cross(imu_angular_velocity);
     res.segment<3>(0) += Rib.transpose() * this->g_;
-    res.segment<3>(0) += linear_acceleration;
+    res.segment<3>(0) += imu_linear_acceleration;
 
     // Position
     const Eigen::Vector3d& r = x.segment<3>(6);
@@ -186,46 +103,53 @@ Eigen::Matrix<double, 15, 1> IMUEKF::computeDynamics(const Eigen::Matrix<double,
     return res;
 }
 
-void IMUEKF::predict(Vector3d omega_, Vector3d f_)
+void IMUEKF::predict(Eigen::Vector3d imu_angular_velocity, 
+                     Eigen::Vector3d imu_linear_acceleration, 
+                     double dt)
 {
-    omega = omega_;
-    f = f_;
     // Used in updating Rib with the Rodriquez formula
-    omegahat.noalias() = omega - x.segment<3>(9);
-    v = x.segment<3>(0);
+    const Eigen::Vector3d& angular_velocity = imu_angular_velocity - x.segment<3>(9);
+    const Eigen::Vector3d& v = x.segment<3>(0);
 
     // Update the Input-noise Jacobian
-    Lcf.block<3, 3>(0, 0).noalias() = -wedge(v);
+    Lc_.block<3, 3>(0, 0).noalias() = -wedge(v);
 
-    euler(omega_, f_);
+    // Compute the State dynamics Jacobian
+    Eigen::Matrix<double, 15, 15> Ac =
+        computeTransitionMatrix(x, Rib, imu_angular_velocity, imu_linear_acceleration);
+    
+    // Euler Discretization - First order Truncation
+    Eigen::Matrix<double, 15, 15> Ad = Eigen::Matrix<double, 15, 15>::Identity();
+    Ad += Ac * dt;
+    // Propagete the state through the dynamics
+    x = computeDynamics(x, Rib, imu_angular_velocity, imu_linear_acceleration, dt);
 
-    // Covariance Q with full state + biases
-    Qf(0, 0) = gyr_qx * gyr_qx;
-    Qf(1, 1) = gyr_qy * gyr_qy;
-    Qf(2, 2) = gyr_qz * gyr_qz;
-    Qf(3, 3) = acc_qx * acc_qx;
-    Qf(4, 4) = acc_qy * acc_qy;
-    Qf(5, 5) = acc_qz * acc_qz;
-    Qf(6, 6) = gyrb_qx * gyrb_qx;
-    Qf(7, 7) = gyrb_qy * gyrb_qy;
-    Qf(8, 8) = gyrb_qz * gyrb_qz;
-    Qf(9, 9) = accb_qx * accb_qx;
-    Qf(10, 10) = accb_qy * accb_qy;
-    Qf(11, 11) = accb_qz * accb_qz;
-
-    // Qff.noalias() =  Lcf * Qf * Lcf.transpose() * dt;
-    Qff.noalias() = Af * Lcf * Qf * Lcf.transpose() * Af.transpose() * dt;
-
-    /** Predict Step: Propagate the Error Covariance  **/
-    P = Af * P * Af.transpose();
-    P.noalias() += Qff;
-
-    // Propagate only if non-zero input
-    if (!omegahat.isZero())
-    {
-        Rib *= expMap(omegahat * dt);
+    // Propagate the orinetation seperately
+    if (!angular_velocity.isZero()) {
+        Rib *= expMap(angular_velocity * dt);
     }
 
+    // Covariance Q with full state + biases
+    Q_(0, 0) = gyr_qx * gyr_qx;
+    Q_(1, 1) = gyr_qy * gyr_qy;
+    Q_(2, 2) = gyr_qz * gyr_qz;
+    Q_(3, 3) = acc_qx * acc_qx;
+    Q_(4, 4) = acc_qy * acc_qy;
+    Q_(5, 5) = acc_qz * acc_qz;
+    Q_(6, 6) = gyrb_qx * gyrb_qx;
+    Q_(7, 7) = gyrb_qy * gyrb_qy;
+    Q_(8, 8) = gyrb_qz * gyrb_qz;
+    Q_(9, 9) = accb_qx * accb_qx;
+    Q_(10, 10) = accb_qy * accb_qy;
+    Q_(11, 11) = accb_qz * accb_qz;
+
+    Eigen::Matrix<double, 15, 15> Qd;
+    Qd.noalias() = Ad * Lc_ * Q_ * Lc_.transpose() * Ad.transpose() * dt;
+
+    // Predict Step: Propagate the Error Covariance 
+    P_ = Ad * P_ * Ad.transpose() + Qd;
+
+    // Reset orientation twist
     x.segment<3>(3) = Vector3d::Zero();
     updateVars();
 }
@@ -233,6 +157,9 @@ void IMUEKF::predict(Vector3d omega_, Vector3d f_)
 /** Update **/
 void IMUEKF::updateWithTwist(Vector3d y)
 {
+    Eigen::Matrix<double, 15, 3> Kv = Eigen::Matrix<double, 15, 3>::Zero();
+
+    Matrix<double, 3, 3> Rv = Matrix<double, 3, 3>::Zero();
 
     Rv(0, 0) = vel_px * vel_px;
     Rv(1, 1) = vel_py * vel_py;
@@ -244,12 +171,15 @@ void IMUEKF::updateWithTwist(Vector3d y)
     zv = y;
     zv.noalias() -= Rib * v;
 
+    Matrix<double, 3, 15> Hv = Matrix<double, 3, 15>::Zero();
     Hv.block<3, 3>(0, 0) = Rib;
     Hv.block<3, 3>(0, 3).noalias() = -Rib * wedge(v);
     sv = Rv;
     sv.noalias() += Hv * P * Hv.transpose();
     Kv.noalias() = P * Hv.transpose() * sv.inverse();
 
+
+    Eigen::Matrix<double, 15, 1> dxf;
     dxf.noalias() = Kv * zv;
 
     // Update the mean estimate
@@ -268,32 +198,21 @@ void IMUEKF::updateWithTwist(Vector3d y)
     updateVars();
 }
 
-void IMUEKF::updateWithTwistRotation(Vector3d y, Quaterniond qy)
+void IMUEKF::updateWithBaseOrientation(const Eigen::Quaterniond& qy)
 {
 
     R(0, 0) = vel_px * vel_px;
     R(1, 1) = vel_py * vel_py;
     R(2, 2) = vel_pz * vel_pz;
-    R(3, 3) = leg_odom_ax * leg_odom_ax;
-    R(4, 4) = leg_odom_ay * leg_odom_ay;
-    R(5, 5) = leg_odom_az * leg_odom_az;
 
-    v = x.segment<3>(0);
-    // std::cout<<" Update with Twist Rot" <<std::endl;
-    // std::cout<<y<<std::endl;
-    // Innovetion vector
-    z.segment<3>(0) = y;
-    z.segment<3>(0).noalias() -= Rib * v;
-    z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
+    z  = logMap((Rib.transpose() * qy.toRotationMatrix()));
     // z.segment<3>(3) = logMap((qy.toRotationMatrix() * Rib.transpose() ));
-
-    Hvf.block<3, 3>(0, 0) = Rib;
-    Hvf.block<3, 3>(0, 3).noalias() = -Rib * wedge(v);
+    H.block<3, 3>(0, 3) = Matrix3d::Identity();
+    
     s = R;
     s.noalias() += Hvf * P * Hvf.transpose();
-    Kf.noalias() = P * Hvf.transpose() * s.inverse();
-
-    dxf.noalias() = Kf * z;
+    K.noalias() = P * Hvf.transpose() * s.inverse();
+    dx.noalias() = K * z;
 
     // Update the mean estimate
     x.noalias() += dxf;
@@ -304,51 +223,23 @@ void IMUEKF::updateWithTwistRotation(Vector3d y, Quaterniond qy)
 
     if (dxf(3) != 0 || dxf(4) != 0 || dxf(5) != 0)
     {
-        Rib *= expMap(dxf.segment<3>(3));
+        Rib *= expMap(dx.segment<3>(3));
     }
     x.segment<3>(3) = Vector3d::Zero();
 
     updateVars();
 }
 
-void IMUEKF::updateWithLegOdom(Vector3d y, Quaterniond qy)
-{
-    R(0, 0) = leg_odom_px * leg_odom_px;
-    R(1, 1) = leg_odom_py * leg_odom_py;
-    R(2, 2) = leg_odom_pz * leg_odom_pz;
-
-    R(3, 3) = leg_odom_ax * leg_odom_ax;
-    R(4, 4) = leg_odom_ay * leg_odom_ay;
-    R(5, 5) = leg_odom_az * leg_odom_az;
-
-    r = x.segment<3>(6);
-
-    // Innovetion vector
-    z.segment<3>(0) = y - r;
-    z.segment<3>(3) = logMap((Rib.transpose() * qy.toRotationMatrix()));
-
-    // Compute the Kalman Gain
-    s = R;
-    s.noalias() += Hf * P * Hf.transpose();
-    Kf.noalias() = P * Hf.transpose() * s.inverse();
-
-    // Update the error covariance
-    P = (If - Kf * Hf) * P * (If - Kf * Hf).transpose();
-    P.noalias() += Kf * R * Kf.transpose();
-
-    dxf.noalias() = Kf * z;
-    x.noalias() += dxf;
-    if (dxf(3) != 0 || dxf(4) != 0 || dxf(5) != 0)
-    {
-        Rib *= expMap(dxf.segment<3>(3));
-    }
-    x.segment<3>(3) = Vector3d::Zero();
-
-    updateVars();
-}
 
 bool IMUEKF::updateWithOdom(Vector3d y, Quaterniond qy, bool useOutlierDetection)
 {
+    Matrix<double, 15, 6> Kf = Matrix<double, 15, 6>::Zero();
+    Matrix<double, 6, 15> Hf = Matrix<double, 6, 15>::Zero();
+    Hf.block<3, 3>(0, 6) = Matrix3d::Identity();
+    Hf.block<3, 3>(3, 3) = Matrix3d::Identity();
+
+    Matrix<double, 6, 6> R = Matrix<double, 6, 6>::Zero();
+
     R(0, 0) = odom_px * odom_px;
     R(1, 1) = odom_py * odom_py;
     R(2, 2) = odom_pz * odom_pz;

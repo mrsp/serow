@@ -35,7 +35,7 @@ class IMUEKF {
 	
 	/// Error Covariance state is velocity in base frame, orientation in the world frame, position 
 	/// in the world frame, Gyro and accelerometer biases
-    Eigen::Matrix<double, 15, 15> P_, I_;
+    Eigen::Matrix<double, 15, 15> P_;
 
     /// Robust Gaussian ESKF
     /// Beta distribution parameters
@@ -59,13 +59,9 @@ class IMUEKF {
      */
     Eigen::Matrix<double, 15, 15> computeTransitionMatrix(const Eigen::Matrix<double, 15, 1>& x,
                                                           const Eigen::Matrix<double, 3, 3>& Rib,
-                                                          Eigen::Vector3d angular_velocity,
-                                                          Eigen::Vector3d linear_acceleration);
-    /**
-     *  @brief performs euler (first-order) discretization to the nonlinear state-space dynamics
-     *
-     */
-    void euler(Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration, double dt);
+                                                          Eigen::Vector3d imu_angular_velocity,
+                                                          Eigen::Vector3d imu_linear_acceleration);
+
     /**
      *  @brief updates the parameters for the outlier detection on odometry measurements
      *
@@ -82,8 +78,8 @@ class IMUEKF {
      */
     Eigen::Matrix<double, 15, 1> computeDynamics(const Eigen::Matrix<double, 15, 1> x,
                                                  const Eigen::Matrix3d& Rib,
-                                                 Eigen::Vector3d angular_velocity,
-                                                 Eigen::Vector3d linear_acceleration,
+                                                 Eigen::Vector3d imu_angular_velocity,
+                                                 Eigen::Vector3d imu_linear_acceleration,
                                                  double dt);
 
    public:
@@ -96,7 +92,7 @@ class IMUEKF {
     bool useEuler;
 
     // Gravity vector
-    Vector3d g, bgyr, bacc, gyro, acc, vel, pos, angle;
+    Eigen::Vector3d g_;
 
     // Noise Stds
     double acc_qx, acc_qy, acc_qz, gyr_qx, gyr_qy, gyr_qz, gyrb_qx, gyrb_qy, gyrb_qz,
@@ -127,7 +123,7 @@ class IMUEKF {
      *  @param bgyr_ angular velocity bias in the base coordinates
      */
     void setImuAngularVelocityBias(Vector3d imu_angular_velocity_bias) {
-		state_.imu_gyro_rate_bias_ = std::move(imu_angular_velocity_bias);
+		state_.imu_angular_velocity_bias_ = std::move(imu_angular_velocity_bias);
     }
 
     /** @fn void setImuLinearAccelerationBias(Vector3d bacc_)
@@ -135,7 +131,7 @@ class IMUEKF {
      *  @param bacc_ acceleration bias in the base coordinates
      */
     void setImuLinearAccelerationBias(Vector3d imu_linear_acceleration_bias) {
-       state_.imu_accelaration_bias_ = std::move(imu_linear_acceleration_bias);
+       state_.imu_linear_acceleration_bias_ = std::move(imu_linear_acceleration_bias);
     }
 
     /** @fn void setBasePosition(Eigen::Vector3d base_position)
@@ -174,8 +170,9 @@ class IMUEKF {
      *  @brief realises the predict step of the Error State Kalman Filter (ESKF)
      *  @param imu_angular_velocity angular velocity of the base in the base frame 
      *  @param imu_linear_acceleration linear acceleration of the base in the base frame
+	 *  @param dt discretization constant = 1.0 / sampling_frequency
      */
-    void predict(Eigen::Vector3d imu_angular_velocity, Eigen::Vector3d imu_linear_acceleration);
+    void predict(Eigen::Vector3d imu_angular_velocity, Eigen::Vector3d imu_linear_acceleration, double dt);
     
 	/** @fn void updateWithOdom(const Eigen::Vector3d& y, const Eigen::Quaterniond& qy, bool useOutlierDetection);
      *  @brief realises the pose update step of the Error State Kalman Filter (ESKF)

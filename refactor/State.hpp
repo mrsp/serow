@@ -23,8 +23,8 @@ class State {
     Eigen::Quaterniond getBaseOrientation() const;
     Eigen::Vector3d getBaseLinearVelocity() const;
     Eigen::Vector3d getBaseAngularVelocity() const;
-    Eigen::Vector3d getImuAccelarationBias() const;
-    Eigen::Vector3d getImuGyroRateBias() const;
+    Eigen::Vector3d getImuLinearAccelarationBias() const;
+    Eigen::Vector3d getImuAngularVelocityBias() const;
     std::optional<Eigen::Isometry3d> getFootPose(const std::string &frame_name) const;
 
     // State covariance getter
@@ -33,8 +33,8 @@ class State {
     Eigen::Matrix3d getBaseOrientationCov() const;
     Eigen::Matrix3d getBaseLinearVelocityCov() const;
     Eigen::Matrix3d getBaseAngularVelocityCov() const;
-    Eigen::Matrix3d getImuAccelarationBiasCov() const;
-    Eigen::Matrix3d getImuGyroRateBiasCov() const;
+    Eigen::Matrix3d getImuLinearAccelarationBiasCov() const;
+    Eigen::Matrix3d getImuAngularVelocityBiasCov() const;
     std::optional<Eigen::Matrix<double, 6, 6>> getFootPoseCov(const std::string &frame_name) const;
 
     // State setter
@@ -55,9 +55,9 @@ class State {
     // Feet state: frame_name to foot pose in the world frame
     std::optional<std::map<std::string, Eigen::Isometry3d>> foot_pose_;
     // Imu acceleration bias in the local imu frame
-    Eigen::Vector3d imu_accelaration_bias_{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d imu_linear_acceleration_bias_{Eigen::Vector3d::Zero()};
     // Imu gyro rate bias in the local imu frame
-    Eigen::Vector3d imu_gyro_rate_bias_{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d imu_angular_velocity_bias_{Eigen::Vector3d::Zero()};
 
     // Covariances
     // Base pose covariance in the world frame
@@ -71,9 +71,9 @@ class State {
     // Base angular velocity covariance in the world frame
     Eigen::Matrix3d base_angular_velocity_cov_{Eigen::Matrix3d::Zero()};
     // Imu acceleration bias covariance in the local imu frame
-    Eigen::Matrix3d imu_accelaration_bias_cov_{Eigen::Matrix3d::Zero()};
+    Eigen::Matrix3d imu_linear_acceleration_bias_cov_{Eigen::Matrix3d::Zero()};
     // Imu gyro rate bias covariance in the local imu frame
-    Eigen::Matrix3d imu_gyro_rate_bias_cov_{Eigen::Matrix3d::Zero()};
+    Eigen::Matrix3d imu_angular_velocity_bias_cov_{Eigen::Matrix3d::Zero()};
     // Feet state: frame_name to foot pose covariance in the world frame
     std::optional<std::map<std::string, Eigen::Matrix<double, 6, 6>>> foot_pose_cov_;
 };
