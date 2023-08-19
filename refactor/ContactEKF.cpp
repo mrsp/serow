@@ -44,16 +44,16 @@ void ContactEKF::init(State state) {
     }
 
     // Initialize the error state covariance
-    P_ = If;
+    P_ = I_;
     P_(v_idx_, v_idx_) = state.getBaseLinearVelocityCov();
     P_(r_idx_, r_idx_) = state.getBaseOrientationCov();
     P_(p_idx_, p_idx_) = state.getBasePositionCov();
     P_(bg_idx_, bg_idx_) = state.getImuAngularVelocityBiasCov();
     P_(ba_idx_, ba_idx_) = state.getImuLinearAccelerationBiasCov();
-
+    
     for (const auto& foot_frame : state.getFootFrames()) {
         if (state.getFootPoseCov(foot_frame)) {
-            P(pl_idx_.at(foot_frame), pl_idx_.at(foot_frame)) =
+            P_(pl_idx_.at(foot_frame), pl_idx_.at(foot_frame)) =
                 state.getFootPoseCov(foot_frame).value();
         } else {
             std::cout << "Cannot read foot pose covariance for frame " << foot_frame << std::endl;

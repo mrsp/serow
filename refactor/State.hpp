@@ -11,13 +11,6 @@
 
 class State {
    public:
-    State() = default;
-    ~State() = default;
-    State(State &state);
-    State(State &&state);
-    State &operator=(State state);
-    State &operator=(State &&state);
-
     // State getters
     Eigen::Isometry3d getBasePose() const;
     Eigen::Vector3d getBasePosition() const;
