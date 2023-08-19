@@ -50,12 +50,11 @@ class ContactEKF {
     Eigen::Array3i nba_idx_;
     std::unordered_map<std::string, Eigen::ArrayXi> npl_idx_;
 
+    /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
+    /// matrix 15 + 6N x 15 + 6N
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> I_, P_;
     /// Linearized state-input model 15 + 6N x 12 + 6N
     Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
-    /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
-    /// matrix 15 + 6N x 15 + 6N
-    Matrix<double, Eigen::Dynamic, Eigen::Dynamic> P, Af, Acf, If, Qff;
 
     State computeDiscreteDynamics(
         State state, double dt, Eigen::Vector3d angular_velocity,
