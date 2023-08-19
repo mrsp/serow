@@ -33,10 +33,21 @@ Eigen::Vector3d State::getImuAngularVelocityBias() const {
 }
 
 std::optional<Eigen::Isometry3d> State::getFootPose(const std::string &frame_name) const {
-    if (foot_pose_.has_value() && foot_pose_.value().count(frame_name))
-        return foot_pose_.value().at(frame_name);
+    if (foot_pose_.count(frame_name))
+        return foot_pose_.at(frame_name);
     else
         return std::nullopt;
+}
+
+std::unordered_set<std::string> State::getFootFrames() const {
+    return foot_frames_;
+}
+
+std::optional<bool> State::getFootContactStatus(const std::string& frame_name) const {
+    if (foot_contact_.count(frame_name))
+        return foot_contact_.at(frame_name);
+    else
+        return std::nullopt; 
 }
 
 Eigen::Matrix<double, 6, 6> State::getBasePoseCov() const {
@@ -59,7 +70,7 @@ Eigen::Matrix3d State::getBaseAngularVelocityCov() const {
     return base_angular_velocity_cov_;
 }
 
-Eigen::Matrix3d State::getImuLinearAccelarationBiasCov() const {
+Eigen::Matrix3d State::getImuLinearAccelerationBiasCov() const {
     return imu_linear_acceleration_bias_cov_;
 }
 
@@ -69,8 +80,8 @@ Eigen::Matrix3d State::getImuAngularVelocityBiasCov() const {
 
 std::optional<Eigen::Matrix<double, 6, 6>>
 State::getFootPoseCov(const std::string &frame_name) const {
-    if (foot_pose_cov_.has_value() && foot_pose_cov_.value().count(frame_name))
-        return foot_pose_cov_.value().at(frame_name);
+    if (foot_pose_cov_.count(frame_name))
+        return foot_pose_cov_.at(frame_name);
     else
         return std::nullopt;
 }

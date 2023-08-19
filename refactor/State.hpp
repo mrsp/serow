@@ -3,11 +3,11 @@
  * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
  */
 #pragma once
-#include <Eigen/Dense>
-#include <map>
-#include <set>
+#include <eigen3/Eigen/Dense>
 #include <optional>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 class State {
    public:
@@ -27,22 +27,23 @@ class State {
     Eigen::Vector3d getImuLinearAccelarationBias() const;
     Eigen::Vector3d getImuAngularVelocityBias() const;
     std::optional<Eigen::Isometry3d> getFootPose(const std::string &frame_name) const;
-    std::optional<std::unordered_set> getFootFrames() const;
+    std::unordered_set<std::string> getFootFrames() const;
     // State covariance getter
     Eigen::Matrix<double, 6, 6> getBasePoseCov() const;
     Eigen::Matrix3d getBasePositionCov() const;
     Eigen::Matrix3d getBaseOrientationCov() const;
     Eigen::Matrix3d getBaseLinearVelocityCov() const;
     Eigen::Matrix3d getBaseAngularVelocityCov() const;
-    Eigen::Matrix3d getImuLinearAccelarationBiasCov() const;
+    Eigen::Matrix3d getImuLinearAccelerationBiasCov() const;
     Eigen::Matrix3d getImuAngularVelocityBiasCov() const;
-    std::optional<Eigen::Matrix<double, 6, 6>> getFootPoseCov(const std::string &frame_name) const;
-
+    std::optional<Eigen::Matrix<double, 6, 6>> getFootPoseCov(const std::string& frame_name) const;
+    std::optional<bool> getFootContactStatus(const std::string& frame_name) const;
     // State setter
     void update(State state);
-    
-    // Flag to indicate if the robot is in contact with the ground
-    bool is_in_contact_{};
+
+   private:
+    // Flag to indicate if the robot has point feet. False indicates flat feet contacts.
+    bool point_feet_{};
 
     int num_leg_ee_{};
     // Base pose as an transformation from world to base
@@ -56,7 +57,10 @@ class State {
     // Base angular velocity in the world frame
     Eigen::Vector3d base_angular_velocity_{Eigen::Vector3d::Zero()};
     // Feet state: frame_name to foot pose in the world frame
-    std::optional<std::map<std::string, Eigen::Isometry3d>> foot_pose_;
+    std::unordered_map<std::string, Eigen::Isometry3d> foot_pose_;
+    std::unordered_map<std::string, bool> foot_contact_;
+    std::unordered_set<std::string> foot_frames_;
+
     // Imu acceleration bias in the local imu frame
     Eigen::Vector3d imu_linear_acceleration_bias_{Eigen::Vector3d::Zero()};
     // Imu gyro rate bias in the local imu frame
@@ -78,5 +82,7 @@ class State {
     // Imu gyro rate bias covariance in the local imu frame
     Eigen::Matrix3d imu_angular_velocity_bias_cov_{Eigen::Matrix3d::Zero()};
     // Feet state: frame_name to foot pose covariance in the world frame
-    std::optional<std::map<std::string, Eigen::Matrix<double, 6, 6>>> foot_pose_cov_;
+    std::unordered_map<std::string, Eigen::Matrix<double, 6, 6>> foot_pose_cov_;
+
+    friend class ContactEKF;
 };
