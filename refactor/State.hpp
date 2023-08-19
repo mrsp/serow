@@ -19,7 +19,7 @@ class State {
     Eigen::Vector3d getBaseAngularVelocity() const;
     Eigen::Vector3d getImuLinearAccelarationBias() const;
     Eigen::Vector3d getImuAngularVelocityBias() const;
-    std::optional<Eigen::Isometry3d> getFootPose(const std::string &frame_name) const;
+    std::optional<Eigen::Isometry3d> getFootPose(const std::string& frame_name) const;
     std::unordered_set<std::string> getFootFrames() const;
     // State covariance getter
     Eigen::Matrix<double, 6, 6> getBasePoseCov() const;

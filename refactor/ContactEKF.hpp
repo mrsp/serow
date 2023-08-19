@@ -25,7 +25,7 @@ struct KinematicMeasurement;
 
 class ContactEKF {
    public:
-	ContactEKF();
+    ContactEKF();
     void init(State state);
     void predict(State state, ImuMeasurement imu, KinematicMeasurement kin);
 
