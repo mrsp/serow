@@ -3,8 +3,9 @@
  * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
  */
 #pragma once
-#include <eigen3/Eigen/Dense>
+#include <Eigen/Dense>
 #include <map>
+#include <set>
 #include <optional>
 #include <string>
 
@@ -26,7 +27,7 @@ class State {
     Eigen::Vector3d getImuLinearAccelarationBias() const;
     Eigen::Vector3d getImuAngularVelocityBias() const;
     std::optional<Eigen::Isometry3d> getFootPose(const std::string &frame_name) const;
-
+    std::optional<std::unordered_set> getFootFrames() const;
     // State covariance getter
     Eigen::Matrix<double, 6, 6> getBasePoseCov() const;
     Eigen::Matrix3d getBasePositionCov() const;
@@ -39,9 +40,11 @@ class State {
 
     // State setter
     void update(State state);
-
+    
     // Flag to indicate if the robot is in contact with the ground
     bool is_in_contact_{};
+
+    int num_leg_ee_{};
     // Base pose as an transformation from world to base
     Eigen::Isometry3d base_pose_{Eigen::Isometry3d::Identity()};
     // Base position in the world frame
