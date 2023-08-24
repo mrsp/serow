@@ -78,4 +78,11 @@ class ContactEKF {
 
     MatrixXd computeDiscreteTransitionMatrix(State state, Vector3d angular_velocity,
                                              Vector3d linear_acceleration, double dt);
+
+    State updateContacts(
+        State state, const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
+        std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
+        const std::unordered_map<std::string, double>& contacts_probability,
+        std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
+        std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise)
 };
