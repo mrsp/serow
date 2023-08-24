@@ -34,7 +34,6 @@ class State {
     // State setter
     void update(State state);
 
-   private:
     // Flag to indicate if the robot has point feet. False indicates flat feet contacts.
     bool point_feet_{};
 
