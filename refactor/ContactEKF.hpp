@@ -20,14 +20,24 @@
 // State is pos - vel - rot - accel - gyro bias - 15 + 6 x N contact pos - contact or
 using namespace Eigen;
 
-struct ImuMeasurement;
-struct KinematicMeasurement;
+struct ImuMeasurement {
+    double timestamp{};
+    Eigen::Vector3d linear_acceleration;
+    Eigen::Vector3d angular_velocity;
+};
+
+struct KinematicMeasurement {
+    double timestamp{};
+    std::unordered_map<std::string, bool> contacts_status;
+    std::unordered_map<std::string, Eigen::Vector3d> contacts_position;
+    std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation;
+};
 
 class ContactEKF {
    public:
     ContactEKF();
     void init(State state);
-    void predict(State state, ImuMeasurement imu, KinematicMeasurement kin);
+    State predict(State state, ImuMeasurement imu, KinematicMeasurement kin);
 
    private:
     int num_states_{};
@@ -50,6 +60,8 @@ class ContactEKF {
     Eigen::Array3i nba_idx_;
     std::unordered_map<std::string, Eigen::ArrayXi> npl_idx_;
 
+    std::optional<double> last_timestamp_;
+
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
     /// matrix 15 + 6N x 15 + 6N
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> I_, P_;
@@ -66,6 +78,4 @@ class ContactEKF {
 
     MatrixXd computeDiscreteTransitionMatrix(State state, Vector3d angular_velocity,
                                              Vector3d linear_acceleration, double dt);
-
-    std::optional<double> last_timestamp_;
 };

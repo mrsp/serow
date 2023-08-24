@@ -98,19 +98,21 @@ MatrixXd ContactEKF::computeDiscreteTransitionMatrix(State state, Vector3d angul
     return Ad;
 }
 
-// void ContactEKF::predict(State state, ImuMeasurement imu, KinematicMeasurement kin) {
-//     double dt = nominal_dt_;
-//     if (last_timestamp_.has_value()) {
-//         dt = imu.timestamp - last_timestamp_;
-//     }
+State ContactEKF::predict(State state, ImuMeasurement imu, KinematicMeasurement kin) {
+    double dt = nominal_dt_ + 0.1;
+    if (last_timestamp_.has_value()) {
+        dt = imu.timestamp - last_timestamp_.value();
+    }
 
-//     const Eigen::MatrixXd& Ad =
-//         computeDiscreteTransitionMatrix(state, imu.angular_velocity, imu.linear_acceleration, dt);
-    
-//     const State& predicted_state = computeDiscreteDynamics(
-//         state, dt, imu.angular_velocity, imu.linear_acceleration, kin.contacts_status, kin.contacts_position, kin.contacts_orientation);
-//     last_timestamp_ = imu.timestamp;
-// }
+    const Eigen::MatrixXd& Ad =
+        computeDiscreteTransitionMatrix(state, imu.angular_velocity, imu.linear_acceleration, dt);
+
+    const State& predicted_state = computeDiscreteDynamics(
+        state, dt, imu.angular_velocity, imu.linear_acceleration, kin.contacts_status,
+        kin.contacts_position, kin.contacts_orientation);
+    last_timestamp_ = imu.timestamp;
+    return predicted_state;
+}
 
 State ContactEKF::computeDiscreteDynamics(
     State state, double dt, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration,
@@ -171,5 +173,7 @@ State ContactEKF::computeDiscreteDynamics(
         }
     }
 
+    predicted_state.base_orientation_ = Eigen::Quaterniond(
+        lie::so3::plus(state.base_orientation_.toRotationMatrix(), angular_velocity));
     return predicted_state;
 }
