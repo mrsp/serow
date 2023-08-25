@@ -199,92 +199,105 @@ State ContactEKF::computeDiscreteDynamics(
     return predicted_state;
 }
 
-// State ContactEKF::updateContacts(
-//     State state,
-//     const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
-//     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
-//     const std::unordered_map<std::string, double>& contacts_probability,
-//     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation
-//     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise) {
+State ContactEKF::updateContacts(
+    State state,
+    const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
+    std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
+    const std::unordered_map<std::string, double>& contacts_probability,
+    std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
+    std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise) {
     
-//     State updated_state = state;
-//     Eigen::Matrix3d Rp = Eigen::Matrix3d::Zero();
-//     Rp(0, 0) = lp_px * lp_px;
-//     Rp(1, 1) = lp_py * lp_py;
-//     Rp(2, 2) = lp_pz * lp_pz;
+    State updated_state = state;
+    Eigen::Matrix3d Rp = Eigen::Matrix3d::Zero();
+
+    Rp(0, 0) = kin_px_ * kin_px_;
+    Rp(1, 1) = kin_py_ * kin_py_;
+    Rp(2, 2) = kin_pz_ * kin_pz_;
     
-//     Eigen::Matrix3d Ro = Eigen::Matrix3d::Zero();
-//     if (contacts_orientation_noise) {
-//         Ro(0, 0) = lo_px * lo_px;
-//         Ro(1, 1) = lo_py * lo_py;
-//         Ro(2, 2) = lo_pz * lo_pz;
-//     }
+    Eigen::Matrix3d Ro = Eigen::Matrix3d::Zero();
+    if (contacts_orientation_noise.has_value()) {
+        Ro(0, 0) = kin_rx_ * kin_rx_;
+        Ro(1, 1) = kin_ry_ * kin_ry_;
+        Ro(2, 2) = kin_rz_ * kin_rz_;
+    }
 
-//     for (const auto& [cf, cp] : contacts_probability) {
-//         int cs = cp > 0.5 ? 1 : 0;
-//         contacts_position_noise.at(cf) =
-//             cp * contacts_position_noise.at(cf) + (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + Rp;
-//         if (contacts_orientation_noise) {
-//             contacts_orientation_noise.at(cf) = cp * contacts_orientation_noise.at(cf) +
-//                                                 (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + Ro;
-//         }
-//     }
+    for (const auto& [cf, cp] : contacts_probability) {
+        int cs = cp > 0.5 ? 1 : 0;
+        contacts_position_noise.at(cf) =
+            cp * contacts_position_noise.at(cf) + (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + Rp;
+        if (contacts_orientation_noise.has_value()) {
+            contacts_orientation_noise.value().at(cf) =
+                cp * contacts_orientation_noise.value().at(cf) +
+                (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + Ro;
+        }
+    }
 
-//     for (const auto& [cf, cp] : contacts_position) {
-//         Eigen::MatrixXd H;
-//         H.setZero(3, num_states_);
-//         const Eigen::Vector3d& x = state.getBaseOrientation.toRotationMatrix().transpose() *
-//                                     (state.getFootPose(cf) - state.getBasePosition());
-//         const Eigen::Vector3d& z = cp - x;
-//         H.block(0, p_idx_) = -state.getBaseOrientation.toRotationMatrix().transpose();
-//         H.block(0, pl_idx_.at(cf)) = state.getBaseOrientation.toRotationMatrix().transpose();
-//         H.block(0, r_idx_) = lie::so3::wedge(x);
-//         const Eigen::Matrix3d& s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
-//         const Eigen::MatrixXd& K = P * H.transpose() * s.inverse();
-//         const Eigen::VectorXd& dx = K * z;
+    for (const auto& [cf, cp] : contacts_position) {
+        Eigen::MatrixXd H;
+        H.setZero(3, num_states_);
+        const Eigen::Vector3d& x = state.base_orientation_.toRotationMatrix().transpose() *
+                                    (state.contacts_position_.at(cf) - state.getBasePosition());
+        const Eigen::Vector3d& z = cp - x;
+        H.block(0, p_idx_[0], 3, 3) = -state.base_orientation_.toRotationMatrix().transpose();
+        H.block(0, pl_idx_.at(cf)[0], 3, 3) = state.base_orientation_.toRotationMatrix().transpose();
+        H.block(0, r_idx_[0], 3, 3) = lie::so3::wedge(x);
+        const Eigen::Matrix3d& s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
+        const Eigen::MatrixXd& K = P_ * H.transpose() * s.inverse();
+        const Eigen::VectorXd& dx = K * z;
 
-//         updated_state.base_position_ += dx(p_idx_);
-//         updated_state.base_velocity += dx(v_idx_);
-//         updated_state.base_orientation = Eigen::Quaternion(
-//             lie::so3::plus(updated_state.base_orientation.toRotationMatrix(), dx(r_idx_)));
-//         for (const auto& cf : state.contact_frames) {
-//             // TODO: set orientation seperately
-//             updated_state.foot_pose_.at(cf).translation() += dx(pl_idx_.at(cf));
-//         }
+        updated_state.base_position_ += dx(p_idx_);
+        updated_state.base_linear_velocity_ += dx(v_idx_);
+        updated_state.base_orientation_ = Eigen::Quaterniond(
+            lie::so3::plus(updated_state.base_orientation_.toRotationMatrix(), dx(r_idx_)));
+        
+        for (const auto& cf : state.contacts_frame_) {
+            // TODO: set orientation seperately
+            updated_state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
+            if (!state.point_feet_) {
+                updated_state.contacts_orientation_.value().at(cf) =
+                    Eigen::Quaterniond(lie::so3::plus(
+                        updated_state.contacts_orientation_.value().at(cf).toRotationMatrix(),
+                        dx(rl_idx_.at(cf))));
+            }
+        }
 
-//         P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
-//         P_.noalias() += K * contacts_position_noise.at(cf) * K.transpose();
-//     }
+        P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
+        P_.noalias() += K * contacts_position_noise.at(cf) * K.transpose();
+    }
 
-//     if (contacts_orientations.has_value()) {
-//         for (const auto& [cf, co] : contacts_orientations.value()) {
-//             Eigen::MatrixXd H;
-//             H.setZero(3, num_states_);
-//             const Eigen::Quaternion& x =
-//                 Eigen::Quaternion(state.getFootPose(cf).value().linear().transpose() *
-//                                   state.getBaseOrientation.toRotationMatrix());
+    if (contacts_orientation.has_value() && state.point_feet_) {
+        for (const auto& [cf, co] : contacts_orientation.value()) {
+            Eigen::MatrixXd H;
+            H.setZero(3, num_states_);
+            const Eigen::Quaterniond& x = Eigen::Quaterniond(
+                state.contacts_orientation_.value().at(cf).toRotationMatrix().transpose() *
+                state.base_orientation_.toRotationMatrix());
 
-//             const Eigen::Vector3d& z = so3::minus(co, x);
-//             H.block(0, r_idx_, 3, 3) = -x;
-//             H.block(0, plo_idx_, 3, 3) = Eigen::Matrix3d::Identity();
+            const Eigen::Vector3d& z = lie::so3::minus(co, x);
+            H.block(0, r_idx_[0], 3, 3) = -x.toRotationMatrix();
+            H.block(0, rl_idx_.at(cf)[0], 3, 3) = Eigen::Matrix3d::Identity();
             
-//             const Eigen::Matrix3d& s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
-//             const Eigen::MatrixXd& K = P * H.transpose() * s.inverse();
-//             const Eigen::VectorXd& dx = K * z;
+            const Eigen::Matrix3d& s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
+            const Eigen::MatrixXd& K = P_ * H.transpose() * s.inverse();
+            const Eigen::VectorXd& dx = K * z;
 
-//             updated_state.base_position_ += dx(p_idx_);
-//             updated_state.base_velocity += dx(v_idx_);
-//             updated_state.base_orientation = Eigen::Quaternion(
-//                 lie::so3::plus(updated_state.base_orientation.toRotationMatrix(), dx(r_idx_)));
-//             for (const auto& cf : state.contact_frames) {
-//                 // TODO: set orientation seperately
-//                 updated_state.foot_pose_.at(cf).translation() += dx(pl_idx_.at(cf));
-//             }
+            updated_state.base_position_ += dx(p_idx_);
+            updated_state.base_linear_velocity_ += dx(v_idx_);
+            updated_state.base_orientation_ = Eigen::Quaterniond(
+                lie::so3::plus(state.base_orientation_.toRotationMatrix(), dx(r_idx_)));
+            for (const auto& cf : state.contacts_frame_) {
+                // TODO: set orientation seperately
+                updated_state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
+                updated_state.contacts_orientation_.value().at(cf) =
+                    Eigen::Quaterniond(lie::so3::plus(
+                        updated_state.contacts_orientation_.value().at(cf).toRotationMatrix(),
+                        dx(rl_idx_.at(cf))));
+            }
 
-//             P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
-//             P_.noalias() += K * contacts_position_noise.at(cf) * K.transpose();
-//         }
-//     }
+            P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
+            P_.noalias() += K * contacts_position_noise.at(cf) * K.transpose();
+        }
+    }
 
-//    return updated_state;
-// }
+   return updated_state;
+}

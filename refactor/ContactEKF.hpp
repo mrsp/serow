@@ -45,7 +45,8 @@ class ContactEKF {
     int contact_dim_{};
     int num_leg_end_effectors_{};
     double nominal_dt_{};
-
+    double kin_px_{}, kin_py_{}, kin_pz_{};
+    double kin_rx_{}, kin_ry_{}, kin_rz_{};
     Eigen::Vector3d g_;
     Eigen::Array3i v_idx_;
     Eigen::Array3i r_idx_;
