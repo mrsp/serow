@@ -14,7 +14,7 @@ class State {
     State() = default;
     State(std::unordered_set<std::string> contacts_frame, bool point_feet);
     // State getters
-    const Eigen::Isometry3d& getBasePose() const;
+    Eigen::Isometry3d getBasePose() const;
     const Eigen::Vector3d& getBasePosition() const;
     const Eigen::Quaterniond& getBaseOrientation() const;
     const Eigen::Vector3d& getBaseLinearVelocity() const;
@@ -28,7 +28,7 @@ class State {
     std::optional<bool> getContactStatus(const std::string& frame_name) const;
 
     // State covariance getter
-    const Eigen::Matrix<double, 6, 6>& getBasePoseCov() const;
+    Eigen::Matrix<double, 6, 6> getBasePoseCov() const;
     const Eigen::Matrix3d& getBasePositionCov() const;
     const Eigen::Matrix3d& getBaseOrientationCov() const;
     const Eigen::Matrix3d& getBaseLinearVelocityCov() const;
