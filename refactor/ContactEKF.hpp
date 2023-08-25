@@ -52,13 +52,15 @@ class ContactEKF {
     Eigen::Array3i p_idx_;
     Eigen::Array3i bg_idx_;
     Eigen::Array3i ba_idx_;
-    std::unordered_map<std::string, Eigen::ArrayXi> pl_idx_;
+    std::unordered_map<std::string, Eigen::Array3i> pl_idx_;
+    std::unordered_map<std::string, Eigen::Array3i> rl_idx_;
 
     Eigen::Array3i ng_idx_;
     Eigen::Array3i na_idx_;
     Eigen::Array3i nbg_idx_;
     Eigen::Array3i nba_idx_;
-    std::unordered_map<std::string, Eigen::ArrayXi> npl_idx_;
+    std::unordered_map<std::string, Eigen::Array3i> npl_idx_;
+    std::unordered_map<std::string, Eigen::Array3i> nrl_idx_;
 
     std::optional<double> last_timestamp_;
 
@@ -84,5 +86,5 @@ class ContactEKF {
         std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
         const std::unordered_map<std::string, double>& contacts_probability,
         std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
-        std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise)
+        std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise);
 };

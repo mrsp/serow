@@ -11,35 +11,38 @@
 
 class State {
    public:
+    State() = default;
+    State(std::unordered_set<std::string> contacts_frame, bool point_feet);
     // State getters
-    Eigen::Isometry3d getBasePose() const;
-    Eigen::Vector3d getBasePosition() const;
-    Eigen::Quaterniond getBaseOrientation() const;
-    Eigen::Vector3d getBaseLinearVelocity() const;
-    Eigen::Vector3d getBaseAngularVelocity() const;
-    Eigen::Vector3d getImuLinearAccelarationBias() const;
-    Eigen::Vector3d getImuAngularVelocityBias() const;
-    std::optional<Eigen::Isometry3d> getFootPose(const std::string& frame_name) const;
-    std::unordered_set<std::string> getFootFrames() const;
+    const Eigen::Isometry3d& getBasePose() const;
+    const Eigen::Vector3d& getBasePosition() const;
+    const Eigen::Quaterniond& getBaseOrientation() const;
+    const Eigen::Vector3d& getBaseLinearVelocity() const;
+    const Eigen::Vector3d& getBaseAngularVelocity() const;
+    const Eigen::Vector3d& getImuLinearAccelarationBias() const;
+    const Eigen::Vector3d& getImuAngularVelocityBias() const;
+    const std::unordered_set<std::string>& getContactsFrame() const;
+    std::optional<Eigen::Vector3d> getContactPosition(const std::string& frame_name) const;
+    std::optional<Eigen::Quaterniond> getContactOrientation(const std::string& frame_name) const;
+    std::optional<Eigen::Isometry3d> getContactPose(const std::string& frame_name) const;
+    std::optional<bool> getContactStatus(const std::string& frame_name) const;
+
     // State covariance getter
-    Eigen::Matrix<double, 6, 6> getBasePoseCov() const;
-    Eigen::Matrix3d getBasePositionCov() const;
-    Eigen::Matrix3d getBaseOrientationCov() const;
-    Eigen::Matrix3d getBaseLinearVelocityCov() const;
-    Eigen::Matrix3d getBaseAngularVelocityCov() const;
-    Eigen::Matrix3d getImuLinearAccelerationBiasCov() const;
-    Eigen::Matrix3d getImuAngularVelocityBiasCov() const;
-    std::optional<Eigen::Matrix<double, 6, 6>> getFootPoseCov(const std::string& frame_name) const;
-    std::optional<bool> getFootContactStatus(const std::string& frame_name) const;
-    // State setter
-    void update(State state);
+    const Eigen::Matrix<double, 6, 6>& getBasePoseCov() const;
+    const Eigen::Matrix3d& getBasePositionCov() const;
+    const Eigen::Matrix3d& getBaseOrientationCov() const;
+    const Eigen::Matrix3d& getBaseLinearVelocityCov() const;
+    const Eigen::Matrix3d& getBaseAngularVelocityCov() const;
+    const Eigen::Matrix3d& getImuLinearAccelerationBiasCov() const;
+    const Eigen::Matrix3d& getImuAngularVelocityBiasCov() const;
+    std::optional<Eigen::Matrix<double, 6, 6>> getContactPoseCov(const std::string& frame_name) const;
+    std::optional<Eigen::Matrix3d> getContactPositionCov(const std::string& frame_name) const;
+    std::optional<Eigen::Matrix3d> getContactOrientationCov(const std::string& frame_name) const;
 
     // Flag to indicate if the robot has point feet. False indicates flat feet contacts.
     bool point_feet_{};
 
     int num_leg_ee_{};
-    // Base pose as an transformation from world to base
-    Eigen::Isometry3d base_pose_{Eigen::Isometry3d::Identity()};
     // Base position in the world frame
     Eigen::Vector3d base_position_{Eigen::Vector3d::Zero()};
     // Base orientation in the world frame
@@ -48,19 +51,17 @@ class State {
     Eigen::Vector3d base_linear_velocity_{Eigen::Vector3d::Zero()};
     // Base angular velocity in the world frame
     Eigen::Vector3d base_angular_velocity_{Eigen::Vector3d::Zero()};
-    // Feet state: frame_name to foot pose in the world frame
-    std::unordered_map<std::string, Eigen::Isometry3d> foot_pose_;
-    std::unordered_map<std::string, bool> foot_contact_;
-    std::unordered_set<std::string> foot_frames_;
-
+    // Contact state: frame_name to contact pose in the world frame
+    std::unordered_map<std::string, Eigen::Vector3d> contacts_position_;
+    std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation_;
+    std::unordered_map<std::string, bool> contacts_status_;
+    std::unordered_set<std::string> contacts_frame_;
     // Imu acceleration bias in the local imu frame
     Eigen::Vector3d imu_linear_acceleration_bias_{Eigen::Vector3d::Zero()};
     // Imu gyro rate bias in the local imu frame
     Eigen::Vector3d imu_angular_velocity_bias_{Eigen::Vector3d::Zero()};
 
     // Covariances
-    // Base pose covariance in the world frame
-    Eigen::Matrix<double, 6, 6> base_pose_cov_{Eigen::Matrix<double, 6, 6>::Zero()};
     // Base position covariance in the world frame
     Eigen::Matrix3d base_position_cov_{Eigen::Matrix3d::Zero()};
     // Base orientation covariance in the world frame
@@ -73,8 +74,9 @@ class State {
     Eigen::Matrix3d imu_linear_acceleration_bias_cov_{Eigen::Matrix3d::Zero()};
     // Imu gyro rate bias covariance in the local imu frame
     Eigen::Matrix3d imu_angular_velocity_bias_cov_{Eigen::Matrix3d::Zero()};
-    // Feet state: frame_name to foot pose covariance in the world frame
-    std::unordered_map<std::string, Eigen::Matrix<double, 6, 6>> foot_pose_cov_;
+    // Feet state: frame_name to contacts pose covariance in the world frame
+    std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_cov_;
+    std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_cov_;
 
     friend class ContactEKF;
 };
