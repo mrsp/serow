@@ -29,8 +29,11 @@ struct ImuMeasurement {
 struct KinematicMeasurement {
     double timestamp{};
     std::unordered_map<std::string, bool> contacts_status;
+    std::unordered_map<std::string, double> contacts_probability;
     std::unordered_map<std::string, Eigen::Vector3d> contacts_position;
+    std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise;
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation;
+    std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise;
 };
 
 class ContactEKF {
@@ -38,6 +41,7 @@ class ContactEKF {
     ContactEKF();
     void init(State state);
     State predict(State state, ImuMeasurement imu, KinematicMeasurement kin);
+    State update(State state, KinematicMeasurement kin);
 
    private:
     int num_states_{};
