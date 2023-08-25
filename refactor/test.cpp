@@ -25,6 +25,8 @@ int main() {
     kin.timestamp = 0.1;
     kin.contacts_position.insert({"left_foot", Eigen::Vector3d(0.1, 0.5, -0.5)});
     kin.contacts_status.insert({"left_foot", true});
+    kin.contacts_probability.insert({"left_foot", 1.0});
+    kin.contacts_position_noise.insert({"left_foot", Eigen::Matrix3d::Identity() * 1e-6});
 
     State predicted_state = base_ekf.predict(state, imu, kin);
 
@@ -35,5 +37,9 @@ int main() {
     std::cout << "Base orientation after predict " << predicted_state.base_orientation_<<std::endl;
     std::cout << "Left contact position after predict "
               << predicted_state.contacts_position_.at("left_foot").transpose() << std::endl;
+
+    State updated_state = base_ekf.update(predicted_state, kin);
+    std::cout << "Left contact position after update "
+              << updated_state.contacts_position_.at("left_foot").transpose() << std::endl;
     return 0;
 }

@@ -301,3 +301,9 @@ State ContactEKF::updateContacts(
 
    return updated_state;
 }
+
+State ContactEKF::update(State state, KinematicMeasurement kin) {
+   return updateContacts(state, kin.contacts_position, kin.contacts_position_noise,
+                         kin.contacts_probability, kin.contacts_orientation,
+                         kin.contacts_orientation_noise);
+}
