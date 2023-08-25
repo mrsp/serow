@@ -3,8 +3,9 @@
 #include <string>
 #include "ContactEKF.hpp"
 #include "State.hpp"
+#include <gtest/gtest.h>
 
-int main() {
+TEST(Operation, Predict) {
     std::unordered_set<std::string> contacts_frame;
     contacts_frame.insert({"left_foot"});
     State state(contacts_frame, true);
@@ -41,5 +42,4 @@ int main() {
     State updated_state = base_ekf.update(predicted_state, kin);
     std::cout << "Left contact position after update "
               << updated_state.contacts_position_.at("left_foot").transpose() << std::endl;
-    return 0;
 }

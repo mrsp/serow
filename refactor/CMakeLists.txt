@@ -1,7 +1,18 @@
 cmake_minimum_required(VERSION 3.0.0)
-project(serow VERSION 0.1.0)
+project(serow_tests VERSION 0.1.0 LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
 
-find_package (Eigen3 3.3 REQUIRED NO_MODULE)
+include(FetchContent)
 
-add_executable(serow test.cpp State.cpp ContactEKF.cpp)
-target_link_libraries (serow Eigen3::Eigen)
+FetchContent_Declare(
+  googletest
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG        release-1.11.0
+)
+FetchContent_MakeAvailable(googletest)
+add_library(GTest::GTest INTERFACE IMPORTED)
+target_link_libraries(GTest::GTest INTERFACE gtest_main)
+
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+add_executable(serow_tests test.cpp State.cpp ContactEKF.cpp)
+target_link_libraries(serow_tests PRIVATE Eigen3::Eigen GTest::gtest_main)

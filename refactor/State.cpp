@@ -9,7 +9,8 @@ State::State(std::unordered_set<std::string> contacts_frame, bool point_feet) {
     num_leg_ee_ = contacts_frame_.size();
     point_feet_ = point_feet;
 }
-const Eigen::Isometry3d& State::getBasePose() const {
+
+Eigen::Isometry3d State::getBasePose() const {
     Eigen::Isometry3d base_pose = Eigen::Isometry3d::Identity();
     base_pose.linear() = base_orientation_.toRotationMatrix();
     base_pose.translation() = base_position_;
@@ -77,7 +78,7 @@ std::optional<bool> State::getContactStatus(const std::string &frame_name) const
         return std::nullopt;
 }
 
-const Eigen::Matrix<double, 6, 6>& State::getBasePoseCov() const {
+Eigen::Matrix<double, 6, 6> State::getBasePoseCov() const {
     Eigen::Matrix<double, 6, 6> base_pose_cov = Eigen::Matrix<double, 6, 6>::Identity();
     base_pose_cov.block<3, 3>(0, 0) = base_position_cov_;
     base_pose_cov.block<3, 3>(3, 3) = base_orientation_cov_;
