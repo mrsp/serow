@@ -22,8 +22,12 @@ using namespace Eigen;
 
 struct ImuMeasurement {
     double timestamp{};
-    Eigen::Vector3d linear_acceleration;
-    Eigen::Vector3d angular_velocity;
+    Eigen::Vector3d linear_acceleration{};
+    Eigen::Vector3d angular_velocity{};
+    Eigen::Matrix3d angular_velocity_cov{};
+    Eigen::Matrix3d linear_acceleration_cov{};
+    Eigen::Matrix3d angular_velocity_bias_cov{};
+    Eigen::Matrix3d linear_acceleration_bias_cov{};
 };
 
 struct KinematicMeasurement {
@@ -34,12 +38,16 @@ struct KinematicMeasurement {
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise;
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation;
     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise;
+    Eigen::Matrix3d position_slip_cov{};
+    Eigen::Matrix3d orientation_slip_cov{};
+    Eigen::Matrix3d position_cov{};
+    Eigen::Matrix3d orientation_cov{};
 };
 
 class ContactEKF {
    public:
     ContactEKF();
-    void init(State state);
+    void init(State state, double imu_rate);
     State predict(State state, ImuMeasurement imu, KinematicMeasurement kin);
     State update(State state, KinematicMeasurement kin);
 
@@ -48,10 +56,11 @@ class ContactEKF {
     int num_inputs_{};
     int contact_dim_{};
     int num_leg_end_effectors_{};
+    // Predict step sampling time
     double nominal_dt_{};
-    double kin_px_{}, kin_py_{}, kin_pz_{};
-    double kin_rx_{}, kin_ry_{}, kin_rz_{};
+    // Gravity vector
     Eigen::Vector3d g_;
+    // State indices
     Eigen::Array3i v_idx_;
     Eigen::Array3i r_idx_;
     Eigen::Array3i p_idx_;
@@ -59,15 +68,15 @@ class ContactEKF {
     Eigen::Array3i ba_idx_;
     std::unordered_map<std::string, Eigen::Array3i> pl_idx_;
     std::unordered_map<std::string, Eigen::Array3i> rl_idx_;
-
+    // Input indices
     Eigen::Array3i ng_idx_;
     Eigen::Array3i na_idx_;
     Eigen::Array3i nbg_idx_;
     Eigen::Array3i nba_idx_;
     std::unordered_map<std::string, Eigen::Array3i> npl_idx_;
     std::unordered_map<std::string, Eigen::Array3i> nrl_idx_;
-
-    std::optional<double> last_timestamp_;
+    // Previous imu timestamp 
+    std::optional<double> last_imu_timestamp_;
 
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
     /// matrix 15 + 6N x 15 + 6N
@@ -91,6 +100,8 @@ class ContactEKF {
         State state, const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
         std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
         const std::unordered_map<std::string, double>& contacts_probability,
+        Eigen::Matrix3d position_cov,
         std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
-        std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise);
+        std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
+        std::optional<Eigen::Matrix3d> orientation_cov);
 };

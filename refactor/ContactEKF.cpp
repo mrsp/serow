@@ -11,11 +11,12 @@ ContactEKF::ContactEKF() {
     g_(2) = -9.80;
 }
 
-void ContactEKF::init(State state) {
+void ContactEKF::init(State state, double imu_rate) {
     num_leg_end_effectors_ = state.num_leg_ee_;
     contact_dim_ = state.point_feet_ ? 3 : 6;
     num_states_ = 15 + contact_dim_ * num_leg_end_effectors_;
     num_inputs_ = 12 + contact_dim_ * num_leg_end_effectors_;
+    nominal_dt_ = 1.0 / imu_rate;
     I_.setIdentity(num_states_, num_states_);
 
     // Initialize state indices
@@ -25,17 +26,17 @@ void ContactEKF::init(State state) {
     bg_idx_ = p_idx_ + 3;
     ba_idx_ = bg_idx_ + 3;
 
-    Eigen::Array3i pl_idx = ba_idx_ + 3;
+    Eigen::Array3i pl_idx = ba_idx_;
     for (const auto& contact_frame : state.getContactsFrame()) {
-        pl_idx_.insert({contact_frame, pl_idx});
         pl_idx += 3;
+        pl_idx_.insert({contact_frame, pl_idx});
     }
 
     if (!state.point_feet_) {
-        Eigen::Array3i rl_idx = pl_idx + 3;
+        Eigen::Array3i rl_idx = pl_idx;
         for (const auto& contact_frame : state.getContactsFrame()) {
-            rl_idx_.insert({contact_frame, rl_idx});
             rl_idx += 3;
+            rl_idx_.insert({contact_frame, rl_idx});
         }
     }
 
@@ -44,17 +45,17 @@ void ContactEKF::init(State state) {
     nbg_idx_ = na_idx_ + 3;
     nba_idx_ = nbg_idx_ + 3;
 
-    Eigen::Array3i npl_idx = nba_idx_ + 3;
+    Eigen::Array3i npl_idx = nba_idx_;
     for (const auto& contact_frame : state.getContactsFrame()) {
-        npl_idx_.insert({contact_frame, npl_idx});
         npl_idx += 3;
+        npl_idx_.insert({contact_frame, npl_idx});
     }
     
     if (!state.point_feet_) {
-        Eigen::Array3i nrl_idx = npl_idx + 3;
+        Eigen::Array3i nrl_idx = npl_idx;
         for (const auto& contact_frame : state.getContactsFrame()) {
-            nrl_idx_.insert({contact_frame, nrl_idx});
             nrl_idx += 3;
+            nrl_idx_.insert({contact_frame, nrl_idx});
         }
     }
 
@@ -104,10 +105,9 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobi
     Eigen::MatrixXd Ac, Lc;
     Lc = Lc_;
     Lc.block<3, 3>(0, 0).noalias() = -lie::so3::wedge(v);
-
     if (!state.point_feet_) {
         for (const auto& contact_frame : state.getContactsFrame()) {
-            Lc.block<3, 3>(rl_idx_.at(contact_frame)[0], nrl_idx_.at(contact_frame)[0]) =
+            Lc(rl_idx_.at(contact_frame), nrl_idx_.at(contact_frame)) =
                 state.contacts_orientation_.value().at(contact_frame).toRotationMatrix();
         }
     }
@@ -125,9 +125,9 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobi
 }
 
 State ContactEKF::predict(State state, ImuMeasurement imu, KinematicMeasurement kin) {
-    double dt = nominal_dt_ + 0.1;
-    if (last_timestamp_.has_value()) {
-        dt = imu.timestamp - last_timestamp_.value();
+    double dt = nominal_dt_;
+    if (last_imu_timestamp_.has_value()) {
+        dt = imu.timestamp - last_imu_timestamp_.value();
     }
 
     // Compute the state and input-state Jacobians
@@ -136,16 +136,37 @@ State ContactEKF::predict(State state, ImuMeasurement imu, KinematicMeasurement 
     // Euler Discretization - First order Truncation
     Eigen::MatrixXd Ad = I_;
     Ad += Ac * dt;
+    
+    Eigen::MatrixXd Qc = Eigen::MatrixXd::Zero(num_inputs_, num_inputs_);
+    // Covariance Q with full state + biases
+    Qc(ng_idx_, ng_idx_) = imu.angular_velocity_cov;
+    Qc(na_idx_, na_idx_) = imu.linear_acceleration_cov;
+    Qc(nbg_idx_, nbg_idx_) = imu.angular_velocity_bias_cov;
+    Qc(nba_idx_, nba_idx_) = imu.linear_acceleration_bias_cov;
+
+    for (const auto& [cf, cs] : state.contacts_status_) {
+        int contact_status = static_cast<int>(cs);
+        Qc(npl_idx_.at(cf), npl_idx_.at(cf)) =
+            kin.position_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
+    }
+
+    if (!state.point_feet_) {
+        for (const auto& [cf, cs] : state.contacts_status_) {
+            int contact_status = static_cast<int>(cs);
+            Qc(nrl_idx_.at(cf), nrl_idx_.at(cf)) =
+                kin.orientation_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
+        }
+    }
 
     // Predict the state error covariance
-    Eigen::MatrixXd Qd = Ad * Lc * Lc.transpose() * Ad.transpose() * dt;
+    Eigen::MatrixXd Qd = Ad * Lc * Qc * Lc.transpose() * Ad.transpose() * dt;
     P_ = Ad * P_ * Ad.transpose() + Qd;
 
     // Predict the state
     const State& predicted_state = computeDiscreteDynamics(
         state, dt, imu.angular_velocity, imu.linear_acceleration, kin.contacts_status,
         kin.contacts_position, kin.contacts_orientation);
-    last_timestamp_ = imu.timestamp;
+    last_imu_timestamp_ = imu.timestamp;
     return predicted_state;
 }
 
@@ -220,32 +241,22 @@ State ContactEKF::updateWithContacts(
     const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
     const std::unordered_map<std::string, double>& contacts_probability,
+    Eigen::Matrix3d position_cov,
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
-    std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise) {
+    std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
+    std::optional<Eigen::Matrix3d> orientation_cov) {
     
     State updated_state = state;
-
-    Eigen::Matrix3d Rp = Eigen::Matrix3d::Zero();
-    Rp(0, 0) = kin_px_ * kin_px_;
-    Rp(1, 1) = kin_py_ * kin_py_;
-    Rp(2, 2) = kin_pz_ * kin_pz_;
-    
-    Eigen::Matrix3d Ro = Eigen::Matrix3d::Zero();
-    if (contacts_orientation_noise.has_value()) {
-        Ro(0, 0) = kin_rx_ * kin_rx_;
-        Ro(1, 1) = kin_ry_ * kin_ry_;
-        Ro(2, 2) = kin_rz_ * kin_rz_;
-    }
 
     // Compute the relative contacts position/orientation measurement noise
     for (const auto& [cf, cp] : contacts_probability) {
         int cs = cp > 0.5 ? 1 : 0;
         contacts_position_noise.at(cf) =
-            cp * contacts_position_noise.at(cf) + (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + Rp;
+            cp * contacts_position_noise.at(cf) + (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + position_cov;
         if (contacts_orientation_noise.has_value()) {
             contacts_orientation_noise.value().at(cf) =
                 cp * contacts_orientation_noise.value().at(cf) +
-                (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + Ro;
+                (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + orientation_cov.value();
         }
     }
 
@@ -323,6 +334,6 @@ State ContactEKF::updateWithContacts(
 
 State ContactEKF::update(State state, KinematicMeasurement kin) {
    return updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
-                            kin.contacts_probability, kin.contacts_orientation,
-                            kin.contacts_orientation_noise);
+                            kin.contacts_probability, kin.position_cov, kin.contacts_orientation,
+                            kin.contacts_orientation_noise, kin.orientation_cov);
 }
