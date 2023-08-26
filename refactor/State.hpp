@@ -3,7 +3,12 @@
  * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
  */
 #pragma once
-#include <eigen3/Eigen/Dense>
+
+#ifdef __linux__
+    #include <eigen3/Eigen/Dense>
+#else
+    #include <Eigen/Dense>
+#endif
 #include <optional>
 #include <string>
 #include <unordered_map>

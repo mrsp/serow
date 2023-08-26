@@ -1,4 +1,10 @@
-#include <eigen3/Eigen/Dense>
+#pragma once
+
+#ifdef __linux__
+    #include <eigen3/Eigen/Dense>
+#else
+    #include <Eigen/Dense>
+#endif
 
 namespace lie {
 
