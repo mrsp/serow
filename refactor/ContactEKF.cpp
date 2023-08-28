@@ -81,15 +81,15 @@ void ContactEKF::init(State state, double imu_rate) {
     // Compute some parts of the Input-Noise Jacobian once since they are constants
     // gyro (0), acc (3), gyro_bias (6), acc_bias (9), leg end effectors (12 - 12 + contact_dim * N)
     Lc_.setZero(num_states_, num_inputs_);
-    Lc_(v_idx_, na_idx_) = -Matrix3d::Identity();
-    Lc_(r_idx_, ng_idx_) = -Matrix3d::Identity();
-    Lc_(bg_idx_, nbg_idx_) = Matrix3d::Identity();
-    Lc_(ba_idx_, nba_idx_) = Matrix3d::Identity();
+    Lc_(v_idx_, na_idx_) = -Eigen::Matrix3d::Identity();
+    Lc_(r_idx_, ng_idx_) = -Eigen::Matrix3d::Identity();
+    Lc_(bg_idx_, nbg_idx_) = Eigen::Matrix3d::Identity();
+    Lc_(ba_idx_, nba_idx_) = Eigen::Matrix3d::Identity();
 
     for (const auto& contact_frame : state.getContactsFrame()) {
-        Lc_(pl_idx_.at(contact_frame), npl_idx_.at(contact_frame)) = Matrix3d::Identity();
+        Lc_(pl_idx_.at(contact_frame), npl_idx_.at(contact_frame)) = Eigen::Matrix3d::Identity();
         if (!state.point_feet_) {
-            Lc_(rl_idx_.at(contact_frame), nrl_idx_.at(contact_frame)) = Matrix3d::Identity();
+            Lc_(rl_idx_.at(contact_frame), nrl_idx_.at(contact_frame)) = Eigen::Matrix3d::Identity();
         }
     }
 

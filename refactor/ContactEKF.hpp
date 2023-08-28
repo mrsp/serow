@@ -18,31 +18,6 @@
 #include "State.hpp"
 
 // State is pos - vel - rot - accel - gyro bias - 15 + 6 x N contact pos - contact or
-using namespace Eigen;
-
-struct ImuMeasurement {
-    double timestamp{};
-    Eigen::Vector3d linear_acceleration{};
-    Eigen::Vector3d angular_velocity{};
-    Eigen::Matrix3d angular_velocity_cov{};
-    Eigen::Matrix3d linear_acceleration_cov{};
-    Eigen::Matrix3d angular_velocity_bias_cov{};
-    Eigen::Matrix3d linear_acceleration_bias_cov{};
-};
-
-struct KinematicMeasurement {
-    double timestamp{};
-    std::unordered_map<std::string, bool> contacts_status;
-    std::unordered_map<std::string, double> contacts_probability;
-    std::unordered_map<std::string, Eigen::Vector3d> contacts_position;
-    std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise;
-    std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation;
-    std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise;
-    Eigen::Matrix3d position_slip_cov{};
-    Eigen::Matrix3d orientation_slip_cov{};
-    Eigen::Matrix3d position_cov{};
-    Eigen::Matrix3d orientation_cov{};
-};
 
 class ContactEKF {
    public:
@@ -82,7 +57,7 @@ class ContactEKF {
     /// matrix 15 + 6N x 15 + 6N
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> I_, P_;
     /// Linearized state-input model 15 + 6N x 12 + 6N
-    Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
 
     State computeDiscreteDynamics(
         State state, double dt, Eigen::Vector3d angular_velocity,

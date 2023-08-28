@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <string>
 #include "ContactEKF.hpp"
+#include "CoMEKF.hpp"
 #include "State.hpp"
 #include <gtest/gtest.h>
 

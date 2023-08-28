@@ -14,5 +14,5 @@ add_library(GTest::GTest INTERFACE IMPORTED)
 target_link_libraries(GTest::GTest INTERFACE gtest_main)
 
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-add_executable(serow_tests test.cpp State.cpp ContactEKF.cpp)
+add_executable(serow_tests test.cpp State.cpp ContactEKF.cpp CoMEKF.cpp)
 target_link_libraries(serow_tests PRIVATE Eigen3::Eigen GTest::gtest_main)
