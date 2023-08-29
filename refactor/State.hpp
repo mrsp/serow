@@ -18,6 +18,7 @@ struct ImuMeasurement {
     double timestamp{};
     Eigen::Vector3d linear_acceleration{};
     Eigen::Vector3d angular_velocity{};
+    Eigen::Vector3d angular_acceleration{};
     Eigen::Matrix3d angular_velocity_cov{};
     Eigen::Matrix3d linear_acceleration_cov{};
     Eigen::Matrix3d angular_velocity_bias_cov{};
@@ -48,6 +49,8 @@ struct KinematicMeasurement {
     Eigen::Matrix3d com_position_process_cov{Eigen::Matrix3d::Identity()};
     Eigen::Matrix3d com_linear_velocity_process_cov{Eigen::Matrix3d::Identity()};
     Eigen::Matrix3d external_forces_process_cov{Eigen::Matrix3d::Identity()};
+    Eigen::Matrix3d com_position_cov{Eigen::Matrix3d::Identity()};
+    Eigen::Matrix3d com_linear_acceleration_cov{Eigen::Matrix3d::Identity()};
 };
 
 class State {
