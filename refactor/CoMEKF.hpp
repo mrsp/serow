@@ -17,10 +17,10 @@ class CoMEKF {
    private:
     // Error-Covariance, Identity matrices
     Eigen::Matrix<double, 9, 9> P_, I_;
-    
+
     // nominal sampling time, robot's mass, gravity constant and inertia around the x and y axes
     double nominal_dt_{}, mass_{}, g_{}, I_xx_{}, I_yy_{};
-    
+
     // Compute the nonlinear dynamics
     Eigen::Matrix<double, 9, 1> computeContinuousDynamics(State state, Eigen::Vector3d COP,
                                                           Eigen::Vector3d fN,
@@ -28,21 +28,20 @@ class CoMEKF {
     // Compute Linearized matrices
     std::tuple<Eigen::Matrix<double, 9, 9>, Eigen::Matrix<double, 9, 9>> computePredictionJacobians(
         State state, Eigen::Vector3d COP, Eigen::Vector3d fN, std::optional<Eigen::Vector3d> Ldot);
-
+    
+    State updateWithImu(State state, Eigen::Vector3d Acc, Eigen::Vector3d Pos, Eigen::Vector3d Gyro,
+                        Eigen::Vector3d Gyrodot, Eigen::Vector3d COP, Eigen::Vector3d fN,
+                        Eigen::Matrix3d com_linear_acceleration_cov,
+                        std::optional<Eigen::Vector3d> Ldot);
+    State updateWithKinematics(State state, Eigen::Vector3d com_position,
+                               Eigen::Matrix3d com_position_cov);
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    /** @fn void init()
-     *   @brief initializes the nonlinear 3D CoM estimator
-     */
+
     void init(double mass, double I_xx, double I_yy, double rate);
 
     State predict(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf);
-    /** @fn update(Vector3d Acc, Vector3d Pos, Vector3d Gyro, Vector3d Gyrodot);
-     *   @brief realizes the update step of the EKF
-     *   @param Acc  3D Body acceleration as measured with an IMU
-     *   @param Pos  3D CoM position as measured with encoders
-     *   @param Gyro 3D Base angular velocity as measured with an IMU
-     *   @param Gyrodot 3D Base angular acceleration as derived from an IMU
-     */
-    // void update(Vector3d Acc, Vector3d Pos, Vector3d Gyro, Vector3d Gyrodot);
+
+    State update(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf,
+                 ImuMeasurement imu);
 };
