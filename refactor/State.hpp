@@ -129,4 +129,5 @@ class State {
     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_cov_;
 
     friend class ContactEKF;
+    friend class CoMEKF;
 };

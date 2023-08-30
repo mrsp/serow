@@ -1,0 +1,45 @@
+/**
+ * @brief A 2nd order Low Pass Butterworth Filter
+ * @author Stylianos Piperakis
+ * @details to filter out high frequency noise in certain sensor measurements
+ */
+
+#pragma once
+#include <string>
+
+class ButterworthLPF {
+   private:
+    /// state at t-1, t-2, measurement at t-1, t-2
+    double x_p_{}, x_pp_{}, y_p_{}, y_pp_{};
+    /// 2nd order coefficients
+    double a1_{}, a2_{}, b0_{}, b1_{}, b2_{}, a_{};
+    int i_{};
+    /// the name of the filter e.g. "LHipPitch"
+    std::string name_{};
+
+   public:
+    /** @fn void reset()
+     *  @brief resets the 2nd order Low Pass Butterworth filter state
+     */
+    void reset();
+
+    /** @fn double filter(double y)
+     *  @brief recursively filters a measurement with a 2nd order Low Pass
+     *  Butterworth filter
+     *  @param y  measurement to be filtered
+     */
+    double filter(double y);
+
+    /** @fn ButterworthLPF()
+     *  @brief constructor of 2nd order Low Pass Butterworth filter
+     */
+    ButterworthLPF();
+
+    /** @fn void init(string name_ ,double fsampling, double fcutoff)
+     *  @brief initializes the 2nd order Low Pass Butterworth filter
+     *  @param name_ the name of the filter e.g. "LHipPitch"
+     *  @param f_sampling the sampling frequency of the sensor e.g. 100hz
+     *  @param f_cutoff the cut-off frequency of the filter e.g. 10hz
+     */
+    void init(std::string name_, double f_sampling, double f_cutoff);
+};
