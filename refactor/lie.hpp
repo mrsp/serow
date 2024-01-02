@@ -1,13 +1,12 @@
 #pragma once
 
 #ifdef __linux__
-    #include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 #else
-    #include <Eigen/Dense>
+#include <Eigen/Dense>
 #endif
 
 namespace lie {
-
 
 namespace so3 {
 /** @fn Eigen::Matrix3d wedge(const Eigen::Vector3d& v)
@@ -15,7 +14,7 @@ namespace so3 {
  *  @param v  3D Twist vector
  *  @return   3x3 skew symmetric representation
  */
-Eigen::Matrix3d wedge(const Eigen::Vector3d &v) {
+inline Eigen::Matrix3d wedge(const Eigen::Vector3d& v) {
     Eigen::Matrix3d skew = Eigen::Matrix3d::Zero();
     skew(0, 1) = -v(2);
     skew(0, 2) = v(1);
@@ -30,7 +29,7 @@ Eigen::Matrix3d wedge(const Eigen::Vector3d &v) {
  *  @param M  3x3 skew symmetric matrix
  *  @return   3D Twist vector
  */
-Eigen::Vector3d vec(const Eigen::Matrix3d &M) {
+inline Eigen::Vector3d vec(const Eigen::Matrix3d& M) {
     return Eigen::Vector3d(M(2, 1), M(0, 2), M(1, 0));
 }
 
@@ -39,7 +38,7 @@ Eigen::Vector3d vec(const Eigen::Matrix3d &M) {
  *  @param omega 3D twist in so(3) algebra
  *  @return 3x3 Rotation in  SO(3) group
  */
-Eigen::Matrix3d expMap(const Eigen::Vector3d &omega) {
+inline Eigen::Matrix3d expMap(const Eigen::Vector3d& omega) {
     Eigen::Matrix3d res = Eigen::Matrix3d::Identity();
     const double omeganorm = omega.norm();
 
@@ -57,7 +56,7 @@ Eigen::Matrix3d expMap(const Eigen::Vector3d &omega) {
  *  @param Rt 3x3 Rotation in SO(3) group
  *  @return 3D twist in so(3) algebra
  */
-Eigen::Vector3d logMap(const Eigen::Matrix3d &Rt) {
+inline Eigen::Vector3d logMap(const Eigen::Matrix3d& Rt) {
     Eigen::Vector3d res = Eigen::Vector3d::Zero();
     const double costheta = (Rt.trace() - 1.0) / 2.0;
     const double theta = acos(costheta);
@@ -76,7 +75,7 @@ Eigen::Vector3d logMap(const Eigen::Matrix3d &Rt) {
  *  @param q Quaternion in SO(3) group
  *  @return   3D twist in so(3) algebra
  */
-Eigen::Vector3d logMap(const Eigen::Quaterniond &q) {
+inline Eigen::Vector3d logMap(const Eigen::Quaterniond& q) {
     Eigen::Vector3d omega = Eigen::Vector3d::Zero();
     // Get the vector part
     Eigen::Vector3d qv = Eigen::Vector3d(q.x(), q.y(), q.z());
@@ -88,20 +87,18 @@ Eigen::Vector3d logMap(const Eigen::Quaterniond &q) {
     return omega;
 }
 
-Eigen::Matrix3d plus(const Eigen::Matrix3d& R, const Eigen::Vector3d& tau) {
+inline Eigen::Matrix3d plus(const Eigen::Matrix3d& R, const Eigen::Vector3d& tau) {
     return R * expMap(tau);
 }
 
-Eigen::Vector3d minus(const Eigen::Matrix3d& R0, const Eigen::Matrix3d& R1) {
+inline Eigen::Vector3d minus(const Eigen::Matrix3d& R0, const Eigen::Matrix3d& R1) {
     return logMap(R0.transpose() * R1);
 }
 
-Eigen::Vector3d minus(const Eigen::Quaterniond& q0, const Eigen::Quaterniond& q1) {
+inline Eigen::Vector3d minus(const Eigen::Quaterniond& q0, const Eigen::Quaterniond& q1) {
     return logMap(q0.inverse() * q1);
 }
 
-
 }  // namespace so3
-
 
 }  // namespace lie
