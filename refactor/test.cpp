@@ -1,10 +1,13 @@
-#include <iostream>
-#include <unordered_map>
-#include <string>
-#include "ContactEKF.hpp"
-#include "CoMEKF.hpp"
-#include "State.hpp"
 #include <gtest/gtest.h>
+
+#include <iostream>
+#include <string>
+#include <unordered_map>
+
+#include "CoMEKF.hpp"
+#include "ContactEKF.hpp"
+#include "LegOdometry.hpp"
+#include "State.hpp"
 
 TEST(Operation, Development) {
     std::unordered_set<std::string> contacts_frame;
@@ -53,7 +56,8 @@ TEST(Operation, Development) {
               << std::endl;
     std::cout << "Base velocity after predict " << predicted_state.base_linear_velocity_.transpose()
               << std::endl;
-    std::cout << "Base orientation after predict " << predicted_state.base_orientation_<<std::endl;
+    std::cout << "Base orientation after predict " << predicted_state.base_orientation_
+              << std::endl;
     std::cout << "Left contact position after predict "
               << predicted_state.contacts_position_.at("left_foot").transpose() << std::endl;
     std::cout << "Left contact orientation after predict "
