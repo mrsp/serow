@@ -1,0 +1,8 @@
+{
+    "base_frame": "base_link",
+    "point_feet": false,
+    "foot_frames": {
+        "0": "left_foot"
+    },
+    "model_path": "../urdf/nao.urdf"
+}

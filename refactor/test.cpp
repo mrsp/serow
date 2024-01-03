@@ -1,19 +1,36 @@
 #include <gtest/gtest.h>
 
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
 
 #include "CoMEKF.hpp"
 #include "ContactEKF.hpp"
 #include "LegOdometry.hpp"
+#include "Madgwick.hpp"
+#include "Mahony.hpp"
+#include "RobotKinematics.hpp"
 #include "State.hpp"
+
+using json = nlohmann::json;
 
 TEST(Operation, Development) {
     std::unordered_set<std::string> contacts_frame;
-    contacts_frame.insert({"left_foot"});
-    bool point_feet = false;
+
+    std::ifstream f("../config/test.json");
+    json data = json::parse(f);
+    for(int i = 0; i < data["foot_frames"].size(); i++){
+        contacts_frame.insert({data["foot_frames"][std::to_string(i)]});
+    }
+    std::string model_path = data["model_path"];
+    bool point_feet = data["point_feet"];
+
     State state(contacts_frame, point_feet);
+    serow::RobotKinematics kinematics(model_path);
+
+
+
 
     state.contacts_position_.insert({"left_foot", Eigen::Vector3d(0.1, 0.5, -0.5)});
     std::unordered_map<std::string, Eigen::Quaterniond> lo{
@@ -67,4 +84,5 @@ TEST(Operation, Development) {
               << updated_state.contacts_position_.at("left_foot").transpose() << std::endl;
     std::cout << "Left contact orientation after update "
               << updated_state.contacts_orientation_->at("left_foot") << std::endl;
+
 }
