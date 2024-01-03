@@ -1,4 +1,7 @@
-
+/*
+ * Copyright Stylianos Piperakis, Ownage Dynamics L.P.
+ * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
+ */
 /**
  * @brief Numerical Differentiation with the First Order Euler Method
  * @author Stylianos Piperakis

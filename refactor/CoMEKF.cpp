@@ -1,3 +1,7 @@
+/*
+ * Copyright Stylianos Piperakis, Ownage Dynamics L.P.
+ * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
+ */
 #include "CoMEKF.hpp"
 
 #include <iostream>
@@ -43,8 +47,7 @@ State CoMEKF::predict(State state, KinematicMeasurement kin, GroundReactionForce
 
 State CoMEKF::update(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf,
                      ImuMeasurement imu) {
-    State updated_state =
-        updateWithKinematics(state, kin.com_position, kin.com_position_cov);
+    State updated_state = updateWithKinematics(state, kin.com_position, kin.com_position_cov);
     updated_state =
         updateWithImu(state, kin.com_position, imu.linear_acceleration, imu.angular_velocity,
                       imu.angular_acceleration, grf.COP, grf.force, kin.com_linear_acceleration_cov,
@@ -152,8 +155,8 @@ State CoMEKF::updateWithImu(State state, Eigen::Vector3d Acc, Eigen::Vector3d Po
     return updated_state;
 }
 
-State CoMEKF::updateWithKinematics(State state, Eigen::Vector3d com_position, Eigen::Matrix3d com_position_cov)
-{
+State CoMEKF::updateWithKinematics(State state, Eigen::Vector3d com_position,
+                                   Eigen::Matrix3d com_position_cov) {
     State updated_state = state;
     Eigen::Vector3d z = com_position - state.com_position_;
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();

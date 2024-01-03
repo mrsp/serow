@@ -1,3 +1,7 @@
+/*
+ * Copyright Stylianos Piperakis, Ownage Dynamics L.P.
+ * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
+ */
 #pragma once
 
 #ifdef __linux__

@@ -34,7 +34,7 @@ const Eigen::Vector3d& State::getImuAngularVelocityBias() const {
 }
 
 std::optional<Eigen::Vector3d> State::getContactPosition(const std::string& frame_name) const {
-    // If the end-effector is in contact with the environment and we have a contact position 
+    // If the end-effector is in contact with the environment and we have a contact position
     // available
     if (contacts_status_.count(frame_name) && contacts_status_.at(frame_name) &&
         contacts_position_.count(frame_name))
@@ -54,7 +54,7 @@ std::optional<Eigen::Quaterniond> State::getContactOrientation(
         return std::nullopt;
 }
 
-std::optional<Eigen::Isometry3d> State::getContactPose(const std::string &frame_name) const {
+std::optional<Eigen::Isometry3d> State::getContactPose(const std::string& frame_name) const {
     // If the end-effector is in contact with the environment and we have a contact orientation
     // available
     if (contacts_status_.count(frame_name) && contacts_status_.at(frame_name) &&
@@ -71,7 +71,7 @@ std::optional<Eigen::Isometry3d> State::getContactPose(const std::string &frame_
 
 const std::unordered_set<std::string>& State::getContactsFrame() const { return contacts_frame_; }
 
-std::optional<bool> State::getContactStatus(const std::string &frame_name) const {
+std::optional<bool> State::getContactStatus(const std::string& frame_name) const {
     if (contacts_status_.count(frame_name))
         return contacts_status_.at(frame_name);
     else
@@ -91,7 +91,9 @@ const Eigen::Matrix3d& State::getBaseOrientationCov() const { return base_orient
 
 const Eigen::Matrix3d& State::getBaseLinearVelocityCov() const { return base_linear_velocity_cov_; }
 
-const Eigen::Matrix3d& State::getBaseAngularVelocityCov() const { return base_angular_velocity_cov_; }
+const Eigen::Matrix3d& State::getBaseAngularVelocityCov() const {
+    return base_angular_velocity_cov_;
+}
 
 const Eigen::Matrix3d& State::getImuLinearAccelerationBiasCov() const {
     return imu_linear_acceleration_bias_cov_;

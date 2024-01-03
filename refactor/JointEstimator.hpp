@@ -1,3 +1,7 @@
+/*
+ * Copyright Stylianos Piperakis, Ownage Dynamics L.P.
+ * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
+ */
 /**
  * @brief Joint angular velocity estimation with numerical differentiation and
  * 2nd order Low Pass Butterworth Filter

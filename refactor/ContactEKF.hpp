@@ -1,3 +1,7 @@
+/*
+ * Copyright Stylianos Piperakis, Ownage Dynamics L.P.
+ * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
+ */
 #pragma once
 /**
  * @brief Base Estimator combining Inertial Measurement Unit (IMU) and Odometry Measuruements either
@@ -50,7 +54,7 @@ class ContactEKF {
     Eigen::Array3i nba_idx_;
     std::unordered_map<std::string, Eigen::Array3i> npl_idx_;
     std::unordered_map<std::string, Eigen::Array3i> nrl_idx_;
-    // Previous imu timestamp 
+    // Previous imu timestamp
     std::optional<double> last_imu_timestamp_;
 
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
