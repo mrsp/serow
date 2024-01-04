@@ -8,7 +8,7 @@
 namespace serow {
 
 LegOdometry::LegOdometry(
-    Eigen::Vector3d base_position, std::unordered_map<std::string, Eigen::Vector3d> feet_position,
+    std::unordered_map<std::string, Eigen::Vector3d> feet_position,
     std::unordered_map<std::string, Eigen::Quaterniond> feet_orientation, double mass,
     double alpha1, double alpha3, double freq, double g,
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> force_torque_offset) {
@@ -22,7 +22,6 @@ LegOdometry::LegOdometry(
     for (const auto& [key, value] : feet_position) {
         pivots_[key] = Eigen::Vector3d::Zero();
     }
-    base_position_prev_ = base_position;
     feet_position_prev_ = std::move(feet_position);
     feet_orientation_prev_ = std::move(feet_orientation);
     if (force_torque_offset) {
