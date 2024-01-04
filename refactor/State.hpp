@@ -25,10 +25,11 @@ struct ImuMeasurement {
     Eigen::Matrix3d linear_acceleration_bias_cov{};
 };
 
-struct GroundReactionForceMeasurement {
+struct ForceTorqueMeasurement {
     double timestamp{};
-    Eigen::Vector3d force{};
-    Eigen::Vector3d COP{};
+    Eigen::Vector3d force{Eigen::Vector3d::Zero()};
+    std::optional<Eigen::Vector3d> tau;
+    std::optional<Eigen::Vector3d> cop;
 };
 
 struct KinematicMeasurement {
@@ -39,7 +40,7 @@ struct KinematicMeasurement {
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise;
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation;
     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise;
-    std::optional<Eigen::Vector3d> com_angular_momentum{Eigen::Vector3d::Zero()};
+    std::optional<Eigen::Vector3d> com_angular_momentum;
     Eigen::Vector3d com_position{};
     Eigen::Vector3d com_linear_acceleration{};
     Eigen::Matrix3d position_slip_cov{Eigen::Matrix3d::Identity()};

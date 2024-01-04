@@ -4,5 +4,16 @@
     "foot_frames": {
         "0": "left_foot"
     },
-    "model_path": "../urdf/nao.urdf"
+    "model_path": "../urdf/nao.urdf",
+    "mass": 5.14,
+    "gravity_constant": 9.81,
+
+    "imu_rate": 100,
+    "joint_rate": 100,
+    "joint_cuttoff_frequency" : 10,
+    "tau_0": 1.0,
+    "tau_1": 0.1,
+    
+    "attitude_estimator_proportional_gain": 0.5,
+    "attitude_estimator_integral_gain": 0
 }

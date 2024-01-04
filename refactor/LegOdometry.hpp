@@ -14,9 +14,9 @@
 #include <string>
 #include <unordered_map>
 #ifdef __linux__
-    #include <eigen3/Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 #else
-    #include <Eigen/Dense>
+#include <Eigen/Dense>
 #endif
 
 namespace serow {
@@ -35,6 +35,17 @@ class LegOdometry {
     };
 
    private:
+    void computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
+                    const Eigen::Vector3d& angular_velocity, const Eigen::Vector3d& linear_velocity,
+                    Eigen::Vector3d force, Eigen::Vector3d torque);
+
+    /** @fn     double cropGRF(double force)
+     *  @brief  Crops the measured vertical ground reaction force (GRF) in the margins [0, mass * g]
+     *  @param  force Measured GRF
+     *  @return  The cropped GRF
+     */
+    double cropGRF(double force) const;
+
     bool is_initialized{};
     Eigen::Vector3d base_position_ = Eigen::Vector3d::Zero();
     Eigen::Vector3d base_position_prev_ = Eigen::Vector3d::Zero();
@@ -53,8 +64,7 @@ class LegOdometry {
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    LegOdometry(Eigen::Vector3d base_position,
-                std::unordered_map<std::string, Eigen::Vector3d> feet_position,
+    LegOdometry(std::unordered_map<std::string, Eigen::Vector3d> feet_position,
                 std::unordered_map<std::string, Eigen::Quaterniond> feet_orientation,
                 double mass = 5.14, double alpha1 = 1.0, double alpha3 = 0.01, double freq = 100.0,
                 double g = 9.81,
@@ -64,10 +74,6 @@ class LegOdometry {
     const Eigen::Vector3d& getBasePosition() const;
 
     const Eigen::Vector3d& getBaseLinearVelocity() const;
-
-    void computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
-                    const Eigen::Vector3d& angular_velocity, const Eigen::Vector3d& linear_velocity,
-                    Eigen::Vector3d force, Eigen::Vector3d torque);
 
     void estimate(
         const Eigen::Quaterniond& base_orientation, const Eigen::Vector3d& base_angular_velocity,
@@ -79,13 +85,6 @@ class LegOdometry {
         const std::unordered_map<std::string, Eigen::Vector3d>& contact_forces,
         std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques =
             std::nullopt);
-
-    /** @fn     double cropGRF(double force)
-     *  @brief  Crops the measured vertical ground reaction force (GRF) in the margins [0, mass * g]
-     *  @param  force Measured GRF
-     *  @return  The cropped GRF
-     */
-    double cropGRF(double force) const;
 };
 
 }  // namespace serow

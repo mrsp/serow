@@ -68,12 +68,12 @@ class Mahony {
      */
     Eigen::Vector3d getEuler() const { return q_.toRotationMatrix().eulerAngles(0, 1, 2); }
 
-    /** @fn updateIMU(Eigen::Vector3d gyro_, Eigen::Vector3d acc_)
+    /** @fn filter(Eigen::Vector3d gyro_, Eigen::Vector3d acc_)
      *  @brief Computes the IMU orientation w.r.t the world frame of reference
      *  @param gyro_ angular velocity as measured by the IMU
      *  @param acc_ linea acceleration as measured by the IMU
      */
-    void updateIMU(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc) {
+    void filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc) {
         double recipNorm;
         double halfvx, halfvy, halfvz;
         double halfex, halfey, halfez;
