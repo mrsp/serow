@@ -11,7 +11,7 @@
 #endif
 
 #include <iostream>
-#include <map>
+#include <unordered_map>
 #include <pinocchio/algorithm/center-of-mass.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/jacobian.hpp>
@@ -78,8 +78,8 @@ class RobotKinematics {
 
     int ndofActuated() const { return pmodel_->nq; }
 
-    void updateJointConfig(const std::map<std::string, double>& qmap,
-                           const std::map<std::string, double>& qdotmap, double joint_std) {
+    void updateJointConfig(const std::unordered_map<std::string, double>& qmap,
+                           const std::unordered_map<std::string, double>& qdotmap, double joint_std) {
         mapJointNamesIDs(qmap, qdotmap);
         pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
         pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
@@ -96,8 +96,8 @@ class RobotKinematics {
         return angularJacobian(frame_name) * qn_;
     }
 
-    void mapJointNamesIDs(const std::map<std::string, double>& qmap,
-                          const std::map<std::string, double>& qdotmap) {
+    void mapJointNamesIDs(const std::unordered_map<std::string, double>& qmap,
+                          const std::unordered_map<std::string, double>& qdotmap) {
         q_.setZero(pmodel_->nq);
         qdot_.setZero(pmodel_->nv);
 

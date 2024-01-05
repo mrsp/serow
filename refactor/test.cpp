@@ -4,13 +4,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "CoMEKF.hpp"
-#include "ContactEKF.hpp"
-#include "LegOdometry.hpp"
-#include "Madgwick.hpp"
-#include "Mahony.hpp"
-#include "RobotKinematics.hpp"
-#include "State.hpp"
+#include "Serow.hpp"
 
 using json = nlohmann::json;
 

@@ -28,8 +28,14 @@ struct ImuMeasurement {
 struct ForceTorqueMeasurement {
     double timestamp{};
     Eigen::Vector3d force{Eigen::Vector3d::Zero()};
-    std::optional<Eigen::Vector3d> tau;
-    std::optional<Eigen::Vector3d> cop;
+    Eigen::Vector3d torque{Eigen::Vector3d::Zero()};
+};
+
+
+struct GroundReactionForceMeasurement {
+    double timestamp{};
+    Eigen::Vector3d force{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d COP{Eigen::Vector3d::Zero()};
 };
 
 struct KinematicMeasurement {

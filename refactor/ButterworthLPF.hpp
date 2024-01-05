@@ -33,7 +33,7 @@ class ButterworthLPF {
     /** @fn ButterworthLPF()
      *  @brief constructor of 2nd order Low Pass Butterworth filter
      */
-    ButterworthLPF();
+    ButterworthLPF() = default;
 
     /** @fn void init(string name_ ,double fsampling, double fcutoff)
      *  @brief initializes the 2nd order Low Pass Butterworth filter
