@@ -9,6 +9,7 @@
 
 #include "CoMEKF.hpp"
 #include "ContactEKF.hpp"
+#include "ContactDetector.hpp"
 #include "JointEstimator.hpp"
 #include "LegOdometry.hpp"
 #include "Mahony.hpp"
@@ -44,10 +45,17 @@ class Serow {
         double joint_cutoff_frequency{};
         double tau0{};
         double tau1{};
+        bool estimate_contact{};
+        std::unordered_map<std::string, Eigen::Matrix3d> R_base_to_force;
+        std::unordered_map<std::string, Eigen::Matrix3d> R_base_to_torque;
+        double high_threshold{};
+        double low_threshold{};
+        int median_window{};
     };
 
     Params params_;
     std::unordered_map<std::string, JointEstimator> joint_estimators_;
+    std::unordered_map<std::string, ContactDetector> contact_estimators_;
     State state_;
     ContactEKF base_estimator_;
     CoMEKF com_estimator_;

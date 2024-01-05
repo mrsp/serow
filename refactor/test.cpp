@@ -22,9 +22,6 @@ TEST(Operation, Development) {
     State state(contacts_frame, point_feet);
     serow::RobotKinematics kinematics(model_path);
 
-
-
-
     state.contacts_position_.insert({"left_foot", Eigen::Vector3d(0.1, 0.5, -0.5)});
     std::unordered_map<std::string, Eigen::Quaterniond> lo{
         {"left_foot", Eigen::Quaterniond::Identity()}};

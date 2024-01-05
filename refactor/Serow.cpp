@@ -10,6 +10,15 @@ using json = nlohmann::json;
 namespace serow {
     Serow::Serow(std::string config_file){
         auto config = json::parse(config_file);
+
+        // Initialize the state
+        std::unordered_set<std::string> contacts_frame;
+        for(size_t i = 0; i < config["foot_frames"].size(); i++){
+            contacts_frame.insert({config["foot_frames"][std::to_string(i)]});
+        }
+        bool point_feet = config["point_feet"];
+        State state(std::move(contacts_frame), point_feet);
+        state_ = std::move(state);
         // Initialize the attitude estimator
         params_.imu_rate = config["imu_rate"];
         double Kp = config["attitude_estimator_proportional_gain"];
@@ -25,14 +34,19 @@ namespace serow {
         } else {
             params_.max_imu_calibration_cycles = config["max_imu_calibration_cycles"];
         }
-        params_.R_base_to_gyro << config["R_base_to_gyro"][0], config["R_base_to_gyro"][1],
-            config["R_base_to_gyro"][2], config["R_base_to_gyro"][3], config["R_base_to_gyro"][4],
-            config["R_base_to_gyro"][5], config["R_base_to_gyro"][6], config["R_base_to_gyro"][7],
-            config["R_base_to_gyro"][8];
-        params_.R_base_to_acc << config["R_base_to_acc"][0], config["R_base_to_acc"][1],
-        config["R_base_to_acc"][2], config["R_base_to_acc"][3], config["R_base_to_acc"][4],
-        config["R_base_to_acc"][5], config["R_base_to_acc"][6], config["R_base_to_acc"][7],
-        config["R_base_to_acc"][8];
+        for (size_t i = 0; i < 3; i++) {
+            for (size_t j = 0; j < 3; j++) {
+                params_.R_base_to_gyro(i, j) = config["R_base_to_gyro"][3 * i + j];
+                params_.R_base_to_acc(i, j) = config["R_base_to_acc"][3 * i + j];
+                size_t k = 0;
+                for (const auto& frame : state_.getContactsFrame()) {
+                    params_.R_base_to_force[frame](i, j) = config["R_base_to_force"][std::to_string(k)][3 * i + j];
+                    params_.R_base_to_torque[frame](i, j) = config["R_base_to_torque"][std::to_string(k)][3 * i + j];
+                    k++;
+                }
+            }
+        }
+
         params_.joint_rate = config["joint_rate"];
         params_.joint_cutoff_frequency = config["joint_cutoff_frequency"];
         
@@ -78,7 +92,28 @@ namespace serow {
             std::cout << "Gyro biases " << params_.bias_gyro.transpose() << std::endl;
             std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
         }
-        
+
+        std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
+        std::unordered_map<std::string, Eigen::Vector3d> contact_torques;
+
+        if (params_.estimate_contact && contact_estimators_.empty()) {
+            for (const auto& frame : state_.getContactsFrame()){
+                ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
+                                   params_.median_window);
+                contact_estimators_[frame] = std::move(cd);
+            }
+        }
+
+        // Transform F/T to base frame
+        for (const auto& frame : state_.getContactsFrame()){
+            contact_forces[frame] = params_.R_base_to_force.at(frame) * ft.at(frame).force;
+            contact_torques[frame] = params_.R_base_to_torque.at(frame) * ft.at(frame).torque;
+            if (params_.estimate_contact) {
+                contact_estimators_.at(frame).SchmittTrigger(contact_forces.at(frame).z());
+                state_.contacts_status_.at(frame) = contact_estimators_.at(frame).getContactStatus();
+            }
+        }  
+
         // Update the Kinematic Structure
         kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities, 0.1);
 
@@ -90,8 +125,6 @@ namespace serow {
         std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_positions;
         std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_linear_velocities;
         std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_angular_velocities;
-        std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
-        std::unordered_map<std::string, Eigen::Vector3d> contact_torques;
 
         for (const auto& contact_frame : state_.getContactsFrame()) {
             base_to_foot_orientations[contact_frame] =
