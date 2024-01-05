@@ -3,35 +3,57 @@
  * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
  */
 #pragma once
-#include "JointEstimator.hpp"
-#include "State.hpp"
-#include "ContactEKF.hpp"
-#include "Mahony.hpp"
-#include "LegOdometry.hpp"
-#include <unordered_map>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <unordered_map>
+
+#include "CoMEKF.hpp"
+#include "ContactEKF.hpp"
+#include "JointEstimator.hpp"
+#include "LegOdometry.hpp"
+#include "Mahony.hpp"
+#include "RobotKinematics.hpp"
+#include "State.hpp"
 
 namespace serow {
 
 struct JointMeasurement {
     double timestamp{};
     double position{};
-}
-
-
+};
 
 class Serow {
-    public:
+   public:
     Serow(std::string config);
-    private:
-        std::unordered_map<std::string, JointEstimator> joint_estimators_;
-        State state_;
-        ContactEKF base_estimator_;
-        CoMEKF com_estimator_;
-        std::unique_ptr<Mahony> attitude_estimator_;
-        std::unique_ptr<RobotKinematics> kinematic_estimator_;
-        std::unique_ptr<LegOdometry> leg_odometry_;
+    void filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
+                std::unordered_map<std::string, ForceTorqueMeasurement> ft,
+                std::optional<std::unordered_map<std::string, double>> contact_probabilities);
+
+   private:
+    struct Params {
+        double mass{};
+        double g{};
+        bool calibrate_imu{};
+        double max_imu_calibration_cycles{};
+        double imu_rate{};
+        Eigen::Vector3d bias_gyro{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d bias_acc{Eigen::Vector3d::Zero()};
+        Eigen::Matrix3d R_base_to_gyro{Eigen::Matrix3d::Identity()};
+        Eigen::Matrix3d R_base_to_acc{Eigen::Matrix3d::Identity()};
+        double joint_rate{};
+        double joint_cutoff_frequency{};
+        double tau0{};
+        double tau1{};
+    };
+
+    Params params_;
+    std::unordered_map<std::string, JointEstimator> joint_estimators_;
+    State state_;
+    ContactEKF base_estimator_;
+    CoMEKF com_estimator_;
+    std::unique_ptr<Mahony> attitude_estimator_;
+    std::unique_ptr<RobotKinematics> kinematic_estimator_;
+    std::unique_ptr<LegOdometry> leg_odometry_;
 };
 
 }  // namespace serow
