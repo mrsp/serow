@@ -142,8 +142,8 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
     // Compute the leg odometry and the contact points
     if (!leg_odometry_) {
         // Initialize the state
-        state_.base_orientation = attitude_estimator_->getQ();
-        state_.com_position = base_to_com_position;
+        state_.base_orientation_ = attitude_estimator_->getQ();
+        state_.com_position_ = base_to_com_position;
         leg_odometry_ = std::make_unique<LegOdometry>(
             base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau0,
             params_.tau1, params_.joint_rate, params_.g);
