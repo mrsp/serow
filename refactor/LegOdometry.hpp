@@ -75,6 +75,10 @@ class LegOdometry {
 
     const Eigen::Vector3d& getBaseLinearVelocity() const;
 
+    const std::unordered_map<std::string, Eigen::Vector3d> getContactPositions() const;
+
+    const std::unordered_map<std::string, Eigen::Quaterniond> getContactOrientations() const;
+
     void estimate(
         const Eigen::Quaterniond& base_orientation, const Eigen::Vector3d& base_angular_velocity,
         const std::unordered_map<std::string, Eigen::Quaterniond>& base_to_foot_orientations,

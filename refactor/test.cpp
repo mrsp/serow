@@ -10,7 +10,7 @@ using json = nlohmann::json;
 
 TEST(Operation, Development) {
     std::unordered_set<std::string> contacts_frame;
-
+    serow::Serow SERoW("../config/test.json");
     std::ifstream f("../config/test.json");
     json data = json::parse(f);
     for(int i = 0; i < data["foot_frames"].size(); i++){
