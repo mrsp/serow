@@ -33,6 +33,15 @@ const Eigen::Vector3d& LegOdometry::getBasePosition() const { return base_positi
 
 const Eigen::Vector3d& LegOdometry::getBaseLinearVelocity() const { return base_linear_velocity_; }
 
+const std::unordered_map<std::string, Eigen::Vector3d> LegOdometry::getContactPositions() const {
+    return contact_positions_;
+}
+
+const std::unordered_map<std::string, Eigen::Quaterniond> LegOdometry::getContactOrientations()
+    const {
+    return contact_orientations_;
+}
+
 void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
                              const Eigen::Vector3d& angular_velocity,
                              const Eigen::Vector3d& linear_velocity, Eigen::Vector3d force,

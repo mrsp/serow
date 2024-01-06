@@ -10,7 +10,7 @@ using json = nlohmann::json;
 
 namespace serow {
 Serow::Serow(std::string config_file) {
-    auto config = json::parse(config_file);
+    auto config = json::parse(std::ifstream(config_file));
 
     // Initialize the state
     std::unordered_set<std::string> contacts_frame;
@@ -18,7 +18,7 @@ Serow::Serow(std::string config_file) {
         contacts_frame.insert({config["foot_frames"][std::to_string(i)]});
     }
     bool point_feet = config["point_feet"];
-    State state(std::move(contacts_frame), point_feet);
+    State state(contacts_frame, point_feet);
     state_ = std::move(state);
     // Initialize the attitude estimator
     params_.imu_rate = config["imu_rate"];
@@ -55,8 +55,8 @@ Serow::Serow(std::string config_file) {
 
     params_.mass = config["mass"];
     params_.g = config["g"];
-    params_.tau0 = config["tau0"];
-    params_.tau1 = config["tau1"];
+    params_.tau0 = config["tau_0"];
+    params_.tau1 = config["tau_1"];
 }
 
 void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
@@ -155,7 +155,38 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         base_to_foot_orientations, base_to_foot_positions, base_to_foot_linear_velocities,
         base_to_foot_angular_velocities, *contact_probabilities, contact_forces, contact_torques);
 
+    // Create the measurements
+    imu.angular_velocity_cov = params_.angular_velocity_cov.asDiagonal();
+    imu.angular_velocity_bias_cov = params_.angular_velocity_bias_cov.asDiagonal();
+    imu.linear_acceleration_cov = params_.linear_acceleration_cov.asDiagonal();
+    imu.linear_acceleration_bias_cov = params_.linear_acceleration_bias_cov.asDiagonal();
 
+    KinematicMeasurement kin;
+    kin.contacts_status = state_.contacts_status_;
+    kin.contacts_probability = state_.contacts_probability_;
+    kin.contacts_position = leg_odometry_->getContactPositions();
+    kin.contacts_orientation = leg_odometry_->getContactOrientations();
+    kin.position_cov = params_.contact_position_cov.asDiagonal();
+    kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
+    
+    if (!state_.point_feet_) {
+        kin.orientation_cov = params_.contact_orientation_cov.asDiagonal();
+        kin.orientation_slip_cov = params_.contact_orientation_slip_cov.asDiagonal();
+    }
+    for (const auto& frame : state_.getContactsFrame()) {
+        kin.contacts_position_noise[frame] =
+            kinematic_estimator_->getLinearVelocityNoise(frame) *
+            kinematic_estimator_->getLinearVelocityNoise(frame).transpose();
+        if (!state_.point_feet_) {
+            kin.contacts_orientation_noise->emplace(
+                frame, kinematic_estimator_->getAngularVelocityNoise(frame) *
+                           kinematic_estimator_->getAngularVelocityNoise(frame).transpose());
+        }
+    }
+    // Call the Base Estimator predict step utilizing imu and contact status measurements
+    state_ = base_estimator_.predict(state_, imu, kin);
+    // Call the Base Estimator update step by employing relative contact pose measurements
+    state_ = base_estimator_.update(state_, kin);
 
 }
 

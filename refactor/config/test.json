@@ -7,18 +7,23 @@
     "model_path": "../urdf/nao.urdf",
     "mass": 5.14,
     "g": 9.81,
-
     "joint_rate": 100,
-    "joint_cutoff_frequency" : 10,
+    "joint_cutoff_frequency": 10,
     "tau_0": 1.0,
     "tau_1": 0.1,
-
     "imu_rate": 100,
     "R_base_to_gyro": [1, 0, 0, 0, 1, 0, 0, 0, 1],
     "R_base_to_acc": [1, 0, 0, 0, 1, 0, 0, 0, 1],
     "calibrate_imu": true,
     "max_imu_calibration_cycles": 1000,
-
+    "bias_acc": [0, 0, 0],
+    "bias_gyro": [0, 0, 0],
+    "R_base_to_force": {
+        "0": [1, 0, 0, 0, 1, 0, 0, 0, 1]
+    },
+    "R_base_to_torque": {
+        "0": [1, 0, 0, 0, 1, 0, 0, 0, 1]
+    }, 
     "attitude_estimator_proportional_gain": 0.5,
     "attitude_estimator_integral_gain": 0
 }

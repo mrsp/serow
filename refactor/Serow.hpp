@@ -51,6 +51,15 @@ class Serow {
         double high_threshold{};
         double low_threshold{};
         int median_window{};
+
+        Eigen::Vector3d angular_velocity_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d angular_velocity_bias_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d linear_acceleration_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d linear_acceleration_bias_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d contact_position_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d contact_orientation_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d contact_position_slip_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d contact_orientation_slip_cov{Eigen::Vector3d::Zero()};
     };
 
     Params params_;

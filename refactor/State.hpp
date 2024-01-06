@@ -106,6 +106,7 @@ class State {
     std::unordered_map<std::string, Eigen::Vector3d> contacts_position_;
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation_;
     std::unordered_map<std::string, bool> contacts_status_;
+    std::unordered_map<std::string, double> contacts_probability_;
     std::unordered_set<std::string> contacts_frame_;
     // Imu acceleration bias in the local imu frame
     Eigen::Vector3d imu_linear_acceleration_bias_{Eigen::Vector3d::Zero()};
