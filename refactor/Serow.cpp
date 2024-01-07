@@ -68,6 +68,18 @@ Serow::Serow(std::string config_file) {
     params_.high_threshold = config["high_threshold"];
     params_.low_threshold = config["low_threshold"];
     params_.median_window = config["median_window"];
+    
+    // Base estimation parameters
+    for (size_t i = 0; i < 3; i++) {
+        params_.angular_velocity_cov[i] = config["imu_angular_velocity_covariance"][i];
+        params_.angular_velocity_bias_cov[i] = config["imu_angular_velocity_bias_covariance"][i];
+        params_.linear_acceleration_cov[i] = config["imu_linear_acceleration_covariance"][i];
+        params_.linear_acceleration_cov[i] = config["imu_linear_acceleration_bias_covariance"][i];
+        params_.contact_position_cov[i] = config["contact_position_covariance"][i];
+        params_.contact_orientation_cov[i] = config["contact_orientation_covariance"][i];
+        params_.contact_position_slip_cov[i] = config["contact_position_slip_covariance"][i];
+        params_.contact_orientation_slip_cov[i] = config["contact_orientation_slip_covariance"][i];
+    }
 }
 
 void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
