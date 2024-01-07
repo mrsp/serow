@@ -56,13 +56,13 @@ Serow::Serow(std::string config_file) {
     params_.estimate_joint_velocity = config["estimate_joint_velocity"];
     params_.joint_cutoff_frequency = config["joint_cutoff_frequency"];
     params_.joint_position_variance = config["joint_position_variance"];
-    
+
     // Leg odometry perameters
     params_.mass = config["mass"];
     params_.g = config["g"];
     params_.tau_0 = config["tau_0"];
     params_.tau_1 = config["tau_1"];
-    
+
     // Contact estimation parameters
     params_.estimate_contact_status = config["estimate_contact_status"];
     params_.high_threshold = config["high_threshold"];
@@ -85,7 +85,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
             joint_velocities[key] = value.velocity.value();
         } else {
             joint_velocities[key] = joint_estimators_.at(key).filter(value.position);
-        } 
+        }
     }
 
     // Estimate the base frame attitude
@@ -116,26 +116,28 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         for (const auto& frame : state_.getContactsFrame()) {
             if (params_.estimate_contact && contact_estimators_.empty()) {
                 ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
-                                params_.median_window, params_.mass, params_.g);
+                                   params_.median_window, params_.mass, params_.g);
                 contact_estimators_[frame] = std::move(cd);
             }
             // Transform F/T to base frame
             contact_forces[frame] = params_.R_base_to_force.at(frame) * ft->at(frame).force;
             if (!state_.point_feet_ && ft->at(frame).torque.has_value()) {
-                contact_torques[frame] = params_.R_base_to_torque.at(frame) * ft->at(frame).torque.value();
+                contact_torques[frame] =
+                    params_.R_base_to_torque.at(frame) * ft->at(frame).torque.value();
             }
             if (params_.estimate_contact_status) {
                 contact_estimators_.at(frame).SchmittTrigger(contact_forces.at(frame).z());
-                state_.contacts_status_.at(frame) = contact_estimators_.at(frame).getContactStatus();
+                state_.contacts_status_.at(frame) =
+                    contact_estimators_.at(frame).getContactStatus();
             }
-            den += contact_estimators_.at(frame).getContactForce(); 
+            den += contact_estimators_.at(frame).getContactForce();
         }
         if (params_.estimate_contact && !contact_probabilities.has_value()) {
             for (const auto& frame : state_.getContactsFrame()) {
                 state_.contacts_probability_[frame] =
                     (contact_estimators_.at(frame).getContactForce() + params_.eps) / den;
             }
-        } else if (contact_probabilities){
+        } else if (contact_probabilities) {
             state_.contacts_probability_ = std::move(contact_probabilities.value());
         }
         state_.contact_forces = std::move(contact_forces);
