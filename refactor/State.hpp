@@ -28,7 +28,7 @@ struct ImuMeasurement {
 struct ForceTorqueMeasurement {
     double timestamp{};
     Eigen::Vector3d force{Eigen::Vector3d::Zero()};
-    Eigen::Vector3d torque{Eigen::Vector3d::Zero()};
+    std::optional<Eigen::Vector3d> torque;
 };
 
 
@@ -135,6 +135,9 @@ class State {
     // Feet state: frame_name to contacts pose covariance in the world frame
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_cov_;
     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_cov_;
+
+    std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
+    std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques;
 
     friend class Serow;
     friend class ContactEKF;
