@@ -63,7 +63,7 @@ class Serow {
         Eigen::Vector3d contact_orientation_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d contact_position_slip_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d contact_orientation_slip_cov{Eigen::Vector3d::Zero()};
-        double eps = 0.1;
+        double eps{0.1};
     };
 
     Params params_;
