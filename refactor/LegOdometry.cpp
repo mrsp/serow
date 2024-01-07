@@ -17,14 +17,13 @@ LegOdometry::LegOdometry(
     params_.Tm = 1.0 / freq;
     params_.Tm2 = params_.Tm * params_.Tm;
     params_.Tm3 = (mass * mass * g * g) * params_.Tm2;
-    params_.eps = 0.1;
     params_.g = g;
     for (const auto& [key, value] : feet_position) {
         pivots_[key] = Eigen::Vector3d::Zero();
     }
     feet_position_prev_ = std::move(feet_position);
     feet_orientation_prev_ = std::move(feet_orientation);
-    if (force_torque_offset) {
+    if (force_torque_offset.has_value()) {
         force_torque_offset_ = std::move(force_torque_offset);
     }
 }
@@ -45,7 +44,7 @@ const std::unordered_map<std::string, Eigen::Quaterniond> LegOdometry::getContac
 void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
                              const Eigen::Vector3d& angular_velocity,
                              const Eigen::Vector3d& linear_velocity, Eigen::Vector3d force,
-                             Eigen::Vector3d torque) {
+                             std::optional<Eigen::Vector3d> torque) {
     const Eigen::Matrix3d& force_skew = lie::so3::wedge(force);
     const Eigen::Matrix3d& omega_skew = lie::so3::wedge(R.transpose() * angular_velocity);
     Eigen::Matrix3d A = Eigen::Matrix3d::Zero();
@@ -56,11 +55,11 @@ void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
     b.noalias() = 1.0 / params_.Tm2 * pivots_.at(frame);
     b.noalias() += params_.alpha1 * omega_skew * R.transpose() * linear_velocity;
 
-    if (params_.alpha3 > 0 && force_torque_offset_) {
+    if (params_.alpha3 > 0 && torque.has_value() && force_torque_offset_.has_value()) {
         A.noalias() -= params_.alpha3 / params_.Tm3 * force_skew * force_skew;
-        b.noalias() +=
-            params_.alpha3 / params_.Tm3 *
-            (force_skew * torque - force_skew * force_skew * force_torque_offset_->at(frame));
+        b.noalias() += params_.alpha3 / params_.Tm3 *
+                       (force_skew * torque.value() -
+                        force_skew * force_skew * force_torque_offset_->at(frame));
     }
     pivots_.at(frame).noalias() = A.inverse() * b;
 }
@@ -74,15 +73,6 @@ void LegOdometry::estimate(
     std::unordered_map<std::string, double> contact_probabilities,
     const std::unordered_map<std::string, Eigen::Vector3d>& contact_forces,
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques) {
-    if (contact_probabilities.empty()) {
-        double den = 2.0 * params_.eps;
-        for (const auto& [key, value] : contact_forces) {
-            den += cropGRF(value.z());
-        }
-        for (const auto& [key, value] : contact_forces) {
-            contact_probabilities[key] = (cropGRF(value.z()) + params_.eps) / den;
-        }
-    }
 
     const Eigen::Matrix3d& Rwb = base_orientation.toRotationMatrix();
 
@@ -107,8 +97,14 @@ void LegOdometry::estimate(
             lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) +
             Rwb * base_to_foot_linear_velocities.at(key);
 
-        computeIMP(key, Rwb * value.toRotationMatrix(), foot_angular_velocity, foot_linear_velocity,
-                   contact_forces.at(key), contact_torques->at(key));
+        if (contact_torques.has_value()) {
+            computeIMP(key, Rwb * value.toRotationMatrix(), foot_angular_velocity,
+                       foot_linear_velocity, contact_forces.at(key),
+                       contact_torques.value().at(key));
+        } else {
+            computeIMP(key, Rwb * value.toRotationMatrix(), foot_angular_velocity,
+                       foot_linear_velocity, contact_forces.at(key));
+        }
     }
 
     for (const auto [key, value] : pivots_) {
@@ -143,15 +139,6 @@ void LegOdometry::estimate(
     if (!is_initialized) {
         is_initialized = true;
     }
-}
-
-/** @fn     double cropGRF(double force)
- *  @brief  Crops the measured vertical ground reaction force (GRF) in the margins [0, mass * g]
- *  @param  force Measured GRF
- *  @return  The cropped GRF
- */
-double LegOdometry::cropGRF(double force) const {
-    return std::max(0.0, std::min(force, params_.mass * params_.g));
 }
 
 }  // namespace serow

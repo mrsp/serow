@@ -21,13 +21,14 @@ namespace serow {
 struct JointMeasurement {
     double timestamp{};
     double position{};
+    std::optional<double> velocity{};
 };
 
 class Serow {
    public:
     Serow(std::string config);
     void filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
-                std::unordered_map<std::string, ForceTorqueMeasurement> ft,
+                std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft,
                 std::optional<std::unordered_map<std::string, double>> contact_probabilities);
 
    private:
@@ -42,16 +43,18 @@ class Serow {
         Eigen::Matrix3d R_base_to_gyro{Eigen::Matrix3d::Identity()};
         Eigen::Matrix3d R_base_to_acc{Eigen::Matrix3d::Identity()};
         double joint_rate{};
+        bool estimate_joint_velocity{};
         double joint_cutoff_frequency{};
-        double tau0{};
-        double tau1{};
+        double joint_position_variance{};
+        double tau_0{};
+        double tau_1{};
         bool estimate_contact{};
         std::unordered_map<std::string, Eigen::Matrix3d> R_base_to_force;
         std::unordered_map<std::string, Eigen::Matrix3d> R_base_to_torque;
+        bool estimate_contact_status{};
         double high_threshold{};
         double low_threshold{};
         int median_window{};
-
         Eigen::Vector3d angular_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d angular_velocity_bias_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d linear_acceleration_cov{Eigen::Vector3d::Zero()};
@@ -60,6 +63,7 @@ class Serow {
         Eigen::Vector3d contact_orientation_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d contact_position_slip_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d contact_orientation_slip_cov{Eigen::Vector3d::Zero()};
+        double eps = 0.1;
     };
 
     Params params_;

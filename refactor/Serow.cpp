@@ -20,6 +20,7 @@ Serow::Serow(std::string config_file) {
     bool point_feet = config["point_feet"];
     State state(contacts_frame, point_feet);
     state_ = std::move(state);
+
     // Initialize the attitude estimator
     params_.imu_rate = config["imu_rate"];
     double Kp = config["attitude_estimator_proportional_gain"];
@@ -50,27 +51,41 @@ Serow::Serow(std::string config_file) {
         }
     }
 
+    // Joint parameters
     params_.joint_rate = config["joint_rate"];
+    params_.estimate_joint_velocity = config["estimate_joint_velocity"];
     params_.joint_cutoff_frequency = config["joint_cutoff_frequency"];
-
+    params_.joint_position_variance = config["joint_position_variance"];
+    
+    // Leg odometry perameters
     params_.mass = config["mass"];
     params_.g = config["g"];
-    params_.tau0 = config["tau_0"];
-    params_.tau1 = config["tau_1"];
+    params_.tau_0 = config["tau_0"];
+    params_.tau_1 = config["tau_1"];
+    
+    // Contact estimation parameters
+    params_.estimate_contact_status = config["estimate_contact_status"];
+    params_.high_threshold = config["high_threshold"];
+    params_.low_threshold = config["low_threshold"];
+    params_.median_window = config["median_window"];
 }
 
 void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
-                   std::unordered_map<std::string, ForceTorqueMeasurement> ft,
+                   std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft,
                    std::optional<std::unordered_map<std::string, double>> contact_probabilities) {
     // Estimate the joint velocities
     std::unordered_map<std::string, double> joint_positions;
     std::unordered_map<std::string, double> joint_velocities;
     for (const auto& [key, value] : joints) {
-        if (!joint_estimators_.count(key)) {
+        if (params_.estimate_joint_velocity && !joint_estimators_.count(key)) {
             joint_estimators_[key].init(key, params_.joint_rate, params_.joint_cutoff_frequency);
         }
         joint_positions[key] = value.position;
-        joint_velocities[key] = joint_estimators_.at(key).filter(value.position);
+        if (params_.estimate_joint_velocity && value.velocity.has_value()) {
+            joint_velocities[key] = value.velocity.value();
+        } else {
+            joint_velocities[key] = joint_estimators_.at(key).filter(value.position);
+        } 
     }
 
     // Estimate the base frame attitude
@@ -94,29 +109,44 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
     }
 
-    std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
-    std::unordered_map<std::string, Eigen::Vector3d> contact_torques;
-
-    if (params_.estimate_contact && contact_estimators_.empty()) {
+    if (ft.has_value()) {
+        std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
+        std::unordered_map<std::string, Eigen::Vector3d> contact_torques;
+        double den = 2.0 * params_.eps;
         for (const auto& frame : state_.getContactsFrame()) {
-            ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
-                               params_.median_window);
-            contact_estimators_[frame] = std::move(cd);
+            if (params_.estimate_contact && contact_estimators_.empty()) {
+                ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
+                                params_.median_window, params_.mass, params_.g);
+                contact_estimators_[frame] = std::move(cd);
+            }
+            // Transform F/T to base frame
+            contact_forces[frame] = params_.R_base_to_force.at(frame) * ft->at(frame).force;
+            if (!state_.point_feet_ && ft->at(frame).torque.has_value()) {
+                contact_torques[frame] = params_.R_base_to_torque.at(frame) * ft->at(frame).torque.value();
+            }
+            if (params_.estimate_contact_status) {
+                contact_estimators_.at(frame).SchmittTrigger(contact_forces.at(frame).z());
+                state_.contacts_status_.at(frame) = contact_estimators_.at(frame).getContactStatus();
+            }
+            den += contact_estimators_.at(frame).getContactForce(); 
         }
-    }
-
-    // Transform F/T to base frame
-    for (const auto& frame : state_.getContactsFrame()) {
-        contact_forces[frame] = params_.R_base_to_force.at(frame) * ft.at(frame).force;
-        contact_torques[frame] = params_.R_base_to_torque.at(frame) * ft.at(frame).torque;
-        if (params_.estimate_contact) {
-            contact_estimators_.at(frame).SchmittTrigger(contact_forces.at(frame).z());
-            state_.contacts_status_.at(frame) = contact_estimators_.at(frame).getContactStatus();
+        if (params_.estimate_contact && !contact_probabilities.has_value()) {
+            for (const auto& frame : state_.getContactsFrame()) {
+                state_.contacts_probability_[frame] =
+                    (contact_estimators_.at(frame).getContactForce() + params_.eps) / den;
+            }
+        } else if (contact_probabilities){
+            state_.contacts_probability_ = std::move(contact_probabilities.value());
+        }
+        state_.contact_forces = std::move(contact_forces);
+        if (!contact_torques.empty()) {
+            state_.contact_torques = std::move(contact_torques);
         }
     }
 
     // Update the Kinematic Structure
-    kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities, 0.1);
+    kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities,
+                                            params_.joint_position_variance);
 
     // Get the CoM w.r.t the base frame
     Eigen::Vector3d base_to_com_position = kinematic_estimator_->comPosition();
@@ -135,25 +165,26 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
             kinematic_estimator_->getAngularVelocity(contact_frame);
         base_to_foot_linear_velocities[contact_frame] =
             kinematic_estimator_->getLinearVelocity(contact_frame);
-        contact_forces[contact_frame] = ft.at(contact_frame).force;
-        contact_torques[contact_frame] = ft.at(contact_frame).torque;
     }
 
     // Compute the leg odometry and the contact points
     if (!leg_odometry_) {
-        // Initialize the state
         state_.base_orientation_ = attitude_estimator_->getQ();
         state_.com_position_ = base_to_com_position;
         leg_odometry_ = std::make_unique<LegOdometry>(
-            base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau0,
-            params_.tau1, params_.joint_rate, params_.g);
+            base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
+            params_.tau_1, params_.joint_rate, params_.g);
         base_estimator_.init(state_, params_.imu_rate);
+    }
+    if (state_.contacts_probability_.empty()) {
+        return;
     }
     leg_odometry_->estimate(
         attitude_estimator_->getQ(),
         attitude_estimator_->getGyro() - attitude_estimator_->getR() * params_.bias_gyro,
         base_to_foot_orientations, base_to_foot_positions, base_to_foot_linear_velocities,
-        base_to_foot_angular_velocities, *contact_probabilities, contact_forces, contact_torques);
+        base_to_foot_angular_velocities, state_.contacts_probability_, state_.contact_forces,
+        state_.contact_torques);
 
     // Create the measurements
     imu.angular_velocity_cov = params_.angular_velocity_cov.asDiagonal();
@@ -168,7 +199,6 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
     kin.contacts_orientation = leg_odometry_->getContactOrientations();
     kin.position_cov = params_.contact_position_cov.asDiagonal();
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
-    
     if (!state_.point_feet_) {
         kin.orientation_cov = params_.contact_orientation_cov.asDiagonal();
         kin.orientation_slip_cov = params_.contact_orientation_slip_cov.asDiagonal();
@@ -183,11 +213,11 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
                            kinematic_estimator_->getAngularVelocityNoise(frame).transpose());
         }
     }
+
     // Call the Base Estimator predict step utilizing imu and contact status measurements
     state_ = base_estimator_.predict(state_, imu, kin);
     // Call the Base Estimator update step by employing relative contact pose measurements
     state_ = base_estimator_.update(state_, kin);
-
 }
 
 }  // namespace serow

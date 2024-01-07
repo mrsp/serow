@@ -26,7 +26,6 @@ class LegOdometry {
         double Tm{};
         double Tm2{};
         double Tm3{};
-        double eps{};
         double mass{};
         double g{};
         double freq{};
@@ -37,14 +36,7 @@ class LegOdometry {
    private:
     void computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
                     const Eigen::Vector3d& angular_velocity, const Eigen::Vector3d& linear_velocity,
-                    Eigen::Vector3d force, Eigen::Vector3d torque);
-
-    /** @fn     double cropGRF(double force)
-     *  @brief  Crops the measured vertical ground reaction force (GRF) in the margins [0, mass * g]
-     *  @param  force Measured GRF
-     *  @return  The cropped GRF
-     */
-    double cropGRF(double force) const;
+                    Eigen::Vector3d force, std::optional<Eigen::Vector3d> torque = std::nullopt);
 
     bool is_initialized{};
     Eigen::Vector3d base_position_ = Eigen::Vector3d::Zero();
