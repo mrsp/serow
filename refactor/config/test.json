@@ -20,10 +20,10 @@
     "max_imu_calibration_cycles": 1000,
     "bias_acc": [0, 0, 0],
     "bias_gyro": [0, 0, 0],
-    "R_base_to_force": {
+    "R_foot_to_force": {
         "0": [1, 0, 0, 0, 1, 0, 0, 0, 1]
     },
-    "R_base_to_torque": {
+    "R_foot_to_torque": {
         "0": [1, 0, 0, 0, 1, 0, 0, 0, 1]
     }, 
     "attitude_estimator_proportional_gain": 0.5,
@@ -39,5 +39,10 @@
     "contact_position_covariance": [1e-6, 1e-6, 1e-6],
     "contact_orientation_covariance": [1e-3, 1e-3, 1e-3],
     "contact_position_slip_covariance": [1e-4, 1e-4, 1e-4],
-    "contact_orientation_slip_covariance": [1e-3, 1e-3, 1e-3]
+    "contact_orientation_slip_covariance": [1e-3, 1e-3, 1e-3],
+    "com_position_process_covariance": [1e-6, 1e-6, 1e-6],
+    "com_linear_velocity_process_covariance": [1e-4, 1e-4, 1e-4],
+    "external_forces_process_covariance": [1e-2, 1e-2, 1e-2],
+    "com_position_covariance": [1e-6, 1e-6, 1e-6],
+    "com_linear_acceleration_covariance": [1e-3, 1e-3, 1e-3]
 }
