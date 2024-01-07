@@ -49,8 +49,8 @@ class Serow {
         double tau_0{};
         double tau_1{};
         bool estimate_contact{};
-        std::unordered_map<std::string, Eigen::Matrix3d> R_base_to_force;
-        std::unordered_map<std::string, Eigen::Matrix3d> R_base_to_torque;
+        std::unordered_map<std::string, Eigen::Matrix3d> R_foot_to_force;
+        std::unordered_map<std::string, Eigen::Matrix3d> R_foot_to_torque;
         bool estimate_contact_status{};
         double high_threshold{};
         double low_threshold{};
@@ -63,6 +63,11 @@ class Serow {
         Eigen::Vector3d contact_orientation_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d contact_position_slip_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d contact_orientation_slip_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d com_position_process_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d com_linear_velocity_process_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d external_forces_process_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d com_position_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d com_linear_acceleration_cov{Eigen::Vector3d::Zero()};
         double eps{0.1};
     };
 

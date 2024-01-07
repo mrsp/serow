@@ -23,7 +23,7 @@ void CoMEKF::init(double mass, double rate, double I_xx, double I_yy) {
 State CoMEKF::predict(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf) {
     State predicted_state = state;
     const auto& [Ac, Lc] =
-        computePredictionJacobians(state, grf.COP, grf.force, kin.com_angular_momentum);
+        computePredictionJacobians(state, grf.cop, grf.force, kin.com_angular_momentum);
 
     // Discretization
     Eigen::Matrix<double, 9, 9> Qd;
@@ -38,7 +38,7 @@ State CoMEKF::predict(State state, KinematicMeasurement kin, GroundReactionForce
 
     // Propagate the mean estimate, forward euler integration of dynamics f
     Eigen::Matrix<double, 9, 1> f =
-        computeContinuousDynamics(state, grf.COP, grf.force, kin.com_angular_momentum);
+        computeContinuousDynamics(state, grf.cop, grf.force, kin.com_angular_momentum);
     predicted_state.com_position_ += f.head<3>() * nominal_dt_;
     predicted_state.com_linear_velocity_ += f.segment<3>(3) * nominal_dt_;
     predicted_state.external_forces_ += f.tail<3>() * nominal_dt_;
@@ -50,7 +50,7 @@ State CoMEKF::update(State state, KinematicMeasurement kin, GroundReactionForceM
     State updated_state = updateWithKinematics(state, kin.com_position, kin.com_position_cov);
     updated_state =
         updateWithImu(state, kin.com_position, imu.linear_acceleration, imu.angular_velocity,
-                      imu.angular_acceleration, grf.COP, grf.force, kin.com_linear_acceleration_cov,
+                      imu.angular_acceleration, grf.cop, grf.force, kin.com_linear_acceleration_cov,
                       kin.com_angular_momentum);
     return updated_state;
 }
