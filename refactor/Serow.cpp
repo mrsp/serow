@@ -9,6 +9,8 @@
 using json = nlohmann::json;
 
 namespace serow {
+
+
 Serow::Serow(std::string config_file) {
     auto config = json::parse(std::ifstream(config_file));
 
@@ -36,6 +38,8 @@ Serow::Serow(std::string config_file) {
     } else {
         params_.max_imu_calibration_cycles = config["max_imu_calibration_cycles"];
     }
+
+    params_.force_torque_rate = config["force_torque_rate"];
     for (size_t i = 0; i < 3; i++) {
         for (size_t j = 0; j < 3; j++) {
             params_.R_base_to_gyro(i, j) = config["R_base_to_gyro"][3 * i + j];
@@ -130,7 +134,6 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
     // Update the Kinematic Structure
     kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities,
                                             params_.joint_position_variance);
-
     // Get the CoM w.r.t the base frame
     Eigen::Vector3d base_to_com_position = kinematic_estimator_->comPosition();
 
@@ -152,30 +155,32 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
 
     if (ft.has_value()) {
         std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
-        std::unordered_map<std::string, Eigen::Vector3d> contact_torques;
+        std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques;
         double den = 2.0 * params_.eps;
         for (const auto& frame : state_.getContactsFrame()) {
-            if (params_.estimate_contact && contact_estimators_.empty()) {
+            if (params_.estimate_contact_status && !contact_estimators_.count(frame)) {
                 ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
-                                   params_.median_window, params_.mass, params_.g);
+                                   params_.mass, params_.g, params_.median_window);
                 contact_estimators_[frame] = std::move(cd);
             }
+
             // Transform F/T to base frame
             contact_forces[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
                                     params_.R_foot_to_force.at(frame) * ft->at(frame).force;
             if (!state_.point_feet_ && ft->at(frame).torque.has_value()) {
-                contact_torques[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
+                contact_torques.value()[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
                                          params_.R_foot_to_torque.at(frame) *
                                          ft->at(frame).torque.value();
             }
+
             if (params_.estimate_contact_status) {
                 contact_estimators_.at(frame).SchmittTrigger(contact_forces.at(frame).z());
-                state_.contacts_status_.at(frame) =
-                    contact_estimators_.at(frame).getContactStatus();
+                state_.contacts_status_[frame] =  contact_estimators_.at(frame).getContactStatus();
                 den += contact_estimators_.at(frame).getContactForce();
             }
         }
-        if (params_.estimate_contact && !contact_probabilities.has_value()) {
+
+        if (params_.estimate_contact_status && !contact_probabilities.has_value()) {
             for (const auto& frame : state_.getContactsFrame()) {
                 state_.contacts_probability_[frame] =
                     (contact_estimators_.at(frame).getContactForce() + params_.eps) / den;
@@ -183,16 +188,16 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         } else if (contact_probabilities) {
             state_.contacts_probability_ = std::move(contact_probabilities.value());
         }
+        state_.contact_forces = std::move(contact_forces);
 
-        if (!state_.point_feet_ && !contact_torques.empty()) {
+        if (!state_.point_feet_ && !contact_torques.has_value()) {
             for (const auto& frame : state_.getContactsFrame()) {
-                if (state_.contacts_probability_[frame] > 0.0) {
+                if (state_.contacts_probability_.at(frame) > 0.0) {
                     ft->at(frame).cop = Eigen::Vector3d(
-                        -contact_torques[frame].y() / contact_forces[frame].z(),
-                        contact_torques[frame].x() / contact_forces[frame].z(), 0.0);
+                        -contact_torques.value().at(frame).y() / contact_forces.at(frame).z(),
+                        contact_torques.value().at(frame).x() / contact_forces.at(frame).z(), 0.0);
                 }
             }
-            state_.contact_forces = std::move(contact_forces);
             state_.contact_torques = std::move(contact_torques);
         }
     }
@@ -205,16 +210,20 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
             base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
             params_.tau_1, params_.joint_rate, params_.g);
         base_estimator_.init(state_, params_.imu_rate);
+        com_estimator_.init(params_.mass, params_.force_torque_rate, 0.0, 0.0);
     }
     if (state_.contacts_probability_.empty()) {
         return;
     }
+    std::cout<<"Leg odometry init"<<std::endl;
+
     leg_odometry_->estimate(
         attitude_estimator_->getQ(),
         attitude_estimator_->getGyro() - attitude_estimator_->getR() * params_.bias_gyro,
         base_to_foot_orientations, base_to_foot_positions, base_to_foot_linear_velocities,
         base_to_foot_angular_velocities, state_.contacts_probability_, state_.contact_forces,
         state_.contact_torques);
+    std::cout<<"Leg odometry ran"<<std::endl;
 
     // Create the base estimation measurements
     imu.angular_velocity_cov = params_.angular_velocity_cov.asDiagonal();
@@ -248,6 +257,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
     state_ = base_estimator_.predict(state_, imu, kin);
     // Call the base estimator update step by employing relative contact pose measurements
     state_ = base_estimator_.update(state_, kin);
+    std::cout<<"Base estimator ran"<<std::endl;
 
     if (ft) {
         // Create the CoM estimation measurements
@@ -271,8 +281,12 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         // Call the CoM estimator predict step utilizing ground reaction measurements
         state_ = com_estimator_.predict(state_, kin, grf);
         // Call the CoM estimator update step by employing kinematic and imu measurements
-        state_ = com_estimator_.update(state_, kin, grf, imu);
+        state_ = com_estimator_.updateWithImu(state_, kin, grf, imu);
     }
+    // Call the CoM estimator update step by employing kinematic measurements
+    state_ = com_estimator_.updateWithKinematics(state_, kin);
+    std::cout<<"CoM estimator ran"<<std::endl;
 }
+
 
 }  // namespace serow

@@ -27,10 +27,13 @@ struct JointMeasurement {
 class Serow {
    public:
     Serow(std::string config);
-    void filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
-                std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft,
-                std::optional<std::unordered_map<std::string, double>> contact_probabilities);
 
+    void filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
+                std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
+                std::optional<std::unordered_map<std::string, double>> contact_probabilities = std::nullopt);
+    
+    State getState() { return state_; }
+    
    private:
     struct Params {
         double mass{};
@@ -48,7 +51,7 @@ class Serow {
         double joint_position_variance{};
         double tau_0{};
         double tau_1{};
-        bool estimate_contact{};
+        double force_torque_rate{};
         std::unordered_map<std::string, Eigen::Matrix3d> R_foot_to_force;
         std::unordered_map<std::string, Eigen::Matrix3d> R_foot_to_torque;
         bool estimate_contact_status{};

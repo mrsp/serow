@@ -32,13 +32,11 @@ struct ForceTorqueMeasurement {
     std::optional<Eigen::Vector3d> torque;
 };
 
-
 struct GroundReactionForceMeasurement {
     double timestamp{};
     Eigen::Vector3d force{Eigen::Vector3d::Zero()};
     Eigen::Vector3d cop{Eigen::Vector3d::Zero()};
 };
-
 
 struct KinematicMeasurement {
     double timestamp{};
