@@ -142,7 +142,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
                                             params_.joint_position_variance);
     // Get the CoM w.r.t the base frame
     Eigen::Vector3d base_to_com_position = kinematic_estimator_->comPosition();
-
+    
     // Get the leg end-effector kinematics w.r.t the base frame
     std::unordered_map<std::string, Eigen::Quaterniond> base_to_foot_orientations;
     std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_positions;
@@ -163,6 +163,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
         std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques;
         double den = 2.0 * params_.eps;
+
         for (const auto& frame : state_.getContactsFrame()) {
             if (params_.estimate_contact_status && !contact_estimators_.count(frame)) {
                 ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
