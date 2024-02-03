@@ -83,6 +83,7 @@ class Serow {
     std::unique_ptr<Mahony> attitude_estimator_;
     std::unique_ptr<RobotKinematics> kinematic_estimator_;
     std::unique_ptr<LegOdometry> leg_odometry_;
+    bool is_initialized{};
 };
 
 }  // namespace serow

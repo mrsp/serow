@@ -16,11 +16,7 @@ TEST(Operation, Development) {
     imu.timestamp = 0.01;
     imu.linear_acceleration = Eigen::Vector3d(0.1, -0.1, 0.05) - g;
     imu.angular_velocity = Eigen::Vector3d(-0.1, 0.1, 0.0);
-    imu.angular_velocity_cov = Eigen::Matrix3d::Identity() * 1e-4;
-    imu.linear_acceleration_cov = Eigen::Matrix3d::Identity() * 1e-3;
-    imu.angular_velocity_bias_cov = Eigen::Matrix3d::Identity() * 1e-5;
-    imu.linear_acceleration_bias_cov = Eigen::Matrix3d::Identity() * 5e-4;
-    
+
     std::unordered_map<std::string, serow::JointMeasurement> joints;
     serow::JointMeasurement jm{.timestamp = 0.01, .position = 0.0};
     joints.insert({"HeadYaw", jm});
@@ -50,16 +46,12 @@ TEST(Operation, Development) {
     joints.insert({"RWristYaw", jm});
     joints.insert({"RHand", jm});
 
-    ForceTorqueMeasurement ft{
-        .timestamp = 0.01,
-        .force = Eigen::Vector3d(0.0, 0.0, 40.0), 
-        .cop = Eigen::Vector3d(0.0, 0.0, 0.0)};
+    ForceTorqueMeasurement ft{.timestamp = 0.01, .force = Eigen::Vector3d(0.0, 0.0, 40.0)};
     std::unordered_map<std::string, ForceTorqueMeasurement> force_torque;
-    force_torque.insert({"l_ankle", ft}); 
-    force_torque.insert({"r_ankle", ft});   
- 
+    force_torque.insert({"l_ankle", ft});
+    force_torque.insert({"r_ankle", ft});
+
     SERoW.filter(imu, joints, force_torque);
-    std::cout<<"g"<<std::endl;
     State state = SERoW.getState();
 
     std::cout << "Base position " << state.base_position_.transpose() << std::endl;
@@ -70,8 +62,8 @@ TEST(Operation, Development) {
               << std::endl;
     std::cout << "Left contact orientation " << state.contacts_orientation_->at("l_ankle")
               << std::endl;
-    std::cout << "Right contact position after update "
-              << state.contacts_position_.at("r_ankle").transpose() << std::endl;
-    std::cout << "Right contact orientation after update "
-              << state.contacts_orientation_->at("r_ankle") << std::endl;
+    std::cout << "Right contact position " << state.contacts_position_.at("r_ankle").transpose()
+              << std::endl;
+    std::cout << "Right contact orientation " << state.contacts_orientation_->at("r_ankle")
+              << std::endl;
 }
