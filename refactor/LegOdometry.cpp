@@ -46,21 +46,16 @@ void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
                              const Eigen::Vector3d& angular_velocity,
                              const Eigen::Vector3d& linear_velocity, Eigen::Vector3d force,
                              std::optional<Eigen::Vector3d> torque) {
-    std::cout<<"4"<<std::endl;
     const Eigen::Matrix3d& force_skew = lie::so3::wedge(force);
     const Eigen::Matrix3d& omega_skew = lie::so3::wedge(R.transpose() * angular_velocity);
-    std::cout<<"4"<<std::endl;
-
 
     Eigen::Matrix3d A = Eigen::Matrix3d::Zero();
     Eigen::Vector3d b = Eigen::Vector3d::Zero();
-    std::cout<<"4"<<std::endl;
 
     A.noalias() = 1.0 / params_.Tm2 * Eigen::Matrix3d::Identity();
     A.noalias() -= params_.alpha1 * omega_skew * omega_skew;
     b.noalias() = 1.0 / params_.Tm2 * pivots_.at(frame);
     b.noalias() += params_.alpha1 * omega_skew * R.transpose() * linear_velocity;
-    std::cout<<"4"<<std::endl;
 
     if (params_.alpha3 > 0 && torque.has_value() && force_torque_offset_.has_value()) {
         A.noalias() -= params_.alpha3 / params_.Tm3 * force_skew * force_skew;
@@ -105,16 +100,12 @@ void LegOdometry::estimate(
             Rwb * base_to_foot_linear_velocities.at(key);
 
         if (contact_torques.has_value()) {
-            std::cout<<"0"<<std::endl;
             computeIMP(key, Rwb * value.toRotationMatrix(), foot_angular_velocity,
                        foot_linear_velocity, contact_forces.at(key),
                        contact_torques.value().at(key));
-            std::cout<<"0"<<std::endl;
         } else {
-            std::cout<<"1 "<<contact_forces.at(key)<<std::endl;
             computeIMP(key, Rwb * value.toRotationMatrix(), foot_angular_velocity,
                        foot_linear_velocity, contact_forces.at(key));
-            std::cout<<"1"<<std::endl;
         }
     }
 
@@ -122,7 +113,6 @@ void LegOdometry::estimate(
         feet_position_prev_.at(key) +=
             -Rwb * base_to_foot_orientations.at(key).toRotationMatrix() * value +
             feet_orientation_prev_.at(key).toRotationMatrix() * value;
-        std::cout<<"3"<<std::endl;
     }
 
     std::unordered_map<std::string, Eigen::Vector3d> contact_contributions;
