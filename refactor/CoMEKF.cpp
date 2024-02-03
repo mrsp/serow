@@ -26,7 +26,7 @@ State CoMEKF::predict(State state, KinematicMeasurement kin, GroundReactionForce
         computePredictionJacobians(state, grf.cop, grf.force, kin.com_angular_momentum);
 
     // Discretization
-    Eigen::Matrix<double, 9, 9> Qd;
+    Eigen::Matrix<double, 9, 9> Qd = Eigen::Matrix<double, 9, 9>::Zero();
     Qd.block<3, 3>(0, 0) = kin.com_position_process_cov;
     Qd.block<3, 3>(3, 3) = kin.com_linear_velocity_process_cov;
     Qd.block<3, 3>(6, 6) = kin.external_forces_process_cov;
@@ -114,16 +114,15 @@ State CoMEKF::updateWithCoMAcceleration(State state, Eigen::Vector3d Acc, Eigen:
     State updated_state = state;
     // Approximate the CoM Acceleration
     Acc += Gyro.cross(Gyro.cross(Pos)) + Gyrodot.cross(Pos);
-
     double den = state.com_position_.z() - COP.z();
     Eigen::Vector3d z = Eigen::Vector3d::Zero();
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();
     z.z() = Acc(2) - ((fN.z() + state.external_forces_.z()) / mass_ - g_);
     H(0, 0) = (fN.z()) / (mass_ * den);
     H(1, 1) = (fN.z()) / (mass_ * den);
-    H(0, 6) = 1.000 / mass_;
-    H(1, 7) = 1.000 / mass_;
-    H(2, 8) = 1.000 / mass_;
+    H(0, 6) = 1.0 / mass_;
+    H(1, 7) = 1.0 / mass_;
+    H(2, 8) = 1.0 / mass_;
 
     if (Ldot.has_value()) {
         z.x() = Acc(0) - ((state.com_position_.x() - COP.x()) / (mass_ * den) * (fN.z()) +
@@ -146,8 +145,7 @@ State CoMEKF::updateWithCoMAcceleration(State state, Eigen::Vector3d Acc, Eigen:
 
         H(1, 2) = -(fN.z()) * (state.com_position_.y() - COP.y()) / (mass_ * den * den);
     }
-
-    Eigen::Matrix3d R = com_linear_acceleration_cov;
+    const Eigen::Matrix3d& R = com_linear_acceleration_cov;
     Eigen::Matrix3d s = R + H * P_ * H.transpose();
     Eigen::Matrix<double, 9, 3> K = P_ * H.transpose() * s.inverse();
     Eigen::Matrix<double, 9, 1> dx = K * z;

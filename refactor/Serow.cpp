@@ -291,13 +291,12 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         double den = 0;
         for (const auto& frame : state_.getContactsFrame()) {
             grf.timestamp = ft->at(frame).timestamp;
-            grf.force += state_.getBasePose() * ft->at(frame).force;
-            grf.cop +=
-                state_.contacts_probability_.at(frame) * (state_.getBasePose() * ft->at(frame).cop);
+            grf.force += state_.getContactPose(frame)->linear() * ft->at(frame).force;
+            grf.cop += state_.contacts_probability_.at(frame) *
+                       (*state_.getContactPose(frame) * ft->at(frame).cop);
             den += state_.contacts_probability_.at(frame);
         }
         grf.cop /= den;
-
         // Call the CoM estimator predict step utilizing ground reaction measurements
         state_ = com_estimator_.predict(state_, kin, grf);
         // Call the CoM estimator update step by employing kinematic and imu measurements
