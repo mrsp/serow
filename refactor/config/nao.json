@@ -2,7 +2,8 @@
     "base_frame": "base_link",
     "point_feet": false,
     "foot_frames": {
-        "0": "left_foot"
+        "0": "l_ankle",
+        "1": "r_ankle"
     },
     "model_path": "../urdf/nao.urdf",
     "mass": 5.14,
@@ -16,15 +17,18 @@
     "imu_rate": 100,
     "R_base_to_gyro": [1, 0, 0, 0, 1, 0, 0, 0, 1],
     "R_base_to_acc": [1, 0, 0, 0, 1, 0, 0, 0, 1],
-    "calibrate_imu": true,
+    "calibrate_imu": false,
     "max_imu_calibration_cycles": 1000,
     "bias_acc": [0, 0, 0],
     "bias_gyro": [0, 0, 0],
+    "force_torque_rate": 100,
     "R_foot_to_force": {
-        "0": [1, 0, 0, 0, 1, 0, 0, 0, 1]
+        "0": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+        "1": [1, 0, 0, 0, 1, 0, 0, 0, 1]
     },
     "R_foot_to_torque": {
-        "0": [1, 0, 0, 0, 1, 0, 0, 0, 1]
+        "0": [1, 0, 0, 0, 1, 0, 0, 0, 1],
+        "1": [1, 0, 0, 0, 1, 0, 0, 0, 1]
     }, 
     "attitude_estimator_proportional_gain": 0.5,
     "attitude_estimator_integral_gain": 0,

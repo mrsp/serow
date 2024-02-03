@@ -17,7 +17,7 @@ void CoMEKF::init(double mass, double rate, double I_xx, double I_yy) {
     I_xx_ = I_xx;
     I_yy_ = I_yy;
     g_ = 9.81;
-    std::cout << "Nonlinear CoM Estimator Initialized!" << std::endl;
+    std::cout << "Nonlinear CoM Estimator Initialized Successfully" << std::endl;
 }
 
 State CoMEKF::predict(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf) {
@@ -45,14 +45,16 @@ State CoMEKF::predict(State state, KinematicMeasurement kin, GroundReactionForce
     return predicted_state;
 }
 
-State CoMEKF::update(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf,
-                     ImuMeasurement imu) {
-    State updated_state = updateWithKinematics(state, kin.com_position, kin.com_position_cov);
-    updated_state =
-        updateWithImu(state, kin.com_position, imu.linear_acceleration, imu.angular_velocity,
-                      imu.angular_acceleration, grf.cop, grf.force, kin.com_linear_acceleration_cov,
-                      kin.com_angular_momentum);
-    return updated_state;
+State CoMEKF::updateWithKinematics(State state, KinematicMeasurement kin) {
+    return updateWithCoMPosition(state, kin.com_position, kin.com_position_cov);
+}
+
+State CoMEKF::updateWithImu(State state, KinematicMeasurement kin,
+                            GroundReactionForceMeasurement grf, ImuMeasurement imu) {
+    return updateWithCoMAcceleration(state, kin.com_position, imu.linear_acceleration,
+                                     imu.angular_velocity, imu.angular_acceleration, grf.cop,
+                                     grf.force, kin.com_linear_acceleration_cov,
+                                     kin.com_angular_momentum);
 }
 
 Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(State state, Eigen::Vector3d COP,
@@ -104,10 +106,11 @@ CoMEKF::computePredictionJacobians(State state, Eigen::Vector3d COP, Eigen::Vect
     return std::make_tuple(Ac, Lc);
 }
 
-State CoMEKF::updateWithImu(State state, Eigen::Vector3d Acc, Eigen::Vector3d Pos,
-                            Eigen::Vector3d Gyro, Eigen::Vector3d Gyrodot, Eigen::Vector3d COP,
-                            Eigen::Vector3d fN, Eigen::Matrix3d com_linear_acceleration_cov,
-                            std::optional<Eigen::Vector3d> Ldot) {
+State CoMEKF::updateWithCoMAcceleration(State state, Eigen::Vector3d Acc, Eigen::Vector3d Pos,
+                                        Eigen::Vector3d Gyro, Eigen::Vector3d Gyrodot,
+                                        Eigen::Vector3d COP, Eigen::Vector3d fN,
+                                        Eigen::Matrix3d com_linear_acceleration_cov,
+                                        std::optional<Eigen::Vector3d> Ldot) {
     State updated_state = state;
     // Approximate the CoM Acceleration
     Acc += Gyro.cross(Gyro.cross(Pos)) + Gyrodot.cross(Pos);
@@ -155,8 +158,8 @@ State CoMEKF::updateWithImu(State state, Eigen::Vector3d Acc, Eigen::Vector3d Po
     return updated_state;
 }
 
-State CoMEKF::updateWithKinematics(State state, Eigen::Vector3d com_position,
-                                   Eigen::Matrix3d com_position_cov) {
+State CoMEKF::updateWithCoMPosition(State state, Eigen::Vector3d com_position,
+                                    Eigen::Matrix3d com_position_cov) {
     State updated_state = state;
     Eigen::Vector3d z = com_position - state.com_position_;
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();

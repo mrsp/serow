@@ -9,33 +9,9 @@
 using json = nlohmann::json;
 
 TEST(Operation, Development) {
-    std::unordered_set<std::string> contacts_frame;
-    serow::Serow SERoW("../config/test.json");
-    std::ifstream f("../config/test.json");
-    json data = json::parse(f);
-    for(int i = 0; i < data["foot_frames"].size(); i++){
-        contacts_frame.insert({data["foot_frames"][std::to_string(i)]});
-    }
-    std::string model_path = data["model_path"];
-    bool point_feet = data["point_feet"];
+    serow::Serow SERoW("../config/nao.json");
 
-    State state(contacts_frame, point_feet);
-    serow::RobotKinematics kinematics(model_path);
-
-    state.contacts_position_.insert({"left_foot", Eigen::Vector3d(0.1, 0.5, -0.5)});
-    std::unordered_map<std::string, Eigen::Quaterniond> lo{
-        {"left_foot", Eigen::Quaterniond::Identity()}};
-    std::unordered_map<std::string, Eigen::Matrix3d> lo_cov{
-        {"left_foot", Eigen::Matrix3d::Identity() * 1e-6}};
-
-    state.contacts_orientation_.emplace(lo);
-    state.contacts_status_.insert({"left_foot", true});
-
-    ContactEKF base_ekf;
     Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
-    double imu_rate = 1000;
-    base_ekf.init(state, imu_rate);
-
     ImuMeasurement imu;
     imu.timestamp = 0.01;
     imu.linear_acceleration = Eigen::Vector3d(0.1, -0.1, 0.05) - g;
@@ -44,35 +20,58 @@ TEST(Operation, Development) {
     imu.linear_acceleration_cov = Eigen::Matrix3d::Identity() * 1e-3;
     imu.angular_velocity_bias_cov = Eigen::Matrix3d::Identity() * 1e-5;
     imu.linear_acceleration_bias_cov = Eigen::Matrix3d::Identity() * 5e-4;
+    
+    std::unordered_map<std::string, serow::JointMeasurement> joints;
+    serow::JointMeasurement jm{.timestamp = 0.01, .position = 0.0};
+    joints.insert({"HeadYaw", jm});
+    joints.insert({"HeadPitch", jm});
+    joints.insert({"LHipYawPitch", jm});
+    joints.insert({"LHipRoll", jm});
+    joints.insert({"LHipPitch", jm});
+    joints.insert({"LKneePitch", jm});
+    joints.insert({"LAnklePitch", jm});
+    joints.insert({"LAnkleRoll", jm});
+    joints.insert({"LShoulderPitch", jm});
+    joints.insert({"LShoulderRoll", jm});
+    joints.insert({"LElbowYaw", jm});
+    joints.insert({"LElbowRoll", jm});
+    joints.insert({"LWristYaw", jm});
+    joints.insert({"LHand", jm});
+    joints.insert({"RHipYawPitch", jm});
+    joints.insert({"RHipRoll", jm});
+    joints.insert({"RHipPitch", jm});
+    joints.insert({"RKneePitch", jm});
+    joints.insert({"RAnklePitch", jm});
+    joints.insert({"RAnkleRoll", jm});
+    joints.insert({"RShoulderPitch", jm});
+    joints.insert({"RShoulderRoll", jm});
+    joints.insert({"RElbowYaw", jm});
+    joints.insert({"RElbowRoll", jm});
+    joints.insert({"RWristYaw", jm});
+    joints.insert({"RHand", jm});
 
-    KinematicMeasurement kin;
-    kin.timestamp = 0.1;
-    kin.contacts_position.insert({"left_foot", Eigen::Vector3d(0.1, 0.5, -0.5)});
-    kin.contacts_orientation.emplace(lo);
-    kin.contacts_status.insert({"left_foot", true});
-    kin.contacts_probability.insert({"left_foot", 1.0});
-    kin.contacts_position_noise.insert({"left_foot", Eigen::Matrix3d::Identity() * 1e-6});
-    kin.contacts_orientation_noise.emplace(lo_cov);
-    kin.position_cov = Eigen::Matrix3d::Identity() * 1e-6;
-    kin.orientation_cov = Eigen::Matrix3d::Identity() * 1e-6;
-    kin.position_slip_cov = Eigen::Matrix3d::Identity() * 1e-6;
-    kin.orientation_slip_cov = Eigen::Matrix3d::Identity() * 1e-3;
+    ForceTorqueMeasurement ft{
+        .timestamp = 0.01,
+        .force = Eigen::Vector3d(0.0, 0.0, 40.0), 
+        .cop = Eigen::Vector3d(0.0, 0.0, 0.0)};
+    std::unordered_map<std::string, ForceTorqueMeasurement> force_torque;
+    force_torque.insert({"l_ankle", ft}); 
+    force_torque.insert({"r_ankle", ft});   
+ 
+    SERoW.filter(imu, joints, force_torque);
+    std::cout<<"g"<<std::endl;
+    State state = SERoW.getState();
 
-    State predicted_state = base_ekf.predict(state, imu, kin);
-    std::cout << "Base position after predict " << predicted_state.base_position_.transpose()
+    std::cout << "Base position " << state.base_position_.transpose() << std::endl;
+    std::cout << "Base velocity " << state.base_linear_velocity_.transpose() << std::endl;
+    std::cout << "Base orientation " << state.base_orientation_ << std::endl;
+    std::cout << "CoM position " << state.com_position_.transpose() << std::endl;
+    std::cout << "Left contact position " << state.contacts_position_.at("l_ankle").transpose()
               << std::endl;
-    std::cout << "Base velocity after predict " << predicted_state.base_linear_velocity_.transpose()
+    std::cout << "Left contact orientation " << state.contacts_orientation_->at("l_ankle")
               << std::endl;
-    std::cout << "Base orientation after predict " << predicted_state.base_orientation_
-              << std::endl;
-    std::cout << "Left contact position after predict "
-              << predicted_state.contacts_position_.at("left_foot").transpose() << std::endl;
-    std::cout << "Left contact orientation after predict "
-              << predicted_state.contacts_orientation_->at("left_foot") << std::endl;
-    State updated_state = base_ekf.update(predicted_state, kin);
-    std::cout << "Left contact position after update "
-              << updated_state.contacts_position_.at("left_foot").transpose() << std::endl;
-    std::cout << "Left contact orientation after update "
-              << updated_state.contacts_orientation_->at("left_foot") << std::endl;
-
+    std::cout << "Right contact position after update "
+              << state.contacts_position_.at("r_ankle").transpose() << std::endl;
+    std::cout << "Right contact orientation after update "
+              << state.contacts_orientation_->at("r_ankle") << std::endl;
 }

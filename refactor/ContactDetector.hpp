@@ -24,7 +24,7 @@ class ContactDetector {
         high_threshold_ = high_threshold;
         low_threshold_ = low_threshold;
         mass_ = mass;
-        g = g_;
+        g_ = g;
         mdf_ = MediatorNew(median_window);
     }
 
@@ -35,8 +35,10 @@ class ContactDetector {
      *  @param force normal ground reaction force
      */
     void SchmittTrigger(double contact_force) {
-        MediatorInsert(mdf_, cropContactForce(contact_force));
-        contact_force_ = MediatorMedian(mdf_);
+        // MediatorInsert(mdf_, cropContactForce(contact_force));
+        // contact_force_ = MediatorMedian(mdf_);
+        contact_force_ = cropContactForce(contact_force);
+
         if (contact_status_ == 0) {
             if (contact_force_ > high_threshold_) {
                 contact_status_ = 1;
