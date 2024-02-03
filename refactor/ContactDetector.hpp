@@ -17,7 +17,7 @@ class ContactDetector {
      *   @brief initializes the contact estimation with a Schmitt-Trigger
      */
     ContactDetector(std::string contact_frame, double high_threshold, double low_threshold,
-                    double mass, double g, int median_window = 10) {
+                    double mass, double g, int median_window = 11) {
         contact_status_ = 0;
         contact_force_ = 0.0;
         contact_frame_ = contact_frame;
@@ -25,10 +25,10 @@ class ContactDetector {
         low_threshold_ = low_threshold;
         mass_ = mass;
         g_ = g;
-        mdf_ = MediatorNew(median_window);
+        // mdf_ = MediatorNew(median_window);
     }
 
-    ~ContactDetector() { delete mdf_; }
+    // ~ContactDetector() {} delete mdf_; }
     
     /** @fn  SchmittTrigger(double contact_force)
      *  @brief applies a digital Schmitt-Trigger for contact detection
@@ -66,7 +66,7 @@ class ContactDetector {
     }
 
    private:
-    Mediator* mdf_;
+    // Mediator* mdf_;
     int contact_status_{};
     double contact_force_{};
     std::string contact_frame_;
