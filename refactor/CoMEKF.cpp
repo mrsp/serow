@@ -176,4 +176,4 @@ State CoMEKF::updateWithCoMPosition(State state, Eigen::Vector3d com_position,
     return updated_state;
 }
 
-} // namespace serow
+}  // namespace serow

@@ -146,4 +146,4 @@ void update(State state) {
     // TODO (mrsp) fill in
 }
 
-} // namespace serow
+}  // namespace serow

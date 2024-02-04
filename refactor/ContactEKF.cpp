@@ -340,4 +340,4 @@ State ContactEKF::update(State state, KinematicMeasurement kin) {
                               kin.contacts_orientation_noise, kin.orientation_cov);
 }
 
-} // namespace serow
+}  // namespace serow

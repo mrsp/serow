@@ -32,4 +32,4 @@ void Differentiator::reset() {
     std::cout << name_ << "Finite Differentiator Reseted Successfully" << std::endl;
 }
 
-} // namespace serow
+}  // namespace serow
