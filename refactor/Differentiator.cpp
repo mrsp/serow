@@ -6,6 +6,8 @@
 
 #include <iostream>
 
+namespace serow {
+
 void Differentiator::init(std::string name, double dt) {
     dt_ = dt;
     name_ = name;
@@ -29,3 +31,5 @@ void Differentiator::reset() {
     firstrun_ = true;
     std::cout << name_ << "Finite Differentiator Reseted Successfully" << std::endl;
 }
+
+} // namespace serow

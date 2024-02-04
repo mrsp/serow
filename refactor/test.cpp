@@ -12,7 +12,7 @@ TEST(Operation, Development) {
     serow::Serow SERoW("../config/nao.json");
 
     Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
-    ImuMeasurement imu;
+    serow::ImuMeasurement imu;
     imu.timestamp = 0.01;
     imu.linear_acceleration = Eigen::Vector3d(0.1, -0.1, 0.05) - g;
     imu.angular_velocity = Eigen::Vector3d(-0.1, 0.1, 0.0);
@@ -46,13 +46,13 @@ TEST(Operation, Development) {
     joints.insert({"RWristYaw", jm});
     joints.insert({"RHand", jm});
 
-    ForceTorqueMeasurement ft{.timestamp = 0.01, .force = Eigen::Vector3d(0.0, 0.0, 40.0)};
-    std::unordered_map<std::string, ForceTorqueMeasurement> force_torque;
+    serow::ForceTorqueMeasurement ft{.timestamp = 0.01, .force = Eigen::Vector3d(0.0, 0.0, 40.0)};
+    std::unordered_map<std::string, serow::ForceTorqueMeasurement> force_torque;
     force_torque.insert({"l_ankle", ft});
     force_torque.insert({"r_ankle", ft});
 
     SERoW.filter(imu, joints, force_torque);
-    State state = SERoW.getState();
+    serow::State state = SERoW.getState();
 
     std::cout << "Base position " << state.base_position_.transpose() << std::endl;
     std::cout << "Base velocity " << state.base_linear_velocity_.transpose() << std::endl;

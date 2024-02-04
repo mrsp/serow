@@ -21,6 +21,8 @@
 
 #include "State.hpp"
 
+namespace serow {
+
 // State is pos - vel - rot - accel - gyro bias - 15 + 6 x N contact pos - contact or
 
 class ContactEKF {
@@ -84,3 +86,5 @@ class ContactEKF {
         std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov);
 };
+
+} // namespace serow

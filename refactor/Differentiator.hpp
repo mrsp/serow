@@ -11,6 +11,8 @@
 #pragma once
 #include <string>
 
+namespace serow {
+
 class Differentiator {
    public:
     /** @fn void setParams(double dt)
@@ -43,3 +45,5 @@ class Differentiator {
     bool firstrun_{true};
     std::string name_{};
 };
+
+} // namespace serow

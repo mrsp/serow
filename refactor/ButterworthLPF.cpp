@@ -1,8 +1,9 @@
 #include "ButterworthLPF.hpp"
 
 #include <math.h>
-
 #include <iostream>
+
+namespace serow {
 
 void ButterworthLPF::reset() {
     a1_ = 0;
@@ -47,3 +48,5 @@ double ButterworthLPF::filter(double y) {
 
     return out;
 }
+
+} // namespace serow

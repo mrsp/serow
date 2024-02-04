@@ -14,6 +14,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+namespace serow {
+
 struct ImuMeasurement {
     double timestamp{};
     Eigen::Vector3d linear_acceleration{};
@@ -142,3 +144,5 @@ class State {
     friend class ContactEKF;
     friend class CoMEKF;
 };
+
+} // namespace serow
