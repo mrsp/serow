@@ -5,7 +5,7 @@
 #pragma once
 #include <string>
 
-#include "Mediator.hpp"
+#include "MovingMedianFilter.hpp"
 
 namespace serow {
 
@@ -25,19 +25,15 @@ class ContactDetector {
         low_threshold_ = low_threshold;
         mass_ = mass;
         g_ = g;
-        // mdf_ = MediatorNew(median_window);
+        mdf_ = std::make_unique<MovingMedianFilter>(median_window);
     }
-
-    // ~ContactDetector() {} delete mdf_; }
 
     /** @fn  SchmittTrigger(double contact_force)
      *  @brief applies a digital Schmitt-Trigger for contact detection
      *  @param force normal ground reaction force
      */
     void SchmittTrigger(double contact_force) {
-        // MediatorInsert(mdf_, cropContactForce(contact_force));
-        // contact_force_ = MediatorMedian(mdf_);
-        contact_force_ = cropContactForce(contact_force);
+        contact_force_ = mdf_->filter(cropContactForce(contact_force));
 
         if (contact_status_ == 0) {
             if (contact_force_ > high_threshold_) {
@@ -66,7 +62,7 @@ class ContactDetector {
     }
 
    private:
-    // Mediator* mdf_;
+    std::unique_ptr<MovingMedianFilter> mdf_;
     int contact_status_{};
     double contact_force_{};
     std::string contact_frame_;
