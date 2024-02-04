@@ -4,6 +4,8 @@
  */
 #include "State.hpp"
 
+namespace serow {
+
 State::State(std::unordered_set<std::string> contacts_frame, bool point_feet) {
     contacts_frame_ = std::move(contacts_frame);
     num_leg_ee_ = contacts_frame_.size();
@@ -143,3 +145,5 @@ std::optional<Eigen::Matrix<double, 6, 6>> State::getContactPoseCov(
 void update(State state) {
     // TODO (mrsp) fill in
 }
+
+} // namespace serow

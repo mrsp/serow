@@ -13,6 +13,8 @@
 #pragma once
 #include "State.hpp"
 
+namespace serow {
+
 class CoMEKF {
    private:
     // Error-Covariance, Identity matrices
@@ -50,3 +52,5 @@ class CoMEKF {
     State updateWithImu(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf,
                         ImuMeasurement imu);
 };
+
+} // namespace serow

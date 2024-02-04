@@ -6,6 +6,8 @@
 
 #include <iostream>
 
+namespace serow {
+
 void JointEstimator::init(std::string joint_name, double f_sampling, double f_cutoff) {
     joint_name_ = joint_name;
     joint_position_ = 0.0;
@@ -27,3 +29,5 @@ double JointEstimator::filter(double joint_position_measurement) {
     joint_velocity_ = bw_.filter(df_.filter(joint_position_measurement));
     return joint_velocity_;
 }
+
+} // namespace serow

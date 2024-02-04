@@ -7,6 +7,8 @@
 #pragma once
 #include <string>
 
+namespace serow {
+
 class ButterworthLPF {
    private:
     /// state at t-1, t-2, measurement at t-1, t-2
@@ -43,3 +45,5 @@ class ButterworthLPF {
      */
     void init(std::string name_, double f_sampling, double f_cutoff);
 };
+
+} //namespace serow

@@ -6,6 +6,8 @@
 
 #include "lie.hpp"
 
+namespace serow {
+
 ContactEKF::ContactEKF() {
     // Gravity Vector
     g_ = Eigen::Vector3d::Zero();
@@ -337,3 +339,5 @@ State ContactEKF::update(State state, KinematicMeasurement kin) {
                               kin.contacts_probability, kin.position_cov, kin.contacts_orientation,
                               kin.contacts_orientation_noise, kin.orientation_cov);
 }
+
+} // namespace serow

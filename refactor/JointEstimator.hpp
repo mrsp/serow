@@ -13,6 +13,8 @@
 #include "ButterworthLPF.hpp"
 #include "Differentiator.hpp"
 
+namespace serow {
+
 class JointEstimator {
    private:
     /// 2nd order butterworth filter to smooth the angular velocity
@@ -48,3 +50,5 @@ class JointEstimator {
      */
     void init(std::string joint_name, double f_sampling, double f_cutoff);
 };
+
+} // namespace serow

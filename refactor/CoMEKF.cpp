@@ -6,6 +6,8 @@
 
 #include <iostream>
 
+namespace serow {
+
 void CoMEKF::init(double mass, double rate, double I_xx, double I_yy) {
     I_ = Eigen::Matrix<double, 9, 9>::Identity();
     P_ = Eigen::Matrix<double, 9, 9>::Zero();
@@ -173,3 +175,5 @@ State CoMEKF::updateWithCoMPosition(State state, Eigen::Vector3d com_position,
     P_ = (I_ - K * H) * P_ * (I_ - K * H).transpose() + K * R * K.transpose();
     return updated_state;
 }
+
+} // namespace serow
