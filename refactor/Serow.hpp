@@ -13,7 +13,7 @@
 #include "JointEstimator.hpp"
 #include "LegOdometry.hpp"
 #include "Mahony.hpp"
-#include "Measurements.hpp"
+#include "Measurement.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 

@@ -11,7 +11,7 @@
 
  */
 #pragma once
-#include "Measurements.hpp"
+#include "Measurement.hpp"
 #include "State.hpp"
 
 namespace serow {
