@@ -46,4 +46,4 @@ class Differentiator {
     std::string name_{};
 };
 
-} // namespace serow
+}  // namespace serow

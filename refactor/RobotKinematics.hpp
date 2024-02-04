@@ -11,7 +11,6 @@
 #endif
 
 #include <iostream>
-#include <unordered_map>
 #include <pinocchio/algorithm/center-of-mass.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/jacobian.hpp>
@@ -20,6 +19,7 @@
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace serow {
@@ -79,7 +79,8 @@ class RobotKinematics {
     int ndofActuated() const { return pmodel_->nq; }
 
     void updateJointConfig(const std::unordered_map<std::string, double>& qmap,
-                           const std::unordered_map<std::string, double>& qdotmap, double joint_std) {
+                           const std::unordered_map<std::string, double>& qdotmap,
+                           double joint_std) {
         mapJointNamesIDs(qmap, qdotmap);
         pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
         pinocchio::computeJointJacobians(*pmodel_, *data_, q_);

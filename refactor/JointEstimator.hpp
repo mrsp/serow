@@ -51,4 +51,4 @@ class JointEstimator {
     void init(std::string joint_name, double f_sampling, double f_cutoff);
 };
 
-} // namespace serow
+}  // namespace serow

@@ -8,32 +8,29 @@
 #include <unordered_map>
 
 #include "CoMEKF.hpp"
-#include "ContactEKF.hpp"
 #include "ContactDetector.hpp"
+#include "ContactEKF.hpp"
 #include "JointEstimator.hpp"
 #include "LegOdometry.hpp"
 #include "Mahony.hpp"
+#include "Measurements.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 
 namespace serow {
 
-struct JointMeasurement {
-    double timestamp{};
-    double position{};
-    std::optional<double> velocity{};
-};
-
 class Serow {
    public:
     Serow(std::string config);
 
-    void filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
-                std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
-                std::optional<std::unordered_map<std::string, double>> contact_probabilities = std::nullopt);
-    
+    void filter(
+        ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
+        std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
+        std::optional<std::unordered_map<std::string, double>> contact_probabilities =
+            std::nullopt);
+
     State getState() { return state_; }
-    
+
    private:
     struct Params {
         double mass{};

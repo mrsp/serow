@@ -29,7 +29,7 @@ class ContactDetector {
     }
 
     // ~ContactDetector() {} delete mdf_; }
-    
+
     /** @fn  SchmittTrigger(double contact_force)
      *  @brief applies a digital Schmitt-Trigger for contact detection
      *  @param force normal ground reaction force

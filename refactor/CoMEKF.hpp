@@ -11,6 +11,7 @@
 
  */
 #pragma once
+#include "Measurements.hpp"
 #include "State.hpp"
 
 namespace serow {
@@ -36,7 +37,7 @@ class CoMEKF {
                                     Eigen::Vector3d COP, Eigen::Vector3d fN,
                                     Eigen::Matrix3d com_linear_acceleration_cov,
                                     std::optional<Eigen::Vector3d> Ldot);
-    
+
     State updateWithCoMPosition(State state, Eigen::Vector3d com_position,
                                 Eigen::Matrix3d com_position_cov);
 
@@ -53,4 +54,4 @@ class CoMEKF {
                         ImuMeasurement imu);
 };
 
-} // namespace serow
+}  // namespace serow

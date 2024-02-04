@@ -19,6 +19,7 @@
 
 #include <iostream>
 
+#include "Measurements.hpp"
 #include "State.hpp"
 
 namespace serow {
@@ -87,4 +88,4 @@ class ContactEKF {
         std::optional<Eigen::Matrix3d> orientation_cov);
 };
 
-} // namespace serow
+}  // namespace serow
