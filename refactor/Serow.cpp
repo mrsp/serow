@@ -278,7 +278,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
     // Call the base estimator update step by employing relative contact pose measurements
     state_ = base_estimator_.update(state_, kin);
 
-    if (ft) {
+    if (ft.has_value()) {
         // Create the CoM estimation measurements
         kin.com_position = state_.getBasePose() * base_to_com_position;
         kin.com_position_cov = params_.com_position_cov.asDiagonal();
