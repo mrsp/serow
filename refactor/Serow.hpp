@@ -71,6 +71,8 @@ class Serow {
         Eigen::Vector3d com_linear_acceleration_cov{Eigen::Vector3d::Zero()};
         double eps{0.1};
         Eigen::Isometry3d T_base_to_odom{Eigen::Isometry3d::Identity()};
+        bool is_flat_terrain{};
+        double terrain_height_covariance{};
     };
 
     Params params_;
@@ -83,6 +85,7 @@ class Serow {
     std::unique_ptr<RobotKinematics> kinematic_estimator_;
     std::unique_ptr<LegOdometry> leg_odometry_;
     bool is_initialized{};
+    std::optional<TerrainMeasurement> terrain_ = std::nullopt;
 };
 
 }  // namespace serow

@@ -13,7 +13,7 @@ FetchContent_MakeAvailable(googletest)
 add_library(GTest::GTest INTERFACE IMPORTED)
 target_link_libraries(GTest::GTest INTERFACE gtest_main)
 
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(pinocchio REQUIRED)
 find_package(nlohmann_json REQUIRED)
 

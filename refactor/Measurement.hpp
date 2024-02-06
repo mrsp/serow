@@ -75,4 +75,10 @@ struct OdometryMeasurement {
     Eigen::Matrix3d base_orientation_cov{Eigen::Matrix3d::Identity()};
 };
 
+struct TerrainMeasurement {
+    double timestamp{};
+    double height{};
+    double height_cov{1.0};
+};
+
 }  // namespace serow
