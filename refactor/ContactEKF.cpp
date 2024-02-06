@@ -334,10 +334,66 @@ State ContactEKF::updateWithContacts(
     return updated_state;
 }
 
-State ContactEKF::update(State state, KinematicMeasurement kin) {
-    return updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
-                              kin.contacts_probability, kin.position_cov, kin.contacts_orientation,
-                              kin.contacts_orientation_noise, kin.orientation_cov);
+State ContactEKF::updateWithOdometry(State state, const Eigen::Vector3d& base_position,
+                                     const Eigen::Quaterniond& base_orientation,
+                                     const Eigen::Matrix3d& base_position_cov,
+                                     const Eigen::Matrix3d& base_orientation_cov) {
+    State updated_state = state;
+
+    Eigen::MatrixXd H;
+    H.setZero(6, num_states_);
+    Eigen::MatrixXd R = Eigen::Matrix<double, 6, 6>::Zero();
+
+    // Construct the innovation vector z
+    const Eigen::Vector3d& zp = base_position - state.base_position_;
+    const Eigen::Vector3d& zq = lie::so3::minus(base_orientation, state.base_orientation_);
+    Eigen::VectorXd z;
+    z.setZero(6);
+    z.head(3) = zp;
+    z.tail(3) = zq;
+
+    // Construct the linearized measurement matrix H
+    H.block(0, p_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
+    H.block(3, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
+
+    // Construct the measurement noise matrix R
+    R.topLeftCorner<3, 3>() = base_position_cov;
+    R.bottomRightCorner<3, 3>() = base_orientation_cov;
+
+    const Eigen::Matrix3d& s = R + H * P_ * H.transpose();
+    const Eigen::MatrixXd& K = P_ * H.transpose() * s.inverse();
+    const Eigen::VectorXd& dx = K * z;
+
+    updated_state.base_position_ += dx(p_idx_);
+    updated_state.base_linear_velocity_ += dx(v_idx_);
+    updated_state.base_orientation_ =
+        Eigen::Quaterniond(lie::so3::plus(state.base_orientation_.toRotationMatrix(), dx(r_idx_)));
+    for (const auto& cf : state.contacts_frame_) {
+        // TODO: set orientation seperately
+        updated_state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
+        updated_state.contacts_orientation_.value().at(cf) = Eigen::Quaterniond(
+            lie::so3::plus(updated_state.contacts_orientation_.value().at(cf).toRotationMatrix(),
+                           dx(rl_idx_.at(cf))));
+    }
+
+    P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
+    P_.noalias() += K * R * K.transpose();
+
+    return updated_state;
+}
+
+State ContactEKF::update(State state, KinematicMeasurement kin,
+                         std::optional<OdometryMeasurement> odom) {
+    State updated_state =
+        updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
+                           kin.contacts_probability, kin.position_cov, kin.contacts_orientation,
+                           kin.contacts_orientation_noise, kin.orientation_cov);
+    if (odom) {
+        return updateWithOdometry(updated_state, odom->base_position, odom->base_orientation,
+                                  odom->base_position_cov, odom->base_orientation_cov);
+    } else {
+        return updated_state;
+    }
 }
 
 }  // namespace serow
