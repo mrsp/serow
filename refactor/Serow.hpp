@@ -26,6 +26,7 @@ class Serow {
     void filter(
         ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
         std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
+        std::optional<OdometryMeasurement> odom = std::nullopt,
         std::optional<std::unordered_map<std::string, double>> contact_probabilities =
             std::nullopt);
 
@@ -69,6 +70,7 @@ class Serow {
         Eigen::Vector3d com_position_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d com_linear_acceleration_cov{Eigen::Vector3d::Zero()};
         double eps{0.1};
+        Eigen::Isometry3d T_base_to_odom{Eigen::Isometry3d::Identity()};
     };
 
     Params params_;

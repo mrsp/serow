@@ -31,7 +31,8 @@ class ContactEKF {
     ContactEKF();
     void init(State state, double imu_rate);
     State predict(State state, ImuMeasurement imu, KinematicMeasurement kin);
-    State update(State state, KinematicMeasurement kin);
+    State update(State state, KinematicMeasurement kin,
+                 std::optional<OdometryMeasurement> odom = std::nullopt);
 
    private:
     int num_states_{};
@@ -86,6 +87,11 @@ class ContactEKF {
         std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov);
+
+    State updateWithOdometry(State state, const Eigen::Vector3d& base_position,
+                             const Eigen::Quaterniond& base_orientation,
+                             const Eigen::Matrix3d& base_position_cov,
+                             const Eigen::Matrix3d& base_orientation_cov);
 };
 
 }  // namespace serow

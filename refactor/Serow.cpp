@@ -89,10 +89,18 @@ Serow::Serow(std::string config_file) {
         params_.com_position_cov[i] = config["com_position_covariance"][i];
         params_.com_linear_acceleration_cov[i] = config["com_linear_acceleration_covariance"][i];
     }
+
+    // External odometry extrinsics
+    for (size_t i = 0; i < 4; i++) {
+        for (size_t j = 0; j < 4; j++) {
+            params_.T_base_to_odom(i, j) = config["T_base_to_odom"][4 * i + j];
+        }
+    }
 }
 
 void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
                    std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft,
+                   std::optional<OdometryMeasurement> odom,
                    std::optional<std::unordered_map<std::string, double>> contact_probabilities) {
     if (!is_initialized && ft.has_value()) {
         is_initialized = true;
@@ -275,8 +283,18 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
 
     // Call the base estimator predict step utilizing imu and contact status measurements
     state_ = base_estimator_.predict(state_, imu, kin);
-    // Call the base estimator update step by employing relative contact pose measurements
-    state_ = base_estimator_.update(state_, kin);
+    // Call the base estimator update step by employing relative contact pose and odometry
+    // measurements
+    if (odom.has_value()) {
+        odom->base_position = params_.T_base_to_odom * odom->base_position;
+        odom->base_orientation = Eigen::Quaterniond(params_.T_base_to_odom.linear() *
+                                                    odom->base_orientation.toRotationMatrix());
+        odom->base_position_cov = params_.T_base_to_odom.linear() * odom->base_position_cov *
+                                  params_.T_base_to_odom.linear().transpose();
+        odom->base_orientation_cov = params_.T_base_to_odom.linear() * odom->base_orientation_cov *
+                                     params_.T_base_to_odom.linear().transpose();
+    }
+    state_ = base_estimator_.update(state_, kin, odom);
 
     if (ft.has_value()) {
         // Create the CoM estimation measurements

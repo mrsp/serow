@@ -67,4 +67,12 @@ struct KinematicMeasurement {
     Eigen::Matrix3d com_linear_acceleration_cov{Eigen::Matrix3d::Identity()};
 };
 
+struct OdometryMeasurement {
+    double timestamp{};
+    Eigen::Vector3d base_position{Eigen::Vector3d::Zero()};
+    Eigen::Quaterniond base_orientation{Eigen::Quaterniond::Identity()};
+    Eigen::Matrix3d base_position_cov{Eigen::Matrix3d::Identity()};
+    Eigen::Matrix3d base_orientation_cov{Eigen::Matrix3d::Identity()};
+};
+
 }  // namespace serow
