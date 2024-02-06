@@ -32,7 +32,8 @@ class ContactEKF {
     void init(State state, double imu_rate);
     State predict(State state, ImuMeasurement imu, KinematicMeasurement kin);
     State update(State state, KinematicMeasurement kin,
-                 std::optional<OdometryMeasurement> odom = std::nullopt);
+                 std::optional<OdometryMeasurement> odom = std::nullopt,
+                 std::optional<TerrainMeasurement> terrain = std::nullopt);
 
    private:
     int num_states_{};
@@ -92,6 +93,8 @@ class ContactEKF {
                              const Eigen::Quaterniond& base_orientation,
                              const Eigen::Matrix3d& base_position_cov,
                              const Eigen::Matrix3d& base_orientation_cov);
+
+    State updateWithTerrain(State state, const double terrain_height, const double terrain_cov);
 };
 
 }  // namespace serow

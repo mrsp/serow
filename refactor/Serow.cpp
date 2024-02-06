@@ -96,6 +96,10 @@ Serow::Serow(std::string config_file) {
             params_.T_base_to_odom(i, j) = config["T_base_to_odom"][4 * i + j];
         }
     }
+
+    // Terrain height parameter
+    params_.is_flat_terrain = config["is_flat_terrain"];
+    params_.terrain_height_covariance = config["terrain_height_covariance"];
 }
 
 void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
@@ -228,6 +232,16 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         state_.base_orientation_ = attitude_estimator_->getQ();
         state_.com_position_ = base_to_com_position;
         state_.contacts_position_ = base_to_foot_positions;
+        // Assuming the terrain is flat and the robot is initialized in a standing posture we can
+        // have a measurement of the terrain height constraining base estimation.
+        if (params_.is_flat_terrain) {
+            TerrainMeasurement tm{.height = 0.0, .height_cov = params_.terrain_height_covariance};
+            terrain_ = tm;
+            for (const auto& frame : state_.getContactsFrame()) {
+                terrain_->height += base_to_foot_positions.at(frame).z();
+            }
+            terrain_->height /= state_.getContactsFrame().size();
+        }
         if (!state_.point_feet_) {
             state_.contacts_orientation_ = base_to_foot_orientations;
         }
@@ -294,7 +308,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         odom->base_orientation_cov = params_.T_base_to_odom.linear() * odom->base_orientation_cov *
                                      params_.T_base_to_odom.linear().transpose();
     }
-    state_ = base_estimator_.update(state_, kin, odom);
+    state_ = base_estimator_.update(state_, kin, odom, terrain_);
 
     if (ft.has_value()) {
         // Create the CoM estimation measurements

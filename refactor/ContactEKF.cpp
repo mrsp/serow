@@ -382,18 +382,71 @@ State ContactEKF::updateWithOdometry(State state, const Eigen::Vector3d& base_po
     return updated_state;
 }
 
+State ContactEKF::updateWithTerrain(State state, const double terrain_height,
+                                    const double terrain_height_cov) {
+    State updated_state = state;
+
+    // Construct the innovation vector z, the linearized measurement matrix H, and the measurement
+    // noise matrix R
+    Eigen::VectorXd z;
+    z.setZero(num_leg_end_effectors_);
+    Eigen::MatrixXd H;
+    H.setZero(num_leg_end_effectors_, num_states_);
+    Eigen::MatrixXd R;
+    R.setZero(num_leg_end_effectors_, num_leg_end_effectors_);
+    int i = 0;
+    for (const auto& [cf, cs] : state.contacts_status_) {
+        H(i, pl_idx_.at(cf)[2]) = 1.0;
+        if (cs) {
+            z(i) = terrain_height - state.contacts_position_.at(cf).z();
+            R(i, i) = terrain_height_cov;
+        } else {
+            z(i) = 0.0;
+            R(i, i) = 1e4;
+        }
+        i++;
+    }
+
+    const Eigen::MatrixXd& s = R + H * P_ * H.transpose();
+    const Eigen::MatrixXd& K = P_ * H.transpose() * s.inverse();
+    const Eigen::VectorXd& dx = K * z;
+
+    updated_state.base_position_ += dx(p_idx_);
+    updated_state.base_linear_velocity_ += dx(v_idx_);
+    updated_state.base_orientation_ =
+        Eigen::Quaterniond(lie::so3::plus(state.base_orientation_.toRotationMatrix(), dx(r_idx_)));
+    for (const auto& cf : state.contacts_frame_) {
+        // TODO: set orientation seperately
+        updated_state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
+        updated_state.contacts_orientation_.value().at(cf) = Eigen::Quaterniond(
+            lie::so3::plus(updated_state.contacts_orientation_.value().at(cf).toRotationMatrix(),
+                           dx(rl_idx_.at(cf))));
+    }
+
+    P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
+    P_.noalias() += K * R * K.transpose();
+
+    return updated_state;
+}
+
 State ContactEKF::update(State state, KinematicMeasurement kin,
-                         std::optional<OdometryMeasurement> odom) {
+                         std::optional<OdometryMeasurement> odom,
+                         std::optional<TerrainMeasurement> terrain) {
     State updated_state =
         updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
                            kin.contacts_probability, kin.position_cov, kin.contacts_orientation,
                            kin.contacts_orientation_noise, kin.orientation_cov);
-    if (odom) {
-        return updateWithOdometry(updated_state, odom->base_position, odom->base_orientation,
-                                  odom->base_position_cov, odom->base_orientation_cov);
-    } else {
-        return updated_state;
+    if (odom.has_value()) {
+        updated_state =
+            updateWithOdometry(updated_state, odom->base_position, odom->base_orientation,
+                               odom->base_position_cov, odom->base_orientation_cov);
     }
+
+    if (terrain.has_value()) {
+        updated_state = updateWithTerrain(updated_state, terrain->height, terrain->height_cov);
+    }
+
+    return updated_state;
 }
 
 }  // namespace serow
