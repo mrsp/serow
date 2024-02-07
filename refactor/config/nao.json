@@ -50,6 +50,6 @@
     "com_position_covariance": [1e-6, 1e-6, 1e-6],
     "com_linear_acceleration_covariance": [1e-3, 1e-3, 1e-3],
     "T_base_to_odom": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-    "is_flat_terrain": true,
+    "is_flat_terrain": false,
     "terrain_height_covariance": 1e-3
 }

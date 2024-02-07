@@ -219,22 +219,26 @@ State ContactEKF::computeDiscreteDynamics(
         }
     }
 
-    if (contacts_status.has_value() && contacts_orientations.has_value()) {
+    if (!state.point_feet_ && contacts_status.has_value() && contacts_orientations.has_value()) {
         for (auto [cf, cs] : contacts_status.value()) {
             if (contacts_orientations.value().count(cf)) {
                 if (cs) {
                     predicted_state.contacts_orientation_.value().at(cf) =
                         state.contacts_orientation_.value().at(cf);
                 } else {
-                    predicted_state.contacts_orientation_.value().at(cf) = Eigen::Quaterniond(
-                        R * contacts_orientations.value().at(cf).toRotationMatrix());
+                    predicted_state.contacts_orientation_.value().at(cf) =
+                        Eigen::Quaterniond(R *
+                                           contacts_orientations.value().at(cf).toRotationMatrix())
+                            .normalized();
                 }
             }
         }
     }
 
-    predicted_state.base_orientation_ = Eigen::Quaterniond(
-        lie::so3::plus(state.base_orientation_.toRotationMatrix(), angular_velocity));
+    predicted_state.base_orientation_ =
+        Eigen::Quaterniond(
+            lie::so3::plus(state.base_orientation_.toRotationMatrix(), angular_velocity))
+            .normalized();
     return predicted_state;
 }
 
@@ -254,7 +258,7 @@ State ContactEKF::updateWithContacts(
         contacts_position_noise.at(cf) = cp * contacts_position_noise.at(cf) +
                                          (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
                                          position_cov;
-        if (contacts_orientation_noise.has_value()) {
+        if (contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
                 cp * contacts_orientation_noise.value().at(cf) +
                 (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + orientation_cov.value();
@@ -275,29 +279,14 @@ State ContactEKF::updateWithContacts(
         const Eigen::Matrix3d& s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
         const Eigen::MatrixXd& K = P_ * H.transpose() * s.inverse();
         const Eigen::VectorXd& dx = K * z;
-
-        updated_state.base_position_ += dx(p_idx_);
-        updated_state.base_linear_velocity_ += dx(v_idx_);
-        updated_state.base_orientation_ = Eigen::Quaterniond(
-            lie::so3::plus(updated_state.base_orientation_.toRotationMatrix(), dx(r_idx_)));
-
-        for (const auto& cf : state.contacts_frame_) {
-            // TODO: set orientation seperately
-            updated_state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
-            if (!state.point_feet_) {
-                updated_state.contacts_orientation_.value().at(cf) =
-                    Eigen::Quaterniond(lie::so3::plus(
-                        updated_state.contacts_orientation_.value().at(cf).toRotationMatrix(),
-                        dx(rl_idx_.at(cf))));
-            }
-        }
+        updateState(updated_state, dx);
 
         P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
         P_.noalias() += K * contacts_position_noise.at(cf) * K.transpose();
     }
 
     // Optionally update the state with the relative contacts orientation
-    if (contacts_orientation.has_value() && state.point_feet_) {
+    if (!state.point_feet_ && contacts_orientation.has_value()) {
         for (const auto& [cf, co] : contacts_orientation.value()) {
             Eigen::MatrixXd H;
             H.setZero(3, num_states_);
@@ -312,19 +301,7 @@ State ContactEKF::updateWithContacts(
             const Eigen::Matrix3d& s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
             const Eigen::MatrixXd& K = P_ * H.transpose() * s.inverse();
             const Eigen::VectorXd& dx = K * z;
-
-            updated_state.base_position_ += dx(p_idx_);
-            updated_state.base_linear_velocity_ += dx(v_idx_);
-            updated_state.base_orientation_ = Eigen::Quaterniond(
-                lie::so3::plus(state.base_orientation_.toRotationMatrix(), dx(r_idx_)));
-            for (const auto& cf : state.contacts_frame_) {
-                // TODO: set orientation seperately
-                updated_state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
-                updated_state.contacts_orientation_.value().at(cf) =
-                    Eigen::Quaterniond(lie::so3::plus(
-                        updated_state.contacts_orientation_.value().at(cf).toRotationMatrix(),
-                        dx(rl_idx_.at(cf))));
-            }
+            updateState(updated_state, dx);
 
             P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
             P_.noalias() += K * contacts_position_noise.at(cf) * K.transpose();
@@ -363,18 +340,7 @@ State ContactEKF::updateWithOdometry(State state, const Eigen::Vector3d& base_po
     const Eigen::Matrix3d& s = R + H * P_ * H.transpose();
     const Eigen::MatrixXd& K = P_ * H.transpose() * s.inverse();
     const Eigen::VectorXd& dx = K * z;
-
-    updated_state.base_position_ += dx(p_idx_);
-    updated_state.base_linear_velocity_ += dx(v_idx_);
-    updated_state.base_orientation_ =
-        Eigen::Quaterniond(lie::so3::plus(state.base_orientation_.toRotationMatrix(), dx(r_idx_)));
-    for (const auto& cf : state.contacts_frame_) {
-        // TODO: set orientation seperately
-        updated_state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
-        updated_state.contacts_orientation_.value().at(cf) = Eigen::Quaterniond(
-            lie::so3::plus(updated_state.contacts_orientation_.value().at(cf).toRotationMatrix(),
-                           dx(rl_idx_.at(cf))));
-    }
+    updateState(updated_state, dx);
 
     P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
     P_.noalias() += K * R * K.transpose();
@@ -410,23 +376,37 @@ State ContactEKF::updateWithTerrain(State state, const double terrain_height,
     const Eigen::MatrixXd& s = R + H * P_ * H.transpose();
     const Eigen::MatrixXd& K = P_ * H.transpose() * s.inverse();
     const Eigen::VectorXd& dx = K * z;
-
-    updated_state.base_position_ += dx(p_idx_);
-    updated_state.base_linear_velocity_ += dx(v_idx_);
-    updated_state.base_orientation_ =
-        Eigen::Quaterniond(lie::so3::plus(state.base_orientation_.toRotationMatrix(), dx(r_idx_)));
-    for (const auto& cf : state.contacts_frame_) {
-        // TODO: set orientation seperately
-        updated_state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
-        updated_state.contacts_orientation_.value().at(cf) = Eigen::Quaterniond(
-            lie::so3::plus(updated_state.contacts_orientation_.value().at(cf).toRotationMatrix(),
-                           dx(rl_idx_.at(cf))));
-    }
+    updateState(updated_state, dx);
 
     P_ = (I_ - K * H) * P_ * (I_ - H.transpose() * K.transpose());
     P_.noalias() += K * R * K.transpose();
 
     return updated_state;
+}
+
+void ContactEKF::updateState(State& state, const Eigen::VectorXd& dx) {
+    state.base_position_ += dx(p_idx_);
+    state.base_linear_velocity_ += dx(v_idx_);
+    state.base_orientation_ =
+        Eigen::Quaterniond(lie::so3::plus(state.base_orientation_.toRotationMatrix(), dx(r_idx_)))
+            .normalized();
+    for (const auto& cf : state.contacts_frame_) {
+        state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
+    }
+    if (!state.point_feet_) {
+        if (state.contacts_orientation_.has_value()) {
+            for (const auto& cf : state.contacts_frame_) {
+                state.contacts_orientation_.value().at(cf) =
+                    Eigen::Quaterniond(
+                        lie::so3::plus(
+                            state.contacts_orientation_.value().at(cf).toRotationMatrix(),
+                            dx(rl_idx_.at(cf))))
+                        .normalized();
+            }
+        } else {
+            std::cerr << "Contacts orientations not initialized, skipping in update" << std::endl;
+        }
+    }
 }
 
 State ContactEKF::update(State state, KinematicMeasurement kin,
@@ -436,6 +416,7 @@ State ContactEKF::update(State state, KinematicMeasurement kin,
         updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
                            kin.contacts_probability, kin.position_cov, kin.contacts_orientation,
                            kin.contacts_orientation_noise, kin.orientation_cov);
+
     if (odom.has_value()) {
         updated_state =
             updateWithOdometry(updated_state, odom->base_position, odom->base_orientation,
