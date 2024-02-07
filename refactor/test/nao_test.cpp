@@ -4,7 +4,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "Serow.hpp"
+#include "../src/Serow.hpp"
 
 using json = nlohmann::json;
 
@@ -53,11 +53,22 @@ TEST(Operation, Development) {
 
     SERoW.filter(imu, joints, force_torque);
     serow::State state = SERoW.getState();
+    EXPECT_FALSE(state.base_position_ != state.base_position_);
+    EXPECT_FALSE(state.base_linear_velocity_ != state.base_linear_velocity_);
+    EXPECT_FALSE(state.base_orientation_ != state.base_orientation_);
+    for (const auto& cf : state.getContactsFrame()) {
+        EXPECT_FALSE(state.contacts_position_.at(cf) != state.contacts_position_.at(cf));
+        if (!state.point_feet_) {
+            EXPECT_FALSE(state.contacts_orientation_->at(cf) != state.contacts_orientation_->at(cf));
+        }
+    }
+    EXPECT_FALSE(state.com_position_ != state.com_position_);
+    EXPECT_FALSE(state.com_linear_velocity_ != state.com_linear_velocity_);
+    EXPECT_FALSE(state.external_forces_ != state.external_forces_);
 
     std::cout << "Base position " << state.base_position_.transpose() << std::endl;
     std::cout << "Base velocity " << state.base_linear_velocity_.transpose() << std::endl;
     std::cout << "Base orientation " << state.base_orientation_ << std::endl;
-    std::cout << "CoM position " << state.com_position_.transpose() << std::endl;
     std::cout << "Left contact position " << state.contacts_position_.at("l_ankle").transpose()
               << std::endl;
     std::cout << "Right contact position " << state.contacts_position_.at("r_ankle").transpose()
@@ -65,8 +76,10 @@ TEST(Operation, Development) {
     if (!state.point_feet_) {
         std::cout << "Left contact orientation " << state.contacts_orientation_->at("l_ankle")
                   << std::endl;
-
         std::cout << "Right contact orientation " << state.contacts_orientation_->at("r_ankle")
                   << std::endl;
     }
+    std::cout << "CoM position " << state.com_position_.transpose() << std::endl;
+    std::cout << "CoM linear velocity " << state.com_linear_velocity_.transpose() << std::endl;
+    std::cout << "CoM external forces " << state.external_forces_.transpose() << std::endl;
 }
