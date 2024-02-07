@@ -60,10 +60,13 @@ TEST(Operation, Development) {
     std::cout << "CoM position " << state.com_position_.transpose() << std::endl;
     std::cout << "Left contact position " << state.contacts_position_.at("l_ankle").transpose()
               << std::endl;
-    std::cout << "Left contact orientation " << state.contacts_orientation_->at("l_ankle")
-              << std::endl;
     std::cout << "Right contact position " << state.contacts_position_.at("r_ankle").transpose()
               << std::endl;
-    std::cout << "Right contact orientation " << state.contacts_orientation_->at("r_ankle")
-              << std::endl;
+    if (!state.point_feet_) {
+        std::cout << "Left contact orientation " << state.contacts_orientation_->at("l_ankle")
+                  << std::endl;
+
+        std::cout << "Right contact orientation " << state.contacts_orientation_->at("r_ankle")
+                  << std::endl;
+    }
 }

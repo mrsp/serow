@@ -95,6 +95,8 @@ class ContactEKF {
                              const Eigen::Matrix3d& base_orientation_cov);
 
     State updateWithTerrain(State state, const double terrain_height, const double terrain_cov);
+
+    void updateState(State& state, const Eigen::VectorXd& dx);
 };
 
 }  // namespace serow
