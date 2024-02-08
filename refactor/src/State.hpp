@@ -26,7 +26,7 @@ class State {
     const Eigen::Quaterniond& getBaseOrientation() const;
     const Eigen::Vector3d& getBaseLinearVelocity() const;
     const Eigen::Vector3d& getBaseAngularVelocity() const;
-    const Eigen::Vector3d& getImuLinearAccelarationBias() const;
+    const Eigen::Vector3d& getImuLinearAccelerationBias() const;
     const Eigen::Vector3d& getImuAngularVelocityBias() const;
     const std::unordered_set<std::string>& getContactsFrame() const;
     std::optional<Eigen::Vector3d> getContactPosition(const std::string& frame_name) const;

@@ -181,7 +181,7 @@ State ContactEKF::computeDiscreteDynamics(
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientations) {
     State predicted_state = state;
     angular_velocity -= state.getImuAngularVelocityBias();
-    linear_acceleration -= state.getImuLinearAccelarationBias();
+    linear_acceleration -= state.getImuLinearAccelerationBias();
 
     // Nonlinear Process Model
     // Compute \dot{v}_b @ k
@@ -426,7 +426,6 @@ State ContactEKF::update(State state, KinematicMeasurement kin,
     if (terrain.has_value()) {
         updated_state = updateWithTerrain(updated_state, terrain->height, terrain->height_cov);
     }
-
     return updated_state;
 }
 

@@ -27,7 +27,7 @@ const Eigen::Vector3d& State::getBaseLinearVelocity() const { return base_linear
 
 const Eigen::Vector3d& State::getBaseAngularVelocity() const { return base_angular_velocity_; }
 
-const Eigen::Vector3d& State::getImuLinearAccelarationBias() const {
+const Eigen::Vector3d& State::getImuLinearAccelerationBias() const {
     return imu_linear_acceleration_bias_;
 }
 
