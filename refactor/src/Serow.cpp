@@ -249,7 +249,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
             base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
             params_.tau_1, params_.joint_rate, params_.g);
         base_estimator_.init(state_, params_.imu_rate);
-        com_estimator_.init(params_.mass, params_.force_torque_rate, 0.0, 0.0);
+        com_estimator_.init(params_.mass, params_.force_torque_rate);
     }
     if (state_.contacts_probability_.empty()) {
         return;
@@ -313,11 +313,27 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
     if (ft.has_value()) {
         // Create the CoM estimation measurements
         kin.com_position = state_.getBasePose() * base_to_com_position;
+        
+        // Approximate the CoM linear acceleration
+        Eigen::Vector3d base_linear_acceleration =
+            state_.getBasePose().linear() *
+            (imu.linear_acceleration - state_.getImuLinearAccelerationBias() -
+             Eigen::Vector3d(0, 0, params_.g));
+        Eigen::Vector3d base_angular_velocity =
+            state_.getBasePose().linear() *
+            (imu.angular_velocity - state_.getImuAngularVelocityBias());
+        Eigen::Vector3d base_angular_acceleration = Eigen::Vector3d::Zero();
+        kin.com_linear_acceleration = base_linear_acceleration;
+        kin.com_linear_acceleration +=
+            base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
+            base_angular_acceleration.cross(base_to_com_position);
+
         kin.com_position_cov = params_.com_position_cov.asDiagonal();
         kin.com_position_process_cov = params_.com_position_process_cov.asDiagonal();
         kin.com_linear_velocity_process_cov = params_.com_linear_velocity_process_cov.asDiagonal();
         kin.external_forces_process_cov = params_.external_forces_process_cov.asDiagonal();
         kin.com_linear_acceleration_cov = params_.com_linear_acceleration_cov.asDiagonal();
+        
         GroundReactionForceMeasurement grf;
         double den = 0;
         for (const auto& frame : state_.getContactsFrame()) {
@@ -328,10 +344,11 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
             den += state_.contacts_probability_.at(frame);
         }
         grf.cop /= den;
+
         // Call the CoM estimator predict step utilizing ground reaction measurements
         state_ = com_estimator_.predict(state_, kin, grf);
         // Call the CoM estimator update step by employing kinematic and imu measurements
-        state_ = com_estimator_.updateWithImu(state_, kin, grf, imu);
+        state_ = com_estimator_.updateWithImu(state_, kin, grf);
     }
     // Call the CoM estimator update step by employing kinematic measurements
     state_ = com_estimator_.updateWithKinematics(state_, kin);

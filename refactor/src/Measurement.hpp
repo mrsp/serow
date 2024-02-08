@@ -54,8 +54,9 @@ struct KinematicMeasurement {
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise;
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation;
     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise;
-    std::optional<Eigen::Vector3d> com_angular_momentum;
+    std::optional<Eigen::Vector3d> com_angular_momentum_derivative;
     Eigen::Vector3d com_position{Eigen::Vector3d::Zero()};
+    Eigen::Vector3d com_linear_acceleration{Eigen::Vector3d::Zero()};
     Eigen::Matrix3d position_slip_cov{Eigen::Matrix3d::Identity()};
     Eigen::Matrix3d orientation_slip_cov{Eigen::Matrix3d::Identity()};
     Eigen::Matrix3d position_cov{Eigen::Matrix3d::Identity()};

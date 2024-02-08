@@ -18,40 +18,48 @@ namespace serow {
 
 class CoMEKF {
    private:
+    // Previous grf timestamp
+    std::optional<double> last_grf_timestamp_;
+
     // Error-Covariance, Identity matrices
     Eigen::Matrix<double, 9, 9> P_, I_;
 
-    // nominal sampling time, robot's mass, gravity constant and inertia around the x and y axes
-    double nominal_dt_{}, mass_{}, g_{}, I_xx_{}, I_yy_{};
+    // nominal F/T time, robot's mass and gravity constant
+    double nominal_dt_{}, mass_{}, g_{};
 
     // Compute the nonlinear dynamics
-    Eigen::Matrix<double, 9, 1> computeContinuousDynamics(State state, Eigen::Vector3d COP,
-                                                          Eigen::Vector3d fN,
-                                                          std::optional<Eigen::Vector3d> Ldot);
+    Eigen::Matrix<double, 9, 1> computeContinuousDynamics(
+        const State& state, const Eigen::Vector3d& cop_position,
+        const Eigen::Vector3d& ground_reaction_force,
+        std::optional<Eigen::Vector3d> com_angular_momentum_derivative);
     // Compute Linearized matrices
     std::tuple<Eigen::Matrix<double, 9, 9>, Eigen::Matrix<double, 9, 9>> computePredictionJacobians(
-        State state, Eigen::Vector3d COP, Eigen::Vector3d fN, std::optional<Eigen::Vector3d> Ldot);
+        const State& state, const Eigen::Vector3d& cop_position,
+        const Eigen::Vector3d& ground_reaction_force,
+        std::optional<Eigen::Vector3d> com_angular_momentum_derivative);
 
-    State updateWithCoMAcceleration(State state, Eigen::Vector3d Acc, Eigen::Vector3d Pos,
-                                    Eigen::Vector3d Gyro, Eigen::Vector3d Gyrodot,
-                                    Eigen::Vector3d COP, Eigen::Vector3d fN,
-                                    Eigen::Matrix3d com_linear_acceleration_cov,
-                                    std::optional<Eigen::Vector3d> Ldot);
+    State updateWithCoMAcceleration(const State& state,
+                                    const Eigen::Vector3d& com_linear_acceleration,
+                                    const Eigen::Vector3d& cop_position,
+                                    const Eigen::Vector3d& ground_reaction_force,
+                                    const Eigen::Matrix3d& com_linear_acceleration_cov,
+                                    std::optional<Eigen::Vector3d> com_angular_momentum_derivative);
 
-    State updateWithCoMPosition(State state, Eigen::Vector3d com_position,
-                                Eigen::Matrix3d com_position_cov);
+    State updateWithCoMPosition(const State& state, const Eigen::Vector3d& com_position,
+                                const Eigen::Matrix3d& com_position_cov);
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    void init(double mass, double I_xx, double I_yy, double rate);
+    void init(double mass, double I_xx);
 
-    State predict(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf);
+    State predict(const State& state, const KinematicMeasurement& kin,
+                  const GroundReactionForceMeasurement& grf);
 
-    State updateWithKinematics(State state, KinematicMeasurement kin);
+    State updateWithKinematics(const State& state, const KinematicMeasurement& kin);
 
-    State updateWithImu(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf,
-                        ImuMeasurement imu);
+    State updateWithImu(const State& state, const KinematicMeasurement& kin,
+                        const GroundReactionForceMeasurement& grf);
 };
 
 }  // namespace serow

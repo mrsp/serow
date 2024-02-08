@@ -8,7 +8,7 @@
 
 namespace serow {
 
-void CoMEKF::init(double mass, double rate, double I_xx, double I_yy) {
+void CoMEKF::init(double mass, double rate) {
     I_ = Eigen::Matrix<double, 9, 9>::Identity();
     P_ = Eigen::Matrix<double, 9, 9>::Zero();
     P_.block<3, 3>(0, 0) = 1e-6 * Eigen::Matrix<double, 3, 3>::Identity();
@@ -16,16 +16,21 @@ void CoMEKF::init(double mass, double rate, double I_xx, double I_yy) {
     P_.block<3, 3>(6, 6) = 1e-1 * Eigen::Matrix<double, 3, 3>::Identity();
     mass_ = mass;
     nominal_dt_ = 1.0 / rate;
-    I_xx_ = I_xx;
-    I_yy_ = I_yy;
     g_ = 9.81;
     std::cout << "Nonlinear CoM Estimator Initialized Successfully" << std::endl;
 }
 
-State CoMEKF::predict(State state, KinematicMeasurement kin, GroundReactionForceMeasurement grf) {
+State CoMEKF::predict(const State& state, const KinematicMeasurement& kin,
+                      const GroundReactionForceMeasurement& grf) {
+    double dt = nominal_dt_;
+    if (last_grf_timestamp_.has_value()) {
+        dt = grf.timestamp - last_grf_timestamp_.value();
+        last_grf_timestamp_ = grf.timestamp;
+    }
+
     State predicted_state = state;
     const auto& [Ac, Lc] =
-        computePredictionJacobians(state, grf.cop, grf.force, kin.com_angular_momentum);
+        computePredictionJacobians(state, grf.cop, grf.force, kin.com_angular_momentum_derivative);
 
     // Discretization
     Eigen::Matrix<double, 9, 9> Qd = Eigen::Matrix<double, 9, 9>::Zero();
@@ -35,118 +40,142 @@ State CoMEKF::predict(State state, KinematicMeasurement kin, GroundReactionForce
 
     // Euler Discretization - First order Truncation
     Eigen::Matrix<double, 9, 9> Ad = I_;
-    Ad += Ac * nominal_dt_;
-    P_ = Ad * P_ * Ad.transpose() + Lc * Qd * Lc.transpose() * nominal_dt_;
+    Ad += Ac * dt;
+    P_ = Ad * P_ * Ad.transpose() + Lc * Qd * Lc.transpose() * dt;
 
     // Propagate the mean estimate, forward euler integration of dynamics f
     Eigen::Matrix<double, 9, 1> f =
-        computeContinuousDynamics(state, grf.cop, grf.force, kin.com_angular_momentum);
-    predicted_state.com_position_ += f.head<3>() * nominal_dt_;
-    predicted_state.com_linear_velocity_ += f.segment<3>(3) * nominal_dt_;
-    predicted_state.external_forces_ += f.tail<3>() * nominal_dt_;
+        computeContinuousDynamics(state, grf.cop, grf.force, kin.com_angular_momentum_derivative);
+    predicted_state.com_position_ += f.head<3>() * dt;
+    predicted_state.com_linear_velocity_ += f.segment<3>(3) * dt;
+    predicted_state.external_forces_ += f.tail<3>() * dt;
     return predicted_state;
 }
 
-State CoMEKF::updateWithKinematics(State state, KinematicMeasurement kin) {
+State CoMEKF::updateWithKinematics(const State& state, const KinematicMeasurement& kin) {
     return updateWithCoMPosition(state, kin.com_position, kin.com_position_cov);
 }
 
-State CoMEKF::updateWithImu(State state, KinematicMeasurement kin,
-                            GroundReactionForceMeasurement grf, ImuMeasurement imu) {
-    return updateWithCoMAcceleration(state, kin.com_position, imu.linear_acceleration,
-                                     imu.angular_velocity, imu.angular_acceleration, grf.cop,
-                                     grf.force, kin.com_linear_acceleration_cov,
-                                     kin.com_angular_momentum);
+State CoMEKF::updateWithImu(const State& state, const KinematicMeasurement& kin,
+                            const GroundReactionForceMeasurement& grf) {
+    return updateWithCoMAcceleration(state, kin.com_linear_acceleration, grf.cop, grf.force,
+                                     kin.com_linear_acceleration_cov,
+                                     kin.com_angular_momentum_derivative);
 }
 
-Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(State state, Eigen::Vector3d COP,
-                                                              Eigen::Vector3d fN,
-                                                              std::optional<Eigen::Vector3d> Ldot) {
+Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(
+    const State& state, const Eigen::Vector3d& cop_position,
+    const Eigen::Vector3d& ground_reaction_force,
+    std::optional<Eigen::Vector3d> com_angular_momentum_derivative) {
+    double den = state.com_position_.z() - cop_position.z();
     Eigen::Matrix<double, 9, 1> res = Eigen::Matrix<double, 9, 1>::Zero();
-    double den = state.com_position_.z() - COP.z();
-
     res.segment<3>(0) = state.com_linear_velocity_;
-    res(5) = (fN.z() + state.external_forces_.z()) / mass_ - g_;
-    if (Ldot.has_value()) {
-        res(3) = (state.com_position_.x() - COP.x()) / (mass_ * den) * (fN.z()) +
-                 state.external_forces_.x() / mass_ - Ldot.value().y() / (mass_ * den);
-        res(4) = (state.com_position_.y() - COP.y()) / (mass_ * den) * (fN.z()) +
-                 state.external_forces_.y() / mass_ + Ldot.value().x() / (mass_ * den);
+    res(5) = (ground_reaction_force.z() + state.external_forces_.z()) / mass_ - g_;
+    if (com_angular_momentum_derivative.has_value()) {
+        res(3) = (state.com_position_.x() - cop_position.x()) / (mass_ * den) *
+                     (ground_reaction_force.z()) +
+                 state.external_forces_.x() / mass_ -
+                 com_angular_momentum_derivative.value().y() / (mass_ * den);
+        res(4) = (state.com_position_.y() - cop_position.y()) / (mass_ * den) *
+                     (ground_reaction_force.z()) +
+                 state.external_forces_.y() / mass_ +
+                 com_angular_momentum_derivative.value().x() / (mass_ * den);
     } else {
-        res(3) = (state.com_position_.x() - COP.x()) / (mass_ * den) * (fN(2)) +
+        res(3) = (state.com_position_.x() - cop_position.x()) / (mass_ * den) *
+                     (ground_reaction_force.z()) +
                  state.external_forces_.x() / mass_;
-        res(4) = (state.com_position_.y() - COP.y()) / (mass_ * den) * (fN(2)) +
+        res(4) = (state.com_position_.y() - cop_position.y()) / (mass_ * den) *
+                     (ground_reaction_force.z()) +
                  state.external_forces_.y() / mass_;
     }
     return res;
 }
 
 std::tuple<Eigen::Matrix<double, 9, 9>, Eigen::Matrix<double, 9, 9>>
-CoMEKF::computePredictionJacobians(State state, Eigen::Vector3d COP, Eigen::Vector3d fN,
-                                   std::optional<Eigen::Vector3d> Ldot) {
+CoMEKF::computePredictionJacobians(const State& state, const Eigen::Vector3d& cop_position,
+                                   const Eigen::Vector3d& ground_reaction_force,
+                                   std::optional<Eigen::Vector3d> com_angular_momentum_derivative) {
     Eigen::Matrix<double, 9, 9> Ac = Eigen::Matrix<double, 9, 9>::Zero();
     Eigen::Matrix<double, 9, 9> Lc = Eigen::Matrix<double, 9, 9>::Identity();
     Ac.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity();
     Ac(3, 6) = 1.0 / mass_;
     Ac(4, 7) = 1.0 / mass_;
     Ac(5, 8) = 1.0 / mass_;
-    double den = state.com_position_.z() - COP.z();
 
-    Ac(3, 0) = fN.z() / (mass_ * den);
-    Ac(4, 1) = fN.z() / (mass_ * den);
+    double den = state.com_position_.z() - cop_position.z();
+    Ac(3, 0) = ground_reaction_force.z() / (mass_ * den);
+    Ac(4, 1) = ground_reaction_force.z() / (mass_ * den);
 
-    if (Ldot.has_value()) {
-        Ac(3, 2) = -((fN.z()) * (state.com_position_.x() - COP.z())) / (mass_ * den * den) +
-                   Ldot.value().y() / (mass_ * den * den);
-        Ac(4, 2) = -(fN.z()) * (state.com_position_.y() - COP.y()) / (mass_ * den * den) -
-                   Ldot.value().x() / (mass_ * den * den);
+    if (com_angular_momentum_derivative.has_value()) {
+        Ac(3, 2) = -((ground_reaction_force.z()) * (state.com_position_.x() - cop_position.z())) /
+                       (mass_ * den * den) +
+                   com_angular_momentum_derivative.value().y() / (mass_ * den * den);
+        Ac(4, 2) = -(ground_reaction_force.z()) * (state.com_position_.y() - cop_position.y()) /
+                       (mass_ * den * den) -
+                   com_angular_momentum_derivative.value().x() / (mass_ * den * den);
     } else {
-        Ac(3, 2) = -((fN.z()) * (state.com_position_.x() - COP.z())) / (mass_ * den * den);
-        Ac(4, 2) = -(fN.z()) * (state.com_position_.y() - COP.y()) / (mass_ * den * den);
+        Ac(3, 2) = -((ground_reaction_force.z()) * (state.com_position_.x() - cop_position.z())) /
+                   (mass_ * den * den);
+        Ac(4, 2) = -(ground_reaction_force.z()) * (state.com_position_.y() - cop_position.y()) /
+                   (mass_ * den * den);
     }
 
     return std::make_tuple(Ac, Lc);
 }
 
-State CoMEKF::updateWithCoMAcceleration(State state, Eigen::Vector3d Acc, Eigen::Vector3d Pos,
-                                        Eigen::Vector3d Gyro, Eigen::Vector3d Gyrodot,
-                                        Eigen::Vector3d COP, Eigen::Vector3d fN,
-                                        Eigen::Matrix3d com_linear_acceleration_cov,
-                                        std::optional<Eigen::Vector3d> Ldot) {
+State CoMEKF::updateWithCoMAcceleration(
+    const State& state, const Eigen::Vector3d& com_linear_acceleration,
+    const Eigen::Vector3d& cop_position, const Eigen::Vector3d& ground_reaction_force,
+    const Eigen::Matrix3d& com_linear_acceleration_cov,
+    std::optional<Eigen::Vector3d> com_angular_momentum_derivative) {
     State updated_state = state;
-    // Approximate the CoM Acceleration
-    Acc += Gyro.cross(Gyro.cross(Pos)) + Gyrodot.cross(Pos);
-    double den = state.com_position_.z() - COP.z();
+
+    double den = state.com_position_.z() - cop_position.z();
     Eigen::Vector3d z = Eigen::Vector3d::Zero();
+    z.z() = com_linear_acceleration(2) -
+            ((ground_reaction_force.z() + state.external_forces_.z()) / mass_ - g_);
+
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();
-    z.z() = Acc(2) - ((fN.z() + state.external_forces_.z()) / mass_ - g_);
-    H(0, 0) = (fN.z()) / (mass_ * den);
-    H(1, 1) = (fN.z()) / (mass_ * den);
+    H(0, 0) = (ground_reaction_force.z()) / (mass_ * den);
+    H(1, 1) = (ground_reaction_force.z()) / (mass_ * den);
     H(0, 6) = 1.0 / mass_;
     H(1, 7) = 1.0 / mass_;
     H(2, 8) = 1.0 / mass_;
 
-    if (Ldot.has_value()) {
-        z.x() = Acc(0) - ((state.com_position_.x() - COP.x()) / (mass_ * den) * (fN.z()) +
-                          state.external_forces_.x() / mass_ - Ldot.value().y() / (mass_ * den));
-        z.y() = Acc(1) - ((state.com_position_.y() - COP.y()) / (mass_ * den) * (fN.z()) +
-                          state.external_forces_.y() / mass_ + Ldot.value().x() / (mass_ * den));
+    if (com_angular_momentum_derivative.has_value()) {
+        z.x() = com_linear_acceleration(0) -
+                ((state.com_position_.x() - cop_position.x()) / (mass_ * den) *
+                     (ground_reaction_force.z()) +
+                 state.external_forces_.x() / mass_ -
+                 com_angular_momentum_derivative.value().y() / (mass_ * den));
+        z.y() = com_linear_acceleration(1) -
+                ((state.com_position_.y() - cop_position.y()) / (mass_ * den) *
+                     (ground_reaction_force.z()) +
+                 state.external_forces_.y() / mass_ +
+                 com_angular_momentum_derivative.value().x() / (mass_ * den));
 
-        H(0, 2) = -((fN.z()) * (state.com_position_.x() - COP.x())) / (mass_ * den * den) +
-                  Ldot.value().y() / (mass_ * den * den);
+        H(0, 2) = -((ground_reaction_force.z()) * (state.com_position_.x() - cop_position.x())) /
+                      (mass_ * den * den) +
+                  com_angular_momentum_derivative.value().y() / (mass_ * den * den);
 
-        H(1, 2) = -(fN.z()) * (state.com_position_.y() - COP.y()) / (mass_ * den * den) -
-                  Ldot.value().x() / (mass_ * den * den);
+        H(1, 2) = -(ground_reaction_force.z()) * (state.com_position_.y() - cop_position.y()) /
+                      (mass_ * den * den) -
+                  com_angular_momentum_derivative.value().x() / (mass_ * den * den);
     } else {
-        z.x() = Acc(0) - ((state.com_position_.x() - COP.x()) / (mass_ * den) * (fN.z()) +
-                          state.external_forces_.x() / mass_);
-        z.y() = Acc(1) - ((state.com_position_.y() - COP.y()) / (mass_ * den) * (fN.z()) +
-                          state.external_forces_.y() / mass_);
+        z.x() = com_linear_acceleration(0) - ((state.com_position_.x() - cop_position.x()) /
+                                                  (mass_ * den) * (ground_reaction_force.z()) +
+                                              state.external_forces_.x() / mass_);
+        z.y() = com_linear_acceleration(1) - ((state.com_position_.y() - cop_position.y()) /
+                                                  (mass_ * den) * (ground_reaction_force.z()) +
+                                              state.external_forces_.y() / mass_);
 
-        H(0, 2) = -((fN.z()) * (state.com_position_.x() - COP.x())) / (mass_ * den * den);
+        H(0, 2) = -((ground_reaction_force.z()) * (state.com_position_.x() - cop_position.x())) /
+                  (mass_ * den * den);
 
-        H(1, 2) = -(fN.z()) * (state.com_position_.y() - COP.y()) / (mass_ * den * den);
+        H(1, 2) = -(ground_reaction_force.z()) * (state.com_position_.y() - cop_position.y()) /
+                  (mass_ * den * den);
     }
+
     const Eigen::Matrix3d& R = com_linear_acceleration_cov;
     Eigen::Matrix3d s = R + H * P_ * H.transpose();
     Eigen::Matrix<double, 9, 3> K = P_ * H.transpose() * s.inverse();
@@ -158,8 +187,8 @@ State CoMEKF::updateWithCoMAcceleration(State state, Eigen::Vector3d Acc, Eigen:
     return updated_state;
 }
 
-State CoMEKF::updateWithCoMPosition(State state, Eigen::Vector3d com_position,
-                                    Eigen::Matrix3d com_position_cov) {
+State CoMEKF::updateWithCoMPosition(const State& state, const Eigen::Vector3d& com_position,
+                                    const Eigen::Matrix3d& com_position_cov) {
     State updated_state = state;
     Eigen::Vector3d z = com_position - state.com_position_;
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();
