@@ -8,20 +8,29 @@
 
 namespace serow {
 
-void JointEstimator::init(std::string joint_name, double f_sampling, double f_cutoff) {
+void JointEstimator::init(std::string joint_name, double f_sampling, double f_cutoff, bool verbose) {
     joint_name_ = joint_name;
     joint_position_ = 0.0;
     joint_velocity_ = 0.0;
 
-    bw_.init(joint_name_, f_sampling, f_cutoff);
-    df_.init(joint_name_, 1.0 / f_sampling);
-    std::cout << joint_name_ << " Joint estimator initialized successfully" << std::endl;
+    bw_.init(joint_name_, f_sampling, f_cutoff, verbose);
+    df_.init(joint_name_, 1.0 / f_sampling, verbose);
+    
+    if (verbose) {
+        std::cout << joint_name_ << " Joint estimator initialized successfully" << std::endl;
+    }
 }
 
-void JointEstimator::reset() {
+void JointEstimator::reset(bool verbose) {
     joint_position_ = 0.0;
     joint_velocity_ = 0.0;
-    std::cout << joint_name_ << " Joint estimator reset" << std::endl;
+
+    bw_.reset(verbose);
+    df_.reset(verbose);
+
+    if (verbose) {
+        std::cout << joint_name_ << " Joint estimator reset" << std::endl;
+    }
 }
 
 double JointEstimator::filter(double joint_position_measurement) {

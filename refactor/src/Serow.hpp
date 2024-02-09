@@ -10,6 +10,7 @@
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
 #include "ContactEKF.hpp"
+#include "DerivativeEstimator.hpp"
 #include "JointEstimator.hpp"
 #include "LegOdometry.hpp"
 #include "Mahony.hpp"
@@ -77,6 +78,8 @@ class Serow {
 
     Params params_;
     std::unordered_map<std::string, JointEstimator> joint_estimators_;
+    std::unique_ptr<DerivativeEstimator> angular_momentum_derivative_estimator;
+    std::unique_ptr<DerivativeEstimator> gyro_derivative_estimator;
     std::unordered_map<std::string, ContactDetector> contact_estimators_;
     State state_;
     ContactEKF base_estimator_;

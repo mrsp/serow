@@ -31,12 +31,12 @@ class Differentiator {
      *  @param name name of the signal e.g LHipYawPitch
      *  @param dt Sampling time in seconds e.g. 0.01s
      */
-    void init(std::string name, double dt);
+    void init(std::string name, double dt, bool verbose = true);
 
     /** @fn void reset();
      *  @brief  resets the the numerical differentiator's state
      */
-    void reset();
+    void reset(bool verbose = true);
 
    private:
     double x_prev_{};

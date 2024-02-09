@@ -12,6 +12,7 @@
 
 #include <iostream>
 #include <pinocchio/algorithm/center-of-mass.hpp>
+#include <pinocchio/algorithm/centroidal.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/jacobian.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
@@ -227,6 +228,11 @@ class RobotKinematics {
 
     Eigen::MatrixXd comJacobian() const {
         return pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
+    }
+
+    Eigen::VectorXd comAngularMomentum() const {
+        pinocchio::computeCentroidalMomentum(*pmodel_, *data_, q_, qdot_);
+        return data_->hg.angular();
     }
 
     std::vector<std::string> jointNames() const { return jnames_; }

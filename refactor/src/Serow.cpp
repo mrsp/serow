@@ -152,8 +152,16 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
     kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities,
                                             params_.joint_position_variance);
     // Get the CoM w.r.t the base frame
-    Eigen::Vector3d base_to_com_position = kinematic_estimator_->comPosition();
-
+    const Eigen::Vector3d& base_to_com_position = kinematic_estimator_->comPosition();
+    // Get the angular momentum around the CoM
+    const Eigen::Vector3d& com_angular_momentum = kinematic_estimator_->comAngularMomentum();
+    if (!angular_momentum_derivative_estimator) {
+        angular_momentum_derivative_estimator = std::make_unique<DerivativeEstimator>();
+        angular_momentum_derivative_estimator->init(
+            "CoM Angular Momentum Derivative", params_.joint_rate, params_.joint_cutoff_frequency);
+    }
+    const Eigen::Vector3d& com_angular_momentum_derivative =
+        angular_momentum_derivative_estimator->filter(com_angular_momentum);
     // Get the leg end-effector kinematics w.r.t the base frame
     std::unordered_map<std::string, Eigen::Quaterniond> base_to_foot_orientations;
     std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_positions;
@@ -310,6 +318,14 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
     }
     state_ = base_estimator_.update(state_, kin, odom, terrain_);
 
+    if (!gyro_derivative_estimator) {
+        gyro_derivative_estimator = std::make_unique<DerivativeEstimator>();
+        gyro_derivative_estimator->init(
+            "Gyro Derivative", params_.imu_rate, params_.joint_cutoff_frequency);
+    }
+    imu.angular_acceleration = gyro_derivative_estimator->filter(
+        imu.angular_velocity - state_.getImuAngularVelocityBias());
+
     if (ft.has_value()) {
         // Create the CoM estimation measurements
         kin.com_position = state_.getBasePose() * base_to_com_position;
@@ -322,12 +338,16 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         Eigen::Vector3d base_angular_velocity =
             state_.getBasePose().linear() *
             (imu.angular_velocity - state_.getImuAngularVelocityBias());
-        Eigen::Vector3d base_angular_acceleration = Eigen::Vector3d::Zero();
+        Eigen::Vector3d base_angular_acceleration =
+            state_.getBasePose().linear() * imu.angular_acceleration;
         kin.com_linear_acceleration = base_linear_acceleration;
         kin.com_linear_acceleration +=
             base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
             base_angular_acceleration.cross(base_to_com_position);
 
+        kin.com_angular_momentum_derivative =
+            state_.getBasePose().linear() * com_angular_momentum_derivative;
+            
         kin.com_position_cov = params_.com_position_cov.asDiagonal();
         kin.com_position_process_cov = params_.com_position_process_cov.asDiagonal();
         kin.com_linear_velocity_process_cov = params_.com_linear_velocity_process_cov.asDiagonal();
