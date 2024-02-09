@@ -17,5 +17,5 @@ find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(pinocchio REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
-add_executable(nao_test test/nao_test.cpp src/Serow.cpp src/State.cpp src/ContactEKF.cpp src/CoMEKF.cpp src/LegOdometry.cpp src/ButterworthLPF.cpp src/Differentiator.cpp src/JointEstimator.cpp)
+add_executable(nao_test test/nao_test.cpp src/Serow.cpp src/State.cpp src/ContactEKF.cpp src/CoMEKF.cpp src/LegOdometry.cpp src/ButterworthLPF.cpp src/Differentiator.cpp src/JointEstimator.cpp src/DerivativeEstimator.cpp)
 target_link_libraries(nao_test PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json GTest::gtest_main)

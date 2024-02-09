@@ -8,10 +8,13 @@
 
 namespace serow {
 
-void Differentiator::init(std::string name, double dt) {
+void Differentiator::init(std::string name, double dt, bool verbose) {
     dt_ = dt;
     name_ = name;
-    std::cout << name_ << " Finite Differentiator Initialized Successfully" << std::endl;
+
+    if (verbose) {
+        std::cout << name_ << " Finite Differentiator Initialized Successfully" << std::endl;
+    }
 }
 
 double Differentiator::filter(double x) {
@@ -25,11 +28,14 @@ double Differentiator::filter(double x) {
     return xdot_;
 }
 
-void Differentiator::reset() {
+void Differentiator::reset(bool verbose) {
     x_prev_ = 0.0;
     xdot_ = 0.0;
     firstrun_ = true;
-    std::cout << name_ << "Finite Differentiator Reseted Successfully" << std::endl;
+    
+    if (verbose) {
+        std::cout << name_ << "Finite Differentiator Reseted Successfully" << std::endl;
+    }
 }
 
 }  // namespace serow

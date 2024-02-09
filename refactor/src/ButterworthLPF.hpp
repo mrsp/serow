@@ -23,7 +23,7 @@ class ButterworthLPF {
     /** @fn void reset()
      *  @brief resets the 2nd order Low Pass Butterworth filter state
      */
-    void reset();
+    void reset(bool verbose = true);
 
     /** @fn double filter(double y)
      *  @brief recursively filters a measurement with a 2nd order Low Pass
@@ -43,7 +43,7 @@ class ButterworthLPF {
      *  @param f_sampling the sampling frequency of the sensor e.g. 100hz
      *  @param f_cutoff the cut-off frequency of the filter e.g. 10hz
      */
-    void init(std::string name_, double f_sampling, double f_cutoff);
+    void init(std::string name_, double f_sampling, double f_cutoff, bool verbose = true);
 };
 
 } //namespace serow

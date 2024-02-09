@@ -39,7 +39,7 @@ class JointEstimator {
     /** @fn void reset();
      *  @brief  resets the the joint estimator
      */
-    void reset();
+    void reset(bool verbose = true);
 
     /** @fn void init(std::string joint_name,double f_sampling, double f_cutoff);
      *  @brief initializes the differentiator filter
@@ -48,7 +48,7 @@ class JointEstimator {
      *  @param f_cutoff the cut-off frequency of the  2nd order Low Pass
      *  Butterworth Filter filter e.g. 10hz
      */
-    void init(std::string joint_name, double f_sampling, double f_cutoff);
+    void init(std::string joint_name, double f_sampling, double f_cutoff, bool verbose = true);
 };
 
 }  // namespace serow
