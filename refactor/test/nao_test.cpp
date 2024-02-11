@@ -8,7 +8,7 @@
 
 using json = nlohmann::json;
 
-TEST(Operation, Development) {
+TEST(SerowTests, NaoTest) {
     serow::Serow SERoW("../config/nao.json");
 
     Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
@@ -53,33 +53,33 @@ TEST(Operation, Development) {
 
     SERoW.filter(imu, joints, force_torque);
     serow::State state = SERoW.getState();
-    EXPECT_FALSE(state.base_position_ != state.base_position_);
-    EXPECT_FALSE(state.base_linear_velocity_ != state.base_linear_velocity_);
-    EXPECT_FALSE(state.base_orientation_ != state.base_orientation_);
+    EXPECT_FALSE(state.getBasePosition() != state.getBasePosition());
+    EXPECT_FALSE(state.getBaseLinearVelocity() != state.getBaseLinearVelocity());
+    EXPECT_FALSE(state.getBaseOrientation() != state.getBaseOrientation());
     for (const auto& cf : state.getContactsFrame()) {
-        EXPECT_FALSE(state.contacts_position_.at(cf) != state.contacts_position_.at(cf));
-        if (!state.point_feet_) {
-            EXPECT_FALSE(state.contacts_orientation_->at(cf) != state.contacts_orientation_->at(cf));
+        EXPECT_FALSE(*state.getContactPosition(cf) != *state.getContactPosition(cf));
+        if (!state.isPointFeet()) {
+            EXPECT_FALSE(*state.getContactOrientation(cf) != *state.getContactOrientation(cf));
         }
     }
-    EXPECT_FALSE(state.com_position_ != state.com_position_);
-    EXPECT_FALSE(state.com_linear_velocity_ != state.com_linear_velocity_);
-    EXPECT_FALSE(state.external_forces_ != state.external_forces_);
+    EXPECT_FALSE(state.getCoMPosition() != state.getCoMPosition());
+    EXPECT_FALSE(state.getCoMLinearVelocity() != state.getCoMLinearVelocity());
+    EXPECT_FALSE(state.getCoMExternalForces() != state.getCoMExternalForces());
 
-    std::cout << "Base position " << state.base_position_.transpose() << std::endl;
-    std::cout << "Base velocity " << state.base_linear_velocity_.transpose() << std::endl;
-    std::cout << "Base orientation " << state.base_orientation_ << std::endl;
-    std::cout << "Left contact position " << state.contacts_position_.at("l_ankle").transpose()
+    std::cout << "Base position " << state.getBasePosition().transpose() << std::endl;
+    std::cout << "Base velocity " << state.getBaseLinearVelocity().transpose() << std::endl;
+    std::cout << "Base orientation " << state.getBaseOrientation() << std::endl;
+    std::cout << "Left contact position " << state.getContactPosition("l_ankle")->transpose()
               << std::endl;
-    std::cout << "Right contact position " << state.contacts_position_.at("r_ankle").transpose()
+    std::cout << "Right contact position " << state.getContactPosition("r_ankle")->transpose()
               << std::endl;
-    if (!state.point_feet_) {
-        std::cout << "Left contact orientation " << state.contacts_orientation_->at("l_ankle")
+    if (!state.isPointFeet()) {
+        std::cout << "Left contact orientation " << *state.getContactOrientation("l_ankle")
                   << std::endl;
-        std::cout << "Right contact orientation " << state.contacts_orientation_->at("r_ankle")
+        std::cout << "Right contact orientation " << *state.getContactOrientation("r_ankle")
                   << std::endl;
     }
-    std::cout << "CoM position " << state.com_position_.transpose() << std::endl;
-    std::cout << "CoM linear velocity " << state.com_linear_velocity_.transpose() << std::endl;
-    std::cout << "CoM external forces " << state.external_forces_.transpose() << std::endl;
+    std::cout << "CoM position " << state.getCoMPosition().transpose() << std::endl;
+    std::cout << "CoM linear velocity " << state.getCoMLinearVelocity().transpose() << std::endl;
+    std::cout << "CoM external forces " << state.getCoMExternalForces().transpose() << std::endl;
 }
