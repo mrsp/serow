@@ -48,10 +48,13 @@ class CoMEKF {
     State updateWithCoMPosition(const State& state, const Eigen::Vector3d& com_position,
                                 const Eigen::Matrix3d& com_position_cov);
 
+    void updateState(State& state, const Eigen::Matrix<double, 9, 1>& dx,
+                     const Eigen::Matrix<double, 9, 9>& P) const;
+
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    void init(double mass, double I_xx);
+    void init(const State& state, double mass, double rate);
 
     State predict(const State& state, const KinematicMeasurement& kin,
                   const GroundReactionForceMeasurement& grf);

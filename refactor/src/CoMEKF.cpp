@@ -8,12 +8,12 @@
 
 namespace serow {
 
-void CoMEKF::init(double mass, double rate) {
+void CoMEKF::init(const State& state, double mass, double rate) {
     I_ = Eigen::Matrix<double, 9, 9>::Identity();
-    P_ = Eigen::Matrix<double, 9, 9>::Zero();
-    P_.block<3, 3>(0, 0) = 1e-6 * Eigen::Matrix<double, 3, 3>::Identity();
-    P_.block<3, 3>(3, 3) = 1e-2 * Eigen::Matrix<double, 3, 3>::Identity();
-    P_.block<3, 3>(6, 6) = 1e-1 * Eigen::Matrix<double, 3, 3>::Identity();
+    P_ = Eigen::Matrix<double, 9, 9>::Identity();
+    P_.block<3, 3>(0, 0) = state.getCoMPositionCov();
+    P_.block<3, 3>(3, 3) = state.getCoMLinearVelocityCov();
+    P_.block<3, 3>(6, 6) = state.getCoMExternalForcesCov();
     mass_ = mass;
     nominal_dt_ = 1.0 / rate;
     g_ = 9.81;
@@ -180,10 +180,8 @@ State CoMEKF::updateWithCoMAcceleration(
     Eigen::Matrix3d s = R + H * P_ * H.transpose();
     Eigen::Matrix<double, 9, 3> K = P_ * H.transpose() * s.inverse();
     Eigen::Matrix<double, 9, 1> dx = K * z;
-    updated_state.com_position_ += dx.head<3>();
-    updated_state.com_linear_velocity_ += dx.segment<3>(3);
-    updated_state.external_forces_ += dx.tail<3>();
     P_ = (I_ - K * H) * P_ * (I_ - K * H).transpose() + K * R * K.transpose();
+    updateState(updated_state, dx, P_);
     return updated_state;
 }
 
@@ -198,11 +196,19 @@ State CoMEKF::updateWithCoMPosition(const State& state, const Eigen::Vector3d& c
     Eigen::Matrix3d s = R + H * P_ * H.transpose();
     Eigen::Matrix<double, 9, 3> K = P_ * H.transpose() * s.inverse();
     Eigen::Matrix<double, 9, 1> dx = K * z;
-    updated_state.com_position_ += dx.head<3>();
-    updated_state.com_linear_velocity_ += dx.segment<3>(3);
-    updated_state.external_forces_ += dx.tail<3>();
     P_ = (I_ - K * H) * P_ * (I_ - K * H).transpose() + K * R * K.transpose();
+    updateState(updated_state, dx, P_);
     return updated_state;
+}
+
+void CoMEKF::updateState(State& state, const Eigen::Matrix<double, 9, 1>& dx,
+                         const Eigen::Matrix<double, 9, 9>& P) const {
+    state.com_position_ += dx.head<3>();
+    state.com_linear_velocity_ += dx.segment<3>(3);
+    state.external_forces_ += dx.tail<3>();
+    state.com_position_cov_ = P_.block<3, 3>(0, 0);
+    state.com_linear_velocity_cov_ = P_.block<3, 3>(3, 3);
+    state.external_forces_cov_ = P_.block<3, 3>(6, 6);
 }
 
 }  // namespace serow

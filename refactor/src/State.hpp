@@ -9,11 +9,11 @@
 #else
 #include <Eigen/Dense>
 #endif
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <mutex>
 
 namespace serow {
 
@@ -60,6 +60,7 @@ class State {
     const Eigen::Matrix3d& getCoMPositionCov() const;
     const Eigen::Matrix3d& getCoMLinearVelocityCov() const;
     const Eigen::Matrix3d& getCoMExternalForcesCov() const;
+
    private:
     // Flag to indicate if the robot has point feet. False indicates flat feet contacts.
     bool point_feet_{};

@@ -263,7 +263,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
             base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
             params_.tau_1, params_.joint_rate, params_.g);
         base_estimator_.init(state, params_.imu_rate);
-        com_estimator_.init(params_.mass, params_.force_torque_rate);
+        com_estimator_.init(state, params_.mass, params_.force_torque_rate);
     }
     if (state.contacts_probability_.empty()) {
         return;
@@ -329,8 +329,8 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         gyro_derivative_estimator->init("Gyro Derivative", params_.imu_rate,
                                         params_.gyro_cutoff_frequency);
     }
-    imu.angular_acceleration = gyro_derivative_estimator->filter(
-        imu.angular_velocity - state.getImuAngularVelocityBias());
+    imu.angular_acceleration =
+        gyro_derivative_estimator->filter(imu.angular_velocity - state.getImuAngularVelocityBias());
 
     if (ft.has_value()) {
         // Create the CoM estimation measurements
