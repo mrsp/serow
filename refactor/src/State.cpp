@@ -315,7 +315,7 @@ const Eigen::Matrix3d& State::getCoMExternalForcesCov() const {
     return  external_forces_cov_;
 }
 
-bool State::isPointFeet() {
+bool State::isPointFeet() const {
     return point_feet_;
 }
 

@@ -14,9 +14,9 @@ ContactEKF::ContactEKF() {
     g_(2) = -9.80;
 }
 
-void ContactEKF::init(State state, double imu_rate) {
+void ContactEKF::init(const State& state, double imu_rate) {
     num_leg_end_effectors_ = state.num_leg_ee_;
-    contact_dim_ = state.point_feet_ ? 3 : 6;
+    contact_dim_ = state.isPointFeet() ? 3 : 6;
     num_states_ = 15 + contact_dim_ * num_leg_end_effectors_;
     num_inputs_ = 12 + contact_dim_ * num_leg_end_effectors_;
     nominal_dt_ = 1.0 / imu_rate;
@@ -35,7 +35,7 @@ void ContactEKF::init(State state, double imu_rate) {
         pl_idx_.insert({contact_frame, pl_idx});
     }
 
-    if (!state.point_feet_) {
+    if (!state.isPointFeet()) {
         Eigen::Array3i rl_idx = pl_idx;
         for (const auto& contact_frame : state.getContactsFrame()) {
             rl_idx += 3;
@@ -54,7 +54,7 @@ void ContactEKF::init(State state, double imu_rate) {
         npl_idx_.insert({contact_frame, npl_idx});
     }
 
-    if (!state.point_feet_) {
+    if (!state.isPointFeet()) {
         Eigen::Array3i nrl_idx = npl_idx;
         for (const auto& contact_frame : state.getContactsFrame()) {
             nrl_idx += 3;
@@ -75,7 +75,7 @@ void ContactEKF::init(State state, double imu_rate) {
             P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) =
                 state.getContactPositionCov(contact_frame).value();
         }
-        if (!state.point_feet_ && state.getContactOrientationCov(contact_frame)) {
+        if (!state.isPointFeet() && state.getContactOrientationCov(contact_frame)) {
             P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) =
                 state.getContactOrientationCov(contact_frame).value();
         }
@@ -91,7 +91,7 @@ void ContactEKF::init(State state, double imu_rate) {
 
     for (const auto& contact_frame : state.getContactsFrame()) {
         Lc_(pl_idx_.at(contact_frame), npl_idx_.at(contact_frame)) = Eigen::Matrix3d::Identity();
-        if (!state.point_feet_) {
+        if (!state.isPointFeet()) {
             Lc_(rl_idx_.at(contact_frame), nrl_idx_.at(contact_frame)) =
                 Eigen::Matrix3d::Identity();
         }
@@ -101,7 +101,8 @@ void ContactEKF::init(State state, double imu_rate) {
 }
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobians(
-    State state, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration, double dt) {
+    const State& state, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration,
+    double dt) {
     angular_velocity -= state.getImuAngularVelocityBias();
     const Eigen::Vector3d& v = state.getBaseLinearVelocity();
     const Eigen::Matrix3d& R = state.getBaseOrientation().toRotationMatrix();
@@ -109,7 +110,7 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobi
     Eigen::MatrixXd Ac, Lc;
     Lc = Lc_;
     Lc.block<3, 3>(0, 0).noalias() = -lie::so3::wedge(v);
-    if (!state.point_feet_) {
+    if (!state.isPointFeet()) {
         for (const auto& contact_frame : state.getContactsFrame()) {
             Lc(rl_idx_.at(contact_frame), nrl_idx_.at(contact_frame)) =
                 state.contacts_orientation_.value().at(contact_frame).toRotationMatrix();
@@ -128,7 +129,8 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobi
     return std::make_tuple(Ac, Lc);
 }
 
-State ContactEKF::predict(State state, ImuMeasurement imu, KinematicMeasurement kin) {
+State ContactEKF::predict(const State& state, const ImuMeasurement& imu,
+                          const KinematicMeasurement& kin) {
     double dt = nominal_dt_;
     if (last_imu_timestamp_.has_value()) {
         dt = imu.timestamp - last_imu_timestamp_.value();
@@ -154,7 +156,7 @@ State ContactEKF::predict(State state, ImuMeasurement imu, KinematicMeasurement 
             kin.position_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
     }
 
-    if (!state.point_feet_) {
+    if (!state.isPointFeet()) {
         for (const auto& [cf, cs] : state.contacts_status_) {
             int contact_status = static_cast<int>(cs);
             Qc(nrl_idx_.at(cf), nrl_idx_.at(cf)) =
@@ -175,7 +177,8 @@ State ContactEKF::predict(State state, ImuMeasurement imu, KinematicMeasurement 
 }
 
 State ContactEKF::computeDiscreteDynamics(
-    State state, double dt, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration,
+    const State& state, double dt, Eigen::Vector3d angular_velocity,
+    Eigen::Vector3d linear_acceleration,
     std::optional<std::unordered_map<std::string, bool>> contacts_status,
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contacts_position,
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientations) {
@@ -219,7 +222,7 @@ State ContactEKF::computeDiscreteDynamics(
         }
     }
 
-    if (!state.point_feet_ && contacts_status.has_value() && contacts_orientations.has_value()) {
+    if (!state.isPointFeet() && contacts_status.has_value() && contacts_orientations.has_value()) {
         for (auto [cf, cs] : contacts_status.value()) {
             if (contacts_orientations.value().count(cf)) {
                 if (cs) {
@@ -243,10 +246,10 @@ State ContactEKF::computeDiscreteDynamics(
 }
 
 State ContactEKF::updateWithContacts(
-    State state, const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
+    const State& state, const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
     const std::unordered_map<std::string, double>& contacts_probability,
-    Eigen::Matrix3d position_cov,
+    const Eigen::Matrix3d& position_cov,
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov) {
@@ -286,7 +289,7 @@ State ContactEKF::updateWithContacts(
     }
 
     // Optionally update the state with the relative contacts orientation
-    if (!state.point_feet_ && contacts_orientation.has_value()) {
+    if (!state.isPointFeet() && contacts_orientation.has_value()) {
         for (const auto& [cf, co] : contacts_orientation.value()) {
             Eigen::MatrixXd H;
             H.setZero(3, num_states_);
@@ -311,7 +314,7 @@ State ContactEKF::updateWithContacts(
     return updated_state;
 }
 
-State ContactEKF::updateWithOdometry(State state, const Eigen::Vector3d& base_position,
+State ContactEKF::updateWithOdometry(const State& state, const Eigen::Vector3d& base_position,
                                      const Eigen::Quaterniond& base_orientation,
                                      const Eigen::Matrix3d& base_position_cov,
                                      const Eigen::Matrix3d& base_orientation_cov) {
@@ -348,7 +351,7 @@ State ContactEKF::updateWithOdometry(State state, const Eigen::Vector3d& base_po
     return updated_state;
 }
 
-State ContactEKF::updateWithTerrain(State state, const double terrain_height,
+State ContactEKF::updateWithTerrain(const State& state, const double terrain_height,
                                     const double terrain_height_cov) {
     State updated_state = state;
 
@@ -393,7 +396,7 @@ void ContactEKF::updateState(State& state, const Eigen::VectorXd& dx) {
     for (const auto& cf : state.contacts_frame_) {
         state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
     }
-    if (!state.point_feet_) {
+    if (!state.isPointFeet()) {
         if (state.contacts_orientation_.has_value()) {
             for (const auto& cf : state.contacts_frame_) {
                 state.contacts_orientation_.value().at(cf) =
@@ -409,7 +412,7 @@ void ContactEKF::updateState(State& state, const Eigen::VectorXd& dx) {
     }
 }
 
-State ContactEKF::update(State state, KinematicMeasurement kin,
+State ContactEKF::update(const State& state, const KinematicMeasurement& kin,
                          std::optional<OdometryMeasurement> odom,
                          std::optional<TerrainMeasurement> terrain) {
     State updated_state =

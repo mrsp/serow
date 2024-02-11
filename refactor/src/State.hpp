@@ -25,7 +25,7 @@ class State {
     State(State&& other);
     State operator=(const State& other);
     State& operator=(State&& other);
-    bool isPointFeet();
+    bool isPointFeet() const;
 
     // State getters
     Eigen::Isometry3d getBasePose() const;

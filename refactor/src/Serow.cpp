@@ -199,7 +199,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
             // Transform F/T to base frame
             contact_forces[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
                                     params_.R_foot_to_force.at(frame) * ft->at(frame).force;
-            if (!state.point_feet_ && ft->at(frame).torque.has_value()) {
+            if (!state.isPointFeet() && ft->at(frame).torque.has_value()) {
                 contact_torques.value()[frame] =
                     base_to_foot_orientations.at(frame).toRotationMatrix() *
                     params_.R_foot_to_torque.at(frame) * ft->at(frame).torque.value();
@@ -227,7 +227,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
             }
         }
 
-        if (!state.point_feet_ && contact_torques.has_value()) {
+        if (!state.isPointFeet() && contact_torques.has_value()) {
             for (const auto& frame : state.getContactsFrame()) {
                 ft->at(frame).cop = Eigen::Vector3d(0.0, 0.0, 0.0);
                 if (state.contacts_probability_.at(frame) > 0.0) {
@@ -256,7 +256,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
             }
             terrain_->height /= state.getContactsFrame().size();
         }
-        if (!state.point_feet_) {
+        if (!state.isPointFeet()) {
             state.contacts_orientation_ = base_to_foot_orientations;
         }
         leg_odometry_ = std::make_unique<LegOdometry>(
@@ -289,7 +289,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
     kin.contacts_orientation = leg_odometry_->getContactOrientations();
     kin.position_cov = params_.contact_position_cov.asDiagonal();
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
-    if (!state.point_feet_) {
+    if (!state.isPointFeet()) {
         kin.orientation_cov = params_.contact_orientation_cov.asDiagonal();
         kin.orientation_slip_cov = params_.contact_orientation_slip_cov.asDiagonal();
     }
@@ -299,13 +299,13 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         kin.contacts_position_noise[frame] =
             kinematic_estimator_->getLinearVelocityNoise(frame) *
             kinematic_estimator_->getLinearVelocityNoise(frame).transpose();
-        if (!state.point_feet_) {
+        if (!state.isPointFeet()) {
             kin_contacts_orientation_noise.insert(
                 {frame, kinematic_estimator_->getAngularVelocityNoise(frame) *
                             kinematic_estimator_->getAngularVelocityNoise(frame).transpose()});
         }
     }
-    if (!state.point_feet_) {
+    if (!state.isPointFeet()) {
         kin.contacts_orientation_noise.emplace(std::move(kin_contacts_orientation_noise));
     }
 
