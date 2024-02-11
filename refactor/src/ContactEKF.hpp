@@ -29,9 +29,9 @@ namespace serow {
 class ContactEKF {
    public:
     ContactEKF();
-    void init(State state, double imu_rate);
-    State predict(State state, ImuMeasurement imu, KinematicMeasurement kin);
-    State update(State state, KinematicMeasurement kin,
+    void init(const State& state, double imu_rate);
+    State predict(const State& state, const ImuMeasurement& imu, const KinematicMeasurement& kin);
+    State update(const State& state, const KinematicMeasurement& kin,
                  std::optional<OdometryMeasurement> odom = std::nullopt,
                  std::optional<TerrainMeasurement> terrain = std::nullopt);
 
@@ -69,7 +69,7 @@ class ContactEKF {
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
 
     State computeDiscreteDynamics(
-        State state, double dt, Eigen::Vector3d angular_velocity,
+        const State& state, double dt, Eigen::Vector3d angular_velocity,
         Eigen::Vector3d linear_acceleration,
         std::optional<std::unordered_map<std::string, bool>> contacts_status,
         std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contacts_position,
@@ -77,24 +77,24 @@ class ContactEKF {
             std::nullopt);
 
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> computePredictionJacobians(
-        State state, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration,
+        const State& state, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration,
         double dt);
 
     State updateWithContacts(
-        State state, const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
+        const State& state, const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
         std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
         const std::unordered_map<std::string, double>& contacts_probability,
-        Eigen::Matrix3d position_cov,
+        const Eigen::Matrix3d& position_cov,
         std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov);
 
-    State updateWithOdometry(State state, const Eigen::Vector3d& base_position,
+    State updateWithOdometry(const State& state, const Eigen::Vector3d& base_position,
                              const Eigen::Quaterniond& base_orientation,
                              const Eigen::Matrix3d& base_position_cov,
                              const Eigen::Matrix3d& base_orientation_cov);
 
-    State updateWithTerrain(State state, const double terrain_height, const double terrain_cov);
+    State updateWithTerrain(const State& state, double terrain_height, double terrain_cov);
 
     void updateState(State& state, const Eigen::VectorXd& dx);
 };

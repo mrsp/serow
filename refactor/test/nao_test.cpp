@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <unordered_map>
@@ -51,8 +52,17 @@ TEST(SerowTests, NaoTest) {
     force_torque.insert({"l_ankle", ft});
     force_torque.insert({"r_ankle", ft});
 
+    auto t0 = std::chrono::high_resolution_clock::now();
     SERoW.filter(imu, joints, force_torque);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    std::cout << "SERoW filtering loop duration " << duration.count() << " us " << std::endl;
+    t0 = std::chrono::high_resolution_clock::now();
     serow::State state = SERoW.getState();
+    t1 = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    std::cout << "SERoW get state duration " << duration.count() << " us " << std::endl;
+
     EXPECT_FALSE(state.getBasePosition() != state.getBasePosition());
     EXPECT_FALSE(state.getBaseLinearVelocity() != state.getBaseLinearVelocity());
     EXPECT_FALSE(state.getBaseOrientation() != state.getBaseOrientation());
