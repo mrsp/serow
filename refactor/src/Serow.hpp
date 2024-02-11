@@ -3,6 +3,8 @@
  * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
  */
 #pragma once
+#include <gtest/gtest_prod.h>
+
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
@@ -40,6 +42,7 @@ class Serow {
         bool calibrate_imu{};
         double max_imu_calibration_cycles{};
         double imu_rate{};
+        double gyro_cutoff_frequency{};
         Eigen::Vector3d bias_gyro{Eigen::Vector3d::Zero()};
         Eigen::Vector3d bias_acc{Eigen::Vector3d::Zero()};
         Eigen::Matrix3d R_base_to_gyro{Eigen::Matrix3d::Identity()};
@@ -48,6 +51,7 @@ class Serow {
         bool estimate_joint_velocity{};
         double joint_cutoff_frequency{};
         double joint_position_variance{};
+        double angular_momentum_cutoff_frequency{};
         double tau_0{};
         double tau_1{};
         double force_torque_rate{};

@@ -12,6 +12,7 @@
     "estimate_joint_velocity": true,
     "joint_cutoff_frequency": 10,
     "joint_position_variance": 0.1,
+    "angular_momentum_cutoff_frequency": 5,
     "tau_0": 1.0,
     "tau_1": 0.1,
     "imu_rate": 100,
@@ -21,6 +22,7 @@
     "max_imu_calibration_cycles": 1000,
     "bias_acc": [0, 0, 0],
     "bias_gyro": [0, 0, 0],
+    "gyro_cutoff_frequency": 5,
     "force_torque_rate": 100,
     "R_foot_to_force": {
         "0": [1, 0, 0, 0, 1, 0, 0, 0, 1],

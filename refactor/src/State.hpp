@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <mutex>
 
 namespace serow {
 
@@ -20,6 +21,12 @@ class State {
    public:
     State() = default;
     State(std::unordered_set<std::string> contacts_frame, bool point_feet);
+    State(const State& other);
+    State(State&& other);
+    State operator=(const State& other);
+    State& operator=(State&& other);
+    bool isPointFeet();
+
     // State getters
     Eigen::Isometry3d getBasePose() const;
     const Eigen::Vector3d& getBasePosition() const;
@@ -34,6 +41,10 @@ class State {
     std::optional<Eigen::Isometry3d> getContactPose(const std::string& frame_name) const;
     std::optional<bool> getContactStatus(const std::string& frame_name) const;
 
+    const Eigen::Vector3d& getCoMPosition() const;
+    const Eigen::Vector3d& getCoMLinearVelocity() const;
+    const Eigen::Vector3d& getCoMExternalForces() const;
+
     // State covariance getter
     Eigen::Matrix<double, 6, 6> getBasePoseCov() const;
     const Eigen::Matrix3d& getBasePositionCov() const;
@@ -46,7 +57,10 @@ class State {
         const std::string& frame_name) const;
     std::optional<Eigen::Matrix3d> getContactPositionCov(const std::string& frame_name) const;
     std::optional<Eigen::Matrix3d> getContactOrientationCov(const std::string& frame_name) const;
-
+    const Eigen::Matrix3d& getCoMPositionCov() const;
+    const Eigen::Matrix3d& getCoMLinearVelocityCov() const;
+    const Eigen::Matrix3d& getCoMExternalForcesCov() const;
+   private:
     // Flag to indicate if the robot has point feet. False indicates flat feet contacts.
     bool point_feet_{};
 
@@ -69,11 +83,11 @@ class State {
     Eigen::Vector3d imu_linear_acceleration_bias_{Eigen::Vector3d::Zero()};
     // Imu gyro rate bias in the local imu frame
     Eigen::Vector3d imu_angular_velocity_bias_{Eigen::Vector3d::Zero()};
-    // 3D CoM position
+    // 3D CoM position in world frame
     Eigen::Vector3d com_position_{Eigen::Vector3d::Zero()};
-    // 3D CoM velocity
+    // 3D CoM linear velocity in world frame
     Eigen::Vector3d com_linear_velocity_{Eigen::Vector3d::Zero()};
-    // 3D External forces at the CoM
+    // 3D External forces at the CoM in world frame
     Eigen::Vector3d external_forces_{Eigen::Vector3d::Zero()};
 
     // Covariances
@@ -92,9 +106,17 @@ class State {
     // Feet state: frame_name to contacts pose covariance in the world frame
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_cov_;
     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_cov_;
+    // 3D CoM position covariance in world frame
+    Eigen::Matrix3d com_position_cov_{Eigen::Matrix3d::Identity()};
+    // 3D CoM linear velocity covariance in world frame
+    Eigen::Matrix3d com_linear_velocity_cov_{Eigen::Matrix3d::Identity()};
+    // 3D External forces at the CoM covariance in world frame
+    Eigen::Matrix3d external_forces_cov_{Eigen::Matrix3d::Identity()};
 
     std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques;
+
+    std::mutex mutex_;
 
     friend class Serow;
     friend class ContactEKF;
