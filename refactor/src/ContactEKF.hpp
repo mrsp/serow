@@ -96,7 +96,7 @@ class ContactEKF {
 
     State updateWithTerrain(const State& state, double terrain_height, double terrain_cov);
 
-    void updateState(State& state, const Eigen::VectorXd& dx);
+    void updateState(State& state, const Eigen::VectorXd& dx,  const Eigen::MatrixXd& P) const;
 };
 
 }  // namespace serow

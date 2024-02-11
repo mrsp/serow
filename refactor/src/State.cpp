@@ -10,6 +10,23 @@ State::State(std::unordered_set<std::string> contacts_frame, bool point_feet) {
     contacts_frame_ = std::move(contacts_frame);
     num_leg_ee_ = contacts_frame_.size();
     point_feet_ = point_feet;
+
+    std::unordered_map<std::string, Eigen::Quaterniond> contacts_orientation;
+    std::unordered_map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
+    for (const auto& cf : contacts_frame_) {
+        contacts_status_[cf] = false;
+        contacts_probability_[cf] = 0.0;
+        contacts_position_[cf] = Eigen::Vector3d::Zero();
+        contacts_position_cov_[cf] = Eigen::Matrix3d::Identity();
+        if (!isPointFeet()) {
+            contacts_orientation[cf] = Eigen::Quaterniond::Identity();
+            contacts_orientation_cov[cf] = Eigen::Matrix3d::Identity();
+        }
+    }
+    if (!isPointFeet()) {
+        contacts_orientation_ = contacts_orientation;
+        contacts_orientation_cov_ = contacts_orientation_cov;
+    }
 }
 
 State::State(const State& other) {
@@ -291,32 +308,18 @@ std::optional<Eigen::Matrix<double, 6, 6>> State::getContactPoseCov(
     }
 }
 
-const Eigen::Vector3d& State::getCoMPosition() const {
-    return com_position_;
-}
+const Eigen::Vector3d& State::getCoMPosition() const { return com_position_; }
 
-const Eigen::Vector3d& State::getCoMLinearVelocity() const {
-    return com_linear_velocity_;
-}
+const Eigen::Vector3d& State::getCoMLinearVelocity() const { return com_linear_velocity_; }
 
-const Eigen::Vector3d& State::getCoMExternalForces() const {
-    return external_forces_;
-}
+const Eigen::Vector3d& State::getCoMExternalForces() const { return external_forces_; }
 
-const Eigen::Matrix3d& State::getCoMPositionCov() const {
-    return com_position_cov_;
-}
+const Eigen::Matrix3d& State::getCoMPositionCov() const { return com_position_cov_; }
 
-const Eigen::Matrix3d& State::getCoMLinearVelocityCov() const {
-    return com_linear_velocity_cov_;
-}
+const Eigen::Matrix3d& State::getCoMLinearVelocityCov() const { return com_linear_velocity_cov_; }
 
-const Eigen::Matrix3d& State::getCoMExternalForcesCov() const {
-    return  external_forces_cov_;
-}
+const Eigen::Matrix3d& State::getCoMExternalForcesCov() const { return external_forces_cov_; }
 
-bool State::isPointFeet() const {
-    return point_feet_;
-}
+bool State::isPointFeet() const { return point_feet_; }
 
 }  // namespace serow
