@@ -24,12 +24,11 @@
 
 namespace serow {
 
-// State is pos - vel - rot - accel - gyro bias - 15 + 6 x N contact pos - contact or
+// State is pos - vel - rot - accel - gyro bias - 15 + 6 x N contact pos - contact orient
 
 class ContactEKF {
    public:
-    ContactEKF();
-    void init(const State& state, double imu_rate);
+    void init(const State& state, double imu_rate, double g);
     State predict(const State& state, const ImuMeasurement& imu, const KinematicMeasurement& kin);
     State update(const State& state, const KinematicMeasurement& kin,
                  std::optional<OdometryMeasurement> odom = std::nullopt,
@@ -81,7 +80,8 @@ class ContactEKF {
         double dt);
 
     State updateWithContacts(
-        const State& state, const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
+        const State& state,
+        const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
         std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
         const std::unordered_map<std::string, double>& contacts_probability,
         const Eigen::Matrix3d& position_cov,
@@ -96,7 +96,7 @@ class ContactEKF {
 
     State updateWithTerrain(const State& state, double terrain_height, double terrain_cov);
 
-    void updateState(State& state, const Eigen::VectorXd& dx,  const Eigen::MatrixXd& P) const;
+    void updateState(State& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const;
 };
 
 }  // namespace serow

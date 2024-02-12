@@ -74,6 +74,16 @@ class Serow {
         Eigen::Vector3d external_forces_process_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d com_position_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d com_linear_acceleration_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_base_position_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_base_orientation_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_base_linear_velocity_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_contact_position_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_contact_orientation_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_imu_linear_acceleration_bias_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_imu_angular_velocity_bias_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_com_position_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_com_linear_velocity_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d initial_external_forces_cov{Eigen::Vector3d::Zero()};
         double eps{0.1};
         Eigen::Isometry3d T_base_to_odom{Eigen::Isometry3d::Identity()};
         bool is_flat_terrain{};

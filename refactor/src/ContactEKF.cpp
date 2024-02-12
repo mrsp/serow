@@ -8,13 +8,8 @@
 
 namespace serow {
 
-ContactEKF::ContactEKF() {
-    // Gravity Vector
-    g_ = Eigen::Vector3d::Zero();
-    g_(2) = -9.80;
-}
-
-void ContactEKF::init(const State& state, double imu_rate) {
+void ContactEKF::init(const State& state, double imu_rate, double g) {
+    g_ = Eigen::Vector3d(0.0, 0.0, -g);
     num_leg_end_effectors_ = state.num_leg_ee_;
     contact_dim_ = state.isPointFeet() ? 3 : 6;
     num_states_ = 15 + contact_dim_ * num_leg_end_effectors_;

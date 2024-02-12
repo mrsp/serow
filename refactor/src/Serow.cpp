@@ -90,6 +90,21 @@ Serow::Serow(std::string config_file) {
         params_.external_forces_process_cov[i] = config["external_forces_process_covariance"][i];
         params_.com_position_cov[i] = config["com_position_covariance"][i];
         params_.com_linear_acceleration_cov[i] = config["com_linear_acceleration_covariance"][i];
+        params_.initial_base_position_cov[i] = config["initial_base_position_covariance"][i];
+        params_.initial_base_orientation_cov[i] = config["initial_base_orientation_covariance"][i];
+        params_.initial_base_linear_velocity_cov[i] =
+            config["initial_base_linear_velocity_covariance"][i];
+        params_.initial_contact_position_cov[i] = config["initial_contact_position_covariance"][i];
+        params_.initial_contact_orientation_cov[i] =
+            config["initial_contact_orientation_covariance"][i];
+        params_.initial_imu_linear_acceleration_bias_cov[i] =
+            config["initial_imu_linear_acceleration_bias_covariance"][i];
+        params_.initial_imu_angular_velocity_bias_cov[i] =
+            config["initial_imu_angular_velocity_bias_covariance"][i];
+        params_.initial_com_position_cov[i] = config["initial_com_position_covariance"][i];
+        params_.initial_com_linear_velocity_cov[i] =
+            config["initial_com_linear_velocity_covariance"][i];
+        params_.initial_external_forces_cov[i] = config["initial_external_forces_covariance"][i];
     }
 
     // External odometry extrinsics
@@ -102,6 +117,28 @@ Serow::Serow(std::string config_file) {
     // Terrain height parameter
     params_.is_flat_terrain = config["is_flat_terrain"];
     params_.terrain_height_covariance = config["terrain_height_covariance"];
+
+    // Initialize state uncertainty
+    state_.base_position_cov_ = params_.initial_base_position_cov.asDiagonal();
+    state_.base_orientation_cov_ = params_.initial_base_orientation_cov.asDiagonal();
+    state_.base_linear_velocity_cov_ = params_.initial_base_linear_velocity_cov.asDiagonal();
+    state_.imu_angular_velocity_bias_cov_ =
+        params_.initial_imu_angular_velocity_bias_cov.asDiagonal();
+    state_.imu_linear_acceleration_bias_cov_ =
+        params_.initial_imu_linear_acceleration_bias_cov.asDiagonal();
+    std::unordered_map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
+    for (const auto& cf : state_.getContactsFrame()) {
+        state_.contacts_position_cov_[cf] = params_.initial_contact_position_cov.asDiagonal();
+        if (!state_.isPointFeet()) {
+            contacts_orientation_cov[cf] = params_.initial_contact_orientation_cov.asDiagonal();
+        }
+    }
+    if (!contacts_orientation_cov.empty()) {
+        state_.contacts_orientation_cov_ = contacts_orientation_cov;
+    }
+    state_.com_position_cov_ = params_.initial_com_position_cov.asDiagonal();
+    state_.com_linear_velocity_cov_ = params_.initial_com_linear_velocity_cov.asDiagonal();
+    state_.external_forces_cov_ = params_.initial_external_forces_cov.asDiagonal();
 }
 
 void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
@@ -262,7 +299,7 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
         leg_odometry_ = std::make_unique<LegOdometry>(
             base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
             params_.tau_1, params_.joint_rate, params_.g);
-        base_estimator_.init(state, params_.imu_rate);
+        base_estimator_.init(state, params_.imu_rate, params_.g);
         com_estimator_.init(state, params_.mass, params_.force_torque_rate);
     }
     if (state.contacts_probability_.empty()) {
