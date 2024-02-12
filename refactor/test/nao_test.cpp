@@ -58,38 +58,39 @@ TEST(SerowTests, NaoTest) {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     std::cout << "SERoW filtering loop duration " << duration.count() << " us " << std::endl;
     t0 = std::chrono::high_resolution_clock::now();
-    serow::State state = SERoW.getState();
+    auto state = SERoW.getState(true);
     t1 = std::chrono::high_resolution_clock::now();
+    EXPECT_TRUE(state.has_value());
     duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
     std::cout << "SERoW get state duration " << duration.count() << " us " << std::endl;
 
-    EXPECT_FALSE(state.getBasePosition() != state.getBasePosition());
-    EXPECT_FALSE(state.getBaseLinearVelocity() != state.getBaseLinearVelocity());
-    EXPECT_FALSE(state.getBaseOrientation() != state.getBaseOrientation());
-    for (const auto& cf : state.getContactsFrame()) {
-        EXPECT_FALSE(*state.getContactPosition(cf) != *state.getContactPosition(cf));
-        if (!state.isPointFeet()) {
-            EXPECT_FALSE(*state.getContactOrientation(cf) != *state.getContactOrientation(cf));
+    EXPECT_FALSE(state->getBasePosition() != state->getBasePosition());
+    EXPECT_FALSE(state->getBaseLinearVelocity() != state->getBaseLinearVelocity());
+    EXPECT_FALSE(state->getBaseOrientation() != state->getBaseOrientation());
+    for (const auto& cf : state->getContactsFrame()) {
+        EXPECT_FALSE(*state->getContactPosition(cf) != *state->getContactPosition(cf));
+        if (!state->isPointFeet()) {
+            EXPECT_FALSE(*state->getContactOrientation(cf) != *state->getContactOrientation(cf));
         }
     }
-    EXPECT_FALSE(state.getCoMPosition() != state.getCoMPosition());
-    EXPECT_FALSE(state.getCoMLinearVelocity() != state.getCoMLinearVelocity());
-    EXPECT_FALSE(state.getCoMExternalForces() != state.getCoMExternalForces());
+    EXPECT_FALSE(state->getCoMPosition() != state->getCoMPosition());
+    EXPECT_FALSE(state->getCoMLinearVelocity() != state->getCoMLinearVelocity());
+    EXPECT_FALSE(state->getCoMExternalForces() != state->getCoMExternalForces());
 
-    std::cout << "Base position " << state.getBasePosition().transpose() << std::endl;
-    std::cout << "Base velocity " << state.getBaseLinearVelocity().transpose() << std::endl;
-    std::cout << "Base orientation " << state.getBaseOrientation() << std::endl;
-    std::cout << "Left contact position " << state.getContactPosition("l_ankle")->transpose()
+    std::cout << "Base position " << state->getBasePosition().transpose() << std::endl;
+    std::cout << "Base velocity " << state->getBaseLinearVelocity().transpose() << std::endl;
+    std::cout << "Base orientation " << state->getBaseOrientation() << std::endl;
+    std::cout << "Left contact position " << state->getContactPosition("l_ankle")->transpose()
               << std::endl;
-    std::cout << "Right contact position " << state.getContactPosition("r_ankle")->transpose()
+    std::cout << "Right contact position " << state->getContactPosition("r_ankle")->transpose()
               << std::endl;
-    if (!state.isPointFeet()) {
-        std::cout << "Left contact orientation " << *state.getContactOrientation("l_ankle")
+    if (!state->isPointFeet()) {
+        std::cout << "Left contact orientation " << *state->getContactOrientation("l_ankle")
                   << std::endl;
-        std::cout << "Right contact orientation " << *state.getContactOrientation("r_ankle")
+        std::cout << "Right contact orientation " << *state->getContactOrientation("r_ankle")
                   << std::endl;
     }
-    std::cout << "CoM position " << state.getCoMPosition().transpose() << std::endl;
-    std::cout << "CoM linear velocity " << state.getCoMLinearVelocity().transpose() << std::endl;
-    std::cout << "CoM external forces " << state.getCoMExternalForces().transpose() << std::endl;
+    std::cout << "CoM position " << state->getCoMPosition().transpose() << std::endl;
+    std::cout << "CoM linear velocity " << state->getCoMLinearVelocity().transpose() << std::endl;
+    std::cout << "CoM external forces " << state->getCoMExternalForces().transpose() << std::endl;
 }

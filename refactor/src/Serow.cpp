@@ -75,6 +75,7 @@ Serow::Serow(std::string config_file) {
     params_.median_window = config["median_window"];
 
     // Base/CoM estimation parameters
+    params_.convergence_cycles = config["convergence_cycles"];
     for (size_t i = 0; i < 3; i++) {
         params_.angular_velocity_cov[i] = config["imu_angular_velocity_covariance"][i];
         params_.angular_velocity_bias_cov[i] = config["imu_angular_velocity_bias_covariance"][i];
@@ -418,6 +419,17 @@ void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeas
 
     // Safely copy the state post filtering
     state_ = std::move(state);
+    if (cycle++ > params_.convergence_cycles) {
+        state_.is_valid = true;
+    }
+}
+
+std::optional<State> Serow::getState(bool allow_invalid) {
+    if (state_.is_valid || allow_invalid) {
+        return state_;
+    } else {
+        return std::nullopt;
+    }
 }
 
 }  // namespace serow

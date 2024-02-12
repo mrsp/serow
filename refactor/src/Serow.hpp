@@ -33,7 +33,7 @@ class Serow {
         std::optional<std::unordered_map<std::string, double>> contact_probabilities =
             std::nullopt);
 
-    State getState() { return state_; }
+    std::optional<State> getState(bool allow_invalid = false);
 
    private:
     struct Params {
@@ -61,6 +61,7 @@ class Serow {
         double high_threshold{};
         double low_threshold{};
         int median_window{};
+        int convergence_cycles{};
         Eigen::Vector3d angular_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d angular_velocity_bias_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d linear_acceleration_cov{Eigen::Vector3d::Zero()};
@@ -102,6 +103,7 @@ class Serow {
     std::unique_ptr<RobotKinematics> kinematic_estimator_;
     std::unique_ptr<LegOdometry> leg_odometry_;
     bool is_initialized{};
+    size_t cycle{};
     std::optional<TerrainMeasurement> terrain_ = std::nullopt;
 };
 
