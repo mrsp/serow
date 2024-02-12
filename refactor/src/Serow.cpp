@@ -142,10 +142,11 @@ Serow::Serow(std::string config_file) {
     state_.external_forces_cov_ = params_.initial_external_forces_cov.asDiagonal();
 }
 
-void Serow::filter(ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
-                   std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft,
-                   std::optional<OdometryMeasurement> odom,
-                   std::optional<std::unordered_map<std::string, double>> contact_probabilities) {
+void Serow::filter(
+    ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
+    std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft,
+    std::optional<OdometryMeasurement> odom,
+    std::optional<std::unordered_map<std::string, ContactMeasurement>> contact_probabilities) {
     if (!is_initialized && ft.has_value()) {
         is_initialized = true;
     } else {
