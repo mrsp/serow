@@ -64,8 +64,9 @@ class State {
    private:
     // Flag to indicate if the robot has point feet. False indicates flat feet contacts.
     bool point_feet_{};
-
     int num_leg_ee_{};
+    bool is_valid{};
+
     // Base position in the world frame
     Eigen::Vector3d base_position_{Eigen::Vector3d::Zero()};
     // Base orientation in the world frame
