@@ -30,7 +30,7 @@ class Serow {
         ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
         std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
         std::optional<OdometryMeasurement> odom = std::nullopt,
-        std::optional<std::unordered_map<std::string, double>> contact_probabilities =
+        std::optional<std::unordered_map<std::string, ContactMeasurement>> contact_probabilities =
             std::nullopt);
 
     std::optional<State> getState(bool allow_invalid = false);

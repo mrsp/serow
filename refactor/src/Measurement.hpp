@@ -82,4 +82,6 @@ struct TerrainMeasurement {
     double height_cov{1.0};
 };
 
+using ContactMeasurement = double;
+
 }  // namespace serow
