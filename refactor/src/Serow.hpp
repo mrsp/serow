@@ -102,8 +102,9 @@ class Serow {
     std::unique_ptr<Mahony> attitude_estimator_;
     std::unique_ptr<RobotKinematics> kinematic_estimator_;
     std::unique_ptr<LegOdometry> leg_odometry_;
-    bool is_initialized{};
-    size_t cycle{};
+    bool is_initialized_{};
+    size_t cycle_{};
+    size_t imu_calibration_cycles_{};
     std::optional<TerrainMeasurement> terrain_ = std::nullopt;
 };
 
