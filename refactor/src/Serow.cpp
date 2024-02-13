@@ -48,8 +48,10 @@ Serow::Serow(std::string config_file) {
             for (const auto& frame : state_.getContactsFrame()) {
                 params_.R_foot_to_force[frame](i, j) =
                     config["R_foot_to_force"][std::to_string(k)][3 * i + j];
-                params_.R_foot_to_torque[frame](i, j) =
-                    config["R_foot_to_torque"][std::to_string(k)][3 * i + j];
+                if (config["has_force_torque"]) {
+                    params_.R_foot_to_torque[frame](i, j) =
+                        config["R_foot_to_torque"][std::to_string(k)][3 * i + j];
+                }
                 k++;
             }
         }
@@ -147,9 +149,9 @@ void Serow::filter(
     std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft,
     std::optional<OdometryMeasurement> odom,
     std::optional<std::unordered_map<std::string, ContactMeasurement>> contact_probabilities) {
-    if (!is_initialized && ft.has_value()) {
-        is_initialized = true;
-    } else {
+    if (!is_initialized_ && ft.has_value()) {
+        is_initialized_ = true;
+    } else if (!is_initialized_) {
         return;
     }
     // Safely copy the state prior to filtering
@@ -176,18 +178,17 @@ void Serow::filter(
 
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
-    static int imu_calibration_cycles = 0;
-    if (params_.calibrate_imu && imu_calibration_cycles < params_.max_imu_calibration_cycles) {
+    if (params_.calibrate_imu && imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
         params_.bias_gyro += imu.angular_velocity;
         params_.bias_acc += imu.linear_acceleration -
                             R_world_to_base.transpose() * Eigen::Vector3d(0, 0, params_.g);
-        imu_calibration_cycles++;
+        imu_calibration_cycles_++;
         return;
     } else if (params_.calibrate_imu) {
-        params_.bias_acc /= imu_calibration_cycles;
-        params_.bias_gyro /= imu_calibration_cycles;
+        params_.bias_acc /= imu_calibration_cycles_;
+        params_.bias_gyro /= imu_calibration_cycles_;
         params_.calibrate_imu = false;
-        std::cout << "Calibration finished at " << imu_calibration_cycles << std::endl;
+        std::cout << "Calibration finished at " << imu_calibration_cycles_ << std::endl;
         std::cout << "Gyro biases " << params_.bias_gyro.transpose() << std::endl;
         std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
     }
@@ -195,6 +196,7 @@ void Serow::filter(
     // Update the Kinematic Structure
     kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities,
                                             params_.joint_position_variance);
+
     // Get the CoM w.r.t the base frame
     const Eigen::Vector3d& base_to_com_position = kinematic_estimator_->comPosition();
     // Get the angular momentum around the CoM
@@ -420,7 +422,7 @@ void Serow::filter(
 
     // Safely copy the state post filtering
     state_ = std::move(state);
-    if (cycle++ > params_.convergence_cycles) {
+    if (cycle_++ > params_.convergence_cycles) {
         state_.is_valid = true;
     }
 }
