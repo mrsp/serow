@@ -154,6 +154,7 @@ void Serow::filter(
     } else if (!is_initialized_) {
         return;
     }
+
     // Safely copy the state prior to filtering
     State state(state_);
 
@@ -175,7 +176,6 @@ void Serow::filter(
     // Estimate the base frame attitude
     imu.angular_velocity = params_.R_base_to_gyro * imu.angular_velocity;
     imu.linear_acceleration = params_.R_base_to_acc * imu.linear_acceleration;
-
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
 
@@ -195,16 +195,17 @@ void Serow::filter(
         std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
     }
 
+    // Remove the imu bias from the measurements
     imu.angular_velocity -= params_.bias_gyro;
     imu.linear_acceleration -= params_.bias_acc;
 
-    // Update the Kinematic Structure
+    // Update the kinematic structure
     kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities,
                                             params_.joint_position_variance);
 
     // Get the CoM w.r.t the base frame
     const Eigen::Vector3d& base_to_com_position = kinematic_estimator_->comPosition();
-    // Get the angular momentum around the CoM
+    // Get the angular momentum around the CoM in base frame coordinates
     const Eigen::Vector3d& com_angular_momentum = kinematic_estimator_->comAngularMomentum();
     if (!angular_momentum_derivative_estimator) {
         angular_momentum_derivative_estimator = std::make_unique<DerivativeEstimator>();
@@ -212,8 +213,10 @@ void Serow::filter(
                                                     params_.joint_rate,
                                                     params_.angular_momentum_cutoff_frequency);
     }
+    // Estimate the angular momentum derivative 
     const Eigen::Vector3d& com_angular_momentum_derivative =
         angular_momentum_derivative_estimator->filter(com_angular_momentum);
+    
     // Get the leg end-effector kinematics w.r.t the base frame
     std::unordered_map<std::string, Eigen::Quaterniond> base_to_foot_orientations;
     std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_positions;
@@ -232,7 +235,7 @@ void Serow::filter(
 
     if (ft.has_value()) {
         std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
-        std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques;
+        std::unordered_map<std::string, Eigen::Vector3d> contact_torques;
         double den = state_.num_leg_ee_ * params_.eps;
 
         for (const auto& frame : state.getContactsFrame()) {
@@ -246,11 +249,12 @@ void Serow::filter(
             contact_forces[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
                                     params_.R_foot_to_force.at(frame) * ft->at(frame).force;
             if (!state.isPointFeet() && ft->at(frame).torque.has_value()) {
-                contact_torques.value()[frame] =
+                contact_torques[frame] =
                     base_to_foot_orientations.at(frame).toRotationMatrix() *
                     params_.R_foot_to_torque.at(frame) * ft->at(frame).torque.value();
             }
 
+            // Estimate the contact status
             if (params_.estimate_contact_status) {
                 contact_estimators_.at(frame).SchmittTrigger(contact_forces.at(frame).z());
                 state.contacts_status_[frame] = contact_estimators_.at(frame).getContactStatus();
@@ -260,6 +264,7 @@ void Serow::filter(
         den /= state_.num_leg_ee_;
         if (params_.estimate_contact_status && !contact_probabilities.has_value()) {
             for (const auto& frame : state.getContactsFrame()) {
+                // Estimate the contact quality
                 state.contacts_probability_[frame] = std::clamp(
                     (contact_estimators_.at(frame).getContactForce() + params_.eps) / den, 0.0,
                     1.0);
@@ -274,30 +279,34 @@ void Serow::filter(
             }
         }
 
-        if (!state.isPointFeet() && contact_torques.has_value()) {
-            for (const auto& frame : state.getContactsFrame()) {
-                ft->at(frame).cop = Eigen::Vector3d(0.0, 0.0, 0.0);
-                if (state.contacts_probability_.at(frame) > 0.0) {
-                    ft->at(frame).cop = Eigen::Vector3d(
-                        -contact_torques.value().at(frame).y() / contact_forces.at(frame).z(),
-                        contact_torques.value().at(frame).x() / contact_forces.at(frame).z(), 0.0);
-                }
+        // Estimate the COP in the local foot frame
+        for (const auto& frame : state.getContactsFrame()) {
+            ft->at(frame).cop = Eigen::Vector3d::Zero();
+            if (!state.isPointFeet() && contact_torques.count(frame) &&
+                state.contacts_probability_.at(frame) > 0.0) {
+                ft->at(frame).cop = Eigen::Vector3d(
+                    -contact_torques.at(frame).y() / contact_forces.at(frame).z(),
+                    contact_torques.at(frame).x() / contact_forces.at(frame).z(), 0.0);
             }
+        }
+
+        state.contact_forces = std::move(contact_forces);
+        if (!contact_torques.empty()) {
             state.contact_torques = std::move(contact_torques);
         }
-        state.contact_forces = std::move(contact_forces);
     }
 
     // Compute the leg odometry and the contact points
     if (!leg_odometry_) {
+        // Initialize the state
         state.base_orientation_ = attitude_estimator_->getQ();
         state.com_position_ = base_to_com_position;
         state.contacts_position_ = base_to_foot_positions;
         // Assuming the terrain is flat and the robot is initialized in a standing posture we can
-        // have a measurement of the terrain height constraining base estimation.
+        // have a measurement of the average terrain height constraining base estimation.
         if (params_.is_flat_terrain) {
             TerrainMeasurement tm{.height = 0.0, .height_cov = params_.terrain_height_covariance};
-            terrain_ = tm;
+            terrain_ = std::move(tm);
             for (const auto& frame : state.getContactsFrame()) {
                 terrain_->height += base_to_foot_positions.at(frame).z();
             }
@@ -316,6 +325,7 @@ void Serow::filter(
         return;
     }
 
+    // Estimate the relative to the base frame contacts
     leg_odometry_->estimate(
         attitude_estimator_->getQ(),
         attitude_estimator_->getGyro() - attitude_estimator_->getR() * params_.bias_gyro,
@@ -348,18 +358,19 @@ void Serow::filter(
             kinematic_estimator_->getLinearVelocityNoise(frame) *
             kinematic_estimator_->getLinearVelocityNoise(frame).transpose();
         if (!state.isPointFeet()) {
-            kin_contacts_orientation_noise.insert(
-                {frame, kinematic_estimator_->getAngularVelocityNoise(frame) *
-                            kinematic_estimator_->getAngularVelocityNoise(frame).transpose()});
+            kin_contacts_orientation_noise[frame] =
+                kinematic_estimator_->getAngularVelocityNoise(frame) *
+                kinematic_estimator_->getAngularVelocityNoise(frame).transpose();
         }
     }
     if (!state.isPointFeet()) {
-        kin.contacts_orientation_noise.emplace(std::move(kin_contacts_orientation_noise));
+        kin.contacts_orientation_noise = std::move(kin_contacts_orientation_noise);
     }
 
     // Call the base estimator predict step utilizing imu and contact status measurements
     state = base_estimator_.predict(state, imu, kin);
-    // Call the base estimator update step by employing relative contact pose and odometry
+    
+    // Call the base estimator update step by employing relative contact pose, odometry and terrain
     // measurements
     if (odom.has_value()) {
         odom->base_position = params_.T_base_to_odom * odom->base_position;
@@ -372,6 +383,7 @@ void Serow::filter(
     }
     state = base_estimator_.update(state, kin, odom, terrain_);
 
+    // Estimate the angular acceleration using the gyro velocity
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>();
         gyro_derivative_estimator->init("Gyro Derivative", params_.imu_rate,
@@ -380,10 +392,10 @@ void Serow::filter(
     imu.angular_acceleration =
         gyro_derivative_estimator->filter(imu.angular_velocity - state.getImuAngularVelocityBias());
 
+    // Create the CoM estimation measurements
+    kin.com_position = state.getBasePose() * base_to_com_position;
+    kin.com_position_cov = params_.com_position_cov.asDiagonal();
     if (ft.has_value()) {
-        // Create the CoM estimation measurements
-        kin.com_position = state.getBasePose() * base_to_com_position;
-
         // Approximate the CoM linear acceleration
         Eigen::Vector3d base_linear_acceleration =
             state.getBasePose().linear() *
@@ -402,22 +414,26 @@ void Serow::filter(
         kin.com_angular_momentum_derivative =
             state.getBasePose().linear() * com_angular_momentum_derivative;
 
-        kin.com_position_cov = params_.com_position_cov.asDiagonal();
         kin.com_position_process_cov = params_.com_position_process_cov.asDiagonal();
         kin.com_linear_velocity_process_cov = params_.com_linear_velocity_process_cov.asDiagonal();
         kin.external_forces_process_cov = params_.external_forces_process_cov.asDiagonal();
         kin.com_linear_acceleration_cov = params_.com_linear_acceleration_cov.asDiagonal();
 
+        // Compute the COP and the total GRF in the world frame
         GroundReactionForceMeasurement grf;
         double den = 0;
         for (const auto& frame : state.getContactsFrame()) {
             grf.timestamp = ft->at(frame).timestamp;
-            grf.force += state.getContactPose(frame)->linear() * ft->at(frame).force;
-            grf.cop += state.contacts_probability_.at(frame) *
-                       (*state.getContactPose(frame) * ft->at(frame).cop);
-            den += state.contacts_probability_.at(frame);
+            if (state.contacts_probability_.at(frame) > 0.0) {
+                grf.force += state.getContactPose(frame)->linear() * ft->at(frame).force;
+                grf.cop += state.contacts_probability_.at(frame) *
+                        (*state.getContactPose(frame) * ft->at(frame).cop);
+                den += state.contacts_probability_.at(frame);
+            }
         }
-        grf.cop /= den;
+        if (den > 0) {
+            grf.cop /= den;
+        }
 
         // Call the CoM estimator predict step utilizing ground reaction measurements
         state = com_estimator_.predict(state, kin, grf);
