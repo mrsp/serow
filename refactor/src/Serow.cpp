@@ -178,6 +178,8 @@ void Serow::filter(
 
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
+
+    // Estimate the imu bias in the base frame assumming that the robot is standing still
     if (params_.calibrate_imu && imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
         params_.bias_gyro += imu.angular_velocity;
         params_.bias_acc += imu.linear_acceleration -
@@ -192,6 +194,9 @@ void Serow::filter(
         std::cout << "Gyro biases " << params_.bias_gyro.transpose() << std::endl;
         std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
     }
+
+    imu.angular_velocity -= params_.bias_gyro;
+    imu.linear_acceleration -= params_.bias_acc;
 
     // Update the Kinematic Structure
     kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities,
