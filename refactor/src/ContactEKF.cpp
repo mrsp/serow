@@ -197,7 +197,7 @@ State ContactEKF::computeDiscreteDynamics(
     predicted_state.base_position_ += R * v * dt;
     predicted_state.base_position_ += r;
 
-    // Velocity
+    // Linear velocity
     a *= dt;
     a += v;
     predicted_state.base_linear_velocity_ = a;
@@ -206,17 +206,26 @@ State ContactEKF::computeDiscreteDynamics(
     predicted_state.imu_angular_velocity_bias_ = state.imu_angular_velocity_bias_;
     predicted_state.imu_linear_acceleration_bias_ = state.imu_linear_acceleration_bias_;
 
+    // Orientation
+    predicted_state.base_orientation_ =
+        Eigen::Quaterniond(
+            lie::so3::plus(state.base_orientation_.toRotationMatrix(), angular_velocity))
+            .normalized();
+    
+    // Predicted contacts positions
     if (contacts_status.has_value() && contacts_position.has_value()) {
         for (auto [cf, cs] : contacts_status.value()) {
             if (contacts_position.value().count(cf)) {
                 int contact_status = static_cast<int>(cs);
                 predicted_state.contacts_position_[cf] =
                     contact_status * state.contacts_position_.at(cf) +
-                    (1 - contact_status) * R * contacts_position.value().at(cf);
+                    (1 - contact_status) *
+                        (state.base_position_ + R * contacts_position.value().at(cf));
             }
         }
     }
-
+    
+    // Predicted contacts orientations
     if (!state.isPointFeet() && contacts_status.has_value() && contacts_orientations.has_value()) {
         for (auto [cf, cs] : contacts_status.value()) {
             if (contacts_orientations.value().count(cf)) {
@@ -233,10 +242,6 @@ State ContactEKF::computeDiscreteDynamics(
         }
     }
 
-    predicted_state.base_orientation_ =
-        Eigen::Quaterniond(
-            lie::so3::plus(state.base_orientation_.toRotationMatrix(), angular_velocity))
-            .normalized();
     return predicted_state;
 }
 
@@ -392,7 +397,10 @@ void ContactEKF::updateState(State& state, const Eigen::VectorXd& dx,
         Eigen::Quaterniond(lie::so3::plus(state.base_orientation_.toRotationMatrix(), dx(r_idx_)))
             .normalized();
     state.base_orientation_cov_ = P.block<3, 3>(r_idx_(0), r_idx_(0));
-
+    state.imu_angular_velocity_bias_ += dx(bg_idx_);
+    state.imu_angular_velocity_bias_cov_ = P.block<3, 3>(bg_idx_(0), bg_idx_(0));
+    state.imu_linear_acceleration_bias_ += dx(ba_idx_);
+    state.imu_linear_acceleration_bias_cov_ = P.block<3, 3>(ba_idx_(0), ba_idx_(0));
     for (const auto& cf : state.contacts_frame_) {
         state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
         state.contacts_position_cov_.at(cf) = P_.block<3, 3>(pl_idx_.at(cf)(0), pl_idx_.at(cf)(0));
