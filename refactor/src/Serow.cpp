@@ -178,7 +178,6 @@ void Serow::filter(
 
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
-    std::cout<<R_world_to_base<<std::endl;
     if (params_.calibrate_imu && imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
         params_.bias_gyro += imu.angular_velocity;
         params_.bias_acc += imu.linear_acceleration -
