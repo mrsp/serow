@@ -33,7 +33,7 @@ class ContactDetector {
      *  @param force normal ground reaction force
      */
     void SchmittTrigger(double contact_force) {
-        contact_force_ = mdf_->filter(cropContactForce(contact_force));
+        contact_force_ = mdf_->filter(std::clamp(contact_force, 0.0, mass_ * g_));
 
         if (contact_status_ == 0) {
             if (contact_force_ > high_threshold_) {
@@ -51,15 +51,6 @@ class ContactDetector {
     double getContactForce() { return contact_force_; };
 
     std::string getContactFrame() { return contact_frame_; };
-
-    /** @fn     double cropContactForce(double force)
-     *  @brief  Crops the vertical ground reaction force (GRF) in the margins [0, mass * g]
-     *  @param  force GRF
-     *  @return  The cropped GRF
-     */
-    double cropContactForce(double force) const {
-        return std::max(0.0, std::min(force, mass_ * g_));
-    }
 
    private:
     std::unique_ptr<MovingMedianFilter> mdf_;

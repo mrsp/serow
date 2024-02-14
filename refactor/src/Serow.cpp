@@ -178,6 +178,7 @@ void Serow::filter(
 
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
+    std::cout<<R_world_to_base<<std::endl;
     if (params_.calibrate_imu && imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
         params_.bias_gyro += imu.angular_velocity;
         params_.bias_acc += imu.linear_acceleration -
@@ -228,7 +229,7 @@ void Serow::filter(
     if (ft.has_value()) {
         std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
         std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques;
-        double den = 2.0 * params_.eps;
+        double den = state_.num_leg_ee_ * params_.eps;
 
         for (const auto& frame : state.getContactsFrame()) {
             if (params_.estimate_contact_status && !contact_estimators_.count(frame)) {
@@ -252,11 +253,12 @@ void Serow::filter(
                 den += contact_estimators_.at(frame).getContactForce();
             }
         }
-
+        den /= state_.num_leg_ee_;
         if (params_.estimate_contact_status && !contact_probabilities.has_value()) {
             for (const auto& frame : state.getContactsFrame()) {
-                state.contacts_probability_[frame] =
-                    (contact_estimators_.at(frame).getContactForce() + params_.eps) / den;
+                state.contacts_probability_[frame] = std::clamp(
+                    (contact_estimators_.at(frame).getContactForce() + params_.eps) / den, 0.0,
+                    1.0);
             }
         } else if (contact_probabilities) {
             state.contacts_probability_ = std::move(contact_probabilities.value());
@@ -327,10 +329,11 @@ void Serow::filter(
     kin.contacts_status = state.contacts_status_;
     kin.contacts_probability = state.contacts_probability_;
     kin.contacts_position = leg_odometry_->getContactPositions();
-    kin.contacts_orientation = leg_odometry_->getContactOrientations();
     kin.position_cov = params_.contact_position_cov.asDiagonal();
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
+
     if (!state.isPointFeet()) {
+        kin.contacts_orientation = leg_odometry_->getContactOrientations();
         kin.orientation_cov = params_.contact_orientation_cov.asDiagonal();
         kin.orientation_slip_cov = params_.contact_orientation_slip_cov.asDiagonal();
     }

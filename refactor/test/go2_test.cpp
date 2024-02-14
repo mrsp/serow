@@ -40,7 +40,7 @@ TEST(SerowTests, Go2Test) {
 
     // Parse the data, create the measurements, and run the filtering loop
     for (size_t i = 1; i < data.size(); i++) {
-        double timestamp = std::stod(data[i][0]);
+        double timestamp = std::stod(data[i][0]) * 1e-9;
         std::unordered_map<std::string, serow::ForceTorqueMeasurement> force_torque;
         force_torque.insert(
             {"FR_foot", serow::ForceTorqueMeasurement{
@@ -109,7 +109,9 @@ TEST(SerowTests, Go2Test) {
         EXPECT_FALSE(state->getBaseLinearVelocity() != state->getBaseLinearVelocity());
         EXPECT_FALSE(state->getBaseOrientation() != state->getBaseOrientation());
         for (const auto& cf : state->getContactsFrame()) {
-            EXPECT_FALSE(*state->getContactPosition(cf) != *state->getContactPosition(cf));
+            if(state->getContactPosition(cf)) {
+                EXPECT_FALSE(*state->getContactPosition(cf) != *state->getContactPosition(cf));
+            }
         }
         EXPECT_FALSE(state->getCoMPosition() != state->getCoMPosition());
         EXPECT_FALSE(state->getCoMLinearVelocity() != state->getCoMLinearVelocity());
@@ -118,10 +120,13 @@ TEST(SerowTests, Go2Test) {
         std::cout << "Base position " << state->getBasePosition().transpose() << std::endl;
         std::cout << "Base velocity " << state->getBaseLinearVelocity().transpose() << std::endl;
         std::cout << "Base orientation " << state->getBaseOrientation() << std::endl;
-        std::cout << "Left contact position " << state->getContactPosition("l_ankle")->transpose()
-                  << std::endl;
-        std::cout << "Right contact position " << state->getContactPosition("r_ankle")->transpose()
-                  << std::endl;
+        for (const auto& cf : state->getContactsFrame()) {
+            if (!state->getContactPosition(cf)) {
+                continue;
+            }
+            std::cout << cf << " contact position " << state->getContactPosition(cf)->transpose()
+                      << std::endl;
+        }
         std::cout << "CoM position " << state->getCoMPosition().transpose() << std::endl;
         std::cout << "CoM linear velocity " << state->getCoMLinearVelocity().transpose()
                   << std::endl;
