@@ -120,6 +120,11 @@ TEST(SerowTests, Go2Test) {
         std::cout << "Base position " << state->getBasePosition().transpose() << std::endl;
         std::cout << "Base velocity " << state->getBaseLinearVelocity().transpose() << std::endl;
         std::cout << "Base orientation " << state->getBaseOrientation() << std::endl;
+        std::cout << "IMU gyro bias " << state->getImuAngularVelocityBias().transpose()
+                  << std::endl;
+        std::cout << "IMU acc bias " << state->getImuLinearAccelerationBias().transpose()
+                  << std::endl;
+        
         for (const auto& cf : state->getContactsFrame()) {
             if (!state->getContactPosition(cf)) {
                 continue;
