@@ -261,7 +261,7 @@ void Serow::filter(
                 den += contact_estimators_.at(frame).getContactForce();
             }
         }
-        den /= state_.num_leg_ee_;
+
         if (params_.estimate_contact_status && !contact_probabilities.has_value()) {
             for (const auto& frame : state.getContactsFrame()) {
                 // Estimate the contact quality
@@ -273,7 +273,7 @@ void Serow::filter(
             state.contacts_probability_ = std::move(contact_probabilities.value());
             for (const auto& frame : state.getContactsFrame()) {
                 state.contacts_status_[frame] = false;
-                if (state.contacts_probability_.at(frame) > 0.5) {
+                if (state.contacts_probability_.at(frame) > 0.5 / state_.num_leg_ee_) {
                     state.contacts_status_[frame] = true;
                 }
             }
