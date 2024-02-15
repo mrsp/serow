@@ -273,7 +273,7 @@ void Serow::filter(
             state.contacts_probability_ = std::move(contact_probabilities.value());
             for (const auto& frame : state.getContactsFrame()) {
                 state.contacts_status_[frame] = false;
-                if (state.contacts_probability_.at(frame) > 0.5 / state_.num_leg_ee_) {
+                if (state.contacts_probability_.at(frame) > 0.5) {
                     state.contacts_status_[frame] = true;
                 }
             }

@@ -33,8 +33,8 @@ class ContactDetector {
      *  @param force normal ground reaction force
      */
     void SchmittTrigger(double contact_force) {
-        contact_force_ = mdf_->filter(std::clamp(contact_force, 0.0, mass_ * g_));
-
+        // contact_force_ = mdf_->filter(std::clamp(contact_force, 0.0, mass_ * g_));
+        contact_force_ = std::clamp(contact_force, 0.0, mass_ * g_);
         if (contact_status_ == 0) {
             if (contact_force_ > high_threshold_) {
                 contact_status_ = 1;
