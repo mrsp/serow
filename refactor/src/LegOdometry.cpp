@@ -75,9 +75,8 @@ void LegOdometry::estimate(
     std::unordered_map<std::string, double> contact_probabilities,
     const std::unordered_map<std::string, Eigen::Vector3d>& contact_forces,
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques) {
-
     const Eigen::Matrix3d& Rwb = base_orientation.toRotationMatrix();
-
+        
     if (!is_initialized) {
         base_linear_velocity_ = Eigen::Vector3d::Zero();
         for (const auto& [key, value] : base_to_foot_positions) {
@@ -110,7 +109,7 @@ void LegOdometry::estimate(
     }
 
     for (const auto [key, value] : pivots_) {
-        feet_position_prev_.at(key) +=
+        feet_position_prev_.at(key) += 
             -Rwb * base_to_foot_orientations.at(key).toRotationMatrix() * value +
             feet_orientation_prev_.at(key).toRotationMatrix() * value;
     }
