@@ -11,7 +11,7 @@ namespace serow {
 LegOdometry::LegOdometry(
     std::unordered_map<std::string, Eigen::Vector3d> feet_position,
     std::unordered_map<std::string, Eigen::Quaterniond> feet_orientation, double mass,
-    double alpha1, double alpha3, double freq, double g,
+    double alpha1, double alpha3, double freq, double g, double eps,
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> force_torque_offset) {
     params_.freq = freq;
     params_.mass = mass;
@@ -19,6 +19,8 @@ LegOdometry::LegOdometry(
     params_.Tm2 = params_.Tm * params_.Tm;
     params_.Tm3 = (mass * mass * g * g) * params_.Tm2;
     params_.g = g;
+    params_.eps = eps;
+    params_.num_leg_ee = feet_position.size();
     for (const auto& [key, value] : feet_position) {
         pivots_[key] = Eigen::Vector3d::Zero();
     }
@@ -72,16 +74,24 @@ void LegOdometry::estimate(
     const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_positions,
     const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
     const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
-    std::unordered_map<std::string, double> contact_probabilities,
     const std::unordered_map<std::string, Eigen::Vector3d>& contact_forces,
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques) {
     const Eigen::Matrix3d& Rwb = base_orientation.toRotationMatrix();
-        
+
+    double den = params_.eps * params_.num_leg_ee;
+    std::unordered_map<std::string, double> force_weights;
+    for (const auto& [key, value] : contact_forces) {
+        den += value.z();
+    }
+    for (const auto& [key, value] : contact_forces) {
+        force_weights[key] = std::clamp((value.z() + params_.eps) / den, 0.0, 1.0);
+    }
+
     if (!is_initialized) {
         base_linear_velocity_ = Eigen::Vector3d::Zero();
         for (const auto& [key, value] : base_to_foot_positions) {
             base_linear_velocity_ +=
-                contact_probabilities.at(key) *
+                force_weights.at(key)  *
                 (-lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) -
                  Rwb * base_to_foot_linear_velocities.at(key));
         }
@@ -121,8 +131,8 @@ void LegOdometry::estimate(
 
     base_position_prev_ = base_position_;
     base_position_ = Eigen::Vector3d::Zero();
-    for (const auto [key, value] : contact_probabilities) {
-        base_position_ += value * contact_contributions.at(key);
+    for (const auto [key, value] : force_weights) {
+        base_position_ += value  * contact_contributions.at(key);
     }
 
     for (const auto [key, value] : contact_contributions) {

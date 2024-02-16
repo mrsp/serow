@@ -25,7 +25,7 @@ class ContactDetector {
         low_threshold_ = low_threshold;
         mass_ = mass;
         g_ = g;
-        mdf_ = std::make_unique<MovingMedianFilter>(median_window);
+        // mdf_ = std::make_unique<MovingMedianFilter>(median_window);
     }
 
     /** @fn  SchmittTrigger(double contact_force)
@@ -53,7 +53,7 @@ class ContactDetector {
     std::string getContactFrame() { return contact_frame_; };
 
    private:
-    std::unique_ptr<MovingMedianFilter> mdf_;
+    // std::unique_ptr<MovingMedianFilter> mdf_;
     int contact_status_{};
     double contact_force_{};
     std::string contact_frame_;

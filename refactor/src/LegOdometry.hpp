@@ -28,9 +28,11 @@ class LegOdometry {
         double Tm3{};
         double mass{};
         double g{};
+        double num_leg_ee{};
         double freq{};
         double alpha1{};
         double alpha3{};
+        double eps{};
     };
 
    private:
@@ -59,7 +61,7 @@ class LegOdometry {
     LegOdometry(std::unordered_map<std::string, Eigen::Vector3d> feet_position,
                 std::unordered_map<std::string, Eigen::Quaterniond> feet_orientation,
                 double mass = 5.14, double alpha1 = 1.0, double alpha3 = 0.01, double freq = 100.0,
-                double g = 9.81,
+                double g = 9.81, double eps = 0.1,
                 std::optional<std::unordered_map<std::string, Eigen::Vector3d>>
                     force_torque_offset = std::nullopt);
 
@@ -77,7 +79,6 @@ class LegOdometry {
         const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_positions,
         const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
         const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
-        std::unordered_map<std::string, double> contact_probabilities,
         const std::unordered_map<std::string, Eigen::Vector3d>& contact_forces,
         std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques =
             std::nullopt);

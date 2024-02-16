@@ -262,6 +262,7 @@ void Serow::filter(
             }
         }
 
+        den /=  state_.num_leg_ee_;
         if (params_.estimate_contact_status && !contact_probabilities.has_value()) {
             for (const auto& frame : state.getContactsFrame()) {
                 // Estimate the contact quality
@@ -317,7 +318,7 @@ void Serow::filter(
         }
         leg_odometry_ = std::make_unique<LegOdometry>(
             base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
-            params_.tau_1, params_.joint_rate, params_.g);
+            params_.tau_1, params_.joint_rate, params_.g, params_.eps);
         base_estimator_.init(state, params_.imu_rate, params_.g);
         com_estimator_.init(state, params_.mass, params_.force_torque_rate);
     }
@@ -330,7 +331,7 @@ void Serow::filter(
         attitude_estimator_->getQ(),
         attitude_estimator_->getGyro() - attitude_estimator_->getR() * params_.bias_gyro,
         base_to_foot_orientations, base_to_foot_positions, base_to_foot_linear_velocities,
-        base_to_foot_angular_velocities, state.contacts_probability_, state.contact_forces,
+        base_to_foot_angular_velocities, state.contact_forces,
         state.contact_torques);
 
     // Create the base estimation measurements
