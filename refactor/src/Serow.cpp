@@ -213,10 +213,10 @@ void Serow::filter(
                                                     params_.joint_rate,
                                                     params_.angular_momentum_cutoff_frequency);
     }
-    // Estimate the angular momentum derivative 
+    // Estimate the angular momentum derivative
     const Eigen::Vector3d& com_angular_momentum_derivative =
         angular_momentum_derivative_estimator->filter(com_angular_momentum);
-    
+
     // Get the leg end-effector kinematics w.r.t the base frame
     std::unordered_map<std::string, Eigen::Quaterniond> base_to_foot_orientations;
     std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_positions;
@@ -249,9 +249,9 @@ void Serow::filter(
             contact_forces[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
                                     params_.R_foot_to_force.at(frame) * ft->at(frame).force;
             if (!state.isPointFeet() && ft->at(frame).torque.has_value()) {
-                contact_torques[frame] =
-                    base_to_foot_orientations.at(frame).toRotationMatrix() *
-                    params_.R_foot_to_torque.at(frame) * ft->at(frame).torque.value();
+                contact_torques[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
+                                         params_.R_foot_to_torque.at(frame) *
+                                         ft->at(frame).torque.value();
             }
 
             // Estimate the contact status
@@ -262,7 +262,7 @@ void Serow::filter(
             }
         }
 
-        den /=  state_.num_leg_ee_;
+        den /= state_.num_leg_ee_;
         if (params_.estimate_contact_status && !contact_probabilities.has_value()) {
             for (const auto& frame : state.getContactsFrame()) {
                 // Estimate the contact quality
@@ -322,17 +322,13 @@ void Serow::filter(
         base_estimator_.init(state, params_.imu_rate, params_.g);
         com_estimator_.init(state, params_.mass, params_.force_torque_rate);
     }
-    if (state.contacts_probability_.empty()) {
-        return;
-    }
 
     // Estimate the relative to the base frame contacts
     leg_odometry_->estimate(
         attitude_estimator_->getQ(),
         attitude_estimator_->getGyro() - attitude_estimator_->getR() * params_.bias_gyro,
         base_to_foot_orientations, base_to_foot_positions, base_to_foot_linear_velocities,
-        base_to_foot_angular_velocities, state.contact_forces,
-        state.contact_torques);
+        base_to_foot_angular_velocities, state.contact_forces, state.contact_torques);
 
     // Create the base estimation measurements
     imu.angular_velocity_cov = params_.angular_velocity_cov.asDiagonal();
@@ -370,7 +366,7 @@ void Serow::filter(
 
     // Call the base estimator predict step utilizing imu and contact status measurements
     state = base_estimator_.predict(state, imu, kin);
-    
+
     // Call the base estimator update step by employing relative contact pose, odometry and terrain
     // measurements
     if (odom.has_value()) {
@@ -400,8 +396,8 @@ void Serow::filter(
         // Approximate the CoM linear acceleration
         Eigen::Vector3d base_linear_acceleration =
             state.getBasePose().linear() *
-            (imu.linear_acceleration - state.getImuLinearAccelerationBias() -
-             Eigen::Vector3d(0, 0, params_.g));
+                (imu.linear_acceleration - state.getImuLinearAccelerationBias()) -
+            Eigen::Vector3d(0, 0, params_.g);
         Eigen::Vector3d base_angular_velocity =
             state.getBasePose().linear() *
             (imu.angular_velocity - state.getImuAngularVelocityBias());
@@ -411,10 +407,8 @@ void Serow::filter(
         kin.com_linear_acceleration +=
             base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
             base_angular_acceleration.cross(base_to_com_position);
-
         kin.com_angular_momentum_derivative =
             state.getBasePose().linear() * com_angular_momentum_derivative;
-
         kin.com_position_process_cov = params_.com_position_process_cov.asDiagonal();
         kin.com_linear_velocity_process_cov = params_.com_linear_velocity_process_cov.asDiagonal();
         kin.external_forces_process_cov = params_.external_forces_process_cov.asDiagonal();
@@ -428,7 +422,7 @@ void Serow::filter(
             if (state.contacts_probability_.at(frame) > 0.0) {
                 grf.force += state.getContactPose(frame)->linear() * ft->at(frame).force;
                 grf.cop += state.contacts_probability_.at(frame) *
-                        (*state.getContactPose(frame) * ft->at(frame).cop);
+                           (*state.getContactPose(frame) * ft->at(frame).cop);
                 den += state.contacts_probability_.at(frame);
             }
         }
