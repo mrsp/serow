@@ -50,7 +50,7 @@ inline Eigen::Matrix3d expMap(const Eigen::Vector3d& omega) {
         Eigen::Matrix3d omega_skew = Eigen::Matrix3d::Zero();
         omega_skew = wedge(omega);
         res += omega_skew * (sin(omeganorm) / omeganorm);
-        res += (omega_skew * omega_skew) * ((1.000 - cos(omeganorm)) / (omeganorm * omeganorm));
+        res += (omega_skew * omega_skew) * ((1.0 - cos(omeganorm)) / (omeganorm * omeganorm));
     }
     return res;
 }
