@@ -124,8 +124,10 @@ State ContactEKF::predict(const State& state, const ImuMeasurement& imu,
     double dt = nominal_dt_;
     if (last_imu_timestamp_.has_value()) {
         dt = imu.timestamp - last_imu_timestamp_.value();
+    } 
+    if (dt < nominal_dt_ / 2) {
+        dt = nominal_dt_;
     }
-
     // Compute the state and input-state Jacobians
     const auto& [Ac, Lc] =
         computePredictionJacobians(state, imu.angular_velocity, imu.linear_acceleration, dt);

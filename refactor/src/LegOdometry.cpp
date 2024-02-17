@@ -134,7 +134,7 @@ void LegOdometry::estimate(
     for (const auto [key, value] : force_weights) {
         base_position_ += value  * contact_contributions.at(key);
     }
-    std::cout<<"Leg odometry "<<base_position_.transpose()<<std::endl;
+
     for (const auto [key, value] : contact_contributions) {
         feet_position_prev_.at(key) += base_position_ - value;
         feet_orientation_prev_.at(key) =

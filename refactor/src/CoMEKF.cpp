@@ -25,9 +25,10 @@ State CoMEKF::predict(const State& state, const KinematicMeasurement& kin,
     double dt = nominal_dt_;
     if (last_grf_timestamp_.has_value()) {
         dt = grf.timestamp - last_grf_timestamp_.value();
-        last_grf_timestamp_ = grf.timestamp;
     }
-
+    if (dt < nominal_dt_ / 2) {
+        dt = nominal_dt_;
+    }
     State predicted_state = state;
     const auto& [Ac, Lc] =
         computePredictionJacobians(state, grf.cop, grf.force, kin.com_angular_momentum_derivative);
@@ -49,6 +50,7 @@ State CoMEKF::predict(const State& state, const KinematicMeasurement& kin,
     predicted_state.com_position_ += f.head<3>() * dt;
     predicted_state.com_linear_velocity_ += f.segment<3>(3) * dt;
     predicted_state.external_forces_ += f.tail<3>() * dt;
+    last_grf_timestamp_ = grf.timestamp;
     return predicted_state;
 }
 
