@@ -227,7 +227,7 @@ State ContactEKF::computeDiscreteDynamics(
 State ContactEKF::updateWithContacts(
     const State& state, const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
-    const std::unordered_map<std::string, double>& contacts_probability,
+    const std::unordered_map<std::string, bool>& contacts_status,
     const Eigen::Matrix3d& position_cov,
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
@@ -235,8 +235,8 @@ State ContactEKF::updateWithContacts(
     State updated_state = state;
 
     // Compute the relative contacts position/orientation measurement noise
-    for (const auto& [cf, cp] : contacts_probability) {
-        int cs = cp > 0.5 ? 1 : 0;
+    for (const auto& [cf, cp] : contacts_status) {
+        int cs = cp ? 1 : 0;
         contacts_position_noise.at(cf) = cs * contacts_position_noise.at(cf) +
                                          (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
                                          position_cov;
@@ -404,7 +404,7 @@ State ContactEKF::update(const State& state, const KinematicMeasurement& kin,
                          std::optional<TerrainMeasurement> terrain) {
     State updated_state =
         updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
-                           kin.contacts_probability, kin.position_cov, kin.contacts_orientation,
+                           kin.contacts_status, kin.position_cov, kin.contacts_orientation,
                            kin.contacts_orientation_noise, kin.orientation_cov);
 
     if (odom.has_value()) {

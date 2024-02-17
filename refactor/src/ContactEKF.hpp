@@ -24,8 +24,8 @@
 
 namespace serow {
 
-// State is pos - vel - rot - accel - gyro bias - 15 + 6 x N contact pos - contact orient
-
+// State is velocity  - orientation - position - gyro bias - accel bias - 15 + 6 x N contact
+// position - contact orientation
 class ContactEKF {
    public:
     void init(const State& state, double imu_rate, double g);
@@ -83,7 +83,7 @@ class ContactEKF {
         const State& state,
         const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
         std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
-        const std::unordered_map<std::string, double>& contacts_probability,
+        const std::unordered_map<std::string, bool>& contacts_status,
         const Eigen::Matrix3d& position_cov,
         std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
