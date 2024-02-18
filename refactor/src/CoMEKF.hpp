@@ -29,43 +29,44 @@ class CoMEKF {
 
     // state indices, com position, com linear velocity, external force
     Eigen::Array3i c_idx_, v_idx_, f_idx_;
-    
+
     // Compute the nonlinear dynamics
     Eigen::Matrix<double, 9, 1> computeContinuousDynamics(
-        const State& state, const Eigen::Vector3d& cop_position,
+        const CentroidalState& state, const Eigen::Vector3d& cop_position,
         const Eigen::Vector3d& ground_reaction_force,
         const Eigen::Vector3d& com_angular_momentum_derivative);
     // Compute Linearized matrices
     std::tuple<Eigen::Matrix<double, 9, 9>, Eigen::Matrix<double, 9, 9>> computePredictionJacobians(
-        const State& state, const Eigen::Vector3d& cop_position,
+        const CentroidalState& state, const Eigen::Vector3d& cop_position,
         const Eigen::Vector3d& ground_reaction_force,
         const Eigen::Vector3d& com_angular_momentum_derivative);
 
-    State updateWithCoMAcceleration(const State& state,
-                                    const Eigen::Vector3d& com_linear_acceleration,
-                                    const Eigen::Vector3d& cop_position,
-                                    const Eigen::Vector3d& ground_reaction_force,
-                                    const Eigen::Matrix3d& com_linear_acceleration_cov,
-                                    const Eigen::Vector3d& com_angular_momentum_derivative);
+    CentroidalState updateWithCoMAcceleration(
+        const CentroidalState& state, const Eigen::Vector3d& com_linear_acceleration,
+        const Eigen::Vector3d& cop_position, const Eigen::Vector3d& ground_reaction_force,
+        const Eigen::Matrix3d& com_linear_acceleration_cov,
+        const Eigen::Vector3d& com_angular_momentum_derivative);
 
-    State updateWithCoMPosition(const State& state, const Eigen::Vector3d& com_position,
-                                const Eigen::Matrix3d& com_position_cov);
+    CentroidalState updateWithCoMPosition(const CentroidalState& state,
+                                          const Eigen::Vector3d& com_position,
+                                          const Eigen::Matrix3d& com_position_cov);
 
-    void updateState(State& state, const Eigen::Matrix<double, 9, 1>& dx,
+    void updateState(CentroidalState& state, const Eigen::Matrix<double, 9, 1>& dx,
                      const Eigen::Matrix<double, 9, 9>& P) const;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    void init(const State& state, double mass, double rate);
+    void init(const CentroidalState& state, double mass, double g, double rate);
 
-    State predict(const State& state, const KinematicMeasurement& kin,
-                  const GroundReactionForceMeasurement& grf);
+    CentroidalState predict(const CentroidalState& state, const KinematicMeasurement& kin,
+                            const GroundReactionForceMeasurement& grf);
 
-    State updateWithKinematics(const State& state, const KinematicMeasurement& kin);
+    CentroidalState updateWithKinematics(const CentroidalState& state,
+                                         const KinematicMeasurement& kin);
 
-    State updateWithImu(const State& state, const KinematicMeasurement& kin,
-                        const GroundReactionForceMeasurement& grf);
+    CentroidalState updateWithImu(const CentroidalState& state, const KinematicMeasurement& kin,
+                                  const GroundReactionForceMeasurement& grf);
 };
 
 }  // namespace serow

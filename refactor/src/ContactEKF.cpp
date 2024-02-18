@@ -8,10 +8,13 @@
 
 namespace serow {
 
-void ContactEKF::init(const State& state, double imu_rate, double g) {
+void ContactEKF::init(const BaseState& state, std::unordered_set<std::string> contacts_frame,
+                      bool point_feet, double g, double imu_rate) {
+    num_leg_end_effectors_ = contacts_frame.size();
+    contacts_frame_ = std::move(contacts_frame);
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
-    num_leg_end_effectors_ = state.num_leg_ee_;
-    contact_dim_ = state.isPointFeet() ? 3 : 6;
+    point_feet_ = point_feet;
+    contact_dim_ = point_feet_ ? 3 : 6;
     num_states_ = 15 + contact_dim_ * num_leg_end_effectors_;
     num_inputs_ = 12 + contact_dim_ * num_leg_end_effectors_;
     nominal_dt_ = 1.0 / imu_rate;
@@ -25,14 +28,14 @@ void ContactEKF::init(const State& state, double imu_rate, double g) {
     ba_idx_ = bg_idx_ + 3;
 
     Eigen::Array3i pl_idx = ba_idx_;
-    for (const auto& contact_frame : state.getContactsFrame()) {
+    for (const auto& contact_frame : contacts_frame_) {
         pl_idx += 3;
         pl_idx_.insert({contact_frame, pl_idx});
     }
 
-    if (!state.isPointFeet()) {
+    if (!point_feet_) {
         Eigen::Array3i rl_idx = pl_idx;
-        for (const auto& contact_frame : state.getContactsFrame()) {
+        for (const auto& contact_frame : contacts_frame_) {
             rl_idx += 3;
             rl_idx_.insert({contact_frame, rl_idx});
         }
@@ -44,14 +47,14 @@ void ContactEKF::init(const State& state, double imu_rate, double g) {
     nba_idx_ = nbg_idx_ + 3;
 
     Eigen::Array3i npl_idx = nba_idx_;
-    for (const auto& contact_frame : state.getContactsFrame()) {
+    for (const auto& contact_frame : contacts_frame_) {
         npl_idx += 3;
         npl_idx_.insert({contact_frame, npl_idx});
     }
 
-    if (!state.isPointFeet()) {
+    if (!point_feet_) {
         Eigen::Array3i nrl_idx = npl_idx;
-        for (const auto& contact_frame : state.getContactsFrame()) {
+        for (const auto& contact_frame : contacts_frame_) {
             nrl_idx += 3;
             nrl_idx_.insert({contact_frame, nrl_idx});
         }
@@ -59,20 +62,21 @@ void ContactEKF::init(const State& state, double imu_rate, double g) {
 
     // Initialize the error state covariance
     P_ = I_;
-    P_(v_idx_, v_idx_) = state.getBaseLinearVelocityCov();
-    P_(r_idx_, r_idx_) = state.getBaseOrientationCov();
-    P_(p_idx_, p_idx_) = state.getBasePositionCov();
-    P_(bg_idx_, bg_idx_) = state.getImuAngularVelocityBiasCov();
-    P_(ba_idx_, ba_idx_) = state.getImuLinearAccelerationBiasCov();
+    P_(v_idx_, v_idx_) = state.base_linear_velocity_cov;
+    P_(r_idx_, r_idx_) = state.base_orientation_cov;
+    P_(p_idx_, p_idx_) = state.base_position_cov;
+    P_(bg_idx_, bg_idx_) = state.imu_angular_velocity_bias_cov;
+    P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
 
-    for (const auto& contact_frame : state.getContactsFrame()) {
-        if (state.getContactPositionCov(contact_frame)) {
+    for (const auto& contact_frame : contacts_frame_) {
+        if (state.contacts_position_cov.count(contact_frame)) {
             P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) =
-                state.getContactPositionCov(contact_frame).value();
+                state.contacts_position_cov.at(contact_frame);
         }
-        if (!state.isPointFeet() && state.getContactOrientationCov(contact_frame)) {
+        if (!point_feet_ && state.contacts_orientation_cov.has_value() &&
+            state.contacts_orientation_cov.value().count(contact_frame)) {
             P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) =
-                state.getContactOrientationCov(contact_frame).value();
+                state.contacts_orientation_cov.value().at(contact_frame);
         }
     }
 
@@ -84,9 +88,9 @@ void ContactEKF::init(const State& state, double imu_rate, double g) {
     Lc_(bg_idx_, nbg_idx_) = Eigen::Matrix3d::Identity();
     Lc_(ba_idx_, nba_idx_) = Eigen::Matrix3d::Identity();
 
-    for (const auto& contact_frame : state.getContactsFrame()) {
+    for (const auto& contact_frame : contacts_frame_) {
         Lc_(pl_idx_.at(contact_frame), npl_idx_.at(contact_frame)) = Eigen::Matrix3d::Identity();
-        if (!state.isPointFeet()) {
+        if (!point_feet_) {
             Lc_(rl_idx_.at(contact_frame), nrl_idx_.at(contact_frame)) =
                 Eigen::Matrix3d::Identity();
         }
@@ -96,11 +100,11 @@ void ContactEKF::init(const State& state, double imu_rate, double g) {
 }
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobians(
-    const State& state, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration,
+    const BaseState& state, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration,
     double dt) {
-    angular_velocity -= state.getImuAngularVelocityBias();
-    const Eigen::Vector3d& v = state.getBaseLinearVelocity();
-    const Eigen::Matrix3d& R = state.getBaseOrientation().toRotationMatrix();
+    angular_velocity -= state.imu_angular_velocity_bias;
+    const Eigen::Vector3d& v = state.base_linear_velocity;
+    const Eigen::Matrix3d& R = state.base_orientation.toRotationMatrix();
 
     Eigen::MatrixXd Ac, Lc;
     Lc = Lc_;
@@ -119,12 +123,12 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobi
     return std::make_tuple(Ac, Lc);
 }
 
-State ContactEKF::predict(const State& state, const ImuMeasurement& imu,
-                          const KinematicMeasurement& kin) {
+BaseState ContactEKF::predict(const BaseState& state, const ImuMeasurement& imu,
+                              const KinematicMeasurement& kin) {
     double dt = nominal_dt_;
     if (last_imu_timestamp_.has_value()) {
         dt = imu.timestamp - last_imu_timestamp_.value();
-    } 
+    }
     if (dt < nominal_dt_ / 2) {
         dt = nominal_dt_;
     }
@@ -142,11 +146,11 @@ State ContactEKF::predict(const State& state, const ImuMeasurement& imu,
     Qc(nbg_idx_, nbg_idx_) = imu.angular_velocity_bias_cov;
     Qc(nba_idx_, nba_idx_) = imu.linear_acceleration_bias_cov;
 
-    for (const auto& [cf, cs] : state.contacts_status_) {
+    for (const auto& [cf, cs] : kin.contacts_status) {
         int contact_status = static_cast<int>(cs);
         Qc(npl_idx_.at(cf), npl_idx_.at(cf)) =
             kin.position_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
-        if (!state.isPointFeet()) {
+        if (!point_feet_) {
             Qc(nrl_idx_.at(cf), nrl_idx_.at(cf)) =
                 kin.orientation_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         }
@@ -157,44 +161,44 @@ State ContactEKF::predict(const State& state, const ImuMeasurement& imu,
     P_ = Ad * P_ * Ad.transpose() + Qd;
 
     // Predict the state
-    const State& predicted_state = computeDiscreteDynamics(
+    const BaseState& predicted_state = computeDiscreteDynamics(
         state, dt, imu.angular_velocity, imu.linear_acceleration, kin.contacts_status,
         kin.contacts_position, kin.contacts_orientation);
     last_imu_timestamp_ = imu.timestamp;
     return predicted_state;
 }
 
-State ContactEKF::computeDiscreteDynamics(
-    const State& state, double dt, Eigen::Vector3d angular_velocity,
+BaseState ContactEKF::computeDiscreteDynamics(
+    const BaseState& state, double dt, Eigen::Vector3d angular_velocity,
     Eigen::Vector3d linear_acceleration,
     std::optional<std::unordered_map<std::string, bool>> contacts_status,
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contacts_position,
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientations) {
-    State predicted_state = state;
-    angular_velocity -= state.getImuAngularVelocityBias();
-    linear_acceleration -= state.getImuLinearAccelerationBias();
+    BaseState predicted_state = state;
+    angular_velocity -= state.imu_angular_velocity_bias;
+    linear_acceleration -= state.imu_linear_acceleration_bias;
 
     // Nonlinear Process Model
     // Linear velocity
-    const Eigen::Vector3d& v = state.getBaseLinearVelocity();
-    const Eigen::Matrix3d& R = state.getBaseOrientation().toRotationMatrix();
-    predicted_state.base_linear_velocity_ = v.cross(angular_velocity);
-    predicted_state.base_linear_velocity_ += R.transpose() * g_;
-    predicted_state.base_linear_velocity_ += linear_acceleration;
-    predicted_state.base_linear_velocity_ *= dt;
-    predicted_state.base_linear_velocity_ += v;
+    const Eigen::Vector3d& v = state.base_linear_velocity;
+    const Eigen::Matrix3d& R = state.base_orientation.toRotationMatrix();
+    predicted_state.base_linear_velocity = v.cross(angular_velocity);
+    predicted_state.base_linear_velocity += R.transpose() * g_;
+    predicted_state.base_linear_velocity += linear_acceleration;
+    predicted_state.base_linear_velocity *= dt;
+    predicted_state.base_linear_velocity += v;
     // Position
-    const Eigen::Vector3d& r = state.getBasePosition();
-    predicted_state.base_position_ = R * v;
-    predicted_state.base_position_ *= dt;
-    predicted_state.base_position_ += r;
+    const Eigen::Vector3d& r = state.base_position;
+    predicted_state.base_position = R * v;
+    predicted_state.base_position *= dt;
+    predicted_state.base_position += r;
 
     // Biases
-    predicted_state.imu_angular_velocity_bias_ = state.imu_angular_velocity_bias_;
-    predicted_state.imu_linear_acceleration_bias_ = state.imu_linear_acceleration_bias_;
+    predicted_state.imu_angular_velocity_bias = state.imu_angular_velocity_bias;
+    predicted_state.imu_linear_acceleration_bias = state.imu_linear_acceleration_bias;
 
     // Orientation
-    predicted_state.base_orientation_ =
+    predicted_state.base_orientation =
         Eigen::Quaterniond(lie::so3::plus(R, angular_velocity * dt)).normalized();
 
     // Predicted contacts positions
@@ -202,7 +206,7 @@ State ContactEKF::computeDiscreteDynamics(
         for (auto [cf, cs] : contacts_status.value()) {
             if (contacts_position.value().count(cf)) {
                 if (!cs) {
-                    predicted_state.contacts_position_[cf] =
+                    predicted_state.contacts_position[cf] =
                         (r + R * contacts_position.value().at(cf));
                 }
             }
@@ -210,11 +214,11 @@ State ContactEKF::computeDiscreteDynamics(
     }
 
     // Predicted contacts orientations
-    if (!state.isPointFeet() && contacts_status.has_value() && contacts_orientations.has_value()) {
+    if (!point_feet_ && contacts_status.has_value() && contacts_orientations.has_value()) {
         for (auto [cf, cs] : contacts_status.value()) {
             if (contacts_orientations.value().count(cf)) {
                 if (!cs) {
-                    predicted_state.contacts_orientation_.value().at(cf) =
+                    predicted_state.contacts_orientation.value().at(cf) =
                         Eigen::Quaterniond(R *
                                            contacts_orientations.value().at(cf).toRotationMatrix())
                             .normalized();
@@ -226,15 +230,16 @@ State ContactEKF::computeDiscreteDynamics(
     return predicted_state;
 }
 
-State ContactEKF::updateWithContacts(
-    const State& state, const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
+BaseState ContactEKF::updateWithContacts(
+    const BaseState& state,
+    const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
     const std::unordered_map<std::string, bool>& contacts_status,
     const Eigen::Matrix3d& position_cov,
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov) {
-    State updated_state = state;
+    BaseState updated_state = state;
 
     // Compute the relative contacts position/orientation measurement noise
     for (const auto& [cf, cp] : contacts_status) {
@@ -253,13 +258,12 @@ State ContactEKF::updateWithContacts(
     for (const auto& [cf, cp] : contacts_position) {
         Eigen::MatrixXd H;
         H.setZero(3, num_states_);
-        const Eigen::Vector3d x = state.base_orientation_.toRotationMatrix().transpose() *
-                                   (state.contacts_position_.at(cf) - state.base_position_);
+        const Eigen::Vector3d x = state.base_orientation.toRotationMatrix().transpose() *
+                                  (state.contacts_position.at(cf) - state.base_position);
 
         const Eigen::Vector3d z = cp - x;
-        H.block(0, p_idx_[0], 3, 3) = -state.base_orientation_.toRotationMatrix().transpose();
-        H.block(0, pl_idx_.at(cf)[0], 3, 3) =
-            state.base_orientation_.toRotationMatrix().transpose();
+        H.block(0, p_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix().transpose();
+        H.block(0, pl_idx_.at(cf)[0], 3, 3) = state.base_orientation.toRotationMatrix().transpose();
         H.block(0, r_idx_[0], 3, 3) = lie::so3::wedge(x);
 
         const Eigen::Matrix3d s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
@@ -270,13 +274,13 @@ State ContactEKF::updateWithContacts(
     }
 
     // Optionally update the state with the relative contacts orientation
-    if (!state.isPointFeet() && contacts_orientation.has_value()) {
+    if (!point_feet_ && contacts_orientation.has_value()) {
         for (const auto& [cf, co] : contacts_orientation.value()) {
             Eigen::MatrixXd H;
             H.setZero(3, num_states_);
             const Eigen::Quaterniond x = Eigen::Quaterniond(
-                state.contacts_orientation_.value().at(cf).toRotationMatrix().transpose() *
-                state.base_orientation_.toRotationMatrix());
+                state.contacts_orientation.value().at(cf).toRotationMatrix().transpose() *
+                state.base_orientation.toRotationMatrix());
 
             const Eigen::Vector3d z = lie::so3::minus(co, x);
             H.block(0, r_idx_[0], 3, 3) = -x.toRotationMatrix();
@@ -294,19 +298,20 @@ State ContactEKF::updateWithContacts(
     return updated_state;
 }
 
-State ContactEKF::updateWithOdometry(const State& state, const Eigen::Vector3d& base_position,
-                                     const Eigen::Quaterniond& base_orientation,
-                                     const Eigen::Matrix3d& base_position_cov,
-                                     const Eigen::Matrix3d& base_orientation_cov) {
-    State updated_state = state;
+BaseState ContactEKF::updateWithOdometry(const BaseState& state,
+                                         const Eigen::Vector3d& base_position,
+                                         const Eigen::Quaterniond& base_orientation,
+                                         const Eigen::Matrix3d& base_position_cov,
+                                         const Eigen::Matrix3d& base_orientation_cov) {
+    BaseState updated_state = state;
 
     Eigen::MatrixXd H;
     H.setZero(6, num_states_);
     Eigen::MatrixXd R = Eigen::Matrix<double, 6, 6>::Zero();
 
     // Construct the innovation vector z
-    const Eigen::Vector3d& zp = base_position - state.base_position_;
-    const Eigen::Vector3d& zq = lie::so3::minus(base_orientation, state.base_orientation_);
+    const Eigen::Vector3d& zp = base_position - state.base_position;
+    const Eigen::Vector3d& zq = lie::so3::minus(base_orientation, state.base_orientation);
     Eigen::VectorXd z;
     z.setZero(6);
     z.head(3) = zp;
@@ -330,9 +335,10 @@ State ContactEKF::updateWithOdometry(const State& state, const Eigen::Vector3d& 
     return updated_state;
 }
 
-State ContactEKF::updateWithTerrain(const State& state, const double terrain_height,
-                                    const double terrain_height_cov) {
-    State updated_state = state;
+BaseState ContactEKF::updateWithTerrain(
+    const BaseState& state, const std::unordered_map<std::string, bool>& contacts_status,
+    const double terrain_height, const double terrain_height_cov) {
+    BaseState updated_state = state;
 
     // Construct the innovation vector z, the linearized measurement matrix H, and the measurement
     // noise matrix R
@@ -343,10 +349,10 @@ State ContactEKF::updateWithTerrain(const State& state, const double terrain_hei
     Eigen::MatrixXd R;
     R.setZero(num_leg_end_effectors_, num_leg_end_effectors_);
     int i = 0;
-    for (const auto& [cf, cs] : state.contacts_status_) {
+    for (const auto& [cf, cs] : contacts_status) {
         H(i, pl_idx_.at(cf)[2]) = 1.0;
         if (cs) {
-            z(i) = terrain_height - state.contacts_position_.at(cf).z();
+            z(i) = terrain_height - state.contacts_position.at(cf).z();
             R(i, i) = terrain_height_cov;
         } else {
             z(i) = 0.0;
@@ -365,34 +371,33 @@ State ContactEKF::updateWithTerrain(const State& state, const double terrain_hei
     return updated_state;
 }
 
-void ContactEKF::updateState(State& state, const Eigen::VectorXd& dx,
+void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
                              const Eigen::MatrixXd& P) const {
-    state.base_position_ += dx(p_idx_);
-    state.base_position_cov_ = P.block<3, 3>(p_idx_(0), p_idx_(0));
-    state.base_linear_velocity_ += dx(v_idx_);
-    state.base_linear_velocity_cov_ = P.block<3, 3>(v_idx_(0), v_idx_(0));
-    state.base_orientation_ =
-        Eigen::Quaterniond(lie::so3::plus(state.base_orientation_.toRotationMatrix(), dx(r_idx_)))
+    state.base_position += dx(p_idx_);
+    state.base_position_cov = P.block<3, 3>(p_idx_(0), p_idx_(0));
+    state.base_linear_velocity += dx(v_idx_);
+    state.base_linear_velocity_cov = P.block<3, 3>(v_idx_(0), v_idx_(0));
+    state.base_orientation =
+        Eigen::Quaterniond(lie::so3::plus(state.base_orientation.toRotationMatrix(), dx(r_idx_)))
             .normalized();
-    state.base_orientation_cov_ = P.block<3, 3>(r_idx_(0), r_idx_(0));
-    state.imu_angular_velocity_bias_ += dx(bg_idx_);
-    state.imu_angular_velocity_bias_cov_ = P.block<3, 3>(bg_idx_(0), bg_idx_(0));
-    state.imu_linear_acceleration_bias_ += dx(ba_idx_);
-    state.imu_linear_acceleration_bias_cov_ = P.block<3, 3>(ba_idx_(0), ba_idx_(0));
-    for (const auto& cf : state.contacts_frame_) {
-        state.contacts_position_.at(cf) += dx(pl_idx_.at(cf));
-        state.contacts_position_cov_.at(cf) = P_.block<3, 3>(pl_idx_.at(cf)(0), pl_idx_.at(cf)(0));
+    state.base_orientation_cov = P.block<3, 3>(r_idx_(0), r_idx_(0));
+    state.imu_angular_velocity_bias += dx(bg_idx_);
+    state.imu_angular_velocity_bias_cov = P.block<3, 3>(bg_idx_(0), bg_idx_(0));
+    state.imu_linear_acceleration_bias += dx(ba_idx_);
+    state.imu_linear_acceleration_bias_cov = P.block<3, 3>(ba_idx_(0), ba_idx_(0));
+    for (const auto& cf : contacts_frame_) {
+        state.contacts_position.at(cf) += dx(pl_idx_.at(cf));
+        state.contacts_position_cov.at(cf) = P_.block<3, 3>(pl_idx_.at(cf)(0), pl_idx_.at(cf)(0));
     }
-    if (!state.isPointFeet()) {
-        if (state.contacts_orientation_.has_value()) {
-            for (const auto& cf : state.contacts_frame_) {
-                state.contacts_orientation_.value().at(cf) =
+    if (!point_feet_) {
+        if (state.contacts_orientation.has_value()) {
+            for (const auto& cf : contacts_frame_) {
+                state.contacts_orientation.value().at(cf) =
                     Eigen::Quaterniond(
-                        lie::so3::plus(
-                            state.contacts_orientation_.value().at(cf).toRotationMatrix(),
-                            dx(rl_idx_.at(cf))))
+                        lie::so3::plus(state.contacts_orientation.value().at(cf).toRotationMatrix(),
+                                       dx(rl_idx_.at(cf))))
                         .normalized();
-                state.contacts_orientation_cov_.value().at(cf) =
+                state.contacts_orientation_cov.value().at(cf) =
                     P_.block<3, 3>(rl_idx_.at(cf)(0), rl_idx_.at(cf)(0));
             }
         } else {
@@ -401,10 +406,10 @@ void ContactEKF::updateState(State& state, const Eigen::VectorXd& dx,
     }
 }
 
-State ContactEKF::update(const State& state, const KinematicMeasurement& kin,
-                         std::optional<OdometryMeasurement> odom,
-                         std::optional<TerrainMeasurement> terrain) {
-    State updated_state =
+BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement& kin,
+                             std::optional<OdometryMeasurement> odom,
+                             std::optional<TerrainMeasurement> terrain) {
+    BaseState updated_state =
         updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
                            kin.contacts_status, kin.position_cov, kin.contacts_orientation,
                            kin.contacts_orientation_noise, kin.orientation_cov);
@@ -416,7 +421,8 @@ State ContactEKF::update(const State& state, const KinematicMeasurement& kin,
     }
 
     if (terrain.has_value()) {
-        updated_state = updateWithTerrain(updated_state, terrain->height, terrain->height_cov);
+        updated_state = updateWithTerrain(updated_state, kin.contacts_status, terrain->height,
+                                          terrain->height_cov);
     }
     return updated_state;
 }
