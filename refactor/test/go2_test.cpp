@@ -129,7 +129,6 @@ TEST(SerowTests, Go2Test) {
                   << std::endl;
         std::cout << "IMU acc bias " << state->getImuLinearAccelerationBias().transpose()
                   << std::endl;
-        
         for (const auto& cf : state->getContactsFrame()) {
             if (!state->getContactPosition(cf)) {
                 continue;

@@ -27,23 +27,26 @@ class CoMEKF {
     // nominal F/T time, robot's mass and gravity constant
     double nominal_dt_{}, mass_{}, g_{};
 
+    // state indices, com position, com linear velocity, external force
+    Eigen::Array3i c_idx_, v_idx_, f_idx_;
+    
     // Compute the nonlinear dynamics
     Eigen::Matrix<double, 9, 1> computeContinuousDynamics(
         const State& state, const Eigen::Vector3d& cop_position,
         const Eigen::Vector3d& ground_reaction_force,
-        std::optional<Eigen::Vector3d> com_angular_momentum_derivative);
+        const Eigen::Vector3d& com_angular_momentum_derivative);
     // Compute Linearized matrices
     std::tuple<Eigen::Matrix<double, 9, 9>, Eigen::Matrix<double, 9, 9>> computePredictionJacobians(
         const State& state, const Eigen::Vector3d& cop_position,
         const Eigen::Vector3d& ground_reaction_force,
-        std::optional<Eigen::Vector3d> com_angular_momentum_derivative);
+        const Eigen::Vector3d& com_angular_momentum_derivative);
 
     State updateWithCoMAcceleration(const State& state,
                                     const Eigen::Vector3d& com_linear_acceleration,
                                     const Eigen::Vector3d& cop_position,
                                     const Eigen::Vector3d& ground_reaction_force,
                                     const Eigen::Matrix3d& com_linear_acceleration_cov,
-                                    std::optional<Eigen::Vector3d> com_angular_momentum_derivative);
+                                    const Eigen::Vector3d& com_angular_momentum_derivative);
 
     State updateWithCoMPosition(const State& state, const Eigen::Vector3d& com_position,
                                 const Eigen::Matrix3d& com_position_cov);
