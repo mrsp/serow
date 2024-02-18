@@ -14,18 +14,18 @@ State::State(std::unordered_set<std::string> contacts_frame, bool point_feet) {
     std::unordered_map<std::string, Eigen::Quaterniond> contacts_orientation;
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
     for (const auto& cf : contacts_frame_) {
-        contacts_status_[cf] = false;
-        contacts_probability_[cf] = 0.0;
-        contacts_position_[cf] = Eigen::Vector3d::Zero();
-        contacts_position_cov_[cf] = Eigen::Matrix3d::Identity();
+        contact_state_.contacts_status[cf] = false;
+        contact_state_.contacts_probability[cf] = 0.0;
+        base_state_.contacts_position[cf] = Eigen::Vector3d::Zero();
+        base_state_.contacts_position_cov[cf] = Eigen::Matrix3d::Identity();
         if (!isPointFeet()) {
             contacts_orientation[cf] = Eigen::Quaterniond::Identity();
             contacts_orientation_cov[cf] = Eigen::Matrix3d::Identity();
         }
     }
     if (!isPointFeet()) {
-        contacts_orientation_ = contacts_orientation;
-        contacts_orientation_cov_ = contacts_orientation_cov;
+        base_state_.contacts_orientation = std::move(contacts_orientation);
+        base_state_.contacts_orientation_cov = std::move(contacts_orientation_cov);
     }
 }
 
@@ -33,159 +33,212 @@ State::State(const State& other) {
     const std::lock_guard<std::mutex> lock(this->mutex_);
     this->point_feet_ = other.point_feet_;
     this->num_leg_ee_ = other.num_leg_ee_;
+    this->contacts_frame_ = other.contacts_frame_;
 
     // Base state
-    this->base_position_ = other.base_position_;
-    this->base_orientation_ = other.base_orientation_;
-    this->base_linear_velocity_ = other.base_linear_velocity_;
-    this->base_angular_velocity_ = other.base_angular_velocity_;
-    this->base_linear_acceleration_ = other.base_linear_acceleration_;
-    this->base_angular_acceleration_ = other.base_angular_acceleration_;
-    this->imu_linear_acceleration_bias_ = other.imu_linear_acceleration_bias_;
-    this->imu_angular_velocity_bias_ = other.imu_angular_velocity_bias_;
-    this->contacts_position_ = other.contacts_position_;
-    if (other.contacts_orientation_.has_value()) {
-        this->contacts_orientation_ = other.contacts_orientation_.value();
+    this->base_state_.timestamp = other.base_state_.timestamp;
+    this->base_state_.base_position = other.base_state_.base_position;
+    this->base_state_.base_orientation = other.base_state_.base_orientation;
+    this->base_state_.base_linear_velocity = other.base_state_.base_linear_velocity;
+    this->base_state_.base_angular_velocity = other.base_state_.base_angular_velocity;
+    this->base_state_.base_linear_acceleration = other.base_state_.base_linear_acceleration;
+    this->base_state_.base_angular_acceleration = other.base_state_.base_angular_acceleration;
+    this->base_state_.imu_linear_acceleration_bias = other.base_state_.imu_linear_acceleration_bias;
+    this->base_state_.imu_angular_velocity_bias = other.base_state_.imu_angular_velocity_bias;
+    this->base_state_.contacts_position = other.base_state_.contacts_position;
+    if (other.base_state_.contacts_orientation.has_value()) {
+        this->base_state_.contacts_orientation = other.base_state_.contacts_orientation.value();
     }
 
-    this->base_position_cov_ = other.base_position_cov_;
-    this->base_orientation_cov_ = other.base_orientation_cov_;
-    this->base_linear_velocity_cov_ = other.base_linear_velocity_cov_;
-    this->base_angular_velocity_cov_ = other.base_angular_velocity_cov_;
-    this->imu_linear_acceleration_bias_cov_ = other.imu_linear_acceleration_bias_cov_;
-    this->imu_angular_velocity_bias_cov_ = other.imu_angular_velocity_bias_cov_;
-    this->contacts_position_cov_ = other.contacts_position_cov_;
-    if (other.contacts_orientation_cov_.has_value()) {
-        this->contacts_orientation_cov_ = other.contacts_orientation_cov_.value();
+    this->base_state_.base_position_cov = other.base_state_.base_position_cov;
+    this->base_state_.base_orientation_cov = other.base_state_.base_orientation_cov;
+    this->base_state_.base_linear_velocity_cov = other.base_state_.base_linear_velocity_cov;
+    this->base_state_.base_angular_velocity_cov = other.base_state_.base_angular_velocity_cov;
+    this->base_state_.imu_linear_acceleration_bias_cov =
+        other.base_state_.imu_linear_acceleration_bias_cov;
+    this->base_state_.imu_angular_velocity_bias_cov =
+        other.base_state_.imu_angular_velocity_bias_cov;
+    this->base_state_.contacts_position_cov = other.base_state_.contacts_position_cov;
+    if (other.base_state_.contacts_orientation_cov.has_value()) {
+        this->base_state_.contacts_orientation_cov =
+            other.base_state_.contacts_orientation_cov.value();
     }
 
     // Contact state
-    this->contacts_status_ = other.contacts_status_;
-    this->contacts_probability_ = other.contacts_probability_;
-    this->contacts_frame_ = other.contacts_frame_;
-    this->contact_forces = other.contact_forces;
-    if (other.contact_torques.has_value()) {
-        this->contact_torques = other.contact_torques;
+    this->contact_state_.timestamp = other.contact_state_.timestamp;
+    this->contact_state_.contacts_status = other.contact_state_.contacts_status;
+    this->contact_state_.contacts_probability = other.contact_state_.contacts_probability;
+    this->contact_state_.contacts_force = other.contact_state_.contacts_force;
+    if (other.contact_state_.contacts_torque.has_value()) {
+        this->contact_state_.contacts_torque = other.contact_state_.contacts_torque;
     }
 
-    // Centroidal state
-    this->com_position_ = other.com_position_;
-    this->com_linear_velocity_ = other.com_linear_velocity_;
-    this->external_forces_ = other.external_forces_;
-    this->cop_position_ = other.cop_position_;
-    this->com_linear_acceleration_ = other.com_linear_acceleration_;
-    this->angular_momentum_ = other.angular_momentum_;
-    this->angular_momentum_derivative_ = other.angular_momentum_derivative_;
+    // Joint state
+    this->joint_state_.timestamp = other.joint_state_.timestamp;
+    this->joint_state_.joints_position = other.joint_state_.joints_position;
+    this->joint_state_.joints_velocity = other.joint_state_.joints_velocity;
 
-    this->com_position_cov_ = other.com_position_cov_;
-    this->com_linear_velocity_cov_ = other.com_linear_velocity_cov_;
-    this->external_forces_cov_ = other.external_forces_cov_;
+    // Centroidal state
+    this->centroidal_state_.timestamp = other.centroidal_state_.timestamp;
+    this->centroidal_state_.com_position = other.centroidal_state_.com_position;
+    this->centroidal_state_.com_linear_velocity = other.centroidal_state_.com_linear_velocity;
+    this->centroidal_state_.external_forces = other.centroidal_state_.external_forces;
+    this->centroidal_state_.cop_position = other.centroidal_state_.cop_position;
+    this->centroidal_state_.com_linear_acceleration =
+        other.centroidal_state_.com_linear_acceleration;
+    this->centroidal_state_.angular_momentum = other.centroidal_state_.angular_momentum;
+    this->centroidal_state_.angular_momentum_derivative =
+        other.centroidal_state_.angular_momentum_derivative;
+
+    this->centroidal_state_.com_position_cov = other.centroidal_state_.com_position_cov;
+    this->centroidal_state_.com_linear_velocity_cov =
+        other.centroidal_state_.com_linear_velocity_cov;
+    this->centroidal_state_.external_forces_cov = other.centroidal_state_.external_forces_cov;
 }
 
 State::State(State&& other) {
     const std::lock_guard<std::mutex> lock(this->mutex_);
+
     this->point_feet_ = std::move(other.point_feet_);
     this->num_leg_ee_ = std::move(other.num_leg_ee_);
+    this->contacts_frame_ = std::move(other.contacts_frame_);
 
     // Base state
-    this->base_position_ = std::move(other.base_position_);
-    this->base_orientation_ = std::move(other.base_orientation_);
-    this->base_linear_velocity_ = std::move(other.base_linear_velocity_);
-    this->base_angular_velocity_ = std::move(other.base_angular_velocity_);
-    this->base_linear_acceleration_ = std::move(other.base_linear_acceleration_);
-    this->base_angular_acceleration_ = std::move(other.base_angular_acceleration_);
-    this->imu_linear_acceleration_bias_ = std::move(other.imu_linear_acceleration_bias_);
-    this->imu_angular_velocity_bias_ = std::move(other.imu_angular_velocity_bias_);
-    this->contacts_position_ = std::move(other.contacts_position_);
-    if (other.contacts_orientation_.has_value()) {
-        this->contacts_orientation_ = std::move(other.contacts_orientation_.value());
+    this->base_state_.timestamp = std::move(other.base_state_.timestamp);
+    this->base_state_.base_position = std::move(other.base_state_.base_position);
+    this->base_state_.base_orientation = std::move(other.base_state_.base_orientation);
+    this->base_state_.base_linear_velocity = std::move(other.base_state_.base_linear_velocity);
+    this->base_state_.base_angular_velocity = std::move(other.base_state_.base_angular_velocity);
+    this->base_state_.base_linear_acceleration =
+        std::move(other.base_state_.base_linear_acceleration);
+    this->base_state_.base_angular_acceleration =
+        std::move(other.base_state_.base_angular_acceleration);
+    this->base_state_.imu_linear_acceleration_bias =
+        std::move(other.base_state_.imu_linear_acceleration_bias);
+    this->base_state_.imu_angular_velocity_bias =
+        std::move(other.base_state_.imu_angular_velocity_bias);
+    this->base_state_.contacts_position = std::move(other.base_state_.contacts_position);
+    if (other.base_state_.contacts_orientation.has_value()) {
+        this->base_state_.contacts_orientation =
+            std::move(other.base_state_.contacts_orientation.value());
     }
 
-    this->base_position_cov_ = std::move(other.base_position_cov_);
-    this->base_orientation_cov_ = std::move(other.base_orientation_cov_);
-    this->base_linear_velocity_cov_ = std::move(other.base_linear_velocity_cov_);
-    this->base_angular_velocity_cov_ = std::move(other.base_angular_velocity_cov_);
-    this->imu_linear_acceleration_bias_cov_ = std::move(other.imu_linear_acceleration_bias_cov_);
-    this->imu_angular_velocity_bias_cov_ = std::move(other.imu_angular_velocity_bias_cov_);
-    this->contacts_position_cov_ = std::move(other.contacts_position_cov_);
-    if (other.contacts_orientation_cov_.has_value()) {
-        this->contacts_orientation_cov_ = std::move(other.contacts_orientation_cov_.value());
+    this->base_state_.base_position_cov = std::move(other.base_state_.base_position_cov);
+    this->base_state_.base_orientation_cov = std::move(other.base_state_.base_orientation_cov);
+    this->base_state_.base_linear_velocity_cov =
+        std::move(other.base_state_.base_linear_velocity_cov);
+    this->base_state_.base_angular_velocity_cov =
+        std::move(other.base_state_.base_angular_velocity_cov);
+    this->base_state_.imu_linear_acceleration_bias_cov =
+        std::move(other.base_state_.imu_linear_acceleration_bias_cov);
+    this->base_state_.imu_angular_velocity_bias_cov =
+        std::move(other.base_state_.imu_angular_velocity_bias_cov);
+    this->base_state_.contacts_position_cov = std::move(other.base_state_.contacts_position_cov);
+    if (other.base_state_.contacts_orientation_cov.has_value()) {
+        this->base_state_.contacts_orientation_cov =
+            std::move(other.base_state_.contacts_orientation_cov.value());
     }
 
     // Contact state
-    this->contacts_status_ = std::move(other.contacts_status_);
-    this->contacts_probability_ = std::move(other.contacts_probability_);
-    this->contacts_frame_ = std::move(other.contacts_frame_);
-    this->contact_forces = std::move(other.contact_forces);
-    if (other.contact_torques.has_value()) {
-        this->contact_torques = std::move(other.contact_torques);
+    this->contact_state_.timestamp = std::move(other.contact_state_.timestamp);
+    this->contact_state_.contacts_status = std::move(other.contact_state_.contacts_status);
+    this->contact_state_.contacts_probability =
+        std::move(other.contact_state_.contacts_probability);
+    this->contact_state_.contacts_force = std::move(other.contact_state_.contacts_force);
+    if (other.contact_state_.contacts_torque.has_value()) {
+        this->contact_state_.contacts_torque = std::move(other.contact_state_.contacts_torque);
     }
 
-    // Centroidal state 
-    this->com_position_ = std::move(other.com_position_);
-    this->com_linear_velocity_ = std::move(other.com_linear_velocity_);
-    this->external_forces_ = std::move(other.external_forces_);
-    this->cop_position_ = std::move(other.cop_position_);
-    this->com_linear_acceleration_ = std::move(other.com_linear_acceleration_);
-    this->angular_momentum_ = std::move(other.angular_momentum_);
-    this->angular_momentum_derivative_ = std::move(other.angular_momentum_derivative_);
+    // Joint state
+    this->joint_state_.timestamp = std::move(other.joint_state_.timestamp);
+    this->joint_state_.joints_position = std::move(other.joint_state_.joints_position);
+    this->joint_state_.joints_velocity = std::move(other.joint_state_.joints_velocity);
 
-    this->com_position_cov_ = std::move(other.com_position_cov_);
-    this->com_linear_velocity_cov_ = std::move(other.com_linear_velocity_cov_);
-    this->external_forces_cov_ = std::move(other.external_forces_cov_);
+    // Centroidal state
+    this->centroidal_state_.timestamp = std::move(other.centroidal_state_.timestamp);
+    this->centroidal_state_.com_position = std::move(other.centroidal_state_.com_position);
+    this->centroidal_state_.com_linear_velocity =
+        std::move(other.centroidal_state_.com_linear_velocity);
+    this->centroidal_state_.external_forces = std::move(other.centroidal_state_.external_forces);
+    this->centroidal_state_.cop_position = std::move(other.centroidal_state_.cop_position);
+    this->centroidal_state_.com_linear_acceleration =
+        std::move(other.centroidal_state_.com_linear_acceleration);
+    this->centroidal_state_.angular_momentum = std::move(other.centroidal_state_.angular_momentum);
+    this->centroidal_state_.angular_momentum_derivative =
+        std::move(other.centroidal_state_.angular_momentum_derivative);
+
+    this->centroidal_state_.com_position_cov = std::move(other.centroidal_state_.com_position_cov);
+    this->centroidal_state_.com_linear_velocity_cov =
+        std::move(other.centroidal_state_.com_linear_velocity_cov);
+    this->centroidal_state_.external_forces_cov =
+        std::move(other.centroidal_state_.external_forces_cov);
 }
 
 State State::operator=(const State& other) {
     const std::lock_guard<std::mutex> lock(this->mutex_);
     this->point_feet_ = other.point_feet_;
     this->num_leg_ee_ = other.num_leg_ee_;
+    this->contacts_frame_ = other.contacts_frame_;
 
     // Base state
-    this->base_position_ = other.base_position_;
-    this->base_orientation_ = other.base_orientation_;
-    this->base_linear_velocity_ = other.base_linear_velocity_;
-    this->base_angular_velocity_ = other.base_angular_velocity_;
-    this->base_linear_acceleration_ = other.base_linear_acceleration_;
-    this->base_angular_acceleration_ = other.base_angular_acceleration_;
-    this->imu_linear_acceleration_bias_ = other.imu_linear_acceleration_bias_;
-    this->imu_angular_velocity_bias_ = other.imu_angular_velocity_bias_;
-    this->contacts_position_ = other.contacts_position_;
-    if (other.contacts_orientation_.has_value()) {
-        this->contacts_orientation_ = other.contacts_orientation_.value();
+    this->base_state_.timestamp = other.base_state_.timestamp;
+    this->base_state_.base_position = other.base_state_.base_position;
+    this->base_state_.base_orientation = other.base_state_.base_orientation;
+    this->base_state_.base_linear_velocity = other.base_state_.base_linear_velocity;
+    this->base_state_.base_angular_velocity = other.base_state_.base_angular_velocity;
+    this->base_state_.base_linear_acceleration = other.base_state_.base_linear_acceleration;
+    this->base_state_.base_angular_acceleration = other.base_state_.base_angular_acceleration;
+    this->base_state_.imu_linear_acceleration_bias = other.base_state_.imu_linear_acceleration_bias;
+    this->base_state_.imu_angular_velocity_bias = other.base_state_.imu_angular_velocity_bias;
+    this->base_state_.contacts_position = other.base_state_.contacts_position;
+    if (other.base_state_.contacts_orientation.has_value()) {
+        this->base_state_.contacts_orientation = other.base_state_.contacts_orientation.value();
     }
 
-    this->base_position_cov_ = other.base_position_cov_;
-    this->base_orientation_cov_ = other.base_orientation_cov_;
-    this->base_linear_velocity_cov_ = other.base_linear_velocity_cov_;
-    this->base_angular_velocity_cov_ = other.base_angular_velocity_cov_;
-    this->imu_linear_acceleration_bias_cov_ = other.imu_linear_acceleration_bias_cov_;
-    this->imu_angular_velocity_bias_cov_ = other.imu_angular_velocity_bias_cov_;
-    this->contacts_position_cov_ = other.contacts_position_cov_;
-    if (other.contacts_orientation_cov_.has_value()) {
-        this->contacts_orientation_cov_ = other.contacts_orientation_cov_.value();
+    this->base_state_.base_position_cov = other.base_state_.base_position_cov;
+    this->base_state_.base_orientation_cov = other.base_state_.base_orientation_cov;
+    this->base_state_.base_linear_velocity_cov = other.base_state_.base_linear_velocity_cov;
+    this->base_state_.base_angular_velocity_cov = other.base_state_.base_angular_velocity_cov;
+    this->base_state_.imu_linear_acceleration_bias_cov =
+        other.base_state_.imu_linear_acceleration_bias_cov;
+    this->base_state_.imu_angular_velocity_bias_cov =
+        other.base_state_.imu_angular_velocity_bias_cov;
+    this->base_state_.contacts_position_cov = other.base_state_.contacts_position_cov;
+    if (other.base_state_.contacts_orientation_cov.has_value()) {
+        this->base_state_.contacts_orientation_cov =
+            other.base_state_.contacts_orientation_cov.value();
     }
 
     // Contact state
-    this->contacts_status_ = other.contacts_status_;
-    this->contacts_probability_ = other.contacts_probability_;
-    this->contacts_frame_ = other.contacts_frame_;
-    this->contact_forces = other.contact_forces;
-    if (other.contact_torques.has_value()) {
-        this->contact_torques = other.contact_torques;
+    this->contact_state_.timestamp = other.contact_state_.timestamp;
+    this->contact_state_.contacts_status = other.contact_state_.contacts_status;
+    this->contact_state_.contacts_probability = other.contact_state_.contacts_probability;
+    this->contact_state_.contacts_force = other.contact_state_.contacts_force;
+    if (other.contact_state_.contacts_torque.has_value()) {
+        this->contact_state_.contacts_torque = other.contact_state_.contacts_torque;
     }
 
-    // Centroidal state
-    this->com_position_ = other.com_position_;
-    this->com_linear_velocity_ = other.com_linear_velocity_;
-    this->external_forces_ = other.external_forces_;
-    this->cop_position_ = other.cop_position_;
-    this->com_linear_acceleration_ = other.com_linear_acceleration_;
-    this->angular_momentum_ = other.angular_momentum_;
-    this->angular_momentum_derivative_ = other.angular_momentum_derivative_;
+    // Joint state
+    this->joint_state_.timestamp = other.joint_state_.timestamp;
+    this->joint_state_.joints_position = other.joint_state_.joints_position;
+    this->joint_state_.joints_velocity = other.joint_state_.joints_velocity;
 
-    this->com_position_cov_ = other.com_position_cov_;
-    this->com_linear_velocity_cov_ = other.com_linear_velocity_cov_;
-    this->external_forces_cov_ = other.external_forces_cov_;
+    // Centroidal state
+    this->centroidal_state_.timestamp = other.centroidal_state_.timestamp;
+    this->centroidal_state_.com_position = other.centroidal_state_.com_position;
+    this->centroidal_state_.com_linear_velocity = other.centroidal_state_.com_linear_velocity;
+    this->centroidal_state_.external_forces = other.centroidal_state_.external_forces;
+    this->centroidal_state_.cop_position = other.centroidal_state_.cop_position;
+    this->centroidal_state_.com_linear_acceleration =
+        other.centroidal_state_.com_linear_acceleration;
+    this->centroidal_state_.angular_momentum = other.centroidal_state_.angular_momentum;
+    this->centroidal_state_.angular_momentum_derivative =
+        other.centroidal_state_.angular_momentum_derivative;
+
+    this->centroidal_state_.com_position_cov = other.centroidal_state_.com_position_cov;
+    this->centroidal_state_.com_linear_velocity_cov =
+        other.centroidal_state_.com_linear_velocity_cov;
+    this->centroidal_state_.external_forces_cov = other.centroidal_state_.external_forces_cov;
 
     return *this;
 }
@@ -195,111 +248,151 @@ State& State::operator=(State&& other) {
     if (this != &other) {
         this->point_feet_ = std::move(other.point_feet_);
         this->num_leg_ee_ = std::move(other.num_leg_ee_);
-        
+        this->contacts_frame_ = std::move(other.contacts_frame_);
+
         // Base state
-        this->base_position_ = std::move(other.base_position_);
-        this->base_orientation_ = std::move(other.base_orientation_);
-        this->base_linear_velocity_ = std::move(other.base_linear_velocity_);
-        this->base_angular_velocity_ = std::move(other.base_angular_velocity_);
-        this->base_linear_acceleration_ = std::move(other.base_linear_acceleration_);
-        this->base_angular_acceleration_ = std::move(other.base_angular_acceleration_);
-        this->imu_linear_acceleration_bias_ = std::move(other.imu_linear_acceleration_bias_);
-        this->imu_angular_velocity_bias_ = std::move(other.imu_angular_velocity_bias_);
-        this->contacts_position_ = std::move(other.contacts_position_);
-        if (other.contacts_orientation_.has_value()) {
-            this->contacts_orientation_ = std::move(other.contacts_orientation_.value());
+        this->base_state_.timestamp = std::move(other.base_state_.timestamp);
+        this->base_state_.base_position = std::move(other.base_state_.base_position);
+        this->base_state_.base_orientation = std::move(other.base_state_.base_orientation);
+        this->base_state_.base_linear_velocity = std::move(other.base_state_.base_linear_velocity);
+        this->base_state_.base_angular_velocity =
+            std::move(other.base_state_.base_angular_velocity);
+        this->base_state_.base_linear_acceleration =
+            std::move(other.base_state_.base_linear_acceleration);
+        this->base_state_.base_angular_acceleration =
+            std::move(other.base_state_.base_angular_acceleration);
+        this->base_state_.imu_linear_acceleration_bias =
+            std::move(other.base_state_.imu_linear_acceleration_bias);
+        this->base_state_.imu_angular_velocity_bias =
+            std::move(other.base_state_.imu_angular_velocity_bias);
+        this->base_state_.contacts_position = std::move(other.base_state_.contacts_position);
+        if (other.base_state_.contacts_orientation.has_value()) {
+            this->base_state_.contacts_orientation =
+                std::move(other.base_state_.contacts_orientation.value());
         }
 
-        this->base_position_cov_ = std::move(other.base_position_cov_);
-        this->base_orientation_cov_ = std::move(other.base_orientation_cov_);
-        this->base_linear_velocity_cov_ = std::move(other.base_linear_velocity_cov_);
-        this->base_angular_velocity_cov_ = std::move(other.base_angular_velocity_cov_);
-        this->imu_linear_acceleration_bias_cov_ =
-            std::move(other.imu_linear_acceleration_bias_cov_);
-        this->imu_angular_velocity_bias_cov_ = std::move(other.imu_angular_velocity_bias_cov_);
-        this->contacts_position_cov_ = std::move(other.contacts_position_cov_);
-        if (other.contacts_orientation_cov_.has_value()) {
-            this->contacts_orientation_cov_ = std::move(other.contacts_orientation_cov_.value());
+        this->base_state_.base_position_cov = std::move(other.base_state_.base_position_cov);
+        this->base_state_.base_orientation_cov = std::move(other.base_state_.base_orientation_cov);
+        this->base_state_.base_linear_velocity_cov =
+            std::move(other.base_state_.base_linear_velocity_cov);
+        this->base_state_.base_angular_velocity_cov =
+            std::move(other.base_state_.base_angular_velocity_cov);
+        this->base_state_.imu_linear_acceleration_bias_cov =
+            std::move(other.base_state_.imu_linear_acceleration_bias_cov);
+        this->base_state_.imu_angular_velocity_bias_cov =
+            std::move(other.base_state_.imu_angular_velocity_bias_cov);
+        this->base_state_.contacts_position_cov =
+            std::move(other.base_state_.contacts_position_cov);
+        if (other.base_state_.contacts_orientation_cov.has_value()) {
+            this->base_state_.contacts_orientation_cov =
+                std::move(other.base_state_.contacts_orientation_cov.value());
         }
 
         // Contact state
-        this->contacts_status_ = std::move(other.contacts_status_);
-        this->contacts_probability_ = std::move(other.contacts_probability_);
-        this->contacts_frame_ = std::move(other.contacts_frame_);
-        this->contact_forces = std::move(other.contact_forces);
-        if (other.contact_torques.has_value()) {
-            this->contact_torques = std::move(other.contact_torques);
+        this->contact_state_.timestamp = std::move(other.contact_state_.timestamp);
+        this->contact_state_.contacts_status = std::move(other.contact_state_.contacts_status);
+        this->contact_state_.contacts_probability =
+            std::move(other.contact_state_.contacts_probability);
+        this->contact_state_.contacts_force = std::move(other.contact_state_.contacts_force);
+        if (other.contact_state_.contacts_torque.has_value()) {
+            this->contact_state_.contacts_torque = std::move(other.contact_state_.contacts_torque);
         }
 
+        // Joint state
+        this->joint_state_.timestamp = std::move(other.joint_state_.timestamp);
+        this->joint_state_.joints_position = std::move(other.joint_state_.joints_position);
+        this->joint_state_.joints_velocity = std::move(other.joint_state_.joints_velocity);
+
         // Centroidal state
-        this->com_position_ = std::move(other.com_position_);
-        this->com_linear_velocity_ = std::move(other.com_linear_velocity_);
-        this->external_forces_ = std::move(other.external_forces_);
-        this->cop_position_ = std::move(other.cop_position_);
-        this->com_linear_acceleration_ = std::move(other.com_linear_acceleration_);
-        this->angular_momentum_ = std::move(other.angular_momentum_);
-        this->angular_momentum_derivative_ = std::move(other.angular_momentum_derivative_);
-        
-        this->com_position_cov_ = std::move(other.com_position_cov_);
-        this->com_linear_velocity_cov_ = std::move(other.com_linear_velocity_cov_);
-        this->external_forces_cov_ = std::move(other.external_forces_cov_);
+        this->centroidal_state_.timestamp = std::move(other.centroidal_state_.timestamp);
+        this->centroidal_state_.com_position = std::move(other.centroidal_state_.com_position);
+        this->centroidal_state_.com_linear_velocity =
+            std::move(other.centroidal_state_.com_linear_velocity);
+        this->centroidal_state_.external_forces =
+            std::move(other.centroidal_state_.external_forces);
+        this->centroidal_state_.cop_position = std::move(other.centroidal_state_.cop_position);
+        this->centroidal_state_.com_linear_acceleration =
+            std::move(other.centroidal_state_.com_linear_acceleration);
+        this->centroidal_state_.angular_momentum =
+            std::move(other.centroidal_state_.angular_momentum);
+        this->centroidal_state_.angular_momentum_derivative =
+            std::move(other.centroidal_state_.angular_momentum_derivative);
+
+        this->centroidal_state_.com_position_cov =
+            std::move(other.centroidal_state_.com_position_cov);
+        this->centroidal_state_.com_linear_velocity_cov =
+            std::move(other.centroidal_state_.com_linear_velocity_cov);
+        this->centroidal_state_.external_forces_cov =
+            std::move(other.centroidal_state_.external_forces_cov);
     }
     return *this;
 }
 
 Eigen::Isometry3d State::getBasePose() const {
     Eigen::Isometry3d base_pose = Eigen::Isometry3d::Identity();
-    base_pose.linear() = base_orientation_.toRotationMatrix();
-    base_pose.translation() = base_position_;
+    base_pose.linear() = base_state_.base_orientation.toRotationMatrix();
+    base_pose.translation() = base_state_.base_position;
     return base_pose;
 }
 
-const Eigen::Vector3d& State::getBasePosition() const { return base_position_; }
+const Eigen::Vector3d& State::getBasePosition() const { return base_state_.base_position; }
 
-const Eigen::Quaterniond& State::getBaseOrientation() const { return base_orientation_; }
+const Eigen::Quaterniond& State::getBaseOrientation() const { return base_state_.base_orientation; }
 
-const Eigen::Vector3d& State::getBaseLinearVelocity() const { return base_linear_velocity_; }
+const Eigen::Vector3d& State::getBaseLinearVelocity() const {
+    return base_state_.base_linear_velocity;
+}
 
-const Eigen::Vector3d& State::getBaseAngularVelocity() const { return base_angular_velocity_; }
+const Eigen::Vector3d& State::getBaseAngularVelocity() const {
+    return base_state_.base_angular_velocity;
+}
 
 const Eigen::Vector3d& State::getImuLinearAccelerationBias() const {
-    return imu_linear_acceleration_bias_;
+    return base_state_.imu_linear_acceleration_bias;
 }
 
 const Eigen::Vector3d& State::getImuAngularVelocityBias() const {
-    return imu_angular_velocity_bias_;
+    return base_state_.imu_angular_velocity_bias;
 }
 
 std::optional<Eigen::Vector3d> State::getContactPosition(const std::string& frame_name) const {
     // If the end-effector is in contact with the environment and we have a contact position
     // available
-    if (contacts_status_.count(frame_name) && contacts_status_.at(frame_name) &&
-        contacts_position_.count(frame_name))
-        return contacts_position_.at(frame_name);
-    else
+    if (contact_state_.contacts_status.count(frame_name) &&
+        contact_state_.contacts_status.at(frame_name) &&
+        base_state_.contacts_position.count(frame_name)) {
+        return base_state_.contacts_position.at(frame_name);
+    } else {
         return std::nullopt;
+    }
 }
 
 std::optional<Eigen::Quaterniond> State::getContactOrientation(
     const std::string& frame_name) const {
     // If the end-effector is in contact with the environment and we have a contact orientation
     // available
-    if (contacts_status_.count(frame_name) && contacts_status_.at(frame_name) &&
-        contacts_orientation_.has_value() && contacts_orientation_.value().count(frame_name))
-        return contacts_orientation_.value().at(frame_name);
-    else
+    if (contact_state_.contacts_status.count(frame_name) &&
+        contact_state_.contacts_status.at(frame_name) &&
+        base_state_.contacts_orientation.has_value() &&
+        base_state_.contacts_orientation.value().count(frame_name)) {
+        return base_state_.contacts_orientation.value().at(frame_name);
+    } else {
         return std::nullopt;
+    }
 }
 
 std::optional<Eigen::Isometry3d> State::getContactPose(const std::string& frame_name) const {
     // If the end-effector is in contact with the environment and we have a contact orientation
     // available
-    if (contacts_status_.count(frame_name) && contacts_status_.at(frame_name) &&
-        contacts_position_.count(frame_name) && contacts_orientation_.has_value() &&
-        contacts_orientation_.value().count(frame_name)) {
+    if (contact_state_.contacts_status.count(frame_name) &&
+        contact_state_.contacts_status.at(frame_name) &&
+        base_state_.contacts_position.count(frame_name) &&
+        base_state_.contacts_orientation.has_value() &&
+        base_state_.contacts_orientation.value().count(frame_name)) {
         Eigen::Isometry3d contact_pose = Eigen::Isometry3d::Identity();
-        contact_pose.linear() = contacts_orientation_.value().at(frame_name).toRotationMatrix();
-        contact_pose.translation() = contacts_position_.at(frame_name);
+        contact_pose.linear() =
+            base_state_.contacts_orientation.value().at(frame_name).toRotationMatrix();
+        contact_pose.translation() = base_state_.contacts_position.at(frame_name);
         return contact_pose;
     } else {
         return std::nullopt;
@@ -309,54 +402,62 @@ std::optional<Eigen::Isometry3d> State::getContactPose(const std::string& frame_
 const std::unordered_set<std::string>& State::getContactsFrame() const { return contacts_frame_; }
 
 std::optional<bool> State::getContactStatus(const std::string& frame_name) const {
-    if (contacts_status_.count(frame_name))
-        return contacts_status_.at(frame_name);
+    if (contact_state_.contacts_status.count(frame_name))
+        return contact_state_.contacts_status.at(frame_name);
     else
         return std::nullopt;
 }
 
 Eigen::Matrix<double, 6, 6> State::getBasePoseCov() const {
     Eigen::Matrix<double, 6, 6> base_pose_cov = Eigen::Matrix<double, 6, 6>::Identity();
-    base_pose_cov.block<3, 3>(0, 0) = base_position_cov_;
-    base_pose_cov.block<3, 3>(3, 3) = base_orientation_cov_;
+    base_pose_cov.block<3, 3>(0, 0) = base_state_.base_position_cov;
+    base_pose_cov.block<3, 3>(3, 3) = base_state_.base_orientation_cov;
     return base_pose_cov;
 }
 
-const Eigen::Matrix3d& State::getBasePositionCov() const { return base_position_cov_; }
+const Eigen::Matrix3d& State::getBasePositionCov() const { return base_state_.base_position_cov; }
 
-const Eigen::Matrix3d& State::getBaseOrientationCov() const { return base_orientation_cov_; }
+const Eigen::Matrix3d& State::getBaseOrientationCov() const {
+    return base_state_.base_orientation_cov;
+}
 
-const Eigen::Matrix3d& State::getBaseLinearVelocityCov() const { return base_linear_velocity_cov_; }
+const Eigen::Matrix3d& State::getBaseLinearVelocityCov() const {
+    return base_state_.base_linear_velocity_cov;
+}
 
 const Eigen::Matrix3d& State::getBaseAngularVelocityCov() const {
-    return base_angular_velocity_cov_;
+    return base_state_.base_angular_velocity_cov;
 }
 
 const Eigen::Matrix3d& State::getImuLinearAccelerationBiasCov() const {
-    return imu_linear_acceleration_bias_cov_;
+    return base_state_.imu_linear_acceleration_bias_cov;
 }
 
 const Eigen::Matrix3d& State::getImuAngularVelocityBiasCov() const {
-    return imu_angular_velocity_bias_cov_;
+    return base_state_.imu_angular_velocity_bias_cov;
 }
 
 std::optional<Eigen::Matrix3d> State::getContactPositionCov(const std::string& frame_name) const {
     // If the end-effector is in contact with the environment and we have a contact position
     // covariance available
-    if (contacts_status_.count(frame_name) && contacts_status_.at(frame_name) &&
-        contacts_position_cov_.count(frame_name))
-        return contacts_position_cov_.at(frame_name);
-    else
+    if (contact_state_.contacts_status.count(frame_name) &&
+        contact_state_.contacts_status.at(frame_name) &&
+        base_state_.contacts_position_cov.count(frame_name)) {
+        return base_state_.contacts_position_cov.at(frame_name);
+    } else {
         return std::nullopt;
+    }
 }
 
 std::optional<Eigen::Matrix3d> State::getContactOrientationCov(
     const std::string& frame_name) const {
     // If the end-effector is in contact with the environment and we have a contact orientation
     // covariance available
-    if (contacts_status_.count(frame_name) && contacts_status_.at(frame_name) &&
-        contacts_orientation_cov_.has_value() && contacts_orientation_.value().count(frame_name))
-        return contacts_orientation_cov_.value().at(frame_name);
+    if (contact_state_.contacts_status.count(frame_name) &&
+        contact_state_.contacts_status.at(frame_name) &&
+        base_state_.contacts_orientation_cov.has_value() &&
+        base_state_.contacts_orientation.value().count(frame_name))
+        return base_state_.contacts_orientation_cov.value().at(frame_name);
     else
         return std::nullopt;
 }
@@ -365,29 +466,42 @@ std::optional<Eigen::Matrix<double, 6, 6>> State::getContactPoseCov(
     const std::string& frame_name) const {
     // If the end-effector is in contact with the environment and we have a contact pose
     // covariance available
-    if (contacts_status_.count(frame_name) && contacts_status_.at(frame_name) &&
-        contacts_position_cov_.count(frame_name) && contacts_orientation_cov_.has_value() &&
-        contacts_orientation_cov_.value().count(frame_name)) {
+    if (contact_state_.contacts_status.count(frame_name) &&
+        contact_state_.contacts_status.at(frame_name) &&
+        base_state_.contacts_position_cov.count(frame_name) &&
+        base_state_.contacts_orientation_cov.has_value() &&
+        base_state_.contacts_orientation_cov.value().count(frame_name)) {
         Eigen::Matrix<double, 6, 6> contact_pose_cov = Eigen::Matrix<double, 6, 6>::Identity();
-        contact_pose_cov.block<3, 3>(0, 0) = contacts_position_cov_.at(frame_name);
-        contact_pose_cov.block<3, 3>(3, 3) = contacts_orientation_cov_.value().at(frame_name);
+        contact_pose_cov.block<3, 3>(0, 0) = base_state_.contacts_position_cov.at(frame_name);
+        contact_pose_cov.block<3, 3>(3, 3) =
+            base_state_.contacts_orientation_cov.value().at(frame_name);
         return contact_pose_cov;
     } else {
         return std::nullopt;
     }
 }
 
-const Eigen::Vector3d& State::getCoMPosition() const { return com_position_; }
+const Eigen::Vector3d& State::getCoMPosition() const { return centroidal_state_.com_position; }
 
-const Eigen::Vector3d& State::getCoMLinearVelocity() const { return com_linear_velocity_; }
+const Eigen::Vector3d& State::getCoMLinearVelocity() const {
+    return centroidal_state_.com_linear_velocity;
+}
 
-const Eigen::Vector3d& State::getCoMExternalForces() const { return external_forces_; }
+const Eigen::Vector3d& State::getCoMExternalForces() const {
+    return centroidal_state_.external_forces;
+}
 
-const Eigen::Matrix3d& State::getCoMPositionCov() const { return com_position_cov_; }
+const Eigen::Matrix3d& State::getCoMPositionCov() const {
+    return centroidal_state_.com_position_cov;
+}
 
-const Eigen::Matrix3d& State::getCoMLinearVelocityCov() const { return com_linear_velocity_cov_; }
+const Eigen::Matrix3d& State::getCoMLinearVelocityCov() const {
+    return centroidal_state_.com_linear_velocity_cov;
+}
 
-const Eigen::Matrix3d& State::getCoMExternalForcesCov() const { return external_forces_cov_; }
+const Eigen::Matrix3d& State::getCoMExternalForcesCov() const {
+    return centroidal_state_.external_forces_cov;
+}
 
 bool State::isPointFeet() const { return point_feet_; }
 

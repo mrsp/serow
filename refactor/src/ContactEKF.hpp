@@ -28,17 +28,21 @@ namespace serow {
 // position - contact orientation
 class ContactEKF {
    public:
-    void init(const State& state, double imu_rate, double g);
-    State predict(const State& state, const ImuMeasurement& imu, const KinematicMeasurement& kin);
-    State update(const State& state, const KinematicMeasurement& kin,
-                 std::optional<OdometryMeasurement> odom = std::nullopt,
-                 std::optional<TerrainMeasurement> terrain = std::nullopt);
+    void init(const BaseState& state, std::unordered_set<std::string> contacts_frame,
+              bool point_feet, double g, double imu_rate);
+    BaseState predict(const BaseState& state, const ImuMeasurement& imu,
+                      const KinematicMeasurement& kin);
+    BaseState update(const BaseState& state, const KinematicMeasurement& kin,
+                     std::optional<OdometryMeasurement> odom = std::nullopt,
+                     std::optional<TerrainMeasurement> terrain = std::nullopt);
 
    private:
     int num_states_{};
     int num_inputs_{};
     int contact_dim_{};
     int num_leg_end_effectors_{};
+    std::unordered_set<std::string> contacts_frame_;
+    bool point_feet_{};
     // Predict step sampling time
     double nominal_dt_{};
     // Gravity vector
@@ -67,8 +71,8 @@ class ContactEKF {
     /// Linearized state-input model 15 + 6N x 12 + 6N
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
 
-    State computeDiscreteDynamics(
-        const State& state, double dt, Eigen::Vector3d angular_velocity,
+    BaseState computeDiscreteDynamics(
+        const BaseState& state, double dt, Eigen::Vector3d angular_velocity,
         Eigen::Vector3d linear_acceleration,
         std::optional<std::unordered_map<std::string, bool>> contacts_status,
         std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contacts_position,
@@ -76,11 +80,11 @@ class ContactEKF {
             std::nullopt);
 
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> computePredictionJacobians(
-        const State& state, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration,
-        double dt);
+        const BaseState& state, Eigen::Vector3d angular_velocity,
+        Eigen::Vector3d linear_acceleration, double dt);
 
-    State updateWithContacts(
-        const State& state,
+    BaseState updateWithContacts(
+        const BaseState& state,
         const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
         std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
         const std::unordered_map<std::string, bool>& contacts_status,
@@ -89,14 +93,16 @@ class ContactEKF {
         std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov);
 
-    State updateWithOdometry(const State& state, const Eigen::Vector3d& base_position,
-                             const Eigen::Quaterniond& base_orientation,
-                             const Eigen::Matrix3d& base_position_cov,
-                             const Eigen::Matrix3d& base_orientation_cov);
+    BaseState updateWithOdometry(const BaseState& state, const Eigen::Vector3d& base_position,
+                                 const Eigen::Quaterniond& base_orientation,
+                                 const Eigen::Matrix3d& base_position_cov,
+                                 const Eigen::Matrix3d& base_orientation_cov);
 
-    State updateWithTerrain(const State& state, double terrain_height, double terrain_cov);
+    BaseState updateWithTerrain(const BaseState& state,
+                                const std::unordered_map<std::string, bool>& contacts_status,
+                                double terrain_height, double terrain_cov);
 
-    void updateState(State& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const;
+    void updateState(BaseState& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const;
 };
 
 }  // namespace serow

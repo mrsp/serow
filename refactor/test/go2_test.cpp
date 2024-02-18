@@ -13,11 +13,11 @@ using json = nlohmann::json;
 
 TEST(SerowTests, Go2Test) {
     serow::Serow SERoW("../config/go2.json");
-    const double mass =  8.096; // kg
-    const double g = 9.81; // m/s^2
-    const double mg = mass * g; // N
-    const double bias = 14; // potatos
-    const double den = 172.91 - 4 * bias; // potatos
+    const double mass = 8.096;             // kg
+    const double g = 9.81;                 // m/s^2
+    const double mg = mass * g;            // N
+    const double bias = 14;                // potatos
+    const double den = 172.91 - 4 * bias;  // potatos
 
     std::fstream file("../test/data/go2.csv", std::ios::in);
     if (!file.is_open()) {
@@ -41,8 +41,8 @@ TEST(SerowTests, Go2Test) {
 
     // Parse the data, create the measurements, and run the filtering loop
     for (size_t i = 1; i < data.size(); i++) {
-        double timestamp = std::stod(data[i][0]) * 1e-9; // s
-        
+        double timestamp = std::stod(data[i][0]) * 1e-9;  // s
+
         std::unordered_map<std::string, serow::ForceTorqueMeasurement> force_torque;
         Eigen::Vector3d force =
             Eigen::Vector3d(0, 0, std::clamp((std::stod(data[i][1]) - bias) * mg / den, 0.0, mg));
@@ -72,30 +72,42 @@ TEST(SerowTests, Go2Test) {
             Eigen::Vector3d(std::stod(data[i][8]), std::stod(data[i][9]), std::stod(data[i][10]));
 
         std::unordered_map<std::string, serow::JointMeasurement> joints;
-        joints.insert({"FR_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                         .position = std::stod(data[i][11])}});
-        joints.insert({"FR_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                           .position = std::stod(data[i][12])}});
-        joints.insert({"FR_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                          .position = std::stod(data[i][13])}});
-        joints.insert({"FL_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                         .position = std::stod(data[i][14])}});
-        joints.insert({"FL_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                           .position = std::stod(data[i][15])}});
-        joints.insert({"FL_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                          .position = std::stod(data[i][16])}});
-        joints.insert({"RR_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                         .position = std::stod(data[i][17])}});
-        joints.insert({"RR_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                           .position = std::stod(data[i][18])}});
-        joints.insert({"RR_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                          .position = std::stod(data[i][19])}});
-        joints.insert({"RL_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                         .position = std::stod(data[i][20])}});
-        joints.insert({"RL_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                           .position = std::stod(data[i][21])}});
-        joints.insert({"RL_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                          .position = std::stod(data[i][22])}});
+        joints.insert(
+            {"FR_hip_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][11])}});
+        joints.insert(
+            {"FR_thigh_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][12])}});
+        joints.insert(
+            {"FR_calf_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][13])}});
+        joints.insert(
+            {"FL_hip_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][14])}});
+        joints.insert(
+            {"FL_thigh_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][15])}});
+        joints.insert(
+            {"FL_calf_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][16])}});
+        joints.insert(
+            {"RR_hip_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][17])}});
+        joints.insert(
+            {"RR_thigh_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][18])}});
+        joints.insert(
+            {"RR_calf_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][19])}});
+        joints.insert(
+            {"RL_hip_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][20])}});
+        joints.insert(
+            {"RL_thigh_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][21])}});
+        joints.insert(
+            {"RL_calf_joint",
+             serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][22])}});
 
         auto t0 = std::chrono::high_resolution_clock::now();
         SERoW.filter(imu, joints, force_torque);
@@ -114,7 +126,7 @@ TEST(SerowTests, Go2Test) {
         EXPECT_FALSE(state->getBaseLinearVelocity() != state->getBaseLinearVelocity());
         EXPECT_FALSE(state->getBaseOrientation() != state->getBaseOrientation());
         for (const auto& cf : state->getContactsFrame()) {
-            if(state->getContactPosition(cf)) {
+            if (state->getContactPosition(cf)) {
                 EXPECT_FALSE(*state->getContactPosition(cf) != *state->getContactPosition(cf));
             }
         }
