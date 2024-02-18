@@ -75,22 +75,33 @@ class State {
     Eigen::Vector3d base_linear_velocity_{Eigen::Vector3d::Zero()};
     // Base angular velocity in the world frame
     Eigen::Vector3d base_angular_velocity_{Eigen::Vector3d::Zero()};
+    // Base linear acceleration in the world frame
+    Eigen::Vector3d base_linear_acceleration_{Eigen::Vector3d::Zero()};
+    // Base angular acceleration in the world frame
+    Eigen::Vector3d base_angular_acceleration_{Eigen::Vector3d::Zero()};
     // Contact state: frame_name to contact pose in the world frame
     std::unordered_map<std::string, Eigen::Vector3d> contacts_position_;
     std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation_;
-    std::unordered_map<std::string, bool> contacts_status_;
-    std::unordered_map<std::string, double> contacts_probability_;
+
     std::unordered_set<std::string> contacts_frame_;
     // Imu acceleration bias in the local imu frame
     Eigen::Vector3d imu_linear_acceleration_bias_{Eigen::Vector3d::Zero()};
     // Imu gyro rate bias in the local imu frame
     Eigen::Vector3d imu_angular_velocity_bias_{Eigen::Vector3d::Zero()};
-    // 3D CoM position in world frame
+    // 3D CoM position in the world frame
     Eigen::Vector3d com_position_{Eigen::Vector3d::Zero()};
-    // 3D CoM linear velocity in world frame
+    // 3D CoM linear velocity in the world frame
     Eigen::Vector3d com_linear_velocity_{Eigen::Vector3d::Zero()};
-    // 3D External forces at the CoM in world frame
+    // 3D External forces at the CoM in the world frame
     Eigen::Vector3d external_forces_{Eigen::Vector3d::Zero()};
+    // COP position in the world frame
+    Eigen::Vector3d cop_position_{Eigen::Vector3d::Zero()};
+    // CoM linear acceleration in the world frame
+    Eigen::Vector3d com_linear_acceleration_{Eigen::Vector3d::Zero()};
+    // Angular momentum around the CoM in the world frame
+    Eigen::Vector3d angular_momentum_{Eigen::Vector3d::Zero()};
+    // Angular momentum derivative around the CoM in the world frame
+    Eigen::Vector3d angular_momentum_derivative_{Eigen::Vector3d::Zero()};
 
     // Covariances
     // Base position covariance in the world frame
@@ -115,8 +126,13 @@ class State {
     // 3D External forces at the CoM covariance in world frame
     Eigen::Matrix3d external_forces_cov_{Eigen::Matrix3d::Identity()};
 
+    std::unordered_map<std::string, bool> contacts_status_;
+    std::unordered_map<std::string, double> contacts_probability_;
     std::unordered_map<std::string, Eigen::Vector3d> contact_forces;
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques;
+
+    std::unordered_map<std::string, double> joint_positions;
+    std::unordered_map<std::string, double> joint_velocities;
 
     std::mutex mutex_;
 

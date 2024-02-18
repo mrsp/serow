@@ -117,7 +117,6 @@ State CoMEKF::updateWithCoMAcceleration(
     const Eigen::Matrix3d& com_linear_acceleration_cov,
     const Eigen::Vector3d& com_angular_momentum_derivative) {
     State updated_state = state;
-
     double den = state.com_position_.z() - cop_position.z();
     Eigen::Vector3d z = Eigen::Vector3d::Zero();
     z.x() = com_linear_acceleration(0) - ((state.com_position_.x() - cop_position.x()) /
