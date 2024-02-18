@@ -74,14 +74,14 @@ Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(
     const State& state, const Eigen::Vector3d& cop_position,
     const Eigen::Vector3d& ground_reaction_force,
     const Eigen::Vector3d& com_angular_momentum_derivative) {
-    double den = state.com_position_.z() - cop_position.z();
     Eigen::Matrix<double, 9, 1> res = Eigen::Matrix<double, 9, 1>::Zero();
     res.segment<3>(0) = state.com_linear_velocity_;
+    double den = state.com_position_.z() - cop_position.z();
     res(3) =
-        (state.com_position_.x() - cop_position.x()) / (mass_ * den) * (ground_reaction_force.z()) +
+        (state.com_position_.x() - cop_position.x()) / (mass_ * den) * ground_reaction_force.z() +
         state.external_forces_.x() / mass_ - com_angular_momentum_derivative.y() / (mass_ * den);
     res(4) =
-        (state.com_position_.y() - cop_position.y()) / (mass_ * den) * (ground_reaction_force.z()) +
+        (state.com_position_.y() - cop_position.y()) / (mass_ * den) * ground_reaction_force.z() +
         state.external_forces_.y() / mass_ + com_angular_momentum_derivative.x() / (mass_ * den);
     res(5) = (ground_reaction_force.z() + state.external_forces_.z()) / mass_ - g_;
 
@@ -97,12 +97,12 @@ CoMEKF::computePredictionJacobians(const State& state, const Eigen::Vector3d& co
     double den = state.com_position_.z() - cop_position.z();
     Ac.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity();
     Ac(3, 0) = ground_reaction_force.z() / (mass_ * den);
-    Ac(3, 2) = -((ground_reaction_force.z()) * (state.com_position_.x() - cop_position.z())) /
+    Ac(3, 2) = -(ground_reaction_force.z() * (state.com_position_.x() - cop_position.x())) /
                    (mass_ * den * den) +
                com_angular_momentum_derivative.y() / (mass_ * den * den);
     Ac(3, 6) = 1.0 / mass_;
     Ac(4, 1) = ground_reaction_force.z() / (mass_ * den);
-    Ac(4, 2) = -(ground_reaction_force.z()) * (state.com_position_.y() - cop_position.y()) /
+    Ac(4, 2) = -ground_reaction_force.z() * (state.com_position_.y() - cop_position.y()) /
                    (mass_ * den * den) -
                com_angular_momentum_derivative.x() / (mass_ * den * den);
     Ac(4, 7) = 1.0 / mass_;
@@ -121,24 +121,24 @@ State CoMEKF::updateWithCoMAcceleration(
     double den = state.com_position_.z() - cop_position.z();
     Eigen::Vector3d z = Eigen::Vector3d::Zero();
     z.x() = com_linear_acceleration(0) - ((state.com_position_.x() - cop_position.x()) /
-                                              (mass_ * den) * (ground_reaction_force.z()) +
+                                              (mass_ * den) * ground_reaction_force.z() +
                                           state.external_forces_.x() / mass_ -
                                           com_angular_momentum_derivative.y() / (mass_ * den));
     z.y() = com_linear_acceleration(1) - ((state.com_position_.y() - cop_position.y()) /
-                                              (mass_ * den) * (ground_reaction_force.z()) +
+                                              (mass_ * den) * ground_reaction_force.z() +
                                           state.external_forces_.y() / mass_ +
                                           com_angular_momentum_derivative.x() / (mass_ * den));
     z.z() = com_linear_acceleration(2) -
             ((ground_reaction_force.z() + state.external_forces_.z()) / mass_ - g_);
 
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();
-    H(0, 0) = (ground_reaction_force.z()) / (mass_ * den);
-    H(0, 2) = -((ground_reaction_force.z()) * (state.com_position_.x() - cop_position.x())) /
+    H(0, 0) = ground_reaction_force.z() / (mass_ * den);
+    H(0, 2) = -(ground_reaction_force.z() * (state.com_position_.x() - cop_position.x())) /
                   (mass_ * den * den) +
               com_angular_momentum_derivative.y() / (mass_ * den * den);
     H(0, 6) = 1.0 / mass_;
-    H(1, 1) = (ground_reaction_force.z()) / (mass_ * den);
-    H(1, 2) = -(ground_reaction_force.z()) * (state.com_position_.y() - cop_position.y()) /
+    H(1, 1) = ground_reaction_force.z() / (mass_ * den);
+    H(1, 2) = -ground_reaction_force.z() * (state.com_position_.y() - cop_position.y()) /
                   (mass_ * den * den) -
               com_angular_momentum_derivative.x() / (mass_ * den * den);
     H(1, 7) = 1.0 / mass_;
@@ -158,7 +158,7 @@ State CoMEKF::updateWithCoMPosition(const State& state, const Eigen::Vector3d& c
     State updated_state = state;
     const Eigen::Vector3d z = com_position - state.com_position_;
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();
-    H.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity();
+    H(c_idx_, c_idx_) = Eigen::Matrix3d::Identity();
 
     const Eigen::Matrix3d& R = com_position_cov;
     const Eigen::Matrix3d s = R + H * P_ * H.transpose();
