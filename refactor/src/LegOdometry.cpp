@@ -83,6 +83,7 @@ void LegOdometry::estimate(
     for (const auto& [key, value] : contact_forces) {
         den += value.z();
     }
+    
     for (const auto& [key, value] : contact_forces) {
         force_weights[key] = std::clamp((value.z() + params_.eps) / den, 0.0, 1.0);
     }

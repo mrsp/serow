@@ -11,27 +11,31 @@
 #endif
 
 #include <deque>
+#include <iostream>
 
 namespace serow {
 
 class MovingMedianFilter {
    private:
     int window_size_{};
-    std::deque<double> window_buffer;
+    std::deque<double> window_buffer_;
 
    public:
     MovingMedianFilter(int window_size) { window_size_ = window_size; }
 
     double filter(double x) {
-        if (window_buffer.size() > window_size_) {
-            window_buffer.pop_front();
+        if (window_buffer_.size() == window_size_) {
+            window_buffer_.pop_front();
         }
-        window_buffer.push_back(x);
+        window_buffer_.push_back(x);
 
         // Trivial case
-        if (window_buffer.size() == 1) {
+        if (window_buffer_.size() == 1) {
             return x;
         }
+        
+        // sort the buffer
+        auto window_buffer = window_buffer_;
         std::sort(window_buffer.begin(), window_buffer.end());
         if (window_buffer.size() % 2 == 0) {
             // Mean case
