@@ -91,11 +91,11 @@ class RobotKinematics {
         qn_ *= joint_std;
     }
 
-    Eigen::Vector3d getLinearVelocityNoise(const std::string& frame_name) const {
+    Eigen::Vector3d linearVelocityNoise(const std::string& frame_name) const {
         return linearJacobian(frame_name) * qn_;
     }
 
-    Eigen::Vector3d getAngularVelocityNoise(const std::string& frame_name) const {
+    Eigen::Vector3d angularVelocityNoise(const std::string& frame_name) const {
         return angularJacobian(frame_name) * qn_;
     }
 
@@ -141,11 +141,11 @@ class RobotKinematics {
         }
     }
 
-    Eigen::Vector3d getLinearVelocity(const std::string& frame_name) const {
+    Eigen::Vector3d linearVelocity(const std::string& frame_name) const {
         return (linearJacobian(frame_name) * qdot_);
     }
 
-    Eigen::Vector3d getAngularVelocity(const std::string& frame_name) const {
+    Eigen::Vector3d angularVelocity(const std::string& frame_name) const {
         return (angularJacobian(frame_name) * qdot_);
     }
 

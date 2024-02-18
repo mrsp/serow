@@ -203,6 +203,9 @@ void Serow::filter(
     kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities,
                                             params_.joint_position_variance);
 
+    state.joint_positions = std::move(joint_positions);
+    state.joint_velocities = std::move(joint_velocities);
+
     // Get the CoM w.r.t the base frame
     const Eigen::Vector3d& base_to_com_position = kinematic_estimator_->comPosition();
     // Get the angular momentum around the CoM in base frame coordinates
@@ -228,9 +231,9 @@ void Serow::filter(
             kinematic_estimator_->linkOrientation(contact_frame);
         base_to_foot_positions[contact_frame] = kinematic_estimator_->linkPosition(contact_frame);
         base_to_foot_angular_velocities[contact_frame] =
-            kinematic_estimator_->getAngularVelocity(contact_frame);
+            kinematic_estimator_->angularVelocity(contact_frame);
         base_to_foot_linear_velocities[contact_frame] =
-            kinematic_estimator_->getLinearVelocity(contact_frame);
+            kinematic_estimator_->linearVelocity(contact_frame);
     }
 
     if (ft.has_value()) {
@@ -352,12 +355,12 @@ void Serow::filter(
     std::unordered_map<std::string, Eigen::Matrix3d> kin_contacts_orientation_noise;
     for (const auto& frame : state.getContactsFrame()) {
         kin.contacts_position_noise[frame] =
-            kinematic_estimator_->getLinearVelocityNoise(frame) *
-            kinematic_estimator_->getLinearVelocityNoise(frame).transpose();
+            kinematic_estimator_->linearVelocity(frame) *
+            kinematic_estimator_->linearVelocity(frame).transpose();
         if (!state.isPointFeet()) {
             kin_contacts_orientation_noise[frame] =
-                kinematic_estimator_->getAngularVelocityNoise(frame) *
-                kinematic_estimator_->getAngularVelocityNoise(frame).transpose();
+                kinematic_estimator_->angularVelocityNoise(frame) *
+                kinematic_estimator_->angularVelocityNoise(frame).transpose();
         }
     }
     if (!state.isPointFeet()) {
@@ -392,23 +395,31 @@ void Serow::filter(
     // Create the CoM estimation measurements
     kin.com_position = state.getBasePose() * base_to_com_position;
     kin.com_position_cov = params_.com_position_cov.asDiagonal();
+    kin.com_angular_momentum_derivative =
+        state.getBasePose().linear() * com_angular_momentum_derivative;
+
+    // Approximate the CoM linear acceleration
+    Eigen::Vector3d base_linear_acceleration =
+        state.getBasePose().linear() *
+            (imu.linear_acceleration - state.getImuLinearAccelerationBias()) -
+        Eigen::Vector3d(0, 0, params_.g);
+    Eigen::Vector3d base_angular_velocity =
+        state.getBasePose().linear() * (imu.angular_velocity - state.getImuAngularVelocityBias());
+    Eigen::Vector3d base_angular_acceleration =
+        state.getBasePose().linear() * imu.angular_acceleration;
+    kin.com_linear_acceleration = base_linear_acceleration;
+    kin.com_linear_acceleration +=
+        base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
+        base_angular_acceleration.cross(base_to_com_position);
+    
+    // Update the state
+    state.base_linear_acceleration_ = base_linear_acceleration;
+    state.base_angular_velocity_ =  base_angular_velocity;
+    state.base_angular_acceleration_ = base_angular_acceleration;
+    state.angular_momentum_ = state.getBasePose().linear() * com_angular_momentum;
+    state.angular_momentum_derivative_ = kin.com_angular_momentum_derivative;
+    state.com_linear_acceleration_ = kin.com_linear_acceleration;
     if (ft.has_value()) {
-        // Approximate the CoM linear acceleration
-        Eigen::Vector3d base_linear_acceleration =
-            state.getBasePose().linear() *
-                (imu.linear_acceleration - state.getImuLinearAccelerationBias()) -
-            Eigen::Vector3d(0, 0, params_.g);
-        Eigen::Vector3d base_angular_velocity =
-            state.getBasePose().linear() *
-            (imu.angular_velocity - state.getImuAngularVelocityBias());
-        Eigen::Vector3d base_angular_acceleration =
-            state.getBasePose().linear() * imu.angular_acceleration;
-        kin.com_linear_acceleration = base_linear_acceleration;
-        kin.com_linear_acceleration +=
-            base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
-            base_angular_acceleration.cross(base_to_com_position);
-        kin.com_angular_momentum_derivative =
-            state.getBasePose().linear() * com_angular_momentum_derivative;
         kin.com_position_process_cov = params_.com_position_process_cov.asDiagonal();
         kin.com_linear_velocity_process_cov = params_.com_linear_velocity_process_cov.asDiagonal();
         kin.external_forces_process_cov = params_.external_forces_process_cov.asDiagonal();
@@ -429,12 +440,13 @@ void Serow::filter(
         if (den > 0) {
             grf.cop /= den;
         }
-
+        state.cop_position_ = grf.cop;
         // Call the CoM estimator predict step utilizing ground reaction measurements
         state = com_estimator_.predict(state, kin, grf);
         // Call the CoM estimator update step by employing kinematic and imu measurements
         state = com_estimator_.updateWithImu(state, kin, grf);
     }
+
     // Call the CoM estimator update step by employing kinematic measurements
     state = com_estimator_.updateWithKinematics(state, kin);
 
