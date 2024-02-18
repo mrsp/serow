@@ -48,7 +48,7 @@ Serow::Serow(std::string config_file) {
             for (const auto& frame : state_.getContactsFrame()) {
                 params_.R_foot_to_force[frame](i, j) =
                     config["R_foot_to_force"][std::to_string(k)][3 * i + j];
-                if (config["has_force_torque"]) {
+                if (!config["R_foot_to_torque"].is_null()) {
                     params_.R_foot_to_torque[frame](i, j) =
                         config["R_foot_to_torque"][std::to_string(k)][3 * i + j];
                 }
@@ -79,14 +79,21 @@ Serow::Serow(std::string config_file) {
     // Base/CoM estimation parameters
     params_.convergence_cycles = config["convergence_cycles"];
     for (size_t i = 0; i < 3; i++) {
+        state.imu_angular_velocity_bias_[i] = config["bias_gyro"][i];
+        state.imu_linear_acceleration_bias_[i] = config["bias_acc"][i];
         params_.angular_velocity_cov[i] = config["imu_angular_velocity_covariance"][i];
         params_.angular_velocity_bias_cov[i] = config["imu_angular_velocity_bias_covariance"][i];
         params_.linear_acceleration_cov[i] = config["imu_linear_acceleration_covariance"][i];
         params_.linear_acceleration_cov[i] = config["imu_linear_acceleration_bias_covariance"][i];
         params_.contact_position_cov[i] = config["contact_position_covariance"][i];
-        params_.contact_orientation_cov[i] = config["contact_orientation_covariance"][i];
+        if (!config["contact_orientation_covariance"].is_null()) {
+            params_.contact_orientation_cov[i] = config["contact_orientation_covariance"][i];
+        }
         params_.contact_position_slip_cov[i] = config["contact_position_slip_covariance"][i];
-        params_.contact_orientation_slip_cov[i] = config["contact_orientation_slip_covariance"][i];
+        if (!config["contact_orientation_slip_covariance"].is_null()) {
+            params_.contact_orientation_slip_cov[i] =
+                config["contact_orientation_slip_covariance"][i];
+        }
         params_.com_position_process_cov[i] = config["com_position_process_covariance"][i];
         params_.com_linear_velocity_process_cov[i] =
             config["com_linear_velocity_process_covariance"][i];
@@ -98,8 +105,10 @@ Serow::Serow(std::string config_file) {
         params_.initial_base_linear_velocity_cov[i] =
             config["initial_base_linear_velocity_covariance"][i];
         params_.initial_contact_position_cov[i] = config["initial_contact_position_covariance"][i];
-        params_.initial_contact_orientation_cov[i] =
-            config["initial_contact_orientation_covariance"][i];
+        if (!config["initial_contact_orientation_covariance"].is_null()) {
+            params_.initial_contact_orientation_cov[i] =
+                config["initial_contact_orientation_covariance"][i];
+        }
         params_.initial_imu_linear_acceleration_bias_cov[i] =
             config["initial_imu_linear_acceleration_bias_covariance"][i];
         params_.initial_imu_angular_velocity_bias_cov[i] =
@@ -111,9 +120,11 @@ Serow::Serow(std::string config_file) {
     }
 
     // External odometry extrinsics
-    for (size_t i = 0; i < 4; i++) {
-        for (size_t j = 0; j < 4; j++) {
-            params_.T_base_to_odom(i, j) = config["T_base_to_odom"][4 * i + j];
+    if (!config["T_base_to_odom"].is_null()) {
+        for (size_t i = 0; i < 4; i++) {
+            for (size_t j = 0; j < 4; j++) {
+                params_.T_base_to_odom(i, j) = config["T_base_to_odom"][4 * i + j];
+            }
         }
     }
 
@@ -193,11 +204,9 @@ void Serow::filter(
         std::cout << "Calibration finished at " << imu_calibration_cycles_ << std::endl;
         std::cout << "Gyro biases " << params_.bias_gyro.transpose() << std::endl;
         std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
+        state.imu_angular_velocity_bias_ = params_.bias_gyro;
+        state.imu_linear_acceleration_bias_ = params_.bias_acc;
     }
-
-    // Remove the imu bias from the measurements
-    imu.angular_velocity -= params_.bias_gyro;
-    imu.linear_acceleration -= params_.bias_acc;
 
     // Update the kinematic structure
     kinematic_estimator_->updateJointConfig(joint_positions, joint_velocities,
@@ -411,10 +420,10 @@ void Serow::filter(
     kin.com_linear_acceleration +=
         base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
         base_angular_acceleration.cross(base_to_com_position);
-    
+
     // Update the state
     state.base_linear_acceleration_ = base_linear_acceleration;
-    state.base_angular_velocity_ =  base_angular_velocity;
+    state.base_angular_velocity_ = base_angular_velocity;
     state.base_angular_acceleration_ = base_angular_acceleration;
     state.angular_momentum_ = state.getBasePose().linear() * com_angular_momentum;
     state.angular_momentum_derivative_ = kin.com_angular_momentum_derivative;
