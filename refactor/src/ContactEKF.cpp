@@ -89,10 +89,10 @@ void ContactEKF::init(const BaseState& state, std::unordered_set<std::string> co
     Lc_(ba_idx_, nba_idx_) = Eigen::Matrix3d::Identity();
 
     for (const auto& contact_frame : contacts_frame_) {
-        Lc_(pl_idx_.at(contact_frame), npl_idx_.at(contact_frame)) = Eigen::Matrix3d::Identity();
+        Lc_(pl_idx_.at(contact_frame), npl_idx_.at(contact_frame)) = -Eigen::Matrix3d::Identity();
         if (!point_feet_) {
             Lc_(rl_idx_.at(contact_frame), nrl_idx_.at(contact_frame)) =
-                Eigen::Matrix3d::Identity();
+                -Eigen::Matrix3d::Identity();
         }
     }
 
@@ -109,6 +109,9 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobi
     Eigen::MatrixXd Ac, Lc;
     Lc = Lc_;
     Lc(v_idx_, ng_idx_).noalias() = -lie::so3::wedge(v);
+    for (const auto& contact_frame : contacts_frame_) {
+        Lc_(pl_idx_.at(contact_frame), npl_idx_.at(contact_frame)) = -R;
+    }
 
     Ac.setZero(num_states_, num_states_);
     Ac(v_idx_, v_idx_).noalias() = -lie::so3::wedge(angular_velocity);
