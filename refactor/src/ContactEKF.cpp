@@ -54,10 +54,11 @@ void OutlierDetector::estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix
 }
 
 void ContactEKF::init(const BaseState& state, std::unordered_set<std::string> contacts_frame,
-                      bool point_feet, double g, double imu_rate) {
+                      bool point_feet, double g, double imu_rate, bool outlier_detection) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
+    outlier_detection_ = outlier_detection;
     point_feet_ = point_feet;
     contact_dim_ = point_feet_ ? 3 : 6;
     num_states_ = 15 + contact_dim_ * num_leg_end_effectors_;
@@ -312,39 +313,48 @@ BaseState ContactEKF::updateWithContacts(
         H.block(0, p_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix().transpose();
         H.block(0, pl_idx_.at(cf)[0], 3, 3) = state.base_orientation.toRotationMatrix().transpose();
         H.block(0, r_idx_[0], 3, 3) = lie::so3::wedge(x);
+        
+        if (outlier_detection_) {
+            // RESKF update
+            contact_outlier_detector.init();
+            Eigen::MatrixXd P_i = P_;
+            BaseState updated_state_i = updated_state;
+            for (size_t i = 0; i < contact_outlier_detector.iters; i++) {
+                if (contact_outlier_detector.zeta > contact_outlier_detector.threshold) {
+                    const Eigen::Matrix3d R_z =
+                        contacts_position_noise.at(cf) / contact_outlier_detector.zeta;
+                    const Eigen::Matrix3d s = R_z + H * P_ * H.transpose();
+                    const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
+                    const Eigen::VectorXd dx = K * z;
+                    P_i = (I_ - K * H) * P_;
+                    updated_state_i = updateStateCopy(updated_state, dx, P_);
 
-        contact_outlier_detector.init();
-        Eigen::MatrixXd P_i = P_;
-        BaseState updated_state_i = updated_state;
-        for (size_t i = 0; i < contact_outlier_detector.iters; i++) {
-            if (contact_outlier_detector.zeta > contact_outlier_detector.threshold) {
-                const Eigen::Matrix3d R_z =
-                    contacts_position_noise.at(cf) / contact_outlier_detector.zeta;
-                const Eigen::Matrix3d s = R_z + H * P_ * H.transpose();
-                const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
-                const Eigen::VectorXd dx = K * z;
-                P_i = (I_ - K * H) * P_;
-                updated_state_i = updateStateCopy(updated_state, dx, P_);
-
-                // Outlier detection with the relative contact position measurement vector
-                const Eigen::Vector3d x_i =
-                    updated_state_i.base_orientation.toRotationMatrix().transpose() *
-                    (updated_state_i.contacts_position.at(cf) - updated_state_i.base_position);
-                Eigen::Matrix3d BetaT = cp * cp.transpose();
-                BetaT.noalias() -= 2.0 * cp * x_i.transpose();
-                BetaT.noalias() += x_i * x_i.transpose();
-                BetaT.noalias() += H * P_i * H.transpose();
-                contact_outlier_detector.estimate(BetaT, contacts_position_noise.at(cf));
-            } else {
-                // Measurement is an outlier
-                updated_state_i = updated_state;
-                P_i = P_;
-                break;
+                    // Outlier detection with the relative contact position measurement vector
+                    const Eigen::Vector3d x_i =
+                        updated_state_i.base_orientation.toRotationMatrix().transpose() *
+                        (updated_state_i.contacts_position.at(cf) - updated_state_i.base_position);
+                    Eigen::Matrix3d BetaT = cp * cp.transpose();
+                    BetaT.noalias() -= 2.0 * cp * x_i.transpose();
+                    BetaT.noalias() += x_i * x_i.transpose();
+                    BetaT.noalias() += H * P_i * H.transpose();
+                    contact_outlier_detector.estimate(BetaT, contacts_position_noise.at(cf));
+                } else {
+                    // Measurement is an outlier
+                    updated_state_i = updated_state;
+                    P_i = P_;
+                    break;
+                }
             }
+            P_ = std::move(P_i);
+            updated_state = std::move(updated_state_i);
+        } else {
+            // Normal ESKF update
+            const Eigen::Matrix3d s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
+            const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
+            const Eigen::VectorXd dx = K * z;
+            P_ = (I_ - K * H) * P_;
+            updateState(updated_state, dx, P_);
         }
-
-        P_ = std::move(P_i);
-        updated_state = std::move(updated_state_i);
     }
 
     // Optionally update the state with the relative contacts orientation
