@@ -24,6 +24,26 @@
 
 namespace serow {
 
+struct OutlierDetector {
+    // Beta distribution parameters more info in
+    //  Outlier-Robust State Estimation for Humanoid Robots
+    //  https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
+    double zeta = 1.0;
+    double f_0 = 0.1;
+    double e_0 = 0.9;
+    double f_t = 0.1;
+    double e_t = 0.9;
+    double threshold = 1e-5;
+    int iters = 4;
+
+    // Digamma Function Approximation
+    double computePsi(double xxx);
+    // Initializes the estimation
+    void init();
+    // Compute the outlier indicator zeta
+    void estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix3d& R);
+};
+
 // State is velocity  - orientation - position - gyro bias - accel bias - 15 + 6 x N contact
 // position - contact orientation
 class ContactEKF {
@@ -71,6 +91,8 @@ class ContactEKF {
     /// Linearized state-input model 15 + 6N x 12 + 6N
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
 
+    OutlierDetector contact_outlier_detector;
+
     BaseState computeDiscreteDynamics(
         const BaseState& state, double dt, Eigen::Vector3d angular_velocity,
         Eigen::Vector3d linear_acceleration,
@@ -103,6 +125,8 @@ class ContactEKF {
                                 double terrain_height, double terrain_cov);
 
     void updateState(BaseState& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const;
+    BaseState updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
+                              const Eigen::MatrixXd& P) const;
 };
 
 }  // namespace serow
