@@ -9,15 +9,18 @@
 namespace serow {
 
 double OutlierDetector::computePsi(double xxx) {
-    double result = 0, xx, xx2, xx4;
-    for (; xxx < 7; ++xxx) result -= 1 / xxx;
+    double result = 0;
+    double xx, xx2, xx4;
+    for (; xxx < 7; ++xxx) {
+        result -= 1 / xxx;
+    }
 
     xxx -= 1.0 / 2.0;
     xx = 1.0 / xxx;
     xx2 = xx * xx;
     xx4 = xx2 * xx2;
-    result += std::log(xxx) + (1. / 24.) * xx2 - (7.0 / 960.0) * xx4 + (31.0 / 8064.0) * xx4 * xx2 -
-              (127.0 / 30720.0) * xx4 * xx4;
+    result += std::log(xxx) + (1.0 / 24.0) * xx2 - (7.0 / 960.0) * xx4 +
+              (31.0 / 8064.0) * xx4 * xx2 - (127.0 / 30720.0) * xx4 * xx4;
     return result;
 }
 
@@ -42,7 +45,7 @@ void OutlierDetector::estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix
     pzeta_1 = norm_factor * pzeta_1;
     pzeta_0 = norm_factor * pzeta_0;
 
-    // mean of Bernulli
+    // Mean of Bernulli
     zeta = pzeta_1 / (pzeta_1 + pzeta_0);
 
     // Update epsilon and f

@@ -25,9 +25,8 @@
 namespace serow {
 
 struct OutlierDetector {
-    // Beta distribution parameters more info in
-    //  Outlier-Robust State Estimation for Humanoid Robots
-    //  https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
+    // Beta distribution parameters more info in Outlier-Robust State Estimation for Humanoid Robots
+    // https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
     double zeta = 1.0;
     double f_0 = 0.1;
     double e_0 = 0.9;
@@ -36,10 +35,12 @@ struct OutlierDetector {
     double threshold = 1e-5;
     int iters = 4;
 
-    // Digamma Function Approximation
+    // Digamma function approximation
     double computePsi(double xxx);
+
     // Initializes the estimation
     void init();
+
     // Compute the outlier indicator zeta
     void estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix3d& R);
 };
