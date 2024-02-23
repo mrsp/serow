@@ -61,6 +61,7 @@ class Serow {
         double high_threshold{};
         double low_threshold{};
         int median_window{};
+        bool outlier_detection{};
         int convergence_cycles{};
         Eigen::Vector3d angular_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d angular_velocity_bias_cov{Eigen::Vector3d::Zero()};

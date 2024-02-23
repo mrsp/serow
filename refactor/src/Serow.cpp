@@ -74,6 +74,7 @@ Serow::Serow(std::string config_file) {
     params_.high_threshold = config["high_threshold"];
     params_.low_threshold = config["low_threshold"];
     params_.median_window = config["median_window"];
+    params_.outlier_detection = config["outlier_detection"];
 
     // Base/CoM estimation parameters
     params_.convergence_cycles = config["convergence_cycles"];
@@ -339,7 +340,7 @@ void Serow::filter(
             base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
             params_.tau_1, params_.joint_rate, params_.g, params_.eps);
         base_estimator_.init(state.base_state_, state.getContactsFrame(), state.isPointFeet(),
-                             params_.g, params_.imu_rate);
+                             params_.g, params_.imu_rate, params_.outlier_detection);
         com_estimator_.init(state.centroidal_state_, params_.mass, params_.g,
                             params_.force_torque_rate);
     }

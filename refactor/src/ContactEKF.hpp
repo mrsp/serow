@@ -50,7 +50,7 @@ struct OutlierDetector {
 class ContactEKF {
    public:
     void init(const BaseState& state, std::unordered_set<std::string> contacts_frame,
-              bool point_feet, double g, double imu_rate);
+              bool point_feet, double g, double imu_rate, bool outlier_detection = false);
     BaseState predict(const BaseState& state, const ImuMeasurement& imu,
                       const KinematicMeasurement& kin);
     BaseState update(const BaseState& state, const KinematicMeasurement& kin,
@@ -64,6 +64,7 @@ class ContactEKF {
     int num_leg_end_effectors_{};
     std::unordered_set<std::string> contacts_frame_;
     bool point_feet_{};
+    bool outlier_detection_{};
     // Predict step sampling time
     double nominal_dt_{};
     // Gravity vector

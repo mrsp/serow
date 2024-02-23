@@ -39,6 +39,7 @@
     "high_threshold": 11,
     "low_threshold": 8,
     "median_window": 7,
+    "outlier_detection": false,
     "convergence_cycles": 100,
     "imu_angular_velocity_covariance": [1e-3, 1e-3, 1e-3],
     "imu_angular_velocity_bias_covariance": [1e-5, 1e-5, 1e-5],
