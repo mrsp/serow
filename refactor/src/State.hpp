@@ -150,7 +150,7 @@ class State {
     // Flag to indicate if the robot has point feet. False indicates flat feet contacts.
     bool point_feet_{};
     int num_leg_ee_{};
-    bool is_valid{};
+    bool is_valid_{};
     std::unordered_set<std::string> contacts_frame_;
     
     // Individual states

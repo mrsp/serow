@@ -10,6 +10,7 @@ State::State(std::unordered_set<std::string> contacts_frame, bool point_feet) {
     contacts_frame_ = std::move(contacts_frame);
     num_leg_ee_ = contacts_frame_.size();
     point_feet_ = point_feet;
+    is_valid_ = false;
 
     std::unordered_map<std::string, Eigen::Quaterniond> contacts_orientation;
     std::unordered_map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
@@ -34,6 +35,7 @@ State::State(const State& other) {
     this->point_feet_ = other.point_feet_;
     this->num_leg_ee_ = other.num_leg_ee_;
     this->contacts_frame_ = other.contacts_frame_;
+    this->is_valid_ = other.is_valid_;
 
     // Base state
     this->base_state_.timestamp = other.base_state_.timestamp;
@@ -98,10 +100,10 @@ State::State(const State& other) {
 
 State::State(State&& other) {
     const std::lock_guard<std::mutex> lock(this->mutex_);
-
     this->point_feet_ = std::move(other.point_feet_);
     this->num_leg_ee_ = std::move(other.num_leg_ee_);
     this->contacts_frame_ = std::move(other.contacts_frame_);
+    this->is_valid_ = std::move(other.is_valid_);
 
     // Base state
     this->base_state_.timestamp = std::move(other.base_state_.timestamp);
@@ -179,6 +181,7 @@ State State::operator=(const State& other) {
     this->point_feet_ = other.point_feet_;
     this->num_leg_ee_ = other.num_leg_ee_;
     this->contacts_frame_ = other.contacts_frame_;
+    this->is_valid_ = other.is_valid_;
 
     // Base state
     this->base_state_.timestamp = other.base_state_.timestamp;
@@ -249,7 +252,8 @@ State& State::operator=(State&& other) {
         this->point_feet_ = std::move(other.point_feet_);
         this->num_leg_ee_ = std::move(other.num_leg_ee_);
         this->contacts_frame_ = std::move(other.contacts_frame_);
-
+        this->is_valid_ = std::move(other.is_valid_);
+        
         // Base state
         this->base_state_.timestamp = std::move(other.base_state_.timestamp);
         this->base_state_.base_position = std::move(other.base_state_.base_position);
