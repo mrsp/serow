@@ -199,7 +199,7 @@ void Serow::filter(
     if (params_.calibrate_imu && imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
         params_.bias_gyro += imu.angular_velocity;
         params_.bias_acc += imu.linear_acceleration -
-                            R_world_to_base.transpose() * Eigen::Vector3d(0, 0, params_.g);
+                            R_world_to_base.transpose() * Eigen::Vector3d(0.0, 0.0, params_.g);
         imu_calibration_cycles_++;
         return;
     } else if (params_.calibrate_imu) {
@@ -424,7 +424,7 @@ void Serow::filter(
     Eigen::Vector3d base_linear_acceleration =
         state.getBasePose().linear() *
             (imu.linear_acceleration - state.getImuLinearAccelerationBias()) -
-        Eigen::Vector3d(0, 0, params_.g);
+        Eigen::Vector3d(0.0, 0.0, params_.g);
     Eigen::Vector3d base_angular_velocity =
         state.getBasePose().linear() * (imu.angular_velocity - state.getImuAngularVelocityBias());
     Eigen::Vector3d base_angular_acceleration =
@@ -449,7 +449,7 @@ void Serow::filter(
 
         // Compute the COP and the total GRF in the world frame
         GroundReactionForceMeasurement grf;
-        double den = 0;
+        double den = 0.0;
         for (const auto& frame : state.getContactsFrame()) {
             grf.timestamp = ft->at(frame).timestamp;
             if (state.contact_state_.contacts_probability.at(frame) > 0.0) {
@@ -459,7 +459,7 @@ void Serow::filter(
                 den += state.contact_state_.contacts_probability.at(frame);
             }
         }
-        if (den > 0) {
+        if (den > 0.0) {
             grf.cop /= den;
         }
         state.centroidal_state_.cop_position = grf.cop;
