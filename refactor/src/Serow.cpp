@@ -474,15 +474,17 @@ void Serow::filter(
     state.centroidal_state_.timestamp = kin.timestamp;
     state.centroidal_state_ = com_estimator_.updateWithKinematics(state.centroidal_state_, kin);
 
+    // Check if the state has converged
+    if (cycle_++ > params_.convergence_cycles) {
+        state.is_valid_ = true;
+    }
+
     // Safely copy the state post filtering
     state_ = std::move(state);
-    if (cycle_++ > params_.convergence_cycles) {
-        state_.is_valid = true;
-    }
 }
 
 std::optional<State> Serow::getState(bool allow_invalid) {
-    if (state_.is_valid || allow_invalid) {
+    if (state_.is_valid_ || allow_invalid) {
         return state_;
     } else {
         return std::nullopt;
