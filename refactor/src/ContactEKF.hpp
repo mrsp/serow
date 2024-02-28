@@ -1,26 +1,36 @@
-/*
- * Copyright Stylianos Piperakis, Ownage Dynamics L.P.
- * License: GNU: https://www.gnu.org/licenses/gpl-3.0.html
+/**
+* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
+* General Public License as published by the Free Software Foundation, version 3.
+* 
+* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
+* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
+* General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License along with Serow. If not, 
+* see <https://www.gnu.org/licenses/>.
+**/
+/**
+ * @brief Base Estimator combining Inertial Measurement Unit (IMU), relative to the base leg contact 
+ * measurements and an external odometry e.g Visual Odometry (VO) or Lidar Odometry (LO)  
+ * @author Stylianos Piperakis
+ * @details State is: 
+ * Base position in world frame
+ * Base linear velocity in base frame
+ * Base orientation w.r.t the world frame
+ * Gyro bias in base frame
+ * Accelerometer bias in base frame
+ * Leg contact position in world frame
+ * Leg contact orientation in world frame
+ * More info in Nonlinear State Estimation for Humanoid Robot Walking
+ * https://www.researchgate.net/publication/326194869_Nonlinear_State_Estimation_for_Humanoid_Robot_Walking
  */
 #pragma once
-/**
- * @brief Base Estimator combining Inertial Measurement Unit (IMU) and Odometry Measuruements either
- * from leg odometry or external odometry e.g Visual Odometry (VO) or Lidar Odometry (LO)
- * @author Stylianos Piperakis
- * @details State is  position in World frame
- * velocity in  Base frame
- * orientation of Body frame wrt the World frame
- * accelerometer bias in Base frame
- * gyro bias in Base frame
- * Measurements are: Base Position/Orinetation in World frame by Leg Odometry or Visual Odometry
- * (VO) or Lidar Odometry (LO), when VO/LO is considered the kinematically computed base velocity
- * (Twist) is also employed for update.
- */
-
-#include <iostream>
 
 #include "Measurement.hpp"
 #include "State.hpp"
+
+#include <iostream>
 
 namespace serow {
 
