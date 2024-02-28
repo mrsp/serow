@@ -1,8 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-  <!-- Call SEROW -->
-  <node pkg="serow" type="serow" name="serow" respawn="false" output="screen" >
- 	<!-- Load configurations from YAML file to parameter server -->
-   	 <rosparam file="$(find serow)/config/estimation_params_talos_gazebo.yaml" command="load"/> 
-  </node>
-</launch>
