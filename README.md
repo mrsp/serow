@@ -1,18 +1,16 @@
 
 
 # README
-SEROW (State Estimation RObot Walking) Framework for Humanoid/Quadruped Robot Walking Estimation.  The code is open-source (BSD License). Please note that this work is an on-going research and thus some parts are not fully developed yet. Furthermore, the code will be subject to changes in the future which could include greater re-factoring.
+The SERoW (State Estimation RObot Walking) framework facilitates the estimation of legged robot walking dynamics. Designed as a versatile tool, SERoW offers a generalized estimation solution applicable to legged robots with N limbs, accommodating both point and flat feet configurations. Notably, the framework's codebase is openly accessible under the GNU GPLv3 License.
 
-
-# SEROW in Real-time
+# SERoW in Real-time
 ------------------------------------------------------------------ 
 
-| Cogimon and SEROW  | Centauro and SEROW |
+| Cogimon and SERoW  | Centauro and SERoW |
 | ------------- | ------------- |
 | [![YouTube Link](img/cogimon.png)  ](https://www.youtube.com/watch?v=MLmfgADDjj0)  | [![YouTube Link](img/centauro.png)  ](https://www.youtube.com/watch?v=cVWS8oopr_M) |
 
 ------------------------------------------------------------------ 
-
 
 Relevant Papers:
 * Non-linear ZMP based State Estimation for Humanoid Robot Locomotion, https://ieeexplore.ieee.org/document/7803278 (Humanoids 2016 - nominated for the best interactive paper award)
@@ -24,21 +22,19 @@ More Videos:
 * https://www.youtube.com/watch?v=9OvIBg8tn54
 * https://www.youtube.com/watch?v=ojogeY3xSsw
 
-
 # Getting Started
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
+These instructions will get you a copy of the project up and running on your local machine for testing purposes.
 
 ## Prerequisites
-* Ubuntu 16.04 and later
-* ROS kinetic and later
-* Eigen 3.2.0 and later
-* [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 2.2.1
+* Ubuntu 22.04 and later
+* Eigen 3.3.0 and later
+* [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 2.2.1 and later
+* [json](https://github.com/nlohmann/json/tree/master)
 
-## Installing
-* sudo apt-get install ros-kinetic-pinocchio
+## ROS noetic install
+* sudo apt-get install ros-noetic-pinocchio
 * git clone https://github.com/mrsp/serow.git
 * catkin_make -DCMAKE_BUILD_TYPE=Release 
-* If you are using catkin tools run: catkin build  --cmake-args -DCMAKE_BUILD_TYPE=Release 
 
 ## Minimum Robot Requirements
 ### Using the Rigid Body Estimator to estimate: 
@@ -106,5 +102,5 @@ Upon usage in an academic work kindly cite: <br/>
 }<br/>
 
 ## License
-[BSD](LICENSE) 
+[GNU GPLv3](LICENSE) 
 
