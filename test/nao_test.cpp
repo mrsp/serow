@@ -17,12 +17,12 @@
 #include <string>
 #include <unordered_map>
 
-#include "../src/Serow.hpp"
+#include "../core/src/Serow.hpp"
 
 using json = nlohmann::json;
 
 TEST(SerowTests, NaoTest) {
-    serow::Serow SERoW("../config/nao.json");
+    serow::Serow SERoW("../../config/nao.json");
 
     Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
     serow::ImuMeasurement imu;

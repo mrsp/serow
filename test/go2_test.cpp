@@ -19,19 +19,19 @@
 #include <string>
 #include <unordered_map>
 
-#include "../src/Serow.hpp"
+#include "../core/src/Serow.hpp"
 
 using json = nlohmann::json;
 
 TEST(SerowTests, Go2Test) {
-    serow::Serow SERoW("../config/go2.json");
+    serow::Serow SERoW("../../config/go2.json");
     const double mass = 8.096;             // kg
     const double g = 9.81;                 // m/s^2
     const double mg = mass * g;            // N
     const double bias = 14;                // potatos
     const double den = 172.91 - 4 * bias;  // potatos
 
-    std::fstream file("../test/data/go2.csv", std::ios::in);
+    std::fstream file("../data/go2.csv", std::ios::in);
     if (!file.is_open()) {
         throw std::runtime_error("Could not open file");
         return;
