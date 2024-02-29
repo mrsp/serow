@@ -24,7 +24,7 @@
 using json = nlohmann::json;
 
 TEST(SerowTests, Go2Test) {
-    serow::Serow SERoW("../../config/go2.json");
+    serow::Serow SEROW("../../config/go2.json");
     const double mass = 8.096;             // kg
     const double g = 9.81;                 // m/s^2
     const double mg = mass * g;            // N
@@ -122,15 +122,15 @@ TEST(SerowTests, Go2Test) {
              serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][22])}});
 
         auto t0 = std::chrono::high_resolution_clock::now();
-        SERoW.filter(imu, joints, force_torque);
+        SEROW.filter(imu, joints, force_torque);
         auto t1 = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
-        std::cout << "SERoW filtering loop duration " << duration.count() << " us " << std::endl;
+        std::cout << "SEROW filtering loop duration " << duration.count() << " us " << std::endl;
         t0 = std::chrono::high_resolution_clock::now();
-        auto state = SERoW.getState();
+        auto state = SEROW.getState();
         t1 = std::chrono::high_resolution_clock::now();
         duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
-        std::cout << "SERoW get state duration " << duration.count() << " us " << std::endl;
+        std::cout << "SEROW get state duration " << duration.count() << " us " << std::endl;
         if (!state.has_value()) {
             continue;
         }
