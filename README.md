@@ -28,62 +28,9 @@ More Videos:
 These instructions will get you a copy of the project up and running on your local machine for testing purposes.
 
 ## Prerequisites
-* Ubuntu 22.04 and later
-* Eigen 3.3.0 and later
+* [Eigen](https://eigen.tuxfamily.org/dox/index.html) 3.3.0 and later
 * [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 2.2.1 and later
 * [json](https://github.com/nlohmann/json/tree/master)
-
-## ROS noetic install
-* `sudo apt-get install ros-noetic-pinocchio`
-* `git clone https://github.com/mrsp/serow.git`
-* `catkin_make -DCMAKE_BUILD_TYPE=Release` 
-
-## Minimum Robot Requirements
-### Using the Rigid Body Estimator to estimate: 
-* 3D-Body Position/Orientation/Linear velocity
-* 3D-Support Foot Position/Orientation
-* IMU biases
-### Requirements
-* Robot State Publisher (e.g. topic: `/joint_states`)
-* IMU (e.g. topic `/imu0`)
-* Feet Pressure or Force/Torque Sensors for detecting contact (e.g. topic: `/left_leg/force_torque_states`, `/right_leg/force_torque_states`)
-
-### Using the full cascade framework (Rigid Body Estimator + CoM Estimator) to estimate:
-* 3D-Body Position/Orientation/Linear velocity
-* 3D-Support Foot Position/Orientation
-* IMU biases
-* 3D-CoM Position/Linear velocity
-* 3D-External Forces on CoM
-### Requirements:
-* Robot State Publisher (e.g. topic: `/joint_states`)
-* IMU(e.g. topic `/imu0`)
-* Feet Pressure or Force/Torque Sensors for Center of Pressure (COP) measurements in the local foot frame (e.g. topics `/left_leg/force_torque_states`, `/right_leg/force_torque_states`)
-
-### Using our serow_utils package
-Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the estimated trajectories and to contrast them with other trajectories (e.g. ground_truth).
-
-## ROS Examples
-### Valkyrie SRCsim
-* Download the valkyrie bag file from [valk_bagfile](http://users.ics.forth.gr/~spiperakis/valk.bag)
-* `roscore`
-* `rosbag play --pause valk.bag`
-* `roslaunch serow serow_valkyrie.launch`
-* `roslaunch serow_utils serow_utils.launch`
-* hit space to unpause the rosbag play
-
-![valk](img/valk.png)
-### NAO Walking on rough terrain outdoors
-* Download the nao bag file from [nao_bagfile](http://users.ics.forth.gr/~spiperakis/nao.bag)
-* `roscore`
-* `rosbag play --pause nao.bag`
-* `roslaunch serow serow_nao.launch`
-* `roslaunch serow_utils serow_utils.launch`
-* hit space to unpause the rosbag play
-
-![nao](img/nao.jpg)
-### Launch on your Robot in real time
-* Specify topics on `config/estimation_params.yaml`
-* `roslaunch serow serow.launch`
 
 ## Citation
 Upon usage in an academic work kindly cite: <br/>
