@@ -22,7 +22,7 @@
 using json = nlohmann::json;
 
 TEST(SerowTests, NaoTest) {
-    serow::Serow SERoW("../../config/nao.json");
+    serow::Serow SEROW("../../config/nao.json");
 
     Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
     serow::ImuMeasurement imu;
@@ -65,16 +65,16 @@ TEST(SerowTests, NaoTest) {
     force_torque.insert({"r_ankle", ft});
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    SERoW.filter(imu, joints, force_torque);
+    SEROW.filter(imu, joints, force_torque);
     auto t1 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
-    std::cout << "SERoW filtering loop duration " << duration.count() << " us " << std::endl;
+    std::cout << "SEROW filtering loop duration " << duration.count() << " us " << std::endl;
     t0 = std::chrono::high_resolution_clock::now();
-    auto state = SERoW.getState(true);
+    auto state = SEROW.getState(true);
     t1 = std::chrono::high_resolution_clock::now();
     EXPECT_TRUE(state.has_value());
     duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
-    std::cout << "SERoW get state duration " << duration.count() << " us " << std::endl;
+    std::cout << "SEROW get state duration " << duration.count() << " us " << std::endl;
 
     EXPECT_FALSE(state->getBasePosition() != state->getBasePosition());
     EXPECT_FALSE(state->getBaseLinearVelocity() != state->getBaseLinearVelocity());
