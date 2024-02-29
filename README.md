@@ -1,14 +1,14 @@
 
 
 # README
-![SERoW](img/serow.jpg)
+![SEROW](img/serow.jpg)
 
-SERoW (State Estimation RObot Walking) facilitates legged robot state estimation. Designed as a versatile tool, SERoW offers a generalized estimation solution applicable to legged robots with N limbs, accommodating both point and flat feet configurations. Notably, the framework's codebase is openly accessible under the GNU GPLv3 License.
+SEROW (State Estimation RObot Walking) facilitates legged robot state estimation. Designed as a versatile tool, SEROW offers a generalized estimation solution applicable to legged robots with N limbs, accommodating both point and flat feet configurations. Notably, the framework's codebase is openly accessible under the GNU GPLv3 License.
 
 # SERoW in Real-time
 ------------------------------------------------------------------ 
 
-| Cogimon and SERoW  | Centauro and SERoW |
+| Cogimon and SEROW  | Centauro and SEROW |
 | ------------- | ------------- |
 | [![YouTube Link](img/cogimon.png)  ](https://www.youtube.com/watch?v=MLmfgADDjj0)  | [![YouTube Link](img/centauro.png)  ](https://www.youtube.com/watch?v=cVWS8oopr_M) |
 
