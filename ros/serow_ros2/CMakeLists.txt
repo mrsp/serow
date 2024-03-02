@@ -22,6 +22,7 @@ ament_target_dependencies(serow_ros2 rclcpp geometry_msgs sensor_msgs)
 install(TARGETS
   serow_ros2
   DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME}/)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
