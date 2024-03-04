@@ -19,7 +19,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "../core/src/Serow.hpp"
+#include <Serow.hpp>
 
 using json = nlohmann::json;
 
@@ -31,7 +31,7 @@ TEST(SerowTests, Go2Test) {
     const double bias = 14;                // potatos
     const double den = 172.91 - 4 * bias;  // potatos
 
-    std::fstream file("../data/go2.csv", std::ios::in);
+    std::fstream file("../../test/data/go2.csv", std::ios::in);
     if (!file.is_open()) {
         throw std::runtime_error("Could not open file");
         return;

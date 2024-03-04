@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.8)
 project(serow_ros2)
 
-# Default to C++17
+# Default to C++23
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 23)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -15,9 +15,10 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(Serow REQUIRED)
 
 add_executable(serow_ros2 src/driver.cpp)
-ament_target_dependencies(serow_ros2 rclcpp geometry_msgs sensor_msgs)
+ament_target_dependencies(serow_ros2 serow rclcpp geometry_msgs sensor_msgs)
 
 install(TARGETS
   serow_ros2

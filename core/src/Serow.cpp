@@ -13,6 +13,7 @@
 #include "Serow.hpp"
 
 #include <nlohmann/json.hpp>
+#include <iostream>
 
 using json = nlohmann::json;
 
@@ -164,6 +165,8 @@ Serow::Serow(std::string config_file) {
     state_.centroidal_state_.com_linear_velocity_cov =
         params_.initial_com_linear_velocity_cov.asDiagonal();
     state_.centroidal_state_.external_forces_cov = params_.initial_external_forces_cov.asDiagonal();
+
+    std::cout << "Config initialized" << std::endl;
 }
 
 void Serow::filter(
