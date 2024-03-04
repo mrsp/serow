@@ -33,6 +33,7 @@ namespace serow {
 
 class Serow {
    public:
+    Serow() = default;
     Serow(std::string config);
 
     void filter(

@@ -17,7 +17,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "../core/src/Serow.hpp"
+#include <Serow.hpp>
 
 using json = nlohmann::json;
 

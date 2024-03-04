@@ -1,8 +1,9 @@
-#include "geometry_msgs/msg/wrench.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "geometry_msgs/msg/wrench.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 
+#include <Serow.hpp>
 #include <functional>
 
 using std::placeholders::_1;
@@ -10,8 +11,9 @@ using std::placeholders::_1;
 class SerowDriver : public rclcpp::Node {
    public:
     SerowDriver(const std::string& joint_state_topic, const std::string& imu_topic,
-                const std::vector<std::string>& force_torque_state_topics)
+                const std::vector<std::string>& force_torque_state_topics, std::string_view config_file_path)
         : Node("serow_driver") {
+        SEROW_ = serow::Serow(config_file_path);
         joint_state_subscription_ = this->create_subscription<sensor_msgs::msg::JointState>(
             joint_state_topic, 1000, std::bind(&SerowDriver::joint_state_topic_callback, this, _1));
         imu_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>(
@@ -39,6 +41,7 @@ class SerowDriver : public rclcpp::Node {
         RCLCPP_INFO(this->get_logger(), "imu callback");
     }
 
+    serow::Serow SEROW_;
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscription_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_subscription_;
     std::vector<rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr>
@@ -54,7 +57,7 @@ int main(int argc, char* argv[]) {
     force_torque_state_topics.push_back("/left_leg/force_torque_states");
     force_torque_state_topics.push_back("/right_leg/force_torque_states");
     rclcpp::spin(
-        std::make_shared<SerowDriver>("/joint_states", "/imu0", force_torque_state_topics));
+        std::make_shared<SerowDriver>("/joint_states", "/imu0", force_torque_state_topics), "../../../config/nao.json");
     rclcpp::shutdown();
     return 0;
 }
