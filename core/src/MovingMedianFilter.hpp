@@ -25,11 +25,11 @@ namespace serow {
 
 class MovingMedianFilter {
    private:
-    int window_size_{};
+    size_t window_size_{};
     std::deque<double> window_buffer_;
 
    public:
-    MovingMedianFilter(int window_size) { window_size_ = window_size; }
+    MovingMedianFilter(size_t window_size) { window_size_ = window_size; }
 
     double filter(double x) {
         if (window_buffer_.size() == window_size_) {

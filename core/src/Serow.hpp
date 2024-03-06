@@ -12,12 +12,6 @@
 **/
 #pragma once
 
-#include <gtest/gtest_prod.h>
-
-#include <nlohmann/json.hpp>
-#include <string>
-#include <unordered_map>
-
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
 #include "ContactEKF.hpp"
@@ -28,6 +22,9 @@
 #include "Measurement.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
+
+#include <string>
+#include <unordered_map>
 
 namespace serow {
 
@@ -70,9 +67,9 @@ class Serow {
         bool estimate_contact_status{};
         double high_threshold{};
         double low_threshold{};
-        int median_window{};
+        size_t median_window{};
         bool outlier_detection{};
-        int convergence_cycles{};
+        size_t convergence_cycles{};
         Eigen::Vector3d angular_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d angular_velocity_bias_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d linear_acceleration_cov{Eigen::Vector3d::Zero()};

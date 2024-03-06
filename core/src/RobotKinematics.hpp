@@ -112,10 +112,10 @@ class RobotKinematics {
         q_.setZero(pmodel_->nq);
         qdot_.setZero(pmodel_->nv);
 
-        for (int i = 0; i < jnames_.size(); i++) {
-            int jidx = pmodel_->getJointId(jnames_[i]);
-            int qidx = pmodel_->idx_qs[jidx];
-            int vidx = pmodel_->idx_vs[jidx];
+        for (size_t i = 0; i < jnames_.size(); i++) {
+            size_t jidx = pmodel_->getJointId(jnames_[i]);
+            size_t qidx = pmodel_->idx_qs[jidx];
+            size_t vidx = pmodel_->idx_vs[jidx];
 
             // Model value is equal to 2 for continuous joints
             if (pmodel_->nqs[jidx] == 2) {
@@ -259,13 +259,14 @@ class RobotKinematics {
     }
 
     void printJointLimits() const {
-        if (!((jnames_.size() == qmin_.size()) && (jnames_.size() == qmax_.size()) &&
-              (jnames_.size() == dqmax_.size()))) {
+        if (!((jnames_.size() == static_cast<size_t>(qmin_.size())) &&
+              (jnames_.size() == static_cast<size_t>(qmax_.size())) &&
+              (jnames_.size() == static_cast<size_t>(dqmax_.size())))) {
             std::cerr << "Joint names and joint limits size do not match!" << std::endl;
             return;
         }
         std::cout << "\nJoint Name\t qmin \t qmax \t dqmax" << std::endl;
-        for (int i = 0; i < jnames_.size(); ++i)
+        for (size_t i = 0; i < jnames_.size(); ++i)
             std::cout << jnames_[i] << "\t\t" << qmin_[i] << "\t" << qmax_[i] << "\t" << dqmax_[i]
                       << std::endl;
     }
