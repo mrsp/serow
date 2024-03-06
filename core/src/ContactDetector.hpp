@@ -14,6 +14,7 @@
 
 #include "MovingMedianFilter.hpp"
 
+#include <memory>
 #include <string>
 
 
@@ -44,7 +45,6 @@ class ContactDetector {
      */
     void SchmittTrigger(double contact_force) {
         contact_force_ = mdf_->filter(std::clamp(contact_force, 0.0, mass_ * g_));
-        // contact_force_ = std::clamp(contact_force, 0.0, mass_ * g_);
         if (contact_status_ == 0) {
             if (contact_force_ > high_threshold_) {
                 contact_status_ = 1;
