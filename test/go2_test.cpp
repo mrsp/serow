@@ -21,8 +21,6 @@
 
 #include <Serow.hpp>
 
-using json = nlohmann::json;
-
 TEST(SerowTests, Go2Test) {
     serow::Serow SEROW("../../config/go2.json");
     const double mass = 8.096;             // kg

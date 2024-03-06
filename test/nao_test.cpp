@@ -19,8 +19,6 @@
 
 #include <Serow.hpp>
 
-using json = nlohmann::json;
-
 TEST(SerowTests, NaoTest) {
     serow::Serow SEROW("../../config/nao.json");
 

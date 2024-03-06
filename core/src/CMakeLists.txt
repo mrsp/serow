@@ -32,7 +32,7 @@ set(serow_headers ${serow_src}
 
 
 add_library(serow STATIC ${serow_headers} ${serow_src})
-target_link_libraries(serow PUBLIC Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
+target_link_libraries(serow PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
 
 install(FILES ${serow_headers} DESTINATION include)
 install(TARGETS serow DESTINATION lib)
