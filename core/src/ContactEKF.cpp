@@ -154,8 +154,7 @@ void ContactEKF::init(const BaseState& state, std::unordered_set<std::string> co
 }
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobians(
-    const BaseState& state, Eigen::Vector3d angular_velocity, Eigen::Vector3d linear_acceleration,
-    double dt) {
+    const BaseState& state, Eigen::Vector3d angular_velocity) {
     angular_velocity -= state.imu_angular_velocity_bias;
     const Eigen::Vector3d& v = state.base_linear_velocity;
     const Eigen::Matrix3d& R = state.base_orientation.toRotationMatrix();
@@ -191,7 +190,7 @@ BaseState ContactEKF::predict(const BaseState& state, const ImuMeasurement& imu,
     }
     // Compute the state and input-state Jacobians
     const auto& [Ac, Lc] =
-        computePredictionJacobians(state, imu.angular_velocity, imu.linear_acceleration, dt);
+        computePredictionJacobians(state, imu.angular_velocity);
     // Euler Discretization - First order Truncation
     Eigen::MatrixXd Ad = I_;
     Ad += Ac * dt;

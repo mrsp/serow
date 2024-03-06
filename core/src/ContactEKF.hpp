@@ -43,7 +43,7 @@ struct OutlierDetector {
     double f_t = 0.1;
     double e_t = 0.9;
     double threshold = 1e-5;
-    int iters = 4;
+    size_t iters = 4;
 
     // Digamma function approximation
     double computePsi(double xxx);
@@ -114,8 +114,7 @@ class ContactEKF {
             std::nullopt);
 
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> computePredictionJacobians(
-        const BaseState& state, Eigen::Vector3d angular_velocity,
-        Eigen::Vector3d linear_acceleration, double dt);
+        const BaseState& state, Eigen::Vector3d angular_velocity);
 
     BaseState updateWithContacts(
         const BaseState& state,

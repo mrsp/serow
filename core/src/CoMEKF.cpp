@@ -182,11 +182,11 @@ CentroidalState CoMEKF::updateWithCoMPosition(const CentroidalState& state,
 void CoMEKF::updateState(CentroidalState& state, const Eigen::Matrix<double, 9, 1>& dx,
                          const Eigen::Matrix<double, 9, 9>& P) const {
     state.com_position += dx(c_idx_);
-    state.com_position_cov = P_(c_idx_, c_idx_);
+    state.com_position_cov = P(c_idx_, c_idx_);
     state.com_linear_velocity += dx(v_idx_);
-    state.com_linear_velocity_cov = P_(v_idx_, v_idx_);
+    state.com_linear_velocity_cov = P(v_idx_, v_idx_);
     state.external_forces += dx(f_idx_);
-    state.external_forces_cov = P_(f_idx_, f_idx_);
+    state.external_forces_cov = P(f_idx_, f_idx_);
 }
 
 }  // namespace serow
