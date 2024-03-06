@@ -23,14 +23,14 @@ void DerivativeEstimator::init(std::string joint_name, double f_sampling, double
         bw_[i].init(name_, f_sampling, f_cutoff, verbose);
         df_[i].init(name_, 1.0 / f_sampling, verbose);
     }
-
+    
     std::cout << name_ << " estimator initialized successfully" << std::endl;
 }
 
 void DerivativeEstimator::reset(bool verbose) {
     for (size_t i = 0; i < 3; i++) {
-        bw_[i].reset();
-        df_[i].reset();
+        bw_[i].reset(verbose);
+        df_[i].reset(verbose);
     }
 
     std::cout << name_ << " estimator reset" << std::endl;

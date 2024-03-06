@@ -24,6 +24,8 @@ LegOdometry::LegOdometry(
     std::optional<std::unordered_map<std::string, Eigen::Vector3d>> force_torque_offset) {
     params_.freq = freq;
     params_.mass = mass;
+    params_.alpha1 = alpha1;
+    params_.alpha3 = alpha3;
     params_.Tm = 1.0 / freq;
     params_.Tm2 = params_.Tm * params_.Tm;
     params_.Tm3 = (mass * mass * g * g) * params_.Tm2;
@@ -128,24 +130,24 @@ void LegOdometry::estimate(
         }
     }
 
-    for (const auto [key, value] : pivots_) {
+    for (const auto& [key, value] : pivots_) {
         feet_position_prev_.at(key) += 
             -Rwb * base_to_foot_orientations.at(key).toRotationMatrix() * value +
             feet_orientation_prev_.at(key).toRotationMatrix() * value;
     }
 
     std::unordered_map<std::string, Eigen::Vector3d> contact_contributions;
-    for (const auto [key, value] : base_to_foot_positions) {
+    for (const auto& [key, value] : base_to_foot_positions) {
         contact_contributions[key] = feet_position_prev_.at(key) - Rwb * value;
     }
 
     base_position_prev_ = base_position_;
     base_position_ = Eigen::Vector3d::Zero();
-    for (const auto [key, value] : force_weights) {
+    for (const auto& [key, value] : force_weights) {
         base_position_ += value  * contact_contributions.at(key);
     }
 
-    for (const auto [key, value] : contact_contributions) {
+    for (const auto& [key, value] : contact_contributions) {
         feet_position_prev_.at(key) += base_position_ - value;
         feet_orientation_prev_.at(key) =
             Eigen::Quaterniond(Rwb * base_to_foot_orientations.at(key).toRotationMatrix());
