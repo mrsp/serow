@@ -186,7 +186,7 @@ void Serow::filter(
     // Estimate the joint velocities
     std::unordered_map<std::string, double> joints_position;
     std::unordered_map<std::string, double> joints_velocity;
-    double joint_timestamp;
+    double joint_timestamp{};
     for (const auto& [key, value] : joints) {
         joint_timestamp = value.timestamp;
         if (params_.estimate_joint_velocity && !joint_estimators_.count(key)) {
