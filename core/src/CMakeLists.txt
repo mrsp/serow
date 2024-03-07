@@ -30,10 +30,9 @@ set(serow_headers ${serow_src}
     MovingMedianFilter.hpp
     RobotKinematics.hpp)
 
-
-add_library(serow STATIC ${serow_headers} ${serow_src})
+add_library(serow SHARED ${serow_headers} ${serow_src})
 target_link_libraries(serow PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
 
-install(FILES ${serow_headers} DESTINATION include)
-install(TARGETS serow DESTINATION lib)
+install(FILES ${serow_headers} DESTINATION include/serow)
+install(TARGETS serow DESTINATION lib/serow)
 install(FILES serowConfig.cmake DESTINATION lib/cmake/serow)

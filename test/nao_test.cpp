@@ -10,14 +10,13 @@
 * You should have received a copy of the GNU General Public License along with Serow. If not, 
 * see <https://www.gnu.org/licenses/>.
 **/
+#include <serow/Serow.hpp>
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <iostream>
 #include <string>
 #include <unordered_map>
-
-#include <Serow.hpp>
 
 TEST(SerowTests, NaoTest) {
     serow::Serow SEROW("../../config/nao.json");

@@ -10,6 +10,7 @@
 * You should have received a copy of the GNU General Public License along with Serow. If not, 
 * see <https://www.gnu.org/licenses/>.
 **/
+#include <serow/Serow.hpp>
 #include <gtest/gtest.h>
 
 #include <chrono>
@@ -18,8 +19,6 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
-
-#include <Serow.hpp>
 
 TEST(SerowTests, Go2Test) {
     serow::Serow SEROW("../../config/go2.json");
