@@ -1,15 +1,15 @@
 /**
-* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
-* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
-* General Public License as published by the Free Software Foundation, version 3.
-* 
-* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
-* General Public License for more details.
-* 
-* You should have received a copy of the GNU General Public License along with Serow. If not, 
-* see <https://www.gnu.org/licenses/>.
-**/
+ * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3.
+ *
+ * Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Serow. If not,
+ * see <https://www.gnu.org/licenses/>.
+ **/
 #pragma once
 
 #ifdef __linux__
@@ -19,6 +19,7 @@
 #endif
 
 #include <iostream>
+#include <map>
 #include <pinocchio/algorithm/center-of-mass.hpp>
 #include <pinocchio/algorithm/centroidal.hpp>
 #include <pinocchio/algorithm/frames.hpp>
@@ -28,7 +29,6 @@
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 #include <string>
-#include <map>
 #include <vector>
 
 namespace serow {
@@ -89,8 +89,7 @@ class RobotKinematics {
     int ndofActuated() const { return pmodel_->nq; }
 
     void updateJointConfig(const std::map<std::string, double>& qmap,
-                           const std::map<std::string, double>& qdotmap,
-                           double joint_std) {
+                           const std::map<std::string, double>& qdotmap, double joint_std) {
         mapJointNamesIDs(qmap, qdotmap);
         pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
         pinocchio::computeJointJacobians(*pmodel_, *data_, q_);

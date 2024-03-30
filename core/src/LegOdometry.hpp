@@ -1,15 +1,15 @@
 /**
-* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
-* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
-* General Public License as published by the Free Software Foundation, version 3.
-* 
-* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
-* General Public License for more details.
-* 
-* You should have received a copy of the GNU General Public License along with Serow. If not, 
-* see <https://www.gnu.org/licenses/>.
-**/
+ * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3.
+ *
+ * Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Serow. If not,
+ * see <https://www.gnu.org/licenses/>.
+ **/
 /**
  * @brief leg odometry for legged robots based on force/torque or pressure, and encoder measurement
  * @author Stylianos Piperakis
@@ -23,9 +23,9 @@
 #else
 #include <Eigen/Dense>
 #endif
+#include <map>
 #include <optional>
 #include <string>
-#include <map>
 
 namespace serow {
 
@@ -66,12 +66,12 @@ class LegOdometry {
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    LegOdometry(std::map<std::string, Eigen::Vector3d> feet_position,
-                std::map<std::string, Eigen::Quaterniond> feet_orientation,
-                double mass = 5.14, double alpha1 = 1.0, double alpha3 = 0.01, double freq = 100.0,
-                double g = 9.81, double eps = 0.1,
-                std::optional<std::map<std::string, Eigen::Vector3d>>
-                    force_torque_offset = std::nullopt);
+    LegOdometry(
+        std::map<std::string, Eigen::Vector3d> feet_position,
+        std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass = 5.14,
+        double alpha1 = 1.0, double alpha3 = 0.01, double freq = 100.0, double g = 9.81,
+        double eps = 0.1,
+        std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset = std::nullopt);
 
     const Eigen::Vector3d& getBasePosition() const;
 
@@ -88,8 +88,7 @@ class LegOdometry {
         const std::map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
         const std::map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
         const std::map<std::string, Eigen::Vector3d>& contact_forces,
-        std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques =
-            std::nullopt);
+        std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques = std::nullopt);
 };
 
 }  // namespace serow

@@ -1,15 +1,15 @@
 /**
-* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
-* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
-* General Public License as published by the Free Software Foundation, version 3.
-* 
-* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
-* General Public License for more details.
-* 
-* You should have received a copy of the GNU General Public License along with Serow. If not, 
-* see <https://www.gnu.org/licenses/>.
-**/
+ * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3.
+ *
+ * Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Serow. If not,
+ * see <https://www.gnu.org/licenses/>.
+ **/
 #pragma once
 
 #ifdef __linux__
@@ -17,15 +17,13 @@
 #else
 #include <Eigen/Dense>
 #endif
+#include <map>
 #include <mutex>
 #include <optional>
-#include <string>
-#include <map>
 #include <set>
+#include <string>
 
 namespace serow {
-
-
 
 struct BaseState {
     // last time the state was updated
@@ -109,7 +107,6 @@ struct JointState {
     std::map<std::string, double> joints_velocity;
 };
 
-
 class State {
    public:
     State() = default;
@@ -160,7 +157,7 @@ class State {
     int num_leg_ee_{};
     bool is_valid_{};
     std::set<std::string> contacts_frame_;
-    
+
     // Individual states
     JointState joint_state_;
     ContactState contact_state_;

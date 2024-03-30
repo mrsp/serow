@@ -1,19 +1,19 @@
 /**
-* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
-* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
-* General Public License as published by the Free Software Foundation, version 3.
-* 
-* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
-* General Public License for more details.
-* 
-* You should have received a copy of the GNU General Public License along with Serow. If not, 
-* see <https://www.gnu.org/licenses/>.
-**/
+ * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3.
+ *
+ * Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Serow. If not,
+ * see <https://www.gnu.org/licenses/>.
+ **/
 #include "Serow.hpp"
 
-#include <nlohmann/json.hpp>
 #include <iostream>
+#include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
 
@@ -169,11 +169,10 @@ Serow::Serow(std::string config_file) {
     std::cout << "Config initialized" << std::endl;
 }
 
-void Serow::filter(
-    ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
-    std::optional<std::map<std::string, ForceTorqueMeasurement>> ft,
-    std::optional<OdometryMeasurement> odom,
-    std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
+void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+                   std::optional<std::map<std::string, ForceTorqueMeasurement>> ft,
+                   std::optional<OdometryMeasurement> odom,
+                   std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
     if (!is_initialized_ && ft.has_value()) {
         is_initialized_ = true;
     } else if (!is_initialized_) {

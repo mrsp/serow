@@ -1,15 +1,15 @@
 /**
-* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
-* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
-* General Public License as published by the Free Software Foundation, version 3.
-* 
-* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
-* General Public License for more details.
-* 
-* You should have received a copy of the GNU General Public License along with Serow. If not, 
-* see <https://www.gnu.org/licenses/>.
-**/
+ * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3.
+ *
+ * Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Serow. If not,
+ * see <https://www.gnu.org/licenses/>.
+ **/
 #include "Differentiator.hpp"
 
 #include <iostream>
@@ -40,7 +40,7 @@ void Differentiator::reset(bool verbose) {
     x_prev_ = 0.0;
     xdot_ = 0.0;
     firstrun_ = true;
-    
+
     if (verbose) {
         std::cout << name_ << "Finite Differentiator Reseted Successfully" << std::endl;
     }

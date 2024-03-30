@@ -34,5 +34,5 @@ add_library(serow SHARED ${serow_headers} ${serow_src})
 target_link_libraries(serow PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
 
 install(FILES ${serow_headers} DESTINATION include/serow)
-install(TARGETS serow DESTINATION lib/serow)
+install(TARGETS serow DESTINATION lib/)
 install(FILES serowConfig.cmake DESTINATION lib/cmake/serow)

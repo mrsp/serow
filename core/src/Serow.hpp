@@ -1,16 +1,19 @@
 /**
-* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
-* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
-* General Public License as published by the Free Software Foundation, version 3.
-* 
-* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
-* General Public License for more details.
-* 
-* You should have received a copy of the GNU General Public License along with Serow. If not, 
-* see <https://www.gnu.org/licenses/>.
-**/
+ * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3.
+ *
+ * Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Serow. If not,
+ * see <https://www.gnu.org/licenses/>.
+ **/
 #pragma once
+
+#include <map>
+#include <string>
 
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
@@ -23,9 +26,6 @@
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 
-#include <string>
-#include <map>
-
 namespace serow {
 
 class Serow {
@@ -33,12 +33,11 @@ class Serow {
     Serow() = default;
     Serow(std::string config);
 
-    void filter(
-        ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
-        std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
-        std::optional<OdometryMeasurement> odom = std::nullopt,
-        std::optional<std::map<std::string, ContactMeasurement>> contact_probabilities =
-            std::nullopt);
+    void filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+                std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
+                std::optional<OdometryMeasurement> odom = std::nullopt,
+                std::optional<std::map<std::string, ContactMeasurement>> contact_probabilities =
+                    std::nullopt);
 
     std::optional<State> getState(bool allow_invalid = false);
 
