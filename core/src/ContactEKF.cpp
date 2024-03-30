@@ -1,15 +1,15 @@
 /**
-* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
-* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
-* General Public License as published by the Free Software Foundation, version 3.
-* 
-* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
-* General Public License for more details.
-* 
-* You should have received a copy of the GNU General Public License along with Serow. If not, 
-* see <https://www.gnu.org/licenses/>.
-**/
+ * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3.
+ *
+ * Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Serow. If not,
+ * see <https://www.gnu.org/licenses/>.
+ **/
 #include "ContactEKF.hpp"
 
 #include "lie.hpp"
@@ -61,8 +61,8 @@ void OutlierDetector::estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix
     f_t = f_0 + 1.0 - zeta;
 }
 
-void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame,
-                      bool point_feet, double g, double imu_rate, bool outlier_detection) {
+void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
+                      double g, double imu_rate, bool outlier_detection) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
@@ -189,8 +189,7 @@ BaseState ContactEKF::predict(const BaseState& state, const ImuMeasurement& imu,
         dt = nominal_dt_;
     }
     // Compute the state and input-state Jacobians
-    const auto& [Ac, Lc] =
-        computePredictionJacobians(state, imu.angular_velocity);
+    const auto& [Ac, Lc] = computePredictionJacobians(state, imu.angular_velocity);
     // Euler Discretization - First order Truncation
     Eigen::MatrixXd Ad = I_;
     Ad += Ac * dt;
@@ -226,8 +225,7 @@ BaseState ContactEKF::predict(const BaseState& state, const ImuMeasurement& imu,
 
 BaseState ContactEKF::computeDiscreteDynamics(
     const BaseState& state, double dt, Eigen::Vector3d angular_velocity,
-    Eigen::Vector3d linear_acceleration,
-    std::optional<std::map<std::string, bool>> contacts_status,
+    Eigen::Vector3d linear_acceleration, std::optional<std::map<std::string, bool>> contacts_status,
     std::optional<std::map<std::string, Eigen::Vector3d>> contacts_position,
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientations) {
     BaseState predicted_state = state;
@@ -287,11 +285,9 @@ BaseState ContactEKF::computeDiscreteDynamics(
 }
 
 BaseState ContactEKF::updateWithContacts(
-    const BaseState& state,
-    const std::map<std::string, Eigen::Vector3d>& contacts_position,
+    const BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
     std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
-    const std::map<std::string, bool>& contacts_status,
-    const Eigen::Matrix3d& position_cov,
+    const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov) {
@@ -320,7 +316,7 @@ BaseState ContactEKF::updateWithContacts(
         H.block(0, p_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix().transpose();
         H.block(0, pl_idx_.at(cf)[0], 3, 3) = state.base_orientation.toRotationMatrix().transpose();
         H.block(0, r_idx_[0], 3, 3) = lie::so3::wedge(x);
-        
+
         if (outlier_detection_) {
             // RESKF update
             contact_outlier_detector.init();
@@ -428,9 +424,10 @@ BaseState ContactEKF::updateWithOdometry(const BaseState& state,
     return updated_state;
 }
 
-BaseState ContactEKF::updateWithTerrain(
-    const BaseState& state, const std::map<std::string, bool>& contacts_status,
-    const double terrain_height, const double terrain_height_cov) {
+BaseState ContactEKF::updateWithTerrain(const BaseState& state,
+                                        const std::map<std::string, bool>& contacts_status,
+                                        const double terrain_height,
+                                        const double terrain_height_cov) {
     BaseState updated_state = state;
 
     // Construct the innovation vector z, the linearized measurement matrix H, and the measurement

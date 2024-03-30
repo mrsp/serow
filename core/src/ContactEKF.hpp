@@ -1,20 +1,20 @@
 /**
-* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
-* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
-* General Public License as published by the Free Software Foundation, version 3.
-* 
-* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
-* General Public License for more details.
-* 
-* You should have received a copy of the GNU General Public License along with Serow. If not, 
-* see <https://www.gnu.org/licenses/>.
-**/
+ * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3.
+ *
+ * Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Serow. If not,
+ * see <https://www.gnu.org/licenses/>.
+ **/
 /**
- * @brief Base Estimator combining Inertial Measurement Unit (IMU), relative to the base leg contact 
- * measurements and an external odometry e.g Visual Odometry (VO) or Lidar Odometry (LO)  
+ * @brief Base Estimator combining Inertial Measurement Unit (IMU), relative to the base leg contact
+ * measurements and an external odometry e.g Visual Odometry (VO) or Lidar Odometry (LO)
  * @author Stylianos Piperakis
- * @details State is: 
+ * @details State is:
  * Base position in world frame
  * Base linear velocity in base frame
  * Base orientation w.r.t the world frame
@@ -27,10 +27,10 @@
  */
 #pragma once
 
+#include <iostream>
+
 #include "Measurement.hpp"
 #include "State.hpp"
-
-#include <iostream>
 
 namespace serow {
 
@@ -59,8 +59,8 @@ struct OutlierDetector {
 // position - contact orientation
 class ContactEKF {
    public:
-    void init(const BaseState& state, std::set<std::string> contacts_frame,
-              bool point_feet, double g, double imu_rate, bool outlier_detection = false);
+    void init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
+              double g, double imu_rate, bool outlier_detection = false);
     BaseState predict(const BaseState& state, const ImuMeasurement& imu,
                       const KinematicMeasurement& kin);
     BaseState update(const BaseState& state, const KinematicMeasurement& kin,
@@ -117,11 +117,9 @@ class ContactEKF {
         const BaseState& state, Eigen::Vector3d angular_velocity);
 
     BaseState updateWithContacts(
-        const BaseState& state,
-        const std::map<std::string, Eigen::Vector3d>& contacts_position,
+        const BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
         std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
-        const std::map<std::string, bool>& contacts_status,
-        const Eigen::Matrix3d& position_cov,
+        const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
         std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov);

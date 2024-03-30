@@ -1,26 +1,27 @@
 /**
-* Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
-* Serow is free software: you can redistribute it and/or modify it under the terms of the GNU 
-* General Public License as published by the Free Software Foundation, version 3.
-* 
-* Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without 
-* even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
-* General Public License for more details.
-* 
-* You should have received a copy of the GNU General Public License along with Serow. If not, 
-* see <https://www.gnu.org/licenses/>.
-**/
+ * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License as published by the Free Software Foundation, version 3.
+ *
+ * Serow is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+ * even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with Serow. If not,
+ * see <https://www.gnu.org/licenses/>.
+ **/
 #include "LegOdometry.hpp"
-#include "lie.hpp"
 
 #include <iostream>
+
+#include "lie.hpp"
 
 namespace serow {
 
 LegOdometry::LegOdometry(
     std::map<std::string, Eigen::Vector3d> feet_position,
-    std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass,
-    double alpha1, double alpha3, double freq, double g, double eps,
+    std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass, double alpha1,
+    double alpha3, double freq, double g, double eps,
     std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset) {
     params_.freq = freq;
     params_.mass = mass;
@@ -50,8 +51,7 @@ const std::map<std::string, Eigen::Vector3d> LegOdometry::getContactPositions() 
     return contact_positions_;
 }
 
-const std::map<std::string, Eigen::Quaterniond> LegOdometry::getContactOrientations()
-    const {
+const std::map<std::string, Eigen::Quaterniond> LegOdometry::getContactOrientations() const {
     return contact_orientations_;
 }
 
@@ -94,7 +94,7 @@ void LegOdometry::estimate(
     for (const auto& [key, value] : contact_forces) {
         den += value.z();
     }
-    
+
     for (const auto& [key, value] : contact_forces) {
         force_weights[key] = std::clamp((value.z() + params_.eps) / den, 0.0, 1.0);
     }
@@ -103,7 +103,7 @@ void LegOdometry::estimate(
         base_linear_velocity_ = Eigen::Vector3d::Zero();
         for (const auto& [key, value] : base_to_foot_positions) {
             base_linear_velocity_ +=
-                force_weights.at(key)  *
+                force_weights.at(key) *
                 (-lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) -
                  Rwb * base_to_foot_linear_velocities.at(key));
         }
@@ -131,7 +131,7 @@ void LegOdometry::estimate(
     }
 
     for (const auto& [key, value] : pivots_) {
-        feet_position_prev_.at(key) += 
+        feet_position_prev_.at(key) +=
             -Rwb * base_to_foot_orientations.at(key).toRotationMatrix() * value +
             feet_orientation_prev_.at(key).toRotationMatrix() * value;
     }
@@ -144,7 +144,7 @@ void LegOdometry::estimate(
     base_position_prev_ = base_position_;
     base_position_ = Eigen::Vector3d::Zero();
     for (const auto& [key, value] : force_weights) {
-        base_position_ += value  * contact_contributions.at(key);
+        base_position_ += value * contact_contributions.at(key);
     }
 
     for (const auto& [key, value] : contact_contributions) {
