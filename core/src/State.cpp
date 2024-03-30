@@ -14,14 +14,14 @@
 
 namespace serow {
 
-State::State(std::unordered_set<std::string> contacts_frame, bool point_feet) {
+State::State(std::set<std::string> contacts_frame, bool point_feet) {
     contacts_frame_ = std::move(contacts_frame);
     num_leg_ee_ = contacts_frame_.size();
     point_feet_ = point_feet;
     is_valid_ = false;
 
-    std::unordered_map<std::string, Eigen::Quaterniond> contacts_orientation;
-    std::unordered_map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
+    std::map<std::string, Eigen::Quaterniond> contacts_orientation;
+    std::map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
     for (const auto& cf : contacts_frame_) {
         contact_state_.contacts_status[cf] = false;
         contact_state_.contacts_probability[cf] = 0.0;
@@ -411,7 +411,7 @@ std::optional<Eigen::Isometry3d> State::getContactPose(const std::string& frame_
     }
 }
 
-const std::unordered_set<std::string>& State::getContactsFrame() const { return contacts_frame_; }
+const std::set<std::string>& State::getContactsFrame() const { return contacts_frame_; }
 
 std::optional<bool> State::getContactStatus(const std::string& frame_name) const {
     if (contact_state_.contacts_status.count(frame_name))

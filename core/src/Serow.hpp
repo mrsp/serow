@@ -24,7 +24,7 @@
 #include "State.hpp"
 
 #include <string>
-#include <unordered_map>
+#include <map>
 
 namespace serow {
 
@@ -34,10 +34,10 @@ class Serow {
     Serow(std::string config);
 
     void filter(
-        ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
-        std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
+        ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+        std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
         std::optional<OdometryMeasurement> odom = std::nullopt,
-        std::optional<std::unordered_map<std::string, ContactMeasurement>> contact_probabilities =
+        std::optional<std::map<std::string, ContactMeasurement>> contact_probabilities =
             std::nullopt);
 
     std::optional<State> getState(bool allow_invalid = false);
@@ -62,8 +62,8 @@ class Serow {
         double tau_0{};
         double tau_1{};
         double force_torque_rate{};
-        std::unordered_map<std::string, Eigen::Matrix3d> R_foot_to_force;
-        std::unordered_map<std::string, Eigen::Matrix3d> R_foot_to_torque;
+        std::map<std::string, Eigen::Matrix3d> R_foot_to_force;
+        std::map<std::string, Eigen::Matrix3d> R_foot_to_torque;
         bool estimate_contact_status{};
         double high_threshold{};
         double low_threshold{};
@@ -100,10 +100,10 @@ class Serow {
     };
 
     Params params_;
-    std::unordered_map<std::string, JointEstimator> joint_estimators_;
+    std::map<std::string, JointEstimator> joint_estimators_;
     std::unique_ptr<DerivativeEstimator> angular_momentum_derivative_estimator;
     std::unique_ptr<DerivativeEstimator> gyro_derivative_estimator;
-    std::unordered_map<std::string, ContactDetector> contact_estimators_;
+    std::map<std::string, ContactDetector> contact_estimators_;
     State state_;
     ContactEKF base_estimator_;
     CoMEKF com_estimator_;

@@ -16,7 +16,7 @@
 #include <chrono>
 #include <iostream>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 TEST(SerowTests, NaoTest) {
     serow::Serow SEROW("../../config/nao.json");
@@ -27,7 +27,7 @@ TEST(SerowTests, NaoTest) {
     imu.linear_acceleration = Eigen::Vector3d(0.1, -0.1, 0.05) - g;
     imu.angular_velocity = Eigen::Vector3d(-0.1, 0.1, 0.0);
 
-    std::unordered_map<std::string, serow::JointMeasurement> joints;
+    std::map<std::string, serow::JointMeasurement> joints;
     serow::JointMeasurement jm{.timestamp = 0.01, .position = 0.0};
     joints.insert({"HeadYaw", jm});
     joints.insert({"HeadPitch", jm});
@@ -57,7 +57,7 @@ TEST(SerowTests, NaoTest) {
     joints.insert({"RHand", jm});
 
     serow::ForceTorqueMeasurement ft{.timestamp = 0.01, .force = Eigen::Vector3d(0.0, 0.0, 40.0)};
-    std::unordered_map<std::string, serow::ForceTorqueMeasurement> force_torque;
+    std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
     force_torque.insert({"l_ankle", ft});
     force_torque.insert({"r_ankle", ft});
 

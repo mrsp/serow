@@ -19,8 +19,7 @@
 #endif
 #include <optional>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
+#include <map>
 
 namespace serow {
 
@@ -56,12 +55,12 @@ struct GroundReactionForceMeasurement {
 
 struct KinematicMeasurement {
     double timestamp{};
-    std::unordered_map<std::string, bool> contacts_status;
-    std::unordered_map<std::string, double> contacts_probability;
-    std::unordered_map<std::string, Eigen::Vector3d> contacts_position;
-    std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise;
-    std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation;
-    std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise;
+    std::map<std::string, bool> contacts_status;
+    std::map<std::string, double> contacts_probability;
+    std::map<std::string, Eigen::Vector3d> contacts_position;
+    std::map<std::string, Eigen::Matrix3d> contacts_position_noise;
+    std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation;
+    std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise;
     Eigen::Vector3d com_angular_momentum_derivative{Eigen::Vector3d::Zero()};
     Eigen::Vector3d com_position{Eigen::Vector3d::Zero()};
     Eigen::Vector3d com_linear_acceleration{Eigen::Vector3d::Zero()};
