@@ -20,8 +20,8 @@
 #include <mutex>
 #include <optional>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
+#include <map>
+#include <set>
 
 namespace serow {
 
@@ -47,8 +47,8 @@ struct BaseState {
     // Imu gyro rate bias in the local base frame
     Eigen::Vector3d imu_angular_velocity_bias{Eigen::Vector3d::Zero()};
     // Contact state: frame_name to contact pose in the world frame
-    std::unordered_map<std::string, Eigen::Vector3d> contacts_position;
-    std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation;
+    std::map<std::string, Eigen::Vector3d> contacts_position;
+    std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation;
 
     // Base position covariance in the world frame
     Eigen::Matrix3d base_position_cov{Eigen::Matrix3d::Zero()};
@@ -63,8 +63,8 @@ struct BaseState {
     // Imu gyro rate bias covariance in the local imu frame
     Eigen::Matrix3d imu_angular_velocity_bias_cov{Eigen::Matrix3d::Zero()};
     // Feet state: frame_name to contacts pose covariance in the world frame
-    std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_cov;
-    std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_cov;
+    std::map<std::string, Eigen::Matrix3d> contacts_position_cov;
+    std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_cov;
 };
 
 struct CentroidalState {
@@ -96,24 +96,24 @@ struct CentroidalState {
 struct ContactState {
     // last time the state was updated
     double timestamp{};
-    std::unordered_map<std::string, bool> contacts_status;
-    std::unordered_map<std::string, double> contacts_probability;
-    std::unordered_map<std::string, Eigen::Vector3d> contacts_force;
-    std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contacts_torque;
+    std::map<std::string, bool> contacts_status;
+    std::map<std::string, double> contacts_probability;
+    std::map<std::string, Eigen::Vector3d> contacts_force;
+    std::optional<std::map<std::string, Eigen::Vector3d>> contacts_torque;
 };
 
 struct JointState {
     // last time the state was updated
     double timestamp{};
-    std::unordered_map<std::string, double> joints_position;
-    std::unordered_map<std::string, double> joints_velocity;
+    std::map<std::string, double> joints_position;
+    std::map<std::string, double> joints_velocity;
 };
 
 
 class State {
    public:
     State() = default;
-    State(std::unordered_set<std::string> contacts_frame, bool point_feet);
+    State(std::set<std::string> contacts_frame, bool point_feet);
     State(const State& other);
     State(State&& other);
     State operator=(const State& other);
@@ -128,7 +128,7 @@ class State {
     const Eigen::Vector3d& getBaseAngularVelocity() const;
     const Eigen::Vector3d& getImuLinearAccelerationBias() const;
     const Eigen::Vector3d& getImuAngularVelocityBias() const;
-    const std::unordered_set<std::string>& getContactsFrame() const;
+    const std::set<std::string>& getContactsFrame() const;
     std::optional<Eigen::Vector3d> getContactPosition(const std::string& frame_name) const;
     std::optional<Eigen::Quaterniond> getContactOrientation(const std::string& frame_name) const;
     std::optional<Eigen::Isometry3d> getContactPose(const std::string& frame_name) const;
@@ -159,7 +159,7 @@ class State {
     bool point_feet_{};
     int num_leg_ee_{};
     bool is_valid_{};
-    std::unordered_set<std::string> contacts_frame_;
+    std::set<std::string> contacts_frame_;
     
     // Individual states
     JointState joint_state_;

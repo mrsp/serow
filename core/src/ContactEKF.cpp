@@ -61,7 +61,7 @@ void OutlierDetector::estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix
     f_t = f_0 + 1.0 - zeta;
 }
 
-void ContactEKF::init(const BaseState& state, std::unordered_set<std::string> contacts_frame,
+void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame,
                       bool point_feet, double g, double imu_rate, bool outlier_detection) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
@@ -227,9 +227,9 @@ BaseState ContactEKF::predict(const BaseState& state, const ImuMeasurement& imu,
 BaseState ContactEKF::computeDiscreteDynamics(
     const BaseState& state, double dt, Eigen::Vector3d angular_velocity,
     Eigen::Vector3d linear_acceleration,
-    std::optional<std::unordered_map<std::string, bool>> contacts_status,
-    std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contacts_position,
-    std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientations) {
+    std::optional<std::map<std::string, bool>> contacts_status,
+    std::optional<std::map<std::string, Eigen::Vector3d>> contacts_position,
+    std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientations) {
     BaseState predicted_state = state;
     angular_velocity -= state.imu_angular_velocity_bias;
     linear_acceleration -= state.imu_linear_acceleration_bias;
@@ -288,12 +288,12 @@ BaseState ContactEKF::computeDiscreteDynamics(
 
 BaseState ContactEKF::updateWithContacts(
     const BaseState& state,
-    const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
-    std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
-    const std::unordered_map<std::string, bool>& contacts_status,
+    const std::map<std::string, Eigen::Vector3d>& contacts_position,
+    std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
+    const std::map<std::string, bool>& contacts_status,
     const Eigen::Matrix3d& position_cov,
-    std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
-    std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
+    std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
+    std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov) {
     BaseState updated_state = state;
 
@@ -429,7 +429,7 @@ BaseState ContactEKF::updateWithOdometry(const BaseState& state,
 }
 
 BaseState ContactEKF::updateWithTerrain(
-    const BaseState& state, const std::unordered_map<std::string, bool>& contacts_status,
+    const BaseState& state, const std::map<std::string, bool>& contacts_status,
     const double terrain_height, const double terrain_height_cov) {
     BaseState updated_state = state;
 

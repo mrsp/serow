@@ -59,7 +59,7 @@ struct OutlierDetector {
 // position - contact orientation
 class ContactEKF {
    public:
-    void init(const BaseState& state, std::unordered_set<std::string> contacts_frame,
+    void init(const BaseState& state, std::set<std::string> contacts_frame,
               bool point_feet, double g, double imu_rate, bool outlier_detection = false);
     BaseState predict(const BaseState& state, const ImuMeasurement& imu,
                       const KinematicMeasurement& kin);
@@ -72,7 +72,7 @@ class ContactEKF {
     int num_inputs_{};
     int contact_dim_{};
     int num_leg_end_effectors_{};
-    std::unordered_set<std::string> contacts_frame_;
+    std::set<std::string> contacts_frame_;
     bool point_feet_{};
     bool outlier_detection_{};
     // Predict step sampling time
@@ -85,15 +85,15 @@ class ContactEKF {
     Eigen::Array3i p_idx_;
     Eigen::Array3i bg_idx_;
     Eigen::Array3i ba_idx_;
-    std::unordered_map<std::string, Eigen::Array3i> pl_idx_;
-    std::unordered_map<std::string, Eigen::Array3i> rl_idx_;
+    std::map<std::string, Eigen::Array3i> pl_idx_;
+    std::map<std::string, Eigen::Array3i> rl_idx_;
     // Input indices
     Eigen::Array3i ng_idx_;
     Eigen::Array3i na_idx_;
     Eigen::Array3i nbg_idx_;
     Eigen::Array3i nba_idx_;
-    std::unordered_map<std::string, Eigen::Array3i> npl_idx_;
-    std::unordered_map<std::string, Eigen::Array3i> nrl_idx_;
+    std::map<std::string, Eigen::Array3i> npl_idx_;
+    std::map<std::string, Eigen::Array3i> nrl_idx_;
     // Previous imu timestamp
     std::optional<double> last_imu_timestamp_;
 
@@ -108,9 +108,9 @@ class ContactEKF {
     BaseState computeDiscreteDynamics(
         const BaseState& state, double dt, Eigen::Vector3d angular_velocity,
         Eigen::Vector3d linear_acceleration,
-        std::optional<std::unordered_map<std::string, bool>> contacts_status,
-        std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contacts_position,
-        std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientations =
+        std::optional<std::map<std::string, bool>> contacts_status,
+        std::optional<std::map<std::string, Eigen::Vector3d>> contacts_position,
+        std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientations =
             std::nullopt);
 
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> computePredictionJacobians(
@@ -118,12 +118,12 @@ class ContactEKF {
 
     BaseState updateWithContacts(
         const BaseState& state,
-        const std::unordered_map<std::string, Eigen::Vector3d>& contacts_position,
-        std::unordered_map<std::string, Eigen::Matrix3d> contacts_position_noise,
-        const std::unordered_map<std::string, bool>& contacts_status,
+        const std::map<std::string, Eigen::Vector3d>& contacts_position,
+        std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
+        const std::map<std::string, bool>& contacts_status,
         const Eigen::Matrix3d& position_cov,
-        std::optional<std::unordered_map<std::string, Eigen::Quaterniond>> contacts_orientation,
-        std::optional<std::unordered_map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
+        std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
+        std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov);
 
     BaseState updateWithOdometry(const BaseState& state, const Eigen::Vector3d& base_position,
@@ -132,7 +132,7 @@ class ContactEKF {
                                  const Eigen::Matrix3d& base_orientation_cov);
 
     BaseState updateWithTerrain(const BaseState& state,
-                                const std::unordered_map<std::string, bool>& contacts_status,
+                                const std::map<std::string, bool>& contacts_status,
                                 double terrain_height, double terrain_cov);
 
     void updateState(BaseState& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const;

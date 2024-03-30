@@ -23,7 +23,7 @@ Serow::Serow(std::string config_file) {
     auto config = json::parse(std::ifstream(config_file));
 
     // Initialize the state
-    std::unordered_set<std::string> contacts_frame;
+    std::set<std::string> contacts_frame;
     for (size_t i = 0; i < config["foot_frames"].size(); i++) {
         contacts_frame.insert({config["foot_frames"][std::to_string(i)]});
     }
@@ -150,7 +150,7 @@ Serow::Serow(std::string config_file) {
         params_.initial_imu_angular_velocity_bias_cov.asDiagonal();
     state_.base_state_.imu_linear_acceleration_bias_cov =
         params_.initial_imu_linear_acceleration_bias_cov.asDiagonal();
-    std::unordered_map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
+    std::map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
     for (const auto& cf : state_.getContactsFrame()) {
         state_.base_state_.contacts_position_cov[cf] =
             params_.initial_contact_position_cov.asDiagonal();
@@ -170,10 +170,10 @@ Serow::Serow(std::string config_file) {
 }
 
 void Serow::filter(
-    ImuMeasurement imu, std::unordered_map<std::string, JointMeasurement> joints,
-    std::optional<std::unordered_map<std::string, ForceTorqueMeasurement>> ft,
+    ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+    std::optional<std::map<std::string, ForceTorqueMeasurement>> ft,
     std::optional<OdometryMeasurement> odom,
-    std::optional<std::unordered_map<std::string, ContactMeasurement>> contacts_probability) {
+    std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
     if (!is_initialized_ && ft.has_value()) {
         is_initialized_ = true;
     } else if (!is_initialized_) {
@@ -184,8 +184,8 @@ void Serow::filter(
     State state(state_);
 
     // Estimate the joint velocities
-    std::unordered_map<std::string, double> joints_position;
-    std::unordered_map<std::string, double> joints_velocity;
+    std::map<std::string, double> joints_position;
+    std::map<std::string, double> joints_velocity;
     double joint_timestamp{};
     for (const auto& [key, value] : joints) {
         joint_timestamp = value.timestamp;
@@ -247,10 +247,10 @@ void Serow::filter(
         angular_momentum_derivative_estimator->filter(com_angular_momentum);
 
     // Get the leg end-effector kinematics w.r.t the base frame
-    std::unordered_map<std::string, Eigen::Quaterniond> base_to_foot_orientations;
-    std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_positions;
-    std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_linear_velocities;
-    std::unordered_map<std::string, Eigen::Vector3d> base_to_foot_angular_velocities;
+    std::map<std::string, Eigen::Quaterniond> base_to_foot_orientations;
+    std::map<std::string, Eigen::Vector3d> base_to_foot_positions;
+    std::map<std::string, Eigen::Vector3d> base_to_foot_linear_velocities;
+    std::map<std::string, Eigen::Vector3d> base_to_foot_angular_velocities;
 
     for (const auto& contact_frame : state.getContactsFrame()) {
         base_to_foot_orientations[contact_frame] =
@@ -263,8 +263,8 @@ void Serow::filter(
     }
 
     if (ft.has_value()) {
-        std::unordered_map<std::string, Eigen::Vector3d> contacts_force;
-        std::unordered_map<std::string, Eigen::Vector3d> contacts_torque;
+        std::map<std::string, Eigen::Vector3d> contacts_force;
+        std::map<std::string, Eigen::Vector3d> contacts_torque;
         double den = state.num_leg_ee_ * params_.eps;
 
         for (const auto& frame : state.getContactsFrame()) {
@@ -383,7 +383,7 @@ void Serow::filter(
         kin.orientation_slip_cov = params_.contact_orientation_slip_cov.asDiagonal();
     }
 
-    std::unordered_map<std::string, Eigen::Matrix3d> kin_contacts_orientation_noise;
+    std::map<std::string, Eigen::Matrix3d> kin_contacts_orientation_noise;
     for (const auto& frame : state.getContactsFrame()) {
         kin.contacts_position_noise[frame] =
             kinematic_estimator_->linearVelocity(frame) *

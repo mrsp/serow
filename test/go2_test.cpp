@@ -18,7 +18,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 TEST(SerowTests, Go2Test) {
     serow::Serow SEROW("../../config/go2.json");
@@ -52,7 +52,7 @@ TEST(SerowTests, Go2Test) {
     for (size_t i = 1; i < data.size(); i++) {
         double timestamp = std::stod(data[i][0]) * 1e-9;  // s
 
-        std::unordered_map<std::string, serow::ForceTorqueMeasurement> force_torque;
+        std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
         Eigen::Vector3d force =
             Eigen::Vector3d(0, 0, std::clamp((std::stod(data[i][1]) - bias) * mg / den, 0.0, mg));
         force_torque.insert(
@@ -80,7 +80,7 @@ TEST(SerowTests, Go2Test) {
         imu.angular_velocity =
             Eigen::Vector3d(std::stod(data[i][8]), std::stod(data[i][9]), std::stod(data[i][10]));
 
-        std::unordered_map<std::string, serow::JointMeasurement> joints;
+        std::map<std::string, serow::JointMeasurement> joints;
         joints.insert(
             {"FR_hip_joint",
              serow::JointMeasurement{.timestamp = timestamp, .position = std::stod(data[i][11])}});

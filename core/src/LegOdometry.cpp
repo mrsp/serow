@@ -18,10 +18,10 @@
 namespace serow {
 
 LegOdometry::LegOdometry(
-    std::unordered_map<std::string, Eigen::Vector3d> feet_position,
-    std::unordered_map<std::string, Eigen::Quaterniond> feet_orientation, double mass,
+    std::map<std::string, Eigen::Vector3d> feet_position,
+    std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass,
     double alpha1, double alpha3, double freq, double g, double eps,
-    std::optional<std::unordered_map<std::string, Eigen::Vector3d>> force_torque_offset) {
+    std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset) {
     params_.freq = freq;
     params_.mass = mass;
     params_.alpha1 = alpha1;
@@ -46,11 +46,11 @@ const Eigen::Vector3d& LegOdometry::getBasePosition() const { return base_positi
 
 const Eigen::Vector3d& LegOdometry::getBaseLinearVelocity() const { return base_linear_velocity_; }
 
-const std::unordered_map<std::string, Eigen::Vector3d> LegOdometry::getContactPositions() const {
+const std::map<std::string, Eigen::Vector3d> LegOdometry::getContactPositions() const {
     return contact_positions_;
 }
 
-const std::unordered_map<std::string, Eigen::Quaterniond> LegOdometry::getContactOrientations()
+const std::map<std::string, Eigen::Quaterniond> LegOdometry::getContactOrientations()
     const {
     return contact_orientations_;
 }
@@ -81,16 +81,16 @@ void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
 
 void LegOdometry::estimate(
     const Eigen::Quaterniond& base_orientation, const Eigen::Vector3d& base_angular_velocity,
-    const std::unordered_map<std::string, Eigen::Quaterniond>& base_to_foot_orientations,
-    const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_positions,
-    const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
-    const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
-    const std::unordered_map<std::string, Eigen::Vector3d>& contact_forces,
-    std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques) {
+    const std::map<std::string, Eigen::Quaterniond>& base_to_foot_orientations,
+    const std::map<std::string, Eigen::Vector3d>& base_to_foot_positions,
+    const std::map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
+    const std::map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
+    const std::map<std::string, Eigen::Vector3d>& contact_forces,
+    std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques) {
     const Eigen::Matrix3d& Rwb = base_orientation.toRotationMatrix();
 
     double den = params_.eps * params_.num_leg_ee;
-    std::unordered_map<std::string, double> force_weights;
+    std::map<std::string, double> force_weights;
     for (const auto& [key, value] : contact_forces) {
         den += value.z();
     }
@@ -136,7 +136,7 @@ void LegOdometry::estimate(
             feet_orientation_prev_.at(key).toRotationMatrix() * value;
     }
 
-    std::unordered_map<std::string, Eigen::Vector3d> contact_contributions;
+    std::map<std::string, Eigen::Vector3d> contact_contributions;
     for (const auto& [key, value] : base_to_foot_positions) {
         contact_contributions[key] = feet_position_prev_.at(key) - Rwb * value;
     }

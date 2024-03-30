@@ -13,7 +13,7 @@ set(serow_src ${serow_src}
     JointEstimator.cpp 
     DerivativeEstimator.cpp)
 
-set(serow_headers ${serow_src} 
+set(serow_headers ${serow_headers} 
     Serow.hpp 
     State.hpp 
     ContactEKF.hpp 

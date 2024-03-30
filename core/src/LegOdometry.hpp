@@ -25,7 +25,7 @@
 #endif
 #include <optional>
 #include <string>
-#include <unordered_map>
+#include <map>
 
 namespace serow {
 
@@ -54,41 +54,41 @@ class LegOdometry {
     Eigen::Vector3d base_linear_velocity_ = Eigen::Vector3d::Zero();
     Params params_;
 
-    std::unordered_map<std::string, Eigen::Vector3d> pivots_;
-    std::unordered_map<std::string, Eigen::Vector3d> contact_positions_;
-    std::unordered_map<std::string, Eigen::Quaterniond> contact_orientations_;
+    std::map<std::string, Eigen::Vector3d> pivots_;
+    std::map<std::string, Eigen::Vector3d> contact_positions_;
+    std::map<std::string, Eigen::Quaterniond> contact_orientations_;
 
-    std::unordered_map<std::string, Eigen::Vector3d> feet_position_prev_;
-    std::unordered_map<std::string, Eigen::Quaterniond> feet_orientation_prev_;
+    std::map<std::string, Eigen::Vector3d> feet_position_prev_;
+    std::map<std::string, Eigen::Quaterniond> feet_orientation_prev_;
 
-    std::optional<std::unordered_map<std::string, Eigen::Vector3d>> force_torque_offset_;
+    std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset_;
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    LegOdometry(std::unordered_map<std::string, Eigen::Vector3d> feet_position,
-                std::unordered_map<std::string, Eigen::Quaterniond> feet_orientation,
+    LegOdometry(std::map<std::string, Eigen::Vector3d> feet_position,
+                std::map<std::string, Eigen::Quaterniond> feet_orientation,
                 double mass = 5.14, double alpha1 = 1.0, double alpha3 = 0.01, double freq = 100.0,
                 double g = 9.81, double eps = 0.1,
-                std::optional<std::unordered_map<std::string, Eigen::Vector3d>>
+                std::optional<std::map<std::string, Eigen::Vector3d>>
                     force_torque_offset = std::nullopt);
 
     const Eigen::Vector3d& getBasePosition() const;
 
     const Eigen::Vector3d& getBaseLinearVelocity() const;
 
-    const std::unordered_map<std::string, Eigen::Vector3d> getContactPositions() const;
+    const std::map<std::string, Eigen::Vector3d> getContactPositions() const;
 
-    const std::unordered_map<std::string, Eigen::Quaterniond> getContactOrientations() const;
+    const std::map<std::string, Eigen::Quaterniond> getContactOrientations() const;
 
     void estimate(
         const Eigen::Quaterniond& base_orientation, const Eigen::Vector3d& base_angular_velocity,
-        const std::unordered_map<std::string, Eigen::Quaterniond>& base_to_foot_orientations,
-        const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_positions,
-        const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
-        const std::unordered_map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
-        const std::unordered_map<std::string, Eigen::Vector3d>& contact_forces,
-        std::optional<std::unordered_map<std::string, Eigen::Vector3d>> contact_torques =
+        const std::map<std::string, Eigen::Quaterniond>& base_to_foot_orientations,
+        const std::map<std::string, Eigen::Vector3d>& base_to_foot_positions,
+        const std::map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
+        const std::map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
+        const std::map<std::string, Eigen::Vector3d>& contact_forces,
+        std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques =
             std::nullopt);
 };
 
