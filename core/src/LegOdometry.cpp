@@ -57,7 +57,7 @@ const std::map<std::string, Eigen::Quaterniond> LegOdometry::getContactOrientati
 
 void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
                              const Eigen::Vector3d& angular_velocity,
-                             const Eigen::Vector3d& linear_velocity, Eigen::Vector3d force,
+                             const Eigen::Vector3d& linear_velocity, const Eigen::Vector3d& force,
                              std::optional<Eigen::Vector3d> torque) {
     const Eigen::Matrix3d& force_skew = lie::so3::wedge(force);
     const Eigen::Matrix3d& omega_skew = lie::so3::wedge(R.transpose() * angular_velocity);

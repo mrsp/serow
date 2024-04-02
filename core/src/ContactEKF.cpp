@@ -123,12 +123,12 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
 
     for (const auto& contact_frame : contacts_frame_) {
-        if (state.contacts_position_cov.count(contact_frame)) {
+        if (state.contacts_position_cov.contains(contact_frame)) {
             P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) =
                 state.contacts_position_cov.at(contact_frame);
         }
         if (!point_feet_ && state.contacts_orientation_cov.has_value() &&
-            state.contacts_orientation_cov.value().count(contact_frame)) {
+            state.contacts_orientation_cov.value().contains(contact_frame)) {
             P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) =
                 state.contacts_orientation_cov.value().at(contact_frame);
         }
@@ -258,7 +258,7 @@ BaseState ContactEKF::computeDiscreteDynamics(
     // Predicted contacts positions
     if (contacts_status.has_value() && contacts_position.has_value()) {
         for (auto [cf, cs] : contacts_status.value()) {
-            if (contacts_position.value().count(cf)) {
+            if (contacts_position.value().contains(cf)) {
                 if (!cs) {
                     predicted_state.contacts_position[cf] =
                         (r + R * contacts_position.value().at(cf));
@@ -270,7 +270,7 @@ BaseState ContactEKF::computeDiscreteDynamics(
     // Predicted contacts orientations
     if (!point_feet_ && contacts_status.has_value() && contacts_orientations.has_value()) {
         for (auto [cf, cs] : contacts_status.value()) {
-            if (contacts_orientations.value().count(cf)) {
+            if (contacts_orientations.value().contains(cf)) {
                 if (!cs) {
                     predicted_state.contacts_orientation.value().at(cf) =
                         Eigen::Quaterniond(R *
