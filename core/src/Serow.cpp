@@ -188,7 +188,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     double joint_timestamp{};
     for (const auto& [key, value] : joints) {
         joint_timestamp = value.timestamp;
-        if (params_.estimate_joint_velocity && !joint_estimators_.count(key)) {
+        if (params_.estimate_joint_velocity && !joint_estimators_.contains(key)) {
             joint_estimators_[key].init(key, params_.joint_rate, params_.joint_cutoff_frequency);
         }
         joints_position[key] = value.position;
@@ -267,7 +267,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         double den = state.num_leg_ee_ * params_.eps;
 
         for (const auto& frame : state.getContactsFrame()) {
-            if (params_.estimate_contact_status && !contact_estimators_.count(frame)) {
+            if (params_.estimate_contact_status && !contact_estimators_.contains(frame)) {
                 ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
                                    params_.mass, params_.g, params_.median_window);
                 contact_estimators_[frame] = std::move(cd);
@@ -313,7 +313,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         // Estimate the COP in the local foot frame
         for (const auto& frame : state.getContactsFrame()) {
             ft->at(frame).cop = Eigen::Vector3d::Zero();
-            if (!state.isPointFeet() && contacts_torque.count(frame) &&
+            if (!state.isPointFeet() && contacts_torque.contains(frame) &&
                 state.contact_state_.contacts_probability.at(frame) > 0.0) {
                 ft->at(frame).cop = Eigen::Vector3d(
                     -contacts_torque.at(frame).y() / contacts_force.at(frame).z(),

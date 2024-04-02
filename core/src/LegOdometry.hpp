@@ -46,7 +46,7 @@ class LegOdometry {
    private:
     void computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
                     const Eigen::Vector3d& angular_velocity, const Eigen::Vector3d& linear_velocity,
-                    Eigen::Vector3d force, std::optional<Eigen::Vector3d> torque = std::nullopt);
+                    const Eigen::Vector3d& force, std::optional<Eigen::Vector3d> torque = std::nullopt);
 
     bool is_initialized{};
     Eigen::Vector3d base_position_ = Eigen::Vector3d::Zero();
