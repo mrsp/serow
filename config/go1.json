@@ -17,7 +17,7 @@
   "angular_momentum_cutoff_frequency": 5,
   "tau_0": 1.0,
   "tau_1": 0.1,
-  "imu_rate": 500,
+  "imu_rate": 400,
   "R_base_to_gyro": [1, 0, 0, 0, 1, 0, 0, 0, 1],
   "R_base_to_acc": [1, 0, 0, 0, 1, 0, 0, 0, 1],
   "calibrate_imu": false,
@@ -25,7 +25,7 @@
   "bias_gyro": [-0.0066, -0.0077, -0.0032],
   "bias_acc": [-0.06, -0.087, -0.197],
   "gyro_cutoff_frequency": 5,
-  "force_torque_rate": 500,
+  "force_torque_rate": 400,
   "R_foot_to_force": {
       "0": [1, 0, 0, 0, 1, 0, 0, 0, 1],
       "1": [1, 0, 0, 0, 1, 0, 0, 0, 1],
