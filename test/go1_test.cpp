@@ -20,12 +20,12 @@
 #include <sstream>
 #include <string>
 
-TEST(SerowTests, Go2Test) {
+TEST(SerowTests, Go1Test) {
     serow::Serow SEROW("../../config/go1.json");
     const double mass = 12;             // kg
     const double g = 9.81;                 // m/s^2
     const double mg = mass * g;            // N
-    const double bias = 14;                // potatos
+    const double bias = 0;                // potatos
     const double den = 172.91 - 4 * bias;  // potatos
 
     std::fstream file("../../test/data/go1.csv", std::ios::in);
