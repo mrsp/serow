@@ -20,6 +20,9 @@
 #include <sstream>
 #include <string>
 
+const bool STORE_PREDICTIONS = true; // If true the serow base estimates are stored under results/
+
+
 TEST(SerowTests, Go2Test) {
     serow::Serow SEROW("../../config/go2.json");
     const double mass = 8.096;             // kg
@@ -28,16 +31,26 @@ TEST(SerowTests, Go2Test) {
     const double bias = 14;                // potatos
     const double den = 172.91 - 4 * bias;  // potatos
 
-    std::fstream file("../../test/data/go2.csv", std::ios::in);
-    if (!file.is_open()) {
+    std::fstream inputFile("../data/go2.csv", std::ios::in); // Input file
+    std::ofstream outputFile;
+    if (!inputFile.is_open()) {
         throw std::runtime_error("Could not open file");
         return;
     }
+
+    if (STORE_PREDICTIONS){
+        outputFile.open("../results/go2_serow_estimates.txt"); // Output file
+        if (!outputFile.is_open()) {
+            throw std::runtime_error("Could not open file");
+            return;
+        }
+    }
+
     // Read the CSV file
     std::vector<std::vector<std::string>> data;
     std::vector<std::string> row;
     std::string line, word;
-    while (std::getline(file, line)) {
+    while (std::getline(inputFile, line)) {
         row.clear();
         std::stringstream str(line);
 
@@ -46,12 +59,14 @@ TEST(SerowTests, Go2Test) {
         }
         data.push_back(row);
     }
-    file.close();
+    inputFile.close();
 
+    double sec_timer = 0.0;
+    double prev_timestamp = 0.0;
     // Parse the data, create the measurements, and run the filtering loop
     for (size_t i = 1; i < data.size(); i++) {
         double timestamp = std::stod(data[i][0]) * 1e-9;  // s
-
+        
         std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
         Eigen::Vector3d force =
             Eigen::Vector3d(0, 0, std::clamp((std::stod(data[i][1]) - bias) * mg / den, 0.0, mg));
@@ -162,5 +177,27 @@ TEST(SerowTests, Go2Test) {
                   << std::endl;
         std::cout << "CoM external forces " << state->getCoMExternalForces().transpose()
                   << std::endl;
+
+        // Store the results into an eigen matrix to be saved
+        if (STORE_PREDICTIONS) 
+        {
+            if (timestamp - prev_timestamp < 0){
+                sec_timer += 1.;
+            }
+            prev_timestamp = timestamp;
+            outputFile << timestamp + sec_timer << " "
+                        << state->getBasePosition().transpose().x() << " "
+                        << state->getBasePosition().transpose().y() << " "
+                        << state->getBasePosition().transpose().z() << " "
+                        << state->getBaseOrientation().x() << " "
+                        << state->getBaseOrientation().y() << " "
+                        << state->getBaseOrientation().z() << " "
+                        << state->getBaseOrientation().w() << "\n";
+        }
     }
+
+    outputFile.close();
+
+
+    
 }
