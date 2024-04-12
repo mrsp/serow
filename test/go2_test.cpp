@@ -20,7 +20,7 @@
 #include <sstream>
 #include <string>
 
-const bool STORE_PREDICTIONS = true; // If true the serow base estimates are stored under results/
+constexpr bool kStorePredictions = true; // If true the serow base estimates are stored under results/
 
 
 TEST(SerowTests, Go2Test) {
