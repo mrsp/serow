@@ -26,3 +26,6 @@ target_link_libraries(nao_test PRIVATE serow pinocchio::pinocchio GTest::gtest_m
 
 add_executable(go2_test go2_test.cpp)
 target_link_libraries(go2_test PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
+
+add_executable(go1_test go1_test.cpp)
+target_link_libraries(go1_test PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
