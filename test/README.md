@@ -1,5 +1,5 @@
 ## Trajectory Visualization Overview
-When running a script at test/build for a robot dataset, the serow base state estimates (position + orientation) are saved at *results/<name>.txt* if the flag STORE_PREDICTIONS is true. In order to visualize the predictions follow the instructions below
+When running a script at test/build for a robot dataset, the serow base state estimates (position + orientation) are saved at *results/<name>.txt* if the flag kStorePredictions is true. In order to visualize the predictions follow the instructions below
 
 ## Installation
 In order to visualize the estimated trajectory you will the evo package:
