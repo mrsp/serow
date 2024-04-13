@@ -38,7 +38,7 @@ TEST(SerowTests, Go2Test) {
         return;
     }
 
-    if (STORE_PREDICTIONS){
+    if (kStorePredictions){
         outputFile.open("../results/go2_serow_estimates.txt"); // Output file
         if (!outputFile.is_open()) {
             throw std::runtime_error("Could not open file");
@@ -179,7 +179,7 @@ TEST(SerowTests, Go2Test) {
                   << std::endl;
 
         // Store the results into an eigen matrix to be saved
-        if (STORE_PREDICTIONS) 
+        if (kStorePredictions) 
         {
             if (timestamp - prev_timestamp < 0){
                 sec_timer += 1.;
