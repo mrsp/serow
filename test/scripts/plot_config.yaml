@@ -1,1 +1,5 @@
-data_filename: "../data/go2.csv"
+data_filename: "../data/go2.csv"  # Dataset containing GRF measurements
+NUM_FEET: 4                       # Number of robot's feet
+
+### CONVETION: start from right to left. from front to back FR FL RR RL. Fill the list in that order 
+force_column_idxs: [1,2,3,4]      # Columns in the CSV that contain GRFs. 

@@ -19,11 +19,10 @@ df = pd.read_csv(csv_filename)
 # Extract y-labels from column names
 y_labels = [label.split(",")[0] for label in df.columns[1:]]
 
-
 # Plot data
 for i, column in enumerate(df.columns[1:]):
     plt.figure(figsize=(10, 6))
-    plt.plot(df.iloc[:, 0], df[column])
+    plt.plot(df.iloc[:, 0].values, df[column].values)  # Convert DataFrame columns to numpy arrays
     plt.xlabel(df.columns[0])  # Set xlabel dynamically from the first column
     plt.ylabel(column)
     plt.title(f"{column} vs. {df.columns[0]}")
