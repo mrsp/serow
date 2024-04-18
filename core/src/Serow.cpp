@@ -176,7 +176,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (!is_initialized_ && ft.has_value()) {
         is_initialized_ = true;
     } else if (!is_initialized_) {
-        return;
+        throw std::runtime_error("Force measurements are required for the filter's initialization");    
     }
 
     // Safely copy the state prior to filtering
@@ -336,7 +336,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         // Assuming the terrain is flat and the robot is initialized in a standing posture we can
         // have a measurement of the average terrain height constraining base estimation.
         if (params_.is_flat_terrain) {
-            TerrainMeasurement tm{.height = 0.0, .height_cov = params_.terrain_height_covariance};
+            TerrainMeasurement tm(0.0, 0.0, params_.terrain_height_covariance); // (timestamp, height, height covariance)
             terrain_ = std::move(tm);
             for (const auto& frame : state.getContactsFrame()) {
                 terrain_->height += base_to_foot_positions.at(frame).z();
