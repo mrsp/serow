@@ -88,8 +88,8 @@ Serow::Serow(std::string config_file) {
     // Base/CoM estimation parameters
     params_.convergence_cycles = config["convergence_cycles"];
     for (size_t i = 0; i < 3; i++) {
-        state.base_state_.imu_angular_velocity_bias[i] = config["bias_gyro"][i];
-        state.base_state_.imu_linear_acceleration_bias[i] = config["bias_acc"][i];
+        state_.base_state_.imu_angular_velocity_bias[i] = config["bias_gyro"][i];
+        state_.base_state_.imu_linear_acceleration_bias[i] = config["bias_acc"][i];
         params_.angular_velocity_cov[i] = config["imu_angular_velocity_covariance"][i];
         params_.angular_velocity_bias_cov[i] = config["imu_angular_velocity_bias_covariance"][i];
         params_.linear_acceleration_cov[i] = config["imu_linear_acceleration_covariance"][i];
