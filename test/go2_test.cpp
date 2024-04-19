@@ -25,19 +25,19 @@ constexpr bool kStorePredictions = true; // If true the serow base estimates are
 
 TEST(SerowTests, Go2Test) {
     serow::Serow SEROW("../../config/go2.json");
-    const double mass = 8.096;             // kg
+    const double mass = 15.017;             // kg
     const double g = 9.81;                 // m/s^2
     const double mg = mass * g;            // N
     const double bias = 14;                // potatos
     const double den = 172.91 - 4 * bias;  // potatos
 
     std::fstream inputFile("../data/go2.csv", std::ios::in); // Input file
-    std::ofstream outputFile;
     if (!inputFile.is_open()) {
         throw std::runtime_error("Could not open file");
         return;
     }
 
+    std::ofstream outputFile;
     if (kStorePredictions){
         outputFile.open("../results/go2_serow_estimates.txt"); // Output file
         if (!outputFile.is_open()) {
@@ -61,11 +61,9 @@ TEST(SerowTests, Go2Test) {
     }
     inputFile.close();
 
-    double sec_timer = 0.0;
-    double prev_timestamp = 0.0;
     // Parse the data, create the measurements, and run the filtering loop
     for (size_t i = 1; i < data.size(); i++) {
-        double timestamp = std::stod(data[i][0]) * 1e-9;  // s
+        double timestamp = std::stod(data[i][0]);  // s
         
         std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
         Eigen::Vector3d force =
@@ -181,18 +179,14 @@ TEST(SerowTests, Go2Test) {
         // Store the results into an eigen matrix to be saved
         if (kStorePredictions) 
         {
-            if (timestamp - prev_timestamp < 0){
-                sec_timer += 1.;
-            }
-            prev_timestamp = timestamp;
-            outputFile << timestamp + sec_timer << " "
-                        << state->getBasePosition().transpose().x() << " "
-                        << state->getBasePosition().transpose().y() << " "
-                        << state->getBasePosition().transpose().z() << " "
-                        << state->getBaseOrientation().x() << " "
-                        << state->getBaseOrientation().y() << " "
-                        << state->getBaseOrientation().z() << " "
-                        << state->getBaseOrientation().w() << "\n";
+            outputFile << timestamp << " "
+                       << state->getBasePosition().transpose().x() << " "
+                       << state->getBasePosition().transpose().y() << " "
+                       << state->getBasePosition().transpose().z() << " "
+                       << state->getBaseOrientation().x() << " "
+                       << state->getBaseOrientation().y() << " "
+                       << state->getBaseOrientation().z() << " "
+                       << state->getBaseOrientation().w() << "\n";
         }
     }
 
