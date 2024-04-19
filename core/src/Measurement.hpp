@@ -87,7 +87,7 @@ struct TerrainMeasurement {
     double timestamp{};
     double height{};
     double height_cov{1.0};
-    TerrainMeasurement(double timestamp = 0.0, double height = 0.0 , double height_cov = 1.0)
+    TerrainMeasurement(double timestamp, double height, double height_cov)
         :timestamp(timestamp), height(height), height_cov(height_cov){}
 };
 
