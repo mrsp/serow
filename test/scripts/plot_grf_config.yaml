@@ -1,4 +1,3 @@
 data_filename: "../data/go1.csv"  # Dataset containing GRF measurements
 
-### CONVETION: start from right to left. from front to back FR FL RR RL. Fill the list in that order 
 force_column_indxs: [1,2,3,4]      # Columns in the CSV that contain GRFs. 
