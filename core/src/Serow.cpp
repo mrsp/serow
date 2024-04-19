@@ -336,7 +336,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         // Assuming the terrain is flat and the robot is initialized in a standing posture we can
         // have a measurement of the average terrain height constraining base estimation.
         if (params_.is_flat_terrain) {
-            TerrainMeasurement tm(0.0, 0.0, params_.terrain_height_covariance); // (timestamp, height, height covariance)
+            TerrainMeasurement tm(0.0, 0.0, params_.terrain_height_covariance);
             terrain_ = std::move(tm);
             for (const auto& frame : state.getContactsFrame()) {
                 terrain_->height += base_to_foot_positions.at(frame).z();
