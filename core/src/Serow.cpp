@@ -176,7 +176,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (!is_initialized_ && ft.has_value()) {
         is_initialized_ = true;
     } else if (!is_initialized_) {
-        throw std::runtime_error("Force measurements are required for the filter's initialization");    
+        return;
     }
 
     // Safely copy the state prior to filtering
