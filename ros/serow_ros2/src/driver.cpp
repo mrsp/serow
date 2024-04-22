@@ -1,17 +1,18 @@
-#include "rclcpp/rclcpp.hpp"
+#include <functional>
+#include <serow/Serow.hpp>
+
 #include "geometry_msgs/msg/wrench.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/imu.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
-
-#include <Serow.hpp>
-#include <functional>
 
 using std::placeholders::_1;
 
 class SerowDriver : public rclcpp::Node {
    public:
     SerowDriver(const std::string& joint_state_topic, const std::string& imu_topic,
-                const std::vector<std::string>& force_torque_state_topics, std::string_view config_file_path)
+                const std::vector<std::string>& force_torque_state_topics,
+                const std::string& config_file_path)
         : Node("serow_driver") {
         SEROW_ = serow::Serow(config_file_path);
         joint_state_subscription_ = this->create_subscription<sensor_msgs::msg::JointState>(
@@ -56,8 +57,8 @@ int main(int argc, char* argv[]) {
     std::vector<std::string> force_torque_state_topics;
     force_torque_state_topics.push_back("/left_leg/force_torque_states");
     force_torque_state_topics.push_back("/right_leg/force_torque_states");
-    rclcpp::spin(
-        std::make_shared<SerowDriver>("/joint_states", "/imu0", force_torque_state_topics), "../../../config/nao.json");
+    rclcpp::spin(std::make_shared<SerowDriver>("/joint_states", "/imu0", force_torque_state_topics,
+                                               "../config/nao.json"));
     rclcpp::shutdown();
     return 0;
 }
