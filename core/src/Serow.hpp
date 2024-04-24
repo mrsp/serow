@@ -25,6 +25,8 @@
 #include "Measurement.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
+#include <filesystem> 
+
 
 namespace serow {
 
@@ -113,6 +115,7 @@ class Serow {
     size_t cycle_{};
     size_t imu_calibration_cycles_{};
     std::optional<TerrainMeasurement> terrain_ = std::nullopt;
+    std::string findFilepath(const std::string& filename);
 };
 
 }  // namespace serow

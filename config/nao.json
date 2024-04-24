@@ -5,7 +5,7 @@
         "0": "l_ankle",
         "1": "r_ankle"
     },
-    "model_path": "../urdf/nao.urdf",
+    "model_path": "nao.urdf",
     "mass": 5.14,
     "g": 9.81,
     "joint_rate": 100,
