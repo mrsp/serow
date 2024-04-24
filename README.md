@@ -27,6 +27,10 @@ More Videos:
 # Getting Started
 These instructions will get you a copy of the project up and running on your local machine for testing purposes.
 
+Define the environment variable inside your *.bashrc* file:
+```
+export SEROW_PATH=<path-to-serow-package>
+```
 ## Prerequisites
 * [Eigen](https://eigen.tuxfamily.org/dox/index.html) 3.3.0 and later
 * [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 2.2.1 and later

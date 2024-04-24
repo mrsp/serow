@@ -7,7 +7,7 @@
         "2": "RL_foot",
         "3": "RR_foot"
     },
-    "model_path": "../../urdf/go2.urdf",
+    "model_path": "go2.urdf",
     "mass": 15.017,
     "g": 9.81,
     "joint_rate": 500,

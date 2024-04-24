@@ -20,7 +20,8 @@ using json = nlohmann::json;
 namespace serow {
 
 Serow::Serow(std::string config_file) {
-    auto config = json::parse(std::ifstream(config_file));
+
+    auto config = json::parse(std::ifstream(findFilepath(config_file)));
 
     // Initialize the state
     std::set<std::string> contacts_frame;
@@ -37,7 +38,7 @@ Serow::Serow(std::string config_file) {
     attitude_estimator_ = std::make_unique<Mahony>(params_.imu_rate, Kp, Ki);
 
     // Initialize the kinematic estimator
-    kinematic_estimator_ = std::make_unique<RobotKinematics>(config["model_path"]);
+    kinematic_estimator_ = std::make_unique<RobotKinematics>(findFilepath(config["model_path"]));
     params_.calibrate_imu = config["calibrate_imu"];
     if (!params_.calibrate_imu) {
         params_.bias_acc << config["bias_acc"][0], config["bias_acc"][1], config["bias_acc"][2];
@@ -499,6 +500,25 @@ std::optional<State> Serow::getState(bool allow_invalid) {
     } else {
         return std::nullopt;
     }
+}
+
+
+std::string Serow::findFilepath(const std::string& filename){
+    if (std::getenv("SEROW_PATH") == nullptr){
+        throw std::runtime_error("SEROW_PATH environmental variable not set.");  
+        return "";
+    }
+
+
+    std::string serow_path_env = std::getenv("SEROW_PATH");
+    for (const auto& entry: std::filesystem::recursive_directory_iterator(serow_path_env)){
+        std::cout << "Found file --> " << entry.path().string() << '\n';
+
+        if (std::filesystem::is_regular_file(entry) && entry.path().filename() == filename){
+            return entry.path().string();
+        }
+    }
+    throw std::runtime_error("File '" + filename + "' not found.");
 }
 
 }  // namespace serow
