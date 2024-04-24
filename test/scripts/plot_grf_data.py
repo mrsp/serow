@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import yaml
 
-config_filename = "plot_config.yaml"
+config_filename = "plot_grf_config.yaml"
 
 with open(config_filename, "r") as file:
     config_options = yaml.load(file, Loader=yaml.FullLoader)
