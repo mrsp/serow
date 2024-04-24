@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
     force_torque_state_topics.push_back("/left_leg/force_torque_states");
     force_torque_state_topics.push_back("/right_leg/force_torque_states");
     rclcpp::spin(std::make_shared<SerowDriver>("/joint_states", "/imu0", force_torque_state_topics,
-                                               "../config/nao.json"));
+                                               "nao.json"));
     rclcpp::shutdown();
     return 0;
 }
