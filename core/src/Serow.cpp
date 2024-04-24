@@ -505,15 +505,12 @@ std::optional<State> Serow::getState(bool allow_invalid) {
 
 std::string Serow::findFilepath(const std::string& filename){
     if (std::getenv("SEROW_PATH") == nullptr){
-        throw std::runtime_error("SEROW_PATH environmental variable not set.");  
+        throw std::runtime_error("Environmental variable SEROW_PATH is not set.");  
         return "";
     }
 
-
-    std::string serow_path_env = std::getenv("SEROW_PATH");
+    std::string_view serow_path_env = std::getenv("SEROW_PATH");
     for (const auto& entry: std::filesystem::recursive_directory_iterator(serow_path_env)){
-        std::cout << "Found file --> " << entry.path().string() << '\n';
-
         if (std::filesystem::is_regular_file(entry) && entry.path().filename() == filename){
             return entry.path().string();
         }
