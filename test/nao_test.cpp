@@ -19,7 +19,7 @@
 #include <string>
 
 TEST(SerowTests, NaoTest) {
-    serow::Serow SEROW("../../config/nao.json");
+    serow::Serow SEROW("nao.json");
 
     Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
     serow::ImuMeasurement imu;
