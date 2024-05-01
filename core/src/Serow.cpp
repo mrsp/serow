@@ -179,6 +179,13 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     } else if (!is_initialized_) {
         return;
     }
+    
+    // Check if foot frames exist on the F/T measurement
+    for (const auto& frame : state_.contacts_frame_) {
+        if (ft.value().count(frame) == 0) {
+            throw std::runtime_error("Wrench measurement does not contain correct foot frames");
+        }
+    }
 
     // Safely copy the state prior to filtering
     State state(state_);
@@ -235,6 +242,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Get the CoM w.r.t the base frame
     const Eigen::Vector3d& base_to_com_position = kinematic_estimator_->comPosition();
     // Get the angular momentum around the CoM in base frame coordinates
+
     const Eigen::Vector3d& com_angular_momentum = kinematic_estimator_->comAngularMomentum();
     if (!angular_momentum_derivative_estimator) {
         angular_momentum_derivative_estimator = std::make_unique<DerivativeEstimator>();
@@ -242,6 +250,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                                                     params_.joint_rate,
                                                     params_.angular_momentum_cutoff_frequency);
     }
+
     // Estimate the angular momentum derivative
     const Eigen::Vector3d& com_angular_momentum_derivative =
         angular_momentum_derivative_estimator->filter(com_angular_momentum);
@@ -262,71 +271,74 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             kinematic_estimator_->linearVelocity(contact_frame);
     }
 
-    if (ft.has_value()) {
-        std::map<std::string, Eigen::Vector3d> contacts_force;
-        std::map<std::string, Eigen::Vector3d> contacts_torque;
-        double den = state.num_leg_ee_ * params_.eps;
 
-        for (const auto& frame : state.getContactsFrame()) {
-            if (params_.estimate_contact_status && !contact_estimators_.count(frame)) {
-                ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
-                                   params_.mass, params_.g, params_.median_window);
-                contact_estimators_[frame] = std::move(cd);
-            }
 
-            state.contact_state_.timestamp = ft->at(frame).timestamp;
-            // Transform F/T to base frame
-            contacts_force[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
-                                    params_.R_foot_to_force.at(frame) * ft->at(frame).force;
-            if (!state.isPointFeet() && ft->at(frame).torque.has_value()) {
-                contacts_torque[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
-                                         params_.R_foot_to_torque.at(frame) *
-                                         ft->at(frame).torque.value();
-            }
-
-            // Estimate the contact status
-            if (params_.estimate_contact_status) {
-                contact_estimators_.at(frame).SchmittTrigger(contacts_force.at(frame).z());
-                state.contact_state_.contacts_status[frame] =
-                    contact_estimators_.at(frame).getContactStatus();
-                den += contact_estimators_.at(frame).getContactForce();
-            }
+    std::map<std::string, Eigen::Vector3d> contacts_force;
+    std::map<std::string, Eigen::Vector3d> contacts_torque;
+    double den = state.num_leg_ee_ * params_.eps;
+    for (const auto& frame : state.getContactsFrame()) {
+        std::cout << frame << '\n';
+        if (params_.estimate_contact_status && !contact_estimators_.count(frame)) {
+            ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
+                                params_.mass, params_.g, params_.median_window);
+            contact_estimators_[frame] = std::move(cd);
         }
 
-        den /= state.num_leg_ee_;
-        if (params_.estimate_contact_status && !contacts_probability.has_value()) {
-            for (const auto& frame : state.getContactsFrame()) {
-                // Estimate the contact quality
-                state.contact_state_.contacts_probability[frame] = std::clamp(
-                    (contact_estimators_.at(frame).getContactForce() + params_.eps) / den, 0.0,
-                    1.0);
-            }
-        } else if (contacts_probability) {
-            state.contact_state_.contacts_probability = std::move(contacts_probability.value());
-            for (const auto& frame : state.getContactsFrame()) {
-                state.contact_state_.contacts_status[frame] = false;
-                if (state.contact_state_.contacts_probability.at(frame) > 0.5) {
-                    state.contact_state_.contacts_status[frame] = true;
-                }
-            }
+        state.contact_state_.timestamp = ft->at(frame).timestamp;
+
+
+        // Transform F/T to base frame
+        contacts_force[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
+                                params_.R_foot_to_force.at(frame) * ft->at(frame).force;
+        if (!state.isPointFeet() && ft->at(frame).torque.has_value()) {
+            contacts_torque[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
+                                        params_.R_foot_to_torque.at(frame) *
+                                        ft->at(frame).torque.value();
         }
 
-        // Estimate the COP in the local foot frame
-        for (const auto& frame : state.getContactsFrame()) {
-            ft->at(frame).cop = Eigen::Vector3d::Zero();
-            if (!state.isPointFeet() && contacts_torque.count(frame) &&
-                state.contact_state_.contacts_probability.at(frame) > 0.0) {
-                ft->at(frame).cop = Eigen::Vector3d(
-                    -contacts_torque.at(frame).y() / contacts_force.at(frame).z(),
-                    contacts_torque.at(frame).x() / contacts_force.at(frame).z(), 0.0);
-            }
-        }
-
-        state.contact_state_.contacts_force = std::move(contacts_force);
-        if (!contacts_torque.empty()) {
-            state.contact_state_.contacts_torque = std::move(contacts_torque);
+        // Estimate the contact status
+        if (params_.estimate_contact_status) {
+            contact_estimators_.at(frame).SchmittTrigger(contacts_force.at(frame).z());
+            state.contact_state_.contacts_status[frame] =
+                contact_estimators_.at(frame).getContactStatus();
+            den += contact_estimators_.at(frame).getContactForce();
         }
     }
+
+    den /= state.num_leg_ee_;
+    if (params_.estimate_contact_status && !contacts_probability.has_value()) {
+        for (const auto& frame : state.getContactsFrame()) {
+            // Estimate the contact quality
+            state.contact_state_.contacts_probability[frame] = std::clamp(
+                (contact_estimators_.at(frame).getContactForce() + params_.eps) / den, 0.0,
+                1.0);
+        }
+    } else if (contacts_probability) {
+        state.contact_state_.contacts_probability = std::move(contacts_probability.value());
+        for (const auto& frame : state.getContactsFrame()) {
+            state.contact_state_.contacts_status[frame] = false;
+            if (state.contact_state_.contacts_probability.at(frame) > 0.5) {
+                state.contact_state_.contacts_status[frame] = true;
+            }
+        }
+    }
+
+    // Estimate the COP in the local foot frame
+    for (const auto& frame : state.getContactsFrame()) {
+        ft->at(frame).cop = Eigen::Vector3d::Zero();
+        if (!state.isPointFeet() && contacts_torque.count(frame) &&
+            state.contact_state_.contacts_probability.at(frame) > 0.0) {
+            ft->at(frame).cop = Eigen::Vector3d(
+                -contacts_torque.at(frame).y() / contacts_force.at(frame).z(),
+                contacts_torque.at(frame).x() / contacts_force.at(frame).z(), 0.0);
+        }
+    }
+
+    state.contact_state_.contacts_force = std::move(contacts_force);
+    if (!contacts_torque.empty()) {
+        state.contact_state_.contacts_torque = std::move(contacts_torque);
+    }
+    
 
     // Compute the leg odometry and the contact points
     if (!leg_odometry_) {
