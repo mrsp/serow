@@ -179,7 +179,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     } else if (!is_initialized_) {
         return;
     }
-    
+
     // Check if foot frames exist on the F/T measurement
     for (const auto& frame : state_.contacts_frame_) {
         if (ft.value().count(frame) == 0) {
@@ -277,7 +277,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     std::map<std::string, Eigen::Vector3d> contacts_torque;
     double den = state.num_leg_ee_ * params_.eps;
     for (const auto& frame : state.getContactsFrame()) {
-        std::cout << frame << '\n';
         if (params_.estimate_contact_status && !contact_estimators_.count(frame)) {
             ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
                                 params_.mass, params_.g, params_.median_window);
