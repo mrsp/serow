@@ -180,15 +180,15 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         return;
     }
 
+    // Safely copy the state prior to filtering
+    State state(state_);
+
     // Check if foot frames exist on the F/T measurement
-    for (const auto& frame : state_.contacts_frame_) {
+    for (const auto& frame : state.contacts_frame_) {
         if (ft.value().count(frame) == 0) {
             throw std::runtime_error("Wrench measurement does not contain correct foot frames");
         }
     }
-
-    // Safely copy the state prior to filtering
-    State state(state_);
 
     // Estimate the joint velocities
     std::map<std::string, double> joints_position;
