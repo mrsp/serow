@@ -151,7 +151,6 @@ int main(int argc, char** argv) {
     force_torque_state_topics.push_back("/ihmc_ros/valkyrie/output/foot_force/right");
 
     SerowDriver driver(nh, "/joint_states", "/ihmc_ros/valkyrie/output/imu/pelvis_pelvisMiddleImu", force_torque_state_topics, "valk.json");
-    // ros::spin();
 
     return 0;
 }
