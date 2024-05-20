@@ -1,13 +1,13 @@
-#include "pinocchio/fwd.hpp"
 #include <functional>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/WrenchStamped.h>
 #include <map>
+#include "pinocchio/fwd.hpp"
 #include <queue>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/JointState.h>
-#include <geometry_msgs/WrenchStamped.h>
 #include <serow/Serow.hpp>
-#include <geometry_msgs/PoseStamped.h>
 
 
 
@@ -140,8 +140,6 @@ private:
     std::map<std::string, std::queue<geometry_msgs::WrenchStamped>> ft_data_;
     geometry_msgs::PoseStamped pose_estimate_;
     serow::Serow serow_;
-    // serow::State state_;
-
 };
 
 int main(int argc, char** argv) {
