@@ -1,8 +1,8 @@
+#include "pinocchio/fwd.hpp" // Always first include to avoid boost related errors
 #include <functional>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
 #include <map>
-#include "pinocchio/fwd.hpp"
 #include <queue>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
