@@ -28,7 +28,3 @@ target_link_libraries(serow_ros ${catkin_LIBRARIES} Eigen3::Eigen pinocchio::pin
 add_dependencies(serow_ros ${catkin_EXPORTED_TARGETS})
 
 set_property(TARGET serow_ros PROPERTY CXX_STANDARD 17)
-
-catkin_install_python(PROGRAMS src/force_remapper.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
