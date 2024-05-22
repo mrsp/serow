@@ -1,0 +1,6 @@
+joint_state_topic: "/joint_states"
+base_imu_topic: "/ihmc_ros/valkyrie/output/imu/pelvis_pelvisMiddleImu"
+config_file_path: "valk.json"
+force_torque_state_topics:
+  - "/ihmc_ros/valkyrie/output/foot_force/left"
+  - "/ihmc_ros/valkyrie/output/foot_force/right"
