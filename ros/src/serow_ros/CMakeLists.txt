@@ -23,8 +23,8 @@ include_directories(
   ${Boost_INCLUDE_DIR}
 )
 
-add_executable(serow_ros src/serow_driver.cpp)
-target_link_libraries(serow_ros ${catkin_LIBRARIES} Eigen3::Eigen pinocchio::pinocchio serow)
-add_dependencies(serow_ros ${catkin_EXPORTED_TARGETS})
+add_executable(serow_driver src/serow_driver.cpp)
+target_link_libraries(serow_driver ${catkin_LIBRARIES} Eigen3::Eigen pinocchio::pinocchio serow)
+add_dependencies(serow_driver ${catkin_EXPORTED_TARGETS})
 
-set_property(TARGET serow_ros PROPERTY CXX_STANDARD 17)
+set_property(TARGET serow_driver PROPERTY CXX_STANDARD 17)
