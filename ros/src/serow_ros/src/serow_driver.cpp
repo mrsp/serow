@@ -1,4 +1,4 @@
-#include "pinocchio/fwd.hpp" // Always first include to avoid boost related errors
+#include "pinocchio/fwd.hpp" // Always first include to avoid boost related compilation errors
 #include <functional>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/WrenchStamped.h>
@@ -9,22 +9,35 @@
 #include <sensor_msgs/JointState.h>
 #include <serow/Serow.hpp>
 
-
-
 class SerowDriver {
 public:
-    SerowDriver(const ros::NodeHandle& nh, const std::string& joint_state_topic, const std::string& base_imu_topic,
-                const std::vector<std::string>& force_torque_state_topics, const std::string& config_file_path)
+    SerowDriver(const ros::NodeHandle& nh)
         : nh_(nh) {
+        // Load parameters from the parameter server
+        if (!nh_.getParam("joint_state_topic", joint_state_topic_)) {
+            ROS_ERROR("Failed to get param 'joint_state_topic'");
+        }
+        if (!nh_.getParam("base_imu_topic", base_imu_topic_)) {
+            ROS_ERROR("Failed to get param 'base_imu_topic'");
+        }
+        if (!nh_.getParam("force_torque_state_topics", force_torque_state_topics_)) {
+            ROS_ERROR("Failed to get param 'force_torque_state_topics'");
+        }
+        if (!nh_.getParam("config_file_path", config_file_path_)) {
+            ROS_ERROR("Failed to get param 'config_file_path'");
+        }
+
         // Initialize SERoW
-        serow_ = serow::Serow(config_file_path);
+        serow_ = serow::Serow(config_file_path_);
         pose_estimate_.header.frame_id = "base_link";
+
         // Create subscribers
-        joint_state_subscription_ = nh_.subscribe(joint_state_topic, 1000, &SerowDriver::joint_state_topic_callback, this);
-        base_imu_subscription_ = nh_.subscribe(base_imu_topic, 1000, &SerowDriver::base_imu_topic_callback, this);
-        base_state_publisher_= nh_.advertise<geometry_msgs::PoseStamped>("/serow/base_estimate", 100);
+        joint_state_subscription_ = nh_.subscribe(joint_state_topic_, 1000, &SerowDriver::joint_state_topic_callback, this);
+        base_imu_subscription_ = nh_.subscribe(base_imu_topic_, 1000, &SerowDriver::base_imu_topic_callback, this);
+        base_state_publisher_ = nh_.advertise<geometry_msgs::PoseStamped>("/serow/base_estimate", 100);
+
         // Dynamically create a wrench callback one for each limb
-        for (const auto& ft_topic : force_torque_state_topics) {
+        for (const auto& ft_topic : force_torque_state_topics_) {
             auto ft_callback = boost::bind(&SerowDriver::force_torque_state_topic_callback, this, _1);
             force_torque_state_subscriptions_.push_back(nh_.subscribe<geometry_msgs::WrenchStamped>(ft_topic, 1000, ft_callback));
         }
@@ -55,9 +68,7 @@ public:
         }
     }
 
-
 private:
-
     void run() {
         ros::Rate loop_rate(100); // Define the loop rate
         while (ros::ok()) { // Check if ROS is still running
@@ -92,7 +103,6 @@ private:
                 // Create the leg F/T measurement
                 std::map<std::string, serow::ForceTorqueMeasurement> ft_measurements;
                 for (auto& [key, value] : ft_data_) {
-                    
                     if (value.size()) {
                         serow::ForceTorqueMeasurement ft{};
                         const auto& ft_data = value.front();
@@ -100,10 +110,9 @@ private:
                                     static_cast<double>(ft_data.header.stamp.nsec) * 1e-9;
                         ft.force = Eigen::Vector3d(ft_data.wrench.force.x, ft_data.wrench.force.y,
                                                 ft_data.wrench.force.z);
-
                         ft.torque = Eigen::Vector3d(ft_data.wrench.torque.x,
-                                                        ft_data.wrench.torque.y,
-                                                        ft_data.wrench.torque.z);
+                                                    ft_data.wrench.torque.y,
+                                                    ft_data.wrench.torque.z);
                         ft_measurements[key] = std::move(ft);
                         value.pop();
                     }
@@ -125,32 +134,33 @@ private:
                 base_state_publisher_.publish(pose_estimate_);
             }
             ros::spinOnce();
-            loop_rate.sleep(); 
+            loop_rate.sleep();
         }
     }
 
     ros::NodeHandle nh_;
     ros::Subscriber joint_state_subscription_;
     ros::Subscriber base_imu_subscription_;
-    ros::Publisher base_state_publisher_ ;
-    
+    ros::Publisher base_state_publisher_;
+
     std::vector<ros::Subscriber> force_torque_state_subscriptions_;
     std::queue<sensor_msgs::JointState> joint_state_data_;
     std::queue<sensor_msgs::Imu> base_imu_data_;
     std::map<std::string, std::queue<geometry_msgs::WrenchStamped>> ft_data_;
     geometry_msgs::PoseStamped pose_estimate_;
     serow::Serow serow_;
+
+    std::string joint_state_topic_;
+    std::string base_imu_topic_;
+    std::vector<std::string> force_torque_state_topics_;
+    std::string config_file_path_;
 };
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "serow_ros_driver");
+    ros::init(argc, argv, "serow_driver");
     ros::NodeHandle nh;
 
-    std::vector<std::string> force_torque_state_topics;
-    force_torque_state_topics.push_back("/ihmc_ros/valkyrie/output/foot_force/left");
-    force_torque_state_topics.push_back("/ihmc_ros/valkyrie/output/foot_force/right");
-
-    SerowDriver driver(nh, "/joint_states", "/ihmc_ros/valkyrie/output/imu/pelvis_pelvisMiddleImu", force_torque_state_topics, "valk.json");
+    SerowDriver driver(nh);
 
     return 0;
 }
