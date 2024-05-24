@@ -26,7 +26,9 @@ public:
         if (!nh_.getParam("config_file_path", config_file_path_)) {
             ROS_ERROR("Failed to get param 'config_file_path'");
         }
-
+        if (!nh_.getParam("joint_encoder_hz", joint_refresh_rate_)) {
+            ROS_ERROR("Failed to get param 'joint_encoder_hz'");
+        }
         // Initialize SERoW
         serow_ = serow::Serow(config_file_path_);
         pose_estimate_.header.frame_id = "base_link";
@@ -70,7 +72,7 @@ public:
 
 private:
     void run() {
-        ros::Rate loop_rate(100); // Define the loop rate
+        ros::Rate loop_rate(joint_refresh_rate_); // Define the loop rate
         while (ros::ok()) { // Check if ROS is still running
             if (joint_state_data_.size() > 0 && base_imu_data_.size() > 0) {
                 // Create the joint measurements
@@ -142,7 +144,7 @@ private:
     ros::Subscriber joint_state_subscription_;
     ros::Subscriber base_imu_subscription_;
     ros::Publisher base_state_publisher_;
-
+    int joint_refresh_rate_;
     std::vector<ros::Subscriber> force_torque_state_subscriptions_;
     std::queue<sensor_msgs::JointState> joint_state_data_;
     std::queue<sensor_msgs::Imu> base_imu_data_;
