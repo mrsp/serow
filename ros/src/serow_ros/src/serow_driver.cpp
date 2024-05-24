@@ -109,9 +109,9 @@ private:
                         serow::ForceTorqueMeasurement ft{};
                         const auto& ft_data = value.front();
                         ft.timestamp = static_cast<double>(ft_data.header.stamp.sec) +
-                                    static_cast<double>(ft_data.header.stamp.nsec) * 1e-9;
+                                       static_cast<double>(ft_data.header.stamp.nsec) * 1e-9;
                         ft.force = Eigen::Vector3d(ft_data.wrench.force.x, ft_data.wrench.force.y,
-                                                ft_data.wrench.force.z);
+                                                   ft_data.wrench.force.z);
                         ft.torque = Eigen::Vector3d(ft_data.wrench.torque.x,
                                                     ft_data.wrench.torque.y,
                                                     ft_data.wrench.torque.z);
