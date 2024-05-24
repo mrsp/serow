@@ -183,6 +183,13 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Safely copy the state prior to filtering
     State state(state_);
 
+    // Check if foot frames exist on the F/T measurement
+    for (const auto& frame : state.contacts_frame_) {
+        if (ft.value().count(frame) == 0) {
+            throw std::runtime_error("Wrench measurement does not contain correct foot frames");
+        }
+    }
+
     // Estimate the joint velocities
     std::map<std::string, double> joints_position;
     std::map<std::string, double> joints_velocity;
@@ -235,6 +242,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Get the CoM w.r.t the base frame
     const Eigen::Vector3d& base_to_com_position = kinematic_estimator_->comPosition();
     // Get the angular momentum around the CoM in base frame coordinates
+
     const Eigen::Vector3d& com_angular_momentum = kinematic_estimator_->comAngularMomentum();
     if (!angular_momentum_derivative_estimator) {
         angular_momentum_derivative_estimator = std::make_unique<DerivativeEstimator>();
@@ -242,6 +250,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                                                     params_.joint_rate,
                                                     params_.angular_momentum_cutoff_frequency);
     }
+
     // Estimate the angular momentum derivative
     const Eigen::Vector3d& com_angular_momentum_derivative =
         angular_momentum_derivative_estimator->filter(com_angular_momentum);
@@ -262,11 +271,10 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             kinematic_estimator_->linearVelocity(contact_frame);
     }
 
-    if (ft.has_value()) {
+    if (ft.has_value()){
         std::map<std::string, Eigen::Vector3d> contacts_force;
         std::map<std::string, Eigen::Vector3d> contacts_torque;
         double den = state.num_leg_ee_ * params_.eps;
-
         for (const auto& frame : state.getContactsFrame()) {
             if (params_.estimate_contact_status && !contact_estimators_.count(frame)) {
                 ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
@@ -275,6 +283,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             }
 
             state.contact_state_.timestamp = ft->at(frame).timestamp;
+
             // Transform F/T to base frame
             contacts_force[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
                                     params_.R_foot_to_force.at(frame) * ft->at(frame).force;
