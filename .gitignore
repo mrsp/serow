@@ -5,5 +5,5 @@
 .vscode/
 /devel/
 /test/build/
-/ros_ws/devel/
-/ros_ws/build/
+/ros/devel/
+/ros/build/
