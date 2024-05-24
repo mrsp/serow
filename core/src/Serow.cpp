@@ -271,7 +271,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             kinematic_estimator_->linearVelocity(contact_frame);
     }
 
-
     if (ft.has_value()){
         std::map<std::string, Eigen::Vector3d> contacts_force;
         std::map<std::string, Eigen::Vector3d> contacts_torque;
@@ -279,20 +278,19 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         for (const auto& frame : state.getContactsFrame()) {
             if (params_.estimate_contact_status && !contact_estimators_.count(frame)) {
                 ContactDetector cd(frame, params_.high_threshold, params_.low_threshold,
-                                    params_.mass, params_.g, params_.median_window);
+                                   params_.mass, params_.g, params_.median_window);
                 contact_estimators_[frame] = std::move(cd);
             }
 
             state.contact_state_.timestamp = ft->at(frame).timestamp;
-
 
             // Transform F/T to base frame
             contacts_force[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
                                     params_.R_foot_to_force.at(frame) * ft->at(frame).force;
             if (!state.isPointFeet() && ft->at(frame).torque.has_value()) {
                 contacts_torque[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
-                                            params_.R_foot_to_torque.at(frame) *
-                                            ft->at(frame).torque.value();
+                                         params_.R_foot_to_torque.at(frame) *
+                                         ft->at(frame).torque.value();
             }
 
             // Estimate the contact status
