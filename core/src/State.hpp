@@ -137,6 +137,7 @@ class State {
 
     // State covariance getter
     Eigen::Matrix<double, 6, 6> getBasePoseCov() const;
+    Eigen::Matrix<double, 6, 6> getBaseVelocityCov() const;
     const Eigen::Matrix3d& getBasePositionCov() const;
     const Eigen::Matrix3d& getBaseOrientationCov() const;
     const Eigen::Matrix3d& getBaseLinearVelocityCov() const;
