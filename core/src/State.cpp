@@ -433,6 +433,13 @@ const Eigen::Matrix3d& State::getBaseOrientationCov() const {
     return base_state_.base_orientation_cov;
 }
 
+Eigen::Matrix<double, 6, 6> State::getBaseVelocityCov() const {
+    Eigen::Matrix<double, 6, 6> base_velocity_cov = Eigen::Matrix<double, 6, 6>::Identity();
+    base_velocity_cov.block<3, 3>(0, 0) = base_state_.base_linear_velocity_cov;
+    base_velocity_cov.block<3, 3>(3, 3) = base_state_.base_angular_velocity_cov;
+    return base_velocity_cov;
+}
+
 const Eigen::Matrix3d& State::getBaseLinearVelocityCov() const {
     return base_state_.base_linear_velocity_cov;
 }

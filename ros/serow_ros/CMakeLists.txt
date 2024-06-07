@@ -6,7 +6,8 @@ add_compile_options(-std=c++17)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
-  std_msgs
+  geometry_msgs
+  nav_msgs
 )
 
 find_package(Boost REQUIRED NO_MODULE)
@@ -18,7 +19,6 @@ find_package(nlohmann_json REQUIRED)
 catkin_package()
 
 include_directories(
-# include
   ${catkin_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIR}
 )
