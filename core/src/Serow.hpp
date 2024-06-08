@@ -32,8 +32,7 @@ namespace serow {
 
 class Serow {
    public:
-    Serow() = default;
-    Serow(std::string config);
+    bool initialize(std::string config);
 
     void filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
                 std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
