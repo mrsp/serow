@@ -19,7 +19,8 @@
 #include <string>
 
 TEST(SerowTests, NaoTest) {
-    serow::Serow SEROW("nao.json");
+    serow::Serow SEROW;
+    EXPECT_TRUE(SEROW.initialize("nao.json"));
 
     Eigen::Vector3d g = Eigen::Vector3d(0, 0, -9.81);
     serow::ImuMeasurement imu;

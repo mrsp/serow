@@ -24,7 +24,9 @@ constexpr bool kStorePredictions = true; // If true the serow base estimates are
 
 
 TEST(SerowTests, Go1Test) {
-    serow::Serow SEROW("go1.json");
+    serow::Serow SEROW;
+    EXPECT_TRUE(SEROW.initialize("go1.json"));
+    
     const double mass = 12;                // kg
     const double g = 9.81;                 // m/s^2
     const double mg = mass * g;            // N

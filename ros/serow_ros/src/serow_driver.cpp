@@ -35,7 +35,11 @@ public:
         }
 
         // Initialize SERoW
-        serow_ = serow::Serow(config_file_path);
+        if (!serow_.initialize(config_file_path)) {
+            ROS_ERROR("SEROW cannot be initialized, exiting...")
+            return;
+        }
+        
         odom_.header.frame_id = "world";
         odom_.child_frame_id = "base_link";
 
@@ -54,7 +58,7 @@ public:
             force_torque_state_subscriptions_.push_back(
                 nh_.subscribe<geometry_msgs::WrenchStamped>(ft_topic, 1000, ft_callback));
         }
-        ROS_INFO("SERoW was initialized successfully");
+        ROS_INFO("SEROW was initialized successfully");
 
         // Run SERoW
         run();
@@ -64,7 +68,7 @@ public:
         joint_state_data_.push(*msg);
         if (joint_state_data_.size() > 100) {
             joint_state_data_.pop();
-            ROS_WARN("SERoW is dropping joint state measurements, SERoW estimate is not real-time");
+            ROS_WARN("SEROW is dropping joint state measurements, SEROW estimate is not real-time");
         }
     }
 
@@ -72,7 +76,7 @@ public:
         base_imu_data_.push(*msg);
         if (base_imu_data_.size() > 100) {
             base_imu_data_.pop();
-            ROS_WARN("SERoW is dropping base IMU measurements, SERoW estimate is not real-time");
+            ROS_WARN("SEROW is dropping base IMU measurements, SEROW estimate is not real-time");
         }
     }
 
@@ -81,7 +85,7 @@ public:
         ft_data_[frame_id].push(*msg);
         if (ft_data_.at(frame_id).size() > 100) {
             ft_data_.at(frame_id).pop();
-            ROS_WARN("SERoW is dropping leg F/T measurements, SERoW estimate is not real-time");
+            ROS_WARN("SEROW is dropping leg F/T measurements, SEROW estimate is not real-time");
         }
     }
 
