@@ -33,9 +33,6 @@ public:
         if (!nh_.getParam("joint_state_rate", loop_rate_)) {
             ROS_ERROR("Failed to get param 'joint_state_rate'");
         }
-        if (!nh_.getParam("foot_frames", foot_frames_)) {
-            ROS_ERROR("Failed to get param 'foot_frames'");
-        }
 
         // Initialize SERoW
         if (!serow_.initialize(config_file_path)) {
@@ -45,12 +42,7 @@ public:
         
         odom_.header.frame_id = "world";
         odom_.child_frame_id = "base_link";
-        
-        // Initialize keys in std::map
-        for (const auto & frame : foot_frames_){
-            ft_data_[frame];
-        }
-        
+    
         // Create subscribers
         joint_state_subscription_ =
             nh_.subscribe(joint_state_topic, 1000, &SerowDriver::joint_state_topic_callback, this);
@@ -90,8 +82,8 @@ public:
 
     void force_torque_state_topic_callback(const geometry_msgs::WrenchStamped::ConstPtr& msg) {
         std::string frame_id = msg->header.frame_id;
-        ft_data_.at(frame_id).push(*msg);
-
+        ft_data_[frame_id].push(*msg);
+        
         if (ft_data_.at(frame_id).size() > 100) {
             ft_data_.at(frame_id).pop();
             ROS_WARN("SEROW is dropping leg F/T measurements, SEROW estimate is not real-time");
@@ -200,7 +192,6 @@ private:
     std::queue<sensor_msgs::JointState> joint_state_data_;
     std::queue<sensor_msgs::Imu> base_imu_data_;
     std::map<std::string, std::queue<geometry_msgs::WrenchStamped>> ft_data_;
-    std::vector<std::string> foot_frames_;
     double loop_rate_{};
 
     nav_msgs::Odometry odom_;
