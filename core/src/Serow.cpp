@@ -506,8 +506,8 @@ bool Serow::initialize(std::string config_file) {
 
     // External odometry extrinsics
     if (!config["T_base_to_odom"].is_null() &&
-        (!config["T_base_to_odom"].is_array() || config["T_base_to_odom"].size() != 36)) {
-        std::cerr << "Configuration: T_base_to_odom must be an array of 36 elements \n";
+        (!config["T_base_to_odom"].is_array() || config["T_base_to_odom"].size() != 16)) {
+        std::cerr << "Configuration: T_base_to_odom must be an array of 16 elements \n";
         return false;
     }
     if (!config["T_base_to_odom"].is_null()) {
