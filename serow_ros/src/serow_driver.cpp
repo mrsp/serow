@@ -33,16 +33,24 @@ public:
         if (!nh_.getParam("joint_state_rate", loop_rate_)) {
             ROS_ERROR("Failed to get param 'joint_state_rate'");
         }
+        if (!nh_.getParam("foot_frames", foot_frames_)) {
+            ROS_ERROR("Failed to get param 'foot_frames'");
+        }
 
         // Initialize SERoW
         if (!serow_.initialize(config_file_path)) {
-            ROS_ERROR("SEROW cannot be initialized, exiting...")
+            ROS_ERROR("SEROW cannot be initialized, exiting...");
             return;
         }
         
         odom_.header.frame_id = "world";
         odom_.child_frame_id = "base_link";
-
+        
+        // Initialize keys in std::map
+        for (const auto & frame : foot_frames_){
+            ft_data_[frame];
+        }
+        
         // Create subscribers
         joint_state_subscription_ =
             nh_.subscribe(joint_state_topic, 1000, &SerowDriver::joint_state_topic_callback, this);
@@ -81,8 +89,9 @@ public:
     }
 
     void force_torque_state_topic_callback(const geometry_msgs::WrenchStamped::ConstPtr& msg) {
-        std::string_view frame_id = msg->header.frame_id;
-        ft_data_[frame_id].push(*msg);
+        std::string frame_id = msg->header.frame_id;
+        ft_data_.at(frame_id).push(*msg);
+
         if (ft_data_.at(frame_id).size() > 100) {
             ft_data_.at(frame_id).pop();
             ROS_WARN("SEROW is dropping leg F/T measurements, SEROW estimate is not real-time");
@@ -157,25 +166,26 @@ private:
                 odom_.pose.pose.orientation.z = state->getBaseOrientation().coeffs().z();
                 odom_.pose.pose.orientation.w = state->getBaseOrientation().coeffs().w();
                 // Base 3D linear velocity
-                odom_.twist.twist.linear.x = state_->getBaseLinearVelocity().x();
-                odom_.twist.twist.linear.y = state_->getBaseLinearVelocity().y();
-                odom_.twist.twist.linear.z = state_->getBaseLinearVelocity().z();
+                odom_.twist.twist.linear.x = state->getBaseLinearVelocity().x();
+                odom_.twist.twist.linear.y = state->getBaseLinearVelocity().y();
+                odom_.twist.twist.linear.z = state->getBaseLinearVelocity().z();
                 // Base 3D angular velocity
-                odom_.twist.twist.angular.x = state_->getBaseAngularVelocity().x();
-                odom_.twist.twist.angular.y = state_->getBaseAngularVelocity().y();
-                odom_.twist.twist.angular.z = state_->getBaseAngularVelocity().z();
+                odom_.twist.twist.angular.x = state->getBaseAngularVelocity().x();
+                odom_.twist.twist.angular.y = state->getBaseAngularVelocity().y();
+                odom_.twist.twist.angular.z = state->getBaseAngularVelocity().z();
                 // Base 3D pose and velocity covariance
-                const <Eigen::Matrix<double, 6, 6>& base_pose_cov = state_->getBasePoseCov();
-                const <Eigen::Matrix<double, 6, 6>& base_velocity_cov = state_->getBaseVelocityCov();
+                const Eigen::Matrix<double, 6, 6>& base_pose_cov = state->getBasePoseCov();
+                const Eigen::Matrix<double, 6, 6>& base_velocity_cov = state->getBaseVelocityCov();
                 for (size_t i = 0; i < 6; i++) {
                     for (size_t j = 0; j < 6; j++) {
                         // Row-major
                         odom_.pose.covariance[i * 6 + j] = base_pose_cov(i, j);
-                        odome_.twist.covariance[i * 6 + j] = base_velocity_cov(i, j);
+                        odom_.twist.covariance[i * 6 + j] = base_velocity_cov(i, j);
                     }
                 }
                 odom_publisher_.publish(odom_);
             }
+
             ros::spinOnce();
             loop_rate.sleep();
         }
@@ -190,6 +200,7 @@ private:
     std::queue<sensor_msgs::JointState> joint_state_data_;
     std::queue<sensor_msgs::Imu> base_imu_data_;
     std::map<std::string, std::queue<geometry_msgs::WrenchStamped>> ft_data_;
+    std::vector<std::string> foot_frames_;
     double loop_rate_{};
 
     nav_msgs::Odometry odom_;
