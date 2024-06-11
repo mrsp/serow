@@ -1,4 +1,5 @@
 joint_state_rate: 500
+foot_frames: ["leftFoot", "rightFoot"]
 joint_state_topic: "/ihmc_ros/valkyrie/output/joint_states"
 base_imu_topic: "/ihmc_ros/valkyrie/output/imu/pelvis_pelvisMiddleImu"
 config_file_path: "valk.json"
