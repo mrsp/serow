@@ -1,9 +1,9 @@
 *~
 *.swp
 *.swo
-/build/
 .vscode/
-/devel/
+/docs
+/build
 /test/build/
 /ros/devel/
 /ros/build/
