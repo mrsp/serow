@@ -39,7 +39,8 @@ bool Serow::initialize(std::string config_file) {
     }
 
     if (!config["point_feet"].is_boolean()) {
-        std::cerr << "Configuration: point_feet must be boolen \n";
+        std::cerr << "Configuration: point_feet must be boolean \n";
+
         return false;
     }
     State state(contacts_frame, config["point_feet"]);
