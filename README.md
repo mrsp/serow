@@ -5,7 +5,7 @@
 
 SEROW (State Estimation RObot Walking) facilitates legged robot state estimation. Designed as a versatile tool, SEROW offers a generalized estimation solution applicable to legged robots with N limbs, accommodating both point and flat feet configurations. Notably, the framework's codebase is openly accessible under the GNU GPLv3 License.
 
-# SERoW in Real-time
+# SEROW in Real-time
 ------------------------------------------------------------------ 
 
 | Cogimon and SEROW  | Centauro and SEROW |
@@ -32,9 +32,21 @@ Define the environment variable inside your *.bashrc* file:
 export SEROW_PATH=<path-to-serow-package>
 ```
 ## Prerequisites
-* [Eigen](https://eigen.tuxfamily.org/dox/index.html) 3.3.0 and later
+* [Eigen](https://eigen.tuxfamily.org/dox/index.html) 3.4.0 and later
 * [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 2.2.1 and later
 * [json](https://github.com/nlohmann/json/tree/master)
+* cmake 3.16.3 and later
+* gcc 9.4.0 and later
+  
+## Install
+* `mkdir build && cd build`
+* `cmake .. && make -j4`
+* `sudo make install`  
+
+## Test
+* `cd test && mkdir build && cd build`
+* `cmake .. && make -j4`
+* `./nao_test`
 
 ## Citation
 Upon usage in an academic work kindly cite: <br/>
