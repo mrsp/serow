@@ -1,11 +1,12 @@
 # Getting Started
 These instructions will get you a copy of the project up and running on your local machine for testing purposes with ROS noetic.
 
-## ROS noetic install
-* `sudo apt-get install ros-noetic-pinocchio`
-*  [json](https://github.com/nlohmann/json/tree/master)
-* `git clone https://github.com/mrsp/serow.git`
-* `catkin_make -DCMAKE_BUILD_TYPE=Release` 
+## Install
+* Install [serow](https://github.com/mrsp/serow/tree/devel?tab=readme-ov-file#getting-started)
+* Create a ROS workspace with `mkdir -p ros_ws/src`
+* `cd ros_ws/src`
+* `ln -s $SEROW_PATH/serow_ros ./serow_ros`
+* `cd .. && catkin_make -DCMAKE_BUILD_TYPE=Release` 
 
 ## Minimum Robot Requirements
 ### Using the Base Estimator to estimate: 
@@ -38,8 +39,8 @@ Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the esti
 * Download the valkyrie bag file from [valk_bagfile](http://users.ics.forth.gr/~spiperakis/valk.bag)
 * `roscore`
 * `rosbag play --pause valk.bag`
-* `roslaunch serow serow_valkyrie.launch`
-* `roslaunch serow_utils serow_utils.launch`
+* `roslaunch serow_ros serow_valk.launch`
+* `roslaunch serow_ros serow_utils.launch`
 * hit space to unpause the rosbag play
 
 ![valk](../img/valk.png)
@@ -47,14 +48,14 @@ Use the [serow_utils](https://github.com/mrsp/serow_utils) to visualize the esti
 * Download the nao bag file from [nao_bagfile](http://users.ics.forth.gr/~spiperakis/nao.bag)
 * `roscore`
 * `rosbag play --pause nao.bag`
-* `roslaunch serow serow_nao.launch`
-* `roslaunch serow_utils serow_utils.launch`
+* `roslaunch serow_ros serow_nao.launch`
+* `roslaunch serow_ros serow_utils.launch`
 * hit space to unpause the rosbag play
 
 ![nao](../img/nao.jpg)
 ### Launch on your Robot in real time
 * Specify topics on `config/estimation_params.yaml`
-* `roslaunch serow serow.launch`
+* `roslaunch serow_ros serow.launch`
 
 ## Citation
 Upon usage in an academic work kindly cite: <br/>
