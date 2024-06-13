@@ -536,6 +536,7 @@ bool Serow::initialize(std::string config_file) {
     params_.terrain_height_covariance = config["terrain_height_covariance"];
 
     // Initialize state uncertainty
+    state_.mass_ = params_.mass;
     state_.base_state_.base_position_cov = params_.initial_base_position_cov.asDiagonal();
     state_.base_state_.base_orientation_cov = params_.initial_base_orientation_cov.asDiagonal();
     state_.base_state_.base_linear_velocity_cov =

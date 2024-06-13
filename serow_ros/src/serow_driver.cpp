@@ -1,6 +1,7 @@
 #include "pinocchio/fwd.hpp" // Always first include to avoid boost related compilation errors
 #include <functional>
 #include <geometry_msgs/WrenchStamped.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <map>
 #include <nav_msgs/Odometry.h>
 #include <queue>
@@ -34,7 +35,7 @@ public:
             ROS_ERROR("Failed to get param 'joint_state_rate'");
         }
 
-        // Initialize SERoW
+        // Initialize SEROW
         if (!serow_.initialize(config_file_path)) {
             ROS_ERROR("SEROW cannot be initialized, exiting...");
             return;
@@ -42,14 +43,22 @@ public:
         
         odom_.header.frame_id = "world";
         odom_.child_frame_id = "base_link";
-    
+        com_.header.frame_id = "world";
+        com_.child_frame_id = "com";
+
         // Create subscribers
         joint_state_subscription_ =
             nh_.subscribe(joint_state_topic, 1000, &SerowDriver::joint_state_topic_callback, this);
         base_imu_subscription_ =
             nh_.subscribe(base_imu_topic, 1000, &SerowDriver::base_imu_topic_callback, this);
         odom_publisher_ =
-            nh_.advertise<nav_msgs::Odometry>("/serow/base/odometry", 1000);
+            nh_.advertise<nav_msgs::Odometry>("/serow/base/odom", 1000);
+        com_publisher_ = 
+            nh_.advertise<nav_msgs::Odometry>("/serow/com/odom", 1000);
+        momentum_publisher_ =
+            nh_.advertise<geometry_msgs::TwistStamped>("/serow/com/momentum", 1000);
+        momentum_rate_publisher_ =
+            nh_.advertise<geometry_msgs::TwistStamped>("/serow/com/momentum_rate", 1000);
 
         // Dynamically create a wrench callback one for each limb
         for (const auto& ft_topic : force_torque_state_topics) {
@@ -60,7 +69,7 @@ public:
         }
         ROS_INFO("SEROW was initialized successfully");
 
-        // Run SERoW
+        // Run SEROW
         run();
     }
 
@@ -81,7 +90,7 @@ public:
     }
 
     void force_torque_state_topic_callback(const geometry_msgs::WrenchStamped::ConstPtr& msg) {
-        std::string frame_id = msg->header.frame_id;
+        const std::string& frame_id = msg->header.frame_id;
         ft_data_[frame_id].push(*msg);
         
         if (ft_data_.at(frame_id).size() > 100) {
@@ -110,7 +119,7 @@ private:
 
                 // Create the base imu measurement
                 const auto& imu_data = base_imu_data_.front();
-                const auto base_timestamp = imu_data.header.stamp;
+                const auto timestamp = imu_data.header.stamp;
                 serow::ImuMeasurement imu_measurement{};
                 imu_measurement.timestamp =
                     static_cast<double>(imu_data.header.stamp.sec) +
@@ -147,7 +156,7 @@ private:
 
                 auto state = serow_.getState();
                 odom_.header.seq  += 1;
-                odom_.header.stamp = base_timestamp;
+                odom_.header.stamp = timestamp;
                 // Base 3D position
                 odom_.pose.pose.position.x = state->getBasePosition().x();
                 odom_.pose.pose.position.y = state->getBasePosition().y();
@@ -176,6 +185,50 @@ private:
                     }
                 }
                 odom_publisher_.publish(odom_);
+
+                com_.header.seq += 1;
+                com_.header.stamp = timestamp;
+                // CoM 3D position
+                com_.pose.pose.position.x = state->getCoMPosition().x();
+                com_.pose.pose.position.y = state->getCoMPosition().y();
+                com_.pose.pose.position.z = state->getCoMPosition().z();
+                // CoM 3D linear velocity
+                com_.twist.twist.linear.x = state->getCoMLinearVelocity().x();
+                com_.twist.twist.linear.y = state->getCoMLinearVelocity().y();
+                com_.twist.twist.linear.z = state->getCoMLinearVelocity().z();
+                // CoM 3D position and linear velocity covariance
+                const Eigen::Matrix<double, 3, 3>& com_position_cov = state->getCoMPositionCov();
+                const Eigen::Matrix<double, 3, 3>& com_linear_velocity_cov = state->getCoMLinearVelocityCov();
+                for (size_t i = 0; i < 3; i++) {
+                    for (size_t j = 0; j < 3; j++) {
+                        // Row-major
+                        com_.pose.covariance[i * 6 + j] = com_position_cov(i, j);
+                        com_.twist.covariance[i * 6 + j] = com_linear_velocity_cov(i, j);
+                    }
+                }
+                com_publisher_.publish(com_);
+
+                // 3D CoM linear and angular momentum
+                momentum_.header.seq += 1;
+                momentum_.header.stamp = timestamp;
+                momentum_.twist.linear.x = state->getMass() * state->getCoMLinearVelocity().x();
+                momentum_.twist.linear.y = state->getMass() * state->getCoMLinearVelocity().y();
+                momentum_.twist.linear.z = state->getMass() * state->getCoMLinearVelocity().z();
+                momentum_.twist.angular.x = state->getCoMAngularMomentum().x();
+                momentum_.twist.angular.y = state->getCoMAngularMomentum().x();
+                momentum_.twist.angular.z = state->getCoMAngularMomentum().z();
+                momentum_publisher_.publish(momentum_);
+
+                // 3D CoM linear and angular momentum rate
+                momentum_rate_.header.seq += 1;
+                momentum_rate_.header.stamp = timestamp;
+                momentum_rate_.twist.linear.x = state->getMass() * state->getCoMLinearAcceleration().x();
+                momentum_rate_.twist.linear.y = state->getMass() * state->getCoMLinearAcceleration().y();
+                momentum_rate_.twist.linear.z = state->getMass() * state->getCoMLinearAcceleration().z();
+                momentum_rate_.twist.angular.x = state->getCoMAngularMomentumRate().x();
+                momentum_rate_.twist.angular.y = state->getCoMAngularMomentumRate().x();
+                momentum_rate_.twist.angular.z = state->getCoMAngularMomentumRate().z();
+                momentum_rate_publisher_.publish(momentum_rate_);
             }
 
             ros::spinOnce();
@@ -187,6 +240,9 @@ private:
     ros::Subscriber joint_state_subscription_;
     ros::Subscriber base_imu_subscription_;
     ros::Publisher odom_publisher_;
+    ros::Publisher com_publisher_;
+    ros::Publisher momentum_publisher_;
+    ros::Publisher momentum_rate_publisher_;
 
     std::vector<ros::Subscriber> force_torque_state_subscriptions_;
     std::queue<sensor_msgs::JointState> joint_state_data_;
@@ -195,13 +251,16 @@ private:
     double loop_rate_{};
 
     nav_msgs::Odometry odom_;
-    
+    nav_msgs::Odometry com_;
+    geometry_msgs::TwistStamped momentum_;
+    geometry_msgs::TwistStamped momentum_rate_;
+
     serow::Serow serow_;
 };
 
 
 int main(int argc, char** argv) {
-    ros::init(argc, argv, "serow_driver");
+    ros::init(argc, argv, "serow_ros");
     ros::NodeHandle nh;
 
     SerowDriver driver(nh);
