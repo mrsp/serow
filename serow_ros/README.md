@@ -2,7 +2,7 @@
 These instructions will get you a copy of the project up and running on your local machine for testing purposes with ROS noetic.
 
 ## Install
-* Install [serow](https://github.com/mrsp/serow/tree/devel?tab=readme-ov-file#getting-started)
+* Install [SEROW](https://github.com/mrsp/serow/tree/devel?tab=readme-ov-file#getting-started)
 * Create a ROS workspace with `mkdir -p ros_ws/src`
 * `cd ros_ws/src`
 * `ln -s $SEROW_PATH/serow_ros ./serow_ros`
