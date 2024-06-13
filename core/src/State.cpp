@@ -510,6 +510,18 @@ const Eigen::Vector3d& State::getCoMExternalForces() const {
     return centroidal_state_.external_forces;
 }
 
+const Eigen::Vector3d& State::getCoMAngularMomentum() const {
+    return centroidal_state_.angular_momentum;
+}
+
+const Eigen::Vector3d& State::getCoMAngularMomentumRate() const {
+    return centroidal_state_.angular_momentum_derivative;
+}
+
+const Eigen::Vector3d& State::getCoMLinearAcceleration() const {
+    return centroidal_state_.com_linear_acceleration;
+}
+
 const Eigen::Matrix3d& State::getCoMPositionCov() const {
     return centroidal_state_.com_position_cov;
 }
@@ -523,5 +535,7 @@ const Eigen::Matrix3d& State::getCoMExternalForcesCov() const {
 }
 
 bool State::isPointFeet() const { return point_feet_; }
+
+double State::getMass() const { return mass_; }
 
 }  // namespace serow

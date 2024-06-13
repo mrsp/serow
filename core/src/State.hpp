@@ -162,6 +162,12 @@ class State {
     const Eigen::Vector3d& getCoMLinearVelocity() const;
     /// Returns the 3D CoM external forces in world frame coordinates
     const Eigen::Vector3d& getCoMExternalForces() const;
+    /// Returns the 3D angular momentum around the CoM in world frame coordinates
+    const Eigen::Vector3d& getCoMAngularMomentum() const;
+    /// Returns the 3D angular momentum rate around the CoM in world frame coordinates
+    const Eigen::Vector3d& getCoMAngularMomentumRate() const;
+    /// Returns the 3D CoM linear acceleration in world frame coordinates approximated with the base IMU
+    const Eigen::Vector3d& getCoMLinearAcceleration() const;
 
     /// State covariance getter
     /// Returns the 3D base pose as a 6 x 6 matrix in world frame coordinates
@@ -197,6 +203,8 @@ class State {
     const Eigen::Matrix3d& getCoMLinearVelocityCov() const;
     /// Returns the 3D CoM external forces covariance in world frame coordinates
     const Eigen::Matrix3d& getCoMExternalForcesCov() const;
+    /// Returns the mass of the robot
+    double getMass() const;
 
    private:
     /// Flag to indicate if the robot has point feet. False indicates flat feet contacts
@@ -207,6 +215,8 @@ class State {
     bool is_valid_{};
     /// Leg contact frames
     std::set<std::string> contacts_frame_;
+    /// Robot mass
+    double mass_{};
 
     /// Individual states
     JointState joint_state_;
