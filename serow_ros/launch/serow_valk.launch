@@ -1,4 +1,0 @@
-<launch>
-    <rosparam file="$(find serow_ros)/config/valk_config.yaml" command="load" />
-    <node name="serow_driver" pkg="serow_ros" type="serow_driver" output="screen" />
-</launch>
