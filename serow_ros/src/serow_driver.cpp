@@ -67,6 +67,19 @@ public:
             force_torque_state_subscriptions_.push_back(
                 nh_.subscribe<geometry_msgs::WrenchStamped>(ft_topic, 1000, ft_callback));
         }
+        
+        auto state = serow_.getState(true);
+        for (const auto& frame: state->getContactsFrame()) {
+            nav_msgs::Odometry msg;
+            msg.header.frame_id = "world";
+            msg.child_frame_id = frame;
+            feet_.push_back(std::move(msg));
+            std::string topic = "/serow/" + frame + "/odom";
+            std::transform(topic.begin(), topic.end(), topic.begin(), ::tolower);
+            ros::Publisher pub = nh_.advertise<nav_msgs::Odometry>(topic, 1000);
+            feet_publisher_.push_back(std::move(pub));
+        }
+
         ROS_INFO("SEROW was initialized successfully");
 
         // Run SEROW
@@ -229,6 +242,31 @@ private:
                 momentum_rate_.twist.angular.y = state->getCoMAngularMomentumRate().x();
                 momentum_rate_.twist.angular.z = state->getCoMAngularMomentumRate().z();
                 momentum_rate_publisher_.publish(momentum_rate_);
+            
+                size_t i = 0;
+                for (auto& foot: feet_) {
+                    foot.header.seq += 1;
+                    foot.header.stamp = timestamp;
+                    // Foot 3D position
+                    foot.pose.pose.position.x = state->getFootPosition(foot.child_frame_id).x();
+                    foot.pose.pose.position.y = state->getFootPosition(foot.child_frame_id).y();
+                    foot.pose.pose.position.z = state->getFootPosition(foot.child_frame_id).z();
+                    // Foot 3D orientation
+                    foot.pose.pose.orientation.x = state->getFootOrientation(foot.child_frame_id).coeffs().x();
+                    foot.pose.pose.orientation.y = state->getFootOrientation(foot.child_frame_id).coeffs().y();
+                    foot.pose.pose.orientation.z = state->getFootOrientation(foot.child_frame_id).coeffs().z();
+                    foot.pose.pose.orientation.w = state->getFootOrientation(foot.child_frame_id).coeffs().w();
+                    // Foot 3D linear velocity
+                    foot.twist.twist.linear.x = state->getFootLinearVelocity(foot.child_frame_id).x();
+                    foot.twist.twist.linear.y = state->getFootLinearVelocity(foot.child_frame_id).y();
+                    foot.twist.twist.linear.z = state->getFootLinearVelocity(foot.child_frame_id).z();
+                    // Foot 3D angular velocity
+                    foot.twist.twist.angular.x = state->getFootAngularVelocity(foot.child_frame_id).x();
+                    foot.twist.twist.angular.y = state->getFootAngularVelocity(foot.child_frame_id).y();
+                    foot.twist.twist.angular.z = state->getFootAngularVelocity(foot.child_frame_id).z();
+                    feet_publisher_[i].publish(foot);
+                    i++;
+                }   
             }
 
             ros::spinOnce();
@@ -243,6 +281,7 @@ private:
     ros::Publisher com_publisher_;
     ros::Publisher momentum_publisher_;
     ros::Publisher momentum_rate_publisher_;
+    std::vector<ros::Publisher> feet_publisher_;
 
     std::vector<ros::Subscriber> force_torque_state_subscriptions_;
     std::queue<sensor_msgs::JointState> joint_state_data_;
@@ -252,6 +291,7 @@ private:
 
     nav_msgs::Odometry odom_;
     nav_msgs::Odometry com_;
+    std::vector<nav_msgs::Odometry> feet_;
     geometry_msgs::TwistStamped momentum_;
     geometry_msgs::TwistStamped momentum_rate_;
 
