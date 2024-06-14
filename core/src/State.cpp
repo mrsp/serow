@@ -420,6 +420,23 @@ std::optional<bool> State::getContactStatus(const std::string& frame_name) const
         return std::nullopt;
 }
 
+const Eigen::Vector3d& State::getFootPosition(const std::string& frame_name) const {
+    return base_state_.feet_position.at(frame_name);
+}
+
+const Eigen::Quaterniond& State::getFootOrientation(const std::string& frame_name) const {
+    return base_state_.feet_orientation.at(frame_name);
+}
+
+const Eigen::Vector3d& State::getFootLinearVelocity(const std::string& frame_name) const {
+    return base_state_.feet_linear_velocity.at(frame_name);
+}
+
+const Eigen::Vector3d& State::getFootAngularVelocity(const std::string& frame_name) const {
+    return base_state_.feet_angular_velocity.at(frame_name);
+}
+
+
 Eigen::Matrix<double, 6, 6> State::getBasePoseCov() const {
     Eigen::Matrix<double, 6, 6> base_pose_cov = Eigen::Matrix<double, 6, 6>::Identity();
     base_pose_cov.block<3, 3>(0, 0) = base_state_.base_position_cov;

@@ -49,6 +49,14 @@ struct BaseState {
     /// Holds contact frame name to 3D contact orientation in world frame coordinates, only applies
     /// if the robot has flat feet
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation;
+    /// Holds contact frame name to 3D foot position in world frame coordinates
+    std::map<std::string, Eigen::Vector3d> feet_position;
+    /// Holds contact frame name to 3D foot orientation in world frame coordinates
+    std::map<std::string, Eigen::Quaterniond> feet_orientation;
+    /// Holds contact frame name to 3D foot linear velocity in world frame coordinates
+    std::map<std::string, Eigen::Vector3d> feet_linear_velocity;
+    /// Holds contact frame name to 3D foot angular velocity in world frame coordinates
+    std::map<std::string, Eigen::Vector3d> feet_angular_velocity;
 
     /// Base position covariance in world frame coordinates
     Eigen::Matrix3d base_position_cov{Eigen::Matrix3d::Zero()};
@@ -155,6 +163,14 @@ class State {
     /// Returns the contact frame binary contact status if the frame is in contact. Only applies if
     /// the robot has flat feet
     std::optional<bool> getContactStatus(const std::string& frame_name) const;
+    /// Returns the foot frame 3D position in world frame coordinates
+    const Eigen::Vector3d& getFootPosition(const std::string& frame_name) const;
+    /// Returns the foot frame 3D orientation in world frame coordinates 
+    const Eigen::Quaterniond& getFootOrientation(const std::string& frame_name) const;
+    /// Returns the foot frame 3D linear velocity in world frame coordinates
+    const Eigen::Vector3d& getFootLinearVelocity(const std::string& frame_name) const;
+    /// Returns the foot frame 3D angular velocity in world frame coordinates 
+    const Eigen::Vector3d& getFootAngularVelocity(const std::string& frame_name) const;
 
     /// Returns the 3D CoM position in world frame coordinates
     const Eigen::Vector3d& getCoMPosition() const;
