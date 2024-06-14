@@ -820,23 +820,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     state.base_state_.timestamp = kin.timestamp;
     state.base_state_ = base_estimator_.update(state.base_state_, kin, odom, terrain_);
 
-    // Update the feet pose/velocity
-    for (const auto& frame : state.getContactsFrame()) {
-        const Eigen::Isometry3d base_pose = state.getBasePose();
-        state.base_state_.feet_position[frame] =
-            base_pose * base_to_foot_positions.at(frame);
-        state.base_state_.feet_orientation[frame] = Eigen::Quaterniond(
-            base_pose.linear() * base_to_foot_orientations.at(frame).toRotationMatrix());
-        state.base_state_.feet_linear_velocity[frame] =
-            state.base_state_.base_linear_velocity +
-            state.base_state_.base_angular_velocity.cross(base_pose.linear() *
-                                                          base_to_foot_positions.at(frame)) +
-            base_pose.linear() * base_to_foot_linear_velocities.at(frame);
-        state.base_state_.feet_angular_velocity[frame] =
-            state.base_state_.base_angular_velocity +
-            base_pose.linear() * base_to_foot_angular_velocities.at(frame);
-    }
-
     // Estimate the angular acceleration using the gyro velocity
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>();
@@ -873,6 +856,24 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     state.centroidal_state_.angular_momentum = state.getBasePose().linear() * com_angular_momentum;
     state.centroidal_state_.angular_momentum_derivative = kin.com_angular_momentum_derivative;
     state.centroidal_state_.com_linear_acceleration = kin.com_linear_acceleration;
+    
+    // Update the feet pose/velocity
+    for (const auto& frame : state.getContactsFrame()) {
+        const Eigen::Isometry3d base_pose = state.getBasePose();
+        state.base_state_.feet_position[frame] =
+            base_pose * base_to_foot_positions.at(frame);
+        state.base_state_.feet_orientation[frame] = Eigen::Quaterniond(
+            base_pose.linear() * base_to_foot_orientations.at(frame).toRotationMatrix());
+        state.base_state_.feet_linear_velocity[frame] =
+            state.base_state_.base_linear_velocity +
+            state.base_state_.base_angular_velocity.cross(base_pose.linear() *
+                                                          base_to_foot_positions.at(frame)) +
+            base_pose.linear() * base_to_foot_linear_velocities.at(frame);
+        state.base_state_.feet_angular_velocity[frame] =
+            state.base_state_.base_angular_velocity +
+            base_pose.linear() * base_to_foot_angular_velocities.at(frame);
+    }
+
     if (ft.has_value()) {
         kin.com_position_process_cov = params_.com_position_process_cov.asDiagonal();
         kin.com_linear_velocity_process_cov = params_.com_linear_velocity_process_cov.asDiagonal();
