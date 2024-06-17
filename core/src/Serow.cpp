@@ -19,7 +19,23 @@ using json = nlohmann::json;
 
 namespace serow {
 
-bool Serow::initialize(std::string config_file) {
+
+std::string findFilepath(const std::string& filename) {
+    if (std::getenv("SEROW_PATH") == nullptr) {
+        throw std::runtime_error("Environmental variable SEROW_PATH is not set.");
+        return "";
+    }
+
+    std::string_view serow_path_env = std::getenv("SEROW_PATH");
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(serow_path_env)) {
+        if (std::filesystem::is_regular_file(entry) && entry.path().filename() == filename) {
+            return entry.path().string();
+        }
+    }
+    throw std::runtime_error("File '" + filename + "' not found.");
+}
+
+bool Serow::initialize(const std::string& config_file) {
     auto config = json::parse(std::ifstream(findFilepath(config_file)));
 
     // Initialize the state
@@ -924,19 +940,5 @@ std::optional<State> Serow::getState(bool allow_invalid) {
     }
 }
 
-std::string Serow::findFilepath(const std::string& filename) {
-    if (std::getenv("SEROW_PATH") == nullptr) {
-        throw std::runtime_error("Environmental variable SEROW_PATH is not set.");
-        return "";
-    }
-
-    std::string_view serow_path_env = std::getenv("SEROW_PATH");
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(serow_path_env)) {
-        if (std::filesystem::is_regular_file(entry) && entry.path().filename() == filename) {
-            return entry.path().string();
-        }
-    }
-    throw std::runtime_error("File '" + filename + "' not found.");
-}
 
 }  // namespace serow

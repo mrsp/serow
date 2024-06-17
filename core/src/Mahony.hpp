@@ -35,48 +35,48 @@ class Mahony {
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    /** @fn  Mahony(double sampleFreq, double Kp, double Ki = 0.0f)
+    /** @fn  Mahony(double freq, double kp, double ki = 0.0)
      *  @brief Initializes parameters and sets the sampling frequency and gains of the algorithm
-     *  @param sampleFreq sampling frequency
-     *  @param Kp Proportional gain
-     *  @param Ki Integral gain
+     *  @param freq sampling frequency
+     *  @param kp Proportional gain
+     *  @param ki Integral gain
      */
-    Mahony(double freq, double Kp, double Ki = 0.0) {
+    Mahony(double freq, double kp, double ki = 0.0) {
         freq_ = freq;
-        twoKp_ = 2.0 * Kp;
-        twoKi_ = 2.0 * Ki;
+        twoKp_ = 2.0 * kp;
+        twoKi_ = 2.0 * ki;
         integralFBx_ = 0.0;
         integralFBy_ = 0.0;
         integralFBz_ = 0.0;
     }
 
     /** @fn Eigen::Quaterniond getQ()
-     *  @returns the orientation of IMU  w.r.t the world frame as a quaternion
+     *  @returns the orientation of IMU w.r.t the world frame as a quaternion
      */
     Eigen::Quaterniond getQ() const { return q_; }
+    
     /** @fn  Eigen::Vector3d getAcc()
-     *  @returns the linear acceleration of IMU  in the world frame
+     *  @returns the linear acceleration of IMU in the world frame
      */
-
     Eigen::Vector3d getAcc() const { return acc_; }
+    
     /** @fn  Eigen::Vector3d getGyro()
-     *  @returns the angular velocity  of IMU  in the world frame
+     *  @returns the angular velocity of IMU in the world frame
      */
-
     Eigen::Vector3d getGyro() const { return gyro_; }
+    
     /** @fn Eigen::Matrix3d getR()
-     *  @returns the orientation of IMU  w.r.t the world frame as a rotation matrix
+     *  @returns the orientation of IMU w.r.t the world frame as a rotation matrix
      */
-
     Eigen::Matrix3d getR() const { return R_; }
 
     /** @fn Eigen::Matrix3d getEuler()
-     *  @returns the orientation of IMU  w.r.t the world frame as  euler angles in the RPY
+     *  @returns the orientation of IMU w.r.t the world frame as  euler angles in the RPY
      * convention
      */
     Eigen::Vector3d getEuler() const { return q_.toRotationMatrix().eulerAngles(0, 1, 2); }
 
-    /** @fn filter(Eigen::Vector3d gyro_, Eigen::Vector3d acc_)
+    /** @fn filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc)
      *  @brief Computes the IMU orientation w.r.t the world frame of reference
      *  @param gyro_ angular velocity as measured by the IMU
      *  @param acc_ linea acceleration as measured by the IMU
@@ -95,9 +95,9 @@ class Mahony {
         ay = acc(1);
         az = acc(2);
         // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer
-        // normalisation)
+        // normalization)
         if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
-            // Normalise accelerometer measurement
+            // Normalize accelerometer measurement
             recipNorm = 1.0 / std::sqrt(ax * ax + ay * ay + az * az);
             ax *= recipNorm;
             ay *= recipNorm;
@@ -148,7 +148,7 @@ class Mahony {
         q2_ += (qa * gy - qb * gz + q3_ * gx);
         q3_ += (qa * gz + qb * gy - qc * gx);
 
-        // Normalise quaternion
+        // Normalize quaternion
         recipNorm = 1.0 / sqrt(q0_ * q0_ + q1_ * q1_ + q2_ * q2_ + q3_ * q3_);
         q0_ *= recipNorm;
         q1_ *= recipNorm;

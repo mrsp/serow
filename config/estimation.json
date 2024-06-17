@@ -138,7 +138,7 @@
   "contact_orientation_covariance": [1e-3, 1e-3, 1e-3],
   // array: leg end-effector contact position slip uncertainty (m^2)
   "contact_position_slip_covariance": [1e-4, 1e-4, 1e-4],
-  // array: leg end-effector contact orientation slip uncertainty (m^2)
+  // array: leg end-effector contact orientation slip uncertainty (rad^2)
   "contact_orientation_slip_covariance": [1e-3, 1e-3, 1e-3],
   // array: initial uncertainty for the base position (m^2)
   "initial_base_position_covariance": [1.0, 1.0, 1.0],
