@@ -551,6 +551,10 @@ const Eigen::Matrix3d& State::getCoMExternalForcesCov() const {
     return centroidal_state_.external_forces_cov;
 }
 
+const Eigen::Vector3d& State::getCOPPosition() const {
+    return centroidal_state_.cop_position;
+}
+
 bool State::isPointFeet() const { return point_feet_; }
 
 double State::getMass() const { return mass_; }

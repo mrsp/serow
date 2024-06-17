@@ -184,6 +184,8 @@ class State {
     const Eigen::Vector3d& getCoMAngularMomentumRate() const;
     /// Returns the 3D CoM linear acceleration in world frame coordinates approximated with the base IMU
     const Eigen::Vector3d& getCoMLinearAcceleration() const;
+    /// Returns the 3D COP position in world frame coordinates
+    const Eigen::Vector3d& getCOPPosition() const;
 
     /// State covariance getter
     /// Returns the 3D base pose as a 6 x 6 matrix in world frame coordinates

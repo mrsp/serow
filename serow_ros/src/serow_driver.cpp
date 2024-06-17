@@ -45,6 +45,8 @@ public:
         odom_.child_frame_id = "base_link";
         com_.header.frame_id = "world";
         com_.child_frame_id = "com";
+        cop_.header.frame_id = "world";
+        cop_.child_frame_id = "cop";
 
         // Create subscribers
         joint_state_subscription_ =
@@ -59,6 +61,8 @@ public:
             nh_.advertise<geometry_msgs::TwistStamped>("/serow/com/momentum", 1000);
         momentum_rate_publisher_ =
             nh_.advertise<geometry_msgs::TwistStamped>("/serow/com/momentum_rate", 1000);
+        cop_publisher_ = 
+            nh_.advertise<nav_msgs::Odometry>("/serow/cop/odom", 1000);
 
         // Dynamically create a wrench callback one for each limb
         for (const auto& ft_topic : force_torque_state_topics) {
@@ -168,105 +172,132 @@ private:
                                                        : std::nullopt);
 
                 auto state = serow_.getState();
-                odom_.header.seq  += 1;
-                odom_.header.stamp = timestamp;
-                // Base 3D position
-                odom_.pose.pose.position.x = state->getBasePosition().x();
-                odom_.pose.pose.position.y = state->getBasePosition().y();
-                odom_.pose.pose.position.z = state->getBasePosition().z();
-                // Base 3D orientation
-                odom_.pose.pose.orientation.x = state->getBaseOrientation().coeffs().x();
-                odom_.pose.pose.orientation.y = state->getBaseOrientation().coeffs().y();
-                odom_.pose.pose.orientation.z = state->getBaseOrientation().coeffs().z();
-                odom_.pose.pose.orientation.w = state->getBaseOrientation().coeffs().w();
-                // Base 3D linear velocity
-                odom_.twist.twist.linear.x = state->getBaseLinearVelocity().x();
-                odom_.twist.twist.linear.y = state->getBaseLinearVelocity().y();
-                odom_.twist.twist.linear.z = state->getBaseLinearVelocity().z();
-                // Base 3D angular velocity
-                odom_.twist.twist.angular.x = state->getBaseAngularVelocity().x();
-                odom_.twist.twist.angular.y = state->getBaseAngularVelocity().y();
-                odom_.twist.twist.angular.z = state->getBaseAngularVelocity().z();
-                // Base 3D pose and velocity covariance
-                const Eigen::Matrix<double, 6, 6>& base_pose_cov = state->getBasePoseCov();
-                const Eigen::Matrix<double, 6, 6>& base_velocity_cov = state->getBaseVelocityCov();
-                for (size_t i = 0; i < 6; i++) {
-                    for (size_t j = 0; j < 6; j++) {
-                        // Row-major
-                        odom_.pose.covariance[i * 6 + j] = base_pose_cov(i, j);
-                        odom_.twist.covariance[i * 6 + j] = base_velocity_cov(i, j);
+                if (state) {
+                    odom_.header.seq += 1;
+                    odom_.header.stamp = timestamp;
+                    // Base 3D position
+                    odom_.pose.pose.position.x = state->getBasePosition().x();
+                    odom_.pose.pose.position.y = state->getBasePosition().y();
+                    odom_.pose.pose.position.z = state->getBasePosition().z();
+                    // Base 3D orientation
+                    odom_.pose.pose.orientation.x = state->getBaseOrientation().coeffs().x();
+                    odom_.pose.pose.orientation.y = state->getBaseOrientation().coeffs().y();
+                    odom_.pose.pose.orientation.z = state->getBaseOrientation().coeffs().z();
+                    odom_.pose.pose.orientation.w = state->getBaseOrientation().coeffs().w();
+                    // Base 3D linear velocity
+                    odom_.twist.twist.linear.x = state->getBaseLinearVelocity().x();
+                    odom_.twist.twist.linear.y = state->getBaseLinearVelocity().y();
+                    odom_.twist.twist.linear.z = state->getBaseLinearVelocity().z();
+                    // Base 3D angular velocity
+                    odom_.twist.twist.angular.x = state->getBaseAngularVelocity().x();
+                    odom_.twist.twist.angular.y = state->getBaseAngularVelocity().y();
+                    odom_.twist.twist.angular.z = state->getBaseAngularVelocity().z();
+                    // Base 3D pose and velocity covariance
+                    const Eigen::Matrix<double, 6, 6>& base_pose_cov = state->getBasePoseCov();
+                    const Eigen::Matrix<double, 6, 6>& base_velocity_cov =
+                        state->getBaseVelocityCov();
+                    for (size_t i = 0; i < 6; i++) {
+                        for (size_t j = 0; j < 6; j++) {
+                            // Row-major
+                            odom_.pose.covariance[i * 6 + j] = base_pose_cov(i, j);
+                            odom_.twist.covariance[i * 6 + j] = base_velocity_cov(i, j);
+                        }
                     }
-                }
-                odom_publisher_.publish(odom_);
+                    odom_publisher_.publish(odom_);
 
-                com_.header.seq += 1;
-                com_.header.stamp = timestamp;
-                // CoM 3D position
-                com_.pose.pose.position.x = state->getCoMPosition().x();
-                com_.pose.pose.position.y = state->getCoMPosition().y();
-                com_.pose.pose.position.z = state->getCoMPosition().z();
-                // CoM 3D linear velocity
-                com_.twist.twist.linear.x = state->getCoMLinearVelocity().x();
-                com_.twist.twist.linear.y = state->getCoMLinearVelocity().y();
-                com_.twist.twist.linear.z = state->getCoMLinearVelocity().z();
-                // CoM 3D position and linear velocity covariance
-                const Eigen::Matrix<double, 3, 3>& com_position_cov = state->getCoMPositionCov();
-                const Eigen::Matrix<double, 3, 3>& com_linear_velocity_cov = state->getCoMLinearVelocityCov();
-                for (size_t i = 0; i < 3; i++) {
-                    for (size_t j = 0; j < 3; j++) {
-                        // Row-major
-                        com_.pose.covariance[i * 6 + j] = com_position_cov(i, j);
-                        com_.twist.covariance[i * 6 + j] = com_linear_velocity_cov(i, j);
+                    com_.header.seq += 1;
+                    com_.header.stamp = timestamp;
+                    // CoM 3D position
+                    com_.pose.pose.position.x = state->getCoMPosition().x();
+                    com_.pose.pose.position.y = state->getCoMPosition().y();
+                    com_.pose.pose.position.z = state->getCoMPosition().z();
+                    // CoM 3D linear velocity
+                    com_.twist.twist.linear.x = state->getCoMLinearVelocity().x();
+                    com_.twist.twist.linear.y = state->getCoMLinearVelocity().y();
+                    com_.twist.twist.linear.z = state->getCoMLinearVelocity().z();
+                    // CoM 3D position and linear velocity covariance
+                    const Eigen::Matrix<double, 3, 3>& com_position_cov =
+                        state->getCoMPositionCov();
+                    const Eigen::Matrix<double, 3, 3>& com_linear_velocity_cov =
+                        state->getCoMLinearVelocityCov();
+                    for (size_t i = 0; i < 3; i++) {
+                        for (size_t j = 0; j < 3; j++) {
+                            // Row-major
+                            com_.pose.covariance[i * 6 + j] = com_position_cov(i, j);
+                            com_.twist.covariance[i * 6 + j] = com_linear_velocity_cov(i, j);
+                        }
                     }
+                    com_publisher_.publish(com_);
+
+                    // 3D CoM linear and angular momentum
+                    momentum_.header.seq += 1;
+                    momentum_.header.stamp = timestamp;
+                    momentum_.twist.linear.x = state->getMass() * state->getCoMLinearVelocity().x();
+                    momentum_.twist.linear.y = state->getMass() * state->getCoMLinearVelocity().y();
+                    momentum_.twist.linear.z = state->getMass() * state->getCoMLinearVelocity().z();
+                    momentum_.twist.angular.x = state->getCoMAngularMomentum().x();
+                    momentum_.twist.angular.y = state->getCoMAngularMomentum().x();
+                    momentum_.twist.angular.z = state->getCoMAngularMomentum().z();
+                    momentum_publisher_.publish(momentum_);
+
+                    // 3D CoM linear and angular momentum rate
+                    momentum_rate_.header.seq += 1;
+                    momentum_rate_.header.stamp = timestamp;
+                    momentum_rate_.twist.linear.x =
+                        state->getMass() * state->getCoMLinearAcceleration().x();
+                    momentum_rate_.twist.linear.y =
+                        state->getMass() * state->getCoMLinearAcceleration().y();
+                    momentum_rate_.twist.linear.z =
+                        state->getMass() * state->getCoMLinearAcceleration().z();
+                    momentum_rate_.twist.angular.x = state->getCoMAngularMomentumRate().x();
+                    momentum_rate_.twist.angular.y = state->getCoMAngularMomentumRate().x();
+                    momentum_rate_.twist.angular.z = state->getCoMAngularMomentumRate().z();
+                    momentum_rate_publisher_.publish(momentum_rate_);
+
+                    size_t i = 0;
+                    for (auto& foot : feet_) {
+                        foot.header.seq += 1;
+                        foot.header.stamp = timestamp;
+                        // Foot 3D position
+                        foot.pose.pose.position.x = state->getFootPosition(foot.child_frame_id).x();
+                        foot.pose.pose.position.y = state->getFootPosition(foot.child_frame_id).y();
+                        foot.pose.pose.position.z = state->getFootPosition(foot.child_frame_id).z();
+                        // Foot 3D orientation
+                        foot.pose.pose.orientation.x =
+                            state->getFootOrientation(foot.child_frame_id).coeffs().x();
+                        foot.pose.pose.orientation.y =
+                            state->getFootOrientation(foot.child_frame_id).coeffs().y();
+                        foot.pose.pose.orientation.z =
+                            state->getFootOrientation(foot.child_frame_id).coeffs().z();
+                        foot.pose.pose.orientation.w =
+                            state->getFootOrientation(foot.child_frame_id).coeffs().w();
+                        // Foot 3D linear velocity
+                        foot.twist.twist.linear.x =
+                            state->getFootLinearVelocity(foot.child_frame_id).x();
+                        foot.twist.twist.linear.y =
+                            state->getFootLinearVelocity(foot.child_frame_id).y();
+                        foot.twist.twist.linear.z =
+                            state->getFootLinearVelocity(foot.child_frame_id).z();
+                        // Foot 3D angular velocity
+                        foot.twist.twist.angular.x =
+                            state->getFootAngularVelocity(foot.child_frame_id).x();
+                        foot.twist.twist.angular.y =
+                            state->getFootAngularVelocity(foot.child_frame_id).y();
+                        foot.twist.twist.angular.z =
+                            state->getFootAngularVelocity(foot.child_frame_id).z();
+                        feet_publisher_[i].publish(foot);
+                        i++;
+                    }
+
+                    
+                    cop_.header.seq += 1;
+                    cop_.header.stamp = timestamp;
+                    // COP 3D position
+                    cop_.pose.pose.position.x = state->getCOPPosition().x();
+                    cop_.pose.pose.position.y = state->getCOPPosition().y();
+                    cop_.pose.pose.position.z = state->getCOPPosition().z();
+                    cop_publisher_.publish(cop_);
                 }
-                com_publisher_.publish(com_);
-
-                // 3D CoM linear and angular momentum
-                momentum_.header.seq += 1;
-                momentum_.header.stamp = timestamp;
-                momentum_.twist.linear.x = state->getMass() * state->getCoMLinearVelocity().x();
-                momentum_.twist.linear.y = state->getMass() * state->getCoMLinearVelocity().y();
-                momentum_.twist.linear.z = state->getMass() * state->getCoMLinearVelocity().z();
-                momentum_.twist.angular.x = state->getCoMAngularMomentum().x();
-                momentum_.twist.angular.y = state->getCoMAngularMomentum().x();
-                momentum_.twist.angular.z = state->getCoMAngularMomentum().z();
-                momentum_publisher_.publish(momentum_);
-
-                // 3D CoM linear and angular momentum rate
-                momentum_rate_.header.seq += 1;
-                momentum_rate_.header.stamp = timestamp;
-                momentum_rate_.twist.linear.x = state->getMass() * state->getCoMLinearAcceleration().x();
-                momentum_rate_.twist.linear.y = state->getMass() * state->getCoMLinearAcceleration().y();
-                momentum_rate_.twist.linear.z = state->getMass() * state->getCoMLinearAcceleration().z();
-                momentum_rate_.twist.angular.x = state->getCoMAngularMomentumRate().x();
-                momentum_rate_.twist.angular.y = state->getCoMAngularMomentumRate().x();
-                momentum_rate_.twist.angular.z = state->getCoMAngularMomentumRate().z();
-                momentum_rate_publisher_.publish(momentum_rate_);
-            
-                size_t i = 0;
-                for (auto& foot: feet_) {
-                    foot.header.seq += 1;
-                    foot.header.stamp = timestamp;
-                    // Foot 3D position
-                    foot.pose.pose.position.x = state->getFootPosition(foot.child_frame_id).x();
-                    foot.pose.pose.position.y = state->getFootPosition(foot.child_frame_id).y();
-                    foot.pose.pose.position.z = state->getFootPosition(foot.child_frame_id).z();
-                    // Foot 3D orientation
-                    foot.pose.pose.orientation.x = state->getFootOrientation(foot.child_frame_id).coeffs().x();
-                    foot.pose.pose.orientation.y = state->getFootOrientation(foot.child_frame_id).coeffs().y();
-                    foot.pose.pose.orientation.z = state->getFootOrientation(foot.child_frame_id).coeffs().z();
-                    foot.pose.pose.orientation.w = state->getFootOrientation(foot.child_frame_id).coeffs().w();
-                    // Foot 3D linear velocity
-                    foot.twist.twist.linear.x = state->getFootLinearVelocity(foot.child_frame_id).x();
-                    foot.twist.twist.linear.y = state->getFootLinearVelocity(foot.child_frame_id).y();
-                    foot.twist.twist.linear.z = state->getFootLinearVelocity(foot.child_frame_id).z();
-                    // Foot 3D angular velocity
-                    foot.twist.twist.angular.x = state->getFootAngularVelocity(foot.child_frame_id).x();
-                    foot.twist.twist.angular.y = state->getFootAngularVelocity(foot.child_frame_id).y();
-                    foot.twist.twist.angular.z = state->getFootAngularVelocity(foot.child_frame_id).z();
-                    feet_publisher_[i].publish(foot);
-                    i++;
-                }   
             }
 
             ros::spinOnce();
@@ -279,6 +310,7 @@ private:
     ros::Subscriber base_imu_subscription_;
     ros::Publisher odom_publisher_;
     ros::Publisher com_publisher_;
+    ros::Publisher cop_publisher_;
     ros::Publisher momentum_publisher_;
     ros::Publisher momentum_rate_publisher_;
     std::vector<ros::Publisher> feet_publisher_;
@@ -291,6 +323,7 @@ private:
 
     nav_msgs::Odometry odom_;
     nav_msgs::Odometry com_;
+    nav_msgs::Odometry cop_;
     std::vector<nav_msgs::Odometry> feet_;
     geometry_msgs::TwistStamped momentum_;
     geometry_msgs::TwistStamped momentum_rate_;
