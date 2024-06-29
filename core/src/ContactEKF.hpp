@@ -11,17 +11,17 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 /**
- * @brief Base Estimator combining Inertial Measurement Unit (IMU), relative to the base leg contact
+ * @brief Base Estimator fusing Inertial Measurement Unit (IMU), relative to the base leg contact
  * measurements and an external odometry e.g Visual Odometry (VO) or Lidar Odometry (LO)
  * @author Stylianos Piperakis
  * @details State is:
- * Base position in world frame
- * Base linear velocity in base frame
- * Base orientation w.r.t the world frame
- * Gyro bias in base frame
- * Accelerometer bias in base frame
- * Leg contact position in world frame
- * Leg contact orientation in world frame
+ * Base position in world frame coordinates
+ * Base linear velocity in base frame coordinates
+ * Base orientation w.r.t the world frame coordinates
+ * Gyro bias in base frame coordinates
+ * Accelerometer bias in base frame coordinates
+ * Leg contact position in world frame coordinates
+ * Leg contact orientation in world frame coordinates
  * More info in Nonlinear State Estimation for Humanoid Robot Walking
  * https://www.researchgate.net/publication/326194869_Nonlinear_State_Estimation_for_Humanoid_Robot_Walking
  */
@@ -35,8 +35,8 @@
 namespace serow {
 
 struct OutlierDetector {
-    // Beta distribution parameters more info in Outlier-Robust State Estimation for Humanoid Robots
-    // https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
+    /// Beta distribution parameters more info in Outlier-Robust State Estimation for Humanoid Robots
+    /// https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
     double zeta = 1.0;
     double f_0 = 0.1;
     double e_0 = 0.9;
@@ -45,13 +45,13 @@ struct OutlierDetector {
     double threshold = 1e-5;
     size_t iters = 4;
 
-    // Digamma function approximation
+    /// Digamma function approximation
     double computePsi(double xxx);
 
-    // Initializes the estimation
+    /// Initializes the estimation
     void init();
 
-    // Compute the outlier indicator zeta
+    /// Compute the outlier indicator zeta
     void estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix3d& R);
 };
 

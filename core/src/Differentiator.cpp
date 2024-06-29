@@ -16,7 +16,7 @@
 
 namespace serow {
 
-void Differentiator::init(std::string name, double dt, bool verbose) {
+void Differentiator::init(const std::string& name, double dt, bool verbose) {
     dt_ = dt;
     name_ = name;
 

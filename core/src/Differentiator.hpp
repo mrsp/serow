@@ -23,35 +23,35 @@ namespace serow {
 
 class Differentiator {
    public:
-    /** @fn void setParams(double dt)
-     *  @brief differentiates the measurement with finite differences
-     *  @param dt Sampling time in seconds e.g. 0.01s
-     */
+    /// @brief sets the filter's sampling time
+    /// @param dt sampling time (s)
     void setParams(double dt) { dt_ = dt; }
-    /** @fn void filter(double x)
-     *  @brief differentiates the measurement with finite differences
-     *  @param x signal to be differentiatied
-     */
+
+    /// @brief Differentiates the measurement with finite differences
+    /// @param x measurement to be differentiated
+    /// @return The measurement's derivative
     double filter(double x);
 
-    /** @fn void init(std::string name, double dt);
-     *  @brief initializes the numerical differentiator
-     *  @param name name of the signal e.g LHipYawPitch
-     *  @param dt Sampling time in seconds e.g. 0.01s
-     */
-    void init(std::string name, double dt, bool verbose = true);
+    /// @brief Initializes the numerical differentiator
+    /// @param name name of the filter e.g "LHipYawPitch"
+    /// @param dt sampling time (s)
+    /// @param verbose whether or not to print debug messages
+    void init(const std::string& name, double dt, bool verbose = true);
 
-    /** @fn void reset();
-     *  @brief  resets the the numerical differentiator's state
-     */
+    /// @brief Resets the filter
+    /// @param verbose whether or not to print debug messages
     void reset(bool verbose = true);
 
    private:
+    /// previous measurement
     double x_prev_{};
+    /// estimated derivative
     double xdot_{};
+    /// sampling time (s)
     double dt_{};
-    bool firstrun_{true};
+    /// name of the filter e.g "LHipYawPitch"
     std::string name_{};
+    bool firstrun_{true};
 };
 
 }  // namespace serow
