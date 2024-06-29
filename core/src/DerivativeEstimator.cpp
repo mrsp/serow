@@ -16,7 +16,7 @@
 
 namespace serow {
 
-void DerivativeEstimator::init(std::string joint_name, double f_sampling, double f_cutoff,
+void DerivativeEstimator::init(const std::string& joint_name, double f_sampling, double f_cutoff,
                                bool verbose) {
     name_ = joint_name;
     for (size_t i = 0; i < 3; i++) {

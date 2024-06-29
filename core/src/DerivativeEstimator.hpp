@@ -11,8 +11,8 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 /**
- * @brief Signal derivative estimation with numerical differentiation and
- * 2nd order Low Pass Butterworth Filter
+ * @brief 3D Signal derivative estimation with numerical differentiation and 2nd order Low Pass
+ * Butterworth Filter
  * @author Stylianos Piperakis
  * @details estimates the measurement's 3D derivative
  */
@@ -31,32 +31,30 @@ namespace serow {
 
 class DerivativeEstimator {
    private:
-    /// 2nd order butterworth filter to smooth the 3D derivative
+    /// 2nd order butterworth filter to smooth the 3D signal
     ButterworthLPF bw_[3];
     /// linear differentiator filter to compute the 3D derivative
     Differentiator df_[3];
 
    public:
+    /// name of the estimator e.g. "com-angular-momentum"
     std::string name_{};
 
-    /** @fn Eigen::Vector3d filter(Eigen::Vector3d measurement);
-     *  @brief estimates the derivative of a 3D measurement
-     */
+    /// @brief Estimates the derivative of a 3D measurement
+    /// @param measurement the signal to estimate the derivative of
+    /// @return The signal's derivative
     Eigen::Vector3d filter(const Eigen::Vector3d& measurement);
 
-    /** @fn void reset();
-     *  @brief resets the the estimator
-     */
+    /// @brief resets the estimator
+    /// @param verbose whether or not to print debug messages
     void reset(bool verbose = false);
 
-    /** @fn void init(std::string name, double f_sampling, double f_cutoff);
-     *  @brief initializes the differentiator filter
-     *  @param name the name of the filter e.g. "AngularMomentum"
-     *  @param f_sampling the sampling frequency of the sensor e.g. 100hz
-     *  @param f_cutoff the cut-off frequency of the  2nd order Low Pass
-     *  Butterworth Filter filter e.g. 10hz
-     */
-    void init(std::string name, double f_sampling, double f_cutoff, bool verbose = false);
+    /// @brief Initializes the derivative estimator
+    /// @param name name of the estimator e.g. "com-angular-momentum"
+    /// @param f_sampling the sampling frequency of the signal e.g. 100hz
+    /// @param f_cutoff the cut-off frequency of the low pass filter e.g. 10hz
+    /// @param verbose whether or not to print debug messages
+    void init(const std::string& name, double f_sampling, double f_cutoff, bool verbose = false);
 };
 
 }  // namespace serow

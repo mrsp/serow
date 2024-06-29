@@ -32,14 +32,13 @@ class ButterworthLPF {
     std::string name_{};
 
    public:
-    /** @fn void reset()
+    /** @fn void reset(bool verbose = true)
      *  @brief resets the 2nd order Low Pass Butterworth filter state
      */
     void reset(bool verbose = true);
 
     /** @fn double filter(double y)
-     *  @brief recursively filters a measurement with a 2nd order Low Pass
-     *  Butterworth filter
+     *  @brief recursively filters a measurement with a 2nd order Low Pass Butterworth filter
      *  @param y  measurement to be filtered
      */
     double filter(double y);
