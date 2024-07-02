@@ -23,6 +23,14 @@ namespace serow {
 
 class Differentiator {
    public:
+    /// @brief Initializes the numerical differentiator
+    /// @param name name of the filter e.g "LHipYawPitch"
+    /// @param dt sampling time (s)
+    /// @param verbose whether or not to print debug messages
+    Differentiator(const std::string& name, double dt, bool verbose = true);
+
+    Differentiator() = default;
+
     /// @brief sets the filter's sampling time
     /// @param dt sampling time (s)
     void setParams(double dt) { dt_ = dt; }
@@ -31,12 +39,6 @@ class Differentiator {
     /// @param x measurement to be differentiated
     /// @return The measurement's derivative
     double filter(double x);
-
-    /// @brief Initializes the numerical differentiator
-    /// @param name name of the filter e.g "LHipYawPitch"
-    /// @param dt sampling time (s)
-    /// @param verbose whether or not to print debug messages
-    void init(const std::string& name, double dt, bool verbose = true);
 
     /// @brief Resets the filter
     /// @param verbose whether or not to print debug messages

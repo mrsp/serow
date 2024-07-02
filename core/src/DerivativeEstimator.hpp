@@ -11,10 +11,10 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 /**
- * @brief 3D Signal derivative estimation with numerical differentiation and 2nd order Low Pass
+ * @brief Signal derivative estimation with numerical differentiation and 2nd order Low Pass
  * Butterworth Filter
  * @author Stylianos Piperakis
- * @details estimates the measurement's 3D derivative
+ * @details estimates the measurement's derivative
  */
 #pragma once
 
@@ -31,19 +31,27 @@ namespace serow {
 
 class DerivativeEstimator {
    private:
-    /// 2nd order butterworth filter to smooth the 3D signal
-    ButterworthLPF bw_[3];
-    /// linear differentiator filter to compute the 3D derivative
-    Differentiator df_[3];
+    /// 2nd order butterworth filter to smooth the signal
+    std::vector<ButterworthLPF> bw_;
+    /// linear differentiator filter to compute the derivative
+    std::vector<Differentiator> df_;
 
    public:
     /// name of the estimator e.g. "com-angular-momentum"
     std::string name_{};
 
-    /// @brief Estimates the derivative of a 3D measurement
+    /// dimensions of the signal
+    size_t dim_{};
+
+    /// Filtered signal
+    Eigen::VectorXd x_;
+    /// Signal derivative
+    Eigen::VectorXd x_dot_;
+
+    /// @brief Estimates the derivative of a measurement
     /// @param measurement the signal to estimate the derivative of
     /// @return The signal's derivative
-    Eigen::Vector3d filter(const Eigen::Vector3d& measurement);
+    Eigen::VectorXd filter(const Eigen::VectorXd& measurement);
 
     /// @brief resets the estimator
     /// @param verbose whether or not to print debug messages
@@ -53,8 +61,12 @@ class DerivativeEstimator {
     /// @param name name of the estimator e.g. "com-angular-momentum"
     /// @param f_sampling the sampling frequency of the signal e.g. 100hz
     /// @param f_cutoff the cut-off frequency of the low pass filter e.g. 10hz
+    /// @param dim dimensions of the signal e.g. 3D
     /// @param verbose whether or not to print debug messages
-    void init(const std::string& name, double f_sampling, double f_cutoff, bool verbose = false);
+    DerivativeEstimator(const std::string& name, double f_sampling, double f_cutoff, size_t dim,
+                        bool verbose = false);
+    
+    DerivativeEstimator() = default;
 };
 
 }  // namespace serow

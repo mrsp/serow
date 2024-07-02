@@ -20,7 +20,6 @@
 #include "ContactDetector.hpp"
 #include "ContactEKF.hpp"
 #include "DerivativeEstimator.hpp"
-#include "JointEstimator.hpp"
 #include "LegOdometry.hpp"
 #include "Mahony.hpp"
 #include "Measurement.hpp"
@@ -197,7 +196,7 @@ class Serow {
     /// @brief SEROW's configuration
     Params params_;
     /// @brief holds the joint name to joint state estimator
-    std::map<std::string, JointEstimator> joint_estimators_;
+    std::map<std::string, DerivativeEstimator> joint_estimators_;
     /// @brief angular momentum rate around the CoM estimator
     std::unique_ptr<DerivativeEstimator> angular_momentum_derivative_estimator;
     /// @brief base angular acceleration estimator

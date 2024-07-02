@@ -608,13 +608,15 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     for (const auto& [key, value] : joints) {
         joint_timestamp = value.timestamp;
         if (params_.estimate_joint_velocity && !joint_estimators_.count(key)) {
-            joint_estimators_[key].init(key, params_.joint_rate, params_.joint_cutoff_frequency);
+            joint_estimators_[key] = std::move(
+                DerivativeEstimator(key, params_.joint_rate, params_.joint_cutoff_frequency, 1));
         }
         joints_position[key] = value.position;
         if (params_.estimate_joint_velocity && value.velocity.has_value()) {
             joints_velocity[key] = value.velocity.value();
         } else {
-            joints_velocity[key] = joint_estimators_.at(key).filter(value.position);
+            joints_velocity[key] =
+                joint_estimators_.at(key).filter(Eigen::Matrix<double, 1, 1>(value.position))(0);
         }
     }
 
@@ -656,10 +658,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     const Eigen::Vector3d& com_angular_momentum = kinematic_estimator_->comAngularMomentum();
     if (!angular_momentum_derivative_estimator) {
-        angular_momentum_derivative_estimator = std::make_unique<DerivativeEstimator>();
-        angular_momentum_derivative_estimator->init("CoM Angular Momentum Derivative",
-                                                    params_.joint_rate,
-                                                    params_.angular_momentum_cutoff_frequency);
+        angular_momentum_derivative_estimator = std::make_unique<DerivativeEstimator>(
+            "CoM Angular Momentum Derivative", params_.joint_rate,
+            params_.angular_momentum_cutoff_frequency, 3);
     }
 
     // Estimate the angular momentum derivative
@@ -838,9 +839,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     // Estimate the angular acceleration using the gyro velocity
     if (!gyro_derivative_estimator) {
-        gyro_derivative_estimator = std::make_unique<DerivativeEstimator>();
-        gyro_derivative_estimator->init("Gyro Derivative", params_.imu_rate,
-                                        params_.gyro_cutoff_frequency);
+        gyro_derivative_estimator = std::make_unique<DerivativeEstimator>(
+            "Gyro Derivative", params_.imu_rate, params_.gyro_cutoff_frequency, 3);
     }
     imu.angular_acceleration =
         gyro_derivative_estimator->filter(imu.angular_velocity - state.getImuAngularVelocityBias());
