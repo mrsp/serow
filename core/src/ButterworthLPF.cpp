@@ -35,7 +35,7 @@ void ButterworthLPF::reset(bool verbose) {
     }
 }
 
-void ButterworthLPF::init(std::string name, double f_sampling, double f_cutoff, bool verbose) {
+ButterworthLPF::ButterworthLPF(std::string name, double f_sampling, double f_cutoff, bool verbose) {
     double ff = f_cutoff / f_sampling;
     double ita = 1.0 / tan(3.14159265359 * ff);
     double q = sqrt(2.0);

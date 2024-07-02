@@ -63,7 +63,7 @@
     "initial_imu_angular_velocity_bias_covariance": [1e-4, 1e-4, 1e-4],
     "initial_com_position_covariance": [1e-6, 1e-6, 1e-6],
     "initial_com_linear_velocity_covariance": [1e-3, 1e-3, 1e-3],
-    "initial_external_forces_covariance": [1, 1, 1],
+    "initial_external_forces_covariance": [1.0, 1.0, 1.0],
     "T_base_to_odom": null,
     "is_flat_terrain": true,
     "terrain_height_covariance": 1e-3

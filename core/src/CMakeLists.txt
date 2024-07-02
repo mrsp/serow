@@ -10,7 +10,6 @@ set(serow_src ${serow_src}
     LegOdometry.cpp 
     ButterworthLPF.cpp 
     Differentiator.cpp 
-    JointEstimator.cpp 
     DerivativeEstimator.cpp)
 
 set(serow_headers ${serow_headers} 
@@ -21,7 +20,6 @@ set(serow_headers ${serow_headers}
     LegOdometry.hpp 
     ButterworthLPF.hpp 
     Differentiator.hpp 
-    JointEstimator.hpp 
     DerivativeEstimator.hpp
     ContactDetector.hpp
     lie.hpp

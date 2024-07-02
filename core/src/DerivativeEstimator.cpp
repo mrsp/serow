@@ -16,19 +16,25 @@
 
 namespace serow {
 
-void DerivativeEstimator::init(const std::string& joint_name, double f_sampling, double f_cutoff,
-                               bool verbose) {
-    name_ = joint_name;
-    for (size_t i = 0; i < 3; i++) {
-        bw_[i].init(name_, f_sampling, f_cutoff, verbose);
-        df_[i].init(name_, 1.0 / f_sampling, verbose);
+DerivativeEstimator::DerivativeEstimator(const std::string& name, double f_sampling,
+                                         double f_cutoff, size_t dim, bool verbose) {
+    name_ = name;
+    dim_ = dim;
+    bw_.resize(dim);
+    df_.resize(dim);
+    for (size_t i = 0; i < dim; i++) {
+        bw_[i] = std::move(ButterworthLPF(name_, f_sampling, f_cutoff, verbose));
+        df_[i] = std::move(Differentiator(name_, 1.0 / f_sampling, verbose));
     }
+
+    x_ = Eigen::VectorXd::Zero(dim);
+    x_dot_ = Eigen::VectorXd::Zero(dim);
 
     std::cout << name_ << " estimator initialized successfully" << std::endl;
 }
 
 void DerivativeEstimator::reset(bool verbose) {
-    for (size_t i = 0; i < 3; i++) {
+    for (size_t i = 0; i < dim_; i++) {
         bw_[i].reset(verbose);
         df_[i].reset(verbose);
     }
@@ -36,12 +42,18 @@ void DerivativeEstimator::reset(bool verbose) {
     std::cout << name_ << " estimator reset" << std::endl;
 }
 
-Eigen::Vector3d DerivativeEstimator::filter(const Eigen::Vector3d& measurement) {
-    Eigen::Vector3d out = Eigen::Vector3d::Zero();
-    for (size_t i = 0; i < 3; i++) {
-        out(i) = bw_[i].filter(df_[i].filter(measurement(i)));
+Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement) {
+    if (measurement.size() != static_cast<int>(dim_)) {
+        throw std::runtime_error(
+            "Derivative estimator created with wrong signal dimensions, returning the measurement");
+        return measurement;
     }
-    return out;
+
+    for (size_t i = 0; i < dim_; i++) {
+        x_(i) = bw_[i].filter(measurement(i));
+        x_dot_(i) = df_[i].filter(x_(i));
+    }
+    return x_dot_;
 }
 
 }  // namespace serow
