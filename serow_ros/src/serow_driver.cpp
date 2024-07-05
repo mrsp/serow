@@ -105,8 +105,10 @@ private:
         ros::Rate loop_rate(loop_rate_);
         while (ros::ok()) { 
             if (joint_state_data_.has_value() && base_imu_data_.has_value()) { // New messages arrived
-                sensor_msgs::JointState joint_state_data = joint_state_data_.value();
-                sensor_msgs::Imu base_imu_data =  base_imu_data_.value();
+                const sensor_msgs::JointState& joint_state_data = joint_state_data_.value();
+                const sensor_msgs::Imu& base_imu_data  =  base_imu_data_.value();
+
+                const auto& timestamp = base_imu_data.header.stamp;
                 // Create the joint measurements
                 std::map<std::string, serow::JointMeasurement> joint_measurements;
                 for (size_t i = 0; i < joint_state_data.name.size(); i++) {
@@ -121,8 +123,8 @@ private:
                 // Create the base imu measurement
                 serow::ImuMeasurement imu_measurement{};
                 imu_measurement.timestamp =
-                    static_cast<double>(base_imu_data.header.stamp.sec) +
-                    static_cast<double>(base_imu_data.header.stamp.nsec) * 1e-9;
+                    static_cast<double>(timestamp.sec) +
+                    static_cast<double>(timestamp.nsec) * 1e-9;
                 imu_measurement.linear_acceleration =
                     Eigen::Vector3d(base_imu_data.linear_acceleration.x, base_imu_data.linear_acceleration.y,
                                     base_imu_data.linear_acceleration.z);
@@ -153,7 +155,7 @@ private:
                 auto state = serow_.getState();
                 if (state) {
                     odom_.header.seq += 1;
-                    odom_.header.stamp = base_imu_data.header.stamp;
+                    odom_.header.stamp = timestamp;
                     // Base 3D position
                     odom_.pose.pose.position.x = state->getBasePosition().x();
                     odom_.pose.pose.position.y = state->getBasePosition().y();
@@ -185,7 +187,7 @@ private:
                     odom_publisher_.publish(odom_);
 
                     com_.header.seq += 1;
-                    com_.header.stamp = base_imu_data.header.stamp;
+                    com_.header.stamp = timestamp;
                     // CoM 3D position
                     com_.pose.pose.position.x = state->getCoMPosition().x();
                     com_.pose.pose.position.y = state->getCoMPosition().y();
@@ -210,7 +212,7 @@ private:
 
                     // 3D CoM linear and angular momentum
                     momentum_.header.seq += 1;
-                    momentum_.header.stamp = base_imu_data.header.stamp;
+                    momentum_.header.stamp = timestamp;
                     momentum_.twist.linear.x = state->getMass() * state->getCoMLinearVelocity().x();
                     momentum_.twist.linear.y = state->getMass() * state->getCoMLinearVelocity().y();
                     momentum_.twist.linear.z = state->getMass() * state->getCoMLinearVelocity().z();
@@ -221,7 +223,7 @@ private:
 
                     // 3D CoM linear and angular momentum rate
                     momentum_rate_.header.seq += 1;
-                    momentum_rate_.header.stamp = base_imu_data.header.stamp;
+                    momentum_rate_.header.stamp = timestamp;
                     momentum_rate_.twist.linear.x =
                         state->getMass() * state->getCoMLinearAcceleration().x();
                     momentum_rate_.twist.linear.y =
@@ -236,7 +238,7 @@ private:
                     size_t i = 0;
                     for (auto& foot : feet_) {
                         foot.header.seq += 1; //?
-                        foot.header.stamp = base_imu_data.header.stamp;
+                        foot.header.stamp = timestamp;
                         // Foot 3D position
                         foot.pose.pose.position.x = state->getFootPosition(foot.child_frame_id).x();
                         foot.pose.pose.position.y = state->getFootPosition(foot.child_frame_id).y();
@@ -270,7 +272,7 @@ private:
 
                     
                     cop_.header.seq += 1;
-                    cop_.header.stamp = base_imu_data.header.stamp;
+                    cop_.header.stamp = timestamp;
                     // COP 3D position
                     cop_.pose.pose.position.x = state->getCOPPosition().x();
                     cop_.pose.pose.position.y = state->getCOPPosition().y();
