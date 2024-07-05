@@ -7,3 +7,4 @@ force_torque_state_topics:
   - "/FR_force"
   - "/RL_force"
   - "/RR_force"
+  
