@@ -1,0 +1,9 @@
+joint_state_rate: 500
+joint_state_topic: "/joint_states"
+base_imu_topic: "/trunk_imu"
+config_file_path: "go1.json"
+force_torque_state_topics:
+  - "/FL_force"
+  - "/FR_force"
+  - "/RL_force"
+  - "/RR_force"
