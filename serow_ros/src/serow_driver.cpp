@@ -237,7 +237,7 @@ private:
 
                     size_t i = 0;
                     for (auto& foot : feet_) {
-                        foot.header.seq += 1; //?
+                        foot.header.seq += 1;
                         foot.header.stamp = timestamp;
                         // Foot 3D position
                         foot.pose.pose.position.x = state->getFootPosition(foot.child_frame_id).x();
