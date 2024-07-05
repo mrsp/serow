@@ -4,12 +4,10 @@
 #include <geometry_msgs/TwistStamped.h>
 #include <map>
 #include <nav_msgs/Odometry.h>
-#include <queue>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/JointState.h>
 #include <serow/Serow.hpp>
-
 
 class SerowDriver {
 public:
@@ -17,7 +15,7 @@ public:
         : nh_(nh) {
         std::string joint_state_topic, base_imu_topic, config_file_path;
         std::vector<std::string> force_torque_state_topics;
-
+        
         // Load parameters from the parameter server
         if (!nh_.getParam("joint_state_topic", joint_state_topic)) {
             ROS_ERROR("Failed to get param 'joint_state_topic'");
@@ -34,7 +32,7 @@ public:
         if (!nh_.getParam("joint_state_rate", loop_rate_)) {
             ROS_ERROR("Failed to get param 'joint_state_rate'");
         }
-
+        num_feet_ = static_cast<int>(force_torque_state_topics.size());
         // Initialize SEROW
         if (!serow_.initialize(config_file_path)) {
             ROS_ERROR("SEROW cannot be initialized, exiting...");
@@ -50,26 +48,26 @@ public:
 
         // Create subscribers
         joint_state_subscription_ =
-            nh_.subscribe(joint_state_topic, 1000, &SerowDriver::joint_state_topic_callback, this);
+            nh_.subscribe(joint_state_topic, 1, &SerowDriver::joint_state_topic_callback, this);
         base_imu_subscription_ =
-            nh_.subscribe(base_imu_topic, 1000, &SerowDriver::base_imu_topic_callback, this);
+            nh_.subscribe(base_imu_topic, 1, &SerowDriver::base_imu_topic_callback, this);
         odom_publisher_ =
-            nh_.advertise<nav_msgs::Odometry>("/serow/base/odom", 1000);
+            nh_.advertise<nav_msgs::Odometry>("/serow/base/odom", 1);
         com_publisher_ = 
-            nh_.advertise<nav_msgs::Odometry>("/serow/com/odom", 1000);
+            nh_.advertise<nav_msgs::Odometry>("/serow/com/odom", 1);
         momentum_publisher_ =
-            nh_.advertise<geometry_msgs::TwistStamped>("/serow/com/momentum", 1000);
+            nh_.advertise<geometry_msgs::TwistStamped>("/serow/com/momentum", 1);
         momentum_rate_publisher_ =
-            nh_.advertise<geometry_msgs::TwistStamped>("/serow/com/momentum_rate", 1000);
+            nh_.advertise<geometry_msgs::TwistStamped>("/serow/com/momentum_rate", 1);
         cop_publisher_ = 
-            nh_.advertise<nav_msgs::Odometry>("/serow/cop/odom", 1000);
+            nh_.advertise<nav_msgs::Odometry>("/serow/cop/odom", 1);
 
         // Dynamically create a wrench callback one for each limb
         for (const auto& ft_topic : force_torque_state_topics) {
             auto ft_callback =
                 boost::bind(&SerowDriver::force_torque_state_topic_callback, this, _1);
             force_torque_state_subscriptions_.push_back(
-                nh_.subscribe<geometry_msgs::WrenchStamped>(ft_topic, 1000, ft_callback));
+                nh_.subscribe<geometry_msgs::WrenchStamped>(ft_topic, 1, ft_callback));
         }
         
         auto state = serow_.getState(true);
@@ -80,7 +78,7 @@ public:
             feet_.push_back(std::move(msg));
             std::string topic = "/serow/" + frame + "/odom";
             std::transform(topic.begin(), topic.end(), topic.begin(), ::tolower);
-            ros::Publisher pub = nh_.advertise<nav_msgs::Odometry>(topic, 1000);
+            ros::Publisher pub = nh_.advertise<nav_msgs::Odometry>(topic, 1);
             feet_publisher_.push_back(std::move(pub));
         }
 
@@ -91,85 +89,67 @@ public:
     }
 
     void joint_state_topic_callback(const sensor_msgs::JointState::ConstPtr& msg) {
-        joint_state_data_.push(*msg);
-        if (joint_state_data_.size() > 100) {
-            joint_state_data_.pop();
-            ROS_WARN("SEROW is dropping joint state measurements, SEROW estimate is not real-time");
-        }
+        joint_state_data_ = *msg;
+        gotJointMsg = true;
     }
 
     void base_imu_topic_callback(const sensor_msgs::Imu::ConstPtr& msg) {
-        base_imu_data_.push(*msg);
-        if (base_imu_data_.size() > 100) {
-            base_imu_data_.pop();
-            ROS_WARN("SEROW is dropping base IMU measurements, SEROW estimate is not real-time");
-        }
+        base_imu_data_ = *msg;
+        gotImuMsg = true;
     }
 
     void force_torque_state_topic_callback(const geometry_msgs::WrenchStamped::ConstPtr& msg) {
-        const std::string& frame_id = msg->header.frame_id;
-        ft_data_[frame_id].push(*msg);
-        
-        if (ft_data_.at(frame_id).size() > 100) {
-            ft_data_.at(frame_id).pop();
-            ROS_WARN("SEROW is dropping leg F/T measurements, SEROW estimate is not real-time");
-        }
+        ft_data_[msg->header.frame_id] = *msg;
     }
 
 private:
     void run() {
         ros::Rate loop_rate(loop_rate_); // Define the loop rate
         while (ros::ok()) { // Check if ROS is still running
-            if (joint_state_data_.size() > 0 && base_imu_data_.size() > 0) {
+            if (gotJointMsg && gotImuMsg) {
                 // Create the joint measurements
-                const auto& joint_state_data = joint_state_data_.front();
                 std::map<std::string, serow::JointMeasurement> joint_measurements;
-                for (size_t i = 0; i < joint_state_data.name.size(); i++) {
+                for (size_t i = 0; i < joint_state_data_.name.size(); i++) {
                     serow::JointMeasurement joint{};
                     joint.timestamp =
-                        static_cast<double>(joint_state_data.header.stamp.sec) +
-                        static_cast<double>(joint_state_data.header.stamp.nsec) * 1e-9;
-                    joint.position = joint_state_data.position[i];
-                    joint_measurements[joint_state_data.name[i]] = std::move(joint);
+                        static_cast<double>(joint_state_data_.header.stamp.sec) +
+                        static_cast<double>(joint_state_data_.header.stamp.nsec) * 1e-9;
+                    joint.position = joint_state_data_.position[i];
+                    joint_measurements[joint_state_data_.name[i]] = std::move(joint);
                 }
-                joint_state_data_.pop();
 
                 // Create the base imu measurement
-                const auto& imu_data = base_imu_data_.front();
-                const auto timestamp = imu_data.header.stamp;
+                const auto timestamp = base_imu_data_.header.stamp;
                 serow::ImuMeasurement imu_measurement{};
                 imu_measurement.timestamp =
-                    static_cast<double>(imu_data.header.stamp.sec) +
-                    static_cast<double>(imu_data.header.stamp.nsec) * 1e-9;
+                    static_cast<double>(base_imu_data_.header.stamp.sec) +
+                    static_cast<double>(base_imu_data_.header.stamp.nsec) * 1e-9;
                 imu_measurement.linear_acceleration =
-                    Eigen::Vector3d(imu_data.linear_acceleration.x, imu_data.linear_acceleration.y,
-                                    imu_data.linear_acceleration.z);
+                    Eigen::Vector3d(base_imu_data_.linear_acceleration.x, base_imu_data_.linear_acceleration.y,
+                                    base_imu_data_.linear_acceleration.z);
                 imu_measurement.angular_velocity =
-                    Eigen::Vector3d(imu_data.angular_velocity.x, imu_data.angular_velocity.y,
-                                    imu_data.angular_velocity.z);
-                base_imu_data_.pop();
+                    Eigen::Vector3d(base_imu_data_.angular_velocity.x, base_imu_data_.angular_velocity.y,
+                                    base_imu_data_.angular_velocity.z);
 
                 // Create the leg F/T measurement
                 std::map<std::string, serow::ForceTorqueMeasurement> ft_measurements;
-                for (auto& [key, value] : ft_data_) {
-                    if (value.size()) {
-                        serow::ForceTorqueMeasurement ft{};
-                        const auto& ft_data = value.front();
-                        ft.timestamp = static_cast<double>(ft_data.header.stamp.sec) +
-                                       static_cast<double>(ft_data.header.stamp.nsec) * 1e-9;
-                        ft.force = Eigen::Vector3d(ft_data.wrench.force.x, ft_data.wrench.force.y,
-                                                   ft_data.wrench.force.z);
-                        ft.torque = Eigen::Vector3d(ft_data.wrench.torque.x,
-                                                    ft_data.wrench.torque.y,
-                                                    ft_data.wrench.torque.z);
-                        ft_measurements[key] = std::move(ft);
-                        value.pop();
+                if (ft_data_.size() == num_feet_){
+                    for (auto& [key, value] : ft_data_) {
+                            serow::ForceTorqueMeasurement ft{};
+                            ft.timestamp = static_cast<double>(value.header.stamp.sec) +
+                                        static_cast<double>(value.header.stamp.nsec) * 1e-9;
+                            ft.force = Eigen::Vector3d(value.wrench.force.x,
+                                                    value.wrench.force.y,
+                                                    value.wrench.force.z);
+                            ft.torque = Eigen::Vector3d(value.wrench.torque.x,
+                                                        value.wrench.torque.y,
+                                                        value.wrench.torque.z);
+                            ft_measurements[key] = std::move(ft);
                     }
                 }
-
                 serow_.filter(imu_measurement, joint_measurements,
-                            ft_measurements.size() > 0 ? std::make_optional(ft_measurements)
-                                                       : std::nullopt);
+                            ft_measurements.size() == num_feet_ ? std::make_optional(ft_measurements)
+                                                   : std::nullopt);
 
                 auto state = serow_.getState();
                 if (state) {
@@ -236,7 +216,7 @@ private:
                     momentum_.twist.linear.y = state->getMass() * state->getCoMLinearVelocity().y();
                     momentum_.twist.linear.z = state->getMass() * state->getCoMLinearVelocity().z();
                     momentum_.twist.angular.x = state->getCoMAngularMomentum().x();
-                    momentum_.twist.angular.y = state->getCoMAngularMomentum().x();
+                    momentum_.twist.angular.y = state->getCoMAngularMomentum().y();
                     momentum_.twist.angular.z = state->getCoMAngularMomentum().z();
                     momentum_publisher_.publish(momentum_);
 
@@ -256,7 +236,7 @@ private:
 
                     size_t i = 0;
                     for (auto& foot : feet_) {
-                        foot.header.seq += 1;
+                        foot.header.seq += 1; //?
                         foot.header.stamp = timestamp;
                         // Foot 3D position
                         foot.pose.pose.position.x = state->getFootPosition(foot.child_frame_id).x();
@@ -298,8 +278,9 @@ private:
                     cop_.pose.pose.position.z = state->getCOPPosition().z();
                     cop_publisher_.publish(cop_);
                 }
+                gotJointMsg = false;
+                gotImuMsg = false;
             }
-
             ros::spinOnce();
             loop_rate.sleep();
         }
@@ -316,11 +297,13 @@ private:
     std::vector<ros::Publisher> feet_publisher_;
 
     std::vector<ros::Subscriber> force_torque_state_subscriptions_;
-    std::queue<sensor_msgs::JointState> joint_state_data_;
-    std::queue<sensor_msgs::Imu> base_imu_data_;
-    std::map<std::string, std::queue<geometry_msgs::WrenchStamped>> ft_data_;
+    sensor_msgs::JointState joint_state_data_;
+    sensor_msgs::Imu base_imu_data_;
+    std::map<std::string, geometry_msgs::WrenchStamped> ft_data_;
+    std::optional<serow::State> state_;
     double loop_rate_{};
-
+    int num_feet_{};
+    bool gotJointMsg{false}, gotImuMsg{false};
     nav_msgs::Odometry odom_;
     nav_msgs::Odometry com_;
     nav_msgs::Odometry cop_;
