@@ -10,6 +10,10 @@
  * You should have received a copy of the GNU General Public License along with Serow. If not,
  * see <https://www.gnu.org/licenses/>.
  **/
+/**
+ * @file state.h
+ * @brief Defines data structures and accessors for the robot states in the SEROW state estimator.
+ **/
 #pragma once
 
 #ifdef __linux__
@@ -25,6 +29,9 @@
 
 namespace serow {
 
+/**
+ * @brief Represents the state related to the base of the robot.
+ */
 struct BaseState {
     /// last time the state was updated
     double timestamp{};
@@ -77,6 +84,9 @@ struct BaseState {
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_cov;
 };
 
+/**
+ * @brief Represents the centroidal state of the robot.
+ */
 struct CentroidalState {
     /// last time the state was updated
     double timestamp{};
@@ -103,6 +113,9 @@ struct CentroidalState {
     Eigen::Matrix3d external_forces_cov{Eigen::Matrix3d::Identity()};
 };
 
+/**
+ * @brief Represents the contact state of the robot.
+ */
 struct ContactState {
     /// last time the state was updated
     double timestamp{};
@@ -116,6 +129,9 @@ struct ContactState {
     std::optional<std::map<std::string, Eigen::Vector3d>> contacts_torque;
 };
 
+/**
+ * @brief Represents the joint state of the robot.
+ */
 struct JointState {
     /// last time the state was updated
     double timestamp{};
@@ -125,6 +141,9 @@ struct JointState {
     std::map<std::string, double> joints_velocity;
 };
 
+/**
+ * @brief Represents the overall state of the robot including base, centroidal, contact, and joint states.
+ */
 class State {
    public:
     State() = default;

@@ -28,6 +28,10 @@
 
 namespace serow {
 
+/**
+ * @class Serow
+ * @brief Implements the SEROW legged robot state estimator
+ */
 class Serow {
    public:
     /// @brief initializes SEROW's configuration and internal state
