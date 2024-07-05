@@ -27,6 +27,11 @@ State::State(std::set<std::string> contacts_frame, bool point_feet) {
         contact_state_.contacts_probability[cf] = 0.0;
         base_state_.contacts_position[cf] = Eigen::Vector3d::Zero();
         base_state_.contacts_position_cov[cf] = Eigen::Matrix3d::Identity();
+        base_state_.feet_position[cf] = Eigen::Vector3d::Zero();
+        base_state_.feet_orientation[cf] = Eigen::Quaterniond::Identity();
+        base_state_.feet_linear_velocity[cf] = Eigen::Vector3d::Zero();
+        base_state_.feet_angular_velocity[cf] = Eigen::Vector3d::Zero();
+
         if (!isPointFeet()) {
             contacts_orientation[cf] = Eigen::Quaterniond::Identity();
             contacts_orientation_cov[cf] = Eigen::Matrix3d::Identity();
@@ -69,6 +74,7 @@ State::State(const State& other) {
     this->base_state_.imu_angular_velocity_bias_cov =
         other.base_state_.imu_angular_velocity_bias_cov;
     this->base_state_.contacts_position_cov = other.base_state_.contacts_position_cov;
+    
     if (other.base_state_.contacts_orientation_cov.has_value()) {
         this->base_state_.contacts_orientation_cov =
             other.base_state_.contacts_orientation_cov.value();
@@ -82,6 +88,10 @@ State::State(const State& other) {
     if (other.contact_state_.contacts_torque.has_value()) {
         this->contact_state_.contacts_torque = other.contact_state_.contacts_torque;
     }
+    this->base_state_.feet_position = other.base_state_.feet_position;
+    this->base_state_.feet_orientation = other.base_state_.feet_orientation;
+    this->base_state_.feet_linear_velocity = other.base_state_.feet_linear_velocity;
+    this->base_state_.feet_angular_velocity = other.base_state_.feet_angular_velocity;
 
     // Joint state
     this->joint_state_.timestamp = other.joint_state_.timestamp;
@@ -158,6 +168,11 @@ State::State(State&& other) {
     if (other.contact_state_.contacts_torque.has_value()) {
         this->contact_state_.contacts_torque = std::move(other.contact_state_.contacts_torque);
     }
+    this->base_state_.feet_position = std::move(other.base_state_.feet_position);
+    this->base_state_.feet_orientation = std::move(other.base_state_.feet_orientation);
+    this->base_state_.feet_linear_velocity = std::move(other.base_state_.feet_linear_velocity);
+    this->base_state_.feet_angular_velocity = std::move(other.base_state_.feet_angular_velocity);
+
 
     // Joint state
     this->joint_state_.timestamp = std::move(other.joint_state_.timestamp);
@@ -228,6 +243,10 @@ State State::operator=(const State& other) {
     if (other.contact_state_.contacts_torque.has_value()) {
         this->contact_state_.contacts_torque = other.contact_state_.contacts_torque;
     }
+    this->base_state_.feet_position = other.base_state_.feet_position;
+    this->base_state_.feet_orientation = other.base_state_.feet_orientation;
+    this->base_state_.feet_linear_velocity = other.base_state_.feet_linear_velocity;
+    this->base_state_.feet_angular_velocity = other.base_state_.feet_angular_velocity;
 
     // Joint state
     this->joint_state_.timestamp = other.joint_state_.timestamp;
@@ -309,6 +328,10 @@ State& State::operator=(State&& other) {
         if (other.contact_state_.contacts_torque.has_value()) {
             this->contact_state_.contacts_torque = std::move(other.contact_state_.contacts_torque);
         }
+        this->base_state_.feet_position = std::move(other.base_state_.feet_position);
+        this->base_state_.feet_orientation = std::move(other.base_state_.feet_orientation);
+        this->base_state_.feet_linear_velocity = std::move(other.base_state_.feet_linear_velocity);
+        this->base_state_.feet_angular_velocity = std::move(other.base_state_.feet_angular_velocity);
 
         // Joint state
         this->joint_state_.timestamp = std::move(other.joint_state_.timestamp);
