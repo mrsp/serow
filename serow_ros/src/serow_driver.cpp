@@ -90,12 +90,10 @@ public:
 
     void joint_state_topic_callback(const sensor_msgs::JointState::ConstPtr& msg) {
         joint_state_data_ = *msg;
-        gotJointMsg = true;
     }
 
     void base_imu_topic_callback(const sensor_msgs::Imu::ConstPtr& msg) {
         base_imu_data_ = *msg;
-        gotImuMsg = true;
     }
 
     void force_torque_state_topic_callback(const geometry_msgs::WrenchStamped::ConstPtr& msg) {
@@ -104,32 +102,33 @@ public:
 
 private:
     void run() {
-        ros::Rate loop_rate(loop_rate_); // Define the loop rate
-        while (ros::ok()) { // Check if ROS is still running
-            if (gotJointMsg && gotImuMsg) {
+        ros::Rate loop_rate(loop_rate_);
+        while (ros::ok()) { 
+            if (joint_state_data_.has_value() && base_imu_data_.has_value()) { // New messages arrived
+                sensor_msgs::JointState joint_state_data = joint_state_data_.value();
+                sensor_msgs::Imu base_imu_data =  base_imu_data_.value();
                 // Create the joint measurements
                 std::map<std::string, serow::JointMeasurement> joint_measurements;
-                for (size_t i = 0; i < joint_state_data_.name.size(); i++) {
+                for (size_t i = 0; i < joint_state_data.name.size(); i++) {
                     serow::JointMeasurement joint{};
                     joint.timestamp =
-                        static_cast<double>(joint_state_data_.header.stamp.sec) +
-                        static_cast<double>(joint_state_data_.header.stamp.nsec) * 1e-9;
-                    joint.position = joint_state_data_.position[i];
-                    joint_measurements[joint_state_data_.name[i]] = std::move(joint);
+                        static_cast<double>(joint_state_data.header.stamp.sec) +
+                        static_cast<double>(joint_state_data.header.stamp.nsec) * 1e-9;
+                    joint.position = joint_state_data.position[i];
+                    joint_measurements[joint_state_data.name[i]] = std::move(joint);
                 }
 
                 // Create the base imu measurement
-                const auto timestamp = base_imu_data_.header.stamp;
                 serow::ImuMeasurement imu_measurement{};
                 imu_measurement.timestamp =
-                    static_cast<double>(base_imu_data_.header.stamp.sec) +
-                    static_cast<double>(base_imu_data_.header.stamp.nsec) * 1e-9;
+                    static_cast<double>(base_imu_data.header.stamp.sec) +
+                    static_cast<double>(base_imu_data.header.stamp.nsec) * 1e-9;
                 imu_measurement.linear_acceleration =
-                    Eigen::Vector3d(base_imu_data_.linear_acceleration.x, base_imu_data_.linear_acceleration.y,
-                                    base_imu_data_.linear_acceleration.z);
+                    Eigen::Vector3d(base_imu_data.linear_acceleration.x, base_imu_data.linear_acceleration.y,
+                                    base_imu_data.linear_acceleration.z);
                 imu_measurement.angular_velocity =
-                    Eigen::Vector3d(base_imu_data_.angular_velocity.x, base_imu_data_.angular_velocity.y,
-                                    base_imu_data_.angular_velocity.z);
+                    Eigen::Vector3d(base_imu_data.angular_velocity.x, base_imu_data.angular_velocity.y,
+                                    base_imu_data.angular_velocity.z);
 
                 // Create the leg F/T measurement
                 std::map<std::string, serow::ForceTorqueMeasurement> ft_measurements;
@@ -154,7 +153,7 @@ private:
                 auto state = serow_.getState();
                 if (state) {
                     odom_.header.seq += 1;
-                    odom_.header.stamp = timestamp;
+                    odom_.header.stamp = base_imu_data.header.stamp;
                     // Base 3D position
                     odom_.pose.pose.position.x = state->getBasePosition().x();
                     odom_.pose.pose.position.y = state->getBasePosition().y();
@@ -186,7 +185,7 @@ private:
                     odom_publisher_.publish(odom_);
 
                     com_.header.seq += 1;
-                    com_.header.stamp = timestamp;
+                    com_.header.stamp = base_imu_data.header.stamp;
                     // CoM 3D position
                     com_.pose.pose.position.x = state->getCoMPosition().x();
                     com_.pose.pose.position.y = state->getCoMPosition().y();
@@ -211,7 +210,7 @@ private:
 
                     // 3D CoM linear and angular momentum
                     momentum_.header.seq += 1;
-                    momentum_.header.stamp = timestamp;
+                    momentum_.header.stamp = base_imu_data.header.stamp;
                     momentum_.twist.linear.x = state->getMass() * state->getCoMLinearVelocity().x();
                     momentum_.twist.linear.y = state->getMass() * state->getCoMLinearVelocity().y();
                     momentum_.twist.linear.z = state->getMass() * state->getCoMLinearVelocity().z();
@@ -222,7 +221,7 @@ private:
 
                     // 3D CoM linear and angular momentum rate
                     momentum_rate_.header.seq += 1;
-                    momentum_rate_.header.stamp = timestamp;
+                    momentum_rate_.header.stamp = base_imu_data.header.stamp;
                     momentum_rate_.twist.linear.x =
                         state->getMass() * state->getCoMLinearAcceleration().x();
                     momentum_rate_.twist.linear.y =
@@ -237,7 +236,7 @@ private:
                     size_t i = 0;
                     for (auto& foot : feet_) {
                         foot.header.seq += 1; //?
-                        foot.header.stamp = timestamp;
+                        foot.header.stamp = base_imu_data.header.stamp;
                         // Foot 3D position
                         foot.pose.pose.position.x = state->getFootPosition(foot.child_frame_id).x();
                         foot.pose.pose.position.y = state->getFootPosition(foot.child_frame_id).y();
@@ -271,15 +270,15 @@ private:
 
                     
                     cop_.header.seq += 1;
-                    cop_.header.stamp = timestamp;
+                    cop_.header.stamp = base_imu_data.header.stamp;
                     // COP 3D position
                     cop_.pose.pose.position.x = state->getCOPPosition().x();
                     cop_.pose.pose.position.y = state->getCOPPosition().y();
                     cop_.pose.pose.position.z = state->getCOPPosition().z();
                     cop_publisher_.publish(cop_);
                 }
-                gotJointMsg = false;
-                gotImuMsg = false;
+                joint_state_data_.reset();
+                base_imu_data_.reset();
             }
             ros::spinOnce();
             loop_rate.sleep();
@@ -297,13 +296,11 @@ private:
     std::vector<ros::Publisher> feet_publisher_;
 
     std::vector<ros::Subscriber> force_torque_state_subscriptions_;
-    sensor_msgs::JointState joint_state_data_;
-    sensor_msgs::Imu base_imu_data_;
+    std::optional<sensor_msgs::JointState> joint_state_data_;
+    std::optional<sensor_msgs::Imu> base_imu_data_;
     std::map<std::string, geometry_msgs::WrenchStamped> ft_data_;
-    std::optional<serow::State> state_;
     double loop_rate_{};
-    int num_feet_{};
-    bool gotJointMsg{false}, gotImuMsg{false};
+    size_t num_feet_{};
     nav_msgs::Odometry odom_;
     nav_msgs::Odometry com_;
     nav_msgs::Odometry cop_;
