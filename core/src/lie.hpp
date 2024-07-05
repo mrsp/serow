@@ -10,11 +10,13 @@
  * You should have received a copy of the GNU General Public License along with Serow. If not,
  * see <https://www.gnu.org/licenses/>.
  **/
+
 /**
- * @brief SO(3) Lie group and so(3) Lie algebra operations
- * @author Stylianos Piperakis
- * @details A thin wrapper of the essential SO(3)/so(3) operations e.g. expMap, logMap, plus, minus
- **/
+ * @file lie.hpp
+ * @brief Header file for SO(3) Lie group and so(3) Lie algebra operations.
+ * @details A thin wrapper of the essential SO(3)/so(3) operations e.g. expMap, logMap, plus, minus.
+ * This header provides various utility functions to work with rotations and their algebra.
+ */
 
 #pragma once
 
