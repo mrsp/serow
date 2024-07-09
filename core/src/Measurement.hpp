@@ -77,7 +77,7 @@ struct KinematicMeasurement {
     std::map<std::string, double> contacts_probability;                                     ///< Map of contact probabilities ([0, 1])
     std::map<std::string, Eigen::Vector3d> contacts_position;                               ///< Map of contact positions relative to base frame (m) 
     std::map<std::string, Eigen::Matrix3d> contacts_position_noise;                         ///< Map of contact position noise covariances relative to base frame (m^2)
-    std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation;          ///< Optional map of contact orientations relative to base frame (rad)
+    std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation;          ///< Optional map of contact orientations relative to base frame 
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise;       ///< Optional map of contact orientation noise covariances relative to base frame (rad^2)
     Eigen::Vector3d com_angular_momentum_derivative{Eigen::Vector3d::Zero()};               ///< Derivative of center of mass (COM) angular momentum (Nm)
     Eigen::Vector3d com_position{Eigen::Vector3d::Zero()};                                  ///< Center of mass (COM) position (m)
@@ -85,7 +85,7 @@ struct KinematicMeasurement {
     Eigen::Matrix3d position_slip_cov{Eigen::Matrix3d::Identity()};                         ///< Covariance of position slip (m^2)
     Eigen::Matrix3d orientation_slip_cov{Eigen::Matrix3d::Identity()};                      ///< Covariance of orientation slip (rad^2)
     Eigen::Matrix3d position_cov{Eigen::Matrix3d::Identity()};                              ///< Covariance of position (m^2)
-    Eigen::Matrix3d orientation_cov{Eigen::Matrix3d::Identity()};                           ///< Covariance of orientation (rad)
+    Eigen::Matrix3d orientation_cov{Eigen::Matrix3d::Identity()};                           ///< Covariance of orientation (rad^2)
     Eigen::Matrix3d com_position_process_cov{Eigen::Matrix3d::Identity()};                  ///< Covariance of COM position process noise (m^2)
     Eigen::Matrix3d com_linear_velocity_process_cov{Eigen::Matrix3d::Identity()};           ///< Covariance of COM linear velocity process noise (m^2/s^2)
     Eigen::Matrix3d external_forces_process_cov{Eigen::Matrix3d::Identity()};               ///< Covariance of external forces process noise (N^2)
@@ -100,7 +100,7 @@ struct KinematicMeasurement {
 struct OdometryMeasurement {
     double timestamp{};                                                  ///< Timestamp of the measurement (s)
     Eigen::Vector3d base_position{Eigen::Vector3d::Zero()};              ///< Base position from odometry (m)
-    Eigen::Quaterniond base_orientation{Eigen::Quaterniond::Identity()}; ///< Base orientation from odometry (rad)
+    Eigen::Quaterniond base_orientation{Eigen::Quaterniond::Identity()}; ///< Base orientation from odometry
     Eigen::Matrix3d base_position_cov{Eigen::Matrix3d::Identity()};      ///< Covariance matrix of base position (m^2)
     Eigen::Matrix3d base_orientation_cov{Eigen::Matrix3d::Identity()};   ///< Covariance matrix of base orientation (rad^2)
 };
