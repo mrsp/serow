@@ -37,7 +37,7 @@ struct BaseState {
     double timestamp{};
     /// Base position in world frame coordinates (m)
     Eigen::Vector3d base_position{Eigen::Vector3d::Zero()};
-    /// Base orientation in world frame coordinates (rad)
+    /// Base orientation in world frame coordinates 
     Eigen::Quaterniond base_orientation{Eigen::Quaterniond::Identity()};
     /// Base linear velocity in world frame coordinates (m/s)
     Eigen::Vector3d base_linear_velocity{Eigen::Vector3d::Zero()};
@@ -54,11 +54,11 @@ struct BaseState {
     /// Holds contact frame name to 3D contact position in world frame coordinates (m)
     std::map<std::string, Eigen::Vector3d> contacts_position;
     /// Holds contact frame name to 3D contact orientation in world frame coordinates, only applies
-    /// if the robot has flat feet (rad)
+    /// if the robot has flat feet
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation;
     /// Holds contact frame name to 3D foot position in world frame coordinates (m)
     std::map<std::string, Eigen::Vector3d> feet_position;
-    /// Holds contact frame name to 3D foot orientation in world frame coordinates (rad)
+    /// Holds contact frame name to 3D foot orientation in world frame coordinates
     std::map<std::string, Eigen::Quaterniond> feet_orientation;
     /// Holds contact frame name to 3D foot linear velocity in world frame coordinates (m/s)
     std::map<std::string, Eigen::Vector3d> feet_linear_velocity;
@@ -105,7 +105,7 @@ struct CentroidalState {
     /// 3D Angular momentum derivative around the CoM in world frame coordinates (Nm)
     Eigen::Vector3d angular_momentum_derivative{Eigen::Vector3d::Zero()};
 
-    /// 3D CoM position covariance in world frame coordinates  (m^2)
+    /// 3D CoM position covariance in world frame coordinates (m^2)
     Eigen::Matrix3d com_position_cov{Eigen::Matrix3d::Identity()};
     /// 3D CoM linear velocity covariance in world frame coordinates (m^2/s^2)
     Eigen::Matrix3d com_linear_velocity_cov{Eigen::Matrix3d::Identity()};
