@@ -43,20 +43,20 @@ namespace serow {
  *        estimation in humanoid robots.
  */
 struct OutlierDetector {
-    double zeta = 1.0;        ///< Parameter for outlier detection
-    double f_0 = 0.1;         ///< Parameter for outlier detection
-    double e_0 = 0.9;         ///< Parameter for outlier detection
-    double f_t = 0.1;         ///< Parameter for outlier detection
-    double e_t = 0.9;         ///< Parameter for outlier detection
-    double threshold = 1e-5;  ///< Threshold for outlier detection
+    double zeta = 1.0;        ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
+    double f_0 = 0.1;         ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
+    double e_0 = 0.9;         ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
+    double f_t = 0.1;         ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
+    double e_t = 0.9;         ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
+    double threshold = 1e-5; 
     size_t iters = 4;         ///< Number of iterations for outlier detection
 
     /**
      * @brief Computes the digamma function approximation.
-     * @param xxx Argument for digamma function.
+     * @param x Argument for digamma function.
      * @return Computed value of digamma function.
      */
-    double computePsi(double xxx);
+    double computePsi(double x);
 
     /**
      * @brief Initializes the outlier detection process.
