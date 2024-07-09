@@ -89,8 +89,8 @@ class LegOdometry {
      * @param feet_position Initial positions of the feet in world coordinates
      * @param feet_orientation Initial orientations of the feet in world coordinates
      * @param mass Mass of the robot
-     * @param alpha1 Alpha1 parameter
-     * @param alpha3 Alpha3 parameter
+     * @param alpha1 Kinematic-term optimization weight parameter
+     * @param alpha3 F/T-term optimization weight parameter
      * @param freq Joint state nominal frequency
      * @param g Gravity constant
      * @param eps Epsilon parameter
@@ -98,9 +98,8 @@ class LegOdometry {
      */
     LegOdometry(
         std::map<std::string, Eigen::Vector3d> feet_position,
-        std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass = 5.14,
-        double alpha1 = 1.0, double alpha3 = 0.01, double freq = 100.0, double g = 9.81,
-        double eps = 0.1,
+        std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass, double alpha1,
+        double alpha3, double freq, double g, double eps,
         std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset = std::nullopt);
 
     /**
@@ -131,10 +130,10 @@ class LegOdometry {
      * @brief Estimates the odometry based on the provided measurements.
      * @param base_orientation Orientation of the base in world coordinates
      * @param base_angular_velocity Angular velocity of the base in world coordinates
-     * @param base_to_foot_orientations Leg orientations from the base to the feet frame
-     * @param base_to_foot_positions Relative leg positions from the base to the feet frame
-     * @param base_to_foot_linear_velocities Relative leg linear velocities from the base to the feet frame
-     * @param base_to_foot_angular_velocities Relative leg angular velocities from the base to the feet frame
+     * @param base_to_foot_orientations Relative foot orientations from the base to the feet frame
+     * @param base_to_foot_positions Relative foot positions from the base to the feet frame
+     * @param base_to_foot_linear_velocities Relative foot linear velocities from the base to the feet frame
+     * @param base_to_foot_angular_velocities Relative foot angular velocities from the base to the feet frame
      * @param contact_forces Contact forces at the feet frame
      * @param contact_torques Contact torques at the feet frame (optional)
      */

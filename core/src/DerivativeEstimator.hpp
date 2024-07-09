@@ -71,7 +71,7 @@ class DerivativeEstimator {
      * @param name Name of the estimator e.g. "com-angular-momentum".
      * @param f_sampling The sampling frequency of the signal e.g. 100Hz.
      * @param f_cutoff The cut-off frequency of the low pass filter e.g. 10Hz.
-     * @param dim Dimensions of the signal e.g. 3D.
+     * @param dim Dimensions of the signal e.g. 3.
      * @param verbose Whether or not to print debug messages.
      */
     DerivativeEstimator(const std::string& name, double f_sampling, double f_cutoff, size_t dim,
