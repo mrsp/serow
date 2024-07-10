@@ -10,12 +10,13 @@
  * You should have received a copy of the GNU General Public License along with Serow. If not,
  * see <https://www.gnu.org/licenses/>.
  **/
+
 /**
- * @brief Signal derivative estimation with numerical differentiation and 2nd order Low Pass
- * Butterworth Filter
- * @author Stylianos Piperakis
- * @details estimates the measurement's derivative
+ * @file DerivativeEstimator.hpp
+ * @brief Header file for the DerivativeEstimator class.
+ * @details Provides a mechanism to estimate the derivative of a signal using numerical differentiation and a 2nd order Low Pass Butterworth Filter.
  */
+
 #pragma once
 
 #include "ButterworthLPF.hpp"
@@ -29,6 +30,10 @@
 
 namespace serow {
 
+/**
+ * @class DerivativeEstimator
+ * @brief Class for estimating the derivative of a signal using numerical differentiation and a 2nd order Low Pass Butterworth Filter.
+ */
 class DerivativeEstimator {
    private:
     /// 2nd order butterworth filter to smooth the signal
@@ -48,24 +53,33 @@ class DerivativeEstimator {
     /// Signal derivative
     Eigen::VectorXd x_dot_;
 
-    /// @brief Estimates the derivative of a measurement
-    /// @param measurement the signal to estimate the derivative of
-    /// @return The signal's derivative
+    /**
+     * @brief Estimates the derivative of a measurement.
+     * @param measurement The signal to estimate the derivative of.
+     * @return The signal's derivative.
+     */
     Eigen::VectorXd filter(const Eigen::VectorXd& measurement);
 
-    /// @brief resets the estimator
-    /// @param verbose whether or not to print debug messages
+    /**
+     * @brief Resets the estimator.
+     * @param verbose Whether or not to print debug messages.
+     */
     void reset(bool verbose = false);
 
-    /// @brief Initializes the derivative estimator
-    /// @param name name of the estimator e.g. "com-angular-momentum"
-    /// @param f_sampling the sampling frequency of the signal e.g. 100hz
-    /// @param f_cutoff the cut-off frequency of the low pass filter e.g. 10hz
-    /// @param dim dimensions of the signal e.g. 3D
-    /// @param verbose whether or not to print debug messages
+    /**
+     * @brief Initializes the derivative estimator.
+     * @param name Name of the estimator e.g. "com-angular-momentum".
+     * @param f_sampling The sampling frequency of the signal e.g. 100Hz.
+     * @param f_cutoff The cut-off frequency of the low pass filter e.g. 10Hz.
+     * @param dim Dimensions of the signal e.g. 3.
+     * @param verbose Whether or not to print debug messages.
+     */
     DerivativeEstimator(const std::string& name, double f_sampling, double f_cutoff, size_t dim,
                         bool verbose = false);
     
+    /**
+     * @brief Default constructor.
+     */
     DerivativeEstimator() = default;
 };
 
