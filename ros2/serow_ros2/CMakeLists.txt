@@ -20,7 +20,7 @@ find_package(pinocchio REQUIRED)
 find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(nlohmann_json REQUIRED)
 
-add_executable(serow_ros2 src/driver.cpp)
+add_executable(serow_ros2 src/serow_driver.cpp)
 ament_target_dependencies(serow_ros2 rclcpp geometry_msgs sensor_msgs)
 target_link_libraries(serow_ros2 serow pinocchio::pinocchio Eigen3::Eigen nlohmann_json::nlohmann_json)
 
