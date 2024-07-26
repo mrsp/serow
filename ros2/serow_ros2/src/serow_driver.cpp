@@ -76,7 +76,7 @@ class SerowDriver : public rclcpp::Node {
                         serow::ForceTorqueMeasurement ft{};
                         const auto& ft_data = value;
                         ft.timestamp = static_cast<double>(ft_data.header.stamp.sec) +
-                                        static_cast<double>(ft_data.header.stamp.nanosec) * 1e-9;
+                                       static_cast<double>(ft_data.header.stamp.nanosec) * 1e-9;
                         ft.force = Eigen::Vector3d(ft_data.wrench.force.x, 
                                                    ft_data.wrench.force.y,
                                                    ft_data.wrench.force.z);
@@ -85,6 +85,7 @@ class SerowDriver : public rclcpp::Node {
                                                           ft_data.wrench.torque.z));
                         ft_measurements[key] = std::move(ft);
                     }
+                    ft_data_.clear();
                 }
                
                 serow_.filter(imu_measurement, joint_measurements,
@@ -93,18 +94,17 @@ class SerowDriver : public rclcpp::Node {
 
                 joint_state_data_.reset();
                 base_imu_data_.reset();
-
             }
         }
     }
 
    private:
     void joint_state_topic_callback(const sensor_msgs::msg::JointState& msg) {
-        this->joint_state_data_ = std::make_optional(msg);
+        this->joint_state_data_ = msg;
     }
 
     void base_imu_topic_callback(const sensor_msgs::msg::Imu& msg) {
-        this->base_imu_data_ = std::make_optional(msg);
+        this->base_imu_data_ = msg;
     }
 
     serow::Serow serow_;
