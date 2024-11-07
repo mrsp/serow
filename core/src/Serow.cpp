@@ -186,21 +186,25 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
     params_.joint_rate = config["joint_rate"];
+
     if (!config["estimate_joint_velocity"].is_boolean()) {
         std::cerr << "Configuration: estimate_joint_velocity must be a boolean \n";
         return false;
     }
     params_.estimate_joint_velocity = config["estimate_joint_velocity"];
+
     if (!config["joint_cutoff_frequency"].is_number_float()) {
         std::cerr << "Configuration: joint_cutoff_frequency must be a float \n";
         return false;
     }
     params_.joint_cutoff_frequency = config["joint_cutoff_frequency"];
+
     if (!config["joint_position_variance"].is_number_float()) {
         std::cerr << "Configuration: joint_position_variance must be a float \n";
         return false;
     }
     params_.joint_position_variance = config["joint_position_variance"];
+
     if (!config["angular_momentum_cutoff_frequency"].is_number_float()) {
         std::cerr << "Configuration: angular_momentum_cutoff_frequency must be a float \n";
         return false;
@@ -213,16 +217,19 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
     params_.mass = config["mass"];
+
     if (!config["g"].is_number_float()) {
         std::cerr << "Configuration: g must be a float \n";
         return false;
     }
     params_.g = config["g"];
+
     if (!config["tau_0"].is_number_float()) {
         std::cerr << "Configuration: tau_0 must be a float \n";
         return false;
     }
     params_.tau_0 = config["tau_0"];
+
     if (!config["tau_1"].is_number_float()) {
         std::cerr << "Configuration: tau_1 must be a float \n";
         return false;
@@ -235,21 +242,25 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
     params_.estimate_contact_status = config["estimate_contact_status"];
+
     if (!config["high_threshold"].is_number_float()) {
         std::cerr << "Configuration: high_threshold must be a float \n";
         return false;
     }
     params_.high_threshold = config["high_threshold"];
+
     if (!config["low_threshold"].is_number_float()) {
         std::cerr << "Configuration: low_threshold must be a float \n";
         return false;
     }
     params_.low_threshold = config["low_threshold"];
+
     if (!config["median_window"].is_number_unsigned()) {
         std::cerr << "Configuration: median_window must be an integer \n";
         return false;
     }
     params_.median_window = config["median_window"];
+
     if (!config["outlier_detection"].is_boolean()) {
         std::cerr << "Configuration: outlier_detection must be a boolean \n";
         return false;
@@ -269,29 +280,34 @@ bool Serow::initialize(const std::string& config_file) {
             << "Configuration: imu_angular_velocity_covariance must be an array of 3 elements \n";
         return false;
     }
+
     if (!config["imu_angular_velocity_bias_covariance"].is_array() ||
         config["imu_angular_velocity_bias_covariance"].size() != 3) {
         std::cerr << "Configuration: imu_angular_velocity_bias_covariance must be an array of 3 "
                      "elements \n";
         return false;
     }
+
     if (!config["imu_linear_acceleration_covariance"].is_array() ||
         config["imu_linear_acceleration_covariance"].size() != 3) {
         std::cerr << "Configuration: imu_linear_acceleration_covariance must be an array of 3 "
                      "elements \n";
         return false;
     }
+
     if (!config["imu_linear_acceleration_bias_covariance"].is_array() ||
         config["imu_linear_acceleration_bias_covariance"].size() != 3) {
         std::cerr << "Configuration: imu_linear_acceleration_bias_covariance must be an array of 3 "
                      "elements \n";
         return false;
     }
+
     if (!config["contact_position_covariance"].is_array() ||
         config["contact_position_covariance"].size() != 3) {
         std::cerr << "Configuration: contact_position_covariance must be an array of 3 elements \n";
         return false;
     }
+
     if (!config["contact_orientation_covariance"].is_null() &&
         (!config["contact_orientation_covariance"].is_array() ||
          config["contact_orientation_covariance"].size() != 3)) {
@@ -299,42 +315,49 @@ bool Serow::initialize(const std::string& config_file) {
             << "Configuration: contact_orientation_covariance must be an array of 3 elements \n";
         return false;
     }
+
     if (!config["com_position_process_covariance"].is_array() ||
         config["com_position_process_covariance"].size() != 3) {
         std::cerr
             << "Configuration: com_position_process_covariance must be an array of 3 elements \n";
         return false;
     }
+
     if (!config["com_linear_velocity_process_covariance"].is_array() ||
         config["com_linear_velocity_process_covariance"].size() != 3) {
         std::cerr << "Configuration: com_linear_velocity_process_covariance must be an array of 3 "
                      "elements \n";
         return false;
     }
+    
     if (!config["initial_base_position_covariance"].is_array() ||
         config["initial_base_position_covariance"].size() != 3) {
         std::cerr
             << "Configuration: initial_base_position_covariance must be an array of 3 elements \n";
         return false;
     }
+
     if (!config["initial_base_orientation_covariance"].is_array() ||
         config["initial_base_orientation_covariance"].size() != 3) {
         std::cerr << "Configuration: initial_base_orientation_covariance must be an array of 3 "
                      "elements \n";
         return false;
     }
+    
     if (!config["initial_base_linear_velocity_covariance"].is_array() ||
         config["initial_base_linear_velocity_covariance"].size() != 3) {
         std::cerr << "Configuration: initial_base_linear_velocity_covariance must be an array of 3 "
                      "elements \n";
         return false;
     }
+
     if (!config["initial_contact_position_covariance"].is_array() ||
         config["initial_contact_position_covariance"].size() != 3) {
         std::cerr << "Configuration: initial_contact_position_covariance must be an array of 3 "
                      "elements \n";
         return false;
     }
+
     if (!config["initial_contact_orientation_covariance"].is_null() &&
         (!config["initial_contact_orientation_covariance"].is_array() ||
          config["initial_contact_orientation_covariance"].size() != 3)) {
@@ -342,30 +365,35 @@ bool Serow::initialize(const std::string& config_file) {
                      "elements \n";
         return false;
     }
+
     if (!config["initial_imu_linear_acceleration_bias_covariance"].is_array() ||
         config["initial_imu_linear_acceleration_bias_covariance"].size() != 3) {
         std::cerr << "Configuration: initial_imu_linear_acceleration_bias_covariance must be an "
                      "array of 3 elements \n";
         return false;
     }
+
     if (!config["initial_imu_angular_velocity_bias_covariance"].is_array() ||
         config["initial_imu_angular_velocity_bias_covariance"].size() != 3) {
         std::cerr << "Configuration: initial_imu_angular_velocity_bias_covariance must be an array "
                      "of 3 elements \n";
         return false;
     }
+
     if (!config["initial_com_position_covariance"].is_array() ||
         config["initial_com_position_covariance"].size() != 3) {
         std::cerr
             << "Configuration: initial_com_position_covariance must be an array of 3 elements \n";
         return false;
     }
+    
     if (!config["initial_external_forces_covariance"].is_array() ||
         config["initial_external_forces_covariance"].size() != 3) {
         std::cerr << "Configuration: initial_external_forces_covariance must be an array of 3 "
                      "elements \n";
         return false;
     }
+
     for (size_t i = 0; i < 3; i++) {
         state_.base_state_.imu_angular_velocity_bias[i] = config["bias_gyro"][i];
         state_.base_state_.imu_linear_acceleration_bias[i] = config["bias_acc"][i];
@@ -584,7 +612,9 @@ bool Serow::initialize(const std::string& config_file) {
 void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
                    std::optional<std::map<std::string, ForceTorqueMeasurement>> ft,
                    std::optional<OdometryMeasurement> odom,
-                   std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
+                   std::optional<std::map<std::string, ContactMeasurement>> contacts_probability)
+{
+
     if (!is_initialized_ && ft.has_value()) {
         is_initialized_ = true;
     } else if (!is_initialized_) {
@@ -606,15 +636,16 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     std::map<std::string, double> joints_velocity;
     double joint_timestamp{};
     for (const auto& [key, value] : joints) {
-        joint_timestamp = value.timestamp;
-        if (params_.estimate_joint_velocity && !joint_estimators_.count(key)) {
-            joint_estimators_[key] = std::move(
-                DerivativeEstimator(key, params_.joint_rate, params_.joint_cutoff_frequency, 1));
-        }
+
         joints_position[key] = value.position;
-        if (params_.estimate_joint_velocity && value.velocity.has_value()) {
-            joints_velocity[key] = value.velocity.value();
-        } else {
+
+        if (!params_.estimate_joint_velocity){
+            value.velocity.has_value() ? joints_velocity[key] = value.velocity.value() : throw std::runtime_error("No joint velocities found, either provide them or enable the estimate_joint_velocities parameter");
+        }else{
+            if (!joint_estimators_.count(key)){
+                joint_estimators_[key] = std::move(
+                DerivativeEstimator(key, params_.joint_rate, params_.joint_cutoff_frequency, 1));
+            }
             joints_velocity[key] =
                 joint_estimators_.at(key).filter(Eigen::Matrix<double, 1, 1>(value.position))(0);
         }

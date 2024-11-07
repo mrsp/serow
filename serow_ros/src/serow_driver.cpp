@@ -117,6 +117,9 @@ private:
                         static_cast<double>(joint_state_data.header.stamp.sec) +
                         static_cast<double>(joint_state_data.header.stamp.nsec) * 1e-9;
                     joint.position = joint_state_data.position[i];
+                    if (joint_state_data.position.size() == joint_state_data.velocity.size()){
+                        joint.velocity = joint_state_data.velocity[i];
+                    }
                     joint_measurements[joint_state_data.name[i]] = std::move(joint);
                 }
 

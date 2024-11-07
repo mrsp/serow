@@ -25,7 +25,7 @@ namespace serow {
 struct JointMeasurement {
     double timestamp{};                     ///< Timestamp of the measurement (s)
     double position{};                      ///< Joint position measurement (rad)
-    std::optional<double> velocity{};       ///< Optional joint velocity measurement (rad/s)
+    std::optional<double> velocity;       ///< Optional joint velocity measurement (rad/s)
 };
 
 /**
