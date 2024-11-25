@@ -443,6 +443,10 @@ std::optional<bool> State::getContactStatus(const std::string& frame_name) const
         return std::nullopt;
 }
 
+std::optional<Eigen::Vector3d> State::getContactForces(const std::string& frame_name) const {
+  return contact_state_.contacts_force.at(frame_name);
+}
+
 const Eigen::Vector3d& State::getFootPosition(const std::string& frame_name) const {
     return base_state_.feet_position.at(frame_name);
 }
