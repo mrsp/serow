@@ -627,7 +627,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Check if foot frames exist on the F/T measurement
     for (const auto& frame : state.contacts_frame_) {
         if (ft.value().count(frame) == 0) {
-            throw std::runtime_error("Wrench measurement does not contain correct foot frames");
+            std::ostringstream err_msg;
+            err_msg << "Foot frame < " << frame << " > does not exist in the force measurements";
+            throw std::runtime_error(err_msg.str());
         }
     }
 
@@ -728,8 +730,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             state.contact_state_.timestamp = ft->at(frame).timestamp;
 
             // Transform F/T to base frame
-            contacts_force[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
+            contacts_force[frame] = R_world_to_base * base_to_foot_orientations.at(frame).toRotationMatrix() *
                                     params_.R_foot_to_force.at(frame) * ft->at(frame).force;
+
             if (!state.isPointFeet() && ft->at(frame).torque.has_value()) {
                 contacts_torque[frame] = base_to_foot_orientations.at(frame).toRotationMatrix() *
                                          params_.R_foot_to_torque.at(frame) *
