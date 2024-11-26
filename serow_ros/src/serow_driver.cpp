@@ -284,7 +284,7 @@ private:
                             state->getFootAngularVelocity(foot.child_frame_id).z();
                         feet_publisher_[i].publish(foot);
 
-                        auto force_vec = state.value().getContactForces(foot.child_frame_id);
+                        auto force_vec = state.value().getContactForce(foot.child_frame_id);
                         contact_forces_[i].header.seq += 1;
                         contact_forces_[i].header.frame_id = foot.child_frame_id;
                         contact_forces_[i].header.stamp = timestamp;

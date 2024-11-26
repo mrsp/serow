@@ -183,7 +183,7 @@ class State {
     /// the robot has flat feet
     std::optional<bool> getContactStatus(const std::string& frame_name) const;
     /// Returns the contact forces in world frame.
-    std::optional<Eigen::Vector3d> getContactForces(const std::string& frame_name) const;
+    std::optional<Eigen::Vector3d> getContactForce(const std::string& frame_name) const;
 
     /// Returns the foot frame 3D position in world frame coordinates
     const Eigen::Vector3d& getFootPosition(const std::string& frame_name) const;
