@@ -95,7 +95,6 @@ class RobotKinematics {
         std::cout << "Joint Names " << std::endl;
         printJointNames();
         std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
-        std::cout << "Total mass of model " << computeTotalMass(*pmodel_) << " kg" << std::endl;
         std::cout << "Model loaded: " << model_name << std::endl;
     }
 

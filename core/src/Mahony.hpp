@@ -70,7 +70,7 @@ class Mahony {
      */
     Eigen::Matrix3d getR() const { return R_; }
 
-    /** @fn Eigen::Matrix3d getEuler()
+    /** @fn Eigen::Vector3d getEuler()
      *  @returns the orientation of IMU w.r.t the world frame as  euler angles in the RPY
      * convention
      */
@@ -78,8 +78,8 @@ class Mahony {
 
     /** @fn filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc)
      *  @brief Computes the IMU orientation w.r.t the world frame of reference
-     *  @param gyro_ angular velocity as measured by the IMU
-     *  @param acc_ linea acceleration as measured by the IMU
+     *  @param gyro angular velocity as measured by the IMU
+     *  @param acc linea acceleration as measured by the IMU
      */
     void filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc) {
         double recipNorm;

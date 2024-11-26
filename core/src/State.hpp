@@ -182,6 +182,9 @@ class State {
     /// Returns the contact frame binary contact status if the frame is in contact. Only applies if
     /// the robot has flat feet
     std::optional<bool> getContactStatus(const std::string& frame_name) const;
+    /// Returns the contact forces in world frame.
+    std::optional<Eigen::Vector3d> getContactForce(const std::string& frame_name) const;
+
     /// Returns the foot frame 3D position in world frame coordinates
     const Eigen::Vector3d& getFootPosition(const std::string& frame_name) const;
     /// Returns the foot frame 3D orientation in world frame coordinates 
