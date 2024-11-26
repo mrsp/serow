@@ -72,14 +72,27 @@ public:
         
         auto state = serow_.getState(true);
         for (const auto& frame: state->getContactsFrame()) {
-            nav_msgs::Odometry msg;
-            msg.header.frame_id = "world";
-            msg.child_frame_id = frame;
-            feet_.push_back(std::move(msg));
-            std::string topic = "/serow/" + frame + "/odom";
-            std::transform(topic.begin(), topic.end(), topic.begin(), ::tolower);
-            ros::Publisher pub = nh_.advertise<nav_msgs::Odometry>(topic, 1);
-            feet_publisher_.push_back(std::move(pub));
+            nav_msgs::Odometry odom_msg;
+            geometry_msgs::WrenchStamped force_msg;
+
+            odom_msg.header.frame_id = "world";
+            odom_msg.child_frame_id = frame;
+            feet_.push_back(std::move(odom_msg));
+
+            force_msg.header.frame_id = "odom";
+            contact_forces_.push_back(std::move(force_msg));
+
+            std::string odom_topic = "/serow/" + frame + "/odom";
+            std::string force_topic = "/serow/" + frame + "/contact_force";
+
+            std::transform(odom_topic.begin(), odom_topic.end(), odom_topic.begin(), ::tolower);
+            std::transform(force_topic.begin(), force_topic.end(), force_topic.begin(), ::tolower);
+
+            ros::Publisher odom_pub = nh_.advertise<nav_msgs::Odometry>(odom_topic, 1);
+            ros::Publisher force_pub = nh_.advertise<geometry_msgs::WrenchStamped>(force_topic, 1);
+
+            feet_publisher_.push_back(std::move(odom_pub));
+            contact_forces_publisher_.push_back(std::move(force_pub));
         }
 
         ROS_INFO("SEROW was initialized successfully");
@@ -270,7 +283,19 @@ private:
                         foot.twist.twist.angular.z =
                             state->getFootAngularVelocity(foot.child_frame_id).z();
                         feet_publisher_[i].publish(foot);
+
+                        auto force_vec = state.value().getContactForce(foot.child_frame_id);
+                        contact_forces_[i].header.seq += 1;
+                        contact_forces_[i].header.frame_id = foot.child_frame_id;
+                        contact_forces_[i].header.stamp = timestamp;
+                        contact_forces_[i].wrench.force.x = force_vec.value().x();
+                        contact_forces_[i].wrench.force.y = force_vec.value().y();
+                        contact_forces_[i].wrench.force.z = force_vec.value().z();
+
+                        contact_forces_publisher_[i].publish(contact_forces_[i]);
                         i++;
+
+
                     }
 
                     
@@ -299,7 +324,7 @@ private:
     ros::Publisher momentum_publisher_;
     ros::Publisher momentum_rate_publisher_;
     std::vector<ros::Publisher> feet_publisher_;
-
+    std::vector<ros::Publisher> contact_forces_publisher_;
     std::vector<ros::Subscriber> force_torque_state_subscriptions_;
     std::optional<sensor_msgs::JointState> joint_state_data_;
     std::optional<sensor_msgs::Imu> base_imu_data_;
@@ -310,6 +335,7 @@ private:
     nav_msgs::Odometry com_;
     nav_msgs::Odometry cop_;
     std::vector<nav_msgs::Odometry> feet_;
+    std::vector<geometry_msgs::WrenchStamped> contact_forces_;
     geometry_msgs::TwistStamped momentum_;
     geometry_msgs::TwistStamped momentum_rate_;
 
