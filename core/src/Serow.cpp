@@ -828,6 +828,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     KinematicMeasurement kin;
     kin.contacts_status = state.contact_state_.contacts_status;
     kin.contacts_probability = state.contact_state_.contacts_probability;
+    kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
+    // TODO (@sp): Find a reasonable formula
+    kin.base_linear_velocity_cov = Eigen::Matrix3d::Identity();
     kin.contacts_position = leg_odometry_->getContactPositions();
     kin.position_cov = params_.contact_position_cov.asDiagonal();
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
