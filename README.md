@@ -1,6 +1,9 @@
 
 
 # README
+## This repository is a work in progress.
+We are actively developing and addressing issues with the estimation framework. Contributions, feedback, or suggestions are highly appreciated as we continue to enhance this project!
+
 ![SEROW](img/serow.jpg)
 
 SEROW (State Estimation RObot Walking) facilitates legged robot state estimation. Designed as a versatile tool, SEROW offers a generalized estimation solution applicable to legged robots with N limbs, accommodating both point and flat feet configurations. Notably, the framework's codebase is openly accessible under the GNU GPLv3 License.
