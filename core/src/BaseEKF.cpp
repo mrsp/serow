@@ -187,19 +187,18 @@ BaseState BaseEKF::updateWithTwist(const BaseState& state,
                                    const Eigen::Matrix3d& base_linear_velocity_cov) {
     BaseState updated_state = state;
 
+    const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
+    // Construct the linearized measurement matrix H
     Eigen::MatrixXd H;
     H.setZero(3, num_states_);
-    const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
+    H.block(0, v_idx_[0], 3, 3) = R_world_to_base;
+    H.block(0, r_idx_[0], 3, 3) = -R_world_to_base * lie::so3::wedge(state.base_linear_velocity);
 
     // Construct the innovation vector z
     const Eigen::Vector3d z = base_linear_velocity - R_world_to_base * state.base_linear_velocity;
 
-    // Construct the linearized measurement matrix H
-    H.block(0, v_idx_[0], 3, 3) = R_world_to_base;
-    H.block(3, r_idx_[0], 3, 3) = -R_world_to_base * lie::so3::wedge(state.base_linear_velocity);
-
     // Construct the measurement noise matrix R
-    Eigen::MatrixXd R = base_linear_velocity_cov;
+    const Eigen::Matrix3d R = base_linear_velocity_cov;
 
     const Eigen::Matrix3d s = R + H * P_ * H.transpose();
     const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
@@ -257,7 +256,6 @@ BaseState BaseEKF::update(const BaseState& state, const KinematicMeasurement& ki
                                odom->base_position_cov, odom->base_orientation_cov);
     }
 
- 
     return updated_state;
 }
 
