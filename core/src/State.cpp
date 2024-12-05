@@ -458,6 +458,13 @@ const Eigen::Quaterniond& State::getFootOrientation(const std::string& frame_nam
     return base_state_.feet_orientation.at(frame_name);
 }
 
+Eigen::Isometry3d State::getFootPose(const std::string& frame_name) const {
+    Eigen::Isometry3d foot_pose = Eigen::Isometry3d::Identity();
+    foot_pose.linear() = base_state_.feet_orientation.at(frame_name).toRotationMatrix();
+    foot_pose.translation() = base_state_.feet_position.at(frame_name);
+    return foot_pose;
+}
+
 const Eigen::Vector3d& State::getFootLinearVelocity(const std::string& frame_name) const {
     return base_state_.feet_linear_velocity.at(frame_name);
 }

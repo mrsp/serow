@@ -189,6 +189,8 @@ class State {
     const Eigen::Vector3d& getFootPosition(const std::string& frame_name) const;
     /// Returns the foot frame 3D orientation in world frame coordinates 
     const Eigen::Quaterniond& getFootOrientation(const std::string& frame_name) const;
+    /// Returns the foot frame 3D pose in world frame coordinates as a rigid transformation 
+    Eigen::Isometry3d getFootPose(const std::string& frame_name) const;
     /// Returns the foot frame 3D linear velocity in world frame coordinates
     const Eigen::Vector3d& getFootLinearVelocity(const std::string& frame_name) const;
     /// Returns the foot frame 3D angular velocity in world frame coordinates 

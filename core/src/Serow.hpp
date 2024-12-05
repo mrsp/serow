@@ -16,6 +16,7 @@
 #include <map>
 #include <string>
 
+#include "BaseEKF.hpp"
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
 #include "ContactEKF.hpp"
@@ -195,6 +196,8 @@ class Serow {
         /// @brief virtual flat terrain measurement uncertainty (m^2), only applies if
         /// is_flat_terrain = true
         double terrain_height_covariance{};
+        bool is_contact_ekf{};
+        Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
     };
 
     /// @brief SEROW's configuration
@@ -211,7 +214,8 @@ class Serow {
     State state_;
     /// @brief base estimator that fuses base IMU, leg end-effector contact and relative to the base
     /// leg kinematic measurements
-    ContactEKF base_estimator_;
+    ContactEKF base_estimator_con_;
+    BaseEKF base_estimator_;
     /// @brief coM estimator that fuses ground reaction force, base IMU, and CoM kinematic
     /// measurements
     CoMEKF com_estimator_;
