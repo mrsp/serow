@@ -18,7 +18,7 @@
     "imu_rate": 100.0,
     "R_base_to_gyro": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
     "R_base_to_acc": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-    "calibrate_imu": false,
+    "calibrate_initial_imu_bias": false,
     "max_imu_calibration_cycles": 1000,
     "bias_acc": [0.0, 0.0, 0.0],
     "bias_gyro": [0.0, 0.0, 0.0],

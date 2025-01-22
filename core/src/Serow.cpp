@@ -86,12 +86,12 @@ bool Serow::initialize(const std::string& config_file) {
     }
     kinematic_estimator_ = std::make_unique<RobotKinematics>(findFilepath(config["model_path"]));
 
-    if (!config["calibrate_imu"].is_boolean()) {
-        std::cerr << "Configuration: calibrate_imu must be boolean \n";
+    if (!config["calibrate_initial_imu_bias"].is_boolean()) {
+        std::cerr << "Configuration: calibrate_initial_imu_bias must be boolean \n";
         return false;
     }
-    params_.calibrate_imu = config["calibrate_imu"];
-    if (!params_.calibrate_imu) {
+    params_.calibrate_initial_imu_bias = config["calibrate_initial_imu_bias"];
+    if (!params_.calibrate_initial_imu_bias) {
         if (!config["bias_acc"].is_array() || config["bias_acc"].size() != 3) {
             std::cerr << "Configuration: bias_acc must be an array of 3 elements \n";
             return false;
@@ -652,7 +652,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                 joint_estimators_.at(key).filter(Eigen::Matrix<double, 1, 1>(value.position))(0);
         }
     }
-
     // Estimate the base frame attitude
     imu.angular_velocity = params_.R_base_to_gyro * imu.angular_velocity;
     imu.linear_acceleration = params_.R_base_to_acc * imu.linear_acceleration;
@@ -660,16 +659,16 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
 
     // Estimate the imu bias in the base frame assumming that the robot is standing still
-    if (params_.calibrate_imu && imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
+    if (params_.calibrate_initial_imu_bias && imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
         params_.bias_gyro += imu.angular_velocity;
         params_.bias_acc += imu.linear_acceleration -
                             R_world_to_base.transpose() * Eigen::Vector3d(0.0, 0.0, params_.g);
         imu_calibration_cycles_++;
         return;
-    } else if (params_.calibrate_imu) {
+    } else if (params_.calibrate_initial_imu_bias) {
         params_.bias_acc /= imu_calibration_cycles_;
         params_.bias_gyro /= imu_calibration_cycles_;
-        params_.calibrate_imu = false;
+        params_.calibrate_initial_imu_bias = false;
         std::cout << "Calibration finished at " << imu_calibration_cycles_ << std::endl;
         std::cout << "Gyro biases " << params_.bias_gyro.transpose() << std::endl;
         std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;

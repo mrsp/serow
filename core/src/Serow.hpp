@@ -66,7 +66,7 @@ class Serow {
         /// @brief gravity constant (m/s^2)
         double g{};
         /// @brief whether or not to estimate initial values for the IMU gyro/accelerometer biases
-        bool calibrate_imu{};
+        bool calibrate_initial_imu_bias{};
         /// @brief number of IMU measurements to use for estimating the IMU gyro/accelerometer
         /// biases
         double max_imu_calibration_cycles{};
