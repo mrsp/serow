@@ -61,7 +61,6 @@ TEST(SerowTests, NaoTest) {
     std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
     force_torque.insert({"l_ankle", ft});
     force_torque.insert({"r_ankle", ft});
-
     auto t0 = std::chrono::high_resolution_clock::now();
     SEROW.filter(imu, joints, force_torque);
     auto t1 = std::chrono::high_resolution_clock::now();
