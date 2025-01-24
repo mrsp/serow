@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
 
 # Path to the HDF5 file
-measurement_file = "data/go2_slightly_back.h5"
+measurement_file = "data/go2_5secStill_5secMove_5secStill.h5"
 prediction_file = "data/serow_predictions.h5"
 # Load the data from the HDF5 file
 def load_gt_data(h5_file):
