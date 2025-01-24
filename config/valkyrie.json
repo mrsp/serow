@@ -40,10 +40,14 @@
   "median_window": 13,
   "outlier_detection": false,
   "convergence_cycles": 0,
+
   "imu_angular_velocity_covariance": [1e-4, 1e-4, 1e-4],
   "imu_angular_velocity_bias_covariance": [1e-6, 1e-6, 1e-6],
   "imu_linear_acceleration_covariance": [1e-3, 1e-3, 1e-3],
   "imu_linear_acceleration_bias_covariance": [1e-5, 1e-5, 1e-5],
+  
+  "use_contacts_in_base_estimation": false,
+  "base_linear_velocity_covariance": [1e-1, 1e-1, 1e-1],
   "contact_position_covariance": [1e-6, 1e-6, 1e-6],
   "contact_orientation_covariance": [1e-3, 1e-3, 1e-3],
   "contact_position_slip_covariance": [1e-4, 1e-4, 1e-4],
@@ -56,6 +60,7 @@
   "initial_base_position_covariance": [1.0, 1.0, 1.0],
   "initial_base_orientation_covariance": [1.0, 1.0, 1.0],
   "initial_base_linear_velocity_covariance": [1.0, 1.0, 1.0],
+  
   "initial_contact_position_covariance": [1.0, 1.0, 1.0],
   "initial_contact_orientation_covariance": [1.0, 1.0, 1.0],
   "initial_imu_linear_acceleration_bias_covariance": [1.0, 1.0, 1.0],
