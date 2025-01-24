@@ -302,6 +302,18 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
 
+    if (!config["use_contacts_in_base_estimation"].is_boolean()) {
+        std::cerr << "Configuration: use_contacts_in_base_estimation must be boolean \n";
+        return false;
+    }
+    params_.is_contact_ekf = config["use_contacts_in_base_estimation"];
+
+    if (!config["base_linear_velocity_covariance"].is_array() ||
+        config["base_linear_velocity_covariance"].size() != 3) {
+        std::cerr << "Configuration: base_linear_velocity_covariance must be an array of 3 elements \n";
+        return false;
+    }
+
     if (!config["contact_position_covariance"].is_array() ||
         config["contact_position_covariance"].size() != 3) {
         std::cerr << "Configuration: contact_position_covariance must be an array of 3 elements \n";
@@ -421,11 +433,16 @@ bool Serow::initialize(const std::string& config_file) {
             return false;
         }
         params_.linear_acceleration_bias_cov[i] = config["imu_linear_acceleration_bias_covariance"][i];
+        if (!config["base_linear_velocity_covariance"][i].is_number_float()) {
+            std::cerr << "Configuration: base_linear_velocity_covariance[" << i << "] must be float \n";
+            return false;
+        }
+        params_.base_linear_velocity_cov[i] = config["base_linear_velocity_covariance"][i];
         if (!config["contact_position_covariance"][i].is_number_float()) {
             std::cerr << "Configuration: contact_position_covariance[" << i << "] must be float \n";
             return false;
         }
-        params_.contact_position_cov[i] = config["contact_position_covariance"][i];
+        params_.contact_position_cov[i] = config["contact_position_covariance"][i];  
         if (!config["contact_orientation_covariance"].is_null()) {
             if (!config["contact_orientation_covariance"][i].is_number_float()) {
                 std::cerr << "Configuration: contact_orientation_covariance[" << i
@@ -804,8 +821,13 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         leg_odometry_ = std::make_unique<LegOdometry>(
             base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
             params_.tau_1, params_.joint_rate, params_.g, params_.eps);
-        base_estimator_.init(state.base_state_, state.getContactsFrame(), state.isPointFeet(),
-                             params_.g, params_.imu_rate, params_.outlier_detection);
+        
+        if (params_.is_contact_ekf) {
+            base_estimator_con_.init(state.base_state_, state.getContactsFrame(), state.isPointFeet(),
+                                params_.g, params_.imu_rate, params_.outlier_detection);
+        } else {
+            base_estimator_.init(state.base_state_, params_.g, params_.imu_rate, params_.outlier_detection);
+        }
         com_estimator_.init(state.centroidal_state_, params_.mass, params_.g,
                             params_.force_torque_rate);
     }
@@ -827,6 +849,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     KinematicMeasurement kin;
     kin.contacts_status = state.contact_state_.contacts_status;
     kin.contacts_probability = state.contact_state_.contacts_probability;
+    kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
+    kin.base_linear_velocity_cov = params_.base_linear_velocity_cov.asDiagonal();
     kin.contacts_position = leg_odometry_->getContactPositions();
     kin.position_cov = params_.contact_position_cov.asDiagonal();
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
@@ -854,8 +878,11 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     // Call the base estimator predict step utilizing imu and contact status measurements
     state.base_state_.timestamp = imu.timestamp;
-    state.base_state_ = base_estimator_.predict(state.base_state_, imu, kin);
-
+    if (params_.is_contact_ekf) {
+        state.base_state_ = base_estimator_con_.predict(state.base_state_, imu, kin);
+    } else {
+        state.base_state_ = base_estimator_.predict(state.base_state_, imu);
+    }
     // Call the base estimator update step by employing relative contact pose, odometry and terrain
     // measurements
     if (odom.has_value()) {
@@ -868,7 +895,25 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                                      params_.T_base_to_odom.linear().transpose();
     }
     state.base_state_.timestamp = kin.timestamp;
-    state.base_state_ = base_estimator_.update(state.base_state_, kin, odom, terrain_);
+    
+    if (params_.is_contact_ekf) {
+        state.base_state_ = base_estimator_con_.update(state.base_state_, kin, odom, terrain_);
+    } else {
+        state.base_state_ = base_estimator_.update(state.base_state_, kin, odom);
+        std::map<std::string, Eigen::Quaterniond> con_orient;
+        for (const auto& frame : state.getContactsFrame()) {
+            const Eigen::Isometry3d base_pose = state.getBasePose();
+            state.base_state_.contacts_position[frame] =
+                base_pose * kin.contacts_position.at(frame);
+            if (!state.isPointFeet()) {
+                con_orient[frame] = Eigen::Quaterniond(
+                    base_pose.linear() * kin.contacts_orientation->at(frame).toRotationMatrix());
+            }
+        }
+        if (!state.isPointFeet()) {
+            state.base_state_.contacts_orientation = std::move(con_orient);
+        }
+    }
 
     // Estimate the angular acceleration using the gyro velocity
     if (!gyro_derivative_estimator) {
@@ -934,10 +979,11 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         double den = 0.0;
         for (const auto& frame : state.getContactsFrame()) {
             grf.timestamp = ft->at(frame).timestamp;
+            const Eigen::Isometry3d foot_pose =  state.getFootPose(frame);
             if (state.contact_state_.contacts_probability.at(frame) > 0.0) {
-                grf.force += state.getContactPose(frame)->linear() * ft->at(frame).force;
+                grf.force += foot_pose.linear() * ft->at(frame).force;
                 grf.cop += state.contact_state_.contacts_probability.at(frame) *
-                           (*state.getContactPose(frame) * ft->at(frame).cop);
+                           (foot_pose * ft->at(frame).cop);
                 den += state.contact_state_.contacts_probability.at(frame);
             }
         }

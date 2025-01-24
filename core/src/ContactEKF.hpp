@@ -32,44 +32,11 @@
 
 #include <iostream>
 
+#include "OutlierDetector.hpp"
 #include "Measurement.hpp"  // Includes various sensor measurements
 #include "State.hpp"        // Includes definitions of robot state variables
 
 namespace serow {
-
-/**
- * @struct OutlierDetector
- * @brief Implements outlier detection mechanisms using beta distribution parameters for state
- *        estimation in humanoid robots.
- */
-struct OutlierDetector {
-    double zeta = 1.0;        ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
-    double f_0 = 0.1;         ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
-    double e_0 = 0.9;         ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
-    double f_t = 0.1;         ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
-    double e_t = 0.9;         ///< Parameter for outlier detection: https://www.researchgate.net/publication/334745931_Outlier-Robust_State_Estimation_for_Humanoid_Robots
-    double threshold = 1e-5; 
-    size_t iters = 4;         ///< Number of iterations for outlier detection
-
-    /**
-     * @brief Computes the digamma function approximation.
-     * @param x Argument for digamma function.
-     * @return Computed value of digamma function.
-     */
-    double computePsi(double x);
-
-    /**
-     * @brief Initializes the outlier detection process.
-     */
-    void init();
-
-    /**
-     * @brief Estimates the outlier indicator zeta based on provided matrices.
-     * @param BetaT Matrix used in outlier estimation.
-     * @param R Matrix used in outlier estimation.
-     */
-    void estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix3d& R);
-};
 
 /**
  * @class ContactEKF
