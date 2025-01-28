@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
 
+display_plots = True
+
 # Path to the HDF5 file
 measurement_file = "data/go2_5secStill_5secMove_5secStill.h5"
 prediction_file = "data/serow_predictions.h5"
@@ -46,6 +48,48 @@ def load_serow_preds(h5_file):
         
     return pos_x,pos_y,pos_z,rot_x,rot_y,rot_z,rot_w, b_ax,b_ay,b_az,b_wx,b_wy,b_wz
 
+
+def compute_ATE_pos(gt_pos, est_x, est_y, est_z):
+    est_pos = np.column_stack((est_x, est_y, est_z))
+    error = np.linalg.norm(gt_pos-est_pos, axis = 1)
+    ate = np.sqrt(np.mean(error**2))
+    return ate
+
+def compute_ATE_rot(gt_rot,est_rot_w,est_rot_x,est_rot_y,est_rot_z):
+    est_rot = np.column_stack((est_rot_w,est_rot_x, est_rot_y, est_rot_z))
+    rotation_errors = np.zeros((gt_rot.shape[0]))
+    for i in range(gt_rot.shape[0]):    
+        q_gt = gt_rot[i]
+        q_est = est_rot[i]
+        
+        
+        q_gt_conj = np.array([q_gt[0], -q_gt[1], -q_gt[2], -q_gt[3]])  # Conjugate of q_gt
+        q_rel = quaternion_multiply(q_gt_conj, q_est)
+        rotation_errors[i] = 2 * np.arccos(np.clip(q_rel[0],-1.0,1.0))
+        
+    ate_rot = np.sqrt(np.mean(rotation_errors**2))
+    return ate_rot    
+            
+def quaternion_multiply(q1, q2):
+    """
+    Multiply two quaternions q1 and q2.
+    
+    Parameters:
+    - q1: numpy array of shape (4,), quaternion (w, x, y, z).
+    - q2: numpy array of shape (4,), quaternion (w, x, y, z).
+    
+    Returns:
+    - q: numpy array of shape (4,), resulting quaternion.
+    """
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+    return np.array([w, x, y, z])   
+
+
 if __name__ == "__main__":
     gt_pos, gt_rot, imu, timestamps,FL_forces,FR_forces,RL_forces,RR_forces = load_gt_data(measurement_file)
     est_pos_x, est_pos_y, est_pos_z, est_rot_x, est_rot_y, est_rot_z, est_rot_w, b_ax,b_ay,b_az,b_wx,b_wy,b_wz=  load_serow_preds(prediction_file)
@@ -76,7 +120,11 @@ if __name__ == "__main__":
     RR_forces = RR_forces[(size_diff):(-10)]    
     imu = imu[(size_diff):(-10)]    
 
-
+    print("Position ATE: ", compute_ATE_pos(gt_pos,est_pos_x,est_pos_y,est_pos_z))
+    print("Rotation ATE: ", compute_ATE_rot(gt_rot,est_rot_w, est_rot_x,est_rot_y,est_rot_z))
+    
+    
+    
     timestamps = timestamps[(size_diff):(-10)]
    
     # Plotting Ground Truth and Estimated Position (x, y, z)
@@ -189,4 +237,6 @@ if __name__ == "__main__":
     axs5[3].set_xlabel('Timestamp')
 
     plt.tight_layout()
-    plt.show()
+
+    if (display_plots):
+        plt.show()
