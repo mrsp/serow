@@ -1,0 +1,1 @@
+GO2 stays still for a bit. Then moves for around ten secs at the x-axis. Stops, then rotates 90 degrees and moves straight for another 10 secs. 

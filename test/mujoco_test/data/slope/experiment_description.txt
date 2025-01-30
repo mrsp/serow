@@ -1,0 +1,3 @@
+10 degree slope ramp placed 3 meters in front of the robot. 
+Constant velocity movement along the x-axis only.
+Ends with the robot troting at the top of the slope. 

@@ -1,0 +1,1 @@
+Initializes at normal terrain, then from the first few steps it starts walking on rough terrain. 

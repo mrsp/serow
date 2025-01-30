@@ -7,8 +7,8 @@
 #include <H5Cpp.h>
 #include <serow/Serow.hpp>
 
-constexpr const char* INPUT_FILE = "../mujoco_test/data/go2_5secStill_5secMove_5secStill.h5";
-constexpr const char* OUTPUT_FILE = "../mujoco_test/data/serow_predictions.h5";
+constexpr const char* INPUT_FILE = "../mujoco_test/data/slope/go2_data.h5";
+constexpr const char* OUTPUT_FILE = "../mujoco_test/data/slope/serow_predictions.h5";
 
 // Saves predictions to .h5 file
 void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath, const std::vector<double>& data) {

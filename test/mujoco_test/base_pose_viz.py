@@ -9,8 +9,8 @@ from matplotlib.animation import FuncAnimation
 display_plots = True
 
 # Path to the HDF5 file
-measurement_file = "data/go2_5secStill_5secMove_5secStill.h5"
-prediction_file = "data/serow_predictions.h5"
+measurement_file = "data/slope/go2_data.h5"
+prediction_file = "data/slope/serow_predictions.h5"
 # Load the data from the HDF5 file
 def load_gt_data(h5_file):
     with h5py.File(h5_file, "r") as f:
