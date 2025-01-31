@@ -46,8 +46,9 @@
     "imu_linear_acceleration_covariance": [1e-2, 1e-2, 1e-2],
     "imu_linear_acceleration_bias_covariance": [1e-4, 1e-4, 1e-4],
     
-    "use_contacts_in_base_estimation": true,
-    "base_linear_velocity_covariance": [1e-1, 1e-1, 1e-1],
+    "use_contacts_in_base_estimation": false,
+    "base_linear_velocity_covariance": [1e-10, 1e-10, 1e-10],
+
     "contact_position_covariance": [1e-4, 1e-4, 1e-4],
     "contact_orientation_covariance": null,
     "contact_position_slip_covariance": [1e-6, 1e-6, 1e-6],
