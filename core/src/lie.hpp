@@ -69,33 +69,89 @@ inline Eigen::Matrix3d expMap(const Eigen::Vector3d& omega) {
 /// @brief Computes the logarithmic map for a component in SO(3) group
 /// @param Rt 3x3 Rotation in SO(3) group
 /// @return 3D twist in so(3) algebra
+/// @note Transferred from GTSAM
 inline Eigen::Vector3d logMap(const Eigen::Matrix3d& Rt) {
-    Eigen::Vector3d res = Eigen::Vector3d::Zero();
-    const double costheta = (Rt.trace() - 1.0) / 2.0;
-    const double theta = acos(costheta);
+  using std::sin;
+  using std::sqrt;
 
-    if (std::fabs(theta) > std::numeric_limits<double>::epsilon()) {
-        Eigen::Matrix3d lnR = Rt - Rt.transpose();
-        lnR *= theta / (2.0 * sin(theta));
-        res = vec(lnR);
+  // note switch to base 1
+  const Eigen::Matrix3d& R = Rt.matrix();
+  const double &R11 = R(0, 0), R12 = R(0, 1), R13 = R(0, 2);
+  const double &R21 = R(1, 0), R22 = R(1, 1), R23 = R(1, 2);
+  const double &R31 = R(2, 0), R32 = R(2, 1), R33 = R(2, 2);
+
+  // Get trace(R)
+  const double tr = R.trace();
+
+  Eigen::Vector3d omega;
+
+  // when trace == -1, i.e., when theta = +-pi, +-3pi, +-5pi, etc.
+  // we do something special
+  if (tr + 1.0 < 1e-3) {
+    if (R33 > R22 && R33 > R11) {
+      // R33 is the largest diagonal, a=3, b=1, c=2
+      const double W = R21 - R12;
+      const double Q1 = 2.0 + 2.0 * R33;
+      const double Q2 = R31 + R13;
+      const double Q3 = R23 + R32;
+      const double r = sqrt(Q1);
+      const double one_over_r = 1 / r;
+      const double norm = sqrt(Q1*Q1 + Q2*Q2 + Q3*Q3 + W*W);
+      const double sgn_w = W < 0 ? -1.0 : 1.0;
+      const double mag = M_PI - (2 * sgn_w * W) / norm;
+      const double scale = 0.5 * one_over_r * mag;
+      omega = sgn_w * scale * Eigen::Vector3d(Q2, Q3, Q1);
+    } else if (R22 > R11) {
+      // R22 is the largest diagonal, a=2, b=3, c=1
+      const double W = R13 - R31;
+      const double Q1 = 2.0 + 2.0 * R22;
+      const double Q2 = R23 + R32;
+      const double Q3 = R12 + R21;
+      const double r = sqrt(Q1);
+      const double one_over_r = 1 / r;
+      const double norm = sqrt(Q1*Q1 + Q2*Q2 + Q3*Q3 + W*W);
+      const double sgn_w = W < 0 ? -1.0 : 1.0;
+      const double mag = M_PI - (2 * sgn_w * W) / norm;
+      const double scale = 0.5 * one_over_r * mag;
+      omega = sgn_w * scale * Eigen::Vector3d(Q3, Q1, Q2);
+    } else {
+      // R11 is the largest diagonal, a=1, b=2, c=3
+      const double W = R32 - R23;
+      const double Q1 = 2.0 + 2.0 * R11;
+      const double Q2 = R12 + R21;
+      const double Q3 = R31 + R13;
+      const double r = sqrt(Q1);
+      const double one_over_r = 1 / r;
+      const double norm = sqrt(Q1*Q1 + Q2*Q2 + Q3*Q3 + W*W);
+      const double sgn_w = W < 0 ? -1.0 : 1.0;
+      const double mag = M_PI - (2 * sgn_w * W) / norm;
+      const double scale = 0.5 * one_over_r * mag;
+      omega = sgn_w * scale * Eigen::Vector3d(Q1, Q2, Q3);
     }
+  } else {
+    double magnitude;
+    const double tr_3 = tr - 3.0; // could be non-negative if the matrix is off orthogonal
+    if (tr_3 < -1e-6) {
+      // this is the normal case -1 < trace < 3
+      double theta = acos((tr - 1.0) / 2.0);
+      magnitude = theta / (2.0 * sin(theta));
+    } else {
+      // when theta near 0, +-2pi, +-4pi, etc. (trace near 3.0)
+      // use Taylor expansion: theta \approx 1/2-(t-3)/12 + O((t-3)^2)
+      // see https://github.com/borglab/gtsam/issues/746 for details
+      magnitude = 0.5 - tr_3 / 12.0 + tr_3*tr_3/60.0;
+    }
+    omega = magnitude * Eigen::Vector3d(R32 - R23, R13 - R31, R21 - R12);
+  }
 
-    return res;
+  return omega;
 }
 
 /// @brief Computes the logarithmic map for a component in SO(3) group
 /// @param q quaternion in SO(3) group
 /// @return 3D twist in so(3) algebra
 inline Eigen::Vector3d logMap(const Eigen::Quaterniond& q) {
-    Eigen::Vector3d omega = Eigen::Vector3d::Zero();
-    // Get the vector part
-    Eigen::Vector3d qv = Eigen::Vector3d(q.x(), q.y(), q.z());
-    qv *= (1.0 / qv.norm());
-    omega = qv * (2.0 * std::acos(q.w() / q.norm()));
-    if (std::isnan(omega(0) + omega(1) + omega(2))) {
-        omega = Eigen::Vector3d::Zero();
-    }
-    return omega;
+    return logMap(q.toRotationMatrix());
 }
 
 /// @brief Performs the SO(3) group plus operation
@@ -111,7 +167,7 @@ inline Eigen::Matrix3d plus(const Eigen::Matrix3d& R, const Eigen::Vector3d& tau
 /// @param R1 3x3 Rotation in SO(3) group
 /// @return A 3D twist in so(3) algebra
 inline Eigen::Vector3d minus(const Eigen::Matrix3d& R0, const Eigen::Matrix3d& R1) {
-    return logMap(R0.transpose() * R1);
+    return logMap(R1.transpose() * R0);
 }
 
 /// @brief Performs the SO(3) group minus operation
@@ -119,7 +175,7 @@ inline Eigen::Vector3d minus(const Eigen::Matrix3d& R0, const Eigen::Matrix3d& R
 /// @param q1 quaternion in SO(3) group
 /// @return A 3D twist in so(3) algebra
 inline Eigen::Vector3d minus(const Eigen::Quaterniond& q0, const Eigen::Quaterniond& q1) {
-    return logMap(q0.inverse() * q1);
+    return logMap(q1.inverse() * q0);
 }
 
 }  // namespace so3

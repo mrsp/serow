@@ -314,6 +314,12 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
 
+    if (!config["base_orientation_covariance"].is_array() ||
+        config["base_orientation_covariance"].size() != 3) {
+        std::cerr << "Configuration: base_orientation_covariance must be an array of 3 elements \n";
+        return false;
+    }
+
     if (!config["contact_position_covariance"].is_array() ||
         config["contact_position_covariance"].size() != 3) {
         std::cerr << "Configuration: contact_position_covariance must be an array of 3 elements \n";
@@ -438,6 +444,11 @@ bool Serow::initialize(const std::string& config_file) {
             return false;
         }
         params_.base_linear_velocity_cov[i] = config["base_linear_velocity_covariance"][i];
+        if (!config["base_orientation_covariance"][i].is_number_float()) {
+            std::cerr << "Configuration: base_orientation_covariance[" << i << "] must be float \n";
+            return false;
+        }
+        params_.base_orientation_cov[i] = config["base_orientation_covariance"][i]; 
         if (!config["contact_position_covariance"][i].is_number_float()) {
             std::cerr << "Configuration: contact_position_covariance[" << i << "] must be float \n";
             return false;
@@ -838,7 +849,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         attitude_estimator_->getGyro() - attitude_estimator_->getR() * params_.bias_gyro,
         base_to_foot_orientations, base_to_foot_positions, base_to_foot_linear_velocities,
         base_to_foot_angular_velocities, state.contact_state_.contacts_force,
-        state.contact_state_.contacts_torque);
+        state.contact_state_.contacts_probability, state.contact_state_.contacts_torque);
 
     // Create the base estimation measurements
     imu.angular_velocity_cov = params_.angular_velocity_cov.asDiagonal();
@@ -854,7 +865,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     kin.contacts_position = leg_odometry_->getContactPositions();
     kin.position_cov = params_.contact_position_cov.asDiagonal();
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
-
+    kin.base_orientation = attitude_estimator_->getQ();
+    kin.base_orientation_cov = params_.base_orientation_cov.asDiagonal();
+    
     if (!state.isPointFeet()) {
         kin.contacts_orientation = leg_odometry_->getContactOrientations();
         kin.orientation_cov = params_.contact_orientation_cov.asDiagonal();

@@ -198,6 +198,7 @@ class Serow {
         double terrain_height_covariance{};
         bool is_contact_ekf{};
         Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
     };
 
     /// @brief SEROW's configuration

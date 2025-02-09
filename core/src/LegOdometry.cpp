@@ -86,17 +86,18 @@ void LegOdometry::estimate(
     const std::map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
     const std::map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
     const std::map<std::string, Eigen::Vector3d>& contact_forces,
+    const std::map<std::string, double>& contact_probabilities,
     std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques) {
     const Eigen::Matrix3d& Rwb = base_orientation.toRotationMatrix();
 
     double den = params_.eps * params_.num_leg_ee;
     std::map<std::string, double> force_weights;
-    for (const auto& [key, value] : contact_forces) {
-        den += value.z();
+    for (const auto& [key, value] : contact_probabilities) {
+        den += value;
     }
 
-    for (const auto& [key, value] : contact_forces) {
-        force_weights[key] = std::clamp((value.z() + params_.eps) / den, 0.0, 1.0);
+    for (const auto& [key, value] : contact_probabilities) {
+        force_weights[key] = std::clamp((value + params_.eps) / den, 0.0, 1.0);
     }
 
     if (!is_initialized) {

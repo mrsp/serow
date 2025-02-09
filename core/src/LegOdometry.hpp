@@ -144,6 +144,7 @@ class LegOdometry {
         const std::map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
         const std::map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
         const std::map<std::string, Eigen::Vector3d>& contact_forces,
+        const std::map<std::string, double>& contact_probabilities,
         std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques = std::nullopt);
 };
 
