@@ -55,14 +55,29 @@ inline Eigen::Vector3d vec(const Eigen::Matrix3d& M) {
 /// @return 3x3 Rotation in SO(3) group
 inline Eigen::Matrix3d expMap(const Eigen::Vector3d& omega) {
     Eigen::Matrix3d res = Eigen::Matrix3d::Identity();
-    const double omeganorm = omega.norm();
+    
+    const double theta2 = omega.dot(omega);
+    const double theta = std::sqrt(theta2);
+    const Eigen::Matrix3d W = wedge(omega);
+    const Eigen::Matrix3d WW = W * W;
+    double A;
+    double B;
 
-    if (omeganorm > std::numeric_limits<double>::epsilon()) {
-        Eigen::Matrix3d omega_skew = Eigen::Matrix3d::Zero();
-        omega_skew = wedge(omega);
-        res += omega_skew * (sin(omeganorm) / omeganorm);
-        res += (omega_skew * omega_skew) * ((1.0 - cos(omeganorm)) / (omeganorm * omeganorm));
+    if (theta2 > std::numeric_limits<double>::epsilon()) {
+      const double sin_theta = std::sin(theta);
+      A = sin_theta / theta;
+      const double s2 = std::sin(theta / 2.0);
+      const double one_minus_cos =
+          2.0 * s2 * s2;  // numerically better than [1 - cos(theta)]
+      B = one_minus_cos / theta2;
+    } else {
+      // Taylor expansion at 0
+      A = 1.0 - theta2 * 1.0 / 6.0;
+      B = 0.5 - theta2 * 1.0 / 24.0;
     }
+
+    res += A * W;
+    res += B * WW;
     return res;
 }
 
