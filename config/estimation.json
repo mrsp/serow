@@ -61,7 +61,7 @@
   "R_base_to_acc": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
   
   // boolean: whether or not to estimate initial values for the IMU gyro/accelerometer biases
-  "calibrate_imu": false,
+  "calibrate_initial_imu_bias": false,
   
   // integer: number of IMU measurements to use for estimating the IMU gyro/accelerometer biases
   "max_imu_calibration_cycles": 300,
