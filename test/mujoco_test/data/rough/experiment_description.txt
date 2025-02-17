@@ -1,1 +1,1 @@
-Initializes at normal terrain, then from the first few steps it starts walking on rough terrain. 
+GO2 is initialized on even terrain. After just a few steps it locomotes over a rough terrain region.
