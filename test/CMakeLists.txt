@@ -3,7 +3,7 @@ project(serow_tests VERSION 1.0.0 LANGUAGES CXX)
 
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 
 include(FetchContent)
@@ -21,6 +21,11 @@ target_link_libraries(GTest::GTest INTERFACE gtest_main)
 find_package(pinocchio REQUIRED)
 find_package(serow REQUIRED)
 
+# Find and link HDF5
+find_package(HDF5 REQUIRED COMPONENTS CXX)
+include_directories(${HDF5_INCLUDE_DIRS})
+
+# Add executables
 add_executable(nao_test nao_test.cpp)
 target_link_libraries(nao_test PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
 
@@ -29,3 +34,7 @@ target_link_libraries(go2_test PRIVATE serow pinocchio::pinocchio GTest::gtest_m
 
 add_executable(go1_test go1_test.cpp)
 target_link_libraries(go1_test PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
+
+# Add the executable for HDF5 and Serow processing
+add_executable(go2_mujoco_test mujoco_test/go2_mujoco_test.cpp)
+target_link_libraries(go2_mujoco_test PRIVATE serow pinocchio::pinocchio ${HDF5_LIBRARIES})

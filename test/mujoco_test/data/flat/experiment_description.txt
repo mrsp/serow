@@ -1,0 +1,1 @@
+Initially GO2 stays still. Subsequently, it moves for about 10 seconds in the x-direction. Then stops and rotates 90 degrees around the vertical axis. Finally, it moves straight for another 10 seconds. 

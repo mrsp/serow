@@ -67,7 +67,7 @@ class Serow {
         /// @brief gravity constant (m/s^2)
         double g{};
         /// @brief whether or not to estimate initial values for the IMU gyro/accelerometer biases
-        bool calibrate_imu{};
+        bool calibrate_initial_imu_bias{};
         /// @brief number of IMU measurements to use for estimating the IMU gyro/accelerometer
         /// biases
         double max_imu_calibration_cycles{};
@@ -198,6 +198,7 @@ class Serow {
         double terrain_height_covariance{};
         bool is_contact_ekf{};
         Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
+        Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
     };
 
     /// @brief SEROW's configuration

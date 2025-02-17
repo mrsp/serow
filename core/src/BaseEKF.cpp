@@ -184,23 +184,30 @@ BaseState BaseEKF::updateWithOdometry(const BaseState& state,
 
 BaseState BaseEKF::updateWithTwist(const BaseState& state,
                                    const Eigen::Vector3d& base_linear_velocity,
-                                   const Eigen::Matrix3d& base_linear_velocity_cov) {
+                                   const Eigen::Matrix3d& base_linear_velocity_cov,
+                                   const Eigen::Quaterniond& base_orientation,
+                                   const Eigen::Matrix3d& base_orientation_cov) {
     BaseState updated_state = state;
 
     const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
     // Construct the linearized measurement matrix H
     Eigen::MatrixXd H;
-    H.setZero(3, num_states_);
+    H.setZero(6, num_states_);
     H.block(0, v_idx_[0], 3, 3) = R_world_to_base;
     H.block(0, r_idx_[0], 3, 3) = -R_world_to_base * lie::so3::wedge(state.base_linear_velocity);
+    H.block(3, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
     // Construct the innovation vector z
-    const Eigen::Vector3d z = base_linear_velocity - R_world_to_base * state.base_linear_velocity;
+    Eigen::VectorXd z = Eigen::Matrix<double, 6, 1>::Zero();
+    z.head(3) = base_linear_velocity - R_world_to_base * state.base_linear_velocity;
+    z.tail(3) = lie::so3::minus(base_orientation, state.base_orientation);
 
     // Construct the measurement noise matrix R
-    const Eigen::Matrix3d R = base_linear_velocity_cov;
+    Eigen::MatrixXd R = Eigen::Matrix<double, 6, 6>::Zero();
+    R.topLeftCorner<3, 3>() = base_linear_velocity_cov;
+    R.bottomRightCorner<3, 3>() = base_orientation_cov;
 
-    const Eigen::Matrix3d s = R + H * P_ * H.transpose();
+    const Eigen::Matrix<double, 6, 6> s = R + H * P_ * H.transpose();
     const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
     const Eigen::VectorXd dx = K * z;
 
@@ -212,7 +219,7 @@ BaseState BaseEKF::updateWithTwist(const BaseState& state,
 
 
 BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
-                                      const Eigen::MatrixXd& P) const {
+                                   const Eigen::MatrixXd& P) const {
     BaseState updated_state = state;
     updated_state.base_position += dx(p_idx_);
     updated_state.base_position_cov = P(p_idx_, p_idx_);
@@ -229,8 +236,8 @@ BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd
     return updated_state;
 }
 
-void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
-                             const Eigen::MatrixXd& P) const {
+void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx, 
+                          const Eigen::MatrixXd& P) const {
     state.base_position += dx(p_idx_);
     state.base_position_cov = P(p_idx_, p_idx_);
     state.base_linear_velocity += dx(v_idx_);
@@ -248,7 +255,8 @@ void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
 BaseState BaseEKF::update(const BaseState& state, const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom) {
     BaseState updated_state =
-        updateWithTwist(state, kin.base_linear_velocity, kin.base_linear_velocity_cov);
+        updateWithTwist(state, kin.base_linear_velocity, kin.base_linear_velocity_cov, 
+                        kin.base_orientation, kin.base_orientation_cov);
 
     if (odom.has_value()) {
         updated_state =
