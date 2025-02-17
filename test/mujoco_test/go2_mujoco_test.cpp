@@ -109,7 +109,6 @@ int main() {
         auto feet_force_RL = readHDF5(INPUT_FILE, "feet_force/RL");
         auto feet_force_RR = readHDF5(INPUT_FILE, "feet_force/RR");
         
-        
         // Read Timestamps
         auto timestamps = readHDF5(INPUT_FILE, "timestamps");
 
