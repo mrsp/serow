@@ -1,11 +1,11 @@
 // This file reads data from a .h5 and uses serow to save the predictions.
 
 #include <iostream>
-#include <vector>
-#include <map>
 #include <Eigen/Dense>
 #include <H5Cpp.h>
+#include <map>
 #include <serow/Serow.hpp>
+#include <vector>
 
 constexpr const char* INPUT_FILE = "../mujoco_test/data/slope/go2_data.h5";
 constexpr const char* OUTPUT_FILE = "../mujoco_test/data/slope/serow_predictions.h5";
