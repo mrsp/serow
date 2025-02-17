@@ -24,9 +24,9 @@ void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
         file = H5::H5File(fileName, H5F_ACC_TRUNC);
     }
 
-    size_t lastSlash = datasetPath.find_last_of('/');
-    std::string groupPath = datasetPath.substr(0, lastSlash);
-    std::string datasetName = datasetPath.substr(lastSlash + 1);
+    const size_t lastSlash = datasetPath.find_last_of('/');
+    std::string_view groupPath = datasetPath.substr(0, lastSlash);
+    std::string_view datasetName = datasetPath.substr(lastSlash + 1);
 
     if (datasetName.empty()) {
         throw std::invalid_argument("Dataset name cannot be empty.");
