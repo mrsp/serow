@@ -74,6 +74,7 @@ struct GroundReactionForceMeasurement {
 struct KinematicMeasurement {
     double timestamp{};                                                                     ///< Timestamp of the measurement (s)
     Eigen::Vector3d base_linear_velocity{Eigen::Vector3d::Zero()};                          ///< Base linear velocity (m/s)
+    Eigen::Quaterniond base_orientation{Eigen::Quaterniond::Identity()};                    ///< Base orientation (quaternion)
     std::map<std::string, bool> contacts_status;                                            ///< Map of contact status for different parts (0 or 1)
     std::map<std::string, double> contacts_probability;                                     ///< Map of contact probabilities ([0, 1])
     std::map<std::string, Eigen::Vector3d> contacts_position;                               ///< Map of contact positions relative to base frame (m) 
@@ -84,6 +85,7 @@ struct KinematicMeasurement {
     Eigen::Vector3d com_position{Eigen::Vector3d::Zero()};                                  ///< Center of mass (COM) position (m)
     Eigen::Vector3d com_linear_acceleration{Eigen::Vector3d::Zero()};                       ///< Center of mass (COM) linear acceleration (m/s^2)
     Eigen::Matrix3d base_linear_velocity_cov{Eigen::Matrix3d::Identity()};                  ///< Covariance of base linear velocity (m^2/s^2)
+    Eigen::Matrix3d base_orientation_cov{Eigen::Matrix3d::Identity()};                      ///< Covariance of base orientation (rad^2)
     Eigen::Matrix3d position_slip_cov{Eigen::Matrix3d::Identity()};                         ///< Covariance of position slip (m^2)
     Eigen::Matrix3d orientation_slip_cov{Eigen::Matrix3d::Identity()};                      ///< Covariance of orientation slip (rad^2)
     Eigen::Matrix3d position_cov{Eigen::Matrix3d::Identity()};                              ///< Covariance of position (m^2)

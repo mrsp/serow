@@ -123,7 +123,9 @@ class BaseEKF {
 
     BaseState updateWithTwist(const BaseState& state,
                               const Eigen::Vector3d& base_linear_velocity,
-                              const Eigen::Matrix3d& base_linear_velocity_cov);
+                              const Eigen::Matrix3d& base_linear_velocity_cov,
+                              const Eigen::Quaterniond& base_orientation,
+                              const Eigen::Matrix3d& base_orientation_cov);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.

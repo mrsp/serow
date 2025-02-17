@@ -86,12 +86,12 @@ bool Serow::initialize(const std::string& config_file) {
     }
     kinematic_estimator_ = std::make_unique<RobotKinematics>(findFilepath(config["model_path"]));
 
-    if (!config["calibrate_imu"].is_boolean()) {
-        std::cerr << "Configuration: calibrate_imu must be boolean \n";
+    if (!config["calibrate_initial_imu_bias"].is_boolean()) {
+        std::cerr << "Configuration: calibrate_initial_imu_bias must be boolean \n";
         return false;
     }
-    params_.calibrate_imu = config["calibrate_imu"];
-    if (!params_.calibrate_imu) {
+    params_.calibrate_initial_imu_bias = config["calibrate_initial_imu_bias"];
+    if (!params_.calibrate_initial_imu_bias) {
         if (!config["bias_acc"].is_array() || config["bias_acc"].size() != 3) {
             std::cerr << "Configuration: bias_acc must be an array of 3 elements \n";
             return false;
@@ -314,6 +314,12 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
 
+    if (!config["base_orientation_covariance"].is_array() ||
+        config["base_orientation_covariance"].size() != 3) {
+        std::cerr << "Configuration: base_orientation_covariance must be an array of 3 elements \n";
+        return false;
+    }
+
     if (!config["contact_position_covariance"].is_array() ||
         config["contact_position_covariance"].size() != 3) {
         std::cerr << "Configuration: contact_position_covariance must be an array of 3 elements \n";
@@ -438,6 +444,11 @@ bool Serow::initialize(const std::string& config_file) {
             return false;
         }
         params_.base_linear_velocity_cov[i] = config["base_linear_velocity_covariance"][i];
+        if (!config["base_orientation_covariance"][i].is_number_float()) {
+            std::cerr << "Configuration: base_orientation_covariance[" << i << "] must be float \n";
+            return false;
+        }
+        params_.base_orientation_cov[i] = config["base_orientation_covariance"][i]; 
         if (!config["contact_position_covariance"][i].is_number_float()) {
             std::cerr << "Configuration: contact_position_covariance[" << i << "] must be float \n";
             return false;
@@ -669,7 +680,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                 joint_estimators_.at(key).filter(Eigen::Matrix<double, 1, 1>(value.position))(0);
         }
     }
-
     // Estimate the base frame attitude
     imu.angular_velocity = params_.R_base_to_gyro * imu.angular_velocity;
     imu.linear_acceleration = params_.R_base_to_acc * imu.linear_acceleration;
@@ -677,16 +687,16 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
 
     // Estimate the imu bias in the base frame assumming that the robot is standing still
-    if (params_.calibrate_imu && imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
+    if (params_.calibrate_initial_imu_bias && imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
         params_.bias_gyro += imu.angular_velocity;
         params_.bias_acc += imu.linear_acceleration -
                             R_world_to_base.transpose() * Eigen::Vector3d(0.0, 0.0, params_.g);
         imu_calibration_cycles_++;
         return;
-    } else if (params_.calibrate_imu) {
+    } else if (params_.calibrate_initial_imu_bias) {
         params_.bias_acc /= imu_calibration_cycles_;
         params_.bias_gyro /= imu_calibration_cycles_;
-        params_.calibrate_imu = false;
+        params_.calibrate_initial_imu_bias = false;
         std::cout << "Calibration finished at " << imu_calibration_cycles_ << std::endl;
         std::cout << "Gyro biases " << params_.bias_gyro.transpose() << std::endl;
         std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
@@ -808,7 +818,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         state.base_state_.contacts_position = base_to_foot_positions;
         // Assuming the terrain is flat and the robot is initialized in a standing posture we can
         // have a measurement of the average terrain height constraining base estimation.
-        if (params_.is_flat_terrain) {
+        if (params_.is_flat_terrain && !terrain_.has_value()) {
             TerrainMeasurement tm(0.0, 0.0, params_.terrain_height_covariance);
             terrain_ = std::move(tm);
             for (const auto& frame : state.getContactsFrame()) {
@@ -839,7 +849,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         attitude_estimator_->getGyro() - attitude_estimator_->getR() * params_.bias_gyro,
         base_to_foot_orientations, base_to_foot_positions, base_to_foot_linear_velocities,
         base_to_foot_angular_velocities, state.contact_state_.contacts_force,
-        state.contact_state_.contacts_torque);
+        state.contact_state_.contacts_probability, state.contact_state_.contacts_torque);
 
     // Create the base estimation measurements
     imu.angular_velocity_cov = params_.angular_velocity_cov.asDiagonal();
@@ -855,7 +865,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     kin.contacts_position = leg_odometry_->getContactPositions();
     kin.position_cov = params_.contact_position_cov.asDiagonal();
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
-
+    kin.base_orientation = attitude_estimator_->getQ();
+    kin.base_orientation_cov = params_.base_orientation_cov.asDiagonal();
+    
     if (!state.isPointFeet()) {
         kin.contacts_orientation = leg_odometry_->getContactOrientations();
         kin.orientation_cov = params_.contact_orientation_cov.asDiagonal();
