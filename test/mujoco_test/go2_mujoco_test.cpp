@@ -72,7 +72,6 @@ std::vector<std::vector<double>> readHDF5(const std::string& filename, const std
     H5::DataSpace dataspace = dataset.getSpace();
     hsize_t dims[2];
     int ndims = dataspace.getSimpleExtentDims(dims);
-
     if (ndims != 2 || dims[0] == 0 || dims[1] == 0) {
         throw std::runtime_error("Unexpected dataset dimensions for " + datasetName);
     }
