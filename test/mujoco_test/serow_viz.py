@@ -1,10 +1,8 @@
 # Visualizing data for SEROW
 
 import h5py
-import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.animation import FuncAnimation
+import numpy as np
 
 display_plots = True
 
