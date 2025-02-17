@@ -60,7 +60,6 @@ void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
     }
 }
 
-
 // Reads dataset from HDF5 file (.h5)
 std::vector<std::vector<double>> readHDF5(const std::string& filename, const std::string& datasetName) {
     H5::H5File file(filename, H5F_ACC_RDONLY);
