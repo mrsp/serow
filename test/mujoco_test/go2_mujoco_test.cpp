@@ -24,7 +24,7 @@ void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
         file = H5::H5File(fileName, H5F_ACC_TRUNC);
     }
 
-    size_t lastSlash = datasetPath.find_last_of('/');
+    const size_t lastSlash = datasetPath.find_last_of('/');
     std::string groupPath = datasetPath.substr(0, lastSlash);
     std::string datasetName = datasetPath.substr(lastSlash + 1);
 
