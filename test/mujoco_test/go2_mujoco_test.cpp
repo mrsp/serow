@@ -32,7 +32,7 @@ void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
         throw std::invalid_argument("Dataset name cannot be empty.");
     }
     H5::Exception::dontPrint();
-    // // Ensure groups along the path exist
+   // Ensure groups along the path exist
     H5::Group group = file.openGroup("/");
     if (!groupPath.empty()) {
         std::stringstream ss(groupPath);
