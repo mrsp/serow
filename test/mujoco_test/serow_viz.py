@@ -102,12 +102,17 @@ def quaternion_multiply(q1, q2):
     z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
     return np.array([w, x, y, z])   
 
-def compute_com_vel(com_pos,timestamps):
-    com_vel = np.zeros((com_pos.shape[0],3))
-    for i in range(1,com_pos.shape[0]):
-        com_vel[i,0] = (com_pos[i,0] - com_pos[i-1,0])/(timestamps[i,0] - timestamps[i-1,0])
-        com_vel[i,1] = (com_pos[i,1] - com_pos[i-1,1])/(timestamps[i,0] - timestamps[i-1,0])
-        com_vel[i,2] = (com_pos[i,2] - com_pos[i-1,2])/(timestamps[i,0] - timestamps[i-1,0])        
+def compute_com_vel(com_pos, timestamps):
+    com_vel = np.zeros_like(com_pos)
+    # Central difference for most points
+    for i in range(1, len(com_pos) - 1):
+        dt = timestamps[i+1] - timestamps[i-1]
+        com_vel[i] = (com_pos[i+1] - com_pos[i-1]) / dt # Using Central Difference
+    # Forward difference for first point
+    com_vel[0] = (com_pos[1] - com_pos[0]) / (timestamps[1] - timestamps[0])
+    # Backward difference for last point
+    com_vel[-1] = (com_pos[-1] - com_pos[-2]) / (timestamps[-1] - timestamps[-2])
+    
     return com_vel
 
 if __name__ == "__main__":
@@ -117,13 +122,13 @@ if __name__ == "__main__":
     # Because estimates and ground truth is not the same size
     size_diff =   gt_pos.shape[0] - est_pos_x.shape[0]
     
-    est_pos_x =est_pos_x[:(-10)] 
-    est_pos_y =est_pos_y[:(-10)]  
-    est_pos_z =est_pos_z[:(-10)] 
-    est_rot_x =est_rot_x[:(-10)]  
-    est_rot_y =est_rot_y[:(-10)] 
-    est_rot_z =est_rot_z[:(-10)]  
-    est_rot_w =est_rot_w[:(-10)] 
+    est_pos_x = est_pos_x[:(-10)] 
+    est_pos_y = est_pos_y[:(-10)]  
+    est_pos_z = est_pos_z[:(-10)] 
+    est_rot_x = est_rot_x[:(-10)]  
+    est_rot_y = est_rot_y[:(-10)] 
+    est_rot_z = est_rot_z[:(-10)]  
+    est_rot_w = est_rot_w[:(-10)] 
     
     
     com_pos_x = com_pos_x[:(-10)]
