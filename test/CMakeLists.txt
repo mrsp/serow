@@ -35,6 +35,8 @@ target_link_libraries(go2_test PRIVATE serow pinocchio::pinocchio GTest::gtest_m
 add_executable(go1_test go1_test.cpp)
 target_link_libraries(go1_test PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
 
-# Add the executable for HDF5 and Serow processing
 add_executable(go2_mujoco_test mujoco_test/go2_mujoco_test.cpp)
 target_link_libraries(go2_mujoco_test PRIVATE serow pinocchio::pinocchio ${HDF5_LIBRARIES})
+
+add_executable(a1_serow_test a1_experiments/a1_serow_test.cpp)
+target_link_libraries(a1_serow_test PRIVATE serow pinocchio::pinocchio ${HDF5_LIBRARIES})
