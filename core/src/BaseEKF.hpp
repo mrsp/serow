@@ -14,7 +14,7 @@
 /**
  * @file BaseEKF.hpp
  * @brief Implementation of Extended Kalman Filter (EKF) for state estimation in humanoid robots.
- *        This EKF fuses data from an Inertial Measurement Unit (IMU), base linear velocity 
+ *        This EKF fuses data from an Inertial Measurement Unit (IMU), base linear velocity
  *        measurement, and optionally external odometry (e.g., Visual Odometry or Lidar
  *        Odometry). It models the state of the robot including base position, velocity,
  * orientation  in world frame coordinates as well as the gyro and accelerometer biases.
@@ -31,9 +31,9 @@
 
 #include <iostream>
 
-#include "OutlierDetector.hpp"
 #include "Measurement.hpp"  // Includes various sensor measurements
-#include "State.hpp"        // Includes definitions of robot state variables
+#include "OutlierDetector.hpp"
+#include "State.hpp"  // Includes definitions of robot state variables
 
 namespace serow {
 
@@ -74,11 +74,11 @@ class BaseEKF {
                      std::optional<OdometryMeasurement> odom = std::nullopt);
 
    private:
-    int num_states_{};                      ///< Number of state variables.
-    int num_inputs_{};                      ///< Number of input variables.
-    bool outlier_detection_{};              ///< Flag indicating if outlier detection is enabled.
-    double nominal_dt_{};                   ///< Nominal sampling time for prediction step.
-    Eigen::Vector3d g_;                     ///< Gravity vector.
+    int num_states_{};          ///< Number of state variables.
+    int num_inputs_{};          ///< Number of input variables.
+    bool outlier_detection_{};  ///< Flag indicating if outlier detection is enabled.
+    double nominal_dt_{};       ///< Nominal sampling time for prediction step.
+    Eigen::Vector3d g_;         ///< Gravity vector.
     // State indices
     Eigen::Array3i v_idx_;   ///< Indices for velocity state variables.
     Eigen::Array3i r_idx_;   ///< Indices for orientation state variables.
@@ -86,16 +86,16 @@ class BaseEKF {
     Eigen::Array3i bg_idx_;  ///< Indices for gyro bias state variables.
     Eigen::Array3i ba_idx_;  ///< Indices for accelerometer bias state variables.
     // Input indices
-    Eigen::Array3i ng_idx_;   ///< Indices for IMU input variables.
-    Eigen::Array3i na_idx_;   ///< Indices for kinematic input variables.
-    Eigen::Array3i nbg_idx_;  ///< Indices for gyro bias input variables.
-    Eigen::Array3i nba_idx_;  ///< Indices for accelerometer bias input variables.
+    Eigen::Array3i ng_idx_;                     ///< Indices for IMU input variables.
+    Eigen::Array3i na_idx_;                     ///< Indices for kinematic input variables.
+    Eigen::Array3i nbg_idx_;                    ///< Indices for gyro bias input variables.
+    Eigen::Array3i nba_idx_;                    ///< Indices for accelerometer bias input variables.
     std::optional<double> last_imu_timestamp_;  ///< Timestamp of the last IMU measurement.
 
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
-    /// matrix 15 x 15 
+    /// matrix 15 x 15
     Eigen::Matrix<double, 15, 15> I_, P_;
-    /// Linearized state-input model 15 x 12 
+    /// Linearized state-input model 15 x 12
     Eigen::Matrix<double, 15, 12> Lc_;
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
@@ -108,9 +108,9 @@ class BaseEKF {
      * @param linear_acceleration Linear acceleration measurements.
      * @return Predicted state after applying discrete dynamics.
      */
-    BaseState computeDiscreteDynamics(
-        const BaseState& state, double dt, Eigen::Vector3d angular_velocity,
-        Eigen::Vector3d linear_acceleration);
+    BaseState computeDiscreteDynamics(const BaseState& state, double dt,
+                                      Eigen::Vector3d angular_velocity,
+                                      Eigen::Vector3d linear_acceleration);
 
     /**
      * @brief Computes Jacobians for the prediction step of the EKF.
@@ -121,8 +121,7 @@ class BaseEKF {
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> computePredictionJacobians(
         const BaseState& state, Eigen::Vector3d angular_velocity);
 
-    BaseState updateWithTwist(const BaseState& state,
-                              const Eigen::Vector3d& base_linear_velocity,
+    BaseState updateWithTwist(const BaseState& state, const Eigen::Vector3d& base_linear_velocity,
                               const Eigen::Matrix3d& base_linear_velocity_cov,
                               const Eigen::Quaterniond& base_orientation,
                               const Eigen::Matrix3d& base_orientation_cov);

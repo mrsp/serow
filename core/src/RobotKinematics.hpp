@@ -494,7 +494,7 @@ class RobotKinematics {
     /// Joint position upper limits
     Eigen::VectorXd qmax_;
     /// Joint velocity limits
-    Eigen::VectorXd dqmax_; 
+    Eigen::VectorXd dqmax_;
     /// Joint positions
     Eigen::VectorXd q_;
     /// Joint velocities

@@ -40,9 +40,7 @@ export SEROW_PATH=<path-to-serow-package>
 * [json](https://github.com/nlohmann/json/tree/master)
 * cmake 3.16.3 and later
 * gcc 9.4.0 and later
-### For running the mujoco data
-* `$ pip install h5py`
-* ` $ pip install matplotlib` 
+
 ## Install
 * `mkdir build && cd build`
 * `cmake .. && make -j4`
@@ -52,6 +50,10 @@ export SEROW_PATH=<path-to-serow-package>
 * `cd test && mkdir build && cd build`
 * `cmake .. && make -j4`
 * `./nao_test`
+
+### For running the mujoco data
+* `$ pip install h5py`
+* `$ pip install matplotlib` 
 
 ## Citation
 Upon usage in an academic work kindly cite: <br/>

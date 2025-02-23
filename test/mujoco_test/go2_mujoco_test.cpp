@@ -1,17 +1,19 @@
 // This file reads data from a .h5 and uses serow to save the predictions.
 
-#include <iostream>
-#include <Eigen/Dense>
 #include <H5Cpp.h>
+
+#include <Eigen/Dense>
+#include <iostream>
 #include <map>
 #include <serow/Serow.hpp>
 #include <vector>
 
-constexpr const char* INPUT_FILE = "../mujoco_test/data/slope/go2_data.h5";
-constexpr const char* OUTPUT_FILE = "../mujoco_test/data/slope/serow_predictions.h5";
+constexpr const char* INPUT_FILE = "./data/slope/go2_data.h5";
+constexpr const char* OUTPUT_FILE = "./data/slope/serow_predictions.h5";
 
 // Saves predictions to .h5 file
-void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath, const std::vector<double>& data) {
+void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
+                    const std::vector<double>& data) {
     if (datasetPath.empty() || datasetPath[0] != '/') {
         throw std::invalid_argument("Dataset path must be non-empty and start with '/'");
     }
@@ -32,7 +34,7 @@ void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
         throw std::invalid_argument("Dataset name cannot be empty.");
     }
     H5::Exception::dontPrint();
-   // Ensure groups along the path exist
+    // Ensure groups along the path exist
     H5::Group group = file.openGroup("/");
     if (!groupPath.empty()) {
         std::stringstream ss(groupPath);
@@ -53,18 +55,20 @@ void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
         H5::DataSet dataset = group.openDataSet(datasetName);
     } catch (const H5::Exception&) {
         // Dataset does not exist; create it
-        hsize_t dims[1] = { data.size() };
+        hsize_t dims[1] = {data.size()};
         H5::DataSpace dataspace(1, dims);
-        H5::DataSet dataset = group.createDataSet(datasetName, H5::PredType::NATIVE_DOUBLE, dataspace);
+        H5::DataSet dataset =
+            group.createDataSet(datasetName, H5::PredType::NATIVE_DOUBLE, dataspace);
         dataset.write(data.data(), H5::PredType::NATIVE_DOUBLE);
     }
 }
 
 // Reads dataset from HDF5 file (.h5)
-std::vector<std::vector<double>> readHDF5(const std::string& filename, const std::string& datasetName) {
+std::vector<std::vector<double>> readHDF5(const std::string& filename,
+                                          const std::string& datasetName) {
     H5::H5File file(filename, H5F_ACC_RDONLY);
 
-    if (datasetName.empty() ) {
+    if (datasetName.empty()) {
         throw std::invalid_argument("Dataset name must be non-empty and start with '/'");
     }
 
@@ -105,80 +109,91 @@ int main() {
 
         // Read Feet Forces
         auto feet_force_FR = readHDF5(INPUT_FILE, "feet_force/FR");
-        auto feet_force_FL = readHDF5(INPUT_FILE, "feet_force/FL");        
+        auto feet_force_FL = readHDF5(INPUT_FILE, "feet_force/FL");
         auto feet_force_RL = readHDF5(INPUT_FILE, "feet_force/RL");
         auto feet_force_RR = readHDF5(INPUT_FILE, "feet_force/RR");
-        
+
         // Read Timestamps
         auto timestamps = readHDF5(INPUT_FILE, "timestamps");
 
         // Store predictions
-        std::vector<double> EstTimestamp; // timestamp
-        std::vector<double> base_pos_x,base_pos_y,base_pos_z,base_rot_x,base_rot_y,base_rot_z,base_rot_w ; //Base pose(pos + quat)
-        std::vector<double> com_x,com_y,com_z; // CoM position
-        std::vector<double> com_vel_x,com_vel_y,com_vel_z; // CoM velocity
-        std::vector<double> extFx,extFy,extFz; // External Force
-        std::vector<double> b_ax,b_ay,b_az,b_wx,b_wy,b_wz; // IMU Biases
+        std::vector<double> EstTimestamp;  // timestamp
+        std::vector<double> base_pos_x, base_pos_y, base_pos_z, base_rot_x, base_rot_y, base_rot_z,
+            base_rot_w;                                          // Base pose(pos + quat)
+        std::vector<double> com_x, com_y, com_z;                 // CoM position
+        std::vector<double> com_vel_x, com_vel_y, com_vel_z;     // CoM velocity
+        std::vector<double> extFx, extFy, extFz;                 // External Force
+        std::vector<double> b_ax, b_ay, b_az, b_wx, b_wy, b_wz;  // IMU Biases
 
         for (size_t i = 0; i < timestamps.size(); ++i) {
             double timestamp = timestamps[i][0];
 
             std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
-            force_torque.insert({"FR_foot", serow::ForceTorqueMeasurement{
-                                                .timestamp = timestamp,
-                                                .force = Eigen::Vector3d(feet_force_FR[i][0], feet_force_FR[i][1], feet_force_FR[i][2])}});
-            force_torque.insert({"FL_foot", serow::ForceTorqueMeasurement{
-                                                .timestamp = timestamp,
-                                                .force = Eigen::Vector3d(feet_force_FL[i][0], feet_force_FL[i][1], feet_force_FL[i][2])}});
-            force_torque.insert({"RL_foot", serow::ForceTorqueMeasurement{
-                                                .timestamp = timestamp,
-                                                .force = Eigen::Vector3d(feet_force_RL[i][0], feet_force_RL[i][1], feet_force_RL[i][2])}});
-            force_torque.insert({"RR_foot", serow::ForceTorqueMeasurement{
-                                                .timestamp = timestamp,
-                                                .force = Eigen::Vector3d(feet_force_RR[i][0], feet_force_RR[i][1], feet_force_RR[i][2])}});
+            force_torque.insert(
+                {"FR_foot", serow::ForceTorqueMeasurement{
+                                .timestamp = timestamp,
+                                .force = Eigen::Vector3d(feet_force_FR[i][0], feet_force_FR[i][1],
+                                                         feet_force_FR[i][2])}});
+            force_torque.insert(
+                {"FL_foot", serow::ForceTorqueMeasurement{
+                                .timestamp = timestamp,
+                                .force = Eigen::Vector3d(feet_force_FL[i][0], feet_force_FL[i][1],
+                                                         feet_force_FL[i][2])}});
+            force_torque.insert(
+                {"RL_foot", serow::ForceTorqueMeasurement{
+                                .timestamp = timestamp,
+                                .force = Eigen::Vector3d(feet_force_RL[i][0], feet_force_RL[i][1],
+                                                         feet_force_RL[i][2])}});
+            force_torque.insert(
+                {"RR_foot", serow::ForceTorqueMeasurement{
+                                .timestamp = timestamp,
+                                .force = Eigen::Vector3d(feet_force_RR[i][0], feet_force_RR[i][1],
+                                                         feet_force_RR[i][2])}});
 
             serow::ImuMeasurement imu;
             imu.timestamp = timestamp;
-            imu.linear_acceleration = Eigen::Vector3d(linear_acceleration[i][0], linear_acceleration[i][1], linear_acceleration[i][2]);
-            imu.angular_velocity = Eigen::Vector3d(angular_velocity[i][0], angular_velocity[i][1], angular_velocity[i][2]);
+            imu.linear_acceleration = Eigen::Vector3d(
+                linear_acceleration[i][0], linear_acceleration[i][1], linear_acceleration[i][2]);
+            imu.angular_velocity = Eigen::Vector3d(angular_velocity[i][0], angular_velocity[i][1],
+                                                   angular_velocity[i][2]);
 
             std::map<std::string, serow::JointMeasurement> joints;
             joints.insert(
-                {"FL_hip_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][0]}});
+                {"FL_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                         .position = joint_positions[i][0]}});
             joints.insert(
-                {"FL_thigh_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][1]}});
+                {"FL_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                           .position = joint_positions[i][1]}});
             joints.insert(
-                {"FL_calf_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][2]}});
+                {"FL_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                          .position = joint_positions[i][2]}});
             joints.insert(
-                {"FR_hip_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][3]}});
+                {"FR_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                         .position = joint_positions[i][3]}});
             joints.insert(
-                {"FR_thigh_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][4]}});
+                {"FR_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                           .position = joint_positions[i][4]}});
             joints.insert(
-                {"FR_calf_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][5]}});
+                {"FR_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                          .position = joint_positions[i][5]}});
             joints.insert(
-                {"RL_hip_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][6]}});
+                {"RL_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                         .position = joint_positions[i][6]}});
             joints.insert(
-                {"RL_thigh_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][7]}});
+                {"RL_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                           .position = joint_positions[i][7]}});
             joints.insert(
-                {"RL_calf_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][8]}});
+                {"RL_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                          .position = joint_positions[i][8]}});
             joints.insert(
-                {"RR_hip_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][9]}});
+                {"RR_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                         .position = joint_positions[i][9]}});
             joints.insert(
-                {"RR_thigh_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][10]}});
+                {"RR_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                           .position = joint_positions[i][10]}});
             joints.insert(
-                {"RR_calf_joint",
-                serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions[i][11]}});
+                {"RR_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
+                                                          .position = joint_positions[i][11]}});
 
             SEROW.filter(imu, joints, force_torque);
 
@@ -222,8 +237,8 @@ int main() {
         }
 
         // // Write structured data to HDF5
-        H5::H5File outputFile(OUTPUT_FILE, H5F_ACC_TRUNC); // Create the output file
-        
+        H5::H5File outputFile(OUTPUT_FILE, H5F_ACC_TRUNC);  // Create the output file
+
         saveDataToHDF5(OUTPUT_FILE, "/timestamp/t", EstTimestamp);
         // Base State
         saveDataToHDF5(OUTPUT_FILE, "/base_pose/position/x", base_pos_x);
@@ -245,7 +260,7 @@ int main() {
         saveDataToHDF5(OUTPUT_FILE, "/CoM_state/externalForces/y", extFy);
         saveDataToHDF5(OUTPUT_FILE, "/CoM_state/externalForces/z", extFz);
 
-        //IMU biases
+        // IMU biases
         saveDataToHDF5(OUTPUT_FILE, "/imu_bias/accel/x", b_ax);
         saveDataToHDF5(OUTPUT_FILE, "/imu_bias/accel/y", b_ay);
         saveDataToHDF5(OUTPUT_FILE, "/imu_bias/accel/z", b_az);
@@ -262,4 +277,3 @@ int main() {
 
     return EXIT_SUCCESS;
 }
-

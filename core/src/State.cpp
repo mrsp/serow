@@ -74,7 +74,7 @@ State::State(const State& other) {
     this->base_state_.imu_angular_velocity_bias_cov =
         other.base_state_.imu_angular_velocity_bias_cov;
     this->base_state_.contacts_position_cov = other.base_state_.contacts_position_cov;
-    
+
     if (other.base_state_.contacts_orientation_cov.has_value()) {
         this->base_state_.contacts_orientation_cov =
             other.base_state_.contacts_orientation_cov.value();
@@ -172,7 +172,6 @@ State::State(State&& other) {
     this->base_state_.feet_orientation = std::move(other.base_state_.feet_orientation);
     this->base_state_.feet_linear_velocity = std::move(other.base_state_.feet_linear_velocity);
     this->base_state_.feet_angular_velocity = std::move(other.base_state_.feet_angular_velocity);
-
 
     // Joint state
     this->joint_state_.timestamp = std::move(other.joint_state_.timestamp);
@@ -331,7 +330,8 @@ State& State::operator=(State&& other) {
         this->base_state_.feet_position = std::move(other.base_state_.feet_position);
         this->base_state_.feet_orientation = std::move(other.base_state_.feet_orientation);
         this->base_state_.feet_linear_velocity = std::move(other.base_state_.feet_linear_velocity);
-        this->base_state_.feet_angular_velocity = std::move(other.base_state_.feet_angular_velocity);
+        this->base_state_.feet_angular_velocity =
+            std::move(other.base_state_.feet_angular_velocity);
 
         // Joint state
         this->joint_state_.timestamp = std::move(other.joint_state_.timestamp);
@@ -473,7 +473,6 @@ const Eigen::Vector3d& State::getFootAngularVelocity(const std::string& frame_na
     return base_state_.feet_angular_velocity.at(frame_name);
 }
 
-
 Eigen::Matrix<double, 6, 6> State::getBasePoseCov() const {
     Eigen::Matrix<double, 6, 6> base_pose_cov = Eigen::Matrix<double, 6, 6>::Identity();
     base_pose_cov.block<3, 3>(0, 0) = base_state_.base_position_cov;
@@ -588,9 +587,7 @@ const Eigen::Matrix3d& State::getCoMExternalForcesCov() const {
     return centroidal_state_.external_forces_cov;
 }
 
-const Eigen::Vector3d& State::getCOPPosition() const {
-    return centroidal_state_.cop_position;
-}
+const Eigen::Vector3d& State::getCOPPosition() const { return centroidal_state_.cop_position; }
 
 bool State::isPointFeet() const { return point_feet_; }
 

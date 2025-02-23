@@ -54,17 +54,17 @@ class Mahony {
      *  @returns the orientation of IMU w.r.t the world frame as a quaternion
      */
     Eigen::Quaterniond getQ() const { return q_; }
-    
+
     /** @fn  Eigen::Vector3d getAcc()
      *  @returns the linear acceleration of IMU in the world frame
      */
     Eigen::Vector3d getAcc() const { return acc_; }
-    
+
     /** @fn  Eigen::Vector3d getGyro()
      *  @returns the angular velocity of IMU in the world frame
      */
     Eigen::Vector3d getGyro() const { return gyro_; }
-    
+
     /** @fn Eigen::Matrix3d getR()
      *  @returns the orientation of IMU w.r.t the world frame as a rotation matrix
      */

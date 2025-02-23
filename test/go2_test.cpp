@@ -20,28 +20,28 @@
 #include <sstream>
 #include <string>
 
-constexpr bool kStorePredictions = true; // If true the serow base estimates are stored under results/
-
+constexpr bool kStorePredictions =
+    true;  // If true the serow base estimates are stored under results/
 
 TEST(SerowTests, Go2Test) {
     serow::Serow SEROW;
     EXPECT_TRUE(SEROW.initialize("go2.json"));
-    
-    const double mass = 15.017;             // kg
+
+    const double mass = 15.017;            // kg
     const double g = 9.81;                 // m/s^2
     const double mg = mass * g;            // N
     const double bias = 14;                // potatos
     const double den = 172.91 - 4 * bias;  // potatos
 
-    std::fstream inputFile("../data/go2.csv", std::ios::in); // Input file
+    std::fstream inputFile("../data/go2.csv", std::ios::in);  // Input file
     if (!inputFile.is_open()) {
         throw std::runtime_error("Could not open file");
         return;
     }
 
     std::ofstream outputFile;
-    if (kStorePredictions){
-        outputFile.open("../results/go2_serow_estimates.txt"); // Output file
+    if (kStorePredictions) {
+        outputFile.open("../results/go2_serow_estimates.txt");  // Output file
         if (!outputFile.is_open()) {
             throw std::runtime_error("Could not open file");
             return;
@@ -66,7 +66,7 @@ TEST(SerowTests, Go2Test) {
     // Parse the data, create the measurements, and run the filtering loop
     for (size_t i = 1; i < data.size(); i++) {
         double timestamp = std::stod(data[i][0]);  // s
-        
+
         std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
         Eigen::Vector3d force =
             Eigen::Vector3d(0, 0, std::clamp((std::stod(data[i][1]) - bias) * mg / den, 0.0, mg));
@@ -179,21 +179,15 @@ TEST(SerowTests, Go2Test) {
                   << std::endl;
 
         // Store the results into an eigen matrix to be saved
-        if (kStorePredictions) 
-        {
-            outputFile << timestamp << " "
-                       << state->getBasePosition().transpose().x() << " "
+        if (kStorePredictions) {
+            outputFile << timestamp << " " << state->getBasePosition().transpose().x() << " "
                        << state->getBasePosition().transpose().y() << " "
                        << state->getBasePosition().transpose().z() << " "
-                       << state->getBaseOrientation().x() << " "
-                       << state->getBaseOrientation().y() << " "
-                       << state->getBaseOrientation().z() << " "
+                       << state->getBaseOrientation().x() << " " << state->getBaseOrientation().y()
+                       << " " << state->getBaseOrientation().z() << " "
                        << state->getBaseOrientation().w() << "\n";
         }
     }
 
     outputFile.close();
-
-
-    
 }

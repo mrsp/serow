@@ -14,7 +14,8 @@
 /**
  * @file LegOdometry.hpp
  * @brief Header file for the LegOdometry class.
- * @details Estimates the 3D leg odometry of the base and the corresponding relative leg measurements based on force/torque or pressure, and encoder measurement.
+ * @details Estimates the 3D leg odometry of the base and the corresponding relative leg
+ * measurements based on force/torque or pressure, and encoder measurement.
  */
 
 #pragma once
@@ -40,16 +41,16 @@ class LegOdometry {
      * @brief Struct to hold various parameters for the LegOdometry class.
      */
     struct Params {
-        double Tm{};     ///< Tm parameter
-        double Tm2{};    ///< Tm2 parameter
-        double Tm3{};    ///< Tm3 parameter
-        double mass{};   ///< Mass of the robot
-        double g{};      ///< Gravity constant
-        double num_leg_ee{}; ///< Number of leg end-effectors
-        double freq{};   ///< Joint state nominal frequency
-        double alpha1{}; ///< Alpha1 parameter
-        double alpha3{}; ///< Alpha3 parameter
-        double eps{};    ///< Epsilon parameter
+        double Tm{};          ///< Tm parameter
+        double Tm2{};         ///< Tm2 parameter
+        double Tm3{};         ///< Tm3 parameter
+        double mass{};        ///< Mass of the robot
+        double g{};           ///< Gravity constant
+        double num_leg_ee{};  ///< Number of leg end-effectors
+        double freq{};        ///< Joint state nominal frequency
+        double alpha1{};      ///< Alpha1 parameter
+        double alpha3{};      ///< Alpha3 parameter
+        double eps{};         ///< Epsilon parameter
     };
 
    private:
@@ -64,22 +65,32 @@ class LegOdometry {
      */
     void computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
                     const Eigen::Vector3d& angular_velocity, const Eigen::Vector3d& linear_velocity,
-                    const Eigen::Vector3d& force, std::optional<Eigen::Vector3d> torque = std::nullopt);
+                    const Eigen::Vector3d& force,
+                    std::optional<Eigen::Vector3d> torque = std::nullopt);
 
-    bool is_initialized{}; ///< Flag indicating if the odometry has been initialized
-    Eigen::Vector3d base_position_ = Eigen::Vector3d::Zero(); ///< Estimated base position in world coordinates
-    Eigen::Vector3d base_position_prev_ = Eigen::Vector3d::Zero(); ///< Previous base position in world coordinates
-    Eigen::Vector3d base_linear_velocity_ = Eigen::Vector3d::Zero(); ///< Estimated base linear velocity in world coordinates
-    Params params_; ///< Optimization parameters
+    bool is_initialized{};  ///< Flag indicating if the odometry has been initialized
+    Eigen::Vector3d base_position_ =
+        Eigen::Vector3d::Zero();  ///< Estimated base position in world coordinates
+    Eigen::Vector3d base_position_prev_ =
+        Eigen::Vector3d::Zero();  ///< Previous base position in world coordinates
+    Eigen::Vector3d base_linear_velocity_ =
+        Eigen::Vector3d::Zero();  ///< Estimated base linear velocity in world coordinates
+    Params params_;               ///< Optimization parameters
 
-    std::map<std::string, Eigen::Vector3d> pivots_; ///< Pivot points for the feet in relative foot coordinates
-    std::map<std::string, Eigen::Vector3d> contact_positions_; ///< Contact positions of the feet relative to the base frame
-    std::map<std::string, Eigen::Quaterniond> contact_orientations_; ///< Contact orientations of the feet relative to the base frame
+    std::map<std::string, Eigen::Vector3d>
+        pivots_;  ///< Pivot points for the feet in relative foot coordinates
+    std::map<std::string, Eigen::Vector3d>
+        contact_positions_;  ///< Contact positions of the feet relative to the base frame
+    std::map<std::string, Eigen::Quaterniond>
+        contact_orientations_;  ///< Contact orientations of the feet relative to the base frame
 
-    std::map<std::string, Eigen::Vector3d> feet_position_prev_; ///< Previous positions of the feet in world coordinates
-    std::map<std::string, Eigen::Quaterniond> feet_orientation_prev_; ///< Previous orientations of the feet in world coordinates
+    std::map<std::string, Eigen::Vector3d>
+        feet_position_prev_;  ///< Previous positions of the feet in world coordinates
+    std::map<std::string, Eigen::Quaterniond>
+        feet_orientation_prev_;  ///< Previous orientations of the feet in world coordinates
 
-    std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset_; ///< Force/Torque sensor offsets from the contact frames
+    std::optional<std::map<std::string, Eigen::Vector3d>>
+        force_torque_offset_;  ///< Force/Torque sensor offsets from the contact frames
 
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -132,8 +143,10 @@ class LegOdometry {
      * @param base_angular_velocity Angular velocity of the base in world coordinates
      * @param base_to_foot_orientations Relative foot orientations from the base to the feet frame
      * @param base_to_foot_positions Relative foot positions from the base to the feet frame
-     * @param base_to_foot_linear_velocities Relative foot linear velocities from the base to the feet frame
-     * @param base_to_foot_angular_velocities Relative foot angular velocities from the base to the feet frame
+     * @param base_to_foot_linear_velocities Relative foot linear velocities from the base to the
+     * feet frame
+     * @param base_to_foot_angular_velocities Relative foot angular velocities from the base to the
+     * feet frame
      * @param contact_forces Contact forces at the feet frame
      * @param contact_torques Contact torques at the feet frame (optional)
      */

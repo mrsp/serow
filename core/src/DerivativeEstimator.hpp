@@ -14,7 +14,8 @@
 /**
  * @file DerivativeEstimator.hpp
  * @brief Header file for the DerivativeEstimator class.
- * @details Provides a mechanism to estimate the derivative of a signal using numerical differentiation and a 2nd order Low Pass Butterworth Filter.
+ * @details Provides a mechanism to estimate the derivative of a signal using numerical
+ * differentiation and a 2nd order Low Pass Butterworth Filter.
  */
 
 #pragma once
@@ -32,7 +33,8 @@ namespace serow {
 
 /**
  * @class DerivativeEstimator
- * @brief Class for estimating the derivative of a signal using numerical differentiation and a 2nd order Low Pass Butterworth Filter.
+ * @brief Class for estimating the derivative of a signal using numerical differentiation and a 2nd
+ * order Low Pass Butterworth Filter.
  */
 class DerivativeEstimator {
    private:
@@ -76,7 +78,7 @@ class DerivativeEstimator {
      */
     DerivativeEstimator(const std::string& name, double f_sampling, double f_cutoff, size_t dim,
                         bool verbose = false);
-    
+
     /**
      * @brief Default constructor.
      */

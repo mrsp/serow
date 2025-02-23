@@ -16,8 +16,7 @@
 
 namespace serow {
 
-void BaseEKF::init(const BaseState& state,
-                      double g, double imu_rate, bool outlier_detection) {
+void BaseEKF::init(const BaseState& state, double g, double imu_rate, bool outlier_detection) {
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
     outlier_detection_ = outlier_detection;
     num_states_ = 15;
@@ -105,15 +104,15 @@ BaseState BaseEKF::predict(const BaseState& state, const ImuMeasurement& imu) {
     P_ = Ad * P_ * Ad.transpose() + Qd;
 
     // Predict the state
-    const BaseState& predicted_state = computeDiscreteDynamics(
-        state, dt, imu.angular_velocity, imu.linear_acceleration);
+    const BaseState& predicted_state =
+        computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration);
     last_imu_timestamp_ = imu.timestamp;
     return predicted_state;
 }
 
-BaseState BaseEKF::computeDiscreteDynamics(
-    const BaseState& state, double dt, Eigen::Vector3d angular_velocity,
-    Eigen::Vector3d linear_acceleration) {
+BaseState BaseEKF::computeDiscreteDynamics(const BaseState& state, double dt,
+                                           Eigen::Vector3d angular_velocity,
+                                           Eigen::Vector3d linear_acceleration) {
     BaseState predicted_state = state;
     angular_velocity -= state.imu_angular_velocity_bias;
     linear_acceleration -= state.imu_linear_acceleration_bias;
@@ -144,11 +143,10 @@ BaseState BaseEKF::computeDiscreteDynamics(
     return predicted_state;
 }
 
-BaseState BaseEKF::updateWithOdometry(const BaseState& state,
-                                         const Eigen::Vector3d& base_position,
-                                         const Eigen::Quaterniond& base_orientation,
-                                         const Eigen::Matrix3d& base_position_cov,
-                                         const Eigen::Matrix3d& base_orientation_cov) {
+BaseState BaseEKF::updateWithOdometry(const BaseState& state, const Eigen::Vector3d& base_position,
+                                      const Eigen::Quaterniond& base_orientation,
+                                      const Eigen::Matrix3d& base_position_cov,
+                                      const Eigen::Matrix3d& base_orientation_cov) {
     BaseState updated_state = state;
 
     Eigen::MatrixXd H;
@@ -180,7 +178,6 @@ BaseState BaseEKF::updateWithOdometry(const BaseState& state,
 
     return updated_state;
 }
-
 
 BaseState BaseEKF::updateWithTwist(const BaseState& state,
                                    const Eigen::Vector3d& base_linear_velocity,
@@ -217,7 +214,6 @@ BaseState BaseEKF::updateWithTwist(const BaseState& state,
     return updated_state;
 }
 
-
 BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
                                    const Eigen::MatrixXd& P) const {
     BaseState updated_state = state;
@@ -236,7 +232,7 @@ BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd
     return updated_state;
 }
 
-void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx, 
+void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
                           const Eigen::MatrixXd& P) const {
     state.base_position += dx(p_idx_);
     state.base_position_cov = P(p_idx_, p_idx_);
@@ -253,9 +249,9 @@ void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
 }
 
 BaseState BaseEKF::update(const BaseState& state, const KinematicMeasurement& kin,
-                             std::optional<OdometryMeasurement> odom) {
+                          std::optional<OdometryMeasurement> odom) {
     BaseState updated_state =
-        updateWithTwist(state, kin.base_linear_velocity, kin.base_linear_velocity_cov, 
+        updateWithTwist(state, kin.base_linear_velocity, kin.base_linear_velocity_cov,
                         kin.base_orientation, kin.base_orientation_cov);
 
     if (odom.has_value()) {
