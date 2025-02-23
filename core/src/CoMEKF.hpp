@@ -14,7 +14,7 @@
 /**
  * @file CoMEKF.hpp
  * @brief Nonlinear CoM Estimation based on encoder, force/torque or pressure, and IMU measurements
- * @details Estimates the 3D CoM position, velocity, and external forces. More info in 
+ * @details Estimates the 3D CoM position, velocity, and external forces. More info in
  * Nonlinear State Estimation for Humanoid Robot Walking
  * https://www.researchgate.net/publication/326194869_Nonlinear_State_Estimation_for_Humanoid_Robot_Walking
  * @author Stylianos Piperakis
@@ -32,12 +32,14 @@ namespace serow {
  */
 class CoMEKF {
    private:
-    std::optional<double> last_grf_timestamp_; /**< Previous ground reaction force timestamp, used in the predict step */
+    std::optional<double> last_grf_timestamp_; /**< Previous ground reaction force timestamp, used
+                                                  in the predict step */
     Eigen::Matrix<double, 9, 9> P_;            /**< State covariance matrix */
-    Eigen::Matrix<double, 9, 9> I_ = Eigen::Matrix<double, 9, 9>::Identity(); /**< Identity matrix */
-    double nominal_dt_{};                      /**< Nominal force/torque sampling period */
-    double mass_{};                            /**< Robot's mass */
-    double g_{};                               /**< Gravity constant */
+    Eigen::Matrix<double, 9, 9> I_ =
+        Eigen::Matrix<double, 9, 9>::Identity(); /**< Identity matrix */
+    double nominal_dt_{};                        /**< Nominal force/torque sampling period */
+    double mass_{};                              /**< Robot's mass */
+    double g_{};                                 /**< Gravity constant */
 
     Eigen::Array3i c_idx_; /**< Indices for CoM position in state vector */
     Eigen::Array3i v_idx_; /**< Indices for CoM linear velocity in state vector */
@@ -48,35 +50,39 @@ class CoMEKF {
      * @param state The EKF state to be used in the computation.
      * @param cop_position The position of the COP in world coordinates.
      * @param ground_reaction_force The total ground reaction force in world coordinates.
-     * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world coordinates.
+     * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world
+     * coordinates.
      * @return The EKF state derivative.
      */
     Eigen::Matrix<double, 9, 1> computeContinuousDynamics(
         const CentroidalState& state, const Eigen::Vector3d& cop_position,
         const Eigen::Vector3d& ground_reaction_force,
         const Eigen::Vector3d& com_angular_momentum_derivative);
-        
+
     /**
      * @brief Computes the linearized state dynamics.
      * @param state The EKF state to be used for the linearization.
      * @param cop_position The position of the COP in world coordinates.
      * @param ground_reaction_force The total ground reaction force in world coordinates.
-     * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world coordinates.
+     * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world
+     * coordinates.
      * @return The linearized state transition matrix and the linearized state-input noise matrix.
      */
     std::tuple<Eigen::Matrix<double, 9, 9>, Eigen::Matrix<double, 9, 9>> computePredictionJacobians(
         const CentroidalState& state, const Eigen::Vector3d& cop_position,
         const Eigen::Vector3d& ground_reaction_force,
         const Eigen::Vector3d& com_angular_momentum_derivative);
-    
+
     /**
      * @brief Performs the EKF update step with a CoM linear acceleration measurement.
      * @param state The EKF state used in the computation.
      * @param com_linear_acceleration The CoM linear acceleration in world coordinates.
      * @param cop_position The COP position in world coordinates.
      * @param ground_reaction_force The total ground reaction force in world coordinates.
-     * @param com_linear_acceleration_cov The CoM linear acceleration covariance in world coordinates.
-     * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world coordinates.
+     * @param com_linear_acceleration_cov The CoM linear acceleration covariance in world
+     * coordinates.
+     * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world
+     * coordinates.
      * @return The updated EKF state.
      */
     CentroidalState updateWithCoMAcceleration(
@@ -113,7 +119,8 @@ class CoMEKF {
      * @param state The initial state of the EKF.
      * @param mass The robot's mass.
      * @param g The gravity constant.
-     * @param rate The nominal rate, corresponds to the F/T rate and the rate the predict step is realized.
+     * @param rate The nominal rate, corresponds to the F/T rate and the rate the predict step is
+     * realized.
      */
     void init(const CentroidalState& state, double mass, double g, double rate);
 

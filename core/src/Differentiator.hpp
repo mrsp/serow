@@ -14,7 +14,8 @@
 /**
  * @file Differentiator.hpp
  * @brief Header file for the Differentiator class.
- * @details Provides a mechanism to compute the numerical derivative of a signal using the first-order Euler method.
+ * @details Provides a mechanism to compute the numerical derivative of a signal using the
+ * first-order Euler method.
  */
 
 #pragma once

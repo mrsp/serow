@@ -23,7 +23,7 @@ namespace serow {
  */
 class MovingMedianFilter {
    private:
-    size_t window_size_;            ///< Size of the sliding window for median calculation
+    size_t window_size_;                ///< Size of the sliding window for median calculation
     std::deque<double> window_buffer_;  ///< Buffer to store the current window of values
 
    public:
@@ -60,7 +60,8 @@ class MovingMedianFilter {
         if (sorted_window.size() % 2 == 0) {
             // Even number of elements: return the mean of the two middle elements
             return (sorted_window[sorted_window.size() / 2 - 1] +
-                    sorted_window[sorted_window.size() / 2]) / 2;
+                    sorted_window[sorted_window.size() / 2]) /
+                   2;
         } else {
             // Odd number of elements: return the middle element
             return sorted_window[sorted_window.size() / 2];

@@ -20,18 +20,18 @@
 #include <sstream>
 #include <string>
 
-constexpr bool kStorePredictions = true; // If true the serow base estimates are stored under results/
-
+constexpr bool kStorePredictions =
+    true;  // If true the serow base estimates are stored under results/
 
 TEST(SerowTests, Go1Test) {
     serow::Serow SEROW;
     EXPECT_TRUE(SEROW.initialize("go1.json"));
-    
-    const double mass = 12;                // kg
-    const double g = 9.81;                 // m/s^2
-    const double mg = mass * g;            // N
-    const double bias = -6;                // potatos
-    const double den =  mg - 4 * bias;     // Total weight measurement 
+
+    const double mass = 12;            // kg
+    const double g = 9.81;             // m/s^2
+    const double mg = mass * g;        // N
+    const double bias = -6;            // potatos
+    const double den = mg - 4 * bias;  // Total weight measurement
 
     std::fstream inputFile("../../test/data/go1.csv", std::ios::in);
     if (!inputFile.is_open()) {
@@ -40,14 +40,14 @@ TEST(SerowTests, Go1Test) {
     }
 
     std::ofstream outputFile;
-    if (kStorePredictions){
-        outputFile.open("../results/go1_serow_estimates.txt"); // Output file
+    if (kStorePredictions) {
+        outputFile.open("../results/go1_serow_estimates.txt");  // Output file
         if (!outputFile.is_open()) {
             throw std::runtime_error("Could not open file");
             return;
         }
     }
-    
+
     // Read the CSV file
     std::vector<std::vector<std::string>> data;
     std::vector<std::string> row;
@@ -179,19 +179,15 @@ TEST(SerowTests, Go1Test) {
                   << std::endl;
 
         // Store the results into an eigen matrix to be saved
-        if (kStorePredictions) 
-        {
-            outputFile << timestamp  << " "
-                       << state->getBasePosition().transpose().x() << " "
+        if (kStorePredictions) {
+            outputFile << timestamp << " " << state->getBasePosition().transpose().x() << " "
                        << state->getBasePosition().transpose().y() << " "
                        << state->getBasePosition().transpose().z() << " "
-                       << state->getBaseOrientation().x() << " "
-                       << state->getBaseOrientation().y() << " "
-                       << state->getBaseOrientation().z() << " "
+                       << state->getBaseOrientation().x() << " " << state->getBaseOrientation().y()
+                       << " " << state->getBaseOrientation().z() << " "
                        << state->getBaseOrientation().w() << "\n";
         }
     }
-
+    
     outputFile.close();
-
 }

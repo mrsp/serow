@@ -29,20 +29,20 @@ namespace serow {
  */
 class ButterworthLPF {
    private:
-    double x_p_{};    /**< State at t-1 */
-    double x_pp_{};   /**< State at t-2 */
-    double y_p_{};    /**< Measurement at t-1 */
-    double y_pp_{};   /**< Measurement at t-2 */
-    
-    double a1_{};     /**< 2nd order coefficient a1 */
-    double a2_{};     /**< 2nd order coefficient a2 */
-    double b0_{};     /**< 2nd order coefficient b0 */
-    double b1_{};     /**< 2nd order coefficient b1 */
-    double b2_{};     /**< 2nd order coefficient b2 */
-    double a_{};      /**< 2nd order coefficient a */
-    
-    int i_{};         
-    
+    double x_p_{};  /**< State at t-1 */
+    double x_pp_{}; /**< State at t-2 */
+    double y_p_{};  /**< Measurement at t-1 */
+    double y_pp_{}; /**< Measurement at t-2 */
+
+    double a1_{}; /**< 2nd order coefficient a1 */
+    double a2_{}; /**< 2nd order coefficient a2 */
+    double b0_{}; /**< 2nd order coefficient b0 */
+    double b1_{}; /**< 2nd order coefficient b1 */
+    double b2_{}; /**< 2nd order coefficient b2 */
+    double a_{};  /**< 2nd order coefficient a */
+
+    int i_{};
+
     std::string name_{}; /**< The name of the filter, e.g., "LHipPitch" */
 
    public:

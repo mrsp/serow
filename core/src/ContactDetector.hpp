@@ -14,8 +14,9 @@
 /**
  * @file ContactDetector.hpp
  * @brief Header file for the ContactDetector class.
- * @details Provides a mechanism to estimate contact status using a Schmitt-Trigger (ST) detector with optional median filtering.
- * The contact status is determined based on vertical ground reaction force thresholds.
+ * @details Provides a mechanism to estimate contact status using a Schmitt-Trigger (ST) detector
+ * with optional median filtering. The contact status is determined based on vertical ground
+ * reaction force thresholds.
  */
 
 #pragma once
@@ -41,8 +42,10 @@ class ContactDetector {
     /**
      * @brief Initializes the contact estimation with a Schmitt-Trigger (ST) detector.
      * @param contact_frame Contact frame name e.g., "l_foot_frame".
-     * @param high_threshold Vertical ground reaction high force threshold of the ST detector in Newtons (N).
-     * @param low_threshold Vertical ground reaction low force threshold of the ST detector in Newtons (N).
+     * @param high_threshold Vertical ground reaction high force threshold of the ST detector in
+     * Newtons (N).
+     * @param low_threshold Vertical ground reaction low force threshold of the ST detector in
+     * Newtons (N).
      * @param mass Mass of the robot in kilograms (kg).
      * @param g Gravity constant in meters per second squared (m/s^2).
      * @param median_window Rolling median filter buffer size, used for outlier detection.
@@ -60,8 +63,10 @@ class ContactDetector {
     }
 
     /**
-     * @brief Applies a digital Schmitt-Trigger detector for binary contact status estimation e.g., contact or no contact.
-     * @param contact_force Vertical ground reaction force at the contact_frame in world coordinates.
+     * @brief Applies a digital Schmitt-Trigger detector for binary contact status estimation e.g.,
+     * contact or no contact.
+     * @param contact_force Vertical ground reaction force at the contact_frame in world
+     * coordinates.
      */
     void SchmittTrigger(double contact_force) {
         contact_force_ = mdf_->filter(std::clamp(contact_force, 0.0, mass_ * g_));
@@ -96,13 +101,17 @@ class ContactDetector {
 
    private:
     std::unique_ptr<MovingMedianFilter> mdf_; /**< Rolling median filter. */
-    int contact_status_{}; /**< Estimated contact status (0 or 1). */
-    double contact_force_{}; /**< Filtered vertical ground reaction force in world coordinates (N). */
-    std::string contact_frame_; /**< Contact frame name where detection is done e.g., "l_foot_frame". */
-    double high_threshold_{}; /**< Vertical ground reaction high force threshold of the ST detector in Newtons (N). */
-    double low_threshold_{}; /**< Vertical ground reaction low force threshold of the ST detector in Newtons (N). */
-    double mass_{}; /**< Mass of the robot in kilograms (kg). */
-    double g_{}; /**< Gravity constant in meters per second squared (m/s^2). */
+    int contact_status_{};                    /**< Estimated contact status (0 or 1). */
+    double
+        contact_force_{}; /**< Filtered vertical ground reaction force in world coordinates (N). */
+    std::string
+        contact_frame_; /**< Contact frame name where detection is done e.g., "l_foot_frame". */
+    double high_threshold_{}; /**< Vertical ground reaction high force threshold of the ST detector
+                                 in Newtons (N). */
+    double low_threshold_{}; /**< Vertical ground reaction low force threshold of the ST detector in
+                                Newtons (N). */
+    double mass_{};          /**< Mass of the robot in kilograms (kg). */
+    double g_{};             /**< Gravity constant in meters per second squared (m/s^2). */
 };
 
 }  // namespace serow

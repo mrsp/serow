@@ -180,7 +180,7 @@
   "T_base_to_odom": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
   
   // boolean: whether or not the robot is walking on flat terrain, used to eliminate vertical base 
-  // drift
+  // drift. Only applies with ContactEKF
   "is_flat_terrain": false,
   // double: virtual flat terrain measurement uncertainty (m^2)
   // Only applies if is_flat_terrain = true

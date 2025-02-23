@@ -32,9 +32,9 @@
 
 #include <iostream>
 
-#include "OutlierDetector.hpp"
 #include "Measurement.hpp"  // Includes various sensor measurements
-#include "State.hpp"        // Includes definitions of robot state variables
+#include "OutlierDetector.hpp"
+#include "State.hpp"  // Includes definitions of robot state variables
 
 namespace serow {
 

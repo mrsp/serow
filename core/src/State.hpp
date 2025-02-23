@@ -37,7 +37,7 @@ struct BaseState {
     double timestamp{};
     /// Base position in world frame coordinates (m)
     Eigen::Vector3d base_position{Eigen::Vector3d::Zero()};
-    /// Base orientation in world frame coordinates 
+    /// Base orientation in world frame coordinates
     Eigen::Quaterniond base_orientation{Eigen::Quaterniond::Identity()};
     /// Base linear velocity in world frame coordinates (m/s)
     Eigen::Vector3d base_linear_velocity{Eigen::Vector3d::Zero()};
@@ -47,9 +47,9 @@ struct BaseState {
     Eigen::Vector3d base_linear_acceleration{Eigen::Vector3d::Zero()};
     /// Base angular acceleration in world frame coordinates (rad/s^2)
     Eigen::Vector3d base_angular_acceleration{Eigen::Vector3d::Zero()};
-    /// Imu acceleration bias in local base frame coordinates (m/s^2)
+    /// Imu acceleration bias in local imu frame coordinates (m/s^2)
     Eigen::Vector3d imu_linear_acceleration_bias{Eigen::Vector3d::Zero()};
-    /// Imu gyro rate bias in local base frame coordinates (rad/s)
+    /// Imu gyro rate bias in local imu frame coordinates (rad/s)
     Eigen::Vector3d imu_angular_velocity_bias{Eigen::Vector3d::Zero()};
     /// Holds contact frame name to 3D contact position in world frame coordinates (m)
     std::map<std::string, Eigen::Vector3d> contacts_position;
@@ -73,14 +73,14 @@ struct BaseState {
     Eigen::Matrix3d base_linear_velocity_cov{Eigen::Matrix3d::Zero()};
     /// Base angular velocity covariance in world frame coordinates (rad^2/s^2)
     Eigen::Matrix3d base_angular_velocity_cov{Eigen::Matrix3d::Zero()};
-    /// Imu acceleration bias covariance in local base frame coordinates (m^2/s^4)
+    /// Imu acceleration bias covariance in local imu frame coordinates (m^2/s^4)
     Eigen::Matrix3d imu_linear_acceleration_bias_cov{Eigen::Matrix3d::Zero()};
-    /// Imu gyro rate bias covariance in local base frame coordinates (rad^2/s^2)
+    /// Imu gyro rate bias covariance in local imu frame coordinates (rad^2/s^2)
     Eigen::Matrix3d imu_angular_velocity_bias_cov{Eigen::Matrix3d::Zero()};
     /// Holds contact frame name to 3D contact position covariance in world frame coordinates (m^2)
     std::map<std::string, Eigen::Matrix3d> contacts_position_cov;
-    /// Holds contact frame name to 3D contact orientation covariance in world frame coordinates, (rad^2)
-    /// only applies if the robot has flat feet
+    /// Holds contact frame name to 3D contact orientation covariance in world frame coordinates,
+    /// (rad^2) only applies if the robot has flat feet
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_cov;
 };
 
@@ -142,7 +142,8 @@ struct JointState {
 };
 
 /**
- * @brief Represents the overall state of the robot including base, centroidal, contact, and joint states.
+ * @brief Represents the overall state of the robot including base, centroidal, contact, and joint
+ * states.
  */
 class State {
    public:
@@ -187,13 +188,13 @@ class State {
 
     /// Returns the foot frame 3D position in world frame coordinates
     const Eigen::Vector3d& getFootPosition(const std::string& frame_name) const;
-    /// Returns the foot frame 3D orientation in world frame coordinates 
+    /// Returns the foot frame 3D orientation in world frame coordinates
     const Eigen::Quaterniond& getFootOrientation(const std::string& frame_name) const;
-    /// Returns the foot frame 3D pose in world frame coordinates as a rigid transformation 
+    /// Returns the foot frame 3D pose in world frame coordinates as a rigid transformation
     Eigen::Isometry3d getFootPose(const std::string& frame_name) const;
     /// Returns the foot frame 3D linear velocity in world frame coordinates
     const Eigen::Vector3d& getFootLinearVelocity(const std::string& frame_name) const;
-    /// Returns the foot frame 3D angular velocity in world frame coordinates 
+    /// Returns the foot frame 3D angular velocity in world frame coordinates
     const Eigen::Vector3d& getFootAngularVelocity(const std::string& frame_name) const;
 
     /// Returns the 3D CoM position in world frame coordinates
@@ -206,7 +207,8 @@ class State {
     const Eigen::Vector3d& getCoMAngularMomentum() const;
     /// Returns the 3D angular momentum rate around the CoM in world frame coordinates
     const Eigen::Vector3d& getCoMAngularMomentumRate() const;
-    /// Returns the 3D CoM linear acceleration in world frame coordinates approximated with the base IMU
+    /// Returns the 3D CoM linear acceleration in world frame coordinates approximated with the base
+    /// IMU
     const Eigen::Vector3d& getCoMLinearAcceleration() const;
     /// Returns the 3D COP position in world frame coordinates
     const Eigen::Vector3d& getCOPPosition() const;

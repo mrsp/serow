@@ -12,7 +12,6 @@
  **/
 #include "OutlierDetector.hpp"
 
-
 namespace serow {
 
 double OutlierDetector::computePsi(double xxx) {
@@ -59,6 +58,5 @@ void OutlierDetector::estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix
     e_t = e_0 + zeta;
     f_t = f_0 + 1.0 - zeta;
 }
-
 
 }  // namespace serow

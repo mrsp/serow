@@ -70,15 +70,14 @@ class SerowDriver : public rclcpp::Node {
 
                 std::map<std::string, serow::ForceTorqueMeasurement> ft_measurements;
 
-                if (ft_data_.size() == force_torque_state_subscriptions_.size()){
+                if (ft_data_.size() == force_torque_state_subscriptions_.size()) {
                     // Create the leg F/T measurement
                     for (auto& [key, value] : ft_data_) {
                         serow::ForceTorqueMeasurement ft{};
                         const auto& ft_data = value;
                         ft.timestamp = static_cast<double>(ft_data.header.stamp.sec) +
                                        static_cast<double>(ft_data.header.stamp.nanosec) * 1e-9;
-                        ft.force = Eigen::Vector3d(ft_data.wrench.force.x, 
-                                                   ft_data.wrench.force.y,
+                        ft.force = Eigen::Vector3d(ft_data.wrench.force.x, ft_data.wrench.force.y,
                                                    ft_data.wrench.force.z);
                         ft.torque.emplace(Eigen::Vector3d(ft_data.wrench.torque.x,
                                                           ft_data.wrench.torque.y,
@@ -87,10 +86,11 @@ class SerowDriver : public rclcpp::Node {
                     }
                     ft_data_.clear();
                 }
-               
+
                 serow_.filter(imu_measurement, joint_measurements,
-                              ft_measurements.size() == force_torque_state_subscriptions_.size() ? std::make_optional(ft_measurements)
-                                                         : std::nullopt);
+                              ft_measurements.size() == force_torque_state_subscriptions_.size()
+                                  ? std::make_optional(ft_measurements)
+                                  : std::nullopt);
 
                 joint_state_data_.reset();
                 base_imu_data_.reset();
@@ -103,9 +103,7 @@ class SerowDriver : public rclcpp::Node {
         this->joint_state_data_ = msg;
     }
 
-    void base_imu_topic_callback(const sensor_msgs::msg::Imu& msg) {
-        this->base_imu_data_ = msg;
-    }
+    void base_imu_topic_callback(const sensor_msgs::msg::Imu& msg) { this->base_imu_data_ = msg; }
 
     serow::Serow serow_;
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscription_;
