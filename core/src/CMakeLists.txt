@@ -30,7 +30,8 @@ set(serow_headers ${serow_headers}
     Measurement.hpp
     MovingMedianFilter.hpp
     RobotKinematics.hpp
-    OutlierDetector.hpp)
+    OutlierDetector.hpp
+    TerrainElevation.hpp)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_link_libraries(serow PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)

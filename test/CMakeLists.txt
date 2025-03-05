@@ -34,3 +34,6 @@ target_link_libraries(go2_test PRIVATE serow pinocchio::pinocchio GTest::gtest_m
 
 add_executable(go1_test go1_test.cpp)
 target_link_libraries(go1_test PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
+
+add_executable(terrain_elevation terrain_elevation_test.cpp)
+target_link_libraries(terrain_elevation PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
