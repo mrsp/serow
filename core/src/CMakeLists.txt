@@ -12,7 +12,8 @@ set(serow_src ${serow_src}
     ButterworthLPF.cpp 
     Differentiator.cpp 
     DerivativeEstimator.cpp
-    OutlierDetector.cpp)
+    OutlierDetector.cpp
+    TerrainElevation.cpp)
 
 set(serow_headers ${serow_headers} 
     Serow.hpp 
