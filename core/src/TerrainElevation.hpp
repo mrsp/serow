@@ -63,6 +63,8 @@ class TerrainElevation {
 
     void resetLocalMap();
 
+    bool update(const std::array<float, 2>& loc, float height);
+
    private:
     std::array<float, map_size> height_{};
 
@@ -73,7 +75,9 @@ class TerrainElevation {
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
 
-    int normalize(int x, int a, int b);
+    int normalize(int x, int a, int b) const;
+
+    friend class TerrainElevationTest; // Allow full access
 };
 
 }  // namespace serow

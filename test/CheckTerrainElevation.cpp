@@ -13,15 +13,18 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <fstream>
 #include <iostream>
-#include <map>
 #include <serow/TerrainElevation.hpp>
-#include <sstream>
-#include <string>
 
+namespace serow {
 
-TEST(SerowTests, TerrainElevationTest) {
-   serow::TerrainElevation te;
-   std::cout << "Test" << std::endl;
+class TerrainElevationTest : public ::testing::Test {
+   protected:
+    TerrainElevation te;
+};
+
+TEST_F(TerrainElevationTest, CheckTerrainElevation) {
+   std::cout << "Test" << te.height_.size() << std::endl;
+}
+
 }

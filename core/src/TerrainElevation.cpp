@@ -187,10 +187,21 @@ int TerrainElevation::globalIndexToHashId(const std::array<int, 2>& id_g) const 
     return localIndexToHashId(globalIndexToLocalIndex(id_g));
 }
 
-int TerrainElevation::normalize(int x, int a, int b) {
+int TerrainElevation::normalize(int x, int a, int b) const {
     const int range = b - a + 1;
     const int y = (x - a) % range;
     return (y < 0 ? y + range : y) + a;
 }
+
+
+bool TerrainElevation::update(const std::array<float, 2>& loc, float height) {
+    if (!inside(loc)) {
+        return false;
+    }
+    const int hash_id = locationToHashId(loc);
+    height_[hash_id] = height;
+    return true;
+}
+
 
 }  // namespace serow
