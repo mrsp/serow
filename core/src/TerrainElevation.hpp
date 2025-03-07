@@ -9,7 +9,7 @@ namespace {
 
 static constexpr int size_x = 1000;
 static constexpr int size_y = 1000;
-static constexpr float resolution = 0.05;
+static constexpr float resolution = 0.01;
 static constexpr float resolution_inv = 1.0 / resolution;
 static constexpr int map_size = size_x * size_y;
 static constexpr int half_map_size = map_size / 2;
@@ -22,6 +22,9 @@ namespace serow {
 
 class TerrainElevation {
    public:
+
+    void  printMapInformation() const;
+    
     bool inside(const std::array<int, 2>& id_g) const;
 
     bool inside(const std::array<float, 2>& location) const;
@@ -65,7 +68,6 @@ class TerrainElevation {
 
     bool update(const std::array<float, 2>& loc, float height);
 
-   private:
     std::array<float, map_size> height_{};
 
     std::array<int, 2> local_map_origin_i_{};

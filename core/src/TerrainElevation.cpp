@@ -2,13 +2,24 @@
 
 namespace serow {
 
+
+void TerrainElevation::printMapInformation() const {
+    const std::string GREEN = "\033[1;32m";
+    std::cout << GREEN << "\tresolution: " << resolution << std::endl;
+    std::cout << GREEN << "\tinverse resolution: " << resolution_inv << std::endl;
+    std::cout << GREEN << "\tlocal map size : " << map_size << std::endl;
+    std::cout << GREEN << "\thalf local map size: " << half_map_size << std::endl;
+    std::cout << GREEN << "\tlocal map dim: " << map_dim[0] << " " << map_dim[1] << std::endl;
+    std::cout << GREEN << "\tlocal map half dim: " << half_map_dim[0] << " " << half_map_dim[1] << std::endl;
+}
+
 int TerrainElevation::locationToGlobalIndex(const float loc) const {
     return static_cast<int>(resolution_inv * loc + loc > 0.0 ? 0.5 : -0.5);
 }
 
 std::array<int, 2> TerrainElevation::locationToGlobalIndex(const std::array<float, 2>& loc) const {
-    return {static_cast<int>(resolution_inv * loc[0] + loc[0] > 0.0 ? 0.5 : -0.5),
-            static_cast<int>(resolution_inv * loc[1] + loc[1] > 0.0 ? 0.5 : -0.5)};
+    return {static_cast<int>(resolution_inv * loc[0] + static_cast<float>(loc[0] > 0.0 ? 0.5 : -0.5)),
+            static_cast<int>(resolution_inv * loc[1] + static_cast<float>(loc[1] > 0.0 ? 0.5 : -0.5))};
 }
 
 bool TerrainElevation::inside(const std::array<int, 2>& id_g) const {

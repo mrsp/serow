@@ -24,7 +24,24 @@ class TerrainElevationTest : public ::testing::Test {
 };
 
 TEST_F(TerrainElevationTest, CheckTerrainElevation) {
-   std::cout << "Test" << te.height_.size() << std::endl;
+   te.printMapInformation();
+   te.recenter({0.0, 0.0});
+
+   std::array<float, 2> location = {1.0, 2.0};
+   auto id_g = te.locationToGlobalIndex(location);
+   std::cout << "Global index " << id_g[0] << " " << id_g[1] << std::endl;
+   auto id_l = te.globalIndexToLocalIndex(id_g);
+   std::cout << "Local index " << id_l[0] << " " << id_l[1] << std::endl;
+   auto hash_id = te.localIndexToHashId(id_l);
+   std::cout << "Hash index " << hash_id << std::endl;
+
+   location = {0.3, -2.0};
+   id_g = te.locationToGlobalIndex(location);
+   std::cout << "Global index " << id_g[0] << " " << id_g[1] << std::endl;
+   id_l = te.globalIndexToLocalIndex(id_g);
+   std::cout << "Local index " << id_l[0] << " " << id_l[1] << std::endl;
+   hash_id = te.localIndexToHashId(id_l);
+   std::cout << "Hash index " << hash_id << std::endl;
 }
 
 }
