@@ -63,6 +63,8 @@ class TerrainElevation {
 
     int globalIndexToHashId(const std::array<int, 2>& id_g) const;
 
+    int isHashIdValid(const int id) const;
+
     void initializeLocalMap(const float height);
 
     void resetLocalMap();
@@ -72,6 +74,8 @@ class TerrainElevation {
     std::optional<float> getHeight(const std::array<float, 2>& loc) const;
 
     std::array<float, map_size> height_{};
+
+    float default_height_{0.0};
 
     std::array<int, 2> local_map_origin_i_{};
     std::array<int, 2> local_map_bound_max_i_{};

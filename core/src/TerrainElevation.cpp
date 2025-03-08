@@ -37,12 +37,13 @@ bool TerrainElevation::inside(const std::array<float, 2>& location) const {
     return inside(locationToGlobalIndex(location));
 }
 
-void TerrainElevation::resetCell(const int& hash_id) { height_[hash_id] = 0; }
+void TerrainElevation::resetCell(const int& hash_id) { height_[hash_id] = default_height_; }
 
 void TerrainElevation::resetLocalMap() { std::fill(height_.begin(), height_.end(), 0.0); }
 
 void TerrainElevation::initializeLocalMap(const float height) {
     std::fill(height_.begin(), height_.end(), height);
+    default_height_ = height;
 }
 
 void TerrainElevation::updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
@@ -66,7 +67,12 @@ void TerrainElevation::clearOutOfMapCells(const std::vector<int>& clear_id, cons
     for (const auto& x : clear_id) {
         for (int y = -half_map_dim[ids[1]]; y <= half_map_dim[ids[1]]; y++) {
             const std::array<int, 2> temp_clear_id = {x, y};
-            resetCell(localIndexToHashId(temp_clear_id));
+            const int hash_id = localIndexToHashId(temp_clear_id);
+            if (isHashIdValid(hash_id)) {
+                resetCell(hash_id);
+            } else {
+                continue;
+            }
         }
     }
 }
@@ -118,7 +124,6 @@ void TerrainElevation::recenter(const std::array<float, 2>& location) {
         }
         clearOutOfMapCells(clear_id, i);
     }
-
     updateLocalMapOriginAndBound(new_origin_d, new_origin_i);
 }
 
@@ -210,6 +215,16 @@ int TerrainElevation::locationToHashId(const std::array<float, 2>& loc) const {
 
 int TerrainElevation::globalIndexToHashId(const std::array<int, 2>& id_g) const {
     return localIndexToHashId(globalIndexToLocalIndex(id_g));
+}
+
+int TerrainElevation::isHashIdValid(const int id) const {
+    if (id > map_size) {
+        return false;
+    }
+    if (id < 0) {
+        return false;
+    }
+    return true;
 }
 
 int TerrainElevation::normalize(int x, int a, int b) const {
