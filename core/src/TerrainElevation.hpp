@@ -9,7 +9,7 @@ namespace {
 
 static constexpr int size_x = 1000;
 static constexpr int size_y = 1000;
-static constexpr float resolution = 0.01;
+static constexpr float resolution = 0.05;
 static constexpr float resolution_inv = 1.0 / resolution;
 static constexpr int map_size = size_x * size_y;
 static constexpr int half_map_size = map_size / 2;

@@ -14,7 +14,7 @@ void TerrainElevation::printMapInformation() const {
 }
 
 int TerrainElevation::locationToGlobalIndex(const float loc) const {
-    if (loc < 0.0) {
+    if (loc > 0.0) {
         return static_cast<int>(resolution_inv * loc + 0.5);
     } else {
         return static_cast<int>(resolution_inv * loc - 0.5);

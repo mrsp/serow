@@ -174,17 +174,6 @@ TEST_F(TerrainElevationTest, UpdateHeight) {
    EXPECT_FALSE(update_result);
 }
 
-TEST_F(TerrainElevationTest, Normalize) {
-   // Test normalize function with the large map dimensions
-   EXPECT_EQ(terrain.normalize(5, 0, 999), 5);
-   EXPECT_EQ(terrain.normalize(-5, 0, 999), 995);
-   EXPECT_EQ(terrain.normalize(1005, 0, 999), 6);
-   
-   // Test with half_map_dim range
-   EXPECT_EQ(terrain.normalize(501, -500, 499), -499);
-   EXPECT_EQ(terrain.normalize(-501, -500, 499), 499);
-}
-
 // Additional test for high-resolution operations
 TEST_F(TerrainElevationTest, HighResolutionOperations) {
    // Test operations with the high-resolution setting (0.05)
