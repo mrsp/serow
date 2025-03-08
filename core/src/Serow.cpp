@@ -828,13 +828,17 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         state.base_state_.contacts_position = base_to_foot_positions;
         // Assuming the terrain is flat and the robot is initialized in a standing posture we can
         // have a measurement of the average terrain height constraining base estimation.
-        if (params_.is_flat_terrain && !terrain_.has_value() && params_.is_contact_ekf) {
-            TerrainMeasurement tm(0.0, 0.0, params_.terrain_height_covariance);
-            terrain_ = std::move(tm);
+        if (params_.is_flat_terrain && !terrain_estimator_ && params_.is_contact_ekf) {
+            float terrain_height = 0.0;
             for (const auto& frame : state.getContactsFrame()) {
-                terrain_->height += base_to_foot_positions.at(frame).z();
+                terrain_height += base_to_foot_positions.at(frame).z();
             }
-            terrain_->height /= state.getContactsFrame().size();
+            terrain_height /= state.getContactsFrame().size();
+            // Initialize the terrain elevation mapper
+            terrain_estimator_ = std::make_unique<TerrainElevation>();
+            terrain_estimator_->initializeLocalMap(terrain_height);
+            terrain_estimator_->recenter({0.0, 0.0});
+            terrain_estimator_->printMapInformation();
         }
         if (!state.isPointFeet()) {
             state.base_state_.contacts_orientation = base_to_foot_orientations;
@@ -922,7 +926,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     state.base_state_.timestamp = kin.timestamp;
 
     if (params_.is_contact_ekf) {
-        state.base_state_ = base_estimator_con_.update(state.base_state_, kin, odom, terrain_);
+        state.base_state_ = base_estimator_con_.update(state.base_state_, kin, odom, terrain_estimator_);
     } else {
         state.base_state_ = base_estimator_.update(state.base_state_, kin, odom);
 

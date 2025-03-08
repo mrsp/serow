@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
+#include <optional>
 
 namespace {
 
@@ -23,7 +24,7 @@ namespace serow {
 class TerrainElevation {
    public:
 
-    void  printMapInformation() const;
+    void printMapInformation() const;
     
     bool inside(const std::array<int, 2>& id_g) const;
 
@@ -67,6 +68,8 @@ class TerrainElevation {
     void resetLocalMap();
 
     bool update(const std::array<float, 2>& loc, float height);
+
+    std::optional<float> getHeight(const std::array<float, 2>& loc) const;
 
     std::array<float, map_size> height_{};
 

@@ -381,8 +381,7 @@ BaseState ContactEKF::updateWithOdometry(const BaseState& state,
 
 BaseState ContactEKF::updateWithTerrain(const BaseState& state,
                                         const std::map<std::string, bool>& contacts_status,
-                                        const double terrain_height,
-                                        const double terrain_height_cov) {
+                                        const TerrainElevation& terrain_estimator) {
     BaseState updated_state = state;
 
     // Construct the innovation vector z, the linearized measurement matrix H, and the measurement
@@ -396,13 +395,17 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
     int i = 0;
     for (const auto& [cf, cs] : contacts_status) {
         H(i, pl_idx_.at(cf)[2]) = 1.0;
+        z(i) = 0.0;
+        R(i, i) = 1e4;
+        
         if (cs) {
-            z(i) = terrain_height - state.contacts_position.at(cf).z();
-            R(i, i) = terrain_height_cov;
-        } else {
-            z(i) = 0.0;
-            R(i, i) = 1e4;
-        }
+            auto terrain_height = terrain_estimator.getHeight(
+               {static_cast<float>(state.contacts_position.at(cf).x()), static_cast<float>(state.contacts_position.at(cf).y())});
+            if (terrain_height.has_value()) {
+                z(i) =  static_cast<double>(terrain_height.value()) - state.contacts_position.at(cf).z();
+                R(i, i) = 1e-4;
+            }
+        } 
         i++;
     }
 
@@ -412,7 +415,6 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
 
     P_ = (I_ - K * H) * P_;
     updateState(updated_state, dx, P_);
-
     return updated_state;
 }
 
@@ -490,7 +492,7 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
 
 BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom,
-                             std::optional<TerrainMeasurement> terrain) {
+                             std::shared_ptr<TerrainElevation> terrain_estimator) {
     BaseState updated_state =
         updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
                            kin.contacts_status, kin.position_cov, kin.contacts_orientation,
@@ -502,9 +504,10 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
                                odom->base_position_cov, odom->base_orientation_cov);
     }
 
-    if (terrain.has_value()) {
-        updated_state = updateWithTerrain(updated_state, kin.contacts_status, terrain->height,
-                                          terrain->height_cov);
+    if (terrain_estimator) {
+        updated_state = updateWithTerrain(updated_state, kin.contacts_status, *terrain_estimator);
+        // Update the terrain estimator
+        terrain_estimator->recenter({static_cast<float>(updated_state.base_position.x()), static_cast<float>(updated_state.base_position.y())});
     }
     return updated_state;
 }

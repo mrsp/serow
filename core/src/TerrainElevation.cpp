@@ -231,4 +231,14 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height) {
     return true;
 }
 
+std::optional<float> TerrainElevation::getHeight(const std::array<float, 2>& loc) const {
+    if (!inside(loc)) {
+        return std::nullopt;
+    }
+    
+    const int hash_id = locationToHashId(loc);
+    return height_[hash_id];
+}
+
+
 }  // namespace serow

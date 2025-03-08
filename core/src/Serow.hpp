@@ -26,6 +26,7 @@
 #include "Measurement.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
+#include "TerrainElevation.hpp"
 
 namespace serow {
 
@@ -232,8 +233,8 @@ class Serow {
     /// @brief IMU bias estimation cycles
     size_t cycle_{};
     size_t imu_calibration_cycles_{};
-    /// @brief whether or not to employ a virtual level ground measurement
-    std::optional<TerrainMeasurement> terrain_ = std::nullopt;
+    /// @brief Terrain elevation mapper
+    std::shared_ptr<TerrainElevation> terrain_estimator_;
 };
 
 }  // namespace serow
