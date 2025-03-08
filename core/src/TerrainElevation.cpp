@@ -2,7 +2,6 @@
 
 namespace serow {
 
-
 void TerrainElevation::printMapInformation() const {
     const std::string GREEN = "\033[1;32m";
     std::cout << GREEN << "\tresolution: " << resolution << std::endl;
@@ -10,16 +9,20 @@ void TerrainElevation::printMapInformation() const {
     std::cout << GREEN << "\tlocal map size : " << map_size << std::endl;
     std::cout << GREEN << "\thalf local map size: " << half_map_size << std::endl;
     std::cout << GREEN << "\tlocal map dim: " << map_dim[0] << " " << map_dim[1] << std::endl;
-    std::cout << GREEN << "\tlocal map half dim: " << half_map_dim[0] << " " << half_map_dim[1] << std::endl;
+    std::cout << GREEN << "\tlocal map half dim: " << half_map_dim[0] << " " << half_map_dim[1]
+              << std::endl;
 }
 
 int TerrainElevation::locationToGlobalIndex(const float loc) const {
-    return static_cast<int>(resolution_inv * loc + loc > 0.0 ? 0.5 : -0.5);
+    if (loc < 0.0) {
+        return static_cast<int>(resolution_inv * loc + 0.5);
+    } else {
+        return static_cast<int>(resolution_inv * loc - 0.5);
+    }
 }
 
 std::array<int, 2> TerrainElevation::locationToGlobalIndex(const std::array<float, 2>& loc) const {
-    return {static_cast<int>(resolution_inv * loc[0] + static_cast<float>(loc[0] > 0.0 ? 0.5 : -0.5)),
-            static_cast<int>(resolution_inv * loc[1] + static_cast<float>(loc[1] > 0.0 ? 0.5 : -0.5))};
+    return {locationToGlobalIndex(loc[0]), locationToGlobalIndex(loc[1])};
 }
 
 bool TerrainElevation::inside(const std::array<int, 2>& id_g) const {
@@ -142,12 +145,18 @@ std::array<int, 2> TerrainElevation::localIndexToGlobalIndex(const std::array<in
     for (size_t i = 0; i < 2; i++) {
         int min_id_g = -half_map_dim[i] + local_map_origin_i_[i];
         int min_id_l = min_id_g % map_dim[i];
-        min_id_l -= min_id_l > half_map_dim[i] ? map_dim[i] : 0;
-        min_id_l += min_id_l < -half_map_dim[i] ? map_dim[i] : 0;
+
+        if (min_id_l > half_map_dim[i]) {
+            min_id_l -= map_dim[i];
+        }
+        if (min_id_l < -half_map_dim[i]) {
+            min_id_l += map_dim[i];
+        }
 
         int cur_dis_to_min_id = id_l[i] - min_id_l;
-        cur_dis_to_min_id =
-            cur_dis_to_min_id < 0 ? map_dim[i] + cur_dis_to_min_id : cur_dis_to_min_id;
+        if (cur_dis_to_min_id < 0) {
+            cur_dis_to_min_id += map_dim[i];
+        }
         int cur_id = cur_dis_to_min_id + min_id_g;
         id_g[i] = cur_id;
     }
@@ -159,12 +168,17 @@ std::array<float, 2> TerrainElevation::localIndexToLocation(const std::array<int
     for (size_t i = 0; i < 2; i++) {
         int min_id_g = -half_map_dim[i] + local_map_origin_i_[i];
         int min_id_l = min_id_g % map_dim[i];
-        min_id_l -= min_id_l > half_map_dim[i] ? map_dim[i] : 0;
-        min_id_l += min_id_l < -half_map_dim[i] ? map_dim[i] : 0;
+        if (min_id_l > half_map_dim[i]) {
+            min_id_l -= map_dim[i];
+        }
+        if (min_id_l < -half_map_dim[i]) {
+            min_id_l += map_dim[i];
+        }
 
         int cur_dis_to_min_id = id_l[i] - min_id_l;
-        cur_dis_to_min_id =
-            cur_dis_to_min_id < 0 ? map_dim[i] + cur_dis_to_min_id : cur_dis_to_min_id;
+        if (cur_dis_to_min_id < 0) {
+            cur_dis_to_min_id += map_dim[i];
+        }
         int cur_id = cur_dis_to_min_id + min_id_g;
         loc[i] = cur_id * resolution;
     }
@@ -201,9 +215,12 @@ int TerrainElevation::globalIndexToHashId(const std::array<int, 2>& id_g) const 
 int TerrainElevation::normalize(int x, int a, int b) const {
     const int range = b - a + 1;
     const int y = (x - a) % range;
-    return (y < 0 ? y + range : y) + a;
+    if (y < 0) {
+        return y + range + a;
+    } else {
+        return y + a;
+    }
 }
-
 
 bool TerrainElevation::update(const std::array<float, 2>& loc, float height) {
     if (!inside(loc)) {
@@ -213,6 +230,5 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height) {
     height_[hash_id] = height;
     return true;
 }
-
 
 }  // namespace serow
