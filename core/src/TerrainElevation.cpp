@@ -243,7 +243,31 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
         return false;
     }
     const int hash_id = locationToHashId(loc);
-    elevation_[hash_id] = std::move(ElevationCell(height, stdev));
+    const float height_prev = elevation_[hash_id].height;
+    const float stdev_prev = elevation_[hash_id].stdev;
+    ElevationCell elevation;
+
+    // Kalman update
+    const float den = stdev + stdev_prev;
+    elevation.height = (stdev * height_prev + stdev_prev * height) / den;
+    elevation.stdev = (stdev * stdev_prev) / den;
+    elevation_[hash_id] = elevation;
+    
+    // Propagate update to neighbor cells
+    for (float dx = -radius; dx <= radius; dx += resolution) {
+        for (float dy = -radius; dy <= radius; dy += resolution) {
+            const std::array<float, 2> temp_loc = {dx + loc[0], dy + loc[1]};
+            if (!inside(temp_loc)) {
+                continue;
+            }
+            const int hash_id = locationToHashId(temp_loc);
+            const float distance = std::sqrt(dx * dx + dy * dy);
+            const float weight = std::exp(-distance * distance / (2.0 * radius * radius));
+            elevation_[hash_id].height = weight * elevation.height;
+            elevation_[hash_id].stdev = weight * weight * elevation.stdev;
+        }
+    } 
+
     return true;
 }
 
