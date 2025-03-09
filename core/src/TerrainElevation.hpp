@@ -21,6 +21,17 @@ static constexpr std::array<int, 2> half_map_dim = {size_x / 2, size_y / 2};
 
 namespace serow {
 
+
+struct ElevationCell {
+    float height{};
+    float stdev{};
+    ElevationCell() = default;
+    ElevationCell(float height, float stdev) {
+        this->height = height;
+        this->stdev = stdev;
+    }
+};
+
 class TerrainElevation {
    public:
 
@@ -65,17 +76,17 @@ class TerrainElevation {
 
     int isHashIdValid(const int id) const;
 
-    void initializeLocalMap(const float height);
+    void initializeLocalMap(const float height, const float std);
 
     void resetLocalMap();
 
-    bool update(const std::array<float, 2>& loc, float height);
+    bool update(const std::array<float, 2>& loc, float height, float std);
 
-    std::optional<float> getHeight(const std::array<float, 2>& loc) const;
+    std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
 
-    std::array<float, map_size> height_{};
+    std::array<ElevationCell, map_size> elevation_;
 
-    float default_height_{0.0};
+    ElevationCell default_elevation_;
 
     std::array<int, 2> local_map_origin_i_{};
     std::array<int, 2> local_map_bound_max_i_{};
@@ -88,5 +99,6 @@ class TerrainElevation {
 
     friend class TerrainElevationTest; // Allow full access
 };
+
 
 }  // namespace serow

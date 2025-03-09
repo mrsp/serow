@@ -2,6 +2,7 @@
 
 namespace serow {
 
+
 void TerrainElevation::printMapInformation() const {
     const std::string GREEN = "\033[1;32m";
     std::cout << GREEN << "\tresolution: " << resolution << std::endl;
@@ -37,13 +38,13 @@ bool TerrainElevation::inside(const std::array<float, 2>& location) const {
     return inside(locationToGlobalIndex(location));
 }
 
-void TerrainElevation::resetCell(const int& hash_id) { height_[hash_id] = default_height_; }
+void TerrainElevation::resetCell(const int& hash_id) { elevation_[hash_id] = default_elevation_; }
 
-void TerrainElevation::resetLocalMap() { std::fill(height_.begin(), height_.end(), 0.0); }
+void TerrainElevation::resetLocalMap() { std::fill(elevation_.begin(), elevation_.end(), ElevationCell(0.0, 1e2)); }
 
-void TerrainElevation::initializeLocalMap(const float height) {
-    std::fill(height_.begin(), height_.end(), height);
-    default_height_ = height;
+void TerrainElevation::initializeLocalMap(const float height, const float stdev) {
+    default_elevation_ = std::move(ElevationCell(height, stdev));
+    std::fill(elevation_.begin(), elevation_.end(), default_elevation_);
 }
 
 void TerrainElevation::updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
@@ -237,22 +238,22 @@ int TerrainElevation::normalize(int x, int a, int b) const {
     }
 }
 
-bool TerrainElevation::update(const std::array<float, 2>& loc, float height) {
+bool TerrainElevation::update(const std::array<float, 2>& loc, float height, float stdev) {
     if (!inside(loc)) {
         return false;
     }
     const int hash_id = locationToHashId(loc);
-    height_[hash_id] = height;
+    elevation_[hash_id] = std::move(ElevationCell(height, stdev));
     return true;
 }
 
-std::optional<float> TerrainElevation::getHeight(const std::array<float, 2>& loc) const {
+std::optional<ElevationCell> TerrainElevation::getElevation(const std::array<float, 2>& loc) const {
     if (!inside(loc)) {
         return std::nullopt;
     }
     
     const int hash_id = locationToHashId(loc);
-    return height_[hash_id];
+    return elevation_[hash_id];
 }
 
 

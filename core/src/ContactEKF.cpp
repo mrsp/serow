@@ -399,11 +399,11 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
         R(i, i) = 1e4;
         
         if (cs) {
-            auto terrain_height = terrain_estimator.getHeight(
+            auto elevation = terrain_estimator.getElevation(
                {static_cast<float>(state.contacts_position.at(cf).x()), static_cast<float>(state.contacts_position.at(cf).y())});
-            if (terrain_height.has_value()) {
-                z(i) =  static_cast<double>(terrain_height.value()) - state.contacts_position.at(cf).z();
-                R(i, i) = 1e-4;
+            if (elevation.has_value()) {
+                z(i) =  static_cast<double>(elevation.value().height) - state.contacts_position.at(cf).z();
+                R(i, i) = static_cast<double>(elevation.value().stdev * elevation.value().stdev);
             }
         } 
         i++;
