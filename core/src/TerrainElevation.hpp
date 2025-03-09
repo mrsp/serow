@@ -11,12 +11,32 @@ namespace {
 static constexpr float resolution = 0.05;
 static constexpr float resolution_inv = 1.0 / resolution;
 static constexpr float radius = 0.5;
-static constexpr int size_x = 1000;
-static constexpr int size_y = 1000;
-static constexpr int map_size = size_x * size_y;
-static constexpr int half_map_size = map_size / 2;
-static constexpr std::array<int, 2> map_dim = {size_x, size_y};
-static constexpr std::array<int, 2> half_map_dim = {size_x / 2, size_y / 2};
+static constexpr int map_dim = 1024;  // 2^10
+static constexpr int half_map_dim = map_dim / 2; // 2^9
+static constexpr int map_size = map_dim * map_dim; // 2^20 = 1,048,576
+static constexpr int half_map_size = map_size / 2; // 2^19 = 524,288
+
+template<int N>
+inline int fast_mod(const int& x) {
+    static_assert((N & (N - 1)) == 0, "N must be a power of 2");
+    constexpr int mask = N - 1;
+    
+    // For positive numbers, the bitwise AND works perfectly
+    if (x >= 0) {
+        return x & mask;
+    }
+    
+    // For negative numbers, we need special handling
+    int remainder = x & mask;
+    
+    // If remainder is 0, the result is 0
+    if (remainder == 0) {
+        return 0;
+    }
+    
+    // Otherwise, we need to return a negative result
+    return remainder - N;
+}
 
 }  // namespace
 
@@ -47,7 +67,7 @@ class TerrainElevation {
     void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
                                       const std::array<int, 2>& new_origin_i);
 
-    void clearOutOfMapCells(const std::vector<int>& clear_id, const int& i);
+    void clearOutOfMapCells(const std::vector<int>& clear_id);
 
     void recenter(const std::array<float, 2>& location);
 
@@ -96,7 +116,7 @@ class TerrainElevation {
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
 
-    int normalize(int x, int a, int b) const;
+    int normalize(int x) const;
 
     friend class TerrainElevationTest; // Allow full access
 };
