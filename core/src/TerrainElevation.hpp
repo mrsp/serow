@@ -119,7 +119,8 @@ class TerrainElevation {
     std::array<ElevationCell, map_size> elevation_;
 
     ElevationCell default_elevation_;
-
+    ElevationCell empty_elevation_{0.0, 1e2};
+    
     std::array<int, 2> local_map_origin_i_{};
     std::array<int, 2> local_map_bound_max_i_{};
     std::array<int, 2> local_map_bound_min_i_{};

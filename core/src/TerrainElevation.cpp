@@ -40,7 +40,7 @@ bool TerrainElevation::inside(const std::array<float, 2>& location) const {
 void TerrainElevation::resetCell(const int& hash_id) { elevation_[hash_id] = default_elevation_; }
 
 void TerrainElevation::resetLocalMap() {
-    std::fill(elevation_.begin(), elevation_.end(), ElevationCell(0.0, 1e2));
+    std::fill(elevation_.begin(), elevation_.end(), empty_elevation_);
 }
 
 void TerrainElevation::initializeLocalMap(const float height, const float stdev) {
