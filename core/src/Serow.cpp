@@ -835,7 +835,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             }
             terrain_height /= state.getContactsFrame().size();
             // Initialize the terrain elevation mapper
-            terrain_estimator_ = std::make_unique<TerrainElevation>();
+            terrain_estimator_ = std::make_shared<TerrainElevation>();
             terrain_estimator_->initializeLocalMap(terrain_height, 1e-2);
             terrain_estimator_->recenter({0.0, 0.0});
             terrain_estimator_->printMapInformation();
