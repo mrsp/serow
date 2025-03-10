@@ -397,15 +397,17 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
         H(i, pl_idx_.at(cf)[2]) = 1.0;
         z(i) = 0.0;
         R(i, i) = 1e4;
-        
+
         if (cs) {
             auto elevation = terrain_estimator.getElevation(
-               {static_cast<float>(state.contacts_position.at(cf).x()), static_cast<float>(state.contacts_position.at(cf).y())});
+                {static_cast<float>(state.contacts_position.at(cf).x()),
+                 static_cast<float>(state.contacts_position.at(cf).y())});
             if (elevation.has_value()) {
-                z(i) =  static_cast<double>(elevation.value().height) - state.contacts_position.at(cf).z();
+                z(i) = static_cast<double>(elevation.value().height) -
+                       state.contacts_position.at(cf).z();
                 R(i, i) = static_cast<double>(elevation.value().stdev * elevation.value().stdev);
             }
-        } 
+        }
         i++;
     }
 
@@ -507,7 +509,15 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
     if (terrain_estimator) {
         updated_state = updateWithTerrain(updated_state, kin.contacts_status, *terrain_estimator);
         // Update the terrain estimator
-        terrain_estimator->recenter({static_cast<float>(updated_state.base_position.x()), static_cast<float>(updated_state.base_position.y())});
+        const std::array<float, 2> base_pos_xy = {
+            static_cast<float>(updated_state.base_position.x()),
+            static_cast<float>(updated_state.base_position.y())};
+        const auto& map_origin_xy = terrain_estimator->getMapOrigin();
+        // TODO: @sp make this a const
+        if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 24) ||
+            (abs(base_pos_xy[1] - map_origin_xy[1]) > 24)) {
+            terrain_estimator->recenter(base_pos_xy);
+        }
     }
     return updated_state;
 }

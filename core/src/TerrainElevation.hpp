@@ -113,6 +113,8 @@ class TerrainElevation {
     bool update(const std::array<float, 2>& loc, float height, float std);
 
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
+    
+    const std::array<float, 2>& getMapOrigin() const;
 
     std::array<ElevationCell, map_size> elevation_;
 
