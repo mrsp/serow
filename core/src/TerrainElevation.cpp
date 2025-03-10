@@ -2,7 +2,6 @@
 
 namespace serow {
 
-
 void TerrainElevation::printMapInformation() const {
     const std::string GREEN = "\033[1;32m";
     const std::string WHITE = "\033[1;37m";
@@ -40,7 +39,9 @@ bool TerrainElevation::inside(const std::array<float, 2>& location) const {
 
 void TerrainElevation::resetCell(const int& hash_id) { elevation_[hash_id] = default_elevation_; }
 
-void TerrainElevation::resetLocalMap() { std::fill(elevation_.begin(), elevation_.end(), ElevationCell(0.0, 1e2)); }
+void TerrainElevation::resetLocalMap() {
+    std::fill(elevation_.begin(), elevation_.end(), ElevationCell(0.0, 1e2));
+}
 
 void TerrainElevation::initializeLocalMap(const float height, const float stdev) {
     default_elevation_ = std::move(ElevationCell(height, stdev));
@@ -133,7 +134,6 @@ std::array<float, 2> TerrainElevation::globalIndexToLocation(const std::array<in
 
 std::array<int, 2> TerrainElevation::globalIndexToLocalIndex(const std::array<int, 2>& id_g) const {
     std::array<int, 2> id_l = {};
-
     for (size_t i = 0; i < 2; i++) {
         id_l[i] = fast_mod<map_dim>(id_g[i]);
         if (id_l[i] > half_map_dim) {
@@ -148,7 +148,7 @@ std::array<int, 2> TerrainElevation::globalIndexToLocalIndex(const std::array<in
 std::array<int, 2> TerrainElevation::localIndexToGlobalIndex(const std::array<int, 2>& id_l) const {
     std::array<int, 2> id_g = {};
     for (size_t i = 0; i < 2; i++) {
-        int min_id_g = -half_map_dim + local_map_origin_i_[i];
+        const int min_id_g = -half_map_dim + local_map_origin_i_[i];
         int min_id_l = fast_mod<map_dim>(min_id_g);
         if (min_id_l > half_map_dim) {
             min_id_l -= map_dim;
@@ -170,7 +170,7 @@ std::array<int, 2> TerrainElevation::localIndexToGlobalIndex(const std::array<in
 std::array<float, 2> TerrainElevation::localIndexToLocation(const std::array<int, 2>& id_l) const {
     std::array<float, 2> loc = {};
     for (size_t i = 0; i < 2; i++) {
-        int min_id_g = -half_map_dim + local_map_origin_i_[i];
+        const int min_id_g = -half_map_dim + local_map_origin_i_[i];
         int min_id_l = fast_mod<map_dim>(min_id_g);
         if (min_id_l > half_map_dim) {
             min_id_l -= map_dim;
@@ -183,15 +183,15 @@ std::array<float, 2> TerrainElevation::localIndexToLocation(const std::array<int
         if (cur_dis_to_min_id < 0) {
             cur_dis_to_min_id += map_dim;
         }
-        int cur_id = cur_dis_to_min_id + min_id_g;
+        const int cur_id = cur_dis_to_min_id + min_id_g;
         loc[i] = cur_id * resolution;
     }
     return loc;
 }
 
 std::array<int, 2> TerrainElevation::hashIdToLocalIndex(const int hash_id) const {
-    int id0 = hash_id / map_dim;
-    int id1 = hash_id - id0 * map_dim;
+    const int id0 = hash_id / map_dim;
+    const int id1 = hash_id - id0 * map_dim;
     return {id0 - half_map_dim, id1 - half_map_dim};
 }
 
@@ -226,53 +226,70 @@ int TerrainElevation::isHashIdValid(const int id) const {
     return true;
 }
 
-int TerrainElevation::normalize(int x) const {
-    // Since a = -half_map_dim and b = half_map_dim, the range is 2*half_map_dim + 1
-    // half_map_dim is 512, a power of 2
-    constexpr int a = -half_map_dim;
-    // The modulo operation can be optimized for powers of 2
-    constexpr int mask = (2 * half_map_dim) - 1;  // 1023
-    
-    // (x - a) & mask is equivalent to (x - a) % (2 * half_map_dim) for positive numbers
-    int y = (x - a) & mask;
-    
-    // Handle negative case
-    if (x - a < 0 && y != 0) {
-        return y + a;
-    } else {
-        return y + a;
-    }
-}
-
 bool TerrainElevation::update(const std::array<float, 2>& loc, float height, float stdev) {
     if (!inside(loc)) {
         return false;
     }
-    const int hash_id = locationToHashId(loc);
-    const float height_prev = elevation_[hash_id].height;
-    const float stdev_prev = elevation_[hash_id].stdev;
-    ElevationCell elevation;
+
+    // Update the center cell using Kalman filter
+    const int center_hash_id = locationToHashId(loc);
+    const float height_prev = elevation_[center_hash_id].height;
+    const float stdev_prev = elevation_[center_hash_id].stdev;
 
     // Kalman update
     const float den = stdev + stdev_prev;
-    elevation.height = (stdev * height_prev + stdev_prev * height) / den;
-    elevation.stdev = (stdev * stdev_prev) / den;
-    elevation_[hash_id] = elevation;
-    
-    // Propagate update to neighbor cells
-    for (float dx = -radius; dx <= radius; dx += resolution) {
-        for (float dy = -radius; dy <= radius; dy += resolution) {
-            const std::array<float, 2> temp_loc = {dx + loc[0], dy + loc[1]};
-            if (!inside(temp_loc)) {
+    ElevationCell new_elevation;
+    new_elevation.height = (stdev * height_prev + stdev_prev * height) / den;
+    new_elevation.stdev = (stdev * stdev_prev) / den;
+    elevation_[center_hash_id] = new_elevation;
+
+    // Pre-compute constants for the weight function
+    const float radius_squared = radius * radius;
+    const float weight_factor = -1.0f / (2.0f * radius_squared);
+
+    // Calculate the radius in grid cells (rounded up)
+    const int radius_cells = static_cast<int>(std::ceil(radius / resolution));
+
+    // Get the center cell's indices
+    const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
+
+    // Iterate only over the cells within the radius
+    for (int i = -radius_cells; i <= radius_cells; ++i) {
+        for (int j = -radius_cells; j <= radius_cells; ++j) {
+            // Skip the center cell (already updated)
+            if (i == 0 && j == 0) {
                 continue;
             }
-            const int hash_id = locationToHashId(temp_loc);
-            const float distance = std::sqrt(dx * dx + dy * dy);
-            const float weight = std::exp(-distance * distance / (2.0 * radius * radius));
-            elevation_[hash_id].height = weight * elevation.height;
-            elevation_[hash_id].stdev = weight * weight * elevation.stdev;
+
+            // Calculate squared distance in grid coordinates
+            const float dx = i * resolution;
+            const float dy = j * resolution;
+            const float dist_squared = dx * dx + dy * dy;
+
+            // Skip cells outside the circle
+            if (dist_squared > radius_squared) {
+                continue;
+            }
+
+            // Calculate global index and check if inside map
+            const std::array<int, 2> global_idx = {center_idx[0] + i, center_idx[1] + j};
+            if (!inside(global_idx)) {
+                continue;
+            }
+
+            // Calculate hash ID directly from global index (avoid extra conversions)
+            const int hash_id = globalIndexToHashId(global_idx);
+
+            // Calculate weight (avoid sqrt when possible)
+            const float weight = std::exp(dist_squared * weight_factor);
+
+            // Update the cell
+            elevation_[hash_id].height =
+                weight * new_elevation.height + (1.0 - weight) * elevation_[hash_id].height;
+            elevation_[hash_id].stdev =
+                weight * new_elevation.stdev + (1.0 - weight) * elevation_[hash_id].stdev;
         }
-    } 
+    }
 
     return true;
 }
@@ -281,10 +298,8 @@ std::optional<ElevationCell> TerrainElevation::getElevation(const std::array<flo
     if (!inside(loc)) {
         return std::nullopt;
     }
-    
     const int hash_id = locationToHashId(loc);
     return elevation_[hash_id];
 }
-
 
 }  // namespace serow

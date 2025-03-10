@@ -20,10 +20,11 @@ namespace serow {
 
 class TerrainElevationTest : public ::testing::Test {
    protected:
-    TerrainElevation terrain;
+    TerrainElevation elevation_map;
 };
 
 
+// Test the fast modulo function
 TEST_F(TerrainElevationTest, FastModulo) {
    for (int i=-10000; i <=10000; i++) {
       EXPECT_EQ(fast_mod<half_map_dim>(i), i % half_map_dim);
@@ -31,196 +32,247 @@ TEST_F(TerrainElevationTest, FastModulo) {
    }
 }
 
+// Test initialization and basic properties
+TEST_F(TerrainElevationTest, Initialization) {
+   // Test initialization with specific values
+   float default_height = 5.0f;
+   float default_stdev = 2.0f;
+   elevation_map.initializeLocalMap(default_height, default_stdev);
+   
+   // Check a random point to verify initialization
+   std::array<float, 2> test_loc = {0.0f, 0.0f};
+   auto elevation = elevation_map.getElevation(test_loc);
+   ASSERT_TRUE(elevation.has_value());
+   EXPECT_FLOAT_EQ(elevation->height, default_height);
+   EXPECT_FLOAT_EQ(elevation->stdev, default_stdev);
 }
-// TEST_F(TerrainElevationTest, LocationToGlobalIndex) {
-//    // Test positive locations
-//    EXPECT_EQ(terrain.locationToGlobalIndex(0.55f), 11);  // 0.55 / 0.05 = 11
-//    EXPECT_EQ(terrain.locationToGlobalIndex(1.0f), 20);   // 1.0 / 0.05 = 20
-   
-//    // Test negative locations
-//    EXPECT_EQ(terrain.locationToGlobalIndex(-0.55f), -11); // -0.55 / 0.05 = -11
-//    EXPECT_EQ(terrain.locationToGlobalIndex(-1.0f), -20);  // -1.0 / 0.05 = -20
-   
-//    // Test 2D locations
-//    std::array<float, 2> loc2d_pos = {0.55f, 1.0f};
-//    std::array<int, 2> expected_pos = {11, 20};
-//    EXPECT_EQ(terrain.locationToGlobalIndex(loc2d_pos), expected_pos);
-   
-//    std::array<float, 2> loc2d_neg = {-0.55f, -1.0f};
-//    std::array<int, 2> expected_neg = {-11, -20};
-//    EXPECT_EQ(terrain.locationToGlobalIndex(loc2d_neg), expected_neg);
-// }
 
-// TEST_F(TerrainElevationTest, Inside) {
-//    // Test points inside the map (half_map_dim = {500, 500})
-//    std::array<int, 2> point_inside = {100, 100};
-//    EXPECT_TRUE(terrain.inside(point_inside));
+// Test coordinate transformation functions
+TEST_F(TerrainElevationTest, CoordinateTransformations) {
+   // Test location to global index conversion
+   std::array<float, 2> loc = {1.025f, -2.975f};
+   std::array<int, 2> global_index = elevation_map.locationToGlobalIndex(loc);
+   EXPECT_EQ(global_index[0], 21);    // 1.025 / 0.05 + 0.5 = 21
+   EXPECT_EQ(global_index[1], -60);   // -2.975 / 0.05 - 0.5 = -60
    
-//    // Test points at the edge of the map
-//    std::array<int, 2> point_edge = {500, 500};
-//    EXPECT_TRUE(terrain.inside(point_edge));
+   // Test global index to location conversion
+   std::array<float, 2> loc_back = elevation_map.globalIndexToLocation(global_index);
+   EXPECT_FLOAT_EQ(loc_back[0], 1.05f);   // 21 * 0.05 = 1.05
+   EXPECT_FLOAT_EQ(loc_back[1], -3.0f);   // -60 * 0.05 = -3.0
    
-//    // Test points outside the map
-//    std::array<int, 2> point_outside = {501, 0};
-//    EXPECT_FALSE(terrain.inside(point_outside));
+   // Test local index conversions
+   elevation_map.recenter({0.0f, 0.0f});  // Reset map origin
+   std::array<int, 2> local_index = {10, -10};
+   std::array<int, 2> global_from_local = elevation_map.localIndexToGlobalIndex(local_index);
+   std::array<int, 2> local_back = elevation_map.globalIndexToLocalIndex(global_from_local);
+   EXPECT_EQ(local_back[0], local_index[0]);
+   EXPECT_EQ(local_back[1], local_index[1]);
    
-//    std::array<int, 2> point_far_outside = {1000, 1000};
-//    EXPECT_FALSE(terrain.inside(point_far_outside));
-   
-//    // Test with locations instead of indices
-//    std::array<float, 2> loc_inside = {5.0f, 5.0f};  // 5.0 / 0.05 = 100
-//    EXPECT_TRUE(terrain.inside(loc_inside));
-   
-//    std::array<float, 2> loc_outside = {30.0f, 5.0f}; // 30.0 / 0.05 = 600 > 500
-//    EXPECT_FALSE(terrain.inside(loc_outside));
-// }
+   // Test hash ID conversions
+   int hash_id = elevation_map.localIndexToHashId(local_index);
+   std::array<int, 2> local_from_hash = elevation_map.hashIdToLocalIndex(hash_id);
+   EXPECT_EQ(local_from_hash[0], local_index[0]);
+   EXPECT_EQ(local_from_hash[1], local_index[1]);
+}
 
-// TEST_F(TerrainElevationTest, ResetAndInitialize) {
-//    // Test resetCell
-//    int hash_id = terrain.localIndexToHashId({100, 100});
-//    terrain.elevation_[hash_id] = ElevationCell(5.0f, 1.0f);
-//    EXPECT_EQ(terrain.elevation_[hash_id].height, 5.0f);
+// Test "inside" boundary checking
+TEST_F(TerrainElevationTest, BoundaryChecking) {
+   elevation_map.recenter({0.0f, 0.0f});
    
-//    terrain.resetCell(hash_id);
-//    EXPECT_EQ(terrain.elevation_[hash_id].height, 0.0f);
+   // Max map range with half_map_dim = 512 and resolution = 0.05 is ±25.6m
+   const float max_range = half_map_dim * resolution;
    
-//    // Test resetLocalMap
-//    // Set several points to non-zero values
-//    for (int i = 0; i < 10; i++) {
-//        terrain.elevation_[i] = ElevationCell(3.0f, 1.0f);
-//    }
+   // Points inside the map
+   EXPECT_TRUE(elevation_map.inside(std::array<float, 2>{0.0f, 0.0f}));
+   EXPECT_TRUE(elevation_map.inside(std::array<float, 2>{max_range - 0.1f, max_range - 0.1f}));
+   EXPECT_TRUE(elevation_map.inside(std::array<float, 2>{-max_range + 0.1f, -max_range + 0.1f}));
    
-//    terrain.resetLocalMap();
-//    // Check that all points are reset
-//    for (int i = 0; i < 10; i++) {
-//        EXPECT_EQ(terrain.elevation_[i].height, 0.0f);
-//        EXPECT_EQ(terrain.elevation_[i].stdev, 1e2f);
-//    }
-   
-//    // Test initializeLocalMap
-//    terrain.initializeLocalMap(2.5f, 1.0f);
-//    // Check a sample of points
-//    for (int i = 0; i < 100; i += 10) {
-//        EXPECT_EQ(terrain.elevation_[i].height, 2.5f);
-//        EXPECT_EQ(terrain.elevation_[i].stdev, 1.0f);
-//    }
-// }
+   // Points outside the map
+   EXPECT_FALSE(elevation_map.inside(std::array<float, 2>{max_range + 0.1f, 0.0f}));
+   EXPECT_FALSE(elevation_map.inside(std::array<float, 2>{0.0f, -max_range - 0.1f}));
+   EXPECT_FALSE(elevation_map.inside(std::array<float, 2>{30.0f, 30.0f}));
+}
 
-// TEST_F(TerrainElevationTest, Recenter) {
-//    // Initialize map with non-zero heights
-//    terrain.initializeLocalMap(1.0f, 1.0f);
+// Test map recentering
+TEST_F(TerrainElevationTest, Recentering) {
+   // Initialize with specific values
+   elevation_map.initializeLocalMap(0.0, 1.0);
    
-//    // Set a specific height at a known location
-//    std::array<float, 2> loc = {1.0f, 1.0f};
-//    terrain.update(loc, 5.0f, 1.0f);
+   // Set a specific elevation value at the origin
+   std::array<float, 2> origin = {0.0f, 0.0f};
+   elevation_map.update(origin, 10.0f, 0.5f);
    
-//    // Get the hash ID before recentering
-//    int hash_id_before = terrain.locationToHashId(loc);
-//    EXPECT_EQ(terrain.elevation_[hash_id_before].height, 5.0f);
-//    EXPECT_EQ(terrain.elevation_[hash_id_before].stdev, 1.0f);
+   // Verify the value was set
+   auto elevation_before = elevation_map.getElevation(origin);
+   ASSERT_TRUE(elevation_before.has_value());
+   
+   // Move the map center by a small amount (still keeping original point in map)
+   std::array<float, 2> new_center = {5.0f, 5.0f};
+   elevation_map.recenter(new_center);
+   
+   // Check that the original point is still in the map
+   auto elevation_after = elevation_map.getElevation(origin);
+   ASSERT_TRUE(elevation_after.has_value());
+   EXPECT_FLOAT_EQ(elevation_after->height, elevation_before->height);
+   
+   // Move the map center by a large amount (forcing original point out of map)
+   std::array<float, 2> far_center = {60.0f, 60.0f};
+   elevation_map.recenter(far_center);
+   
+   // Original point should be reset to default values or be outside map
+   auto elevation_reset = elevation_map.getElevation(origin);
+   if (elevation_reset.has_value()) {
+       EXPECT_FLOAT_EQ(elevation_reset->height, 0.0f);  // Default height after reset
+   } else {
+       // If out of bounds, that's also acceptable
+       EXPECT_FALSE(elevation_map.inside(origin));
+   }
+}
 
-//    // Recenter the map slightly (within map boundaries)
-//    std::array<float, 2> new_center = {2.0f, 2.0f};
-//    terrain.recenter(new_center);
+// Test single point update and Kalman filter
+TEST_F(TerrainElevationTest, SinglePointUpdate) {
+   elevation_map.initializeLocalMap(0.0, 1.0);
    
-//    // The point should still be accessible after minor recentering
-//    int hash_id_after = terrain.locationToHashId(loc);
-//    EXPECT_EQ(terrain.elevation_[hash_id_after].height, 5.0f);
+   // Update a single point
+   std::array<float, 2> test_loc = {1.0f, 1.0f};
+   float new_height = 5.0f;
+   float new_stdev = 0.2f;
    
-//    // Test recentering that crosses boundaries but doesn't reset the map
-//    std::array<float, 2> boundary_center = {10.0f, 10.0f};
-//    terrain.recenter(boundary_center);
+   // Check return value
+   EXPECT_TRUE(elevation_map.update(test_loc, new_height, new_stdev));
    
-//    // Test major recentering that should reset the map
-//    // With map_dim = {1000, 1000}, we need to move more than 1000 cells to trigger a reset
-//    std::array<float, 2> far_center = {100.0f, 100.0f}; // 100 / 0.05 = 2000 > 1000
-//    terrain.recenter(far_center);
+   // Verify the update worked
+   auto elevation = elevation_map.getElevation(test_loc);
+   ASSERT_TRUE(elevation.has_value());
    
-//    // After major recentering, the entire map should be reset
-//    // Check a sample of points
-//    for (int i = 0; i < 100; i += 10) {
-//        EXPECT_EQ(terrain.elevation_[i].height, 0.0f);
-//    }
-// }
+   // Calculate expected Kalman filter results
+   float expected_height = (0.2f * 0.0f + 1.0f * 5.0f) / (0.2f + 1.0f);
+   float expected_stdev = (0.2f * 1.0f) / (0.2f + 1.0f);
+   
+   // Verify against calculated values
+   EXPECT_NEAR(elevation->height, expected_height, 1e-5);
+   EXPECT_NEAR(elevation->stdev, expected_stdev, 1e-5);
+}
 
-// TEST_F(TerrainElevationTest, IndexConversions) {
-//    // Test globalIndexToLocation
-//    std::array<int, 2> global_idx = {20, -10};
-//    std::array<float, 2> expected_loc = {1.0f, -0.5f}; // 20 * 0.05 = 1.0, -10 * 0.05 = -0.5
-//    std::array<float, 2> actual_loc = terrain.globalIndexToLocation(global_idx);
-//    EXPECT_FLOAT_EQ(actual_loc[0], expected_loc[0]);
-//    EXPECT_FLOAT_EQ(actual_loc[1], expected_loc[1]);
+// Test circle propagation in update function
+TEST_F(TerrainElevationTest, CirclePropagation) {
+   elevation_map.initializeLocalMap(0.0, 1.0);
    
-//    // Test globalIndexToLocalIndex and localIndexToGlobalIndex (round trip)
-//    std::array<int, 2> local_idx = terrain.globalIndexToLocalIndex(global_idx);
-//    std::array<int, 2> round_trip = terrain.localIndexToGlobalIndex(local_idx);
-//    EXPECT_EQ(round_trip, global_idx);
+   // Update a point
+   std::array<float, 2> center = {10.0f, 10.0f};
+   float new_height = 10.0f;
+   float new_stdev = 0.1f;
    
-//    // Test with values near the map boundaries
-//    std::array<int, 2> edge_global = {500, 500};
-//    std::array<int, 2> edge_local = terrain.globalIndexToLocalIndex(edge_global);
-//    std::array<int, 2> edge_round_trip = terrain.localIndexToGlobalIndex(edge_local);
-//    EXPECT_EQ(edge_round_trip, edge_global);
+   elevation_map.update(center, new_height, new_stdev);
    
-//    // Test hashIdToLocalIndex and localIndexToHashId (round trip)
-//    std::array<int, 2> local_pos = {100, 150};
-//    int hash_id = terrain.localIndexToHashId(local_pos);
-//    std::array<int, 2> local_round_trip = terrain.hashIdToLocalIndex(hash_id);
-//    EXPECT_EQ(local_round_trip, local_pos);
-// }
+   // Check points at different distances from center
+   // With radius = 0.5m, we'll test points within and just beyond this radius
+   std::vector<std::array<float, 2>> test_points = {
+       {10.0f, 10.0f},    // Center point
+       {10.05f, 10.0f},   // 0.05m away (1 cell)
+       {10.25f, 10.0f},   // 0.25m away (5 cells)
+       {10.45f, 10.0f},   // 0.45m away (9 cells) - just within radius
+       {10.55f, 10.0f},   // 0.55m away (11 cells) - just outside radius
+       {10.7f, 10.0f}     // 0.7m away (14 cells) - clearly outside radius
+   };
+   
+   // Get elevations at test points
+   std::vector<std::optional<ElevationCell>> elevations;
+   for (const auto& point : test_points) {
+       elevations.push_back(elevation_map.getElevation(point));
+   }
+   
+   // All points should have valid elevations (they're within map bounds)
+   for (size_t i = 0; i < elevations.size(); ++i) {
+       ASSERT_TRUE(elevations[i].has_value()) << "Point " << i << " has no elevation";
+   }
+   
+   // Center point should have the highest elevation due to Kalman update
+   float center_value = elevations[0]->height;
+   EXPECT_GT(center_value, 0.0f);
+   
+   // Elevation should decrease with distance within radius
+   // (if using Gaussian weight model: exp(-d²/(2*r²)))
+   EXPECT_GT(elevations[0]->height, elevations[1]->height);
+   EXPECT_GT(elevations[1]->height, elevations[2]->height);
+   if (elevations[3]->height > 0) {  // If propagation reaches this far
+       EXPECT_GT(elevations[2]->height, elevations[3]->height);
+   }
+   
+   // Verify Gaussian falloff (approximately)
+   if (elevations[1]->height > 0) {
+       float d1 = 0.05f;
+       float expected_weight1 = std::exp(-d1*d1/(2.0f*radius*radius));
+       EXPECT_NEAR(elevations[1]->height / center_value, expected_weight1, 0.1f);
+   }
+   
+   // Points outside radius should have lower or zero values
+   if (elevations[4]->height > 0 && elevations[3]->height > 0) {
+       EXPECT_LT(elevations[4]->height, elevations[3]->height);
+   }
+}
 
-// TEST_F(TerrainElevationTest, UpdateHeight) {
-//    // Test updating height at a valid location
-//    std::array<float, 2> valid_loc = {5.0f, 5.0f}; // 5.0 / 0.05 = 100, which is inside the map
-//    float new_height = 3.75f;
-//    float new_stdev = 1.0f;
+// Test elevation retrieval for out-of-bounds points
+TEST_F(TerrainElevationTest, OutOfBoundsRetrieval) {
+   elevation_map.recenter({0.0f, 0.0f});
+   
+   // Try to get elevation for points outside the map
+   // With half_map_dim = 512 and resolution = 0.05, map extends to ±25.6m
+   std::array<float, 2> out_of_bounds = {30.0f, 30.0f};
+   auto elevation = elevation_map.getElevation(out_of_bounds);
+   
+   // Should return nullopt
+   EXPECT_FALSE(elevation.has_value());
+}
 
-//    bool update_result = terrain.update(valid_loc, new_height, new_stdev);
-//    EXPECT_TRUE(update_result);
+// Test performance of the update function with known parameters
+TEST_F(TerrainElevationTest, UpdatePerformance) {
+   elevation_map.initializeLocalMap(0.0, 1.0);
    
-//    int hash_id = terrain.locationToHashId(valid_loc);
-//    EXPECT_FLOAT_EQ(terrain.elevation_[hash_id].height, new_height);
-//    EXPECT_FLOAT_EQ(terrain.elevation_[hash_id].stdev, new_stdev);
+   // With radius = 0.5m and resolution = 0.05m, each update affects approximately:
+   // π * (0.5/0.05)² = π * 100 ≈ 314 cells
+   
+   // Number of updates to perform
+   const int num_updates = 1000;
+   
+   // Prepare random positions (to avoid overhead during timing)
+   std::vector<std::array<float, 2>> positions;
+   std::vector<float> heights;
+   std::vector<float> stdevs;
+   
+   for (int i = 0; i < num_updates; ++i) {
+       // Generate random positions within the map (±20m from center)
+       float x = (rand() % 800 - 400) * 0.05f;  // -20 to 20
+       float y = (rand() % 800 - 400) * 0.05f;  // -20 to 20
+       float height = rand() % 10;              // 0 to 9
+       float stdev = 0.1f + (rand() % 10) / 10.0f;  // 0.1 to 1.0
+       
+       positions.push_back({x, y});
+       heights.push_back(height);
+       stdevs.push_back(stdev);
+   }
+   
+   // Measure time for updates
+   auto start_time = std::chrono::high_resolution_clock::now();
+   
+   for (int i = 0; i < num_updates; ++i) {
+       elevation_map.update(positions[i], heights[i], stdevs[i]);
+   }
+   
+   auto end_time = std::chrono::high_resolution_clock::now();
+   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+   
+   // Calculate and output performance metrics
+   double updates_per_second = (duration > 0) ? (num_updates * 1000.0 / duration) : 0;
+   double cells_per_second = updates_per_second * 314;  // Approximate cell updates per second
+   
+   std::cout << "Performance: " << num_updates << " updates in " << duration << " ms" << std::endl;
+   std::cout << "Updates per second: " << updates_per_second << std::endl;
+   std::cout << "Approximate cell updates per second: " << cells_per_second << std::endl;
+   
+   // Fail if performance is below threshold
+   const double minimum_acceptable_updates_per_second = 400000;
+   EXPECT_GT(updates_per_second, minimum_acceptable_updates_per_second);
+}
 
-//    // Test updating height at an invalid location (outside map bounds)
-//    std::array<float, 2> invalid_loc = {50.0f, 50.0f}; // 50.0 / 0.05 = 1000, which is outside
-//    update_result = terrain.update(invalid_loc, new_height, new_stdev);
-//    EXPECT_FALSE(update_result);
-// }
-
-// // Additional test for high-resolution operations
-// TEST_F(TerrainElevationTest, HighResolutionOperations) {
-//    // Test operations with the high-resolution setting (0.05)
-   
-//    // Fine-grained location to index conversion
-//    EXPECT_EQ(terrain.locationToGlobalIndex(0.05f), 1);  // Exactly one grid cell
-//    EXPECT_EQ(terrain.locationToGlobalIndex(0.025f), 1); // Half a grid cell, rounded up
-//    EXPECT_EQ(terrain.locationToGlobalIndex(-0.025f), -1); // Negative half cell, rounded down
-   
-//    // Test small movements in recenter
-//    std::array<float, 2> start_loc = {0.0f, 0.0f};
-//    terrain.recenter(start_loc);
-   
-//    // Set a specific pattern of heights
-//    std::array<float, 2> loc1 = {0.05f, 0.0f};
-//    std::array<float, 2> loc2 = {0.1f, 0.0f};
-//    std::array<float, 2> loc3 = {0.15f, 0.0f};
-   
-//    terrain.update(loc1, 1.0f, 5.0f);
-//    terrain.update(loc2, 2.0f, 10.0f);
-//    terrain.update(loc3, 3.0f, 20.0f);
-   
-//    // Recenter by one cell
-//    std::array<float, 2> new_center = {0.05f, 0.0f};
-//    terrain.recenter(new_center);
-   
-//    // Check if the heights are still accessible at their correct locations
-//    EXPECT_FLOAT_EQ(terrain.elevation_[terrain.locationToHashId(loc1)].height, 1.0f);
-//    EXPECT_FLOAT_EQ(terrain.elevation_[terrain.locationToHashId(loc2)].height, 2.0f);
-//    EXPECT_FLOAT_EQ(terrain.elevation_[terrain.locationToHashId(loc3)].height, 3.0f);
-//    EXPECT_FLOAT_EQ(terrain.elevation_[terrain.locationToHashId(loc1)].stdev, 5.0f);
-//    EXPECT_FLOAT_EQ(terrain.elevation_[terrain.locationToHashId(loc2)].stdev, 10.0f);
-//    EXPECT_FLOAT_EQ(terrain.elevation_[terrain.locationToHashId(loc3)].stdev, 20.0f);
-// }
-
-// }
+}  // namespace serow

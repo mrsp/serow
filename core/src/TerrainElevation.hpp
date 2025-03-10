@@ -17,7 +17,7 @@ static constexpr int map_size = map_dim * map_dim; // 2^20 = 1,048,576
 static constexpr int half_map_size = map_size / 2; // 2^19 = 524,288
 
 template<int N>
-inline int fast_mod(const int& x) {
+inline int fast_mod(const int x) {
     static_assert((N & (N - 1)) == 0, "N must be a power of 2");
     constexpr int mask = N - 1;
     
@@ -36,6 +36,15 @@ inline int fast_mod(const int& x) {
     
     // Otherwise, we need to return a negative result
     return remainder - N;
+}
+
+inline int normalize(const int x) {
+    // Since a = -half_map_dim and b = half_map_dim, the range is 2*half_map_dim + 1
+    constexpr int a = -half_map_dim;
+
+    int range =  2 * half_map_dim + 1;
+    int y = (x - a) % range;
+    return (y < 0 ? y + range : y) + a;
 }
 
 }  // namespace
@@ -115,8 +124,6 @@ class TerrainElevation {
     std::array<float, 2> local_map_origin_d_{};
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
-
-    int normalize(int x) const;
 
     friend class TerrainElevationTest; // Allow full access
 };
