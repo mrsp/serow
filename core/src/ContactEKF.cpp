@@ -250,7 +250,7 @@ BaseState ContactEKF::updateWithContacts(
 
     // Compute the relative contacts position/orientation measurement noise
     for (const auto& [cf, cp] : contacts_status) {
-        int cs = cp ? 1 : 0;
+        const int cs = cp ? 1 : 0;
         contacts_position_noise.at(cf) = cs * contacts_position_noise.at(cf) +
                                          (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
                                          position_cov;
@@ -492,11 +492,17 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
     }
 }
 
+// TODO: @sp Maybe consider passing the state by reference instead of having to copy
 BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom,
                              std::shared_ptr<TerrainElevation> terrain_estimator) {
-    BaseState updated_state =
-        updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
+    BaseState updated_state = state;
+    if (terrain_estimator) {
+        updated_state = updateWithTerrain(updated_state, kin.contacts_status, *terrain_estimator);
+    }
+
+    updated_state =
+        updateWithContacts(updated_state, kin.contacts_position, kin.contacts_position_noise,
                            kin.contacts_status, kin.position_cov, kin.contacts_orientation,
                            kin.contacts_orientation_noise, kin.orientation_cov);
 
@@ -507,18 +513,35 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
     }
 
     if (terrain_estimator) {
-        updated_state = updateWithTerrain(updated_state, kin.contacts_status, *terrain_estimator);
         // Update the terrain estimator
         const std::array<float, 2> base_pos_xy = {
             static_cast<float>(updated_state.base_position.x()),
             static_cast<float>(updated_state.base_position.y())};
-        const auto& map_origin_xy = terrain_estimator->getMapOrigin();
-        // TODO: @sp make this a const
+        const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
+        for (const auto& [cf, cp] : kin.contacts_status) {
+            const int cs = cp ? 1 : 0;
+            if (cs) {
+                const std::array<float, 2> con_pos_xy = {
+                    static_cast<float>(state.contacts_position.at(cf).x()),
+                    static_cast<float>(state.contacts_position.at(cf).y())};
+                const float con_pos_z = static_cast<float>(state.contacts_position.at(cf).z());
+                // TODO: @sp make this a const parameter
+                if (!terrain_estimator->update(con_pos_xy, con_pos_z, 1e-3)) {
+                    std::cout
+                        << "Contact for " << cf
+                        << "is not inside the terrain elevation map and thus height is not updated "
+                        << std::endl;
+                } 
+            }
+        }
+        // TODO: @sp make this a const parameter
+        // Recenter the map
         if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 24) ||
             (abs(base_pos_xy[1] - map_origin_xy[1]) > 24)) {
             terrain_estimator->recenter(base_pos_xy);
         }
     }
+
     return updated_state;
 }
 
