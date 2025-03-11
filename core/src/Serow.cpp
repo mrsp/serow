@@ -1052,4 +1052,7 @@ std::optional<State> Serow::getState(bool allow_invalid) {
     }
 }
 
+const std::shared_ptr<TerrainElevation>& Serow::getTerrainEstimator() const {
+    return terrain_estimator_;
+}
 }  // namespace serow
