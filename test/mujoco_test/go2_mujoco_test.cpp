@@ -1,15 +1,21 @@
-// This file reads data from a .h5 and uses serow to save the predictions.
-
 #include <H5Cpp.h>
 
 #include <Eigen/Dense>
 #include <iostream>
 #include <map>
-#include <serow/Serow.hpp>
+#include "serow/Serow.hpp"
 #include <vector>
+#include "serow/TerrainElevation.hpp"
+#include <fstream>
+#include <iomanip>
+constexpr const char* INPUT_FILE = "../data/slope/go2_data.h5";
+constexpr const char* OUTPUT_FILE = "../data/slope/serow_predictions.h5";
+constexpr const char* ELEVATION_MAP_FILE = "../data/slope/est_elevation_map.bin";
 
-constexpr const char* INPUT_FILE = "./data/slope/go2_data.h5";
-constexpr const char* OUTPUT_FILE = "./data/slope/serow_predictions.h5";
+using namespace serow;
+
+std::ofstream file(ELEVATION_MAP_FILE);
+
 
 // Saves predictions to .h5 file
 void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
@@ -92,8 +98,29 @@ std::vector<std::vector<double>> readHDF5(const std::string& filename,
     return data;
 }
 
+
+/// @brief Writes an elevation map measurement to a binary file
+void saveElevationMap(const std::array<ElevationCell, map_size>& data, double timestamp)
+{
+    if (!file.is_open()) {
+        std::cerr << "[saveElevationMap] File stream is not open!\n";
+        return;
+    }
+
+    // Optional: Write a timestamp or measurement ID
+    file.write(reinterpret_cast<const char*>(&timestamp), sizeof(timestamp));
+    
+    // Write the height data
+    for (size_t i = 0; i < data.size(); ++i) {
+        file.write(reinterpret_cast<const char*>(&data[i].height), sizeof(float));
+    }
+    // Flush to ensure data is written
+    file.flush();
+}
+
 int main() {
     try {
+
         // Initialize Serow
         serow::Serow SEROW;
         if (!SEROW.initialize("go2.json")) {
@@ -124,6 +151,8 @@ int main() {
         std::vector<double> com_vel_x, com_vel_y, com_vel_z;     // CoM velocity
         std::vector<double> extFx, extFy, extFz;                 // External Force
         std::vector<double> b_ax, b_ay, b_az, b_wx, b_wy, b_wz;  // IMU Biases
+
+        double log_timestamp = timestamps[0][0];
 
         for (size_t i = 0; i < timestamps.size(); ++i) {
             double timestamp = timestamps[i][0];
@@ -210,6 +239,21 @@ int main() {
             auto CoMVelocity = state->getCoMLinearVelocity();
             auto linAccelBias = state->getImuLinearAccelerationBias();
             auto angVelBias = state->getImuAngularVelocityBias();
+            
+
+            auto terrainEstimator = SEROW.getTerrainEstimator();
+
+            if (!terrainEstimator){
+                continue;
+            }
+
+            if (timestamp - log_timestamp > 0.5){
+                saveElevationMap(terrainEstimator->elevation_,timestamp);
+                log_timestamp = timestamp;
+            }
+
+            // std::cout << terrainEstimator->elevation_[0].height << '\n';
+
 
             EstTimestamp.push_back(timestamp);
             base_pos_x.push_back(basePos.x());
@@ -235,8 +279,7 @@ int main() {
             b_wy.push_back(angVelBias.y());
             b_wz.push_back(angVelBias.z());
         }
-
-        // // Write structured data to HDF5
+        // Write structured data to HDF5
         H5::H5File outputFile(OUTPUT_FILE, H5F_ACC_TRUNC);  // Create the output file
 
         saveDataToHDF5(OUTPUT_FILE, "/timestamp/t", EstTimestamp);
