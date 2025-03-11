@@ -29,14 +29,18 @@ def read_next_measurement(file):
     return timestamp, heights
 
 def visualize_elevation_map(x, y, heights, timestamp):
+    from mpl_toolkits.mplot3d import Axes3D
+    import matplotlib.pyplot as plt
+
     fig = plt.figure(figsize=(10, 7))
     ax = fig.add_subplot(111, projection='3d')
-    ax.plot_surface(x, y, heights, cmap='viridis', linewidth=0, antialiased=False)
+    ax.plot_wireframe(x, y, heights, color='black', linewidth=0.5)
     ax.set_title(f"Elevation Map at timestamp {timestamp:.3f}")
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_zlabel("Height")
     plt.show()
+
 
 def main():
     # Precompute X and Y grid
