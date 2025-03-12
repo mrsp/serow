@@ -44,8 +44,8 @@ void TerrainElevation::resetLocalMap() {
     std::fill(elevation_.begin(), elevation_.end(), empty_elevation_);
 }
 
-void TerrainElevation::initializeLocalMap(const float height, const float stdev) {
-    default_elevation_ = std::move(ElevationCell(height, stdev));
+void TerrainElevation::initializeLocalMap(const float height, const float variance) {
+    default_elevation_ = std::move(ElevationCell(height, variance));
     std::fill(elevation_.begin(), elevation_.end(), default_elevation_);
 }
 
@@ -227,7 +227,7 @@ int TerrainElevation::isHashIdValid(const int id) const {
     return true;
 }
 
-bool TerrainElevation::update(const std::array<float, 2>& loc, float height, float stdev) {
+bool TerrainElevation::update(const std::array<float, 2>& loc, float height, float variance) {
     if (!inside(loc)) {
         return false;
     }
@@ -235,13 +235,13 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
     // Update the center cell using Kalman filter
     const int center_hash_id = locationToHashId(loc);
     const float height_prev = elevation_[center_hash_id].height;
-    const float stdev_prev = elevation_[center_hash_id].stdev;
+    const float variance_prev = elevation_[center_hash_id].variance;
 
     // Kalman update
-    const float den = stdev + stdev_prev;
+    const float kalman_gain = variance_prev / (variance_prev + variance);
     ElevationCell new_elevation;
-    new_elevation.height = (stdev * height_prev + stdev_prev * height) / den;
-    new_elevation.stdev = (stdev * stdev_prev) / den;
+    new_elevation.height = height_prev + kalman_gain * (height - height_prev);
+    new_elevation.variance = (1.0f - kalman_gain) * variance_prev;
     elevation_[center_hash_id] = new_elevation;
 
     // Pre-compute constants for the weight function
@@ -284,11 +284,18 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
             // Calculate weight (avoid sqrt when possible)
             const float weight = std::exp(dist_squared * weight_factor);
 
-            // Update the cell
-            elevation_[hash_id].height =
-                weight * new_elevation.height + (1.0 - weight) * elevation_[hash_id].height;
-            elevation_[hash_id].stdev =
-                weight * new_elevation.stdev + (1.0 - weight) * elevation_[hash_id].stdev;
+            // Get the current cell values
+            float cell_height = elevation_[hash_id].height;
+            float cell_variance = elevation_[hash_id].variance;
+            
+            // Apply Kalman filter update to neighboring cells with diminishing influence
+            const float effective_variance = new_elevation.variance / weight;
+            const float neighbor_kalman_gain = cell_variance / (cell_variance + effective_variance);
+            
+            // Update the neighboring cell
+            elevation_[hash_id].height = cell_height + 
+                neighbor_kalman_gain * weight * (new_elevation.height - cell_height);
+            elevation_[hash_id].variance = (1.0f - neighbor_kalman_gain * weight) * cell_variance;
         }
     }
 
@@ -392,13 +399,9 @@ bool TerrainElevation::interpolate(const std::vector<std::array<float, 2>>& locs
             // Variance propagation - using squared weights and variances
             float propagated_variance = 0.0;
             for (size_t k = 0; k < weights.size(); ++k) {
-                const float stdev = elevation_[hash_ids[k]].stdev;
-                const float variance = stdev * stdev;  // Convert stdev to variance
-                propagated_variance += weights[k] * weights[k] * variance;  // Squared weights
+                propagated_variance += weights[k] * weights[k] * elevation_[hash_ids[k]].variance;  // Squared weights
             }
-            
-            const float propagated_stdev = std::sqrt(propagated_variance);  // Convert back to stdev
-            elevation_[hash_id] = {weighted_sum_values, propagated_stdev};
+            elevation_[hash_id] = {weighted_sum_values, propagated_variance};
         }
     }
     return true;

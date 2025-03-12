@@ -11,10 +11,10 @@ namespace {
 static constexpr float resolution = 0.02;
 static constexpr float resolution_inv = 1.0 / resolution;
 static constexpr float radius = 0.1;
-static constexpr int map_dim = 128;  // 2^10
-static constexpr int half_map_dim = map_dim / 2; // 2^9
-static constexpr int map_size = map_dim * map_dim; // 2^20 = 1,048,576
-static constexpr int half_map_size = map_size / 2; // 2^19 = 524,288
+static constexpr int map_dim = 128;  // 2^7
+static constexpr int half_map_dim = map_dim / 2; // 2^6
+static constexpr int map_size = map_dim * map_dim; // 2^14 = 16.384
+static constexpr int half_map_size = map_size / 2; // 2^13 = 8.192
 
 template<int N>
 inline int fast_mod(const int x) {
@@ -54,11 +54,11 @@ namespace serow {
 
 struct ElevationCell {
     float height{};
-    float stdev{};
+    float variance{};
     ElevationCell() = default;
-    ElevationCell(float height, float stdev) {
+    ElevationCell(float height, float variance) {
         this->height = height;
-        this->stdev = stdev;
+        this->variance = variance;
     }
 };
 

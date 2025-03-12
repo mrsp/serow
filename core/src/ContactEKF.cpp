@@ -405,7 +405,7 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
             if (elevation.has_value()) {
                 z(i) = static_cast<double>(elevation.value().height) -
                        state.contacts_position.at(cf).z();
-                R(i, i) = static_cast<double>(elevation.value().stdev * elevation.value().stdev);
+                R(i, i) = static_cast<double>(elevation.value().variance);
             }
         }
         i++;
@@ -539,9 +539,9 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
             }
         }
 
-        if(!terrain_estimator->interpolate(con_locs)) {
-            std::cout << "Interpolation failed " << std::endl;
-        }
+        // if(!terrain_estimator->interpolate(con_locs)) {
+        //     std::cout << "Interpolation failed " << std::endl;
+        // }
         
         // TODO: @sp make this a const parameter
         // Recenter the map
