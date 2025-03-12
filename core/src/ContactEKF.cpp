@@ -518,6 +518,8 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
             static_cast<float>(updated_state.base_position.x()),
             static_cast<float>(updated_state.base_position.y())};
         const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
+        std::vector<std::array<float, 2>> con_locs;
+        
         for (const auto& [cf, cp] : kin.contacts_status) {
             const int cs = cp ? 1 : 0;
             if (cs) {
@@ -531,9 +533,16 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
                         << "Contact for " << cf
                         << "is not inside the terrain elevation map and thus height is not updated "
                         << std::endl;
-                } 
+                } else {
+                    con_locs.push_back(con_pos_xy);
+                }
             }
         }
+
+        if(!terrain_estimator->interpolate(con_locs)) {
+            std::cout << "Interpolation failed " << std::endl;
+        }
+        
         // TODO: @sp make this a const parameter
         // Recenter the map
         if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 24) ||

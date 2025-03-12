@@ -10,8 +10,8 @@ namespace {
 
 static constexpr float resolution = 0.05;
 static constexpr float resolution_inv = 1.0 / resolution;
-static constexpr float radius = 0.5;
-static constexpr int map_dim = 1024;  // 2^10
+static constexpr float radius = 0.05;
+static constexpr int map_dim = 256;  // 2^10
 static constexpr int half_map_dim = map_dim / 2; // 2^9
 static constexpr int map_size = map_dim * map_dim; // 2^20 = 1,048,576
 static constexpr int half_map_size = map_size / 2; // 2^19 = 524,288
@@ -111,6 +111,8 @@ class TerrainElevation {
     void resetLocalMap();
 
     bool update(const std::array<float, 2>& loc, float height, float std);
+
+    bool interpolate(const std::vector<std::array<float, 2>>& locs);
 
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
     

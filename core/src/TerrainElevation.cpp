@@ -1,4 +1,5 @@
 #include "TerrainElevation.hpp"
+#include <algorithm>  // For std::find
 
 namespace serow {
 
@@ -291,6 +292,115 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
         }
     }
 
+    return true;
+}
+
+bool TerrainElevation::interpolate(const std::vector<std::array<float, 2>>& locs) {
+    
+    if (locs.empty()) {
+        return false;
+    }
+
+    std::vector<int> hash_ids;
+    float x = 0;
+    float y = 0;
+    float max_x = -1e4;
+    float max_y = -1e4;
+
+    for (const auto& loc : locs) {
+        if (!inside(loc)) {
+            return false;
+        }
+        hash_ids.push_back(locationToHashId(loc));
+        x += loc[0];
+        y += loc[1];
+        
+        if (loc[0] > max_x) {
+            max_x = loc[0];
+        } 
+        if (loc[1] > max_y) {
+            max_y = loc[1];
+        }
+    }
+    x /= locs.size();
+    y /= locs.size();
+
+    const float region_radius = std::max(abs(x - max_x), abs(y - max_y)) + radius;
+    
+    // Calculate the radius in grid cells (rounded up)
+    const int radius_cells = static_cast<int>(std::ceil(region_radius / resolution));
+   
+    // Get the center cell's indices
+    const std::array<int, 2> center_idx = locationToGlobalIndex({x, y});
+
+    // Iterate only over the cells within the radius
+    std::vector<float> distances;
+    distances.reserve(locs.size());
+    std::vector<double> weights;
+    weights.reserve(locs.size());
+
+    for (int i = -radius_cells; i <= radius_cells; ++i) {
+        for (int j = -radius_cells; j <= radius_cells; ++j) {
+            const std::array<int, 2> id_g = {center_idx[0] + i, center_idx[1] + j};
+            const int hash_id = globalIndexToHashId(id_g);
+            if (std::find(hash_ids.begin(), hash_ids.end(), hash_id) != hash_ids.end()) {
+                continue;
+            }
+            distances.clear();
+            weights.clear();
+            float min_distance = 1e4;
+            std::array<float, 2> min_loc = {};
+            for (const auto& loc : locs) {
+                const std::array<float, 2> curr_loc = globalIndexToLocation(id_g);
+                const float dx = curr_loc[0] - loc[0];
+                const float dy = curr_loc[1] - loc[1];
+                const float distance = std::sqrt(dx * dx + dy * dy);
+                if (distance < min_distance) {
+                    min_distance = distance;
+                    min_loc = loc;
+                }
+                distances.push_back(distance);
+            }
+
+            if (min_distance < 1e-4 && inside(min_loc)) {
+                const int min_hash_id = locationToHashId(min_loc); 
+                elevation_[hash_id] = elevation_[min_hash_id];
+                continue;
+            }
+
+            for (const auto& distance : distances) {
+                weights.push_back(1.0 / (distance * distance));
+            }
+            
+            float sum_weights = 0.0;
+            for (const auto& weight : weights) {
+                sum_weights += weight;
+            }
+            
+            for (auto& weight : weights) {
+                weight /= sum_weights;
+            }
+
+            // Calculate weighted average for values
+            float weighted_sum_values = 0.0;
+            for (size_t j = 0; j < weights.size(); ++j) {
+                weighted_sum_values += weights[j] * elevation_[hash_ids[j]].height;
+            }
+            
+            // Variance propagation - using squared weights and variances
+            float propagated_variance = 0.0;
+            for (size_t j = 0; j < weights.size(); ++j) {
+                const float stdev = elevation_[hash_ids[j]].stdev;
+                const float variance = stdev * stdev;  // Convert stdev to variance
+                propagated_variance += weights[j] * weights[j] * variance;  // Squared weights
+            }
+            
+            const float propagated_stdev = std::sqrt(propagated_variance);  // Convert back to stdev
+            
+            // Store results
+            elevation_[hash_id] = {weighted_sum_values, propagated_stdev};
+        }
+    }
     return true;
 }
 
