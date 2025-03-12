@@ -545,8 +545,8 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
         
         // TODO: @sp make this a const parameter
         // Recenter the map
-        if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 24) ||
-            (abs(base_pos_xy[1] - map_origin_xy[1]) > 24)) {
+        if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 0.5) ||
+            (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.5)) {
             terrain_estimator->recenter(base_pos_xy);
         }
     }

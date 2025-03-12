@@ -826,20 +826,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         state.base_state_.base_orientation = attitude_estimator_->getQ();
         state.centroidal_state_.com_position = base_to_com_position;
         state.base_state_.contacts_position = base_to_foot_positions;
-        // Assuming the terrain is flat and the robot is initialized in a standing posture we can
-        // have a measurement of the average terrain height constraining base estimation.
-        if (params_.is_flat_terrain && !terrain_estimator_ && params_.is_contact_ekf) {
-            float terrain_height = 0.0;
-            for (const auto& frame : state.getContactsFrame()) {
-                terrain_height += base_to_foot_positions.at(frame).z();
-            }
-            terrain_height /= state.getContactsFrame().size();
-            // Initialize the terrain elevation mapper
-            terrain_estimator_ = std::make_shared<TerrainElevation>();
-            terrain_estimator_->initializeLocalMap(terrain_height, 1e-2);
-            terrain_estimator_->recenter({0.0, 0.0});
-            terrain_estimator_->printMapInformation();
-        }
         if (!state.isPointFeet()) {
             state.base_state_.contacts_orientation = base_to_foot_orientations;
         }
@@ -883,6 +869,53 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
     kin.base_orientation = attitude_estimator_->getQ();
     kin.base_orientation_cov = params_.base_orientation_cov.asDiagonal();
+
+    // Assuming the terrain is flat and the robot is initialized in a standing posture we can
+    // have a measurement of the average terrain height constraining base estimation.
+    if (params_.is_flat_terrain && !terrain_estimator_ && params_.is_contact_ekf) {
+        float terrain_height = 0.0;
+        int i = 0;
+        for (const auto& [cf, cp] : kin.contacts_status) {
+            const int cs = cp ? 1 : 0;
+            if (cs) {
+                i++;
+                terrain_height += kin.contacts_position.at(cf).z();
+            }
+        }
+        if (i > 0) {
+            terrain_height /= i;
+        }
+        
+        // Initialize the terrain elevation mapper
+        terrain_estimator_ = std::make_shared<TerrainElevation>();
+        terrain_estimator_->initializeLocalMap(terrain_height, 1e-2);
+        terrain_estimator_->recenter({0.0, 0.0});
+        terrain_estimator_->printMapInformation();
+        std::vector<std::array<float, 2>> con_locs;
+        for (const auto& [cf, cp] : kin.contacts_status) {
+            const int cs = cp ? 1 : 0;
+            if (cs) {
+                const std::array<float, 2> con_pos_xy = {
+                    static_cast<float>(kin.contacts_position.at(cf).x()),
+                    static_cast<float>(kin.contacts_position.at(cf).y())};
+                const float con_pos_z = static_cast<float>(kin.contacts_position.at(cf).z());
+                // TODO: @sp make this a const parameter
+                if (!terrain_estimator_->update(con_pos_xy, con_pos_z, 1e-3)) {
+                    std::cout
+                        << "Contact for " << cf
+                        << "is not inside the terrain elevation map and thus height is not updated "
+                        << std::endl;
+                } else {
+                    con_locs.push_back(con_pos_xy);
+                }
+            }
+        }
+
+        if(!terrain_estimator_->interpolate(con_locs)) {
+            std::cout << "Interpolation failed " << std::endl;
+        }
+    }
+
 
     if (!state.isPointFeet()) {
         kin.contacts_orientation = leg_odometry_->getContactOrientations();

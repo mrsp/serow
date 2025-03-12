@@ -5,7 +5,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 # === Configuration ===
 FILENAME = 'data/slope/est_elevation_map.bin'  # <-- Replace with your actual file name
-MAP_SIZE = 256  # 1024 x 1024
+MAP_SIZE = 128  # 1024 x 1024
 CELL_COUNT = MAP_SIZE * MAP_SIZE
 HEIGHT_DTYPE = np.float32
 TIMESTAMP_DTYPE = np.float64

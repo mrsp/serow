@@ -311,6 +311,7 @@ bool TerrainElevation::interpolate(const std::vector<std::array<float, 2>>& locs
         if (!inside(loc)) {
             return false;
         }
+
         hash_ids.push_back(locationToHashId(loc));
         x += loc[0];
         y += loc[1];
@@ -342,6 +343,7 @@ bool TerrainElevation::interpolate(const std::vector<std::array<float, 2>>& locs
     for (int i = -radius_cells; i <= radius_cells; ++i) {
         for (int j = -radius_cells; j <= radius_cells; ++j) {
             const std::array<int, 2> id_g = {center_idx[0] + i, center_idx[1] + j};
+
             const int hash_id = globalIndexToHashId(id_g);
             if (std::find(hash_ids.begin(), hash_ids.end(), hash_id) != hash_ids.end()) {
                 continue;
@@ -383,21 +385,19 @@ bool TerrainElevation::interpolate(const std::vector<std::array<float, 2>>& locs
 
             // Calculate weighted average for values
             float weighted_sum_values = 0.0;
-            for (size_t j = 0; j < weights.size(); ++j) {
-                weighted_sum_values += weights[j] * elevation_[hash_ids[j]].height;
+            for (size_t k = 0; k < weights.size(); ++k) {
+                weighted_sum_values += weights[k] * elevation_[hash_ids[k]].height;
             }
             
             // Variance propagation - using squared weights and variances
             float propagated_variance = 0.0;
-            for (size_t j = 0; j < weights.size(); ++j) {
-                const float stdev = elevation_[hash_ids[j]].stdev;
+            for (size_t k = 0; k < weights.size(); ++k) {
+                const float stdev = elevation_[hash_ids[k]].stdev;
                 const float variance = stdev * stdev;  // Convert stdev to variance
-                propagated_variance += weights[j] * weights[j] * variance;  // Squared weights
+                propagated_variance += weights[k] * weights[k] * variance;  // Squared weights
             }
             
             const float propagated_stdev = std::sqrt(propagated_variance);  // Convert back to stdev
-            
-            // Store results
             elevation_[hash_id] = {weighted_sum_values, propagated_stdev};
         }
     }
