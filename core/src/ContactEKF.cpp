@@ -539,9 +539,9 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
             }
         }
 
-        // if(!terrain_estimator->interpolate(con_locs)) {
-        //     std::cout << "Interpolation failed " << std::endl;
-        // }
+        if(!terrain_estimator->interpolate(con_locs)) {
+            std::cout << "Interpolation failed " << std::endl;
+        }
         
         // TODO: @sp make this a const parameter
         // Recenter the map
