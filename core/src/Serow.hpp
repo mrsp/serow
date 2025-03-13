@@ -195,10 +195,10 @@ class Serow {
         Eigen::Isometry3d T_base_to_odom{Eigen::Isometry3d::Identity()};
         /// @brief whether or not the robot is walking on flat terrain, used to eliminate vertical
         /// base drift
-        bool is_flat_terrain{};
+        bool enable_terrain_estimation{};
         /// @brief virtual flat terrain measurement uncertainty (m^2), only applies if
-        /// is_flat_terrain = true
-        double terrain_height_covariance{};
+        /// enable_terrain_estimation = true
+        double terrain_height_variance{};
         bool is_contact_ekf{};
         Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};

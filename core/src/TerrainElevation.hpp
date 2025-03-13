@@ -110,13 +110,15 @@ class TerrainElevation {
 
     void resetLocalMap();
 
-    bool update(const std::array<float, 2>& loc, float height, float variance);
+    bool update(const std::array<float, 2>& loc, float height);
 
     bool interpolate(const std::vector<std::array<float, 2>>& locs);
 
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
     
     const std::array<float, 2>& getMapOrigin() const;
+    
+    float terrain_height_variance;
 
     std::array<ElevationCell, map_size> elevation_;
 

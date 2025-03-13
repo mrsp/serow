@@ -229,7 +229,7 @@ bool TerrainElevation::isHashIdValid(const int id) const {
     return true;
 }
 
-bool TerrainElevation::update(const std::array<float, 2>& loc, float height, float variance) {
+bool TerrainElevation::update(const std::array<float, 2>& loc, float height) {
     if (!inside(loc)) {
         return false;
     }
@@ -240,7 +240,7 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
     const float variance_prev = elevation_[center_hash_id].variance;
 
     // Kalman update
-    const float kalman_gain = variance_prev / (variance_prev + variance);
+    const float kalman_gain = variance_prev / (variance_prev + terrain_height_variance);
     ElevationCell new_elevation;
     new_elevation.height = height_prev + kalman_gain * (height - height_prev);
     new_elevation.variance = (1.0f - kalman_gain) * variance_prev;
