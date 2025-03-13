@@ -181,8 +181,8 @@
   
   // boolean: whether or not the robot is walking on flat terrain, used to eliminate vertical base 
   // drift. Only applies with ContactEKF
-  "is_flat_terrain": false,
+  "enable_terrain_estimation": false,
   // double: virtual flat terrain measurement uncertainty (m^2)
-  // Only applies if is_flat_terrain = true
-  "terrain_height_covariance": 1e-3
+  // Only applies if enable_terrain_estimation = true
+  "terrain_height_variance": 1e-3
 }

@@ -69,6 +69,6 @@
   "initial_com_linear_velocity_covariance": [1.0, 1.0, 1.0],
   "initial_external_forces_covariance": [1.0, 1.0, 1.0],
   "T_base_to_odom": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0],
-  "is_flat_terrain": false,
-  "terrain_height_covariance": 1e-3
+  "enable_terrain_estimation": false,
+  "terrain_height_variance": 1e-3
 }
