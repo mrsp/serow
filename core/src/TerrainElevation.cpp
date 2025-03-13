@@ -478,4 +478,5 @@ const std::array<float, 2>& TerrainElevation::getMapOrigin() const {
     return local_map_origin_d_;
 }
 
+
 }  // namespace serow
