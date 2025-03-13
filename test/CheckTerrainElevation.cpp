@@ -44,7 +44,7 @@ TEST_F(TerrainElevationTest, Initialization) {
    auto elevation = elevation_map.getElevation(test_loc);
    ASSERT_TRUE(elevation.has_value());
    EXPECT_FLOAT_EQ(elevation->height, default_height);
-   EXPECT_FLOAT_EQ(elevation->stdev, default_stdev);
+   EXPECT_FLOAT_EQ(elevation->variance, default_stdev);
 }
 
 // Test coordinate transformation functions
@@ -151,7 +151,7 @@ TEST_F(TerrainElevationTest, SinglePointUpdate) {
    
    // Verify against calculated values
    EXPECT_NEAR(elevation->height, expected_height, 1e-5);
-   EXPECT_NEAR(elevation->stdev, expected_stdev, 1e-5);
+   EXPECT_NEAR(elevation->variance, expected_stdev, 1e-5);
 }
 
 // Test circle propagation in update function
