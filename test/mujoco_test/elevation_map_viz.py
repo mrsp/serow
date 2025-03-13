@@ -28,6 +28,7 @@ def read_next_measurement(file):
     return timestamp, heights
 
 
+
 def visualize_elevation_map_live(file):
     """Continuously updates the 3D elevation map in real-time."""
     x = np.linspace(0, MAP_SIZE - 1, MAP_SIZE)
@@ -37,19 +38,38 @@ def visualize_elevation_map_live(file):
     fig = plt.figure(figsize=(10, 7))
     ax = fig.add_subplot(111, projection='3d')
 
-    # Initialize an empty surface
-    heights = np.zeros((MAP_SIZE, MAP_SIZE))  # Placeholder for initial frame
-    surf = ax.plot_surface(X, Y, heights, cmap='terrain', edgecolor='none')
+    # First pass: estimate global min and max heights for consistent color mapping
+    all_heights = []
+    file.seek(0)  # Go to start of file
+    while True:
+        timestamp, heights = read_next_measurement(file)
+        if timestamp is None:
+            break
+        all_heights.append(heights)
 
-    # Configure the plot
+    # Compute global vmin and vmax
+    global_min = np.min([np.min(h) for h in all_heights])
+    global_max = np.max([np.max(h) for h in all_heights])
+
+    print(f"Global height range: {global_min:.3f} to {global_max:.3f}")
+
+    # Reset file pointer for actual animation loop
+    file.seek(0)
+
+    # Initialize first surface
+    heights = np.zeros((MAP_SIZE, MAP_SIZE))  # Placeholder
+    surf = ax.plot_surface(X, Y, heights, cmap='terrain', edgecolor='none', vmin=global_min, vmax=global_max)
+    cbar = fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+    cbar.set_label("Height")
+
+    # Configure plot
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_zlabel("Height")
     ax.set_title("Live Elevation Map")
-    fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-    ax.view_init(elev=60, azim=240)  # Adjust view angle
+    ax.view_init(elev=60, azim=240)
 
-    plt.ion()  # Turn on interactive mode
+    plt.ion()
 
     measurement_idx = 0
     while True:
@@ -60,16 +80,16 @@ def visualize_elevation_map_live(file):
 
         print(f"Measurement {measurement_idx}, Timestamp: {timestamp:.3f}")
 
-        # Update surface data
-        surf.remove()  # Remove the old surface
-        surf = ax.plot_surface(X, Y, heights, cmap='terrain', edgecolor='none')
+        # Remove and redraw the surface with consistent colormap
+        surf.remove()
+        surf = ax.plot_surface(X, Y, heights, cmap='terrain', edgecolor='none', vmin=global_min, vmax=global_max)
 
-        ax.set_title(f"Elevation Map at timestamp {timestamp:.3f}")  # Update title
+        ax.set_title(f"Elevation Map at timestamp {timestamp:.3f}")
 
-        plt.pause(0.5)  # Pause to create a smooth update effect
+        plt.pause(0.5)
         measurement_idx += 1
 
-    plt.ioff()  # Turn off interactive mode
+    plt.ioff()
     plt.show()
 
 
