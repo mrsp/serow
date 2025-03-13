@@ -104,13 +104,13 @@ class TerrainElevation {
 
     int globalIndexToHashId(const std::array<int, 2>& id_g) const;
 
-    int isHashIdValid(const int id) const;
+    bool isHashIdValid(const int id) const;
 
-    void initializeLocalMap(const float height, const float std);
+    void initializeLocalMap(const float height, const float variance);
 
     void resetLocalMap();
 
-    bool update(const std::array<float, 2>& loc, float height, float std);
+    bool update(const std::array<float, 2>& loc, float height, float variance);
 
     bool interpolate(const std::vector<std::array<float, 2>>& locs);
 

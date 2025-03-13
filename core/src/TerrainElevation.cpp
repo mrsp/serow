@@ -219,7 +219,7 @@ int TerrainElevation::globalIndexToHashId(const std::array<int, 2>& id_g) const 
     return localIndexToHashId(globalIndexToLocalIndex(id_g));
 }
 
-int TerrainElevation::isHashIdValid(const int id) const {
+bool TerrainElevation::isHashIdValid(const int id) const {
     if (id > map_size) {
         return false;
     }
