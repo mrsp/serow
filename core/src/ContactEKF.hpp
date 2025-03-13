@@ -159,6 +159,7 @@ class ContactEKF {
      * @param contacts_orientation Orientations of leg contacts (optional).
      * @param contacts_orientation_noise Noise in orientation measurements (optional).
      * @param orientation_cov Covariance of orientation measurements (optional).
+     * @param terrain_estimator Terrain elevation estimator (optional).
      * @return Updated state after applying contact-related updates.
      */
     BaseState updateWithContacts(
@@ -167,7 +168,8 @@ class ContactEKF {
         const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
         std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
-        std::optional<Eigen::Matrix3d> orientation_cov);
+        std::optional<Eigen::Matrix3d> orientation_cov,
+        std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.

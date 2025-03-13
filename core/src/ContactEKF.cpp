@@ -245,7 +245,9 @@ BaseState ContactEKF::updateWithContacts(
     const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
-    std::optional<Eigen::Matrix3d> orientation_cov) {
+    std::optional<Eigen::Matrix3d> orientation_cov,
+    std::shared_ptr<TerrainElevation> terrain_estimator) 
+{
     BaseState updated_state = state;
 
     // Compute the relative contacts position/orientation measurement noise
@@ -254,6 +256,15 @@ BaseState ContactEKF::updateWithContacts(
         contacts_position_noise.at(cf) = cs * contacts_position_noise.at(cf) +
                                          (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
                                          position_cov;
+
+        if (terrain_estimator) {
+            contacts_position_noise.at(cf)(2, 0) = 0.0;
+            contacts_position_noise.at(cf)(2, 1) = 0.0;
+            contacts_position_noise.at(cf)(2, 2) = 1e4;
+            contacts_position_noise.at(cf)(0, 2) = 0.0;
+            contacts_position_noise.at(cf)(1, 2) = 0.0;
+        }
+        
         if (contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
                 cs * contacts_orientation_noise.value().at(cf) +
@@ -496,30 +507,9 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
 BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom,
                              std::shared_ptr<TerrainElevation> terrain_estimator) {
-    BaseState updated_state = state;
+    // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
-        updated_state = updateWithTerrain(updated_state, kin.contacts_status, *terrain_estimator);
-    }
-
-    updated_state =
-        updateWithContacts(updated_state, kin.contacts_position, kin.contacts_position_noise,
-                           kin.contacts_status, kin.position_cov, kin.contacts_orientation,
-                           kin.contacts_orientation_noise, kin.orientation_cov);
-
-    if (odom.has_value()) {
-        updated_state =
-            updateWithOdometry(updated_state, odom->base_position, odom->base_orientation,
-                               odom->base_position_cov, odom->base_orientation_cov);
-    }
-
-    if (terrain_estimator) {
-        // Update the terrain estimator
-        const std::array<float, 2> base_pos_xy = {
-            static_cast<float>(updated_state.base_position.x()),
-            static_cast<float>(updated_state.base_position.y())};
-        const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
         std::vector<std::array<float, 2>> con_locs;
-        
         for (const auto& [cf, cp] : kin.contacts_status) {
             const int cs = cp ? 1 : 0;
             if (cs) {
@@ -527,8 +517,13 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
                     static_cast<float>(state.contacts_position.at(cf).x()),
                     static_cast<float>(state.contacts_position.at(cf).y())};
                 const float con_pos_z = static_cast<float>(state.contacts_position.at(cf).z());
+                
+                // Transform measurement noise to world frame
+                const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
+                const Eigen::Matrix3d con_cov =  R * kin.contacts_position_noise.at(cf) * R.transpose();
+
                 // TODO: @sp make this a const parameter
-                if (!terrain_estimator->update(con_pos_xy, con_pos_z, 1e-3)) {
+                if (!terrain_estimator->update(con_pos_xy, con_pos_z, static_cast<float>(con_cov(2, 2)))) {
                     std::cout
                         << "Contact for " << cf
                         << "is not inside the terrain elevation map and thus height is not updated "
@@ -539,12 +534,33 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
             }
         }
 
-        if(!terrain_estimator->interpolate(con_locs)) {
-            std::cout << "Interpolation failed " << std::endl;
-        }
+        // if(!terrain_estimator->interpolate(con_locs)) {
+        //     std::cout << "Interpolation failed " << std::endl;
+        // }
+    }
 
+    // Update the state with the relative to base contacts
+    BaseState updated_state =
+        updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
+                           kin.contacts_status, kin.position_cov, kin.contacts_orientation,
+                           kin.contacts_orientation_noise, kin.orientation_cov, terrain_estimator);
+
+    if (odom.has_value()) {
+        updated_state =
+            updateWithOdometry(updated_state, odom->base_position, odom->base_orientation,
+                               odom->base_position_cov, odom->base_orientation_cov);
+    }
+
+    // Update the state with the absolute terrain height at each contact location and potentially
+    // recenter the terrain mapper
+    if (terrain_estimator) {
+        updated_state = updateWithTerrain(updated_state, kin.contacts_status, *terrain_estimator);
         // TODO: @sp make this a const parameter
         // Recenter the map
+        const std::array<float, 2> base_pos_xy = {
+            static_cast<float>(updated_state.base_position.x()),
+            static_cast<float>(updated_state.base_position.y())};
+        const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
         if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 0.5) ||
             (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.5)) {
             terrain_estimator->recenter(base_pos_xy);
@@ -553,5 +569,6 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
 
     return updated_state;
 }
+
 
 }  // namespace serow
