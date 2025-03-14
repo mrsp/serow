@@ -257,13 +257,13 @@ BaseState ContactEKF::updateWithContacts(
                                          (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
                                          position_cov;
 
-        if (terrain_estimator) {
-            contacts_position_noise.at(cf)(2, 0) = 0.0;
-            contacts_position_noise.at(cf)(2, 1) = 0.0;
-            contacts_position_noise.at(cf)(2, 2) = 1e4;
-            contacts_position_noise.at(cf)(0, 2) = 0.0;
-            contacts_position_noise.at(cf)(1, 2) = 0.0;
-        }
+        // if (terrain_estimator) {
+        //     contacts_position_noise.at(cf)(2, 0) = 0.0;
+        //     contacts_position_noise.at(cf)(2, 1) = 0.0;
+        //     contacts_position_noise.at(cf)(2, 2) = 1e4;
+        //     contacts_position_noise.at(cf)(0, 2) = 0.0;
+        //     contacts_position_noise.at(cf)(1, 2) = 0.0;
+        // }
         
         if (contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
