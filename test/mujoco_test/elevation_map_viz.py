@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import h5py
 # === Configuration ===
-FILENAME = 'data/flat/est_elevation_map.bin'  # Replace with your actual file name
-ESTIMATION_FILE = 'data/flat/serow_predictions.h5'
+FILENAME = 'data/slope/est_elevation_map.bin'  # Replace with your actual file name
+ESTIMATION_FILE = 'data/slope/serow_predictions.h5'
 MAP_SIZE = 1024  # 128 x 128
 CELL_COUNT = MAP_SIZE * MAP_SIZE
 HEIGHT_DTYPE = np.float32
@@ -60,10 +60,10 @@ def visualize_elevation_map_live(file):
     surf = ax.plot_surface(X, Y, heights, cmap='terrain', edgecolor='none')
 
     # Placeholder scatter plots for contacts
-    scatter_plots = {}
-    for foot in contact_positions:
-        # Initially dummy point, label added now so legend works
-        scatter_plots[foot] = ax.scatter([], [], [], s=50, label=foot)
+    # scatter_plots = {}
+    # for foot in contact_positions:
+    #     # Initially dummy point, label added now so legend works
+    #     scatter_plots[foot] = ax.scatter([], [], [], s=50, label=foot)
 
     # Plot config
     ax.set_xlabel("X")
@@ -90,16 +90,16 @@ def visualize_elevation_map_live(file):
         surf = ax.plot_surface(X, Y, heights, cmap='terrain', edgecolor='none')
 
         # Match contact timestamp
-        if measurement_idx < contact_timestamps.shape[0]:
-            contact_idx = measurement_idx
-        else:
-            contact_idx = -1  # fallback to last known
+        # if measurement_idx < contact_timestamps.shape[0]:
+        #     contact_idx = measurement_idx
+        # else:
+        #     contact_idx = -1  # fallback to last known
 
         # Update scatter plots for all feet
-        for foot in contact_positions:
-            pos = contact_positions[foot][contact_idx]  # (x, y, z)
-            if (np.linalg.norm(pos) > 0.1):
-                scatter_plots[foot]._offsets3d = ([pos[0]+1024//2], [pos[1]+1024//2], [pos[2]])
+        # for foot in contact_positions:
+        #     pos = contact_positions[foot][contact_idx]  # (x, y, z)
+        #     if (np.linalg.norm(pos) > 0.1):
+        #         scatter_plots[foot]._offsets3d = ([pos[0]+1024//2], [pos[1]+1024//2], [pos[2]])
 
         ax.set_title(f"Elevation Map at timestamp {timestamp:.3f}")
         plt.pause(0.5)
@@ -157,11 +157,11 @@ def visualize_contact_positions_live():
 
     
 def main():
-    load_contact_positions(ESTIMATION_FILE)
-    print(contact_timestamps.shape, contact_positions['FL_foot'].shape)
-    # with open(FILENAME, 'rb') as file:
-    #     visualize_elevation_map_live(file)
-    visualize_contact_positions_live()
+    # load_contact_positions(ESTIMATION_FILE)
+    # print(contact_timestamps.shape, contact_positions['FL_foot'].shape)
+    with open(FILENAME, 'rb') as file:
+        visualize_elevation_map_live(file)
+    # visualize_contact_positions_live()
 
 if __name__ == "__main__":
     main()

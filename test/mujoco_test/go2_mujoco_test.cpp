@@ -8,9 +8,9 @@
 // #include "serow/TerrainElevation.hpp"
 #include <fstream>
 #include <iomanip>
-constexpr const char* INPUT_FILE = "../data/flat/go2_data.h5";
-constexpr const char* OUTPUT_FILE = "../data/flat/serow_predictions.h5";
-constexpr const char* ELEVATION_MAP_FILE = "../data/flat/est_elevation_map.bin";
+constexpr const char* INPUT_FILE = "../data/slope/go2_data.h5";
+constexpr const char* OUTPUT_FILE = "../data/slope/serow_predictions.h5";
+constexpr const char* ELEVATION_MAP_FILE = "../data/slope/est_elevation_map.bin";
 
 using namespace serow;
 
