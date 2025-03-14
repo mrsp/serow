@@ -887,33 +887,34 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
         
         // Initialize the terrain elevation mapper
+        std::cout << "Init height " << terrain_height << std::endl;
         terrain_estimator_ = std::make_shared<TerrainElevation>();
-        terrain_estimator_->initializeLocalMap(terrain_height, 1e-2);
-        terrain_estimator_->recenter({0.0, 0.0});
+        terrain_estimator_->initializeLocalMap(terrain_height, 1e4);
+        // terrain_estimator_->recenter({0.0, 0.0});
         terrain_estimator_->printMapInformation();
-        std::vector<std::array<float, 2>> con_locs;
-        for (const auto& [cf, cp] : kin.contacts_status) {
-            const int cs = cp ? 1 : 0;
-            if (cs) {
-                const std::array<float, 2> con_pos_xy = {
-                    static_cast<float>(kin.contacts_position.at(cf).x()),
-                    static_cast<float>(kin.contacts_position.at(cf).y())};
-                const float con_pos_z = static_cast<float>(kin.contacts_position.at(cf).z());
-                // TODO: @sp make this a const parameter
-                if (!terrain_estimator_->update(con_pos_xy, con_pos_z, 1e-3)) {
-                    std::cout
-                        << "Contact for " << cf
-                        << "is not inside the terrain elevation map and thus height is not updated "
-                        << std::endl;
-                } else {
-                    con_locs.push_back(con_pos_xy);
-                }
-            }
-        }
+        // std::vector<std::array<float, 2>> con_locs;
+        // for (const auto& [cf, cp] : kin.contacts_status) {
+        //     const int cs = cp ? 1 : 0;
+        //     if (cs) {
+        //         const std::array<float, 2> con_pos_xy = {
+        //             static_cast<float>(kin.contacts_position.at(cf).x()),
+        //             static_cast<float>(kin.contacts_position.at(cf).y())};
+        //         const float con_pos_z = static_cast<float>(kin.contacts_position.at(cf).z());
+        //         // TODO: @sp make this a const parameter
+        //         if (!terrain_estimator_->update(con_pos_xy, con_pos_z, 1e-3)) {
+        //             std::cout
+        //                 << "Contact for " << cf
+        //                 << "is not inside the terrain elevation map and thus height is not updated "
+        //                 << std::endl;
+        //         } else {
+        //             con_locs.push_back(con_pos_xy);
+        //         }
+        //     }
+        // }
 
-        if(!terrain_estimator_->interpolate(con_locs)) {
-            std::cout << "Interpolation failed " << std::endl;
-        }
+        // if(!terrain_estimator_->interpolate(con_locs)) {
+        //     std::cout << "Interpolation failed " << std::endl;
+        // }
     }
 
 

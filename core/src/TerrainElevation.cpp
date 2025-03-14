@@ -255,6 +255,12 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
 
     // Get the center cell's indices
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
+    
+    std::cout << "Cell to be updated " << center_idx[0] << " " << center_idx[1] << " for loc " << loc[0] << " " << loc[1] << std::endl;
+    std::cout << "Height prev " << height_prev << " variance prev " << variance_prev << std::endl;
+    std::cout << "Height mes " << height << " variance mes " << variance << std::endl;
+    std::cout << "Height upd " << new_elevation.height << " variance upd " << new_elevation.variance << std::endl;
+    std::cout << "-------------------------------" << std::endl;
 
     // Iterate only over the cells within the radius
     for (int i = -radius_cells; i <= radius_cells; ++i) {
@@ -298,6 +304,10 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
             elevation_[hash_id].height = cell_height + 
                 neighbor_kalman_gain * weight * (new_elevation.height - cell_height);
             elevation_[hash_id].variance = (1.0f - neighbor_kalman_gain * weight) * cell_variance;
+            // const auto neigbor_loc = globalIndexToLocation(global_idx);
+            // std::cout << "Neighbor Cell to be updated " << global_idx[0] << " " << global_idx[1] << " for loc " << neigbor_loc[0] << " " << neigbor_loc[1] << std::endl;
+            // std::cout << "Neighbor Height upd " <<  elevation_[hash_id].height << " variance upd " <<elevation_[hash_id].variance << std::endl;
+            // std::cout << "-------------------------------" << std::endl;
         }
     }
 
