@@ -26,7 +26,7 @@
 #include "Measurement.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
-#include "TerrainElevation.hpp"
+#include "NaiveTerrainElevation.hpp"
 
 namespace serow {
 
@@ -62,7 +62,7 @@ class Serow {
     std::optional<State> getState(bool allow_invalid = false);
     
     /// @brief Returns the terrain_estimator_ object
-    const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
+    const std::shared_ptr<NaiveTerrainElevation>& getTerrainEstimator() const;
    private:
     struct Params {
         /// @brief total mass of the robot (kg)
@@ -236,7 +236,7 @@ class Serow {
     size_t cycle_{};
     size_t imu_calibration_cycles_{};
     /// @brief Terrain elevation mapper
-    std::shared_ptr<TerrainElevation> terrain_estimator_;
+    std::shared_ptr<NaiveTerrainElevation> terrain_estimator_;
 };
 
 }  // namespace serow

@@ -36,7 +36,7 @@
 #include "Measurement.hpp"  // Includes various sensor measurements
 #include "OutlierDetector.hpp"
 #include "State.hpp"  // Includes definitions of robot state variables
-#include "TerrainElevation.hpp"
+#include "NaiveTerrainElevation.hpp"
 
 namespace serow {
 
@@ -81,7 +81,7 @@ class ContactEKF {
      */
     BaseState update(const BaseState& state, const KinematicMeasurement& kin,
                      std::optional<OdometryMeasurement> odom = std::nullopt,
-                     std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
+                     std::shared_ptr<NaiveTerrainElevation> terrain_estimator = nullptr);
 
    private:
     int num_states_{};                      ///< Number of state variables.
@@ -169,7 +169,7 @@ class ContactEKF {
         std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov,
-        std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
+        std::shared_ptr<NaiveTerrainElevation> terrain_estimator = nullptr);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
@@ -194,7 +194,7 @@ class ContactEKF {
      */
     BaseState updateWithTerrain(const BaseState& state,
                                 const std::map<std::string, bool>& contacts_status,
-                                const TerrainElevation& terrain_estimator);
+                                const NaiveTerrainElevation& terrain_estimator);
 
     /**
      * @brief Updates the state of the robot with the provided state change and covariance matrix.

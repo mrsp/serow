@@ -888,7 +888,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         
         // Initialize the terrain elevation mapper
         std::cout << "Init height " << terrain_height << std::endl;
-        terrain_estimator_ = std::make_shared<TerrainElevation>();
+        terrain_estimator_ = std::make_shared<NaiveTerrainElevation>();
         terrain_estimator_->initializeLocalMap(terrain_height, 1e4);
         // terrain_estimator_->recenter({0.0, 0.0});
         terrain_estimator_->printMapInformation();
@@ -1086,7 +1086,9 @@ std::optional<State> Serow::getState(bool allow_invalid) {
     }
 }
 
-const std::shared_ptr<TerrainElevation>& Serow::getTerrainEstimator() const {
+const std::shared_ptr<NaiveTerrainElevation>& Serow::getTerrainEstimator() const {
     return terrain_estimator_;
 }
+
+
 }  // namespace serow

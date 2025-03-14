@@ -5,16 +5,16 @@
 #include <map>
 #include "serow/Serow.hpp"
 #include <vector>
-#include "serow/TerrainElevation.hpp"
+// #include "serow/TerrainElevation.hpp"
 #include <fstream>
 #include <iomanip>
 constexpr const char* INPUT_FILE = "../data/slope/go2_data.h5";
 constexpr const char* OUTPUT_FILE = "../data/slope/serow_predictions.h5";
-constexpr const char* ELEVATION_MAP_FILE = "../data/slope/est_elevation_map.bin";
+// constexpr const char* ELEVATION_MAP_FILE = "../data/slope/est_elevation_map.bin";
 
 using namespace serow;
 
-std::ofstream file(ELEVATION_MAP_FILE);
+// std::ofstream file(ELEVATION_MAP_FILE);
 
 
 // Saves predictions to .h5 file
@@ -100,23 +100,23 @@ std::vector<std::vector<double>> readHDF5(const std::string& filename,
 
 
 /// @brief Writes an elevation map measurement to a binary file
-void saveElevationMap(const std::array<ElevationCell, map_size>& data, double timestamp)
-{
-    if (!file.is_open()) {
-        std::cerr << "[saveElevationMap] File stream is not open!\n";
-        return;
-    }
+// void saveElevationMap(const std::array<ElevationCell, map_size>& data, double timestamp)
+// {
+//     if (!file.is_open()) {
+//         std::cerr << "[saveElevationMap] File stream is not open!\n";
+//         return;
+//     }
 
-    // Optional: Write a timestamp or measurement ID
-    file.write(reinterpret_cast<const char*>(&timestamp), sizeof(timestamp));
+//     // Optional: Write a timestamp or measurement ID
+//     file.write(reinterpret_cast<const char*>(&timestamp), sizeof(timestamp));
     
-    // Write the height data
-    for (size_t i = 0; i < data.size(); ++i) {
-        file.write(reinterpret_cast<const char*>(&data[i].height), sizeof(float));
-    }
-    // Flush to ensure data is written
-    file.flush();
-}
+//     // Write the height data
+//     for (size_t i = 0; i < data.size(); ++i) {
+//         file.write(reinterpret_cast<const char*>(&data[i].height), sizeof(float));
+//     }
+//     // Flush to ensure data is written
+//     file.flush();
+// }
 
 int main() {
     try {
@@ -247,10 +247,10 @@ int main() {
                 continue;
             }
 
-            if (timestamp - log_timestamp > 0.5){
-                saveElevationMap(terrainEstimator->elevation_,timestamp);
-                log_timestamp = timestamp;
-            }
+            // if (timestamp - log_timestamp > 0.5){
+            //     saveElevationMap(terrainEstimator->elevation_,timestamp);
+            //     log_timestamp = timestamp;
+            // }
 
             // std::cout << terrainEstimator->elevation_[0].height << '\n';
 

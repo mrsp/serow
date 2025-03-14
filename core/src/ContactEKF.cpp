@@ -246,7 +246,7 @@ BaseState ContactEKF::updateWithContacts(
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov,
-    std::shared_ptr<TerrainElevation> terrain_estimator) 
+    std::shared_ptr<NaiveTerrainElevation> terrain_estimator) 
 {
     BaseState updated_state = state;
 
@@ -392,7 +392,7 @@ BaseState ContactEKF::updateWithOdometry(const BaseState& state,
 
 BaseState ContactEKF::updateWithTerrain(const BaseState& state,
                                         const std::map<std::string, bool>& contacts_status,
-                                        const TerrainElevation& terrain_estimator) {
+                                        const NaiveTerrainElevation& terrain_estimator) {
     BaseState updated_state = state;
 
     // Construct the innovation vector z, the linearized measurement matrix H, and the measurement
@@ -499,7 +499,7 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
 // TODO: @sp Maybe consider passing the state by reference instead of having to copy
 BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom,
-                             std::shared_ptr<TerrainElevation> terrain_estimator) {
+                             std::shared_ptr<NaiveTerrainElevation> terrain_estimator) {
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
         std::vector<std::array<float, 2>> con_locs;
@@ -522,14 +522,15 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
                         << "is not inside the terrain elevation map and thus height is not updated "
                         << std::endl;
                 } else {
+                    std::cout << "Terrain map updated" << std::endl;
                     con_locs.push_back(con_pos_xy);
                 }
             }
         }
 
-        // if(!terrain_estimator->interpolate(con_locs)) {
-        //     std::cout << "Interpolation failed " << std::endl;
-        // }
+        if(!terrain_estimator->interpolate(con_locs)) {
+            std::cout << "Interpolation failed " << std::endl;
+        }
     }
 
     // Update the state with the relative to base contacts
@@ -550,14 +551,15 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
         updated_state = updateWithTerrain(updated_state, kin.contacts_status, *terrain_estimator);
         // TODO: @sp make this a const parameter
         // Recenter the map
-        const std::array<float, 2> base_pos_xy = {
-            static_cast<float>(updated_state.base_position.x()),
-            static_cast<float>(updated_state.base_position.y())};
-        const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
+        // const std::array<float, 2> base_pos_xy = {
+        //     static_cast<float>(updated_state.base_position.x()),
+        //     static_cast<float>(updated_state.base_position.y())};
+        // const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
         // if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 0.5) ||
         //     (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.5)) {
         //     terrain_estimator->recenter(base_pos_xy);
         // }
+        std::cout << "Updated with terrain " << std::endl;
     }
 
     return updated_state;
