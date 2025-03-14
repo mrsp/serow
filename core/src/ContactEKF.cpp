@@ -245,8 +245,7 @@ BaseState ContactEKF::updateWithContacts(
     const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
-    std::optional<Eigen::Matrix3d> orientation_cov,
-    std::shared_ptr<NaiveTerrainElevation> terrain_estimator) 
+    std::optional<Eigen::Matrix3d> orientation_cov) 
 {
     BaseState updated_state = state;
 
@@ -537,7 +536,7 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
     BaseState updated_state =
         updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
                            kin.contacts_status, kin.position_cov, kin.contacts_orientation,
-                           kin.contacts_orientation_noise, kin.orientation_cov, terrain_estimator);
+                           kin.contacts_orientation_noise, kin.orientation_cov);
 
     if (odom.has_value()) {
         updated_state =

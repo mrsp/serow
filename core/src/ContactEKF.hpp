@@ -168,8 +168,7 @@ class ContactEKF {
         const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
         std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
-        std::optional<Eigen::Matrix3d> orientation_cov,
-        std::shared_ptr<NaiveTerrainElevation> terrain_estimator = nullptr);
+        std::optional<Eigen::Matrix3d> orientation_cov);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
