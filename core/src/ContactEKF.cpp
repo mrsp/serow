@@ -503,16 +503,17 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
         std::vector<std::array<float, 2>> con_locs;
-        for (const auto& [cf, cp] : kin.contacts_status) {
-            const int cs = cp ? 1 : 0;
-            if (cs) {
+        for (const auto& [cf, cp] : kin.contacts_probability) {
+            if (cp > 0.26) {
+                const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
+                const Eigen::Vector3d r = state.base_position;
+                const Eigen::Vector3d con_pos = r + R * kin.base_to_foot_positions.at(cf);
                 const std::array<float, 2> con_pos_xy = {
-                    static_cast<float>(state.contacts_position.at(cf).x()),
-                    static_cast<float>(state.contacts_position.at(cf).y())};
-                const float con_pos_z = static_cast<float>(state.contacts_position.at(cf).z());
+                    static_cast<float>(con_pos.x()),
+                    static_cast<float>(con_pos.y())};
+                const float con_pos_z = static_cast<float>(con_pos.z());
                 
                 // Transform measurement noise to world frame
-                const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
                 const Eigen::Matrix3d con_cov =  R * kin.contacts_position_noise.at(cf) * R.transpose();
 
                 // TODO: @sp make this a const parameter

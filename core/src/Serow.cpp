@@ -869,7 +869,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
     kin.base_orientation = attitude_estimator_->getQ();
     kin.base_orientation_cov = params_.base_orientation_cov.asDiagonal();
-
+    kin.base_to_foot_positions = base_to_foot_positions;
     // Assuming the terrain is flat and the robot is initialized in a standing posture we can
     // have a measurement of the average terrain height constraining base estimation.
     if (params_.is_flat_terrain && !terrain_estimator_ && params_.is_contact_ekf) {
