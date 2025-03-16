@@ -37,14 +37,16 @@ class NaiveTerrainElevation {
 
     bool update(const std::array<float, 2>& loc, float height, float variance);
 
-    bool interpolate(const std::vector<std::array<float, 2>>& locs);
+    bool interpolate(const std::vector<std::array<float, 2>>& locs, const std::array<float, 2>& robot_heading,
+        float look_ahead_distance);
 
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
     
     const std::array<float, 2>& getMapOrigin() const;
 
     ElevationCell elevation_[map_dim][map_dim];
-
+    std::vector<int64_t> contact_cells;
+    
     ElevationCell default_elevation_;
     ElevationCell empty_elevation_{0.0, 1e2};
     

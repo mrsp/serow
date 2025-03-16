@@ -10,7 +10,7 @@ namespace {
 
 static constexpr float resolution = 0.01;
 static constexpr float resolution_inv = 1.0 / resolution;
-static constexpr float radius = 0.1;
+static constexpr float radius = 0.05;
 static constexpr int map_dim = 1024;  // 2^7
 static constexpr int half_map_dim = map_dim / 2; // 2^6
 static constexpr int map_size = map_dim * map_dim; // 2^14 = 16.384
@@ -55,6 +55,8 @@ namespace serow {
 struct ElevationCell {
     float height{};
     float variance{};
+    bool contact{};
+    bool updated{};
     ElevationCell() = default;
     ElevationCell(float height, float variance) {
         this->height = height;
