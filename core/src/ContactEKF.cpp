@@ -565,15 +565,7 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
                 }
             }
         }
-
-        // TODO @sp: Interpolation reduces accuracy?
-        // if (!terrain_estimator->interpolate(con_locs,
-        //                                     {static_cast<float>(state.base_linear_velocity.x()),
-        //                                      static_cast<float>(state.base_linear_velocity.y())},
-        //                                     0.25)) {
-        //     std::cout << "Interpolation failed " << std::endl;
-        // }
-        }
+    }
 
     // Update the state with the relative to base contacts
     BaseState updated_state =
