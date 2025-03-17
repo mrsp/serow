@@ -146,7 +146,7 @@ BaseState ContactEKF::predict(const BaseState& state, const ImuMeasurement& imu,
                   << std::endl;
         dt = nominal_dt_;
     }
-    
+
     // Compute the state and input-state Jacobians
     const auto& [Ac, Lc] = computePredictionJacobians(state, imu.angular_velocity);
     // Euler Discretization - First order Truncation
@@ -308,7 +308,7 @@ BaseState ContactEKF::updateWithContacts(
                         const Eigen::Matrix3d R_z =
                             contacts_position_noise.at(cf) / contact_outlier_detector.zeta;
                         const Eigen::Matrix3d s = R_z + H * P_ * H.transpose();
-                        const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
+                        K = P_ * H.transpose() * s.inverse();
                         const Eigen::VectorXd dx = K * z;
                         P_i = (I_ - K * H) * P_;
                         updated_state_i = updateStateCopy(updated_state, dx, P_);
@@ -555,7 +555,7 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
 
                 // TODO: @sp make this a const parameter
                 if (!terrain_estimator->update(con_pos_xy, con_pos_z,
-                                               static_cast<float>(con_cov(2, 2)) + 1e-3)) {
+                                               static_cast<float>(con_cov(2, 2)))) {
                     std::cout
                         << "Contact for " << cf
                         << "is not inside the terrain elevation map and thus height is not updated "

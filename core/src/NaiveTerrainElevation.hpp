@@ -48,7 +48,7 @@ class NaiveTerrainElevation {
     std::vector<int64_t> contact_cells;
     
     ElevationCell default_elevation_;
-    ElevationCell empty_elevation_{0.0, 1e2};
+    ElevationCell empty_elevation_{0.0, 1e4};
     
     std::array<int, 2> local_map_origin_i_{0, 0};
     std::array<int, 2> local_map_bound_max_i_{};
@@ -58,7 +58,7 @@ class NaiveTerrainElevation {
     std::array<float, 2> local_map_bound_min_d_{};
 
     float min_terrain_height_variance_{};
-    
+
     friend class TerrainElevationTest; // Allow full access
 };
 
