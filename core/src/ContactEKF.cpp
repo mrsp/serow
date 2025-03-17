@@ -141,8 +141,12 @@ BaseState ContactEKF::predict(const BaseState& state, const ImuMeasurement& imu,
         dt = imu.timestamp - last_imu_timestamp_.value();
     }
     if (dt < nominal_dt_ / 2) {
+        std::cout << "[SEROW/BaseEKF]: Predict step sample time is abnormal " << dt
+                  << " while the nominal sample time is " << nominal_dt_ << " setting to nominal"
+                  << std::endl;
         dt = nominal_dt_;
     }
+    
     // Compute the state and input-state Jacobians
     const auto& [Ac, Lc] = computePredictionJacobians(state, imu.angular_velocity);
     // Euler Discretization - First order Truncation
@@ -252,6 +256,9 @@ BaseState ContactEKF::updateWithContacts(
     // Compute the relative contacts position/orientation measurement noise
     for (const auto& [cf, cp] : contacts_status) {
         const int cs = cp ? 1 : 0;
+
+        // If the terrain estimator is in the loop reduce the effect that kinematics has in the 
+        // contact height update
         if (terrain_estimator) {
             const Eigen::Matrix3d& R = state.base_orientation.toRotationMatrix();
             contacts_position_noise.at(cf) = R * contacts_position_noise.at(cf) * R.transpose();
@@ -279,7 +286,7 @@ BaseState ContactEKF::updateWithContacts(
         const int num_iter = 5;
         Eigen::MatrixXd H;
         Eigen::MatrixXd K;
-        for (size_t i = 0; i < num_iter; i++) {
+        for (size_t iter = 0; iter < num_iter; iter++) {
             H.setZero(3, num_states_);
             const Eigen::Vector3d x =
                 updated_state.base_orientation.toRotationMatrix().transpose() *
@@ -336,19 +343,24 @@ BaseState ContactEKF::updateWithContacts(
                 }
             }
         }
-        P_ = (I_ - K * H) * P_;
+        // TODO: @sp fix this
+        if (!outlier_detection_) {
+            P_ = (I_ - K * H) * P_;
+        }
     }
 
     // Optionally update the state with the relative contacts orientation
     if (!point_feet_ && contacts_orientation.has_value()) {
         for (const auto& [cf, co] : contacts_orientation.value()) {
-            Eigen::MatrixXd H;
-            H.setZero(3, num_states_);
+            // Construct the innovation vector z
             const Eigen::Quaterniond x = Eigen::Quaterniond(
                 state.contacts_orientation.value().at(cf).toRotationMatrix().transpose() *
                 state.base_orientation.toRotationMatrix());
-
             const Eigen::Vector3d z = lie::so3::minus(co, x);
+            
+            // Construct the linearized measurement matrix H
+            Eigen::MatrixXd H;
+            H.setZero(3, num_states_);
             H.block(0, r_idx_[0], 3, 3) = -x.toRotationMatrix();
             H.block(0, rl_idx_.at(cf)[0], 3, 3) = Eigen::Matrix3d::Identity();
 
@@ -378,8 +390,8 @@ BaseState ContactEKF::updateWithOdometry(const BaseState& state,
     Eigen::MatrixXd R = Eigen::Matrix<double, 6, 6>::Zero();
 
     // Construct the innovation vector z
-    const Eigen::Vector3d& zp = base_position - state.base_position;
-    const Eigen::Vector3d& zq = lie::so3::minus(base_orientation, state.base_orientation);
+    const Eigen::Vector3d zp = base_position - state.base_position;
+    const Eigen::Vector3d zq = lie::so3::minus(base_orientation, state.base_orientation);
     Eigen::VectorXd z;
     z.setZero(6);
     z.head(3) = zp;
@@ -410,25 +422,34 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
     // Construct the innovation vector z, the linearized measurement matrix H, and the measurement
     // noise matrix R
     Eigen::VectorXd z;
-    z.setZero(1);
     Eigen::MatrixXd H;
     Eigen::MatrixXd R;
+    z.setZero(1);
     R.setIdentity(1, 1);
+
     for (const auto& [cf, cs] : contacts_status) {
+        // Update only when the elevation at the contact points is available and updated in the map
         if (cs) {
             auto elevation = terrain_estimator.getElevation(
                 {static_cast<float>(updated_state.contacts_position.at(cf).x()),
                  static_cast<float>(updated_state.contacts_position.at(cf).y())});
+
             if (elevation.has_value() && elevation.value().updated) {
+                // Construct the linearized measurement matrix H
                 H.setZero(1, num_states_);
                 H(0, pl_idx_.at(cf)[2]) = 1.0;
                 std::cout << "map height at [x, y]: " << updated_state.contacts_position.at(cf).x()
                           << " " << updated_state.contacts_position.at(cf).x()
                           << " is: " << elevation.value().height
                           << " with variance: " << elevation.value().variance << std::endl;
+                
+                // Compute innovation
                 z(0) = static_cast<double>(elevation.value().height) -
                        updated_state.contacts_position.at(cf).z();
+                
+                // Construct the measurement noise matrix R
                 R(0, 0) = static_cast<double>(elevation.value().variance);
+                
                 const Eigen::MatrixXd s = R + H * P_ * H.transpose();
                 const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
                 const Eigen::VectorXd dx = K * z;
@@ -552,7 +573,7 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
         //                                     0.25)) {
         //     std::cout << "Interpolation failed " << std::endl;
         // }
-    }
+        }
 
     // Update the state with the relative to base contacts
     BaseState updated_state =
