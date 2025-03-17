@@ -598,16 +598,16 @@ bool Serow::initialize(const std::string& config_file) {
     }
 
     // Terrain height parameter
-    if (!config["is_flat_terrain"].is_boolean()) {
-        std::cerr << "Configuration: is_flat_terrain must be boolean \n";
+    if (!config["enable_terrain_estimation"].is_boolean()) {
+        std::cerr << "Configuration: enable_terrain_estimation must be boolean \n";
         return false;
     }
-    params_.is_flat_terrain = config["is_flat_terrain"];
-    if (!config["terrain_height_covariance"].is_number_float()) {
-        std::cerr << "Configuration: terrain_height_covariance must be float \n";
+    params_.enable_terrain_estimation = config["enable_terrain_estimation"];
+    if (!config["minimum_terrain_height_variance"].is_number_float()) {
+        std::cerr << "Configuration: minimum_terrain_height_variance must be float \n";
         return false;
     }
-    params_.terrain_height_covariance = config["terrain_height_covariance"];
+    params_.minimum_terrain_height_variance = config["minimum_terrain_height_variance"];
 
     // Initialize state uncertainty
     state_.mass_ = params_.mass;
@@ -872,7 +872,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     kin.base_to_foot_positions = base_to_foot_positions;
     // Assuming the terrain is flat and the robot is initialized in a standing posture we can
     // have a measurement of the average terrain height constraining base estimation.
-    if (params_.is_flat_terrain && !terrain_estimator_ && params_.is_contact_ekf) {
+    if (params_.enable_terrain_estimation && !terrain_estimator_ && params_.is_contact_ekf) {
         float terrain_height = 0.0;
         int i = 0;
         for (const auto& [cf, cp] : kin.contacts_status) {
@@ -890,31 +890,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         std::cout << "Init height " << terrain_height << std::endl;
         terrain_estimator_ = std::make_shared<NaiveTerrainElevation>();
         terrain_estimator_->initializeLocalMap(terrain_height, 1e4);
-        // terrain_estimator_->recenter({0.0, 0.0});
         terrain_estimator_->printMapInformation();
-        // std::vector<std::array<float, 2>> con_locs;
-        // for (const auto& [cf, cp] : kin.contacts_status) {
-        //     const int cs = cp ? 1 : 0;
-        //     if (cs) {
-        //         const std::array<float, 2> con_pos_xy = {
-        //             static_cast<float>(kin.contacts_position.at(cf).x()),
-        //             static_cast<float>(kin.contacts_position.at(cf).y())};
-        //         const float con_pos_z = static_cast<float>(kin.contacts_position.at(cf).z());
-        //         // TODO: @sp make this a const parameter
-        //         if (!terrain_estimator_->update(con_pos_xy, con_pos_z, 1e-3)) {
-        //             std::cout
-        //                 << "Contact for " << cf
-        //                 << "is not inside the terrain elevation map and thus height is not updated "
-        //                 << std::endl;
-        //         } else {
-        //             con_locs.push_back(con_pos_xy);
-        //         }
-        //     }
-        // }
-
-        // if(!terrain_estimator_->interpolate(con_locs)) {
-        //     std::cout << "Interpolation failed " << std::endl;
-        // }
+        terrain_estimator_->min_terrain_height_variance_ = params_.minimum_terrain_height_variance;
     }
 
 

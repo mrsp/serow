@@ -75,6 +75,7 @@ bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height
         return false;
     }
 
+    variance += min_terrain_height_variance_;
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
     ElevationCell& cell = elevation_[center_idx[0]][center_idx[1]];
     cell.contact = true;

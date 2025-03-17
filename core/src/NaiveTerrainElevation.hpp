@@ -57,6 +57,8 @@ class NaiveTerrainElevation {
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
 
+    float min_terrain_height_variance_{};
+    
     friend class TerrainElevationTest; // Allow full access
 };
 

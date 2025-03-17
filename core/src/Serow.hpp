@@ -193,12 +193,11 @@ class Serow {
         /// @brief rigid body transformation from optional exteroceptive (visual/lidar odometry) to
         /// base frame. Is not specified if no exteroceptive odometry is provided
         Eigen::Isometry3d T_base_to_odom{Eigen::Isometry3d::Identity()};
-        /// @brief whether or not the robot is walking on flat terrain, used to eliminate vertical
-        /// base drift
-        bool is_flat_terrain{};
-        /// @brief virtual flat terrain measurement uncertainty (m^2), only applies if
-        /// is_flat_terrain = true
-        double terrain_height_covariance{};
+        /// @brief whether or not to enable the terrain elevation estimation
+        bool enable_terrain_estimation{};
+        /// @brief minimum terrain measurement uncertainty (m^2), only applies if
+        /// enable_terrain_estimation = true
+        double minimum_terrain_height_variance{};
         bool is_contact_ekf{};
         Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
