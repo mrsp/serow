@@ -234,245 +234,44 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
         return false;
     }
 
-    // Update the center cell using Kalman filter
-    const int center_hash_id = locationToHashId(loc);
-    const float height_prev = elevation_[center_hash_id].height;
-    const float variance_prev = elevation_[center_hash_id].variance;
-
-    // Kalman update
-    const float kalman_gain = variance_prev / (variance_prev + variance);
-    ElevationCell new_elevation;
-    new_elevation.height = height_prev + kalman_gain * (height - height_prev);
-    new_elevation.variance = (1.0f - kalman_gain) * variance_prev;
-    elevation_[center_hash_id] = new_elevation;
-
-    // Pre-compute constants for the weight function
-    const float radius_squared = radius * radius;
-    const float weight_factor = -1.0f / (2.0f * radius_squared);
-
-    // Calculate the radius in grid cells (rounded up)
-    const int radius_cells = static_cast<int>(std::ceil(radius / resolution));
-
-    // Get the center cell's indices
+    variance += min_terrain_height_variance_;
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
+    const int center_hash_id = globalIndexToHashId(center_idx);
+    ElevationCell& cell = elevation_[center_hash_id];
+    cell.contact = true;
+    cell.updated = true;
+
+    // Kalman filter update for the target cell
+    const float prior_variance = cell.variance;
+    const float prior_height = cell.height;
+
+    // Ensure variances are positive to avoid division issues
+    const float effective_variance = std::max(variance, 1e-6f);
+    const float effective_prior_variance = std::max(prior_variance, 1e-6f);
+
+    // Compute Kalman gain
+    const float kalman_gain = 
+        effective_prior_variance / (effective_prior_variance + effective_variance);
+
+    // Update height and variance
+    cell.height = prior_height + kalman_gain * (height - prior_height);
+    cell.variance = (1.0f - kalman_gain) * effective_prior_variance;
     
-    std::cout << "Cell to be updated " << center_idx[0] << " " << center_idx[1] << " for loc " << loc[0] << " " << loc[1] << std::endl;
-    std::cout << "Height prev " << height_prev << " variance prev " << variance_prev << std::endl;
-    std::cout << "Height mes " << height << " variance mes " << variance << std::endl;
-    std::cout << "Height upd " << new_elevation.height << " variance upd " << new_elevation.variance << std::endl;
-    std::cout << "-------------------------------" << std::endl;
-
-    // Iterate only over the cells within the radius
-    for (int i = -radius_cells; i <= radius_cells; ++i) {
-        for (int j = -radius_cells; j <= radius_cells; ++j) {
-            // Skip the center cell (already updated)
-            if (i == 0 && j == 0) {
+    const int radius_cells = static_cast<int>(radius * resolution_inv) + 1;
+    // Process a square region centered on the robot
+    for (int di = -radius_cells; di <= radius_cells; ++di) {
+        for (int dj = -radius_cells; dj <= radius_cells; ++dj) {
+            if (di == 0 && dj == 0) {
                 continue;
             }
-
-            // Calculate squared distance in grid coordinates
-            const float dx = i * resolution;
-            const float dy = j * resolution;
-            const float dist_squared = dx * dx + dy * dy;
-
-            // Skip cells outside the circle
-            if (dist_squared > radius_squared) {
-                continue;
+            const std::array<int, 2> idx = {center_idx[0] + di, center_idx[1] + dj};
+            if (!inside(idx)) {
+                continue; 
             }
-
-            // Calculate global index and check if inside map
-            const std::array<int, 2> global_idx = {center_idx[0] + i, center_idx[1] + j};
-            if (!inside(global_idx)) {
-                continue;
-            }
-
-            // Calculate hash ID directly from global index (avoid extra conversions)
-            const int hash_id = globalIndexToHashId(global_idx);
-
-            // Calculate weight (avoid sqrt when possible)
-            const float weight = std::exp(dist_squared * weight_factor);
-
-            // Get the current cell values
-            float cell_height = elevation_[hash_id].height;
-            float cell_variance = elevation_[hash_id].variance;
-            
-            // Apply Kalman filter update to neighboring cells with diminishing influence
-            const float effective_variance = new_elevation.variance / weight;
-            const float neighbor_kalman_gain = cell_variance / (cell_variance + effective_variance);
-            
-            // Update the neighboring cell
-            elevation_[hash_id].height = cell_height + 
-                neighbor_kalman_gain * weight * (new_elevation.height - cell_height);
-            elevation_[hash_id].variance = (1.0f - neighbor_kalman_gain * weight) * cell_variance;
-            // const auto neigbor_loc = globalIndexToLocation(global_idx);
-            // std::cout << "Neighbor Cell to be updated " << global_idx[0] << " " << global_idx[1] << " for loc " << neigbor_loc[0] << " " << neigbor_loc[1] << std::endl;
-            // std::cout << "Neighbor Height upd " <<  elevation_[hash_id].height << " variance upd " <<elevation_[hash_id].variance << std::endl;
-            // std::cout << "-------------------------------" << std::endl;
+            elevation_[globalIndexToHashId(idx)] = cell;
         }
     }
 
-    return true;
-}
-
-bool TerrainElevation::interpolate(const std::vector<std::array<float, 2>>& locs) {
-    if (locs.size() < 2) {
-        return false;
-    }
-    
-    // Step 1: Determine the bounding box of locations
-    float min_x = std::numeric_limits<float>::max();
-    float min_y = std::numeric_limits<float>::max();
-    float max_x = std::numeric_limits<float>::lowest();
-    float max_y = std::numeric_limits<float>::lowest();
-    
-    // Store hash IDs and check if all points are inside the map
-    std::unordered_set<int> known_hash_ids;
-    known_hash_ids.reserve(locs.size());
-    
-    for (const auto& loc : locs) {
-        if (!inside(loc)) {
-            return false;
-        }
-        
-        min_x = std::min(min_x, loc[0]);
-        min_y = std::min(min_y, loc[1]);
-        max_x = std::max(max_x, loc[0]);
-        max_y = std::max(max_y, loc[1]);
-        
-        known_hash_ids.insert(locationToHashId(loc));
-    }
-    
-    // Step 2: Add a buffer around the bounding box
-    float buffer = radius * 2.0f; // Buffer distance beyond the points
-    min_x -= buffer;
-    min_y -= buffer;
-    max_x += buffer;
-    max_y += buffer;
-    
-    // Step 3: Convert bounds to grid indices
-    std::array<int, 2> min_idx = locationToGlobalIndex({min_x, min_y});
-    std::array<int, 2> max_idx = locationToGlobalIndex({max_x, max_y});
-    
-    // Ensure we stay within the map bounds
-    min_idx[0] = std::max(0, min_idx[0]);
-    min_idx[1] = std::max(0, min_idx[1]);
-    max_idx[0] = std::min(map_dim - 1, max_idx[0]);
-    max_idx[1] = std::min(map_dim - 1, max_idx[1]);
-    
-    // Step 4: Create a KNN-like approach for interpolation
-    const int k_nearest = std::min(5, static_cast<int>(locs.size())); // Use at most 5 nearest neighbors
-    
-    // Pre-compute location data structure for quicker lookup
-    struct LocationData {
-        std::array<float, 2> loc;
-        int hash_id;
-        float height;
-        float variance;
-    };
-    std::vector<LocationData> location_data;
-    location_data.reserve(locs.size());
-    
-    for (const auto& loc : locs) {
-        int hash_id = locationToHashId(loc);
-        location_data.push_back({
-            loc,
-            hash_id,
-            elevation_[hash_id].height,
-            elevation_[hash_id].variance
-        });
-    }
-    
-    // Step 5: Iterate through cells in the bounded region
-    for (int i = min_idx[0]; i <= max_idx[0]; ++i) {
-        for (int j = min_idx[1]; j <= max_idx[1]; ++j) {
-            const std::array<int, 2> curr_idx = {i, j};
-            const int curr_hash_id = globalIndexToHashId(curr_idx);
-            
-            // Skip if this is one of our known points
-            if (known_hash_ids.count(curr_hash_id) > 0) {
-                continue;
-            }
-            
-            // Get the current cell's location
-            const std::array<float, 2> curr_loc = globalIndexToLocation(curr_idx);
-            
-            // Find k nearest neighbors
-            std::vector<std::pair<float, size_t>> distances; // (distance, index in location_data)
-            distances.reserve(location_data.size());
-            
-            for (size_t k = 0; k < location_data.size(); ++k) {
-                const auto& loc_data = location_data[k];
-                const float dx = curr_loc[0] - loc_data.loc[0];
-                const float dy = curr_loc[1] - loc_data.loc[1];
-                const float dist_sq = dx * dx + dy * dy;
-                
-                distances.push_back({dist_sq, k});
-            }
-            
-            // Sort by distance (partial sort is faster for large datasets)
-            std::partial_sort(distances.begin(), 
-                             distances.begin() + std::min(k_nearest, static_cast<int>(distances.size())), 
-                             distances.end());
-            
-            // Get only the k nearest
-            distances.resize(std::min(k_nearest, static_cast<int>(distances.size())));
-            
-            // Check if we have an exact match (or very close)
-            if (!distances.empty() && distances[0].first < 1e-6f) {
-                // Use the exact value
-                const auto& loc_data = location_data[distances[0].second];
-                elevation_[curr_hash_id].height = loc_data.height;
-                elevation_[curr_hash_id].variance = loc_data.variance;
-                continue;
-            }
-            
-            // Calculate inverse distance weighted interpolation
-            float sum_weights = 0.0f;
-            float weighted_sum_heights = 0.0f;
-            float sum_squared_weights = 0.0f;
-            float weight_variance_product = 0.0f;
-            
-            // Use inverse distance squared weighting, but with minimum distance to avoid division by zero
-            const float min_dist_sq = 1e-6f;
-            
-            for (const auto& [dist_sq, idx] : distances) {
-                // Apply minimum distance to avoid division by zero or extreme weights
-                const float clamped_dist_sq = std::max(dist_sq, min_dist_sq);
-                
-                // Calculate weight - with an added falloff term to improve smoothness
-                const float weight = std::exp(-clamped_dist_sq / (2.0f * radius * radius));
-                
-                const auto& loc_data = location_data[idx];
-                
-                sum_weights += weight;
-                weighted_sum_heights += weight * loc_data.height;
-                
-                // For variance propagation
-                sum_squared_weights += weight * weight;
-                weight_variance_product += weight * weight * loc_data.variance;
-            }
-            
-            // Avoid division by zero
-            if (sum_weights > 0.0f) {
-                // Normalize weighted height
-                float interpolated_height = weighted_sum_heights / sum_weights;
-                
-                // Propagate variance - more accurate than simple weighted average
-                float interpolated_variance = weight_variance_product / (sum_squared_weights);
-                
-                // Add distance-based uncertainty component
-                // The further from known points, the higher the variance
-                float min_dist = std::sqrt(distances[0].first);
-                float distance_uncertainty = min_dist * 0.1f; // 10% of distance as uncertainty
-                interpolated_variance += distance_uncertainty * distance_uncertainty;
-                
-                // Update the cell
-                elevation_[curr_hash_id].height = interpolated_height;
-                elevation_[curr_hash_id].variance = interpolated_variance;
-            }
-        }
-    }
-    
     return true;
 }
 

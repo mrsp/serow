@@ -114,8 +114,6 @@ class TerrainElevation {
 
     bool update(const std::array<float, 2>& loc, float height, float variance);
 
-    bool interpolate(const std::vector<std::array<float, 2>>& locs);
-
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
     
     const std::array<float, 2>& getMapOrigin() const;
@@ -131,6 +129,8 @@ class TerrainElevation {
     std::array<float, 2> local_map_origin_d_{0.0, 0.0};
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
+
+    float min_terrain_height_variance_{};
 
     friend class TerrainElevationTest; // Allow full access
 };
