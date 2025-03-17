@@ -280,7 +280,7 @@ int main() {
             }
 
             if (timestamp - log_timestamp > 0.5){
-                saveElevationMap(terrainEstimator->elevation_,timestamp);
+                // saveElevationMap(terrainEstimator->elevation_,timestamp);
                 log_timestamp = timestamp;
             }
 

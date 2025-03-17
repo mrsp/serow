@@ -250,7 +250,7 @@ BaseState ContactEKF::updateWithContacts(
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov,
-    std::shared_ptr<NaiveTerrainElevation> terrain_estimator) {
+    std::shared_ptr<TerrainElevation> terrain_estimator) {
     BaseState updated_state = state;
 
     // Compute the relative contacts position/orientation measurement noise
@@ -417,7 +417,7 @@ BaseState ContactEKF::updateWithOdometry(const BaseState& state,
 
 BaseState ContactEKF::updateWithTerrain(const BaseState& state,
                                         const std::map<std::string, bool>& contacts_status,
-                                        const NaiveTerrainElevation& terrain_estimator) {
+                                        const TerrainElevation& terrain_estimator) {
     BaseState updated_state = state;
     // Construct the innovation vector z, the linearized measurement matrix H, and the measurement
     // noise matrix R
@@ -536,7 +536,7 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
 // TODO: @sp Maybe consider passing the state by reference instead of having to copy
 BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom,
-                             std::shared_ptr<NaiveTerrainElevation> terrain_estimator) {
+                             std::shared_ptr<TerrainElevation> terrain_estimator) {
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
         std::vector<std::array<float, 2>> con_locs;
@@ -585,14 +585,14 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
         updated_state = updateWithTerrain(updated_state, kin.contacts_status, *terrain_estimator);
         // TODO: @sp make this a const parameter
         // Recenter the map
-        // const std::array<float, 2> base_pos_xy = {
-        //     static_cast<float>(updated_state.base_position.x()),
-        //     static_cast<float>(updated_state.base_position.y())};
-        // const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
-        // if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 0.5) ||
-        //     (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.5)) {
-        //     terrain_estimator->recenter(base_pos_xy);
-        // }
+        const std::array<float, 2> base_pos_xy = {
+            static_cast<float>(updated_state.base_position.x()),
+            static_cast<float>(updated_state.base_position.y())};
+        const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
+        if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 1.5) ||
+            (abs(base_pos_xy[1] - map_origin_xy[1]) > 1.5)) {
+            terrain_estimator->recenter(base_pos_xy);
+        }
     }
 
     return updated_state;
