@@ -1,7 +1,7 @@
 #include "TerrainElevation.hpp"
-#include <algorithm>  
-#include <unordered_set>
 
+#include <algorithm>
+#include <unordered_set>
 
 namespace serow {
 
@@ -250,13 +250,13 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
     const float effective_prior_variance = std::max(prior_variance, 1e-6f);
 
     // Compute Kalman gain
-    const float kalman_gain = 
+    const float kalman_gain =
         effective_prior_variance / (effective_prior_variance + effective_variance);
 
     // Update height and variance
     cell.height = prior_height + kalman_gain * (height - prior_height);
     cell.variance = (1.0f - kalman_gain) * effective_prior_variance;
-    
+
     const int radius_cells = static_cast<int>(radius * resolution_inv) + 1;
     // Process a square region centered on the robot
     for (int di = -radius_cells; di <= radius_cells; ++di) {
@@ -266,7 +266,7 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
             }
             const std::array<int, 2> idx = {center_idx[0] + di, center_idx[1] + dj};
             if (!inside(idx)) {
-                continue; 
+                continue;
             }
             elevation_[globalIndexToHashId(idx)] = cell;
         }
@@ -283,9 +283,6 @@ std::optional<ElevationCell> TerrainElevation::getElevation(const std::array<flo
     return elevation_[hash_id];
 }
 
-const std::array<float, 2>& TerrainElevation::getMapOrigin() const {
-    return local_map_origin_d_;
-}
-
+const std::array<float, 2>& TerrainElevation::getMapOrigin() const { return local_map_origin_d_; }
 
 }  // namespace serow

@@ -141,7 +141,7 @@ BaseState ContactEKF::predict(const BaseState& state, const ImuMeasurement& imu,
         dt = imu.timestamp - last_imu_timestamp_.value();
     }
     if (dt < nominal_dt_ / 2) {
-        std::cout << "[SEROW/BaseEKF]: Predict step sample time is abnormal " << dt
+        std::cout << "[SEROW/ContactEKF]: Predict step sample time is abnormal " << dt
                   << " while the nominal sample time is " << nominal_dt_ << " setting to nominal"
                   << std::endl;
         dt = nominal_dt_;
@@ -257,7 +257,7 @@ BaseState ContactEKF::updateWithContacts(
     for (const auto& [cf, cp] : contacts_status) {
         const int cs = cp ? 1 : 0;
 
-        // If the terrain estimator is in the loop reduce the effect that kinematics has in the 
+        // If the terrain estimator is in the loop reduce the effect that kinematics has in the
         // contact height update
         if (terrain_estimator) {
             const Eigen::Matrix3d& R = state.base_orientation.toRotationMatrix();
@@ -286,66 +286,66 @@ BaseState ContactEKF::updateWithContacts(
         const int num_iter = 5;
         Eigen::MatrixXd H;
         Eigen::MatrixXd K;
+        Eigen::Vector3d z;
+        // Iterative ESKF update
         for (size_t iter = 0; iter < num_iter; iter++) {
             H.setZero(3, num_states_);
             const Eigen::Vector3d x =
                 updated_state.base_orientation.toRotationMatrix().transpose() *
                 (updated_state.contacts_position.at(cf) - updated_state.base_position);
-            const Eigen::Vector3d z = cp - x;
+            z = cp - x;
             H.block(0, p_idx_[0], 3, 3) =
                 -updated_state.base_orientation.toRotationMatrix().transpose();
             H.block(0, pl_idx_.at(cf)[0], 3, 3) =
                 updated_state.base_orientation.toRotationMatrix().transpose();
             H.block(0, r_idx_[0], 3, 3) = lie::so3::wedge(x);
 
-            if (outlier_detection_) {
-                // RESKF update
-                contact_outlier_detector.init();
-                Eigen::MatrixXd P_i = P_;
-                BaseState updated_state_i = updated_state;
-                for (size_t i = 0; i < contact_outlier_detector.iters; i++) {
-                    if (contact_outlier_detector.zeta > contact_outlier_detector.threshold) {
-                        const Eigen::Matrix3d R_z =
-                            contacts_position_noise.at(cf) / contact_outlier_detector.zeta;
-                        const Eigen::Matrix3d s = R_z + H * P_ * H.transpose();
-                        K = P_ * H.transpose() * s.inverse();
-                        const Eigen::VectorXd dx = K * z;
-                        P_i = (I_ - K * H) * P_;
-                        updated_state_i = updateStateCopy(updated_state, dx, P_);
-
-                        // Outlier detection with the relative contact position measurement vector
-                        const Eigen::Vector3d x_i =
-                            updated_state_i.base_orientation.toRotationMatrix().transpose() *
-                            (updated_state_i.contacts_position.at(cf) -
-                             updated_state_i.base_position);
-                        Eigen::Matrix3d BetaT = cp * cp.transpose();
-                        BetaT.noalias() -= 2.0 * cp * x_i.transpose();
-                        BetaT.noalias() += x_i * x_i.transpose();
-                        BetaT.noalias() += H * P_i * H.transpose();
-                        contact_outlier_detector.estimate(BetaT, contacts_position_noise.at(cf));
-                    } else {
-                        // Measurement is an outlier
-                        updated_state_i = updated_state;
-                        P_i = P_;
-                        break;
-                    }
-                }
-                P_ = std::move(P_i);
-                updated_state = std::move(updated_state_i);
-            } else {
-                // Normal ESKF update
-                const Eigen::Matrix3d s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
-                K = P_ * H.transpose() * s.inverse();
-                const Eigen::VectorXd dx = K * z;
-                updateState(updated_state, dx, P_);
-                if (dx.norm() < 1e-6) {
-                    break;
-                }
+            // Normal ESKF update
+            const Eigen::Matrix3d s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
+            K = P_ * H.transpose() * s.inverse();
+            const Eigen::VectorXd dx = K * z;
+            updateState(updated_state, dx, P_);
+            if (dx.norm() < 1e-5) {
+                break;
             }
         }
+
         // TODO: @sp fix this
         if (!outlier_detection_) {
             P_ = (I_ - K * H) * P_;
+        } else {
+            // RESKF update
+            contact_outlier_detector.init();
+            Eigen::MatrixXd P_i = P_;
+            BaseState updated_state_i = updated_state;
+            for (size_t i = 0; i < contact_outlier_detector.iters; i++) {
+                if (contact_outlier_detector.zeta > contact_outlier_detector.threshold) {
+                    const Eigen::Matrix3d R_z =
+                        contacts_position_noise.at(cf) / contact_outlier_detector.zeta;
+                    const Eigen::Matrix3d s = R_z + H * P_ * H.transpose();
+                    K = P_ * H.transpose() * s.inverse();
+                    const Eigen::VectorXd dx = K * z;
+                    P_i = (I_ - K * H) * P_;
+                    updated_state_i = updateStateCopy(updated_state, dx, P_);
+
+                    // Outlier detection with the relative contact position measurement vector
+                    const Eigen::Vector3d x_i =
+                        updated_state_i.base_orientation.toRotationMatrix().transpose() *
+                        (updated_state_i.contacts_position.at(cf) - updated_state_i.base_position);
+                    Eigen::Matrix3d BetaT = cp * cp.transpose();
+                    BetaT.noalias() -= 2.0 * cp * x_i.transpose();
+                    BetaT.noalias() += x_i * x_i.transpose();
+                    BetaT.noalias() += H * P_i * H.transpose();
+                    contact_outlier_detector.estimate(BetaT, contacts_position_noise.at(cf));
+                } else {
+                    // Measurement is an outlier
+                    updated_state_i = updated_state;
+                    P_i = P_;
+                    break;
+                }
+            }
+            P_ = std::move(P_i);
+            updated_state = std::move(updated_state_i);
         }
     }
 
@@ -357,7 +357,7 @@ BaseState ContactEKF::updateWithContacts(
                 state.contacts_orientation.value().at(cf).toRotationMatrix().transpose() *
                 state.base_orientation.toRotationMatrix());
             const Eigen::Vector3d z = lie::so3::minus(co, x);
-            
+
             // Construct the linearized measurement matrix H
             Eigen::MatrixXd H;
             H.setZero(3, num_states_);
@@ -442,14 +442,14 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
                           << " " << updated_state.contacts_position.at(cf).x()
                           << " is: " << elevation.value().height
                           << " with variance: " << elevation.value().variance << std::endl;
-                
+
                 // Compute innovation
                 z(0) = static_cast<double>(elevation.value().height) -
                        updated_state.contacts_position.at(cf).z();
-                
+
                 // Construct the measurement noise matrix R
                 R(0, 0) = static_cast<double>(elevation.value().variance);
-                
+
                 const Eigen::MatrixXd s = R + H * P_ * H.transpose();
                 const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
                 const Eigen::VectorXd dx = K * z;

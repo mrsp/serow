@@ -60,9 +60,10 @@ class Serow {
     /// valid estimate
     /// @return SEROW's internal state if available
     std::optional<State> getState(bool allow_invalid = false);
-    
+
     /// @brief Returns the terrain_estimator_ object
     const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
+
    private:
     struct Params {
         /// @brief total mass of the robot (kg)

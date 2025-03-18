@@ -1,21 +1,19 @@
 #pragma once
 
-#include "TerrainElevation.hpp"
 #include <array>
 #include <cmath>
 #include <iostream>
-#include <vector>
 #include <optional>
+#include <vector>
 
+#include "TerrainElevation.hpp"
 
 namespace serow {
 
-
 class NaiveTerrainElevation {
    public:
-
     void printMapInformation() const;
-    
+
     bool inside(const std::array<int, 2>& id_g) const;
 
     bool inside(const std::array<float, 2>& location) const;
@@ -38,15 +36,15 @@ class NaiveTerrainElevation {
     bool update(const std::array<float, 2>& loc, float height, float variance);
 
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
-    
+
     const std::array<float, 2>& getMapOrigin() const;
 
     ElevationCell elevation_[map_dim][map_dim];
     std::vector<int64_t> contact_cells;
-    
+
     ElevationCell default_elevation_;
     ElevationCell empty_elevation_{0.0, 1e4};
-    
+
     std::array<int, 2> local_map_origin_i_{0, 0};
     std::array<int, 2> local_map_bound_max_i_{};
     std::array<int, 2> local_map_bound_min_i_{};
@@ -56,8 +54,7 @@ class NaiveTerrainElevation {
 
     float min_terrain_height_variance_{};
 
-    friend class TerrainElevationTest; // Allow full access
+    friend class TerrainElevationTest;  // Allow full access
 };
-
 
 }  // namespace serow

@@ -885,7 +885,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         if (i > 0) {
             terrain_height /= i;
         }
-        
+
         // Initialize the terrain elevation mapper
         std::cout << "Init height " << terrain_height << std::endl;
         terrain_estimator_ = std::make_shared<TerrainElevation>();
@@ -893,7 +893,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         terrain_estimator_->printMapInformation();
         terrain_estimator_->min_terrain_height_variance_ = params_.minimum_terrain_height_variance;
     }
-
 
     if (!state.isPointFeet()) {
         kin.contacts_orientation = leg_odometry_->getContactOrientations();
@@ -937,7 +936,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     state.base_state_.timestamp = kin.timestamp;
 
     if (params_.is_contact_ekf) {
-        state.base_state_ = base_estimator_con_.update(state.base_state_, kin, odom, terrain_estimator_);
+        state.base_state_ =
+            base_estimator_con_.update(state.base_state_, kin, odom, terrain_estimator_);
     } else {
         state.base_state_ = base_estimator_.update(state.base_state_, kin, odom);
 
@@ -1066,6 +1066,5 @@ std::optional<State> Serow::getState(bool allow_invalid) {
 const std::shared_ptr<TerrainElevation>& Serow::getTerrainEstimator() const {
     return terrain_estimator_;
 }
-
 
 }  // namespace serow

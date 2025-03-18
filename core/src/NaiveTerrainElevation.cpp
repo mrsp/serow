@@ -5,7 +5,6 @@
 
 namespace serow {
 
-
 void NaiveTerrainElevation::printMapInformation() const {
     const std::string GREEN = "\033[1;32m";
     const std::string WHITE = "\033[1;37m";
@@ -92,12 +91,13 @@ bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height
     const float effective_prior_variance = std::max(prior_variance, 1e-6f);
 
     // Compute Kalman gain
-    const float kalman_gain = effective_prior_variance / (effective_prior_variance + effective_variance);
+    const float kalman_gain =
+        effective_prior_variance / (effective_prior_variance + effective_variance);
 
     // Update height and variance
     cell.height = prior_height + kalman_gain * (height - prior_height);
     cell.variance = (1.0f - kalman_gain) * effective_prior_variance;
-    
+
     const int radius_cells = static_cast<int>(radius * resolution_inv) + 1;
     // Process a square region centered on the robot
     for (int di = -radius_cells; di <= radius_cells; ++di) {
@@ -107,7 +107,7 @@ bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height
             }
             const std::array<int, 2> idx = {center_idx[0] + di, center_idx[1] + dj};
             if (!inside(idx)) {
-                continue; 
+                continue;
             }
             elevation_[idx[0]][idx[1]] = cell;
         }
