@@ -234,7 +234,7 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
         return false;
     }
 
-    variance += min_terrain_height_variance_;
+    variance = std::max(variance, min_terrain_height_variance_);
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
     const int center_hash_id = globalIndexToHashId(center_idx);
     ElevationCell& cell = elevation_[center_hash_id];
@@ -257,7 +257,6 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
     cell.height = prior_height + kalman_gain * (height - prior_height);
     cell.variance = (1.0f - kalman_gain) * effective_prior_variance;
 
-    const int radius_cells = static_cast<int>(radius * resolution_inv) + 1;
     // Process a square region centered on the robot
     for (int di = -radius_cells; di <= radius_cells; ++di) {
         for (int dj = -radius_cells; dj <= radius_cells; ++dj) {
