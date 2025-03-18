@@ -167,7 +167,7 @@ bool Serow::initialize(const std::string& config_file) {
                 if (!config["R_foot_to_torque"].is_null()) {
                     if (!config["R_foot_to_torque"][std::to_string(k)][3 * i + j]
                              .is_number_float()) {
-                        std::cerr
+                        std::cerr << RED_COLOR
                             << "Configuration: R_foot_to_torque must be an array of floats \n" << RESET_COLOR;
                         return false;
                     }
@@ -275,7 +275,7 @@ bool Serow::initialize(const std::string& config_file) {
 
     if (!config["imu_angular_velocity_covariance"].is_array() ||
         config["imu_angular_velocity_covariance"].size() != 3) {
-        std::cerr
+        std::cerr << RED_COLOR
             << "Configuration: imu_angular_velocity_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
@@ -309,7 +309,7 @@ bool Serow::initialize(const std::string& config_file) {
 
     if (!config["base_linear_velocity_covariance"].is_array() ||
         config["base_linear_velocity_covariance"].size() != 3) {
-        std::cerr
+        std::cerr << RED_COLOR
             << "Configuration: base_linear_velocity_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
@@ -329,14 +329,14 @@ bool Serow::initialize(const std::string& config_file) {
     if (!config["contact_orientation_covariance"].is_null() &&
         (!config["contact_orientation_covariance"].is_array() ||
          config["contact_orientation_covariance"].size() != 3)) {
-        std::cerr
+        std::cerr << RED_COLOR
             << "Configuration: contact_orientation_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["com_position_process_covariance"].is_array() ||
         config["com_position_process_covariance"].size() != 3) {
-        std::cerr
+        std::cerr << RED_COLOR
             << "Configuration: com_position_process_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
@@ -350,7 +350,7 @@ bool Serow::initialize(const std::string& config_file) {
 
     if (!config["initial_base_position_covariance"].is_array() ||
         config["initial_base_position_covariance"].size() != 3) {
-        std::cerr
+        std::cerr << RED_COLOR
             << "Configuration: initial_base_position_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
@@ -400,7 +400,7 @@ bool Serow::initialize(const std::string& config_file) {
 
     if (!config["initial_com_position_covariance"].is_array() ||
         config["initial_com_position_covariance"].size() != 3) {
-        std::cerr
+        std::cerr << RED_COLOR
             << "Configuration: initial_com_position_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
