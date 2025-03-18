@@ -237,6 +237,11 @@ class Serow {
     size_t imu_calibration_cycles_{};
     /// @brief Terrain elevation mapper
     std::shared_ptr<TerrainElevation> terrain_estimator_;
+    
+    
+    /// @brief Print color settings    
+    inline static constexpr const char* RED_COLOR    = "\033[31m";
+    inline static constexpr const char* RESET_COLOR  = "\033[0m";
 };
 
 }  // namespace serow

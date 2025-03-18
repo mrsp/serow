@@ -40,21 +40,21 @@ bool Serow::initialize(const std::string& config_file) {
     // Initialize the state
     std::set<std::string> contacts_frame;
     if (!config["foot_frames"].is_object()) {
-        std::cerr<< "033[31mConfiguration: foot_frames must be an object \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: foot_frames must be an object \n" << RESET_COLOR;
         return false;
     }
     for (size_t i = 0; i < config["foot_frames"].size(); i++) {
         if (config["foot_frames"][std::to_string(i)].is_string()) {
             contacts_frame.insert({config["foot_frames"][std::to_string(i)]});
         } else {
-            std::cerr<< "033[31mConfiguration: foot_frames[" << std::to_string(i)
-                      << "] must be a string \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: foot_frames[" << std::to_string(i)
+                      << "] must be a string \n" << RESET_COLOR;
             return false;
         }
     }
 
     if (!config["point_feet"].is_boolean()) {
-        std::cerr<< "033[31mConfiguration: point_feet must be boolean \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: point_feet must be boolean \n" << RESET_COLOR;
 
         return false;
     }
@@ -63,14 +63,14 @@ bool Serow::initialize(const std::string& config_file) {
 
     // Initialize the attitude estimator
     if (!config["imu_rate"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: imu_rate must be float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: imu_rate must be float \n" << RESET_COLOR;
         return false;
     }
     params_.imu_rate = config["imu_rate"];
 
     if (!config["attitude_estimator_proportional_gain"].is_number_float() ||
         !config["attitude_estimator_integral_gain"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: attitude_estimator parameters must be float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: attitude_estimator parameters must be float \n" << RESET_COLOR;
         return false;
     }
 
@@ -80,86 +80,86 @@ bool Serow::initialize(const std::string& config_file) {
 
     // Initialize the kinematic estimator
     if (!config["model_path"].is_string()) {
-        std::cerr<< "033[31mConfiguration: model_path must be string \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: model_path must be string \n" << RESET_COLOR;
         return false;
     }
     kinematic_estimator_ = std::make_unique<RobotKinematics>(findFilepath(config["model_path"]));
 
     if (!config["calibrate_initial_imu_bias"].is_boolean()) {
-        std::cerr<< "033[31mConfiguration: calibrate_initial_imu_bias must be boolean \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: calibrate_initial_imu_bias must be boolean \n" << RESET_COLOR;
         return false;
     }
     params_.calibrate_initial_imu_bias = config["calibrate_initial_imu_bias"];
     if (!params_.calibrate_initial_imu_bias) {
         if (!config["bias_acc"].is_array() || config["bias_acc"].size() != 3) {
-            std::cerr<< "033[31mConfiguration: bias_acc must be an array of 3 elements \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: bias_acc must be an array of 3 elements \n" << RESET_COLOR;
             return false;
         }
         if (!config["bias_acc"][0].is_number_float() || !config["bias_acc"][1].is_number_float() ||
             !config["bias_acc"][2].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: bias_acc must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: bias_acc must be float \n" << RESET_COLOR;
             return false;
         }
         if (!config["bias_gyro"].is_array() || config["bias_gyro"].size() != 3) {
-            std::cerr<< "033[31mConfiguration: bias_gyro must be an array of 3 elements \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: bias_gyro must be an array of 3 elements \n" << RESET_COLOR;
             return false;
         }
         if (!config["bias_gyro"][0].is_number_float() ||
             !config["bias_gyro"][1].is_number_float() ||
             !config["bias_gyro"][2].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: bias_gyro must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: bias_gyro must be float \n" << RESET_COLOR;
             return false;
         }
         params_.bias_acc << config["bias_acc"][0], config["bias_acc"][1], config["bias_acc"][2];
         params_.bias_gyro << config["bias_gyro"][0], config["bias_gyro"][1], config["bias_gyro"][2];
     } else {
         if (!config["max_imu_calibration_cycles"].is_number_unsigned()) {
-            std::cerr<< "033[31mConfiguration: max_imu_calibration_cycles must be integer \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: max_imu_calibration_cycles must be integer \n" << RESET_COLOR;
             return false;
         }
         params_.max_imu_calibration_cycles = config["max_imu_calibration_cycles"];
     }
 
     if (!config["gyro_cutoff_frequency"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: gyro_cutoff_frequency must be float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: gyro_cutoff_frequency must be float \n" << RESET_COLOR;
         return false;
     }
     params_.gyro_cutoff_frequency = config["gyro_cutoff_frequency"];
 
     if (!config["force_torque_rate"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: force_torque_rate must be float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: force_torque_rate must be float \n" << RESET_COLOR;
         return false;
     }
     params_.force_torque_rate = config["force_torque_rate"];
 
     if (!config["R_base_to_gyro"].is_array() || config["R_base_to_gyro"].size() != 9) {
-        std::cerr<< "033[31mConfiguration: R_base_to_gyro must be an array of 9 elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: R_base_to_gyro must be an array of 9 elements \n" << RESET_COLOR;
         return false;
     }
     if (!config["R_foot_to_force"].is_object()) {
-        std::cerr<< "033[31mConfiguration: R_foot_to_force must be an object \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: R_foot_to_force must be an object \n" << RESET_COLOR;
         return false;
     }
     if (!config["R_foot_to_torque"].is_null() && !config["R_foot_to_torque"].is_object()) {
-        std::cerr<< "033[31mConfiguration: R_foot_to_torque must be an object \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: R_foot_to_torque must be an object \n" << RESET_COLOR;
         return false;
     }
     for (size_t i = 0; i < 3; i++) {
         for (size_t j = 0; j < 3; j++) {
             if (!config["R_base_to_gyro"][3 * i + j].is_number_float()) {
-                std::cerr<< "033[31mConfiguration: R_base_to_gyro[" << 3 * i + j << "] must be float \033[0m \n";
+                std::cerr << RED_COLOR <<"Configuration: R_base_to_gyro[" << 3 * i + j << "] must be float \n" << RESET_COLOR;
                 return false;
             }
             params_.R_base_to_gyro(i, j) = config["R_base_to_gyro"][3 * i + j];
             if (!config["R_base_to_acc"][3 * i + j].is_number_float()) {
-                std::cerr<< "033[31mConfiguration: R_base_to_acc[" << 3 * i + j << "] must be float \033[0m \n";
+                std::cerr << RED_COLOR <<"Configuration: R_base_to_acc[" << 3 * i + j << "] must be float \n" << RESET_COLOR;
                 return false;
             }
             params_.R_base_to_acc(i, j) = config["R_base_to_acc"][3 * i + j];
             size_t k = 0;
             for (const auto& frame : state_.getContactsFrame()) {
                 if (!config["R_foot_to_force"][std::to_string(k)][3 * i + j].is_number_float()) {
-                    std::cerr<< "033[31mConfiguration: R_foot_to_force must be an array of floats \033[0m \n";
+                    std::cerr << RED_COLOR <<"Configuration: R_foot_to_force must be an array of floats \n" << RESET_COLOR;
                     return false;
                 }
                 params_.R_foot_to_force[frame](i, j) =
@@ -168,7 +168,7 @@ bool Serow::initialize(const std::string& config_file) {
                     if (!config["R_foot_to_torque"][std::to_string(k)][3 * i + j]
                              .is_number_float()) {
                         std::cerr
-                            << "Configuration: R_foot_to_torque must be an array of floats \033[0m \n";
+                            << "Configuration: R_foot_to_torque must be an array of floats \n" << RESET_COLOR;
                         return false;
                     }
                     params_.R_foot_to_torque[frame](i, j) =
@@ -181,94 +181,94 @@ bool Serow::initialize(const std::string& config_file) {
 
     // Joint parameters
     if (!config["joint_rate"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: joint_rate must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: joint_rate must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.joint_rate = config["joint_rate"];
 
     if (!config["estimate_joint_velocity"].is_boolean()) {
-        std::cerr<< "033[31mConfiguration: estimate_joint_velocity must be a boolean \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: estimate_joint_velocity must be a boolean \n" << RESET_COLOR;
         return false;
     }
     params_.estimate_joint_velocity = config["estimate_joint_velocity"];
 
     if (!config["joint_cutoff_frequency"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: joint_cutoff_frequency must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: joint_cutoff_frequency must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.joint_cutoff_frequency = config["joint_cutoff_frequency"];
 
     if (!config["joint_position_variance"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: joint_position_variance must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: joint_position_variance must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.joint_position_variance = config["joint_position_variance"];
 
     if (!config["angular_momentum_cutoff_frequency"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: angular_momentum_cutoff_frequency must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: angular_momentum_cutoff_frequency must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.angular_momentum_cutoff_frequency = config["angular_momentum_cutoff_frequency"];
 
     // Leg odometry perameters
     if (!config["mass"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: mass must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: mass must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.mass = config["mass"];
 
     if (!config["g"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: g must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: g must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.g = config["g"];
 
     if (!config["tau_0"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: tau_0 must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: tau_0 must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.tau_0 = config["tau_0"];
 
     if (!config["tau_1"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: tau_1 must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: tau_1 must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.tau_1 = config["tau_1"];
 
     // Contact estimation parameters
     if (!config["estimate_contact_status"].is_boolean()) {
-        std::cerr<< "033[31mConfiguration: estimate_contact_status must be a boolean \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: estimate_contact_status must be a boolean \n" << RESET_COLOR;
         return false;
     }
     params_.estimate_contact_status = config["estimate_contact_status"];
 
     if (!config["high_threshold"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: high_threshold must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: high_threshold must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.high_threshold = config["high_threshold"];
 
     if (!config["low_threshold"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: low_threshold must be a float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: low_threshold must be a float \n" << RESET_COLOR;
         return false;
     }
     params_.low_threshold = config["low_threshold"];
 
     if (!config["median_window"].is_number_unsigned()) {
-        std::cerr<< "033[31mConfiguration: median_window must be an integer \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: median_window must be an integer \n" << RESET_COLOR;
         return false;
     }
     params_.median_window = config["median_window"];
 
     if (!config["outlier_detection"].is_boolean()) {
-        std::cerr<< "033[31mConfiguration: outlier_detection must be a boolean \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: outlier_detection must be a boolean \n" << RESET_COLOR;
         return false;
     }
     params_.outlier_detection = config["outlier_detection"];
 
     // Base/CoM estimation parameters
     if (!config["convergence_cycles"].is_number_unsigned()) {
-        std::cerr<< "033[31mConfiguration: convergence_cycles must be an integer \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: convergence_cycles must be an integer \n" << RESET_COLOR;
         return false;
     }
     params_.convergence_cycles = config["convergence_cycles"];
@@ -276,33 +276,33 @@ bool Serow::initialize(const std::string& config_file) {
     if (!config["imu_angular_velocity_covariance"].is_array() ||
         config["imu_angular_velocity_covariance"].size() != 3) {
         std::cerr
-            << "Configuration: imu_angular_velocity_covariance must be an array of 3 elements \033[0m \n";
+            << "Configuration: imu_angular_velocity_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["imu_angular_velocity_bias_covariance"].is_array() ||
         config["imu_angular_velocity_bias_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: imu_angular_velocity_bias_covariance must be an array of 3 "
-                     "elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: imu_angular_velocity_bias_covariance must be an array of 3 "
+                     "elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["imu_linear_acceleration_covariance"].is_array() ||
         config["imu_linear_acceleration_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: imu_linear_acceleration_covariance must be an array of 3 "
-                     "elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: imu_linear_acceleration_covariance must be an array of 3 "
+                     "elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["imu_linear_acceleration_bias_covariance"].is_array() ||
         config["imu_linear_acceleration_bias_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: imu_linear_acceleration_bias_covariance must be an array of 3 "
-                     "elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: imu_linear_acceleration_bias_covariance must be an array of 3 "
+                     "elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["use_contacts_in_base_estimation"].is_boolean()) {
-        std::cerr<< "033[31mConfiguration: use_contacts_in_base_estimation must be boolean \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: use_contacts_in_base_estimation must be boolean \n" << RESET_COLOR;
         return false;
     }
     params_.is_contact_ekf = config["use_contacts_in_base_estimation"];
@@ -310,19 +310,19 @@ bool Serow::initialize(const std::string& config_file) {
     if (!config["base_linear_velocity_covariance"].is_array() ||
         config["base_linear_velocity_covariance"].size() != 3) {
         std::cerr
-            << "033[31mConfiguration: base_linear_velocity_covariance must be an array of 3 elements \033[0m \n";
+            << "Configuration: base_linear_velocity_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["base_orientation_covariance"].is_array() ||
         config["base_orientation_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: base_orientation_covariance must be an array of 3 elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: base_orientation_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["contact_position_covariance"].is_array() ||
         config["contact_position_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: contact_position_covariance must be an array of 3 elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: contact_position_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
@@ -330,85 +330,85 @@ bool Serow::initialize(const std::string& config_file) {
         (!config["contact_orientation_covariance"].is_array() ||
          config["contact_orientation_covariance"].size() != 3)) {
         std::cerr
-            << "033[31mConfiguration: contact_orientation_covariance must be an array of 3 elements \033[0m \n";
+            << "Configuration: contact_orientation_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["com_position_process_covariance"].is_array() ||
         config["com_position_process_covariance"].size() != 3) {
         std::cerr
-            << "033[31mConfiguration: com_position_process_covariance must be an array of 3 elements \033[0m \n";
+            << "Configuration: com_position_process_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["com_linear_velocity_process_covariance"].is_array() ||
         config["com_linear_velocity_process_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: com_linear_velocity_process_covariance must be an array of 3 "
-                     "elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: com_linear_velocity_process_covariance must be an array of 3 "
+                     "elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["initial_base_position_covariance"].is_array() ||
         config["initial_base_position_covariance"].size() != 3) {
         std::cerr
-            << "033[31mConfiguration: initial_base_position_covariance must be an array of 3 elements \033[0m \n";
+            << "Configuration: initial_base_position_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["initial_base_orientation_covariance"].is_array() ||
         config["initial_base_orientation_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: initial_base_orientation_covariance must be an array of 3 "
-                     "elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: initial_base_orientation_covariance must be an array of 3 "
+                     "elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["initial_base_linear_velocity_covariance"].is_array() ||
         config["initial_base_linear_velocity_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: initial_base_linear_velocity_covariance must be an array of 3 "
-                     "elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: initial_base_linear_velocity_covariance must be an array of 3 "
+                     "elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["initial_contact_position_covariance"].is_array() ||
         config["initial_contact_position_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: initial_contact_position_covariance must be an array of 3 "
-                     "elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: initial_contact_position_covariance must be an array of 3 "
+                     "elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["initial_contact_orientation_covariance"].is_null() &&
         (!config["initial_contact_orientation_covariance"].is_array() ||
          config["initial_contact_orientation_covariance"].size() != 3)) {
-        std::cerr<< "033[31mConfiguration: initial_contact_orientation_covariance must be an array of 3 "
-                     "elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: initial_contact_orientation_covariance must be an array of 3 "
+                     "elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["initial_imu_linear_acceleration_bias_covariance"].is_array() ||
         config["initial_imu_linear_acceleration_bias_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: initial_imu_linear_acceleration_bias_covariance must be an "
-                     "array of 3 elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: initial_imu_linear_acceleration_bias_covariance must be an "
+                     "array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["initial_imu_angular_velocity_bias_covariance"].is_array() ||
         config["initial_imu_angular_velocity_bias_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: initial_imu_angular_velocity_bias_covariance must be an array "
-                     "of 3 elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: initial_imu_angular_velocity_bias_covariance must be an array "
+                     "of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["initial_com_position_covariance"].is_array() ||
         config["initial_com_position_covariance"].size() != 3) {
         std::cerr
-            << "033[31mConfiguration: initial_com_position_covariance must be an array of 3 elements \033[0m \n";
+            << "Configuration: initial_com_position_covariance must be an array of 3 elements \n" << RESET_COLOR;
         return false;
     }
 
     if (!config["initial_external_forces_covariance"].is_array() ||
         config["initial_external_forces_covariance"].size() != 3) {
-        std::cerr<< "033[31mConfiguration: initial_external_forces_covariance must be an array of 3 "
-                     "elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: initial_external_forces_covariance must be an array of 3 "
+                     "elements \n" << RESET_COLOR;
         return false;
     }
 
@@ -416,163 +416,163 @@ bool Serow::initialize(const std::string& config_file) {
         state_.base_state_.imu_angular_velocity_bias[i] = config["bias_gyro"][i];
         state_.base_state_.imu_linear_acceleration_bias[i] = config["bias_acc"][i];
         if (!config["imu_angular_velocity_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: imu_angular_velocity_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: imu_angular_velocity_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.angular_velocity_cov[i] = config["imu_angular_velocity_covariance"][i];
         if (!config["imu_angular_velocity_bias_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: imu_angular_velocity_bias_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: imu_angular_velocity_bias_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.angular_velocity_bias_cov[i] = config["imu_angular_velocity_bias_covariance"][i];
         if (!config["imu_linear_acceleration_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: imu_linear_acceleration_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: imu_linear_acceleration_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.linear_acceleration_cov[i] = config["imu_linear_acceleration_covariance"][i];
         if (!config["imu_linear_acceleration_bias_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: imu_linear_acceleration_bias_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: imu_linear_acceleration_bias_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.linear_acceleration_bias_cov[i] =
             config["imu_linear_acceleration_bias_covariance"][i];
         if (!config["base_linear_velocity_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: base_linear_velocity_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: base_linear_velocity_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.base_linear_velocity_cov[i] = config["base_linear_velocity_covariance"][i];
         if (!config["base_orientation_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: base_orientation_covariance[" << i << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: base_orientation_covariance[" << i << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.base_orientation_cov[i] = config["base_orientation_covariance"][i];
         if (!config["contact_position_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: contact_position_covariance[" << i << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: contact_position_covariance[" << i << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.contact_position_cov[i] = config["contact_position_covariance"][i];
         if (!config["contact_orientation_covariance"].is_null()) {
             if (!config["contact_orientation_covariance"][i].is_number_float()) {
-                std::cerr<< "033[31mConfiguration: contact_orientation_covariance[" << i
-                          << "] must be float \033[0m \n";
+                std::cerr << RED_COLOR <<"Configuration: contact_orientation_covariance[" << i
+                          << "] must be float \n" << RESET_COLOR;
                 return false;
             }
             params_.contact_orientation_cov[i] = config["contact_orientation_covariance"][i];
         }
         if (!config["contact_position_slip_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: contact_position_slip_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: contact_position_slip_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.contact_position_slip_cov[i] = config["contact_position_slip_covariance"][i];
         if (!config["contact_orientation_slip_covariance"].is_null()) {
             if (!config["contact_orientation_slip_covariance"][i].is_number_float()) {
-                std::cerr<< "033[31mConfiguration: contact_orientation_slip_covariance[" << i
-                          << "] must be float \033[0m \n";
+                std::cerr << RED_COLOR <<"Configuration: contact_orientation_slip_covariance[" << i
+                          << "] must be float \n" << RESET_COLOR;
                 return false;
             }
             params_.contact_orientation_slip_cov[i] =
                 config["contact_orientation_slip_covariance"][i];
         }
         if (!config["com_position_process_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: com_position_process_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: com_position_process_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.com_position_process_cov[i] = config["com_position_process_covariance"][i];
         if (!config["com_linear_velocity_process_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: com_linear_velocity_process_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: com_linear_velocity_process_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.com_linear_velocity_process_cov[i] =
             config["com_linear_velocity_process_covariance"][i];
         if (!config["external_forces_process_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: external_forces_process_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: external_forces_process_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.external_forces_process_cov[i] = config["external_forces_process_covariance"][i];
         if (!config["com_position_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: com_position_covariance[" << i << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: com_position_covariance[" << i << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.com_position_cov[i] = config["com_position_covariance"][i];
         if (!config["com_linear_acceleration_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: com_linear_acceleration_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: com_linear_acceleration_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.com_linear_acceleration_cov[i] = config["com_linear_acceleration_covariance"][i];
         if (!config["initial_base_position_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: initial_base_position_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: initial_base_position_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.initial_base_position_cov[i] = config["initial_base_position_covariance"][i];
         if (!config["initial_base_orientation_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: initial_base_orientation_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: initial_base_orientation_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.initial_base_orientation_cov[i] = config["initial_base_orientation_covariance"][i];
         if (!config["initial_base_linear_velocity_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: initial_base_linear_velocity_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: initial_base_linear_velocity_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.initial_base_linear_velocity_cov[i] =
             config["initial_base_linear_velocity_covariance"][i];
         if (!config["initial_contact_position_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: initial_contact_position_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: initial_contact_position_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.initial_contact_position_cov[i] = config["initial_contact_position_covariance"][i];
         if (!config["initial_contact_orientation_covariance"].is_null()) {
             if (!config["initial_contact_orientation_covariance"][i].is_number_float()) {
-                std::cerr<< "033[31mConfiguration: initial_contact_orientation_covariance[" << i
-                          << "] must be float \033[0m \n";
+                std::cerr << RED_COLOR <<"Configuration: initial_contact_orientation_covariance[" << i
+                          << "] must be float \n" << RESET_COLOR;
                 return false;
             }
             params_.initial_contact_orientation_cov[i] =
                 config["initial_contact_orientation_covariance"][i];
         }
         if (!config["initial_imu_linear_acceleration_bias_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: initial_imu_linear_acceleration_bias_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: initial_imu_linear_acceleration_bias_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.initial_imu_linear_acceleration_bias_cov[i] =
             config["initial_imu_linear_acceleration_bias_covariance"][i];
         if (!config["initial_imu_angular_velocity_bias_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: initial_imu_angular_velocity_bias_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: initial_imu_angular_velocity_bias_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.initial_imu_angular_velocity_bias_cov[i] =
             config["initial_imu_angular_velocity_bias_covariance"][i];
         if (!config["initial_com_position_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: initial_com_position_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: initial_com_position_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.initial_com_position_cov[i] = config["initial_com_position_covariance"][i];
         if (!config["initial_com_linear_velocity_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: initial_com_linear_velocity_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: initial_com_linear_velocity_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.initial_com_linear_velocity_cov[i] =
             config["initial_com_linear_velocity_covariance"][i];
         if (!config["initial_external_forces_covariance"][i].is_number_float()) {
-            std::cerr<< "033[31mConfiguration: initial_external_forces_covariance[" << i
-                      << "] must be float \033[0m \n";
+            std::cerr << RED_COLOR <<"Configuration: initial_external_forces_covariance[" << i
+                      << "] must be float \n" << RESET_COLOR;
             return false;
         }
         params_.initial_external_forces_cov[i] = config["initial_external_forces_covariance"][i];
@@ -581,15 +581,15 @@ bool Serow::initialize(const std::string& config_file) {
     // External odometry extrinsics
     if (!config["T_base_to_odom"].is_null() &&
         (!config["T_base_to_odom"].is_array() || config["T_base_to_odom"].size() != 16)) {
-        std::cerr<< "033[31mConfiguration: T_base_to_odom must be an array of 16 elements \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: T_base_to_odom must be an array of 16 elements \n" << RESET_COLOR;
         return false;
     }
     if (!config["T_base_to_odom"].is_null()) {
         for (size_t i = 0; i < 4; i++) {
             for (size_t j = 0; j < 4; j++) {
                 if (!config["T_base_to_odom"][4 * i + j].is_number_float()) {
-                    std::cerr<< "033[31mConfiguration: T_base_to_odom[" << 4 * i + j
-                              << "] must be float \033[0m \n";
+                    std::cerr << RED_COLOR <<"Configuration: T_base_to_odom[" << 4 * i + j
+                              << "] must be float \n" << RESET_COLOR;
                     return false;
                 }
                 params_.T_base_to_odom(i, j) = config["T_base_to_odom"][4 * i + j];
@@ -599,12 +599,12 @@ bool Serow::initialize(const std::string& config_file) {
 
     // Terrain height parameter
     if (!config["enable_terrain_estimation"].is_boolean()) {
-        std::cerr << "\033[31mConfiguration: enable_terrain_estimation must be boolean \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: enable_terrain_estimation must be boolean \n" << RESET_COLOR;
         return false;
     }
     params_.enable_terrain_estimation = config["enable_terrain_estimation"];
     if (!config["minimum_terrain_height_variance"].is_number_float()) {
-        std::cerr<< "033[31mConfiguration: minimum_terrain_height_variance must be float \033[0m \n";
+        std::cerr << RED_COLOR <<"Configuration: minimum_terrain_height_variance must be float \n" << RESET_COLOR;
         return false;
     }
     params_.minimum_terrain_height_variance = config["minimum_terrain_height_variance"];
