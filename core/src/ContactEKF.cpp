@@ -195,7 +195,8 @@ BaseState ContactEKF::computeDiscreteDynamics(
     // Linear velocity
     const Eigen::Vector3d& v = state.base_linear_velocity;
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
-    predicted_state.base_linear_velocity.noalias() = (v.cross(angular_velocity) + R.transpose() * g_ + linear_acceleration) * dt + v;
+    predicted_state.base_linear_velocity.noalias() =
+        (v.cross(angular_velocity) + R.transpose() * g_ + linear_acceleration) * dt + v;
     // Position
     const Eigen::Vector3d& r = state.base_position;
     predicted_state.base_position.noalias() = (R * v) * dt + r;
