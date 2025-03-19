@@ -74,7 +74,7 @@ class Serow {
         bool calibrate_initial_imu_bias{};
         /// @brief number of IMU measurements to use for estimating the IMU gyro/accelerometer
         /// biases
-        double max_imu_calibration_cycles{};
+        size_t max_imu_calibration_cycles{};
         /// @brief rate at which IMU measurements are available (Hz)
         double imu_rate{};
         /// @brief low-pass filter cutoff frequency (Hz), used to filter the IMU gyro measurement.
