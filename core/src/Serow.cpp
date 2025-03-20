@@ -26,17 +26,18 @@ static constexpr const char* WHITE_COLOR = "\033[0m";
 namespace serow {
 
 std::string findFilepath(const std::string& filename) {
-    if (std::getenv("SEROW_PATH") == nullptr) {
+    const char* serow_path_env = std::getenv("SEROW_PATH");
+    if (serow_path_env == nullptr) {
         throw std::runtime_error("Environmental variable SEROW_PATH is not set.");
-        return "";
     }
 
-    std::string_view serow_path_env = std::getenv("SEROW_PATH");
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(serow_path_env)) {
+    std::filesystem::path serow_path(serow_path_env);
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(serow_path)) {
         if (std::filesystem::is_regular_file(entry) && entry.path().filename() == filename) {
             return entry.path().string();
         }
     }
+
     throw std::runtime_error("File '" + filename + "' not found.");
 }
 
