@@ -82,6 +82,43 @@ struct BaseState {
     /// Holds contact frame name to 3D contact orientation covariance in world frame coordinates,
     /// (rad^2) only applies if the robot has flat feet
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_cov;
+
+    // Default constructor
+    BaseState() = default;
+
+    // Default copy constructor and copy assignment operator
+    BaseState(const BaseState&) = default;
+    BaseState& operator=(const BaseState&) = default;
+
+    // Move assignment operator
+    BaseState& operator=(BaseState&& other) noexcept {
+        if (this != &other) {
+            timestamp = std::move(other.timestamp);
+            base_position = std::move(other.base_position);
+            base_orientation = std::move(other.base_orientation);
+            base_linear_velocity = std::move(other.base_linear_velocity);
+            base_angular_velocity = std::move(other.base_angular_velocity);
+            base_linear_acceleration = std::move(other.base_linear_acceleration);
+            base_angular_acceleration = std::move(other.base_angular_acceleration);
+            imu_linear_acceleration_bias = std::move(other.imu_linear_acceleration_bias);
+            imu_angular_velocity_bias = std::move(other.imu_angular_velocity_bias);
+            contacts_position = std::move(other.contacts_position);
+            contacts_orientation = std::move(other.contacts_orientation);
+            feet_position = std::move(other.feet_position);
+            feet_orientation = std::move(other.feet_orientation);
+            feet_linear_velocity = std::move(other.feet_linear_velocity);
+            feet_angular_velocity = std::move(other.feet_angular_velocity);
+            base_position_cov = std::move(other.base_position_cov);
+            base_orientation_cov = std::move(other.base_orientation_cov);
+            base_linear_velocity_cov = std::move(other.base_linear_velocity_cov);
+            base_angular_velocity_cov = std::move(other.base_angular_velocity_cov);
+            imu_linear_acceleration_bias_cov = std::move(other.imu_linear_acceleration_bias_cov);
+            imu_angular_velocity_bias_cov = std::move(other.imu_angular_velocity_bias_cov);
+            contacts_position_cov = std::move(other.contacts_position_cov);
+            contacts_orientation_cov = std::move(other.contacts_orientation_cov);
+        }
+        return *this;
+    }
 };
 
 /**
