@@ -22,10 +22,6 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 find_package(pinocchio REQUIRED)
 find_package(serow REQUIRED)
 
-# Find and link HDF5
-find_package(HDF5 REQUIRED COMPONENTS CXX)
-include_directories(${HDF5_INCLUDE_DIRS})
-
 # Add executables
 add_executable(nao_test nao_test.cpp)
 target_link_libraries(nao_test PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
