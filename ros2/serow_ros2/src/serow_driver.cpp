@@ -10,7 +10,7 @@
 using std::placeholders::_1;
 
 class SerowDriver : public rclcpp::Node {
-   public:
+public:
     SerowDriver(const std::string& joint_state_topic, const std::string& base_imu_topic,
                 const std::vector<std::string>& force_torque_state_topics,
                 const std::string& config_file_path)
@@ -86,11 +86,16 @@ class SerowDriver : public rclcpp::Node {
                     }
                     ft_data_.clear();
                 }
-
+                RCLCPP_INFO(this->get_logger(), "Filtering");
                 serow_.filter(imu_measurement, joint_measurements,
                               ft_measurements.size() == force_torque_state_subscriptions_.size()
                                   ? std::make_optional(ft_measurements)
                                   : std::nullopt);
+
+                const auto& state = serow_.getState();
+                if (state) {
+                    std::cout << "State: " << state->getBasePosition().transpose() << std::endl;
+                }
 
                 joint_state_data_.reset();
                 base_imu_data_.reset();
@@ -98,7 +103,7 @@ class SerowDriver : public rclcpp::Node {
         }
     }
 
-   private:
+private:
     void joint_state_topic_callback(const sensor_msgs::msg::JointState& msg) {
         this->joint_state_data_ = msg;
     }
@@ -121,10 +126,10 @@ int main(int argc, char* argv[]) {
     rclcpp::init(argc, argv);
 
     std::vector<std::string> force_torque_state_topics;
-    force_torque_state_topics.push_back("/left_leg/force_torque_states");
-    force_torque_state_topics.push_back("/right_leg/force_torque_states");
-    rclcpp::spin(std::make_shared<SerowDriver>("/joint_states", "/imu0", force_torque_state_topics,
-                                               "nao.json"));
+    force_torque_state_topics.push_back("/h1/left_ankle/force_torque_states");
+    force_torque_state_topics.push_back("/h1/right_ankle/force_torque_states");
+    rclcpp::spin(std::make_shared<SerowDriver>("/h1/joint_states", "/h1/imu",
+                                               force_torque_state_topics, "h1.json"));
     rclcpp::shutdown();
     return 0;
 }
