@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.0.0)
 project(serow_tests VERSION 1.0.0 LANGUAGES CXX)
 
 # Default to C++17
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
-endif()
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
@@ -15,15 +15,12 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(googletest)
-add_library(GTest::GTest INTERFACE IMPORTED)
-target_link_libraries(GTest::GTest INTERFACE gtest_main)
+
+# Prevent GoogleTest from overriding compiler flags
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 find_package(pinocchio REQUIRED)
 find_package(serow REQUIRED)
-
-# Find and link HDF5
-find_package(HDF5 REQUIRED COMPONENTS CXX)
-include_directories(${HDF5_INCLUDE_DIRS})
 
 # Add executables
 add_executable(nao_test nao_test.cpp)
@@ -34,3 +31,6 @@ target_link_libraries(go2_test PRIVATE serow pinocchio::pinocchio GTest::gtest_m
 
 add_executable(go1_test go1_test.cpp)
 target_link_libraries(go1_test PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
+
+add_executable(CheckTerrainElevation CheckTerrainElevation.cpp)
+target_link_libraries(CheckTerrainElevation PRIVATE serow pinocchio::pinocchio GTest::gtest GTest::gtest_main)

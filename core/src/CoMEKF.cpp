@@ -53,12 +53,11 @@ CentroidalState CoMEKF::predict(const CentroidalState& state, const KinematicMea
     Qd(f_idx_, f_idx_) = kin.external_forces_process_cov;
 
     // Euler Discretization - First order Truncation
-    Eigen::Matrix<double, 9, 9> Ad = I_;
-    Ad += Ac * dt;
+    const Eigen::Matrix<double, 9, 9> Ad = I_ + Ac * dt;
     P_ = Ad * P_ * Ad.transpose() + Lc * Qd * Lc.transpose() * dt;
 
     // Propagate the mean estimate, forward euler integration of dynamics f
-    Eigen::Matrix<double, 9, 1> f =
+    const Eigen::Matrix<double, 9, 1> f =
         computeContinuousDynamics(state, grf.cop, grf.force, kin.com_angular_momentum_derivative);
     predicted_state.com_position += f(c_idx_) * dt;
     predicted_state.com_linear_velocity += f(v_idx_) * dt;
@@ -86,6 +85,11 @@ Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(
     Eigen::Matrix<double, 9, 1> res = Eigen::Matrix<double, 9, 1>::Zero();
     res.segment<3>(0) = state.com_linear_velocity;
     double den = state.com_position.z() - cop_position.z();
+    if (den == 0.0) {
+        std::cerr << "CoM and COP are at the same height, setting to 1e-6" << std::endl;
+        den = 1e-6;
+    }
+
     res(3) =
         (state.com_position.x() - cop_position.x()) / (mass_ * den) * ground_reaction_force.z() +
         state.external_forces.x() / mass_ - com_angular_momentum_derivative.y() / (mass_ * den);
@@ -105,6 +109,11 @@ CoMEKF::computePredictionJacobians(const CentroidalState& state,
     Eigen::Matrix<double, 9, 9> Ac = Eigen::Matrix<double, 9, 9>::Zero();
     Eigen::Matrix<double, 9, 9> Lc = Eigen::Matrix<double, 9, 9>::Identity();
     double den = state.com_position.z() - cop_position.z();
+    if (den == 0.0) {
+        std::cerr << "CoM and COP are at the same height, setting to 1e-6" << std::endl;
+        den = 1e-6;
+    }
+
     Ac.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity();
     Ac(3, 0) = ground_reaction_force.z() / (mass_ * den);
     Ac(3, 2) = -(ground_reaction_force.z() * (state.com_position.x() - cop_position.x())) /
@@ -128,6 +137,10 @@ CentroidalState CoMEKF::updateWithCoMAcceleration(
     const Eigen::Vector3d& com_angular_momentum_derivative) {
     CentroidalState updated_state = state;
     double den = state.com_position.z() - cop_position.z();
+    if (den == 0.0) {
+        std::cerr << "CoM and COP are at the same height, setting to 1e-6" << std::endl;
+        den = 1e-6;
+    }
     Eigen::Vector3d z = Eigen::Vector3d::Zero();
     z.x() =
         com_linear_acceleration(0) -

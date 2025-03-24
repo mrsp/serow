@@ -39,14 +39,14 @@ TEST(SerowTests, Go1Test) {
         return;
     }
 
-    std::ofstream outputFile;
-    if (kStorePredictions) {
-        outputFile.open("../results/go1_serow_estimates.txt");  // Output file
-        if (!outputFile.is_open()) {
-            throw std::runtime_error("Could not open file");
-            return;
-        }
-    }
+    // std::ofstream outputFile;
+    // if (kStorePredictions) {
+    //     outputFile.open("../results/go1_serow_estimates.txt");  // Output file
+    //     if (!outputFile.is_open()) {
+    //         throw std::runtime_error("Could not open file");
+    //         return;
+    //     }
+    // }
 
     // Read the CSV file
     std::vector<std::vector<std::string>> data;
@@ -179,15 +179,15 @@ TEST(SerowTests, Go1Test) {
                   << std::endl;
 
         // Store the results into an eigen matrix to be saved
-        if (kStorePredictions) {
-            outputFile << timestamp << " " << state->getBasePosition().transpose().x() << " "
-                       << state->getBasePosition().transpose().y() << " "
-                       << state->getBasePosition().transpose().z() << " "
-                       << state->getBaseOrientation().x() << " " << state->getBaseOrientation().y()
-                       << " " << state->getBaseOrientation().z() << " "
-                       << state->getBaseOrientation().w() << "\n";
-        }
+        // if (kStorePredictions) {
+        //     outputFile << timestamp << " " << state->getBasePosition().transpose().x() << " "
+        //                << state->getBasePosition().transpose().y() << " "
+        //                << state->getBasePosition().transpose().z() << " "
+        //                << state->getBaseOrientation().x() << " " << state->getBaseOrientation().y()
+        //                << " " << state->getBaseOrientation().z() << " "
+        //                << state->getBaseOrientation().w() << "\n";
+        // }
     }
     
-    outputFile.close();
+    // outputFile.close();
 }
