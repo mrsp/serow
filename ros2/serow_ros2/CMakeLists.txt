@@ -32,7 +32,13 @@ target_include_directories(serow_ros2 PUBLIC
 )
 
 # Link dependencies
-target_link_libraries(serow_ros2 serow yaml-cpp pinocchio::pinocchio Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_link_libraries(serow_ros2 
+  serow 
+  yaml-cpp 
+  pinocchio::pinocchio 
+  Eigen3::Eigen 
+  nlohmann_json::nlohmann_json
+)
 
 ament_target_dependencies(serow_ros2
   rclcpp
