@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot name="spot">
+  <joint name="fl_ank" type="fixed">
+    <origin xyz="0. 0. -0.3365" rpy="0. 0. 0."/>
+    <parent link="fl_lleg"/>
+    <child link="fl_foot"/>
+  </joint>
+  <joint name="fl_hx" type="revolute">
+    <origin xyz="0.29785 0.055 0. " rpy="0. 0. 0."/>
+    <parent link="spot"/>
+    <child link="fl_hip"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.785398" upper="0.785398" effort="45." velocity="100.000003"/>
+  </joint>
+  <joint name="fl_hy" type="revolute">
+    <origin xyz="0. 0.110945 0. " rpy="0. 0. 0."/>
+    <parent link="fl_hip"/>
+    <child link="fl_uleg"/>
+    <axis xyz="0. 1. 0."/>
+    <limit lower="-0.898845" upper="2.295108" effort="45." velocity="100.000003"/>
+  </joint>
+  <joint name="fl_kn" type="revolute">
+    <origin xyz="0.025 0. -0.3205" rpy="0. 0. 0."/>
+    <parent link="fl_uleg"/>
+    <child link="fl_lleg"/>
+    <axis xyz="0. 1. 0."/>
+    <limit lower="-2.7928999" upper="-0.2471" effort="115." velocity="100.000003"/>
+  </joint>
+  <joint name="fr_ank" type="fixed">
+    <origin xyz="0. 0. -0.3365" rpy="0. 0. 0."/>
+    <parent link="fr_lleg"/>
+    <child link="fr_foot"/>
+  </joint>
+  <joint name="fr_hx" type="revolute">
+    <origin xyz="0.29785 -0.055 0. " rpy="0. 0. 0."/>
+    <parent link="spot"/>
+    <child link="fr_hip"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.785398" upper="0.785398" effort="45." velocity="100.000003"/>
+  </joint>
+  <joint name="fr_hy" type="revolute">
+    <origin xyz="0. -0.110945 0. " rpy="0. 0. 0."/>
+    <parent link="fr_hip"/>
+    <child link="fr_uleg"/>
+    <axis xyz="0. 1. 0."/>
+    <limit lower="-0.898845" upper="2.295108" effort="45." velocity="100.000003"/>
+  </joint>
+  <joint name="fr_kn" type="revolute">
+    <origin xyz="0.025 0. -0.3205" rpy="0. 0. 0."/>
+    <parent link="fr_uleg"/>
+    <child link="fr_lleg"/>
+    <axis xyz="0. 1. 0."/>
+    <limit lower="-2.7928999" upper="-0.2471" effort="115." velocity="100.000003"/>
+  </joint>
+  <joint name="hl_ank" type="fixed">
+    <origin xyz="0. 0. -0.3365" rpy="0. 0. 0."/>
+    <parent link="hl_lleg"/>
+    <child link="hl_foot"/>
+  </joint>
+  <joint name="hl_hx" type="revolute">
+    <origin xyz="-0.29785 0.055 0. " rpy="0. 0. 0."/>
+    <parent link="spot"/>
+    <child link="hl_hip"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.785398" upper="0.785398" effort="45." velocity="100.000003"/>
+  </joint>
+  <joint name="hl_hy" type="revolute">
+    <origin xyz="0. 0.110945 0. " rpy="0. 0. 0."/>
+    <parent link="hl_hip"/>
+    <child link="hl_uleg"/>
+    <axis xyz="0. 1. 0."/>
+    <limit lower="-0.898845" upper="2.295108" effort="45." velocity="100.000003"/>
+  </joint>
+  <joint name="hl_kn" type="revolute">
+    <origin xyz="0.025 0. -0.3205" rpy="0. 0. 0."/>
+    <parent link="hl_uleg"/>
+    <child link="hl_lleg"/>
+    <axis xyz="0. 1. 0."/>
+    <limit lower="-2.7928999" upper="-0.2471" effort="115." velocity="100.000003"/>
+  </joint>
+  <joint name="hr_ank" type="fixed">
+    <origin xyz="0. 0. -0.3365" rpy="0. 0. 0."/>
+    <parent link="hr_lleg"/>
+    <child link="hr_foot"/>
+  </joint>
+  <joint name="hr_hx" type="revolute">
+    <origin xyz="-0.29785 -0.055 0. " rpy="0. 0. 0."/>
+    <parent link="spot"/>
+    <child link="hr_hip"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.785398" upper="0.785398" effort="45." velocity="100.000003"/>
+  </joint>
+  <joint name="hr_hy" type="revolute">
+    <origin xyz="0. -0.110945 0. " rpy="0. 0. 0."/>
+    <parent link="hr_hip"/>
+    <child link="hr_uleg"/>
+    <axis xyz="0. 1. 0."/>
+    <limit lower="-0.898845" upper="2.295108" effort="45." velocity="100.000003"/>
+  </joint>
+  <joint name="hr_kn" type="revolute">
+    <origin xyz="0.025 0. -0.3205" rpy="0. 0. 0."/>
+    <parent link="hr_uleg"/>
+    <child link="hr_lleg"/>
+    <axis xyz="0. 1. 0."/>
+    <limit lower="-2.7928999" upper="-0.2471" effort="115." velocity="100.000003"/>
+  </joint>
+  <link name="fl_foot">
+    <inertial>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <mass value="0.000001"/>
+      <inertia ixx="0.001" ixy="0." ixz="0." iyy="0.001" iyz="0." izz="0.001"/>
+    </inertial>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <sphere radius="0.035"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="fl_hip">
+    <inertial>
+      <origin xyz="-0.0158674 0.0085584 0.000009 " rpy="0. 0. 0."/>
+      <mass value="1.1368834"/>
+      <inertia ixx="0.0012217" ixy="-0.0001775" ixz="0.0000004" iyy="0.0015896" iyz="-0.0000005" izz="0.001729"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/fl_hip_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="fl_lleg">
+    <inertial>
+      <origin xyz="0.0059736 0. -0.1746643" rpy="0. 0. 0."/>
+      <mass value="0.33"/>
+      <inertia ixx="0.0070136" ixy="0." ixz="0.000066" iyy="0.0070995" iyz="0." izz="0.0001453"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/fl_lleg_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="fl_uleg">
+    <inertial>
+      <origin xyz="0.0021444 -0.0111018 -0.078812 " rpy="0. 0. 0."/>
+      <mass value="2.2562037"/>
+      <inertia ixx="0.026925" ixy="-0.0000878" ixz="0.0005487" iyy="0.0258391" iyz="0.0020715" izz="0.0031874"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/fl_uleg_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="fr_foot">
+    <inertial>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <mass value="0.000001"/>
+      <inertia ixx="0.001" ixy="0." ixz="0." iyy="0.001" iyz="0." izz="0.001"/>
+    </inertial>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <sphere radius="0.035"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="fr_hip">
+    <inertial>
+      <origin xyz="-0.0158674 -0.0085584 0.000009 " rpy="0. 0. 0."/>
+      <mass value="1.1368834"/>
+      <inertia ixx="0.0012217" ixy="0.0001775" ixz="0.0000004" iyy="0.0015896" iyz="0.0000005" izz="0.001729"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/fr_hip_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="fr_lleg">
+    <inertial>
+      <origin xyz="0.0059736 0. -0.1746643" rpy="0. 0. 0."/>
+      <mass value="0.33"/>
+      <inertia ixx="0.0070136" ixy="0." ixz="0.000066" iyy="0.0070995" iyz="0." izz="0.0001453"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/fr_lleg_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="fr_uleg">
+    <inertial>
+      <origin xyz="0.0021444 0.0111018 -0.078812 " rpy="0. 0. 0."/>
+      <mass value="2.2562037"/>
+      <inertia ixx="0.026925" ixy="0.0000878" ixz="0.0005487" iyy="0.0258391" iyz="-0.0020715" izz="0.0031874"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/fr_uleg_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="hl_foot">
+    <inertial>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <mass value="0.000001"/>
+      <inertia ixx="0.001" ixy="0." ixz="0." iyy="0.001" iyz="0." izz="0.001"/>
+    </inertial>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <sphere radius="0.035"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="hl_hip">
+    <inertial>
+      <origin xyz="0.0158674 0.0085584 0.000009 " rpy="0. 0. 0."/>
+      <mass value="1.1368834"/>
+      <inertia ixx="0.0012217" ixy="0.0001775" ixz="-0.0000004" iyy="0.0015896" iyz="-0.0000005" izz="0.001729"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/hl_hip_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="hl_lleg">
+    <inertial>
+      <origin xyz="0.0059736 0. -0.1746643" rpy="0. 0. 0."/>
+      <mass value="0.33"/>
+      <inertia ixx="0.0070136" ixy="0." ixz="0.000066" iyy="0.0070995" iyz="0." izz="0.0001453"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/hl_lleg_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="hl_uleg">
+    <inertial>
+      <origin xyz="0.0021444 -0.0111018 -0.078812 " rpy="0. 0. 0."/>
+      <mass value="2.2562037"/>
+      <inertia ixx="0.026925" ixy="-0.0000878" ixz="0.0005487" iyy="0.0258391" iyz="0.0020715" izz="0.0031874"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/hl_uleg_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="hr_foot">
+    <inertial>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <mass value="0.000001"/>
+      <inertia ixx="0.001" ixy="0." ixz="0." iyy="0.001" iyz="0." izz="0.001"/>
+    </inertial>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <sphere radius="0.035"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="hr_hip">
+    <inertial>
+      <origin xyz="0.0158674 -0.0085584 0.000009 " rpy="0. 0. 0."/>
+      <mass value="1.1368834"/>
+      <inertia ixx="0.0012217" ixy="-0.0001775" ixz="-0.0000004" iyy="0.0015896" iyz="0.0000005" izz="0.001729"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/hr_hip_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="hr_lleg">
+    <inertial>
+      <origin xyz="0.0059736 0. -0.1746643" rpy="0. 0. 0."/>
+      <mass value="0.33"/>
+      <inertia ixx="0.0070136" ixy="0." ixz="0.000066" iyy="0.0070995" iyz="0." izz="0.0001453"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/hr_lleg_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="hr_uleg">
+    <inertial>
+      <origin xyz="0.0021444 0.0111018 -0.078812 " rpy="0. 0. 0."/>
+      <mass value="2.2562037"/>
+      <inertia ixx="0.026925" ixy="0.0000878" ixz="0.0005487" iyy="0.0258391" iyz="-0.0020715" izz="0.0031874"/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/hr_uleg_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+  </link>
+  <link name="spot">
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/body_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <box size="0.85 0.2 0.14"/>
+      </geometry>
+    </collision>
+  </link>
+</robot>

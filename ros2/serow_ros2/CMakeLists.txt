@@ -15,30 +15,63 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(serow REQUIRED)
 find_package(pinocchio REQUIRED)
 find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(nlohmann_json REQUIRED)
+find_package(yaml-cpp REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 
+# Add executable
 add_executable(serow_ros2 src/serow_driver.cpp)
-ament_target_dependencies(serow_ros2 rclcpp geometry_msgs sensor_msgs)
-target_link_libraries(serow_ros2 serow pinocchio::pinocchio Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_include_directories(serow_ros2 PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${EIGEN3_INCLUDE_DIR}
+)
 
-install(TARGETS
-  serow_ros2
-  DESTINATION lib/${PROJECT_NAME})
-install(DIRECTORY launch DESTINATION share/${PROJECT_NAME}/)
+# Link dependencies
+target_link_libraries(serow_ros2 
+  serow 
+  yaml-cpp 
+  pinocchio::pinocchio 
+  Eigen3::Eigen 
+  nlohmann_json::nlohmann_json
+)
 
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
+ament_target_dependencies(serow_ros2
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  ament_index_cpp
+)
+
+# Install targets
+install(TARGETS serow_ros2
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install config files
+install(DIRECTORY
+  config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Install launch files
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Export dependencies
+ament_export_dependencies(
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  ament_index_cpp
+  yaml-cpp
+  serow
+)
 
 ament_package()
