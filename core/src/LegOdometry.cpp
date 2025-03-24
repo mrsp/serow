@@ -59,8 +59,8 @@ void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
                              const Eigen::Vector3d& angular_velocity,
                              const Eigen::Vector3d& linear_velocity, const Eigen::Vector3d& force,
                              std::optional<Eigen::Vector3d> torque) {
-    const Eigen::Matrix3d& force_skew = lie::so3::wedge(force);
-    const Eigen::Matrix3d& omega_skew = lie::so3::wedge(R.transpose() * angular_velocity);
+    const Eigen::Matrix3d force_skew = lie::so3::wedge(force);
+    const Eigen::Matrix3d omega_skew = lie::so3::wedge(R.transpose() * angular_velocity);
 
     Eigen::Matrix3d A = Eigen::Matrix3d::Zero();
     Eigen::Vector3d b = Eigen::Vector3d::Zero();
@@ -88,7 +88,7 @@ void LegOdometry::estimate(
     const std::map<std::string, Eigen::Vector3d>& contact_forces,
     const std::map<std::string, double>& contact_probabilities,
     std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques) {
-    const Eigen::Matrix3d& Rwb = base_orientation.toRotationMatrix();
+    const Eigen::Matrix3d Rwb = base_orientation.toRotationMatrix();
 
     double den = params_.eps * params_.num_leg_ee;
     std::map<std::string, double> force_weights;

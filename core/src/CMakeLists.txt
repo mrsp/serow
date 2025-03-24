@@ -12,7 +12,9 @@ set(serow_src ${serow_src}
     ButterworthLPF.cpp 
     Differentiator.cpp 
     DerivativeEstimator.cpp
-    OutlierDetector.cpp)
+    OutlierDetector.cpp
+    TerrainElevation.cpp
+    NaiveTerrainElevation.cpp)
 
 set(serow_headers ${serow_headers} 
     Serow.hpp 
@@ -30,7 +32,9 @@ set(serow_headers ${serow_headers}
     Measurement.hpp
     MovingMedianFilter.hpp
     RobotKinematics.hpp
-    OutlierDetector.hpp)
+    OutlierDetector.hpp
+    TerrainElevation.hpp
+    NaiveTerrainElevation.hpp)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_link_libraries(serow PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)

@@ -31,10 +31,12 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 
 #include "Measurement.hpp"  // Includes various sensor measurements
 #include "OutlierDetector.hpp"
 #include "State.hpp"  // Includes definitions of robot state variables
+#include "TerrainElevation.hpp"
 
 namespace serow {
 
@@ -79,7 +81,7 @@ class ContactEKF {
      */
     BaseState update(const BaseState& state, const KinematicMeasurement& kin,
                      std::optional<OdometryMeasurement> odom = std::nullopt,
-                     std::optional<TerrainMeasurement> terrain = std::nullopt);
+                     std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
 
    private:
     int num_states_{};                      ///< Number of state variables.
@@ -157,6 +159,7 @@ class ContactEKF {
      * @param contacts_orientation Orientations of leg contacts (optional).
      * @param contacts_orientation_noise Noise in orientation measurements (optional).
      * @param orientation_cov Covariance of orientation measurements (optional).
+     * @param terrain_estimator Terrain elevation estimator (optional).
      * @return Updated state after applying contact-related updates.
      */
     BaseState updateWithContacts(
@@ -165,7 +168,8 @@ class ContactEKF {
         const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
         std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
-        std::optional<Eigen::Matrix3d> orientation_cov);
+        std::optional<Eigen::Matrix3d> orientation_cov,
+        std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
@@ -185,13 +189,12 @@ class ContactEKF {
      * @brief Updates the robot's state based on terrain measurements.
      * @param state Current state of the robot.
      * @param contacts_status Status of leg contacts.
-     * @param terrain_height Height of the terrain.
-     * @param terrain_cov Covariance of terrain measurements.
+     * @param terrain_estimator Terrain elevation mapper.
      * @return Updated state after applying terrain updates.
      */
     BaseState updateWithTerrain(const BaseState& state,
                                 const std::map<std::string, bool>& contacts_status,
-                                double terrain_height, double terrain_cov);
+                                const TerrainElevation& terrain_estimator);
 
     /**
      * @brief Updates the state of the robot with the provided state change and covariance matrix.

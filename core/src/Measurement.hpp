@@ -86,6 +86,7 @@ struct KinematicMeasurement {
     std::map<std::string, double> contacts_probability;  ///< Map of contact probabilities ([0, 1])
     std::map<std::string, Eigen::Vector3d>
         contacts_position;  ///< Map of contact positions relative to base frame (m)
+    std::map<std::string, Eigen::Vector3d> base_to_foot_positions;
     std::map<std::string, Eigen::Matrix3d>
         contacts_position_noise;  ///< Map of contact position noise covariances relative to base
                                   ///< frame (m^2)
