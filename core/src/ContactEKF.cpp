@@ -327,7 +327,7 @@ BaseState ContactEKF::updateWithContacts(
                     const Eigen::Vector3d x_i =
                         updated_state_i.base_orientation.toRotationMatrix().transpose() *
                         (updated_state_i.contacts_position.at(cf) - updated_state_i.base_position);
-                    Eigen::Matrix3d BetaT = cp * cp.transpose() - 2.0 * cp * x_i.transpose() +
+                    const Eigen::Matrix3d BetaT = cp * cp.transpose() - 2.0 * cp * x_i.transpose() +
                                             x_i * x_i.transpose() + H * P_i * H.transpose();
                     contact_outlier_detector.estimate(BetaT, contacts_position_noise.at(cf));
                 } else {
