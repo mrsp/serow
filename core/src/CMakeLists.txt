@@ -14,7 +14,8 @@ set(serow_src ${serow_src}
     DerivativeEstimator.cpp
     OutlierDetector.cpp
     TerrainElevation.cpp
-    NaiveTerrainElevation.cpp)
+    NaiveTerrainElevation.cpp
+    DebugLogger.cpp)
 
 set(serow_headers ${serow_headers} 
     Serow.hpp 
@@ -34,7 +35,8 @@ set(serow_headers ${serow_headers}
     RobotKinematics.hpp
     OutlierDetector.hpp
     TerrainElevation.hpp
-    NaiveTerrainElevation.hpp)
+    NaiveTerrainElevation.hpp
+    DebugLogger.hpp)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_link_libraries(serow PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
