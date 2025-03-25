@@ -27,6 +27,7 @@
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 #include "TerrainElevation.hpp"
+#include "DebugLogger.hpp"
 
 namespace serow {
 
@@ -237,6 +238,8 @@ class Serow {
     size_t imu_calibration_cycles_{};
     /// @brief Terrain elevation mapper
     std::shared_ptr<TerrainElevation> terrain_estimator_;
+    /// @brief Debug logger
+    DebugLogger debug_logger_;
 };
 
 }  // namespace serow

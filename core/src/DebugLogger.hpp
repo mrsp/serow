@@ -24,23 +24,28 @@
 #include <fstream>
 #include <map>
 #include <string>
+#include <mcap/mcap.hpp>
+#include <mcap/writer.hpp>
+
 #include "Measurement.hpp"
 #include "State.hpp"
 
 namespace serow {
 
 class DebugLogger {
-    std::ofstream log_file_;
-
-    DebugLogger(const std::string& log_file_path);
+   public:
+    DebugLogger(const std::string& log_file_path = "/tmp/serow_log.mcap");
     ~DebugLogger();
-
     void log(const BaseState& base_state);
     void log(const CentroidalState& centroidal_state);
     void log(const ContactState& contact_state);
     void log(const ImuMeasurement& imu_measurement);
     void log(const std::map<std::string, JointMeasurement>& joints_measurement);
     void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
+
+   private:
+    std::unique_ptr<mcap::McapWriter> writer_;
+    std::unique_ptr<mcap::FileWriter> file_writer_;
 };
 
 }  // namespace serow

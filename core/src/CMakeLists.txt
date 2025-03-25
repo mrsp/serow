@@ -2,6 +2,17 @@ find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(pinocchio REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
+include(FetchContent)
+FetchContent_Declare(
+  mcap_builder
+  GIT_REPOSITORY https://github.com/olympus-robotics/mcap_builder.git
+  GIT_TAG main
+)
+
+# Configure mcap_builder to build with PIC
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+FetchContent_MakeAvailable(mcap_builder)
+
 set(serow_src ${serow_src} 
     Serow.cpp 
     State.cpp 
@@ -39,7 +50,8 @@ set(serow_headers ${serow_headers}
     DebugLogger.hpp)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
-target_link_libraries(serow PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
+target_link_libraries(serow PUBLIC mcap 
+                            PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
 
 install(FILES ${serow_headers} DESTINATION include/serow)
 install(TARGETS serow DESTINATION lib/)

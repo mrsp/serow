@@ -394,6 +394,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         is_initialized_ = true;
     }
 
+    // Log the state
+    debug_logger_.log(state_.base_state_);
+
     // Use move semantics for state copy
     State state = std::move(State(state_));
 
