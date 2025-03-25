@@ -23,9 +23,10 @@
 #endif
 #include <fstream>
 #include <map>
-#include <string>
 #include <mcap/mcap.hpp>
 #include <mcap/writer.hpp>
+#include <memory>
+#include <string>
 
 #include "Measurement.hpp"
 #include "State.hpp"
@@ -33,7 +34,7 @@
 namespace serow {
 
 class DebugLogger {
-   public:
+public:
     DebugLogger(const std::string& log_file_path = "/tmp/serow_log.mcap");
     ~DebugLogger();
     void log(const BaseState& base_state);
@@ -43,9 +44,14 @@ class DebugLogger {
     void log(const std::map<std::string, JointMeasurement>& joints_measurement);
     void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
 
-   private:
+private:
     std::unique_ptr<mcap::McapWriter> writer_;
     std::unique_ptr<mcap::FileWriter> file_writer_;
+    uint32_t base_position_sequence_{};
+    uint32_t imu_sequence_{};
+    uint32_t joint_sequence_{};
+    uint32_t ft_sequence_{};
+    uint32_t contact_sequence_{};
 };
 
 }  // namespace serow
