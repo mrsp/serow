@@ -1,9 +1,32 @@
 #include "DebugLogger.hpp"
 
-struct BinaryVector3d {
-    double x;
-    double y;
-    double z;
+struct BinaryBaseState {
+    double timestamp;
+    double base_position[3];           // x, y, z
+    double base_orientation[4];        // w, x, y, z (quaternion)
+    double base_linear_velocity[3];    // vx, vy, vz
+    double base_angular_velocity[3];   // wx, wy, wz
+    double base_linear_acceleration[3]; // ax, ay, az
+    double base_angular_acceleration[3]; // alpha_x, alpha_y, alpha_z
+    double imu_linear_acceleration_bias[3]; // bias_x, bias_y, bias_z
+    double imu_angular_velocity_bias[3];    // bias_wx, bias_wy, bias_wz
+    uint32_t num_contacts;            // Number of contacts
+    uint32_t num_feet;                // Number of feet
+    // Dynamic arrays for contacts and feet data
+    struct ContactData {
+        char name[32];                // Contact name
+        double position[3];           // x, y, z
+        double orientation[4];        // w, x, y, z (quaternion)
+    };
+    struct FootData {
+        char name[32];                // Foot name
+        double position[3];           // x, y, z
+        double orientation[4];        // w, x, y, z (quaternion)
+        double linear_velocity[3];    // vx, vy, vz
+        double angular_velocity[3];   // wx, wy, wz
+    };
+    std::vector<ContactData> contacts;
+    std::vector<FootData> feet;
 };
 
 struct BinaryImuMeasurement {
@@ -38,6 +61,21 @@ struct BinaryContactState {
     BinaryContactData contacts[];
 };
 
+struct BinaryForceTorqueMeasurement {
+    double timestamp;
+    double force[3];    // fx, fy, fz
+    double cop[3];      // copx, copy, copz
+    bool has_torque;    // flag to indicate if torque is present
+    double torque[3];   // tx, ty, tz (optional)
+};
+
+struct BinaryCentroidalState {
+    double timestamp;
+    double com_position[3];           // x, y, z
+    double com_linear_velocity[3];    // vx, vy, vz
+    double external_forces[3];        // fx, fy, fz
+};
+
 namespace serow {
 
 DebugLogger::DebugLogger(const std::string& filename) {
@@ -52,22 +90,46 @@ DebugLogger::DebugLogger(const std::string& filename) {
     mcap::McapWriterOptions options("ros2");  // Use ROS2 profile
     writer_->open(*file_writer_, options);
 
-    // Define schema for Vector3d
-    mcap::Schema vector3d_schema;
-    vector3d_schema.name = "BinaryVector3d";
-    vector3d_schema.encoding = "binary";
-    std::string vector3d_schema_data = R"({
+    // Define schema for BaseState
+    mcap::Schema base_state_schema;
+    base_state_schema.name = "BinaryBaseState";
+    base_state_schema.encoding = "binary";
+    std::string base_state_schema_data = R"({
         "fields": [
-            {"name": "x", "type": "float64"},
-            {"name": "y", "type": "float64"},
-            {"name": "z", "type": "float64"}
+            {"name": "timestamp", "type": "float64"},
+            {"name": "base_position", "type": "float64[3]"},
+            {"name": "base_orientation", "type": "float64[4]"},
+            {"name": "base_linear_velocity", "type": "float64[3]"},
+            {"name": "base_angular_velocity", "type": "float64[3]"},
+            {"name": "base_linear_acceleration", "type": "float64[3]"},
+            {"name": "base_angular_acceleration", "type": "float64[3]"},
+            {"name": "imu_linear_acceleration_bias", "type": "float64[3]"},
+            {"name": "imu_angular_velocity_bias", "type": "float64[3]"},
+            {"name": "num_contacts", "type": "uint32"},
+            {"name": "num_feet", "type": "uint32"},
+            {"name": "contacts", "type": "array", "items": {
+                "fields": [
+                    {"name": "name", "type": "string"},
+                    {"name": "position", "type": "float64[3]"},
+                    {"name": "orientation", "type": "float64[4]"}
+                ]
+            }},
+            {"name": "feet", "type": "array", "items": {
+                "fields": [
+                    {"name": "name", "type": "string"},
+                    {"name": "position", "type": "float64[3]"},
+                    {"name": "orientation", "type": "float64[4]"},
+                    {"name": "linear_velocity", "type": "float64[3]"},
+                    {"name": "angular_velocity", "type": "float64[3]"}
+                ]
+            }}
         ]
     })";
-    vector3d_schema.data =
-        mcap::ByteArray(reinterpret_cast<const std::byte*>(vector3d_schema_data.data()),
-                        reinterpret_cast<const std::byte*>(vector3d_schema_data.data() +
-                                                           vector3d_schema_data.size()));
-    writer_->addSchema(vector3d_schema);
+    base_state_schema.data =
+        mcap::ByteArray(reinterpret_cast<const std::byte*>(base_state_schema_data.data()),
+                        reinterpret_cast<const std::byte*>(base_state_schema_data.data() +
+                                                           base_state_schema_data.size()));
+    writer_->addSchema(base_state_schema);
 
     // Define schema for ImuMeasurement
     mcap::Schema imu_schema;
@@ -132,6 +194,43 @@ DebugLogger::DebugLogger(const std::string& filename) {
                                                            contact_schema_data.size()));
     writer_->addSchema(contact_schema);
 
+    // Define schema for ForceTorqueMeasurement
+    mcap::Schema ft_schema;
+    ft_schema.name = "BinaryForceTorqueMeasurement";
+    ft_schema.encoding = "binary";
+    std::string ft_schema_data = R"({
+        "fields": [
+            {"name": "timestamp", "type": "float64"},
+            {"name": "force", "type": "float64[3]"},
+            {"name": "cop", "type": "float64[3]"},
+            {"name": "has_torque", "type": "bool"},
+            {"name": "torque", "type": "float64[3]"}
+        ]
+    })";
+    ft_schema.data =
+        mcap::ByteArray(reinterpret_cast<const std::byte*>(ft_schema_data.data()),
+                        reinterpret_cast<const std::byte*>(ft_schema_data.data() +
+                                                           ft_schema_data.size()));
+    writer_->addSchema(ft_schema);
+
+    // Define schema for CentroidalState
+    mcap::Schema centroidal_schema;
+    centroidal_schema.name = "BinaryCentroidalState";
+    centroidal_schema.encoding = "binary";
+    std::string centroidal_schema_data = R"({
+        "fields": [
+            {"name": "timestamp", "type": "float64"},
+            {"name": "com_position", "type": "float64[3]"},
+            {"name": "com_linear_velocity", "type": "float64[3]"},
+            {"name": "external_forces", "type": "float64[3]"}
+        ]
+    })";
+    centroidal_schema.data =
+        mcap::ByteArray(reinterpret_cast<const std::byte*>(centroidal_schema_data.data()),
+                        reinterpret_cast<const std::byte*>(centroidal_schema_data.data() +
+                                                           centroidal_schema_data.size()));
+    writer_->addSchema(centroidal_schema);
+
     // Add channels
     mcap::Channel vector3d_channel;
     vector3d_channel.schemaId = 0;  // First schema (Vector3d)
@@ -152,31 +251,176 @@ DebugLogger::DebugLogger(const std::string& filename) {
     contact_channel.schemaId = 3;  // Fourth schema (ContactState)
     contact_channel.messageEncoding = "binary";
     writer_->addChannel(contact_channel);
+
+    mcap::Channel ft_channel;
+    ft_channel.schemaId = 4;  // Fifth schema (ForceTorqueMeasurement)
+    ft_channel.messageEncoding = "binary";
+    writer_->addChannel(ft_channel);
+
+    mcap::Channel centroidal_channel;
+    centroidal_channel.schemaId = 5;  // Sixth schema (CentroidalState)
+    centroidal_channel.messageEncoding = "binary";
+    writer_->addChannel(centroidal_channel);
 }
 
 void DebugLogger::log(const BaseState& base_state) {
-    // Create a message with the schema and data
+    // Create the binary state
+    BinaryBaseState data;
+    data.timestamp = base_state.timestamp;
+    data.num_contacts = static_cast<uint32_t>(base_state.contacts_position.size());
+    data.num_feet = static_cast<uint32_t>(base_state.feet_position.size());
+
+    // Base state data
+    data.base_position[0] = base_state.base_position.x();
+    data.base_position[1] = base_state.base_position.y();
+    data.base_position[2] = base_state.base_position.z();
+
+    data.base_orientation[0] = base_state.base_orientation.w();
+    data.base_orientation[1] = base_state.base_orientation.x();
+    data.base_orientation[2] = base_state.base_orientation.y();
+    data.base_orientation[3] = base_state.base_orientation.z();
+
+    data.base_linear_velocity[0] = base_state.base_linear_velocity.x();
+    data.base_linear_velocity[1] = base_state.base_linear_velocity.y();
+    data.base_linear_velocity[2] = base_state.base_linear_velocity.z();
+
+    data.base_angular_velocity[0] = base_state.base_angular_velocity.x();
+    data.base_angular_velocity[1] = base_state.base_angular_velocity.y();
+    data.base_angular_velocity[2] = base_state.base_angular_velocity.z();
+
+    data.base_linear_acceleration[0] = base_state.base_linear_acceleration.x();
+    data.base_linear_acceleration[1] = base_state.base_linear_acceleration.y();
+    data.base_linear_acceleration[2] = base_state.base_linear_acceleration.z();
+
+    data.base_angular_acceleration[0] = base_state.base_angular_acceleration.x();
+    data.base_angular_acceleration[1] = base_state.base_angular_acceleration.y();
+    data.base_angular_acceleration[2] = base_state.base_angular_acceleration.z();
+
+    data.imu_linear_acceleration_bias[0] = base_state.imu_linear_acceleration_bias.x();
+    data.imu_linear_acceleration_bias[1] = base_state.imu_linear_acceleration_bias.y();
+    data.imu_linear_acceleration_bias[2] = base_state.imu_linear_acceleration_bias.z();
+
+    data.imu_angular_velocity_bias[0] = base_state.imu_angular_velocity_bias.x();
+    data.imu_angular_velocity_bias[1] = base_state.imu_angular_velocity_bias.y();
+    data.imu_angular_velocity_bias[2] = base_state.imu_angular_velocity_bias.z();
+
+    // Fill in contact data
+    data.contacts.reserve(data.num_contacts);
+    for (const auto& [contact_name, position] : base_state.contacts_position) {
+        BinaryBaseState::ContactData contact_data;
+
+        // Copy contact name
+        std::strncpy(contact_data.name, contact_name.c_str(), sizeof(contact_data.name) - 1);
+        contact_data.name[sizeof(contact_data.name) - 1] = '\0';
+
+        // Position
+        contact_data.position[0] = position.x();
+        contact_data.position[1] = position.y();
+        contact_data.position[2] = position.z();
+
+        // Orientation (if available)
+        if (base_state.contacts_orientation.has_value()) {
+            const auto& orientation = base_state.contacts_orientation.value().at(contact_name);
+            contact_data.orientation[0] = orientation.w();
+            contact_data.orientation[1] = orientation.x();
+            contact_data.orientation[2] = orientation.y();
+            contact_data.orientation[3] = orientation.z();
+        } else {
+            contact_data.orientation[0] = 1.0;
+            contact_data.orientation[1] = 0.0;
+            contact_data.orientation[2] = 0.0;
+            contact_data.orientation[3] = 0.0;
+        }
+
+        data.contacts.push_back(contact_data);
+    }
+
+    // Fill in foot data
+    data.feet.reserve(data.num_feet);
+    for (const auto& [foot_name, position] : base_state.feet_position) {
+        BinaryBaseState::FootData foot_data;
+
+        // Copy foot name
+        std::strncpy(foot_data.name, foot_name.c_str(), sizeof(foot_data.name) - 1);
+        foot_data.name[sizeof(foot_data.name) - 1] = '\0';
+
+        // Position
+        foot_data.position[0] = position.x();
+        foot_data.position[1] = position.y();
+        foot_data.position[2] = position.z();
+
+        // Orientation
+        const auto& orientation = base_state.feet_orientation.at(foot_name);
+        foot_data.orientation[0] = orientation.w();
+        foot_data.orientation[1] = orientation.x();
+        foot_data.orientation[2] = orientation.y();
+        foot_data.orientation[3] = orientation.z();
+
+        // Linear velocity
+        const auto& linear_velocity = base_state.feet_linear_velocity.at(foot_name);
+        foot_data.linear_velocity[0] = linear_velocity.x();
+        foot_data.linear_velocity[1] = linear_velocity.y();
+        foot_data.linear_velocity[2] = linear_velocity.z();
+
+        // Angular velocity
+        const auto& angular_velocity = base_state.feet_angular_velocity.at(foot_name);
+        foot_data.angular_velocity[0] = angular_velocity.x();
+        foot_data.angular_velocity[1] = angular_velocity.y();
+        foot_data.angular_velocity[2] = angular_velocity.z();
+
+        data.feet.push_back(foot_data);
+    }
+
+    // Create and write the message
     mcap::Message message;
-    message.channelId = 0;  // base_position channel
-    message.sequence = base_position_sequence_++;
-    message.logTime = base_state.timestamp;
-    message.publishTime = base_state.timestamp;
-
-    // Convert the base state to our binary format
-    BinaryVector3d data;
-    data.x = base_state.base_position.x();
-    data.y = base_state.base_position.y();
-    data.z = base_state.base_position.z();
-
-    message.dataSize = sizeof(BinaryVector3d);
+    message.channelId = 0;  // base_state channel
+    message.sequence = base_state_sequence_++;
+    message.logTime = data.timestamp;
+    message.publishTime = data.timestamp;
+    message.dataSize = sizeof(BinaryBaseState) + 
+                      (data.contacts.size() * sizeof(BinaryBaseState::ContactData)) +
+                      (data.feet.size() * sizeof(BinaryBaseState::FootData));
     message.data = reinterpret_cast<const std::byte*>(&data);
+
     auto status = writer_->write(message);
     if (status.code != mcap::StatusCode::Success) {
-        std::cerr << "Failed to write message" << std::endl;
+        std::cerr << "Failed to write base state message" << std::endl;
     }
 }
 
-void DebugLogger::log(const CentroidalState& centroidal_state) {}
+void DebugLogger::log(const CentroidalState& centroidal_state) {
+    mcap::Message message;
+    message.channelId = 5;  // centroidal_state channel
+    message.sequence = centroidal_sequence_++;
+    message.logTime = centroidal_state.timestamp;
+    message.publishTime = centroidal_state.timestamp;
+
+    // Convert the centroidal state to our binary format
+    BinaryCentroidalState data;
+    data.timestamp = centroidal_state.timestamp;
+
+    // CoM position
+    data.com_position[0] = centroidal_state.com_position.x();
+    data.com_position[1] = centroidal_state.com_position.y();
+    data.com_position[2] = centroidal_state.com_position.z();
+
+    // CoM linear velocity
+    data.com_linear_velocity[0] = centroidal_state.com_linear_velocity.x();
+    data.com_linear_velocity[1] = centroidal_state.com_linear_velocity.y();
+    data.com_linear_velocity[2] = centroidal_state.com_linear_velocity.z();
+
+    // External forces
+    data.external_forces[0] = centroidal_state.external_forces.x();
+    data.external_forces[1] = centroidal_state.external_forces.y();
+    data.external_forces[2] = centroidal_state.external_forces.z();
+
+    message.dataSize = sizeof(BinaryCentroidalState);
+    message.data = reinterpret_cast<const std::byte*>(&data);
+    auto status = writer_->write(message);
+    if (status.code != mcap::StatusCode::Success) {
+        std::cerr << "Failed to write centroidal state message" << std::endl;
+    }
+}
 
 void DebugLogger::log(const ContactState& contact_state) {
     if (contact_state.contacts_status.empty()) {
@@ -314,7 +558,69 @@ void DebugLogger::log(const std::map<std::string, JointMeasurement>& joints_meas
     }
 }
 
-void DebugLogger::log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement) {}
+void DebugLogger::log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement) {
+    if (ft_measurement.empty()) {
+        return;
+    }
+
+    // Calculate total size needed for the message
+    const size_t num_measurements = ft_measurement.size();
+    const size_t header_size = sizeof(double) + sizeof(uint32_t);  // timestamp + num_measurements
+    const size_t measurement_size = sizeof(BinaryForceTorqueMeasurement);
+    const size_t total_size = header_size + (num_measurements * measurement_size);
+
+    // Allocate memory for the message
+    std::vector<std::byte> buffer(total_size);
+    auto* data = reinterpret_cast<BinaryForceTorqueMeasurement*>(buffer.data());
+
+    // Set the timestamp (using the first measurement's timestamp)
+    data->timestamp = ft_measurement.begin()->second.timestamp;
+
+    // Fill in measurement data
+    size_t measurement_idx = 0;
+    for (const auto& [sensor_name, measurement] : ft_measurement) {
+        auto& measurement_data = data[measurement_idx];
+
+        // Force
+        measurement_data.force[0] = measurement.force.x();
+        measurement_data.force[1] = measurement.force.y();
+        measurement_data.force[2] = measurement.force.z();
+
+        // Center of pressure
+        measurement_data.cop[0] = measurement.cop.x();
+        measurement_data.cop[1] = measurement.cop.y();
+        measurement_data.cop[2] = measurement.cop.z();
+
+        // Torque (if available)
+        measurement_data.has_torque = measurement.torque.has_value();
+        if (measurement_data.has_torque) {
+            const auto& torque = measurement.torque.value();
+            measurement_data.torque[0] = torque.x();
+            measurement_data.torque[1] = torque.y();
+            measurement_data.torque[2] = torque.z();
+        } else {
+            measurement_data.torque[0] = 0.0;
+            measurement_data.torque[1] = 0.0;
+            measurement_data.torque[2] = 0.0;
+        }
+
+        measurement_idx++;
+    }
+
+    // Create and write the message
+    mcap::Message message;
+    message.channelId = 4;  // force_torque_measurement channel
+    message.sequence = ft_sequence_++;
+    message.logTime = data->timestamp;
+    message.publishTime = data->timestamp;
+    message.dataSize = total_size;
+    message.data = buffer.data();
+
+    auto status = writer_->write(message);
+    if (status.code != mcap::StatusCode::Success) {
+        std::cerr << "Failed to write force-torque measurement message" << std::endl;
+    }
+}
 
 DebugLogger::~DebugLogger() {
     if (writer_)

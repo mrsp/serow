@@ -47,11 +47,12 @@ public:
 private:
     std::unique_ptr<mcap::McapWriter> writer_;
     std::unique_ptr<mcap::FileWriter> file_writer_;
-    uint32_t base_position_sequence_{};
+    uint32_t base_state_sequence_{};
     uint32_t imu_sequence_{};
     uint32_t joint_sequence_{};
     uint32_t ft_sequence_{};
     uint32_t contact_sequence_{};
+    uint32_t centroidal_sequence_{};
 };
 
 }  // namespace serow
