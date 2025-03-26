@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Copyright (C) 2025 Stylianos Piperakis, Ownage Dynamics L.P.
  * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
  * General Public License as published by the Free Software Foundation, version 3.
  *
@@ -11,8 +11,20 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 /**
- * @file DebugLog.hpp
- * @brief Defines data structures and accessors for the robot states in the SEROW state estimator.
+ * @file DebugLogger.hpp
+ * @brief Defines the DebugLogger class for logging robot state data in MCAP format.
+ *
+ * The DebugLogger provides functionality to log various robot states and measurements
+ * in a binary MCAP format, including:
+ * - Base state (position, orientation, velocities, etc.)
+ * - Joint measurements
+ * - Contact states
+ * - Force-torque measurements
+ * - IMU measurements
+ * - Centroidal state
+ *
+ * The logger uses the PIMPL pattern to hide implementation details and minimize
+ * compilation dependencies.
  **/
 #pragma once
 
@@ -37,6 +49,15 @@ class DebugLogger {
 public:
     DebugLogger(const std::string& log_file_path = "/tmp/serow_log.mcap");
     ~DebugLogger();
+
+    // Delete copy operations
+    DebugLogger(const DebugLogger&) = delete;
+    DebugLogger& operator=(const DebugLogger&) = delete;
+
+    // Allow move operations
+    DebugLogger(DebugLogger&&) noexcept = default;
+    DebugLogger& operator=(DebugLogger&&) noexcept = default;
+
     void log(const BaseState& base_state);
     void log(const CentroidalState& centroidal_state);
     void log(const ContactState& contact_state);
@@ -45,14 +66,8 @@ public:
     void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
 
 private:
-    std::unique_ptr<mcap::McapWriter> writer_;
-    std::unique_ptr<mcap::FileWriter> file_writer_;
-    uint32_t base_state_sequence_{};
-    uint32_t imu_sequence_{};
-    uint32_t joint_sequence_{};
-    uint32_t ft_sequence_{};
-    uint32_t contact_sequence_{};
-    uint32_t centroidal_sequence_{};
+    class Impl;  // Forward declaration of the implementation class
+    std::unique_ptr<Impl> pimpl_;
 };
 
 }  // namespace serow
