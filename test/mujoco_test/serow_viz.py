@@ -9,8 +9,8 @@ display_plots = True
 
 # Path to the HDF5 file
 serow_path = os.environ.get("SEROW_PATH")
-measurement_file = os.path.join(serow_path, "test", "mujoco_test", "data", "slope", "go2_data.h5")
-prediction_file = os.path.join(serow_path, "test", "mujoco_test", "data", "slope", "serow_predictions.h5")
+measurement_file = os.path.join(serow_path, "test", "mujoco_test", "data", "flat", "go2_data.h5")
+prediction_file = os.path.join(serow_path, "test", "mujoco_test", "data", "flat", "serow_predictions.h5")
 
 # Load the data from the HDF5 file
 def load_gt_data(h5_file):
