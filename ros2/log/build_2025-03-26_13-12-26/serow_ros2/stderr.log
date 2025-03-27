@@ -1,0 +1,17 @@
+[33mCMake Warning at CMakeLists.txt:27 (add_executable):
+  Cannot generate a safe runtime search path for target serow_ros2 because
+  files in some directories may conflict with libraries in implicit
+  directories:
+
+    runtime library [liburdfdom_sensor.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /opt/ros/humble/lib/x86_64-linux-gnu
+    runtime library [liburdfdom_model_state.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /opt/ros/humble/lib/x86_64-linux-gnu
+    runtime library [liburdfdom_model.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /opt/ros/humble/lib/x86_64-linux-gnu
+    runtime library [liburdfdom_world.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+      /opt/ros/humble/lib/x86_64-linux-gnu
+
+  Some of these libraries may not be found correctly.
+
+[0m

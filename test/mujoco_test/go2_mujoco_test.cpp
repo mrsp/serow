@@ -8,9 +8,9 @@
 // #include "serow/TerrainElevation.hpp"
 #include <fstream>
 #include <iomanip>
-constexpr const char* INPUT_FILE = "../data/slope/go2_data.h5";
-constexpr const char* OUTPUT_FILE = "../data/slope/serow_predictions.h5";
-constexpr const char* ELEVATION_MAP_FILE = "../data/slope/est_elevation_map.bin";
+constexpr const char* INPUT_FILE = "../data/flat/go2_data.h5";
+constexpr const char* OUTPUT_FILE = "../data/flat/serow_predictions.h5";
+constexpr const char* ELEVATION_MAP_FILE = "../data/flat/est_elevation_map.bin";
 
 using namespace serow;
 
@@ -155,6 +155,7 @@ int main() {
         std::vector<double> extFx, extFy, extFz;                 // External Force
         std::vector<double> b_ax, b_ay, b_az, b_wx, b_wy, b_wz;  // IMU Biases
         std::vector<Eigen::Vector3d> FR_contact_position,FL_contact_position,RL_contact_position,RR_contact_position;
+        std::vector<double> mahony_quat_x,mahony_quat_y,mahony_quat_z,mahony_quat_w;
         double log_timestamp = timestamps[0][0];
 
         for (size_t i = 0; i < timestamps.size(); ++i) {
@@ -233,7 +234,7 @@ int main() {
             if (!state.has_value()) {
                 continue;
             }
-
+            
             // Store the Estimates
             auto basePos = state->getBasePosition();
             auto baseOrient = state->getBaseOrientation();
@@ -242,12 +243,18 @@ int main() {
             auto CoMVelocity = state->getCoMLinearVelocity();
             auto linAccelBias = state->getImuLinearAccelerationBias();
             auto angVelBias = state->getImuAngularVelocityBias();
+
+            auto mahony_quaternion = SEROW.attitude_estimator_->getQ();
             // Get Contact positions 
             auto FR_contact_pos = state->getContactPosition("FR_foot");
             auto FL_contact_pos = state->getContactPosition("FL_foot");
             auto RL_contact_pos = state->getContactPosition("RL_foot");
             auto RR_contact_pos = state->getContactPosition("RR_foot");
             
+            mahony_quat_x.push_back(mahony_quaternion.x()); 
+            mahony_quat_y.push_back(mahony_quaternion.y()); 
+            mahony_quat_z.push_back(mahony_quaternion.z()); 
+            mahony_quat_w.push_back(mahony_quaternion.w()); 
 
             if (FL_contact_pos.has_value()){
                 FL_contact_position.push_back(FL_contact_pos.value());
@@ -307,6 +314,11 @@ int main() {
             b_wx.push_back(angVelBias.x());
             b_wy.push_back(angVelBias.y());
             b_wz.push_back(angVelBias.z());
+
+
+
+
+
         }
         // Write structured data to HDF5
         H5::H5File outputFile(OUTPUT_FILE, H5F_ACC_TRUNC);  // Create the output file
@@ -339,6 +351,12 @@ int main() {
         saveDataToHDF5(OUTPUT_FILE, "/imu_bias/angVel/x", b_wx);
         saveDataToHDF5(OUTPUT_FILE, "/imu_bias/angVel/y", b_wy);
         saveDataToHDF5(OUTPUT_FILE, "/imu_bias/angVel/z", b_wz);
+
+        saveDataToHDF5(OUTPUT_FILE, "/mahony_quaternion/x", mahony_quat_x);
+        saveDataToHDF5(OUTPUT_FILE, "/mahony_quaternion/y", mahony_quat_y);
+        saveDataToHDF5(OUTPUT_FILE, "/mahony_quaternion/z", mahony_quat_z);
+        saveDataToHDF5(OUTPUT_FILE, "/mahony_quaternion/w", mahony_quat_w);
+
 
         // Contact Positions
         std::vector<double> FL_contact_position_x,FL_contact_position_y,FL_contact_position_z;

@@ -64,7 +64,7 @@ class Serow {
     /// @brief Returns the terrain_estimator_ object
     const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
 
-   private:
+//    public:
     struct Params {
         /// @brief total mass of the robot (kg)
         double mass{};

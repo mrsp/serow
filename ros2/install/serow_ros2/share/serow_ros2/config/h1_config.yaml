@@ -1,0 +1,8 @@
+robot_name: "h1"
+topics:
+  joint_states: "/h1/joint_states"
+  imu: "/h1/imu"
+  force_torque_states:
+    - "/h1/left_ankle/force_torque_states"
+    - "/h1/right_ankle/force_torque_states"
+serow_config: "h1.json" 

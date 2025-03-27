@@ -1,0 +1,280 @@
+[0.000000] (-) TimerEvent: {}
+[0.000331] (serow_ros2) JobQueued: {'identifier': 'serow_ros2', 'dependencies': OrderedDict()}
+[0.000407] (serow_ros2) JobStarted: {'identifier': 'serow_ros2'}
+[0.009347] (serow_ros2) JobProgress: {'identifier': 'serow_ros2', 'progress': 'cmake'}
+[0.009625] (serow_ros2) Command: {'cmd': ['/usr/bin/cmake', '/home/michael/github/serow/ros2/src/serow_ros2', '-DCMAKE_INSTALL_PREFIX=/home/michael/github/serow/ros2/install/serow_ros2'], 'cwd': '/home/michael/github/serow/ros2/build/serow_ros2', 'env': OrderedDict([('PROFILEHOME', ''), ('LESSOPEN', '| /usr/bin/lesspipe %s'), ('LANGUAGE', ''), ('USER', 'michael'), ('LC_TIME', 'el_GR.UTF-8'), ('XDG_SESSION_TYPE', 'x11'), ('KONSOLE_VERSION', '211203'), ('SHLVL', '1'), ('LD_LIBRARY_PATH', '/home/michael/github/champ_ws/install/champ_base/lib:/home/michael/github/champ_ws/install/champ_msgs/lib:/home/michael/github/hyperdog_ws/install/hyperdog_msgs/lib:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib:/home/michael/.mujoco/bin:/usr/lib/nvidia:/opt/openrobots/lib:/home/michael/github/Quadruped-PyMPC/quadruped_pympc/acados/lib'), ('ACADOS_SOURCE_DIR', '/home/michael/github/Quadruped-PyMPC/quadruped_pympc/acados'), ('HOME', '/home/michael'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/michael/github/serow/ros2/src'), ('DESKTOP_SESSION', 'ubuntu'), ('ROS_PYTHON_VERSION', '3'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('SHELL_SESSION_ID', '5aa5c8dc72c946bab3fb8bad88512abd'), ('GTK_MODULES', 'gail:atk-bridge'), ('LC_MONETARY', 'el_GR.UTF-8'), ('KONSOLE_DBUS_SESSION', '/Sessions/1'), ('MANAGERPID', '1710'), ('SYSTEMD_EXEC_PID', '2136'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('COLORTERM', 'truecolor'), ('_CE_M', ''), ('GIO_LAUNCHED_DESKTOP_FILE_PID', '10507'), ('KONSOLE_DBUS_WINDOW', '/Windows/1'), ('COLCON_PREFIX_PATH', '/home/michael/github/hyperdog_ws/install:/home/michael/github/champ_ws/install'), ('ROS_DISTRO', 'humble'), ('GTK_IM_MODULE', 'ibus'), ('LOGNAME', 'michael'), ('WINDOWID', '46137351'), ('JOURNAL_STREAM', '8:25933'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/opt/openrobots/lib/pkgconfig:'), ('XDG_SESSION_CLASS', 'user'), ('COLORFGBG', '15;0'), ('USERNAME', 'michael'), ('TERM', 'xterm-256color'), ('SEROW_PATH', '/home/michael/github/serow/'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('WINDOWPATH', '2'), ('PATH', '/home/michael/mambaforge/condabin:/home/michael/github/champ_ws/install/champ_gazebo/bin:/home/michael/github/champ_ws/install/champ_base/bin:/home/michael/.mujoco/bin:/usr/lib/nvidia:/opt/openrobots/lib:/opt/ros/humble/bin:/opt/openrobots/bin:/home/michael/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/usr/local/go/bin'), ('SESSION_MANAGER', 'local/idea:@/tmp/.ICE-unix/1966,unix/idea:/tmp/.ICE-unix/1966'), ('INVOCATION_ID', '68957847df56475ba0d3669e7dab5ed7'), ('XDG_MENU_PREFIX', 'gnome-'), ('LC_ADDRESS', 'el_GR.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('DISPLAY', ':1'), ('LD_PRELOAD', '/usr/lib/x86_64-linux-gnu/libGLEW.so'), ('LANG', 'en_US.UTF-8'), ('XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('LC_TELEPHONE', 'el_GR.UTF-8'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu'), ('XAUTHORITY', '/run/user/1000/gdm/Xauthority'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('SSH_AGENT_LAUNCHER', 'gnome-keyring'), ('SSH_AUTH_SOCK', '/run/user/1000/keyring/ssh'), ('AMENT_PREFIX_PATH', '/home/michael/github/champ_ws/install/go1_description:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/michael/mambaforge/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'el_GR.UTF-8'), ('QT_ACCESSIBILITY', '1'), ('GDMSESSION', 'ubuntu'), ('WEBOTS_HOME', '/usr/local/webots'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('KONSOLE_DBUS_SERVICE', ':1.132'), ('LC_MEASUREMENT', 'el_GR.UTF-8'), ('GPG_AGENT_INFO', '/run/user/1000/gnupg/S.gpg-agent:0:1'), ('LC_IDENTIFICATION', 'el_GR.UTF-8'), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/michael/github/serow/ros2/build/serow_ros2'), ('LC_ALL', 'en_US.UTF-8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('CONDA_EXE', '/home/michael/mambaforge/bin/conda'), ('XDG_DATA_DIRS', '/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/home/michael/github/champ_ws/install/champ_bringup/local/lib/python3.10/dist-packages:/home/michael/github/champ_ws/install/champ_msgs/local/lib/python3.10/dist-packages:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl/lib/python3.10/site-packages:/home/michael/github/hyperdog_ws/install/hyperdog_msgs/local/lib/python3.10/dist-packages:/home/michael/github/hyperdog_ws/install/hyperdog_launch/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages:/opt/openrobots/lib/python3.10/site-packages:'), ('LC_NUMERIC', 'el_GR.UTF-8'), ('LC_PAPER', 'el_GR.UTF-8'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/home/michael/github/champ_ws/install/go1_description:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/opt/openrobots:')]), 'shell': False}
+[0.085188] (serow_ros2) StdoutLine: {'line': b'-- The C compiler identification is GNU 11.4.0\n'}
+[0.099925] (-) TimerEvent: {}
+[0.122792] (serow_ros2) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 11.4.0\n'}
+[0.128750] (serow_ros2) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[0.183220] (serow_ros2) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[0.187194] (serow_ros2) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[0.187329] (serow_ros2) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[0.187549] (serow_ros2) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[0.189099] (serow_ros2) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[0.200017] (-) TimerEvent: {}
+[0.249796] (serow_ros2) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[0.253781] (serow_ros2) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[0.253902] (serow_ros2) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[0.254229] (serow_ros2) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[0.257565] (serow_ros2) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.10 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[0.300103] (-) TimerEvent: {}
+[0.400302] (-) TimerEvent: {}
+[0.483006] (serow_ros2) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[0.500371] (-) TimerEvent: {}
+[0.550325] (serow_ros2) StdoutLine: {'line': b'-- Found rclcpp: 16.0.10 (/opt/ros/humble/share/rclcpp/cmake)\n'}
+[0.581041] (serow_ros2) StdoutLine: {'line': b'-- Found rosidl_generator_c: 3.1.5 (/opt/ros/humble/share/rosidl_generator_c/cmake)\n'}
+[0.584653] (serow_ros2) StdoutLine: {'line': b'-- Found rosidl_adapter: 3.1.5 (/opt/ros/humble/share/rosidl_adapter/cmake)\n'}
+[0.591105] (serow_ros2) StdoutLine: {'line': b'-- Found rosidl_generator_cpp: 3.1.5 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)\n'}
+[0.599668] (serow_ros2) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c\n'}
+[0.600459] (-) TimerEvent: {}
+[0.610855] (serow_ros2) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp\n'}
+[0.644243] (serow_ros2) StdoutLine: {'line': b'-- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)\n'}
+[0.646615] (serow_ros2) StdoutLine: {'line': b'-- Found rmw_fastrtps_cpp: 6.2.7 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)\n'}
+[0.700577] (-) TimerEvent: {}
+[0.729669] (serow_ros2) StdoutLine: {'line': b'-- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.2")  \n'}
+[0.750006] (serow_ros2) StdoutLine: {'line': b'-- Found FastRTPS: /opt/ros/humble/include  \n'}
+[0.779428] (serow_ros2) StdoutLine: {'line': b"-- Using RMW implementation 'rmw_fastrtps_cpp' as default\n"}
+[0.788586] (serow_ros2) StdoutLine: {'line': b'-- Looking for pthread.h\n'}
+[0.800735] (-) TimerEvent: {}
+[0.854172] (serow_ros2) StdoutLine: {'line': b'-- Looking for pthread.h - found\n'}
+[0.854577] (serow_ros2) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD\n'}
+[0.900859] (-) TimerEvent: {}
+[0.911425] (serow_ros2) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success\n'}
+[0.912672] (serow_ros2) StdoutLine: {'line': b'-- Found Threads: TRUE  \n'}
+[0.948150] (serow_ros2) StdoutLine: {'line': b'-- Found geometry_msgs: 4.2.4 (/opt/ros/humble/share/geometry_msgs/cmake)\n'}
+[0.957169] (serow_ros2) StdoutLine: {'line': b'-- Found sensor_msgs: 4.2.4 (/opt/ros/humble/share/sensor_msgs/cmake)\n'}
+[0.972020] (serow_ros2) StdoutLine: {'line': b'-- pinocchio FOUND. pinocchio at /opt/openrobots/lib/libpinocchio.so\n'}
+[0.972496] (serow_ros2) StdoutLine: {'line': b'-- boost_filesystem FOUND. boost_filesystem at /usr/lib/x86_64-linux-gnu/libboost_filesystem.so\n'}
+[0.972767] (serow_ros2) StdoutLine: {'line': b'-- boost_serialization FOUND. boost_serialization at /usr/lib/x86_64-linux-gnu/libboost_serialization.so\n'}
+[0.973048] (serow_ros2) StdoutLine: {'line': b'-- boost_system FOUND. boost_system at /usr/lib/x86_64-linux-gnu/libboost_system.so\n'}
+[1.001001] (-) TimerEvent: {}
+[1.010189] (serow_ros2) StdoutLine: {'line': b'-- Found Boost: /usr/include (found version "1.74.0") found components: filesystem serialization system \n'}
+[1.012229] (serow_ros2) StdoutLine: {'line': b'-- hpp-fcl FOUND. hpp-fcl at /opt/openrobots/lib/libhpp-fcl.so\n'}
+[1.017721] (serow_ros2) StdoutLine: {'line': b'-- Found Boost: /usr/include (found version "1.74.0") found components: chrono serialization filesystem \n'}
+[1.101171] (-) TimerEvent: {}
+[1.196036] (serow_ros2) StdoutLine: {'line': b'-- Default C++ standard: 201703\n'}
+[1.196150] (serow_ros2) StdoutLine: {'line': b'-- Minimal C++ standard upgraded to 11\n'}
+[1.196179] (serow_ros2) StdoutLine: {'line': b'-- C++ standard sufficient: Minimal required 11, currently defined: 17\n'}
+[1.196762] (serow_ros2) StdoutLine: {'line': b'-- C++ standard sufficient: Minimal required 11, currently defined: 17\n'}
+[1.200289] (serow_ros2) StdoutLine: {'line': b'-- Found nlohmann_json: /usr/local/share/cmake/nlohmann_json/nlohmann_jsonConfig.cmake (found version "3.11.3") \n'}
+[1.201221] (-) TimerEvent: {}
+[1.260075] (serow_ros2) StdoutLine: {'line': b'-- Configuring done\n'}
+[1.265238] (serow_ros2) StderrLine: {'line': b'\x1b[33mCMake Warning at CMakeLists.txt:27 (add_executable):\n'}
+[1.265367] (serow_ros2) StderrLine: {'line': b'  Cannot generate a safe runtime search path for target serow_ros2 because\n'}
+[1.265419] (serow_ros2) StderrLine: {'line': b'  files in some directories may conflict with libraries in implicit\n'}
+[1.265461] (serow_ros2) StderrLine: {'line': b'  directories:\n'}
+[1.265501] (serow_ros2) StderrLine: {'line': b'\n'}
+[1.265538] (serow_ros2) StderrLine: {'line': b'    runtime library [liburdfdom_sensor.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:\n'}
+[1.265577] (serow_ros2) StderrLine: {'line': b'      /opt/ros/humble/lib/x86_64-linux-gnu\n'}
+[1.265612] (serow_ros2) StderrLine: {'line': b'    runtime library [liburdfdom_model_state.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:\n'}
+[1.265650] (serow_ros2) StderrLine: {'line': b'      /opt/ros/humble/lib/x86_64-linux-gnu\n'}
+[1.265684] (serow_ros2) StderrLine: {'line': b'    runtime library [liburdfdom_model.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:\n'}
+[1.265720] (serow_ros2) StderrLine: {'line': b'      /opt/ros/humble/lib/x86_64-linux-gnu\n'}
+[1.265756] (serow_ros2) StderrLine: {'line': b'    runtime library [liburdfdom_world.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:\n'}
+[1.265791] (serow_ros2) StderrLine: {'line': b'      /opt/ros/humble/lib/x86_64-linux-gnu\n'}
+[1.265817] (serow_ros2) StderrLine: {'line': b'\n'}
+[1.265838] (serow_ros2) StderrLine: {'line': b'  Some of these libraries may not be found correctly.\n'}
+[1.265858] (serow_ros2) StderrLine: {'line': b'\n'}
+[1.265880] (serow_ros2) StderrLine: {'line': b'\x1b[0m\n'}
+[1.266053] (serow_ros2) StdoutLine: {'line': b'-- Generating done\n'}
+[1.268134] (serow_ros2) StdoutLine: {'line': b'-- Build files have been written to: /home/michael/github/serow/ros2/build/serow_ros2\n'}
+[1.274773] (serow_ros2) CommandEnded: {'returncode': 0}
+[1.275135] (serow_ros2) JobProgress: {'identifier': 'serow_ros2', 'progress': 'build'}
+[1.275546] (serow_ros2) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/michael/github/serow/ros2/build/serow_ros2', '--', '-j20', '-l20'], 'cwd': '/home/michael/github/serow/ros2/build/serow_ros2', 'env': OrderedDict([('PROFILEHOME', ''), ('LESSOPEN', '| /usr/bin/lesspipe %s'), ('LANGUAGE', ''), ('USER', 'michael'), ('LC_TIME', 'el_GR.UTF-8'), ('XDG_SESSION_TYPE', 'x11'), ('KONSOLE_VERSION', '211203'), ('SHLVL', '1'), ('LD_LIBRARY_PATH', '/home/michael/github/champ_ws/install/champ_base/lib:/home/michael/github/champ_ws/install/champ_msgs/lib:/home/michael/github/hyperdog_ws/install/hyperdog_msgs/lib:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib:/home/michael/.mujoco/bin:/usr/lib/nvidia:/opt/openrobots/lib:/home/michael/github/Quadruped-PyMPC/quadruped_pympc/acados/lib'), ('ACADOS_SOURCE_DIR', '/home/michael/github/Quadruped-PyMPC/quadruped_pympc/acados'), ('HOME', '/home/michael'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/michael/github/serow/ros2/src'), ('DESKTOP_SESSION', 'ubuntu'), ('ROS_PYTHON_VERSION', '3'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('SHELL_SESSION_ID', '5aa5c8dc72c946bab3fb8bad88512abd'), ('GTK_MODULES', 'gail:atk-bridge'), ('LC_MONETARY', 'el_GR.UTF-8'), ('KONSOLE_DBUS_SESSION', '/Sessions/1'), ('MANAGERPID', '1710'), ('SYSTEMD_EXEC_PID', '2136'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('COLORTERM', 'truecolor'), ('_CE_M', ''), ('GIO_LAUNCHED_DESKTOP_FILE_PID', '10507'), ('KONSOLE_DBUS_WINDOW', '/Windows/1'), ('COLCON_PREFIX_PATH', '/home/michael/github/hyperdog_ws/install:/home/michael/github/champ_ws/install'), ('ROS_DISTRO', 'humble'), ('GTK_IM_MODULE', 'ibus'), ('LOGNAME', 'michael'), ('WINDOWID', '46137351'), ('JOURNAL_STREAM', '8:25933'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/opt/openrobots/lib/pkgconfig:'), ('XDG_SESSION_CLASS', 'user'), ('COLORFGBG', '15;0'), ('USERNAME', 'michael'), ('TERM', 'xterm-256color'), ('SEROW_PATH', '/home/michael/github/serow/'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('WINDOWPATH', '2'), ('PATH', '/home/michael/mambaforge/condabin:/home/michael/github/champ_ws/install/champ_gazebo/bin:/home/michael/github/champ_ws/install/champ_base/bin:/home/michael/.mujoco/bin:/usr/lib/nvidia:/opt/openrobots/lib:/opt/ros/humble/bin:/opt/openrobots/bin:/home/michael/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/usr/local/go/bin'), ('SESSION_MANAGER', 'local/idea:@/tmp/.ICE-unix/1966,unix/idea:/tmp/.ICE-unix/1966'), ('INVOCATION_ID', '68957847df56475ba0d3669e7dab5ed7'), ('XDG_MENU_PREFIX', 'gnome-'), ('LC_ADDRESS', 'el_GR.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('DISPLAY', ':1'), ('LD_PRELOAD', '/usr/lib/x86_64-linux-gnu/libGLEW.so'), ('LANG', 'en_US.UTF-8'), ('XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('LC_TELEPHONE', 'el_GR.UTF-8'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu'), ('XAUTHORITY', '/run/user/1000/gdm/Xauthority'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('SSH_AGENT_LAUNCHER', 'gnome-keyring'), ('SSH_AUTH_SOCK', '/run/user/1000/keyring/ssh'), ('AMENT_PREFIX_PATH', '/home/michael/github/champ_ws/install/go1_description:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/michael/mambaforge/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'el_GR.UTF-8'), ('QT_ACCESSIBILITY', '1'), ('GDMSESSION', 'ubuntu'), ('WEBOTS_HOME', '/usr/local/webots'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('KONSOLE_DBUS_SERVICE', ':1.132'), ('LC_MEASUREMENT', 'el_GR.UTF-8'), ('GPG_AGENT_INFO', '/run/user/1000/gnupg/S.gpg-agent:0:1'), ('LC_IDENTIFICATION', 'el_GR.UTF-8'), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/michael/github/serow/ros2/build/serow_ros2'), ('LC_ALL', 'en_US.UTF-8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('CONDA_EXE', '/home/michael/mambaforge/bin/conda'), ('XDG_DATA_DIRS', '/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/home/michael/github/champ_ws/install/champ_bringup/local/lib/python3.10/dist-packages:/home/michael/github/champ_ws/install/champ_msgs/local/lib/python3.10/dist-packages:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl/lib/python3.10/site-packages:/home/michael/github/hyperdog_ws/install/hyperdog_msgs/local/lib/python3.10/dist-packages:/home/michael/github/hyperdog_ws/install/hyperdog_launch/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages:/opt/openrobots/lib/python3.10/site-packages:'), ('LC_NUMERIC', 'el_GR.UTF-8'), ('LC_PAPER', 'el_GR.UTF-8'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/home/michael/github/champ_ws/install/go1_description:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/opt/openrobots:')]), 'shell': False}
+[1.301327] (-) TimerEvent: {}
+[1.319160] (serow_ros2) StdoutLine: {'line': b'[ 50%] \x1b[32mBuilding CXX object CMakeFiles/serow_ros2.dir/src/serow_driver.cpp.o\x1b[0m\n'}
+[1.401437] (-) TimerEvent: {}
+[1.501699] (-) TimerEvent: {}
+[1.602003] (-) TimerEvent: {}
+[1.702214] (-) TimerEvent: {}
+[1.802502] (-) TimerEvent: {}
+[1.902786] (-) TimerEvent: {}
+[2.003077] (-) TimerEvent: {}
+[2.103376] (-) TimerEvent: {}
+[2.203589] (-) TimerEvent: {}
+[2.303822] (-) TimerEvent: {}
+[2.404046] (-) TimerEvent: {}
+[2.504330] (-) TimerEvent: {}
+[2.604621] (-) TimerEvent: {}
+[2.704913] (-) TimerEvent: {}
+[2.805205] (-) TimerEvent: {}
+[2.905491] (-) TimerEvent: {}
+[3.005779] (-) TimerEvent: {}
+[3.106075] (-) TimerEvent: {}
+[3.206382] (-) TimerEvent: {}
+[3.306677] (-) TimerEvent: {}
+[3.406968] (-) TimerEvent: {}
+[3.507258] (-) TimerEvent: {}
+[3.607547] (-) TimerEvent: {}
+[3.707840] (-) TimerEvent: {}
+[3.808146] (-) TimerEvent: {}
+[3.908442] (-) TimerEvent: {}
+[4.008741] (-) TimerEvent: {}
+[4.109033] (-) TimerEvent: {}
+[4.209326] (-) TimerEvent: {}
+[4.309621] (-) TimerEvent: {}
+[4.409917] (-) TimerEvent: {}
+[4.510217] (-) TimerEvent: {}
+[4.610499] (-) TimerEvent: {}
+[4.710790] (-) TimerEvent: {}
+[4.811074] (-) TimerEvent: {}
+[4.911368] (-) TimerEvent: {}
+[5.011670] (-) TimerEvent: {}
+[5.111968] (-) TimerEvent: {}
+[5.212179] (-) TimerEvent: {}
+[5.312411] (-) TimerEvent: {}
+[5.412699] (-) TimerEvent: {}
+[5.513000] (-) TimerEvent: {}
+[5.613308] (-) TimerEvent: {}
+[5.713591] (-) TimerEvent: {}
+[5.813880] (-) TimerEvent: {}
+[5.914176] (-) TimerEvent: {}
+[6.014465] (-) TimerEvent: {}
+[6.114753] (-) TimerEvent: {}
+[6.215082] (-) TimerEvent: {}
+[6.315374] (-) TimerEvent: {}
+[6.415666] (-) TimerEvent: {}
+[6.515962] (-) TimerEvent: {}
+[6.616225] (-) TimerEvent: {}
+[6.716436] (-) TimerEvent: {}
+[6.816692] (-) TimerEvent: {}
+[6.917086] (-) TimerEvent: {}
+[7.017371] (-) TimerEvent: {}
+[7.117656] (-) TimerEvent: {}
+[7.217942] (-) TimerEvent: {}
+[7.318240] (-) TimerEvent: {}
+[7.418535] (-) TimerEvent: {}
+[7.518840] (-) TimerEvent: {}
+[7.619148] (-) TimerEvent: {}
+[7.719454] (-) TimerEvent: {}
+[7.819665] (-) TimerEvent: {}
+[7.919956] (-) TimerEvent: {}
+[8.020167] (-) TimerEvent: {}
+[8.120454] (-) TimerEvent: {}
+[8.220753] (-) TimerEvent: {}
+[8.321007] (-) TimerEvent: {}
+[8.421227] (-) TimerEvent: {}
+[8.521473] (-) TimerEvent: {}
+[8.621715] (-) TimerEvent: {}
+[8.722019] (-) TimerEvent: {}
+[8.822325] (-) TimerEvent: {}
+[8.922612] (-) TimerEvent: {}
+[9.022856] (-) TimerEvent: {}
+[9.123103] (-) TimerEvent: {}
+[9.223339] (-) TimerEvent: {}
+[9.323572] (-) TimerEvent: {}
+[9.423806] (-) TimerEvent: {}
+[9.524112] (-) TimerEvent: {}
+[9.624411] (-) TimerEvent: {}
+[9.724643] (-) TimerEvent: {}
+[9.824934] (-) TimerEvent: {}
+[9.925153] (-) TimerEvent: {}
+[10.025373] (-) TimerEvent: {}
+[10.125620] (-) TimerEvent: {}
+[10.225856] (-) TimerEvent: {}
+[10.326183] (-) TimerEvent: {}
+[10.426438] (-) TimerEvent: {}
+[10.526731] (-) TimerEvent: {}
+[10.627040] (-) TimerEvent: {}
+[10.727250] (-) TimerEvent: {}
+[10.827486] (-) TimerEvent: {}
+[10.927782] (-) TimerEvent: {}
+[11.028076] (-) TimerEvent: {}
+[11.128291] (-) TimerEvent: {}
+[11.228531] (-) TimerEvent: {}
+[11.328763] (-) TimerEvent: {}
+[11.429006] (-) TimerEvent: {}
+[11.529259] (-) TimerEvent: {}
+[11.629495] (-) TimerEvent: {}
+[11.729788] (-) TimerEvent: {}
+[11.830106] (-) TimerEvent: {}
+[11.930415] (-) TimerEvent: {}
+[12.030658] (-) TimerEvent: {}
+[12.130969] (-) TimerEvent: {}
+[12.231189] (-) TimerEvent: {}
+[12.331504] (-) TimerEvent: {}
+[12.431810] (-) TimerEvent: {}
+[12.532072] (-) TimerEvent: {}
+[12.632295] (-) TimerEvent: {}
+[12.732514] (-) TimerEvent: {}
+[12.832737] (-) TimerEvent: {}
+[12.933028] (-) TimerEvent: {}
+[13.033240] (-) TimerEvent: {}
+[13.133497] (-) TimerEvent: {}
+[13.233730] (-) TimerEvent: {}
+[13.334030] (-) TimerEvent: {}
+[13.434254] (-) TimerEvent: {}
+[13.534500] (-) TimerEvent: {}
+[13.634784] (-) TimerEvent: {}
+[13.735017] (-) TimerEvent: {}
+[13.835212] (-) TimerEvent: {}
+[13.935431] (-) TimerEvent: {}
+[14.035684] (-) TimerEvent: {}
+[14.135909] (-) TimerEvent: {}
+[14.236193] (-) TimerEvent: {}
+[14.336428] (-) TimerEvent: {}
+[14.436719] (-) TimerEvent: {}
+[14.537020] (-) TimerEvent: {}
+[14.637313] (-) TimerEvent: {}
+[14.737533] (-) TimerEvent: {}
+[14.837807] (-) TimerEvent: {}
+[14.938095] (-) TimerEvent: {}
+[15.038313] (-) TimerEvent: {}
+[15.138595] (-) TimerEvent: {}
+[15.238815] (-) TimerEvent: {}
+[15.339020] (-) TimerEvent: {}
+[15.439341] (-) TimerEvent: {}
+[15.539623] (-) TimerEvent: {}
+[15.639905] (-) TimerEvent: {}
+[15.740113] (-) TimerEvent: {}
+[15.840403] (-) TimerEvent: {}
+[15.940630] (-) TimerEvent: {}
+[16.040860] (-) TimerEvent: {}
+[16.141107] (-) TimerEvent: {}
+[16.241419] (-) TimerEvent: {}
+[16.341696] (-) TimerEvent: {}
+[16.442057] (-) TimerEvent: {}
+[16.542341] (-) TimerEvent: {}
+[16.642707] (-) TimerEvent: {}
+[16.743076] (-) TimerEvent: {}
+[16.843379] (-) TimerEvent: {}
+[16.943664] (-) TimerEvent: {}
+[17.044060] (-) TimerEvent: {}
+[17.144387] (-) TimerEvent: {}
+[17.189830] (serow_ros2) StdoutLine: {'line': b'[100%] \x1b[32m\x1b[1mLinking CXX executable serow_ros2\x1b[0m\n'}
+[17.244581] (-) TimerEvent: {}
+[17.344928] (-) TimerEvent: {}
+[17.445260] (-) TimerEvent: {}
+[17.545618] (-) TimerEvent: {}
+[17.633124] (serow_ros2) StdoutLine: {'line': b'[100%] Built target serow_ros2\n'}
+[17.643085] (serow_ros2) CommandEnded: {'returncode': 0}
+[17.643738] (serow_ros2) JobProgress: {'identifier': 'serow_ros2', 'progress': 'install'}
+[17.645692] (-) TimerEvent: {}
+[17.648720] (serow_ros2) Command: {'cmd': ['/usr/bin/cmake', '--install', '/home/michael/github/serow/ros2/build/serow_ros2'], 'cwd': '/home/michael/github/serow/ros2/build/serow_ros2', 'env': OrderedDict([('PROFILEHOME', ''), ('LESSOPEN', '| /usr/bin/lesspipe %s'), ('LANGUAGE', ''), ('USER', 'michael'), ('LC_TIME', 'el_GR.UTF-8'), ('XDG_SESSION_TYPE', 'x11'), ('KONSOLE_VERSION', '211203'), ('SHLVL', '1'), ('LD_LIBRARY_PATH', '/home/michael/github/champ_ws/install/champ_base/lib:/home/michael/github/champ_ws/install/champ_msgs/lib:/home/michael/github/hyperdog_ws/install/hyperdog_msgs/lib:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib:/home/michael/.mujoco/bin:/usr/lib/nvidia:/opt/openrobots/lib:/home/michael/github/Quadruped-PyMPC/quadruped_pympc/acados/lib'), ('ACADOS_SOURCE_DIR', '/home/michael/github/Quadruped-PyMPC/quadruped_pympc/acados'), ('HOME', '/home/michael'), ('CONDA_SHLVL', '0'), ('OLDPWD', '/home/michael/github/serow/ros2/src'), ('DESKTOP_SESSION', 'ubuntu'), ('ROS_PYTHON_VERSION', '3'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('SHELL_SESSION_ID', '5aa5c8dc72c946bab3fb8bad88512abd'), ('GTK_MODULES', 'gail:atk-bridge'), ('LC_MONETARY', 'el_GR.UTF-8'), ('KONSOLE_DBUS_SESSION', '/Sessions/1'), ('MANAGERPID', '1710'), ('SYSTEMD_EXEC_PID', '2136'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1000/bus'), ('COLORTERM', 'truecolor'), ('_CE_M', ''), ('GIO_LAUNCHED_DESKTOP_FILE_PID', '10507'), ('KONSOLE_DBUS_WINDOW', '/Windows/1'), ('COLCON_PREFIX_PATH', '/home/michael/github/hyperdog_ws/install:/home/michael/github/champ_ws/install'), ('ROS_DISTRO', 'humble'), ('GTK_IM_MODULE', 'ibus'), ('LOGNAME', 'michael'), ('WINDOWID', '46137351'), ('JOURNAL_STREAM', '8:25933'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('PKG_CONFIG_PATH', '/opt/openrobots/lib/pkgconfig:'), ('XDG_SESSION_CLASS', 'user'), ('COLORFGBG', '15;0'), ('USERNAME', 'michael'), ('TERM', 'xterm-256color'), ('SEROW_PATH', '/home/michael/github/serow/'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('_CE_CONDA', ''), ('ROS_LOCALHOST_ONLY', '0'), ('WINDOWPATH', '2'), ('PATH', '/home/michael/mambaforge/condabin:/home/michael/github/champ_ws/install/champ_gazebo/bin:/home/michael/github/champ_ws/install/champ_base/bin:/home/michael/.mujoco/bin:/usr/lib/nvidia:/opt/openrobots/lib:/opt/ros/humble/bin:/opt/openrobots/bin:/home/michael/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/usr/local/go/bin'), ('SESSION_MANAGER', 'local/idea:@/tmp/.ICE-unix/1966,unix/idea:/tmp/.ICE-unix/1966'), ('INVOCATION_ID', '68957847df56475ba0d3669e7dab5ed7'), ('XDG_MENU_PREFIX', 'gnome-'), ('LC_ADDRESS', 'el_GR.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1000'), ('DISPLAY', ':1'), ('LD_PRELOAD', '/usr/lib/x86_64-linux-gnu/libGLEW.so'), ('LANG', 'en_US.UTF-8'), ('XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('LC_TELEPHONE', 'el_GR.UTF-8'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu'), ('XAUTHORITY', '/run/user/1000/gdm/Xauthority'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('SSH_AGENT_LAUNCHER', 'gnome-keyring'), ('SSH_AUTH_SOCK', '/run/user/1000/keyring/ssh'), ('AMENT_PREFIX_PATH', '/home/michael/github/champ_ws/install/go1_description:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble'), ('CONDA_PYTHON_EXE', '/home/michael/mambaforge/bin/python'), ('SHELL', '/bin/bash'), ('LC_NAME', 'el_GR.UTF-8'), ('QT_ACCESSIBILITY', '1'), ('GDMSESSION', 'ubuntu'), ('WEBOTS_HOME', '/usr/local/webots'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('KONSOLE_DBUS_SERVICE', ':1.132'), ('LC_MEASUREMENT', 'el_GR.UTF-8'), ('GPG_AGENT_INFO', '/run/user/1000/gnupg/S.gpg-agent:0:1'), ('LC_IDENTIFICATION', 'el_GR.UTF-8'), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/michael/github/serow/ros2/build/serow_ros2'), ('LC_ALL', 'en_US.UTF-8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('CONDA_EXE', '/home/michael/mambaforge/bin/conda'), ('XDG_DATA_DIRS', '/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/home/michael/github/champ_ws/install/champ_bringup/local/lib/python3.10/dist-packages:/home/michael/github/champ_ws/install/champ_msgs/local/lib/python3.10/dist-packages:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl/lib/python3.10/site-packages:/home/michael/github/hyperdog_ws/install/hyperdog_msgs/local/lib/python3.10/dist-packages:/home/michael/github/hyperdog_ws/install/hyperdog_launch/lib/python3.10/site-packages:/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages:/opt/openrobots/lib/python3.10/site-packages:'), ('LC_NUMERIC', 'el_GR.UTF-8'), ('LC_PAPER', 'el_GR.UTF-8'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/home/michael/github/champ_ws/install/go1_description:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/opt/openrobots:')]), 'shell': False}
+[17.654607] (serow_ros2) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[17.654664] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/lib/serow_ros2/serow_ros2\n'}
+[17.657863] (serow_ros2) StdoutLine: {'line': b'-- Set runtime path of "/home/michael/github/serow/ros2/install/serow_ros2/lib/serow_ros2/serow_ros2" to ""\n'}
+[17.657909] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/config\n'}
+[17.657945] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/config/h1_config.yaml\n'}
+[17.657987] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/launch\n'}
+[17.658011] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/launch/h1.py\n'}
+[17.658050] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/ament_index/resource_index/package_run_dependencies/serow_ros2\n'}
+[17.658109] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/ament_index/resource_index/parent_prefix_path/serow_ros2\n'}
+[17.658164] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/environment/ament_prefix_path.sh\n'}
+[17.658204] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/environment/ament_prefix_path.dsv\n'}
+[17.658244] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/environment/path.sh\n'}
+[17.658282] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/environment/path.dsv\n'}
+[17.658322] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/local_setup.bash\n'}
+[17.658362] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/local_setup.sh\n'}
+[17.658403] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/local_setup.zsh\n'}
+[17.658445] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/local_setup.dsv\n'}
+[17.658483] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/package.dsv\n'}
+[17.658535] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/ament_index/resource_index/packages/serow_ros2\n'}
+[17.658585] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/cmake/ament_cmake_export_dependencies-extras.cmake\n'}
+[17.658624] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/cmake/serow_ros2Config.cmake\n'}
+[17.658655] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/cmake/serow_ros2Config-version.cmake\n'}
+[17.658693] (serow_ros2) StdoutLine: {'line': b'-- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/package.xml\n'}
+[17.659815] (serow_ros2) CommandEnded: {'returncode': 0}
+[17.671029] (serow_ros2) JobEnded: {'identifier': 'serow_ros2', 'rc': 0}
+[17.671316] (-) EventReactorShutdown: {}

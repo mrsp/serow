@@ -278,7 +278,7 @@ BaseState ContactEKF::updateWithContacts(
 
     // Update the state with the relative contacts position
     for (const auto& [cf, cp] : contacts_position) {
-        const int num_iter = 5;
+        const int num_iter = 1;
         Eigen::MatrixXd H(3, num_states_);
         Eigen::MatrixXd K(num_states_, 3);
         Eigen::Vector3d z;
@@ -440,10 +440,10 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
                 // Construct the linearized measurement matrix H
                 H.setZero();
                 H(0, pl_idx_.at(cf)[2]) = 1.0;
-                std::cout << "map height at [x, y]: " << updated_state.contacts_position.at(cf).x()
-                          << " " << updated_state.contacts_position.at(cf).x()
-                          << " is: " << elevation.value().height
-                          << " with variance: " << elevation.value().variance << std::endl;
+                // std::cout << "map height at [x, y]: " << updated_state.contacts_position.at(cf).x()
+                //           << " " << updated_state.contacts_position.at(cf).x()
+                //           << " is: " << elevation.value().height
+                //           << " with variance: " << elevation.value().variance << std::endl;
 
                 // Compute innovation
                 z(0) = static_cast<double>(elevation.value().height) -

@@ -1,0 +1,96 @@
+[0.010s] Invoking command in '/home/michael/github/serow/ros2/build/serow_ros2': CMAKE_PREFIX_PATH=/home/michael/github/champ_ws/install/go1_description:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/opt/openrobots: /usr/bin/cmake /home/michael/github/serow/ros2/src/serow_ros2 -DCMAKE_INSTALL_PREFIX=/home/michael/github/serow/ros2/install/serow_ros2
+[0.085s] -- The C compiler identification is GNU 11.4.0
+[0.122s] -- The CXX compiler identification is GNU 11.4.0
+[0.128s] -- Detecting C compiler ABI info
+[0.183s] -- Detecting C compiler ABI info - done
+[0.187s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.187s] -- Detecting C compile features
+[0.187s] -- Detecting C compile features - done
+[0.189s] -- Detecting CXX compiler ABI info
+[0.249s] -- Detecting CXX compiler ABI info - done
+[0.253s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.254s] -- Detecting CXX compile features
+[0.254s] -- Detecting CXX compile features - done
+[0.257s] -- Found ament_cmake: 1.3.10 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.483s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[0.550s] -- Found rclcpp: 16.0.10 (/opt/ros/humble/share/rclcpp/cmake)
+[0.581s] -- Found rosidl_generator_c: 3.1.5 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[0.584s] -- Found rosidl_adapter: 3.1.5 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[0.591s] -- Found rosidl_generator_cpp: 3.1.5 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[0.599s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.610s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.644s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[0.646s] -- Found rmw_fastrtps_cpp: 6.2.7 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[0.729s] -- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.2")  
+[0.750s] -- Found FastRTPS: /opt/ros/humble/include  
+[0.779s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[0.788s] -- Looking for pthread.h
+[0.854s] -- Looking for pthread.h - found
+[0.854s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+[0.911s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+[0.912s] -- Found Threads: TRUE  
+[0.948s] -- Found geometry_msgs: 4.2.4 (/opt/ros/humble/share/geometry_msgs/cmake)
+[0.957s] -- Found sensor_msgs: 4.2.4 (/opt/ros/humble/share/sensor_msgs/cmake)
+[0.972s] -- pinocchio FOUND. pinocchio at /opt/openrobots/lib/libpinocchio.so
+[0.972s] -- boost_filesystem FOUND. boost_filesystem at /usr/lib/x86_64-linux-gnu/libboost_filesystem.so
+[0.972s] -- boost_serialization FOUND. boost_serialization at /usr/lib/x86_64-linux-gnu/libboost_serialization.so
+[0.973s] -- boost_system FOUND. boost_system at /usr/lib/x86_64-linux-gnu/libboost_system.so
+[1.010s] -- Found Boost: /usr/include (found version "1.74.0") found components: filesystem serialization system 
+[1.012s] -- hpp-fcl FOUND. hpp-fcl at /opt/openrobots/lib/libhpp-fcl.so
+[1.017s] -- Found Boost: /usr/include (found version "1.74.0") found components: chrono serialization filesystem 
+[1.196s] -- Default C++ standard: 201703
+[1.196s] -- Minimal C++ standard upgraded to 11
+[1.196s] -- C++ standard sufficient: Minimal required 11, currently defined: 17
+[1.196s] -- C++ standard sufficient: Minimal required 11, currently defined: 17
+[1.200s] -- Found nlohmann_json: /usr/local/share/cmake/nlohmann_json/nlohmann_jsonConfig.cmake (found version "3.11.3") 
+[1.260s] -- Configuring done
+[1.265s] [33mCMake Warning at CMakeLists.txt:27 (add_executable):
+[1.265s]   Cannot generate a safe runtime search path for target serow_ros2 because
+[1.265s]   files in some directories may conflict with libraries in implicit
+[1.265s]   directories:
+[1.265s] 
+[1.265s]     runtime library [liburdfdom_sensor.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+[1.265s]       /opt/ros/humble/lib/x86_64-linux-gnu
+[1.265s]     runtime library [liburdfdom_model_state.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+[1.265s]       /opt/ros/humble/lib/x86_64-linux-gnu
+[1.265s]     runtime library [liburdfdom_model.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+[1.265s]       /opt/ros/humble/lib/x86_64-linux-gnu
+[1.265s]     runtime library [liburdfdom_world.so.3.0] in /usr/lib/x86_64-linux-gnu may be hidden by files in:
+[1.265s]       /opt/ros/humble/lib/x86_64-linux-gnu
+[1.265s] 
+[1.265s]   Some of these libraries may not be found correctly.
+[1.265s] 
+[1.265s] [0m
+[1.266s] -- Generating done
+[1.268s] -- Build files have been written to: /home/michael/github/serow/ros2/build/serow_ros2
+[1.274s] Invoked command in '/home/michael/github/serow/ros2/build/serow_ros2' returned '0': CMAKE_PREFIX_PATH=/home/michael/github/champ_ws/install/go1_description:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/opt/openrobots: /usr/bin/cmake /home/michael/github/serow/ros2/src/serow_ros2 -DCMAKE_INSTALL_PREFIX=/home/michael/github/serow/ros2/install/serow_ros2
+[1.276s] Invoking command in '/home/michael/github/serow/ros2/build/serow_ros2': CMAKE_PREFIX_PATH=/home/michael/github/champ_ws/install/go1_description:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/opt/openrobots: /usr/bin/cmake --build /home/michael/github/serow/ros2/build/serow_ros2 -- -j20 -l20
+[1.319s] [ 50%] [32mBuilding CXX object CMakeFiles/serow_ros2.dir/src/serow_driver.cpp.o[0m
+[17.190s] [100%] [32m[1mLinking CXX executable serow_ros2[0m
+[17.633s] [100%] Built target serow_ros2
+[17.643s] Invoked command in '/home/michael/github/serow/ros2/build/serow_ros2' returned '0': CMAKE_PREFIX_PATH=/home/michael/github/champ_ws/install/go1_description:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/opt/openrobots: /usr/bin/cmake --build /home/michael/github/serow/ros2/build/serow_ros2 -- -j20 -l20
+[17.649s] Invoking command in '/home/michael/github/serow/ros2/build/serow_ros2': CMAKE_PREFIX_PATH=/home/michael/github/champ_ws/install/go1_description:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/opt/openrobots: /usr/bin/cmake --install /home/michael/github/serow/ros2/build/serow_ros2
+[17.654s] -- Install configuration: ""
+[17.654s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/lib/serow_ros2/serow_ros2
+[17.657s] -- Set runtime path of "/home/michael/github/serow/ros2/install/serow_ros2/lib/serow_ros2/serow_ros2" to ""
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/config
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/config/h1_config.yaml
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/launch
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/launch/h1.py
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/ament_index/resource_index/package_run_dependencies/serow_ros2
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/ament_index/resource_index/parent_prefix_path/serow_ros2
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/environment/ament_prefix_path.sh
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/environment/ament_prefix_path.dsv
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/environment/path.sh
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/environment/path.dsv
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/local_setup.bash
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/local_setup.sh
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/local_setup.zsh
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/local_setup.dsv
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/package.dsv
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/ament_index/resource_index/packages/serow_ros2
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/cmake/ament_cmake_export_dependencies-extras.cmake
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/cmake/serow_ros2Config.cmake
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/cmake/serow_ros2Config-version.cmake
+[17.658s] -- Installing: /home/michael/github/serow/ros2/install/serow_ros2/share/serow_ros2/package.xml
+[17.660s] Invoked command in '/home/michael/github/serow/ros2/build/serow_ros2' returned '0': CMAKE_PREFIX_PATH=/home/michael/github/champ_ws/install/go1_description:/home/michael/github/hyperdog_ws/install/hyperdog_ctrl:/home/michael/github/hyperdog_ws/install/hyperdog_launch:/opt/ros/humble:/home/michael/github/champ_ws/install/go1_config:/home/michael/github/champ_ws/install/champ_teleop:/home/michael/github/champ_ws/install/champ_navigation:/home/michael/github/champ_ws/install/champ_gazebo:/home/michael/github/champ_ws/install/champ_bringup:/home/michael/github/champ_ws/install/champ_base:/home/michael/github/champ_ws/install/champ_msgs:/home/michael/github/champ_ws/install/champ_description:/home/michael/github/champ_ws/install/champ_config:/home/michael/github/champ_ws/install/champ:/home/michael/github/hyperdog_ws/install/hyperdog_teleop:/home/michael/github/hyperdog_ws/install/hyperdog_gazebo_sim:/home/michael/github/hyperdog_ws/install/hyperdog_msgs:/opt/openrobots: /usr/bin/cmake --install /home/michael/github/serow/ros2/build/serow_ros2

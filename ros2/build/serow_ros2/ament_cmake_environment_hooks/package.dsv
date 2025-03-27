@@ -1,0 +1,4 @@
+source;share/serow_ros2/local_setup.bash
+source;share/serow_ros2/local_setup.dsv
+source;share/serow_ros2/local_setup.sh
+source;share/serow_ros2/local_setup.zsh
