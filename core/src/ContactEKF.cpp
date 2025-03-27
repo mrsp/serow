@@ -266,8 +266,7 @@ BaseState ContactEKF::updateWithContacts(
         }
 
         contacts_position_noise.at(cf) = cs * contacts_position_noise.at(cf) +
-                                         (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
-                                         position_cov;
+            (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + position_cov;
 
         if (contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
@@ -328,7 +327,7 @@ BaseState ContactEKF::updateWithContacts(
                         updated_state_i.base_orientation.toRotationMatrix().transpose() *
                         (updated_state_i.contacts_position.at(cf) - updated_state_i.base_position);
                     const Eigen::Matrix3d BetaT = cp * cp.transpose() - 2.0 * cp * x_i.transpose() +
-                                            x_i * x_i.transpose() + H * P_i * H.transpose();
+                        x_i * x_i.transpose() + H * P_i * H.transpose();
                     contact_outlier_detector.estimate(BetaT, contacts_position_noise.at(cf));
                 } else {
                     // Measurement is an outlier
@@ -447,7 +446,7 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
 
                 // Compute innovation
                 z(0) = static_cast<double>(elevation.value().height) -
-                       updated_state.contacts_position.at(cf).z();
+                    updated_state.contacts_position.at(cf).z();
 
                 // Construct the measurement noise matrix R
                 R(0, 0) = static_cast<double>(elevation.value().variance);
