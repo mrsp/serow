@@ -65,7 +65,7 @@ struct ElevationCell {
 };
 
 class TerrainElevation {
-   public:
+public:
     void printMapInformation() const;
 
     bool inside(const std::array<int, 2>& id_g) const;

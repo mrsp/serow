@@ -40,7 +40,9 @@ bool TerrainElevation::inside(const std::array<float, 2>& location) const {
     return inside(locationToGlobalIndex(location));
 }
 
-void TerrainElevation::resetCell(const int& hash_id) { elevation_[hash_id] = default_elevation_; }
+void TerrainElevation::resetCell(const int& hash_id) {
+    elevation_[hash_id] = default_elevation_;
+}
 
 void TerrainElevation::resetLocalMap() {
     std::fill(elevation_.begin(), elevation_.end(), empty_elevation_);
@@ -282,6 +284,8 @@ std::optional<ElevationCell> TerrainElevation::getElevation(const std::array<flo
     return elevation_[hash_id];
 }
 
-const std::array<float, 2>& TerrainElevation::getMapOrigin() const { return local_map_origin_d_; }
+const std::array<float, 2>& TerrainElevation::getMapOrigin() const {
+    return local_map_origin_d_;
+}
 
 }  // namespace serow

@@ -43,9 +43,13 @@ LegOdometry::LegOdometry(
     }
 }
 
-const Eigen::Vector3d& LegOdometry::getBasePosition() const { return base_position_; }
+const Eigen::Vector3d& LegOdometry::getBasePosition() const {
+    return base_position_;
+}
 
-const Eigen::Vector3d& LegOdometry::getBaseLinearVelocity() const { return base_linear_velocity_; }
+const Eigen::Vector3d& LegOdometry::getBaseLinearVelocity() const {
+    return base_linear_velocity_;
+}
 
 const std::map<std::string, Eigen::Vector3d> LegOdometry::getContactPositions() const {
     return contact_positions_;
@@ -73,8 +77,8 @@ void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
     if (params_.alpha3 > 0 && torque.has_value() && force_torque_offset_.has_value()) {
         A.noalias() -= params_.alpha3 / params_.Tm3 * force_skew * force_skew;
         b.noalias() += params_.alpha3 / params_.Tm3 *
-                       (force_skew * torque.value() -
-                        force_skew * force_skew * force_torque_offset_->at(frame));
+            (force_skew * torque.value() -
+             force_skew * force_skew * force_torque_offset_->at(frame));
     }
     pivots_.at(frame).noalias() = A.inverse() * b;
 }
@@ -103,8 +107,7 @@ void LegOdometry::estimate(
     if (!is_initialized) {
         base_linear_velocity_ = Eigen::Vector3d::Zero();
         for (const auto& [key, value] : base_to_foot_positions) {
-            base_linear_velocity_ +=
-                force_weights.at(key) *
+            base_linear_velocity_ += force_weights.at(key) *
                 (-lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) -
                  Rwb * base_to_foot_linear_velocities.at(key));
         }
@@ -116,8 +119,7 @@ void LegOdometry::estimate(
         const Eigen::Vector3d foot_angular_velocity =
             base_angular_velocity + Rwb * base_to_foot_angular_velocities.at(key);
 
-        const Eigen::Vector3d foot_linear_velocity =
-            base_linear_velocity_ +
+        const Eigen::Vector3d foot_linear_velocity = base_linear_velocity_ +
             lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) +
             Rwb * base_to_foot_linear_velocities.at(key);
 
@@ -156,7 +158,7 @@ void LegOdometry::estimate(
 
     for (const auto& [key, value] : pivots_) {
         contact_positions_[key] = base_to_foot_positions.at(key) +
-                                  base_to_foot_orientations.at(key).toRotationMatrix() * value;
+            base_to_foot_orientations.at(key).toRotationMatrix() * value;
         contact_orientations_[key] = base_to_foot_orientations.at(key);
     }
 

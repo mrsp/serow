@@ -44,7 +44,7 @@ namespace serow {
  * @brief Provides kinematic calculations and operations for a robot model using Pinocchio library
  */
 class RobotKinematics {
-   public:
+public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /**
@@ -102,13 +102,17 @@ class RobotKinematics {
      * @brief Returns the number of degrees of freedom (DOF) of the model
      * @return Number of DOF
      */
-    int ndof() const { return pmodel_->nq; }
+    int ndof() const {
+        return pmodel_->nq;
+    }
 
     /**
      * @brief Returns the number of actuated degrees of freedom (DOF) of the model
      * @return Number of actuated DOF
      */
-    int ndofActuated() const { return pmodel_->nq; }
+    int ndofActuated() const {
+        return pmodel_->nq;
+    }
 
     /**
      * @brief Updates the joint configuration and kinematic data
@@ -378,7 +382,9 @@ class RobotKinematics {
      * @return std::vector<std::string> containing the names of all joints.
      * @note This function returns the stored joint names in the member variable jnames_.
      */
-    std::vector<std::string> jointNames() const { return jnames_; }
+    std::vector<std::string> jointNames() const {
+        return jnames_;
+    }
 
     /**
      * @brief Retrieves the maximum angular limits of all joints in the robot model.
@@ -386,7 +392,9 @@ class RobotKinematics {
      * @note This function returns the stored maximum joint angular limits in the member variable
      * qmax_.
      */
-    Eigen::VectorXd jointMaxAngularLimits() const { return qmax_; }
+    Eigen::VectorXd jointMaxAngularLimits() const {
+        return qmax_;
+    }
 
     /**
      * @brief Retrieves the minimum angular limits of all joints in the robot model.
@@ -394,14 +402,18 @@ class RobotKinematics {
      * @note This function returns the stored minimum joint angular limits in the member variable
      * qmin_.
      */
-    Eigen::VectorXd jointMinAngularLimits() const { return qmin_; }
+    Eigen::VectorXd jointMinAngularLimits() const {
+        return qmin_;
+    }
 
     /**
      * @brief Retrieves the velocity limits of all joints in the robot model.
      * @return Eigen::VectorXd containing the velocity limits of all joints.
      * @note This function returns the stored joint velocity limits in the member variable dqmax_.
      */
-    Eigen::VectorXd jointVelocityLimits() const { return dqmax_; }
+    Eigen::VectorXd jointVelocityLimits() const {
+        return dqmax_;
+    }
 
     /**
      * @brief Prints the names of all joints in the robot model to standard output.
@@ -482,7 +494,7 @@ class RobotKinematics {
         return quat;
     }
 
-   private:
+private:
     /// Pinocchio model
     std::unique_ptr<pinocchio::Model> pmodel_;
     /// Pinocchio data

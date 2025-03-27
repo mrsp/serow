@@ -370,9 +370,13 @@ Eigen::Isometry3d State::getBasePose() const {
     return base_pose;
 }
 
-const Eigen::Vector3d& State::getBasePosition() const { return base_state_.base_position; }
+const Eigen::Vector3d& State::getBasePosition() const {
+    return base_state_.base_position;
+}
 
-const Eigen::Quaterniond& State::getBaseOrientation() const { return base_state_.base_orientation; }
+const Eigen::Quaterniond& State::getBaseOrientation() const {
+    return base_state_.base_orientation;
+}
 
 const Eigen::Vector3d& State::getBaseLinearVelocity() const {
     return base_state_.base_linear_velocity;
@@ -434,7 +438,9 @@ std::optional<Eigen::Isometry3d> State::getContactPose(const std::string& frame_
     }
 }
 
-const std::set<std::string>& State::getContactsFrame() const { return contacts_frame_; }
+const std::set<std::string>& State::getContactsFrame() const {
+    return contacts_frame_;
+}
 
 std::optional<bool> State::getContactStatus(const std::string& frame_name) const {
     if (contact_state_.contacts_status.count(frame_name))
@@ -480,7 +486,9 @@ Eigen::Matrix<double, 6, 6> State::getBasePoseCov() const {
     return base_pose_cov;
 }
 
-const Eigen::Matrix3d& State::getBasePositionCov() const { return base_state_.base_position_cov; }
+const Eigen::Matrix3d& State::getBasePositionCov() const {
+    return base_state_.base_position_cov;
+}
 
 const Eigen::Matrix3d& State::getBaseOrientationCov() const {
     return base_state_.base_orientation_cov;
@@ -553,7 +561,9 @@ std::optional<Eigen::Matrix<double, 6, 6>> State::getContactPoseCov(
     }
 }
 
-const Eigen::Vector3d& State::getCoMPosition() const { return centroidal_state_.com_position; }
+const Eigen::Vector3d& State::getCoMPosition() const {
+    return centroidal_state_.com_position;
+}
 
 const Eigen::Vector3d& State::getCoMLinearVelocity() const {
     return centroidal_state_.com_linear_velocity;
@@ -587,10 +597,16 @@ const Eigen::Matrix3d& State::getCoMExternalForcesCov() const {
     return centroidal_state_.external_forces_cov;
 }
 
-const Eigen::Vector3d& State::getCOPPosition() const { return centroidal_state_.cop_position; }
+const Eigen::Vector3d& State::getCOPPosition() const {
+    return centroidal_state_.cop_position;
+}
 
-bool State::isPointFeet() const { return point_feet_; }
+bool State::isPointFeet() const {
+    return point_feet_;
+}
 
-double State::getMass() const { return mass_; }
+double State::getMass() const {
+    return mass_;
+}
 
 }  // namespace serow

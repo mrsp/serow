@@ -43,7 +43,7 @@ namespace serow {
  *        specifically for fusing IMU data, base linear velocity, and external odometry.
  */
 class BaseEKF {
-   public:
+public:
     /**
      * @brief Initializes the EKF with the initial robot state and other parameters.
      * @param state Initial state of the robot.
@@ -73,7 +73,7 @@ class BaseEKF {
     BaseState update(const BaseState& state, const KinematicMeasurement& kin,
                      std::optional<OdometryMeasurement> odom = std::nullopt);
 
-   private:
+private:
     int num_states_{};          ///< Number of state variables.
     int num_inputs_{};          ///< Number of input variables.
     bool outlier_detection_{};  ///< Flag indicating if outlier detection is enabled.

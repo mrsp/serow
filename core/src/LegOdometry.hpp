@@ -53,7 +53,7 @@ class LegOdometry {
         double eps{};         ///< Epsilon parameter
     };
 
-   private:
+private:
     /**
      * @brief Computes the Instanteneous Moment Pivot (IMP) for a given contact frame.
      * @param frame Contact frame name
@@ -92,7 +92,7 @@ class LegOdometry {
     std::optional<std::map<std::string, Eigen::Vector3d>>
         force_torque_offset_;  ///< Force/Torque sensor offsets from the contact frames
 
-   public:
+public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /**

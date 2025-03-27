@@ -20,6 +20,7 @@
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
 #include "ContactEKF.hpp"
+#include "DebugLogger.hpp"
 #include "DerivativeEstimator.hpp"
 #include "LegOdometry.hpp"
 #include "Mahony.hpp"
@@ -27,7 +28,6 @@
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 #include "TerrainElevation.hpp"
-#include "DebugLogger.hpp"
 
 namespace serow {
 
@@ -36,7 +36,7 @@ namespace serow {
  * @brief Implements the SEROW legged robot state estimator
  */
 class Serow {
-   public:
+public:
     /// @brief initializes SEROW's configuration and internal state
     /// @param config configuration to initialize SEROW with
     /// @return true if SEROW was initialized successfully
@@ -65,7 +65,7 @@ class Serow {
     /// @brief Returns the terrain_estimator_ object
     const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
 
-   private:
+private:
     struct Params {
         /// @brief total mass of the robot (kg)
         double mass{};

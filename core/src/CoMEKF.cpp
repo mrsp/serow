@@ -117,13 +117,13 @@ CoMEKF::computePredictionJacobians(const CentroidalState& state,
     Ac.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity();
     Ac(3, 0) = ground_reaction_force.z() / (mass_ * den);
     Ac(3, 2) = -(ground_reaction_force.z() * (state.com_position.x() - cop_position.x())) /
-                   (mass_ * den * den) +
-               com_angular_momentum_derivative.y() / (mass_ * den * den);
+            (mass_ * den * den) +
+        com_angular_momentum_derivative.y() / (mass_ * den * den);
     Ac(3, 6) = 1.0 / mass_;
     Ac(4, 1) = ground_reaction_force.z() / (mass_ * den);
     Ac(4, 2) = -ground_reaction_force.z() * (state.com_position.y() - cop_position.y()) /
-                   (mass_ * den * den) -
-               com_angular_momentum_derivative.x() / (mass_ * den * den);
+            (mass_ * den * den) -
+        com_angular_momentum_derivative.x() / (mass_ * den * den);
     Ac(4, 7) = 1.0 / mass_;
     Ac(5, 8) = 1.0 / mass_;
 
@@ -142,27 +142,25 @@ CentroidalState CoMEKF::updateWithCoMAcceleration(
         den = 1e-6;
     }
     Eigen::Vector3d z = Eigen::Vector3d::Zero();
-    z.x() =
-        com_linear_acceleration(0) -
+    z.x() = com_linear_acceleration(0) -
         ((state.com_position.x() - cop_position.x()) / (mass_ * den) * ground_reaction_force.z() +
          state.external_forces.x() / mass_ - com_angular_momentum_derivative.y() / (mass_ * den));
-    z.y() =
-        com_linear_acceleration(1) -
+    z.y() = com_linear_acceleration(1) -
         ((state.com_position.y() - cop_position.y()) / (mass_ * den) * ground_reaction_force.z() +
          state.external_forces.y() / mass_ + com_angular_momentum_derivative.x() / (mass_ * den));
     z.z() = com_linear_acceleration(2) -
-            ((ground_reaction_force.z() + state.external_forces.z()) / mass_ - g_);
+        ((ground_reaction_force.z() + state.external_forces.z()) / mass_ - g_);
 
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();
     H(0, 0) = ground_reaction_force.z() / (mass_ * den);
     H(0, 2) = -(ground_reaction_force.z() * (state.com_position.x() - cop_position.x())) /
-                  (mass_ * den * den) +
-              com_angular_momentum_derivative.y() / (mass_ * den * den);
+            (mass_ * den * den) +
+        com_angular_momentum_derivative.y() / (mass_ * den * den);
     H(0, 6) = 1.0 / mass_;
     H(1, 1) = ground_reaction_force.z() / (mass_ * den);
     H(1, 2) = -ground_reaction_force.z() * (state.com_position.y() - cop_position.y()) /
-                  (mass_ * den * den) -
-              com_angular_momentum_derivative.x() / (mass_ * den * den);
+            (mass_ * den * den) -
+        com_angular_momentum_derivative.x() / (mass_ * den * den);
     H(1, 7) = 1.0 / mass_;
     H(2, 8) = 1.0 / mass_;
 
