@@ -34,7 +34,6 @@
 #include <Eigen/Dense>
 #endif
 #include <fstream>
-#include <map>
 #include <mcap/mcap.hpp>
 #include <mcap/writer.hpp>
 #include <memory>
@@ -62,7 +61,7 @@ public:
     // void log(const CentroidalState& centroidal_state);
     // void log(const ContactState& contact_state);
     void log(const ImuMeasurement& imu_measurement);
-    // void log(const std::map<std::string, JointMeasurement>& joints_measurement);
+    void log(const std::map<std::string, JointMeasurement>& joints_measurement);
     // void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
 
 private:

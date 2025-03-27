@@ -11,104 +11,8 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 #include "DebugLogger.hpp"
-#include <Eigen/Dense>
-#include <algorithm>
 #include <iostream>
-#include <mcap/mcap.hpp>
-#include <memory>
-#include <string>
-#include <vector>
 #include <nlohmann/json.hpp>
-
-namespace {
-
-struct BinaryBaseState {
-    double timestamp;
-    double base_position[3];                 // x, y, z
-    double base_orientation[4];              // w, x, y, z (quaternion)
-    double base_linear_velocity[3];          // vx, vy, vz
-    double base_angular_velocity[3];         // wx, wy, wz
-    double base_linear_acceleration[3];      // ax, ay, az
-    double base_angular_acceleration[3];     // alpha_x, alpha_y, alpha_z
-    double imu_linear_acceleration_bias[3];  // bias_x, bias_y, bias_z
-    double imu_angular_velocity_bias[3];     // bias_wx, bias_wy, bias_wz
-    uint32_t num_contacts;                   // Number of contacts
-    uint32_t num_feet;                       // Number of feet
-    // Dynamic arrays for contacts and feet data
-    struct ContactData {
-        char name[32];          // Contact name
-        double position[3];     // x, y, z
-        double orientation[4];  // w, x, y, z (quaternion)
-    };
-    struct FootData {
-        char name[32];               // Foot name
-        double position[3];          // x, y, z
-        double orientation[4];       // w, x, y, z (quaternion)
-        double linear_velocity[3];   // vx, vy, vz
-        double angular_velocity[3];  // wx, wy, wz
-    };
-    std::vector<ContactData> contacts;
-    std::vector<FootData> feet;
-};
-
-struct BinaryImuMeasurement {
-    double timestamp;
-    double linear_acceleration[3];
-    double angular_velocity[3];
-};
-
-struct BinaryJointMeasurement {
-    double timestamp;
-    uint32_t num_joints;
-    // Dynamic array of joint data
-    struct JointData {
-        char name[32];  // Fixed size for joint name
-        double position;
-        double velocity;
-    };
-    std::vector<JointData> joints;  // Use vector instead of flexible array
-};
-
-struct BinaryContactData {
-    char name[32];  // Fixed size for contact name
-    bool status;
-    double probability;
-    double force[3];   // fx, fy, fz
-    double torque[3];  // tx, ty, tz (optional)
-    bool has_torque;   // flag to indicate if torque is present
-};
-
-struct BinaryContactState {
-    double timestamp;
-    uint32_t num_contacts;
-    // Dynamic array of contact data
-    std::vector<BinaryContactData> contacts;  // Use vector instead of flexible array
-};
-
-struct BinaryForceTorqueData {
-    char name[32];  // Fixed size for sensor name
-    double timestamp;
-    double force[3];   // fx, fy, fz
-    double cop[3];     // copx, copy, copz
-    bool has_torque;   // flag to indicate if torque is present
-    double torque[3];  // tx, ty, tz (optional)
-};
-
-struct BinaryForceTorqueMeasurement {
-    double timestamp;
-    uint32_t num_measurements;
-    // Dynamic array of force-torque data
-    std::vector<BinaryForceTorqueData> measurements;  // Use vector instead of flexible array
-};
-
-struct BinaryCentroidalState {
-    double timestamp;
-    double com_position[3];         // x, y, z
-    double com_linear_velocity[3];  // vx, vy, vz
-    double external_forces[3];      // fx, fy, fz
-};
-
-}  // namespace
 
 namespace serow {
 
@@ -138,29 +42,61 @@ public:
         }
     }
 
-
     void log(const ImuMeasurement& imu_measurement) {
         // Create JSON message
         nlohmann::json json_data;
         json_data["timestamp"] = imu_measurement.timestamp;
-        json_data["linear_acceleration"] = {
-            imu_measurement.linear_acceleration.x(),
-            imu_measurement.linear_acceleration.y(),
-            imu_measurement.linear_acceleration.z()
-        };
-        json_data["angular_velocity"] = {
-            imu_measurement.angular_velocity.x(),
-            imu_measurement.angular_velocity.y(),
-            imu_measurement.angular_velocity.z()
-        };
+        json_data["linear_acceleration"] = {imu_measurement.linear_acceleration.x(),
+                                            imu_measurement.linear_acceleration.y(),
+                                            imu_measurement.linear_acceleration.z()};
+        json_data["angular_velocity"] = {imu_measurement.angular_velocity.x(),
+                                         imu_measurement.angular_velocity.y(),
+                                         imu_measurement.angular_velocity.z()};
 
         // Convert JSON to string
         std::string json_str = json_data.dump();
-        
+
         writeMessage(1, imu_sequence_++, imu_measurement.timestamp,
                      reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
     }
 
+    void log(const std::map<std::string, JointMeasurement>& joints_measurement) {
+        if (joints_measurement.empty()) {
+            return;
+        }
+
+        // Create JSON message
+        nlohmann::json json_data;
+
+        // Set timestamp (using the first joint's timestamp)
+        json_data["timestamp"] = joints_measurement.begin()->second.timestamp;
+
+        // Set number of joints
+        json_data["num_joints"] = joints_measurement.size();
+
+        // Create joint names array
+        json_data["joint_names"] = nlohmann::json::array();
+        for (const auto& [joint_name, _] : joints_measurement) {
+            json_data["joint_names"].push_back(joint_name);
+        }
+
+        // Create joints array with positions and velocities
+        json_data["joints"] = nlohmann::json::array();
+        for (const auto& [_, measurement] : joints_measurement) {
+            nlohmann::json joint_data;
+            joint_data["position"] = measurement.position;
+            if (measurement.velocity.has_value()) {
+                joint_data["velocity"] = measurement.velocity.value();
+            }
+            json_data["joints"].push_back(joint_data);
+        }
+
+        // Convert JSON to string
+        std::string json_str = json_data.dump();
+
+        writeMessage(2, joint_sequence_++, json_data["timestamp"],
+                     reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
+    }
 
 private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
@@ -168,8 +104,8 @@ private:
         mcap::Message message;
         message.channelId = channel_id;
         message.sequence = sequence;
-        message.logTime = timestamp;
-        message.publishTime = timestamp;
+        message.logTime = timestamp * 1e9;
+        message.publishTime = timestamp * 1e9;
         message.dataSize = data_size;
         message.data = data;
 
@@ -183,7 +119,7 @@ private:
         std::vector<mcap::Schema> schemas;
         // schemas.push_back(createBaseStateSchema());
         schemas.push_back(createImuMeasurementSchema());
-        // schemas.push_back(createJointMeasurementSchema());
+        schemas.push_back(createJointMeasurementSchema());
         // schemas.push_back(createContactStateSchema());
         // schemas.push_back(createForceTorqueMeasurementSchema());
         // schemas.push_back(createCentroidalStateSchema());
@@ -196,7 +132,7 @@ private:
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
         channels.push_back(createChannel(1, "ImuMeasurement"));
-        // channels.push_back(createChannel(2, "JointMeasurement"));
+        channels.push_back(createChannel(2, "JointMeasurement"));
         // channels.push_back(createChannel(3, "ContactState"));
         // channels.push_back(createChannel(4, "ForceTorqueMeasurement"));
         // channels.push_back(createChannel(5, "CentroidalState"));
@@ -206,12 +142,11 @@ private:
         }
     }
 
-
     mcap::Schema createImuMeasurementSchema() {
         mcap::Schema schema;
         schema.name = "ImuMeasurement";
         schema.encoding = "jsonschema";
-        std::string schema_data = 
+        std::string schema_data =
             "{"
             "    \"type\": \"object\","
             "    \"properties\": {"
@@ -240,20 +175,69 @@ private:
             "    },"
             "    \"required\": [\"timestamp\", \"linear_acceleration\", \"angular_velocity\"]"
             "}";
-        
+
         schema.data = mcap::ByteArray(
             reinterpret_cast<const std::byte*>(schema_data.data()),
             reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
         return schema;
     }
 
+    mcap::Schema createJointMeasurementSchema() {
+        mcap::Schema schema;
+        schema.name = "JointMeasurement";
+        schema.encoding = "jsonschema";
+        std::string schema_data =
+            "{"
+            "    \"type\": \"object\","
+            "    \"properties\": {"
+            "        \"timestamp\": {"
+            "            \"type\": \"number\","
+            "            \"description\": \"Timestamp of the measurement (s)\""
+            "        },"
+            "        \"num_joints\": {"
+            "            \"type\": \"integer\","
+            "            \"description\": \"Number of joints in the measurement\""
+            "        },"
+            "        \"joint_names\": {"
+            "            \"type\": \"array\","
+            "            \"items\": {"
+            "                \"type\": \"string\""
+            "            },"
+            "            \"description\": \"Array of joint names\""
+            "        },"
+            "        \"joints\": {"
+            "            \"type\": \"array\","
+            "            \"items\": {"
+            "                \"type\": \"object\","
+            "                \"properties\": {"
+            "                    \"position\": {"
+            "                        \"type\": \"number\","
+            "                        \"description\": \"Joint position (rad)\""
+            "                    },"
+            "                    \"velocity\": {"
+            "                        \"type\": \"number\","
+            "                        \"description\": \"Joint velocity (rad/s)\""
+            "                    }"
+            "                },"
+            "                \"required\": [\"position\"]"
+            "            }"
+            "        }"
+            "    },"
+            "    \"required\": [\"timestamp\", \"num_joints\", \"joint_names\", \"joints\"]"
+            "}";
+
+        schema.data = mcap::ByteArray(
+            reinterpret_cast<const std::byte*>(schema_data.data()),
+            reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
+        return schema;
+    }
 
     mcap::Channel createChannel(uint16_t id, const std::string& topic) {
         mcap::Channel channel;
         channel.id = id;
         channel.topic = topic;
         channel.schemaId = id;
-        channel.messageEncoding = "json";  // Changed from "binary" to "json"
+        channel.messageEncoding = "json";
         return channel;
     }
 
@@ -277,10 +261,12 @@ DebugLogger::~DebugLogger() = default;
 
 // void DebugLogger::log(const BaseState& base_state) { pimpl_->log(base_state); }
 // void DebugLogger::log(const CentroidalState& centroidal_state) { pimpl_->log(centroidal_state); }
-void DebugLogger::log(const ImuMeasurement& imu_measurement) { pimpl_->log(imu_measurement); }
-// void DebugLogger::log(const std::map<std::string, JointMeasurement>& joints_measurement) {
-//     pimpl_->log(joints_measurement);
-// }
+void DebugLogger::log(const ImuMeasurement& imu_measurement) {
+    pimpl_->log(imu_measurement);
+}
+void DebugLogger::log(const std::map<std::string, JointMeasurement>& joints_measurement) {
+    pimpl_->log(joints_measurement);
+}
 // void DebugLogger::log(const ContactState& contact_state) { pimpl_->log(contact_state); }
 // void DebugLogger::log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement) {
 //     pimpl_->log(ft_measurement);

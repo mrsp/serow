@@ -27,10 +27,10 @@ TEST(SerowTests, Go2Test) {
     serow::Serow SEROW;
     EXPECT_TRUE(SEROW.initialize("go2.json"));
 
-    const double mass = 15.017;            // kg
-    const double g = 9.81;                 // m/s^2
-    const double mg = mass * g;            // N
-    const double bias = 14;                // potatos
+    const double mass = 15.017;  // kg
+    const double g = 9.81;  // m/s^2
+    const double mg = mass * g;  // N
+    const double bias = 14;  // potatos
     const double den = 172.91 - 4 * bias;  // potatos
 
     std::fstream inputFile("../data/go2.csv", std::ios::in);  // Input file
@@ -183,7 +183,8 @@ TEST(SerowTests, Go2Test) {
         //     outputFile << timestamp << " " << state->getBasePosition().transpose().x() << " "
         //                << state->getBasePosition().transpose().y() << " "
         //                << state->getBasePosition().transpose().z() << " "
-        //                << state->getBaseOrientation().x() << " " << state->getBaseOrientation().y()
+        //                << state->getBaseOrientation().x() << " " <<
+        //                state->getBaseOrientation().y()
         //                << " " << state->getBaseOrientation().z() << " "
         //                << state->getBaseOrientation().w() << "\n";
         // }

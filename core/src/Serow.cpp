@@ -469,15 +469,15 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
 
-    // Log the IMU measurement
+    // Log the IMU + joint measurement
     debug_logger_.log(imu);
+    debug_logger_.log(joints);
 
     // IMU bias calibration
     if (params_.calibrate_initial_imu_bias) {
         if (imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
             params_.bias_gyro += imu.angular_velocity;
-            params_.bias_acc.noalias() +=
-                imu.linear_acceleration -
+            params_.bias_acc.noalias() += imu.linear_acceleration -
                 R_world_to_base.transpose() * Eigen::Vector3d(0.0, 0.0, params_.g);
             imu_calibration_cycles_++;
             return;
@@ -554,8 +554,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             if (params_.estimate_contact_status) {
                 if (contact_estimators_.count(frame) == 0) {
                     contact_estimators_.emplace(
-                        frame, ContactDetector(frame, params_.high_threshold, params_.low_threshold,
-                                               params_.mass, params_.g, params_.median_window));
+                        frame,
+                        ContactDetector(frame, params_.high_threshold, params_.low_threshold,
+                                        params_.mass, params_.g, params_.median_window));
                 }
             }
 
@@ -574,8 +575,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             // Process torque if not point feet
             if (!state.isPointFeet() && ft->at(frame).torque.has_value()) {
                 contacts_torque[frame].noalias() = foot_orientation.toRotationMatrix() *
-                                                   params_.R_foot_to_torque.at(frame) *
-                                                   ft->at(frame).torque.value();
+                    params_.R_foot_to_torque.at(frame) * ft->at(frame).torque.value();
             }
 
             // Estimate the contact status
@@ -812,8 +812,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         base_pose.linear() * (imu.angular_velocity - state.getImuAngularVelocityBias());
 
     const Eigen::Vector3d base_angular_acceleration = base_pose.linear() * imu.angular_acceleration;
-    kin.com_linear_acceleration.noalias() =
-        base_linear_acceleration +
+    kin.com_linear_acceleration.noalias() = base_linear_acceleration +
         base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
         base_angular_acceleration.cross(base_to_com_position);
 
