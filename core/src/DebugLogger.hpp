@@ -58,12 +58,12 @@ public:
     DebugLogger(DebugLogger&&) noexcept = default;
     DebugLogger& operator=(DebugLogger&&) noexcept = default;
 
-    void log(const BaseState& base_state);
-    void log(const CentroidalState& centroidal_state);
-    void log(const ContactState& contact_state);
+    // void log(const BaseState& base_state);
+    // void log(const CentroidalState& centroidal_state);
+    // void log(const ContactState& contact_state);
     void log(const ImuMeasurement& imu_measurement);
-    void log(const std::map<std::string, JointMeasurement>& joints_measurement);
-    void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
+    // void log(const std::map<std::string, JointMeasurement>& joints_measurement);
+    // void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
 
 private:
     class Impl;  // Forward declaration of the implementation class

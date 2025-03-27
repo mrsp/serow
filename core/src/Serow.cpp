@@ -629,9 +629,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
     }
 
-    // Log the contact state
-    debug_logger_.log(state.contact_state_);
-
     // Cache frequently used values
     const Eigen::Quaterniond& attitude_q = attitude_estimator_->getQ();
     const Eigen::Vector3d& attitude_gyro = attitude_estimator_->getGyro();
