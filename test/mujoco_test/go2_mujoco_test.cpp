@@ -3,19 +3,18 @@
 #include <Eigen/Dense>
 #include <iostream>
 #include <map>
-#include "serow/Serow.hpp"
 #include <vector>
+#include "serow/Serow.hpp"
 // #include "serow/TerrainElevation.hpp"
 #include <fstream>
 #include <iomanip>
-constexpr const char* INPUT_FILE = "../data/slope/go2_data.h5";
-constexpr const char* OUTPUT_FILE = "../data/slope/serow_predictions.h5";
-constexpr const char* ELEVATION_MAP_FILE = "../data/slope/est_elevation_map.bin";
+constexpr const char* INPUT_FILE = "../data/flat/go2_data.h5";
+constexpr const char* OUTPUT_FILE = "../data/flat/serow_predictions.h5";
+constexpr const char* ELEVATION_MAP_FILE = "../data/flat/est_elevation_map.bin";
 
 using namespace serow;
 
 std::ofstream file(ELEVATION_MAP_FILE);
-
 
 // Saves predictions to .h5 file
 void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
@@ -98,10 +97,8 @@ std::vector<std::vector<double>> readHDF5(const std::string& filename,
     return data;
 }
 
-
 /// @brief Writes an elevation map measurement to a binary file
-void saveElevationMap(ElevationCell data[1024][1024], double timestamp)
-{
+void saveElevationMap(ElevationCell data[1024][1024], double timestamp) {
     if (!file.is_open()) {
         std::cerr << "[saveElevationMap] File stream is not open!\n";
         return;
@@ -109,10 +106,10 @@ void saveElevationMap(ElevationCell data[1024][1024], double timestamp)
 
     // Optional: Write a timestamp or measurement ID
     file.write(reinterpret_cast<const char*>(&timestamp), sizeof(timestamp));
-    
+
     // Write the height data
-    for (size_t i = 0; i < 1024;  ++i) {
-        for (size_t j = 0; j < 1024;  ++j) {
+    for (size_t i = 0; i < 1024; ++i) {
+        for (size_t j = 0; j < 1024; ++j) {
             // std::cout << data[i][j].height << '\n';
             file.write(reinterpret_cast<const char*>(&data[i][j].height), sizeof(float));
         }
@@ -123,7 +120,6 @@ void saveElevationMap(ElevationCell data[1024][1024], double timestamp)
 
 int main() {
     try {
-
         // Initialize Serow
         serow::Serow SEROW;
         if (!SEROW.initialize("go2.json")) {
@@ -149,12 +145,13 @@ int main() {
         // Store predictions
         std::vector<double> EstTimestamp;  // timestamp
         std::vector<double> base_pos_x, base_pos_y, base_pos_z, base_rot_x, base_rot_y, base_rot_z,
-            base_rot_w;                                          // Base pose(pos + quat)
-        std::vector<double> com_x, com_y, com_z;                 // CoM position
-        std::vector<double> com_vel_x, com_vel_y, com_vel_z;     // CoM velocity
-        std::vector<double> extFx, extFy, extFz;                 // External Force
+            base_rot_w;  // Base pose(pos + quat)
+        std::vector<double> com_x, com_y, com_z;  // CoM position
+        std::vector<double> com_vel_x, com_vel_y, com_vel_z;  // CoM velocity
+        std::vector<double> extFx, extFy, extFz;  // External Force
         std::vector<double> b_ax, b_ay, b_az, b_wx, b_wy, b_wz;  // IMU Biases
-        std::vector<Eigen::Vector3d> FR_contact_position,FL_contact_position,RL_contact_position,RR_contact_position;
+        std::vector<Eigen::Vector3d> FR_contact_position, FL_contact_position, RL_contact_position,
+            RR_contact_position;
         double log_timestamp = timestamps[0][0];
 
         for (size_t i = 0; i < timestamps.size(); ++i) {
@@ -162,25 +159,29 @@ int main() {
 
             std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
             force_torque.insert(
-                {"FR_foot", serow::ForceTorqueMeasurement{
-                                .timestamp = timestamp,
-                                .force = Eigen::Vector3d(feet_force_FR[i][0], feet_force_FR[i][1],
-                                                         feet_force_FR[i][2])}});
+                {"FR_foot",
+                 serow::ForceTorqueMeasurement{
+                     .timestamp = timestamp,
+                     .force = Eigen::Vector3d(feet_force_FR[i][0], feet_force_FR[i][1],
+                                              feet_force_FR[i][2])}});
             force_torque.insert(
-                {"FL_foot", serow::ForceTorqueMeasurement{
-                                .timestamp = timestamp,
-                                .force = Eigen::Vector3d(feet_force_FL[i][0], feet_force_FL[i][1],
-                                                         feet_force_FL[i][2])}});
+                {"FL_foot",
+                 serow::ForceTorqueMeasurement{
+                     .timestamp = timestamp,
+                     .force = Eigen::Vector3d(feet_force_FL[i][0], feet_force_FL[i][1],
+                                              feet_force_FL[i][2])}});
             force_torque.insert(
-                {"RL_foot", serow::ForceTorqueMeasurement{
-                                .timestamp = timestamp,
-                                .force = Eigen::Vector3d(feet_force_RL[i][0], feet_force_RL[i][1],
-                                                         feet_force_RL[i][2])}});
+                {"RL_foot",
+                 serow::ForceTorqueMeasurement{
+                     .timestamp = timestamp,
+                     .force = Eigen::Vector3d(feet_force_RL[i][0], feet_force_RL[i][1],
+                                              feet_force_RL[i][2])}});
             force_torque.insert(
-                {"RR_foot", serow::ForceTorqueMeasurement{
-                                .timestamp = timestamp,
-                                .force = Eigen::Vector3d(feet_force_RR[i][0], feet_force_RR[i][1],
-                                                         feet_force_RR[i][2])}});
+                {"RR_foot",
+                 serow::ForceTorqueMeasurement{
+                     .timestamp = timestamp,
+                     .force = Eigen::Vector3d(feet_force_RR[i][0], feet_force_RR[i][1],
+                                              feet_force_RR[i][2])}});
 
             serow::ImuMeasurement imu;
             imu.timestamp = timestamp;
@@ -190,42 +191,42 @@ int main() {
                                                    angular_velocity[i][2]);
 
             std::map<std::string, serow::JointMeasurement> joints;
-            joints.insert(
-                {"FL_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                         .position = joint_positions[i][0]}});
-            joints.insert(
-                {"FL_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                           .position = joint_positions[i][1]}});
-            joints.insert(
-                {"FL_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                          .position = joint_positions[i][2]}});
-            joints.insert(
-                {"FR_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                         .position = joint_positions[i][3]}});
-            joints.insert(
-                {"FR_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                           .position = joint_positions[i][4]}});
-            joints.insert(
-                {"FR_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                          .position = joint_positions[i][5]}});
-            joints.insert(
-                {"RL_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                         .position = joint_positions[i][6]}});
-            joints.insert(
-                {"RL_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                           .position = joint_positions[i][7]}});
-            joints.insert(
-                {"RL_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                          .position = joint_positions[i][8]}});
-            joints.insert(
-                {"RR_hip_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                         .position = joint_positions[i][9]}});
-            joints.insert(
-                {"RR_thigh_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                           .position = joint_positions[i][10]}});
-            joints.insert(
-                {"RR_calf_joint", serow::JointMeasurement{.timestamp = timestamp,
-                                                          .position = joint_positions[i][11]}});
+            joints.insert({"FL_hip_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][0]}});
+            joints.insert({"FL_thigh_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][1]}});
+            joints.insert({"FL_calf_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][2]}});
+            joints.insert({"FR_hip_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][3]}});
+            joints.insert({"FR_thigh_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][4]}});
+            joints.insert({"FR_calf_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][5]}});
+            joints.insert({"RL_hip_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][6]}});
+            joints.insert({"RL_thigh_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][7]}});
+            joints.insert({"RL_calf_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][8]}});
+            joints.insert({"RR_hip_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][9]}});
+            joints.insert({"RR_thigh_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][10]}});
+            joints.insert({"RR_calf_joint",
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions[i][11]}});
 
             SEROW.filter(imu, joints, force_torque);
 
@@ -242,47 +243,45 @@ int main() {
             auto CoMVelocity = state->getCoMLinearVelocity();
             auto linAccelBias = state->getImuLinearAccelerationBias();
             auto angVelBias = state->getImuAngularVelocityBias();
-            // Get Contact positions 
+            // Get Contact positions
             auto FR_contact_pos = state->getContactPosition("FR_foot");
             auto FL_contact_pos = state->getContactPosition("FL_foot");
             auto RL_contact_pos = state->getContactPosition("RL_foot");
             auto RR_contact_pos = state->getContactPosition("RR_foot");
-            
 
-            if (FL_contact_pos.has_value()){
+            if (FL_contact_pos.has_value()) {
                 FL_contact_position.push_back(FL_contact_pos.value());
-            }else{
+            } else {
                 FL_contact_position.push_back(Eigen::Vector3d::Zero());
             }
 
-            if (FR_contact_pos.has_value()){
+            if (FR_contact_pos.has_value()) {
                 FR_contact_position.push_back(FR_contact_pos.value());
-            }else{
+            } else {
                 FR_contact_position.push_back(Eigen::Vector3d::Zero());
             }
 
-            if (RL_contact_pos.has_value()){
+            if (RL_contact_pos.has_value()) {
                 RL_contact_position.push_back(RL_contact_pos.value());
-            }else{
+            } else {
                 RL_contact_position.push_back(Eigen::Vector3d::Zero());
             }
-            
-            if (RR_contact_pos.has_value()){
+
+            if (RR_contact_pos.has_value()) {
                 RR_contact_position.push_back(RR_contact_pos.value());
-            }else{
+            } else {
                 RR_contact_position.push_back(Eigen::Vector3d::Zero());
             }
 
+            // auto terrainEstimator = SEROW.getTerrainEstimator();
+            // if (!terrainEstimator) {
+            //     continue;
+            // }
 
-            auto terrainEstimator = SEROW.getTerrainEstimator();
-            if (!terrainEstimator){
-                continue;
-            }
-
-            if (timestamp - log_timestamp > 0.5){
-                // saveElevationMap(terrainEstimator->elevation_,timestamp);
-                log_timestamp = timestamp;
-            }
+            // if (timestamp - log_timestamp > 0.5) {
+            //     saveElevationMap(terrainEstimator->elevation_, timestamp);
+            //     log_timestamp = timestamp;
+            // }
 
             EstTimestamp.push_back(timestamp);
             base_pos_x.push_back(basePos.x());
@@ -341,11 +340,10 @@ int main() {
         saveDataToHDF5(OUTPUT_FILE, "/imu_bias/angVel/z", b_wz);
 
         // Contact Positions
-        std::vector<double> FL_contact_position_x,FL_contact_position_y,FL_contact_position_z;
-        std::vector<double> FR_contact_position_x,FR_contact_position_y,FR_contact_position_z;
-        std::vector<double> RL_contact_position_x,RL_contact_position_y,RL_contact_position_z;
-        std::vector<double> RR_contact_position_x,RR_contact_position_y,RR_contact_position_z;
-
+        std::vector<double> FL_contact_position_x, FL_contact_position_y, FL_contact_position_z;
+        std::vector<double> FR_contact_position_x, FR_contact_position_y, FR_contact_position_z;
+        std::vector<double> RL_contact_position_x, RL_contact_position_y, RL_contact_position_z;
+        std::vector<double> RR_contact_position_x, RR_contact_position_y, RR_contact_position_z;
 
         for (const auto& vec : FL_contact_position) {
             FL_contact_position_x.push_back(vec.x());
@@ -386,10 +384,6 @@ int main() {
         saveDataToHDF5(OUTPUT_FILE, "/contact_positions/RR_foot/y", RR_contact_position_y);
         saveDataToHDF5(OUTPUT_FILE, "/contact_positions/RR_foot/z", RR_contact_position_z);
 
-
-
-
-        
         std::cout << "Processing complete. Predictions saved to " << OUTPUT_FILE << std::endl;
 
     } catch (const std::exception& e) {
