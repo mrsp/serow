@@ -451,9 +451,11 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             }
             joints_velocity[key] = value.velocity.value();
         } else {
-            joint_estimators_.try_emplace(
-                key,
-                DerivativeEstimator(key, params_.joint_rate, params_.joint_cutoff_frequency, 1));
+            if (joint_estimators_.count(key) == 0) {
+                joint_estimators_.emplace(key,
+                                          DerivativeEstimator(key, params_.joint_rate,
+                                                              params_.joint_cutoff_frequency, 1));
+            }
             joints_velocity[key] =
                 joint_estimators_.at(key).filter(Eigen::Matrix<double, 1, 1>(value.position))(0);
         }
@@ -550,9 +552,11 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         for (const auto& frame : state.getContactsFrame()) {
             // Create contact estimators if needed
             if (params_.estimate_contact_status) {
-                contact_estimators_.try_emplace(
-                    frame, ContactDetector(frame, params_.high_threshold, params_.low_threshold,
-                                           params_.mass, params_.g, params_.median_window));
+                if (contact_estimators_.count(frame) == 0) {
+                    contact_estimators_.emplace(
+                        frame, ContactDetector(frame, params_.high_threshold, params_.low_threshold,
+                                               params_.mass, params_.g, params_.median_window));
+                }
             }
 
             state.contact_state_.timestamp = ft->at(frame).timestamp;
