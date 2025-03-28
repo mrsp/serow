@@ -26,7 +26,8 @@ set(serow_src ${serow_src}
     OutlierDetector.cpp
     TerrainElevation.cpp
     NaiveTerrainElevation.cpp
-    DebugLogger.cpp)
+    DebugLogger.cpp
+    ThreadPool.cpp)
 
 set(serow_headers ${serow_headers} 
     Serow.hpp 
@@ -47,7 +48,8 @@ set(serow_headers ${serow_headers}
     OutlierDetector.hpp
     TerrainElevation.hpp
     NaiveTerrainElevation.hpp
-    DebugLogger.hpp)
+    DebugLogger.hpp
+    ThreadPool.hpp)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_link_libraries(serow PUBLIC mcap 

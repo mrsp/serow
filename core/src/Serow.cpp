@@ -41,6 +41,10 @@ std::string findFilepath(const std::string& filename) {
     throw std::runtime_error("File '" + filename + "' not found.");
 }
 
+Serow::Serow() {
+    threadpool_ = std::make_unique<ThreadPool>();
+}
+
 bool Serow::initialize(const std::string& config_file) {
     // Load configuration JSON
     auto config = json::parse(std::ifstream(findFilepath(config_file)));
@@ -77,6 +81,9 @@ bool Serow::initialize(const std::string& config_file) {
         }
 
         param_value = config[param_name];
+        
+        // Create a threadpool job to log data to mcap file
+        
         return true;
     };
 
@@ -469,13 +476,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Estimate the base frame attitude
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
-
-    // Log the IMU + FT + joint measurement
-    debug_logger_.log(imu);
-    debug_logger_.log(joints);
-    if (ft.has_value()) {
-        debug_logger_.log(ft.value());
-    }
 
     // IMU bias calibration
     if (params_.calibrate_initial_imu_bias) {
@@ -894,18 +894,38 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     state.centroidal_state_.timestamp = kin.timestamp;
     state.centroidal_state_ = com_estimator_.updateWithKinematics(state.centroidal_state_, kin);
 
-    debug_logger_.log(state.contact_state_);
-    debug_logger_.log(state.centroidal_state_);
-    debug_logger_.log(state.base_state_);
-
     // Check if state has converged
     if (!state.is_valid_ && cycle_++ > params_.convergence_cycles) {
         state.is_valid_ = true;
     }
 
+    // Create a threadpool job to log data 
+    // check if the threadpool is already running
+    if (!threadpool_->isRunning()) {
+        threadpool_->addJob([this, base_state = state.base_state_, 
+                               centroidal_state = state.centroidal_state_,
+                               contact_state = state.contact_state_,
+                               imu=imu, joints=joints, ft=ft]() {
+        try {
+            // Log all state data to MCAP file
+            debug_logger_.log(base_state);
+            debug_logger_.log(centroidal_state);
+            debug_logger_.log(contact_state);
+            debug_logger_.log(imu);
+            debug_logger_.log(joints);
+            if (ft.has_value()) {
+                debug_logger_.log(ft.value());
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Error in logging thread: " << e.what() << std::endl;
+            }
+        });
+    }
+
     // Update the state
     state_ = std::move(state);
 }
+
 
 std::optional<State> Serow::getState(bool allow_invalid) {
     if (state_.is_valid_ || allow_invalid) {

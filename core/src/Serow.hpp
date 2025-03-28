@@ -28,6 +28,7 @@
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 #include "TerrainElevation.hpp"
+#include "ThreadPool.hpp"
 
 namespace serow {
 
@@ -37,6 +38,9 @@ namespace serow {
  */
 class Serow {
 public:
+    /// @brief constructor
+    Serow();
+    
     /// @brief initializes SEROW's configuration and internal state
     /// @param config configuration to initialize SEROW with
     /// @return true if SEROW was initialized successfully
@@ -240,6 +244,8 @@ private:
     std::shared_ptr<TerrainElevation> terrain_estimator_;
     /// @brief Debug logger
     DebugLogger debug_logger_;
+    /// @brief Threadpool
+    std::unique_ptr<ThreadPool> threadpool_;
 };
 
 }  // namespace serow
