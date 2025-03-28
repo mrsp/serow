@@ -905,7 +905,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         threadpool_->addJob([this, base_state = state.base_state_, 
                                centroidal_state = state.centroidal_state_,
                                contact_state = state.contact_state_,
-                               imu=imu, joints=joints, ft=ft]() {
+                               imu=imu, joints=joints, ft=ft,
+                               ts = kin.timestamp]() {
         try {
             // Log all state data to MCAP file
             debug_logger_.log(base_state);
@@ -916,10 +917,10 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             if (ft.has_value()) {
                 debug_logger_.log(ft.value());
             }
-            if (terrain_estimator_) {
-                terrain_estimator_->updateLocalMap();
-                // debug_logger_.log(terrain_estimator_->getLocalMap());
-            }    
+            // if (terrain_estimator_ && (ts - debug_logger_.getLastLocalMapTimestamp() > 0.2)) {
+            //     terrain_estimator_->updateLocalMap(ts);
+            //     debug_logger_.log(terrain_estimator_->getLocalMap());
+            // }    
         } catch (const std::exception& e) {
                 std::cerr << "Error in logging thread: " << e.what() << std::endl;
         }

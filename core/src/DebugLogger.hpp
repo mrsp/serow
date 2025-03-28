@@ -39,6 +39,7 @@
 #include <memory>
 #include <string>
 
+#include "TerrainElevation.hpp"
 #include "Measurement.hpp"
 #include "State.hpp"
 
@@ -63,7 +64,9 @@ public:
     void log(const ImuMeasurement& imu_measurement);
     void log(const std::map<std::string, JointMeasurement>& joints_measurement);
     void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
-
+    void log(const std::pair<double, std::array<std::array<float, 3>, map_size>>& local_map_state);
+    double getLastLocalMapTimestamp() const;
+    
 private:
     class Impl;  // Forward declaration of the implementation class
     std::unique_ptr<Impl> pimpl_;

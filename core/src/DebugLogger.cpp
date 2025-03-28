@@ -394,6 +394,43 @@ public:
         }
     }
 
+    void log(const std::pair<double, std::array<std::array<float, 3>, map_size>>& local_map_state) {
+        try {
+            const double timestamp = local_map_state.first;
+            const auto& local_map = local_map_state.second;
+            
+            nlohmann::json json_data;
+            json_data["map_size"] = map_size;
+            
+            // Create array of points
+            nlohmann::json points = nlohmann::json::array();
+            
+            for (size_t i = 0; i < 1000; ++i) {
+                    const std::array<float, 3>& point = local_map[i];
+                    points.push_back({
+                        static_cast<double>(point[0]),
+                        static_cast<double>(point[1]),
+                        static_cast<double>(point[2])
+                    });
+            }
+            
+            json_data["points"] = points;
+            
+            std::string json_str = json_data.dump(-1, ' ', true);
+
+            writeMessage(7, local_map_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(json_str.data()), 
+                         json_str.size());
+            last_local_map_timestamp_ = timestamp;
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging local map: " << e.what() << std::endl;
+        }
+    }
+
+    double getLastLocalMapTimestamp() const {
+        return last_local_map_timestamp_;
+    }
+
 private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) {
@@ -430,6 +467,7 @@ private:
         schemas.push_back(createContactStateSchema());
         schemas.push_back(createCentroidalStateSchema());
         schemas.push_back(createBaseStateSchema());
+        schemas.push_back(createLocalMapSchema());
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -444,6 +482,7 @@ private:
         channels.push_back(createChannel(4, "ContactState"));
         channels.push_back(createChannel(5, "CentroidalState"));
         channels.push_back(createChannel(6, "BaseState"));
+        channels.push_back(createChannel(7, "LocalMap"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
@@ -926,6 +965,41 @@ private:
         return schema;
     }
 
+    mcap::Schema createLocalMapSchema() {
+        mcap::Schema schema;
+        schema.name = "LocalMap";
+        schema.encoding = "jsonschema";
+        std::string schema_data =
+            "{"
+            "    \"type\": \"object\","
+            "    \"properties\": {"
+            "        \"map_size\": {"
+            "            \"type\": \"integer\","
+            "            \"description\": \"Size of the local map grid\""
+            "        },"
+            "        \"points\": {"
+            "            \"type\": \"array\","
+            "            \"items\": {"
+            "                \"type\": \"array\","
+            "                \"items\": {"
+            "                    \"type\": \"number\""
+            "                },"
+            "                \"minItems\": 3,"
+            "                \"maxItems\": 3,"
+            "                \"description\": \"[x, y, z] coordinates of a point in the map\""
+            "            },"
+            "            \"description\": \"Array of 3D points in the local map\""
+            "        }"
+            "    },"
+            "    \"required\": [\"timestamp\", \"map_size\", \"points\"]"
+            "}";
+
+        schema.data = mcap::ByteArray(
+            reinterpret_cast<const std::byte*>(schema_data.data()),
+            reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
+        return schema;
+    }
+
     mcap::Channel createChannel(uint16_t id, const std::string& topic) {
         mcap::Channel channel;
         channel.id = id;
@@ -942,6 +1016,8 @@ private:
     uint64_t imu_sequence_ = 0;
     uint64_t joint_sequence_ = 0;
     uint64_t ft_sequence_ = 0;
+    uint64_t local_map_sequence_ = 0;
+    double last_local_map_timestamp_{-1.0};
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
@@ -971,6 +1047,14 @@ void DebugLogger::log(const std::map<std::string, ForceTorqueMeasurement>& ft_me
 
 void DebugLogger::log(const ContactState& contact_state) {
     pimpl_->log(contact_state);
+}
+
+void DebugLogger::log(const std::pair<double, std::array<std::array<float, 3>, map_size>>& local_map_state) {
+    pimpl_->log(local_map_state);
+}
+
+double DebugLogger::getLastLocalMapTimestamp() const {
+    return pimpl_->getLastLocalMapTimestamp();
 }
 
 }  // namespace serow

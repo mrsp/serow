@@ -113,9 +113,9 @@ public:
 
     void resetLocalMap();
 
-    void updateLocalMap();
+    void updateLocalMap(double timestamp);
 
-    const std::array<std::array<float, 3>, map_size>& getLocalMap() const;
+    const std::pair<double, std::array<std::array<float, 3>, map_size>>& getLocalMap() const;
 
     bool update(const std::array<float, 2>& loc, float height, float variance);
 
@@ -127,10 +127,11 @@ public:
 
     // world x y height
     std::array<std::array<float, 3>, map_size> local_map_{};
+    double timestamp_{};
 
     ElevationCell default_elevation_;
     ElevationCell empty_elevation_{0.0, 1e2};
-
+    
     std::array<int, 2> local_map_origin_i_{0, 0};
     std::array<int, 2> local_map_bound_max_i_{};
     std::array<int, 2> local_map_bound_min_i_{};
