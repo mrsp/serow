@@ -1,0 +1,1 @@
+Go2 robot move towards +x axis. Then stops. Rotates 90 degrees to the right (+y) and starts walking again.
