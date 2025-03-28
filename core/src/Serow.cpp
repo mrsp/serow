@@ -442,6 +442,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     double joint_timestamp{};
     for (const auto& [key, value] : joints) {
         joints_position[key] = value.position;
+        joint_timestamp = value.timestamp;
 
         if (!params_.estimate_joint_velocity) {
             if (!value.velocity.has_value()) {
@@ -469,9 +470,12 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
 
-    // Log the IMU + joint measurement
+    // Log the IMU + FT + joint measurement
     debug_logger_.log(imu);
     debug_logger_.log(joints);
+    if (ft.has_value()) {
+        debug_logger_.log(ft.value());
+    }
 
     // IMU bias calibration
     if (params_.calibrate_initial_imu_bias) {
@@ -629,6 +633,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
     }
 
+
     // Cache frequently used values
     const Eigen::Quaterniond& attitude_q = attitude_estimator_->getQ();
     const Eigen::Vector3d& attitude_gyro = attitude_estimator_->getGyro();
@@ -679,6 +684,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     // Prepare kinematic measurement
     KinematicMeasurement kin;
+    kin.timestamp = joint_timestamp;
     kin.contacts_status = state.contact_state_.contacts_status;
     kin.contacts_probability = state.contact_state_.contacts_probability;
     kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
@@ -887,6 +893,10 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Update CoM state with kinematic measurements
     state.centroidal_state_.timestamp = kin.timestamp;
     state.centroidal_state_ = com_estimator_.updateWithKinematics(state.centroidal_state_, kin);
+
+    debug_logger_.log(state.contact_state_);
+    debug_logger_.log(state.centroidal_state_);
+    debug_logger_.log(state.base_state_);
 
     // Check if state has converged
     if (!state.is_valid_ && cycle_++ > params_.convergence_cycles) {
