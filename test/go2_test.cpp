@@ -20,8 +20,6 @@
 #include <sstream>
 #include <string>
 
-constexpr bool kStorePredictions =
-    true;  // If true the serow base estimates are stored under results/
 
 TEST(SerowTests, Go2Test) {
     serow::Serow SEROW;
@@ -38,15 +36,6 @@ TEST(SerowTests, Go2Test) {
         throw std::runtime_error("Could not open csv file");
         return;
     }
-
-    // std::ofstream outputFile;
-    // if (kStorePredictions) {
-    //     outputFile.open("../results/go2_serow_estimates.txt");  // Output file
-    //     if (!outputFile.is_open()) {
-    //         throw std::runtime_error("Could not open txt file");
-    //         return;
-    //     }
-    // }
 
     // Read the CSV file
     std::vector<std::vector<std::string>> data;
@@ -177,18 +166,5 @@ TEST(SerowTests, Go2Test) {
                   << std::endl;
         std::cout << "CoM external forces " << state->getCoMExternalForces().transpose()
                   << std::endl;
-
-        // Store the results into an eigen matrix to be saved
-        // if (kStorePredictions) {
-        //     outputFile << timestamp << " " << state->getBasePosition().transpose().x() << " "
-        //                << state->getBasePosition().transpose().y() << " "
-        //                << state->getBasePosition().transpose().z() << " "
-        //                << state->getBaseOrientation().x() << " " <<
-        //                state->getBaseOrientation().y()
-        //                << " " << state->getBaseOrientation().z() << " "
-        //                << state->getBaseOrientation().w() << "\n";
-        // }
     }
-
-    // outputFile.close();
 }

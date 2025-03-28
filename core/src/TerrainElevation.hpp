@@ -87,6 +87,8 @@ public:
 
     std::array<float, 2> globalIndexToLocation(const std::array<int, 2>& id_g) const;
 
+    std::array<float, 2> globalIndexToWorldLocation(const std::array<int, 2>& id_g) const;
+
     std::array<int, 2> globalIndexToLocalIndex(const std::array<int, 2>& id_g) const;
 
     std::array<int, 2> localIndexToGlobalIndex(const std::array<int, 2>& id_l) const;
@@ -111,6 +113,10 @@ public:
 
     void resetLocalMap();
 
+    void updateLocalMap();
+
+    const std::array<std::array<float, 3>, map_size>& getLocalMap() const;
+
     bool update(const std::array<float, 2>& loc, float height, float variance);
 
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
@@ -118,6 +124,9 @@ public:
     const std::array<float, 2>& getMapOrigin() const;
 
     std::array<ElevationCell, map_size> elevation_;
+
+    // world x y height
+    std::array<std::array<float, 3>, map_size> local_map_{};
 
     ElevationCell default_elevation_;
     ElevationCell empty_elevation_{0.0, 1e2};

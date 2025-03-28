@@ -915,10 +915,14 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             debug_logger_.log(joints);
             if (ft.has_value()) {
                 debug_logger_.log(ft.value());
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Error in logging thread: " << e.what() << std::endl;
             }
+            if (terrain_estimator_) {
+                terrain_estimator_->updateLocalMap();
+                // debug_logger_.log(terrain_estimator_->getLocalMap());
+            }    
+        } catch (const std::exception& e) {
+                std::cerr << "Error in logging thread: " << e.what() << std::endl;
+        }
         });
     }
 

@@ -48,6 +48,21 @@ void TerrainElevation::resetLocalMap() {
     std::fill(elevation_.begin(), elevation_.end(), empty_elevation_);
 }
 
+
+void TerrainElevation::updateLocalMap() {
+    for (int i = 0; i < map_size; i++) {
+        const auto world_loc = globalIndexToWorldLocation(hashIdToGlobalIndex(i));
+        const auto height = elevation_[i].height;
+        local_map_[i] = {world_loc[0], world_loc[1], height};
+    }
+}
+
+
+const std::array<std::array<float, 3>, map_size>& TerrainElevation::getLocalMap() const {
+    return local_map_;
+}
+
+
 void TerrainElevation::initializeLocalMap(const float height, const float variance) {
     default_elevation_ = std::move(ElevationCell(height, variance));
     std::fill(elevation_.begin(), elevation_.end(), default_elevation_);
@@ -135,6 +150,10 @@ void TerrainElevation::recenter(const std::array<float, 2>& location) {
 
 std::array<float, 2> TerrainElevation::globalIndexToLocation(const std::array<int, 2>& id_g) const {
     return {id_g[0] * resolution, id_g[1] * resolution};
+}
+
+std::array<float, 2> TerrainElevation::globalIndexToWorldLocation(const std::array<int, 2>& id_g) const {
+    return {id_g[0] * resolution + local_map_origin_d_[0], id_g[1] * resolution + local_map_origin_d_[1]};
 }
 
 std::array<int, 2> TerrainElevation::globalIndexToLocalIndex(const std::array<int, 2>& id_g) const {
