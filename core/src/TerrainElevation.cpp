@@ -50,9 +50,11 @@ void TerrainElevation::resetLocalMap() {
 }
 
 void TerrainElevation::updateLocalMap(double timestamp) {
+    std::cout << "Updating local map" << std::endl;
     std::lock_guard<std::mutex> lock(mutex_);  // Single lock for the entire function
     try {
         // Create a temporary state to avoid modifying the shared state until we're done
+        std::cout << "Creating local map state" << std::endl;
         LocalMapState local_map_state{};
         local_map_state.timestamp = timestamp;
 
@@ -60,9 +62,10 @@ void TerrainElevation::updateLocalMap(double timestamp) {
         constexpr size_t chunk_size = 1000;
         for (size_t chunk_start = 0; chunk_start < map_size; chunk_start += chunk_size) {
             size_t chunk_end = std::min(chunk_start + chunk_size, static_cast<size_t>(map_size));
-
+            std::cout << "Processing chunk " << chunk_start << " to " << chunk_end << std::endl;
             for (size_t i = chunk_start; i < chunk_end; i++) {
                 try {
+                    std::cout << "Processing cell " << i << std::endl;
                     // Validate the index before accessing
                     if (i >= map_size) {
                         std::cerr << "Index " << i << " out of bounds for map_size " << map_size
@@ -71,10 +74,13 @@ void TerrainElevation::updateLocalMap(double timestamp) {
                     }
 
                     // Get the world location and height atomically
+                    std::cout << "Getting world location and height" << std::endl;
                     const auto world_loc = globalIndexToWorldLocation(hashIdToGlobalIndex(i));
+                    std::cout << "Getting height" << std::endl;
                     const auto height = elevation_[i].height;
 
                     // Store the data
+                    std::cout << "Storing data" << std::endl;
                     local_map_state.data[i] = {world_loc[0], world_loc[1], height};
                 } catch (const std::exception& e) {
                     std::cerr << "Error processing cell " << i << ": " << e.what() << std::endl;

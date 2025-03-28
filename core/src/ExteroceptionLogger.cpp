@@ -82,7 +82,7 @@ public:
 
             std::string json_str = json_data.dump(-1, ' ', true);
 
-            writeMessage(7, local_map_sequence_++, timestamp,
+            writeMessage(1, local_map_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
             last_local_map_timestamp_ = timestamp;
         } catch (const std::exception& e) {

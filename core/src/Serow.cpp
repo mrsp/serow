@@ -923,11 +923,11 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     }
 
     if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
-        (kin.timestamp - exteroception_logger_.getLastLocalMapTimestamp() > 0.2)) {
+        ((kin.timestamp - exteroception_logger_.getLastLocalMapTimestamp()) > 0.2)) {
         exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
             try {
                 std::cout << "Computing the local map" << std::endl;
-                terrain_estimator_->updateLocalMap(ts);
+                // terrain_estimator_->updateLocalMap(ts);
                 std::cout << "Logging the local map" << std::endl;
                 exteroception_logger_.log(terrain_estimator_->getLocalMap());
             } catch (const std::exception& e) {
