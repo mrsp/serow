@@ -1,0 +1,1 @@
+GO2 is initialized on even terrain. After just a few steps it locomotes over a rough terrain region.

@@ -1,3 +1,0 @@
-GO2 locomotes over a 10 degree slope ramp placed 3 meters in front of the robot's initial location.
-After a (almost) constant velocity walking gait along the x-axis only, the robot performs a troting gait at the top of the slope.
-Ends with the robot troting at the top of the slope. 

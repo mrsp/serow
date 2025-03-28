@@ -1,0 +1,3 @@
+Go2 starts moving towards the +x direction then stops and waits. Then it starts again.
+The expected results for x-position is a stair-like graph while for y and z it should be flat.
+
