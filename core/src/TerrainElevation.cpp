@@ -50,17 +50,19 @@ void TerrainElevation::resetLocalMap() {
 
 
 void TerrainElevation::updateLocalMap(double timestamp) {
+    LocalMap local_map;
     for (int i = 0; i < map_size; i++) {
         const auto world_loc = globalIndexToWorldLocation(hashIdToGlobalIndex(i));
         const auto height = elevation_[i].height;
-        local_map_[i] = {world_loc[0], world_loc[1], height};
+        local_map.data[i] = {world_loc[0], world_loc[1], height};
     }
-    timestamp_ = timestamp;
+    local_map.timestamp = timestamp;
+    local_map_ = std::move(local_map);
 }
 
 
-const std::pair<double, std::array<std::array<float, 3>, map_size>>& TerrainElevation::getLocalMap() const {
-    return std::make_pair(timestamp_, local_map_);
+const LocalMap& TerrainElevation::getLocalMap() const {
+    return local_map_;
 }
 
 

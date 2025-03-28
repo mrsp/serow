@@ -64,6 +64,11 @@ struct ElevationCell {
     }
 };
 
+struct LocalMap {
+    double timestamp{};
+    std::array<std::array<float, 3>, map_size> data{};
+};
+
 class TerrainElevation {
 public:
     void printMapInformation() const;
@@ -115,7 +120,7 @@ public:
 
     void updateLocalMap(double timestamp);
 
-    const std::pair<double, std::array<std::array<float, 3>, map_size>>& getLocalMap() const;
+    const LocalMap& getLocalMap() const;
 
     bool update(const std::array<float, 2>& loc, float height, float variance);
 
@@ -125,9 +130,8 @@ public:
 
     std::array<ElevationCell, map_size> elevation_;
 
-    // world x y height
-    std::array<std::array<float, 3>, map_size> local_map_{};
-    double timestamp_{};
+    // world x y height + timestamp
+    LocalMap local_map_{};
 
     ElevationCell default_elevation_;
     ElevationCell empty_elevation_{0.0, 1e2};
