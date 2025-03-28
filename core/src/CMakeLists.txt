@@ -26,7 +26,8 @@ set(serow_src ${serow_src}
     OutlierDetector.cpp
     TerrainElevation.cpp
     NaiveTerrainElevation.cpp
-    DebugLogger.cpp
+    ProprioceptionLogger.cpp
+    ExteroceptionLogger.cpp
     ThreadPool.cpp)
 
 set(serow_headers ${serow_headers} 
@@ -48,7 +49,8 @@ set(serow_headers ${serow_headers}
     OutlierDetector.hpp
     TerrainElevation.hpp
     NaiveTerrainElevation.hpp
-    DebugLogger.hpp
+    ProprioceptionLogger.hpp
+    ExteroceptionLogger.hpp
     ThreadPool.hpp)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})

@@ -418,7 +418,7 @@ BaseState ContactEKF::updateWithOdometry(const BaseState& state,
 
 BaseState ContactEKF::updateWithTerrain(const BaseState& state,
                                         const std::map<std::string, bool>& contacts_status,
-                                        const TerrainElevation& terrain_estimator) {
+                                        std::shared_ptr<TerrainElevation> terrain_estimator) {
     BaseState updated_state = state;
     // Construct the innovation vector z, the linearized measurement matrix H, and the measurement
     // noise matrix R
@@ -431,7 +431,7 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
     for (const auto& [cf, cs] : contacts_status) {
         // Update only when the elevation at the contact points is available and updated in the map
         if (cs) {
-            auto elevation = terrain_estimator.getElevation(
+            auto elevation = terrain_estimator->getElevation(
                 {static_cast<float>(updated_state.contacts_position.at(cf).x()),
                  static_cast<float>(updated_state.contacts_position.at(cf).y())});
 
@@ -439,10 +439,11 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
                 // Construct the linearized measurement matrix H
                 H.setZero();
                 H(0, pl_idx_.at(cf)[2]) = 1.0;
-                std::cout << "map height at [x, y]: " << updated_state.contacts_position.at(cf).x()
-                          << " " << updated_state.contacts_position.at(cf).x()
-                          << " is: " << elevation.value().height
-                          << " with variance: " << elevation.value().variance << std::endl;
+                // std::cout << "map height at [x, y]: " <<
+                // updated_state.contacts_position.at(cf).x()
+                //           << " " << updated_state.contacts_position.at(cf).x()
+                //           << " is: " << elevation.value().height
+                //           << " with variance: " << elevation.value().variance << std::endl;
 
                 // Compute innovation
                 z(0) = static_cast<double>(elevation.value().height) -
@@ -583,7 +584,7 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
     // Update the state with the absolute terrain height at each contact location and potentially
     // recenter the terrain mapper
     if (terrain_estimator) {
-        updated_state = updateWithTerrain(updated_state, kin.contacts_status, *terrain_estimator);
+        updated_state = updateWithTerrain(updated_state, kin.contacts_status, terrain_estimator);
         // TODO: @sp make this a const parameter
         // Recenter the map
         const std::array<float, 2> base_pos_xy = {

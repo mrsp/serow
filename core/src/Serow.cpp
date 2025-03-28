@@ -42,7 +42,8 @@ std::string findFilepath(const std::string& filename) {
 }
 
 Serow::Serow() {
-    threadpool_ = std::make_unique<ThreadPool>();
+    proprioception_logger_job_ = std::make_unique<ThreadPool>();
+    exteroception_logger_job_ = std::make_unique<ThreadPool>();
 }
 
 bool Serow::initialize(const std::string& config_file) {
@@ -81,9 +82,9 @@ bool Serow::initialize(const std::string& config_file) {
         }
 
         param_value = config[param_name];
-        
+
         // Create a threadpool job to log data to mcap file
-        
+
         return true;
     };
 
@@ -633,7 +634,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
     }
 
-
     // Cache frequently used values
     const Eigen::Quaterniond& attitude_q = attitude_estimator_->getQ();
     const Eigen::Vector3d& attitude_gyro = attitude_estimator_->getGyro();
@@ -899,38 +899,46 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         state.is_valid_ = true;
     }
 
-    // Create a threadpool job to log data 
-    // check if the threadpool is already running
-    if (!threadpool_->isRunning()) {
-        threadpool_->addJob([this, base_state = state.base_state_, 
-                               centroidal_state = state.centroidal_state_,
-                               contact_state = state.contact_state_,
-                               imu=imu, joints=joints, ft=ft,
-                               ts = kin.timestamp]() {
-        try {
-            // Log all state data to MCAP file
-            debug_logger_.log(base_state);
-            debug_logger_.log(centroidal_state);
-            debug_logger_.log(contact_state);
-            debug_logger_.log(imu);
-            debug_logger_.log(joints);
-            if (ft.has_value()) {
-                debug_logger_.log(ft.value());
+    // Launch the threadpool jobs to log data
+    if (!proprioception_logger_job_->isRunning()) {
+        proprioception_logger_job_->addJob(
+            [this, base_state = state.base_state_, centroidal_state = state.centroidal_state_,
+             contact_state = state.contact_state_, imu = imu, joints = joints, ft = ft]() {
+                try {
+                    // Log all state data to MCAP file
+                    proprioception_logger_.log(base_state);
+                    proprioception_logger_.log(centroidal_state);
+                    proprioception_logger_.log(contact_state);
+                    proprioception_logger_.log(imu);
+                    proprioception_logger_.log(joints);
+                    if (ft.has_value()) {
+                        proprioception_logger_.log(ft.value());
+                    }
+
+                } catch (const std::exception& e) {
+                    std::cerr << "Error in proprioception logging thread: " << e.what()
+                              << std::endl;
+                }
+            });
+    }
+
+    if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
+        (kin.timestamp - exteroception_logger_.getLastLocalMapTimestamp() > 0.2)) {
+        exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
+            try {
+                std::cout << "Computing the local map" << std::endl;
+                terrain_estimator_->updateLocalMap(ts);
+                std::cout << "Logging the local map" << std::endl;
+                exteroception_logger_.log(terrain_estimator_->getLocalMap());
+            } catch (const std::exception& e) {
+                std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
             }
-            // if (terrain_estimator_ && (ts - debug_logger_.getLastLocalMapTimestamp() > 0.2)) {
-            //     terrain_estimator_->updateLocalMap(ts);
-            //     debug_logger_.log(terrain_estimator_->getLocalMap());
-            // }    
-        } catch (const std::exception& e) {
-                std::cerr << "Error in logging thread: " << e.what() << std::endl;
-        }
         });
     }
 
     // Update the state
     state_ = std::move(state);
 }
-
 
 std::optional<State> Serow::getState(bool allow_invalid) {
     if (state_.is_valid_ || allow_invalid) {

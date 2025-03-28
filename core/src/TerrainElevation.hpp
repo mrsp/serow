@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -64,7 +65,7 @@ struct ElevationCell {
     }
 };
 
-struct LocalMap {
+struct LocalMapState {
     double timestamp{};
     std::array<std::array<float, 3>, map_size> data{};
 };
@@ -73,18 +74,35 @@ class TerrainElevation {
 public:
     void printMapInformation() const;
 
+    void recenter(const std::array<float, 2>& location);
+
+    void initializeLocalMap(const float height, const float variance);
+
+    void updateLocalMap(double timestamp);
+
+    const LocalMapState& getLocalMap();
+
+    bool update(const std::array<float, 2>& loc, float height, float variance);
+
+    std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc);
+
+    const std::array<float, 2>& getMapOrigin();
+
+    float min_terrain_height_variance_{};
+
+private:
+    void resetLocalMap();
+
+    void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
+                                      const std::array<int, 2>& new_origin_i);
+
     bool inside(const std::array<int, 2>& id_g) const;
 
     bool inside(const std::array<float, 2>& location) const;
 
     void resetCell(const int& hash_id);
 
-    void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
-                                      const std::array<int, 2>& new_origin_i);
-
     void clearOutOfMapCells(const std::vector<int>& clear_id);
-
-    void recenter(const std::array<float, 2>& location);
 
     int locationToGlobalIndex(const float loc) const;
 
@@ -114,28 +132,14 @@ public:
 
     bool isHashIdValid(const int id) const;
 
-    void initializeLocalMap(const float height, const float variance);
-
-    void resetLocalMap();
-
-    void updateLocalMap(double timestamp);
-
-    const LocalMap& getLocalMap() const;
-
-    bool update(const std::array<float, 2>& loc, float height, float variance);
-
-    std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
-
-    const std::array<float, 2>& getMapOrigin() const;
-
     std::array<ElevationCell, map_size> elevation_;
 
     // world x y height + timestamp
-    LocalMap local_map_{};
+    LocalMapState local_map_state_{};
 
     ElevationCell default_elevation_;
     ElevationCell empty_elevation_{0.0, 1e2};
-    
+
     std::array<int, 2> local_map_origin_i_{0, 0};
     std::array<int, 2> local_map_bound_max_i_{};
     std::array<int, 2> local_map_bound_min_i_{};
@@ -143,8 +147,7 @@ public:
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
 
-    float min_terrain_height_variance_{};
-
+    std::mutex mutex_;
     friend class TerrainElevationTest;  // Allow full access
 };
 

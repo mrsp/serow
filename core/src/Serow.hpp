@@ -20,11 +20,12 @@
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
 #include "ContactEKF.hpp"
-#include "DebugLogger.hpp"
 #include "DerivativeEstimator.hpp"
+#include "ExteroceptionLogger.hpp"
 #include "LegOdometry.hpp"
 #include "Mahony.hpp"
 #include "Measurement.hpp"
+#include "ProprioceptionLogger.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 #include "TerrainElevation.hpp"
@@ -242,10 +243,13 @@ private:
     size_t imu_calibration_cycles_{};
     /// @brief Terrain elevation mapper
     std::shared_ptr<TerrainElevation> terrain_estimator_;
-    /// @brief Debug logger
-    DebugLogger debug_logger_;
-    /// @brief Threadpool for logging
-    std::unique_ptr<ThreadPool> threadpool_;
+    /// @brief Data loggers
+    ProprioceptionLogger proprioception_logger_;
+    ExteroceptionLogger exteroception_logger_;
+    /// @brief Threadpool job for proprioceptive logging
+    std::unique_ptr<ThreadPool> proprioception_logger_job_;
+    /// @brief Threadpool job for exteroceptive logging
+    std::unique_ptr<ThreadPool> exteroception_logger_job_;
 };
 
 }  // namespace serow

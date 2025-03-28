@@ -11,10 +11,10 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 /**
- * @file DebugLogger.hpp
- * @brief Defines the DebugLogger class for logging robot state data in MCAP format.
+ * @file ProprioceptionLogger.hpp
+ * @brief Defines the ProprioceptionLogger class for logging robot state data in MCAP format.
  *
- * The DebugLogger provides functionality to log various robot states and measurements
+ * The ProprioceptionLogger provides functionality to log various robot states and measurements
  * in a binary MCAP format, including:
  * - Base state (position, orientation, velocities, etc.)
  * - Joint measurements
@@ -39,24 +39,24 @@
 #include <memory>
 #include <string>
 
-#include "TerrainElevation.hpp"
 #include "Measurement.hpp"
 #include "State.hpp"
+#include "TerrainElevation.hpp"
 
 namespace serow {
 
-class DebugLogger {
+class ProprioceptionLogger {
 public:
-    DebugLogger(const std::string& log_file_path = "/tmp/serow_log.mcap");
-    ~DebugLogger();
+    ProprioceptionLogger(const std::string& log_file_path = "/tmp/serow_proprioception.mcap");
+    ~ProprioceptionLogger();
 
     // Delete copy operations
-    DebugLogger(const DebugLogger&) = delete;
-    DebugLogger& operator=(const DebugLogger&) = delete;
+    ProprioceptionLogger(const ProprioceptionLogger&) = delete;
+    ProprioceptionLogger& operator=(const ProprioceptionLogger&) = delete;
 
     // Allow move operations
-    DebugLogger(DebugLogger&&) noexcept = default;
-    DebugLogger& operator=(DebugLogger&&) noexcept = default;
+    ProprioceptionLogger(ProprioceptionLogger&&) noexcept = default;
+    ProprioceptionLogger& operator=(ProprioceptionLogger&&) noexcept = default;
 
     void log(const BaseState& base_state);
     void log(const CentroidalState& centroidal_state);
@@ -64,9 +64,7 @@ public:
     void log(const ImuMeasurement& imu_measurement);
     void log(const std::map<std::string, JointMeasurement>& joints_measurement);
     void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
-    void log(const std::pair<double, std::array<std::array<float, 3>, map_size>>& local_map_state);
-    double getLastLocalMapTimestamp() const;
-    
+
 private:
     class Impl;  // Forward declaration of the implementation class
     std::unique_ptr<Impl> pimpl_;

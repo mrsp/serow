@@ -45,28 +45,60 @@ void TerrainElevation::resetCell(const int& hash_id) {
 }
 
 void TerrainElevation::resetLocalMap() {
+    std::lock_guard<std::mutex> lock(mutex_);
     std::fill(elevation_.begin(), elevation_.end(), empty_elevation_);
 }
 
-
 void TerrainElevation::updateLocalMap(double timestamp) {
-    LocalMap local_map;
-    for (int i = 0; i < map_size; i++) {
-        const auto world_loc = globalIndexToWorldLocation(hashIdToGlobalIndex(i));
-        const auto height = elevation_[i].height;
-        local_map.data[i] = {world_loc[0], world_loc[1], height};
+    std::lock_guard<std::mutex> lock(mutex_);  // Single lock for the entire function
+    try {
+        // Create a temporary state to avoid modifying the shared state until we're done
+        LocalMapState local_map_state{};
+        local_map_state.timestamp = timestamp;
+
+        // Process the map in chunks to avoid stack overflow
+        constexpr size_t chunk_size = 1000;
+        for (size_t chunk_start = 0; chunk_start < map_size; chunk_start += chunk_size) {
+            size_t chunk_end = std::min(chunk_start + chunk_size, static_cast<size_t>(map_size));
+
+            for (size_t i = chunk_start; i < chunk_end; i++) {
+                try {
+                    // Validate the index before accessing
+                    if (i >= map_size) {
+                        std::cerr << "Index " << i << " out of bounds for map_size " << map_size
+                                  << std::endl;
+                        continue;
+                    }
+
+                    // Get the world location and height atomically
+                    const auto world_loc = globalIndexToWorldLocation(hashIdToGlobalIndex(i));
+                    const auto height = elevation_[i].height;
+
+                    // Store the data
+                    local_map_state.data[i] = {world_loc[0], world_loc[1], height};
+                } catch (const std::exception& e) {
+                    std::cerr << "Error processing cell " << i << ": " << e.what() << std::endl;
+                    // Continue with next cell instead of crashing
+                    continue;
+                }
+            }
+        }
+
+        // Only update the shared state if we successfully created the new state
+        local_map_state_ = std::move(local_map_state);
+    } catch (const std::exception& e) {
+        std::cerr << "Error in updateLocalMap: " << e.what() << std::endl;
+        // Don't update the state if there was an error
     }
-    local_map.timestamp = timestamp;
-    local_map_ = std::move(local_map);
 }
 
-
-const LocalMap& TerrainElevation::getLocalMap() const {
-    return local_map_;
+const LocalMapState& TerrainElevation::getLocalMap() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return local_map_state_;
 }
-
 
 void TerrainElevation::initializeLocalMap(const float height, const float variance) {
+    std::lock_guard<std::mutex> lock(mutex_);
     default_elevation_ = std::move(ElevationCell(height, variance));
     std::fill(elevation_.begin(), elevation_.end(), default_elevation_);
 }
@@ -102,6 +134,7 @@ void TerrainElevation::clearOutOfMapCells(const std::vector<int>& clear_id) {
 }
 
 void TerrainElevation::recenter(const std::array<float, 2>& location) {
+    std::lock_guard<std::mutex> lock(mutex_);
     // Compute the shifting index
     const std::array<int, 2> new_origin_i = locationToGlobalIndex(location);
     const std::array<float, 2> new_origin_d = {new_origin_i[0] * resolution,
@@ -155,8 +188,10 @@ std::array<float, 2> TerrainElevation::globalIndexToLocation(const std::array<in
     return {id_g[0] * resolution, id_g[1] * resolution};
 }
 
-std::array<float, 2> TerrainElevation::globalIndexToWorldLocation(const std::array<int, 2>& id_g) const {
-    return {id_g[0] * resolution + local_map_origin_d_[0], id_g[1] * resolution + local_map_origin_d_[1]};
+std::array<float, 2> TerrainElevation::globalIndexToWorldLocation(
+    const std::array<int, 2>& id_g) const {
+    return {id_g[0] * resolution + local_map_origin_d_[0],
+            id_g[1] * resolution + local_map_origin_d_[1]};
 }
 
 std::array<int, 2> TerrainElevation::globalIndexToLocalIndex(const std::array<int, 2>& id_g) const {
@@ -254,6 +289,7 @@ bool TerrainElevation::isHashIdValid(const int id) const {
 }
 
 bool TerrainElevation::update(const std::array<float, 2>& loc, float height, float variance) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!inside(loc)) {
         return false;
     }
@@ -298,7 +334,8 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
     return true;
 }
 
-std::optional<ElevationCell> TerrainElevation::getElevation(const std::array<float, 2>& loc) const {
+std::optional<ElevationCell> TerrainElevation::getElevation(const std::array<float, 2>& loc) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!inside(loc)) {
         return std::nullopt;
     }
@@ -306,7 +343,8 @@ std::optional<ElevationCell> TerrainElevation::getElevation(const std::array<flo
     return elevation_[hash_id];
 }
 
-const std::array<float, 2>& TerrainElevation::getMapOrigin() const {
+const std::array<float, 2>& TerrainElevation::getMapOrigin() {
+    std::lock_guard<std::mutex> lock(mutex_);
     return local_map_origin_d_;
 }
 

@@ -194,7 +194,7 @@ private:
      */
     BaseState updateWithTerrain(const BaseState& state,
                                 const std::map<std::string, bool>& contacts_status,
-                                const TerrainElevation& terrain_estimator);
+                                std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**
      * @brief Updates the state of the robot with the provided state change and covariance matrix.
