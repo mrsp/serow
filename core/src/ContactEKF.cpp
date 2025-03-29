@@ -439,10 +439,11 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
                 // Construct the linearized measurement matrix H
                 H.setZero();
                 H(0, pl_idx_.at(cf)[2]) = 1.0;
-                std::cout << "map height at [x, y]: " << updated_state.contacts_position.at(cf).x()
-                          << " " << updated_state.contacts_position.at(cf).x()
-                          << " is: " << elevation.value().height
-                          << " with variance: " << elevation.value().variance << std::endl;
+                // std::cout << "map height at [x, y]: " <<
+                // updated_state.contacts_position.at(cf).x()
+                //           << " " << updated_state.contacts_position.at(cf).x()
+                //           << " is: " << elevation.value().height
+                //           << " with variance: " << elevation.value().variance << std::endl;
 
                 // Compute innovation
                 z(0) = static_cast<double>(elevation.value().height) -
