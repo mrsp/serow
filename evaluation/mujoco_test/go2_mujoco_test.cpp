@@ -297,10 +297,10 @@ int main() {
                 RR_contact_position.push_back(Eigen::Vector3d::Zero());
             }
 
-            auto terrainEstimator = SEROW.getTerrainEstimator();
-            if (!terrainEstimator) {
-                continue;
-            }
+            // auto terrainEstimator = SEROW.getTerrainEstimator();
+            // if (!terrainEstimator) {
+            //     continue;
+            // }
 
             // if (timestamp - log_timestamp > 0.5) {
             //     saveElevationMap(terrainEstimator->elevation_, timestamp, file);

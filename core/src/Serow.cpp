@@ -728,7 +728,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Compute orientation noise for contacts
     std::map<std::string, Eigen::Matrix3d> kin_contacts_orientation_noise;
     for (const auto& frame : state.getContactsFrame()) {
-        const Eigen::Vector3d& lin_vel = kinematic_estimator_->linearVelocity(frame);
+        const Eigen::Vector3d& lin_vel = kinematic_estimator_->linearVelocityNoise(frame);
         kin.contacts_position_noise[frame].noalias() = lin_vel * lin_vel.transpose();
 
         if (!state.isPointFeet()) {

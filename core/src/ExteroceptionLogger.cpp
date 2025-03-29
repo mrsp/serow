@@ -389,7 +389,6 @@ ExteroceptionLogger::~ExteroceptionLogger() = default;
 
 void ExteroceptionLogger::log(const LocalMapState& local_map_state) {
     pimpl_->log(local_map_state);
-    std::cout << "Logged exteroception data" << std::endl;
 }
 
 double ExteroceptionLogger::getLastLocalMapTimestamp() const {
