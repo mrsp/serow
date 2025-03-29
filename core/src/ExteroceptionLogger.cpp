@@ -77,7 +77,7 @@ public:
                  static_cast<int32_t>((timestamp - static_cast<int64_t>(timestamp)) * 1e9)}};
 
             // Add frame_id
-            json_data["frame_id"] = "";
+            json_data["frame_id"] = "world";
 
             // Add pose (identity transform)
             json_data["pose"] = {{"position", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},

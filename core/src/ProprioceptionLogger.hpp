@@ -66,6 +66,8 @@ public:
     void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
     void log(const Eigen::Vector3d& position, const Eigen::Quaterniond& orientation,
              double timestamp);
+    void log(const std::map<std::string, Eigen::Vector3d>& positions,
+             const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp);
 
 private:
     class Impl;  // Forward declaration of the implementation class

@@ -60,6 +60,33 @@ public:
         return static_cast<uint64_t>(timestamp * 1e9);
     }
 
+    void log(const std::map<std::string, Eigen::Vector3d>& positions,
+             const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp) {
+        nlohmann::json json_data = {{"timestamp", timestamp},
+                                    {"transforms", nlohmann::json::array()}};
+
+        for (const auto& [frame_id, position] : positions) {
+            nlohmann::json transform = {
+                {"timestamp",
+                 {{"sec", static_cast<int>(timestamp)},
+                  {"nsec", static_cast<int>((timestamp - static_cast<int>(timestamp)) * 1e9)}}},
+                {"parent_frame_id", "world"},
+                {"child_frame_id", frame_id},
+                {"translation", {{"x", position.x()}, {"y", position.y()}, {"z", position.z()}}},
+                {"rotation",
+                 {{"x", orientations.at(frame_id).x()},
+                  {"y", orientations.at(frame_id).y()},
+                  {"z", orientations.at(frame_id).z()},
+                  {"w", orientations.at(frame_id).w()}}}};
+            json_data["transforms"].push_back(transform);
+        }
+
+        std::string json_str = json_data.dump(-1, ' ', true);
+
+        writeMessage(8, leg_tf_sequence_++, timestamp,
+                     reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
+    }
+
     void log(const Eigen::Vector3d& position, const Eigen::Quaterniond& orientation,
              double timestamp) {
         try {
@@ -67,7 +94,7 @@ public:
                 {"timestamp",
                  {{"sec", static_cast<int>(timestamp)},
                   {"nsec", static_cast<int>((timestamp - static_cast<int>(timestamp)) * 1e9)}}},
-                {"parent_frame_id", ""},
+                {"parent_frame_id", "world"},
                 {"child_frame_id", "base_link"},
                 {"translation", {{"x", position.x()}, {"y", position.y()}, {"z", position.z()}}},
                 {"rotation",
@@ -379,6 +406,7 @@ private:
         schemas.push_back(createCentroidalStateSchema());
         schemas.push_back(createBaseStateSchema());
         schemas.push_back(createTFSchema());
+        schemas.push_back(createFrameTransformsSchema());
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -394,511 +422,11 @@ private:
         channels.push_back(createChannel(5, "CentroidalState"));
         channels.push_back(createChannel(6, "BaseState"));
         channels.push_back(createChannel(7, "/odom"));
+        channels.push_back(createChannel(8, "/legs"));
+
         for (auto& channel : channels) {
             writer_->addChannel(channel);
         }
-    }
-
-    mcap::Schema createImuMeasurementSchema() {
-        mcap::Schema schema;
-        schema.name = "ImuMeasurement";
-        schema.encoding = "jsonschema";
-        std::string schema_data =
-            "{"
-            "    \"type\": \"object\","
-            "    \"properties\": {"
-            "        \"timestamp\": {"
-            "            \"type\": \"number\","
-            "            \"description\": \"Timestamp of the measurement (s)\""
-            "        },"
-            "        \"linear_acceleration\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"Linear acceleration in x, y, z (m/s^2)\""
-            "        },"
-            "        \"angular_velocity\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"Angular velocity in x, y, z (rad/s)\""
-            "        }"
-            "    },"
-            "    \"required\": [\"timestamp\", \"linear_acceleration\", \"angular_velocity\"]"
-            "}";
-
-        schema.data = mcap::ByteArray(
-            reinterpret_cast<const std::byte*>(schema_data.data()),
-            reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
-        return schema;
-    }
-
-    mcap::Schema createJointMeasurementSchema() {
-        mcap::Schema schema;
-        schema.name = "JointMeasurement";
-        schema.encoding = "jsonschema";
-        std::string schema_data =
-            "{"
-            "    \"type\": \"object\","
-            "    \"properties\": {"
-            "        \"timestamp\": {"
-            "            \"type\": \"number\","
-            "            \"description\": \"Timestamp of the measurement (s)\""
-            "        },"
-            "        \"num_joints\": {"
-            "            \"type\": \"integer\","
-            "            \"description\": \"Number of joints in the measurement\""
-            "        },"
-            "        \"joint_names\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"string\""
-            "            },"
-            "            \"description\": \"Array of joint names\""
-            "        },"
-            "        \"joints\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"object\","
-            "                \"properties\": {"
-            "                    \"position\": {"
-            "                        \"type\": \"number\","
-            "                        \"description\": \"Joint position (rad)\""
-            "                    },"
-            "                    \"velocity\": {"
-            "                        \"type\": \"number\","
-            "                        \"description\": \"Joint velocity (rad/s)\""
-            "                    }"
-            "                },"
-            "                \"required\": [\"position\"]"
-            "            }"
-            "        }"
-            "    },"
-            "    \"required\": [\"timestamp\", \"num_joints\", \"joint_names\", \"joints\"]"
-            "}";
-
-        schema.data = mcap::ByteArray(
-            reinterpret_cast<const std::byte*>(schema_data.data()),
-            reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
-        return schema;
-    }
-
-    mcap::Schema createForceTorqueMeasurementSchema() {
-        mcap::Schema schema;
-        schema.name = "ForceTorqueMeasurement";
-        schema.encoding = "jsonschema";
-        std::string schema_data =
-            "{"
-            "    \"type\": \"object\","
-            "    \"properties\": {"
-            "        \"timestamp\": {"
-            "            \"type\": \"number\","
-            "            \"description\": \"Timestamp of the measurement (s)\""
-            "        },"
-            "        \"num_sensors\": {"
-            "            \"type\": \"integer\","
-            "            \"description\": \"Number of force-torque sensors in the measurement\""
-            "        },"
-            "        \"sensor_names\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"string\""
-            "            },"
-            "            \"description\": \"Array of force-torque sensor names\""
-            "        },"
-            "        \"sensors\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"object\","
-            "                \"properties\": {"
-            "                    \"force\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 3,"
-            "                        \"maxItems\": 3,"
-            "                        \"description\": \"Force measured by force-torque sensor (N)\""
-            "                    },"
-            "                    \"cop\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 3,"
-            "                        \"maxItems\": 3,"
-            "                        \"description\": \"Center of pressure (COP) measured by "
-            "force-torque sensor (m)\""
-            "                    },"
-            "                    \"torque\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 3,"
-            "                        \"maxItems\": 3,"
-            "                        \"description\": \"Optional torque measured by force-torque "
-            "sensor (Nm)\""
-            "                    }"
-            "                },"
-            "                \"required\": [\"force\", \"cop\"]"
-            "            }"
-            "        }"
-            "    },"
-            "    \"required\": [\"timestamp\", \"num_sensors\", \"sensor_names\", \"sensors\"]"
-            "}";
-
-        schema.data = mcap::ByteArray(
-            reinterpret_cast<const std::byte*>(schema_data.data()),
-            reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
-        return schema;
-    }
-
-    mcap::Schema createContactStateSchema() {
-        mcap::Schema schema;
-        schema.name = "ContactState";
-        schema.encoding = "jsonschema";
-        std::string schema_data =
-            "{"
-            "    \"type\": \"object\","
-            "    \"properties\": {"
-            "        \"timestamp\": {"
-            "            \"type\": \"number\","
-            "            \"description\": \"Timestamp of the state (s)\""
-            "        },"
-            "        \"num_contacts\": {"
-            "            \"type\": \"integer\","
-            "            \"description\": \"Number of contact points\""
-            "        },"
-            "        \"contact_names\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"string\""
-            "            },"
-            "            \"description\": \"Array of contact point names\""
-            "        },"
-            "        \"contacts\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"object\","
-            "                \"properties\": {"
-            "                    \"status\": {"
-            "                        \"type\": \"boolean\","
-            "                        \"description\": \"Contact status (true if in contact)\""
-            "                    },"
-            "                    \"probability\": {"
-            "                        \"type\": \"number\","
-            "                        \"description\": \"Contact probability (0-1)\""
-            "                    },"
-            "                    \"force\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 3,"
-            "                        \"maxItems\": 3,"
-            "                        \"description\": \"3D Contact force in world frame "
-            "coordinates (N)\""
-            "                    },"
-            "                    \"torque\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 3,"
-            "                        \"maxItems\": 3,"
-            "                        \"description\": \"3D Contact torque in world frame "
-            "coordinates (Nm)\""
-            "                    }"
-            "                },"
-            "                \"required\": [\"status\", \"probability\", \"force\"]"
-            "            }"
-            "        }"
-            "    },"
-            "    \"required\": [\"timestamp\", \"num_contacts\", \"contact_names\", \"contacts\"]"
-            "}";
-
-        schema.data = mcap::ByteArray(
-            reinterpret_cast<const std::byte*>(schema_data.data()),
-            reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
-        return schema;
-    }
-
-    mcap::Schema createCentroidalStateSchema() {
-        mcap::Schema schema;
-        schema.name = "CentroidalState";
-        schema.encoding = "jsonschema";
-        std::string schema_data =
-            "{"
-            "    \"type\": \"object\","
-            "    \"properties\": {"
-            "        \"timestamp\": {"
-            "            \"type\": \"number\","
-            "            \"description\": \"Timestamp of the state (s)\""
-            "        },"
-            "        \"com_position\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D CoM position in world frame coordinates (m)\""
-            "        },"
-            "        \"com_linear_velocity\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D CoM linear velocity in world frame coordinates "
-            "(m/s)\""
-            "        },"
-            "        \"external_forces\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D External forces at the CoM in world frame "
-            "coordinates (N)\""
-            "        },"
-            "        \"cop_position\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D COP position in world frame coordinates (m)\""
-            "        },"
-            "        \"com_linear_acceleration\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D CoM linear acceleration in world frame coordinates "
-            "(m/s^2)\""
-            "        },"
-            "        \"angular_momentum\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D Angular momentum around the CoM in world frame "
-            "coordinates (kg m^2/s)\""
-            "        },"
-            "        \"angular_momentum_derivative\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D Angular momentum derivative around the CoM in world "
-            "frame coordinates (Nm)\""
-            "        }"
-            "    },"
-            "    \"required\": [\"timestamp\", \"com_position\", \"com_linear_velocity\", "
-            "\"external_forces\", \"cop_position\", \"com_linear_acceleration\", "
-            "\"angular_momentum\", \"angular_momentum_derivative\"]"
-            "}";
-
-        schema.data = mcap::ByteArray(
-            reinterpret_cast<const std::byte*>(schema_data.data()),
-            reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
-        return schema;
-    }
-
-    mcap::Schema createBaseStateSchema() {
-        mcap::Schema schema;
-        schema.name = "BaseState";
-        schema.encoding = "jsonschema";
-        std::string schema_data =
-            "{"
-            "    \"type\": \"object\","
-            "    \"properties\": {"
-            "        \"timestamp\": {"
-            "            \"type\": \"number\","
-            "            \"description\": \"Timestamp of the state (s)\""
-            "        },"
-            "        \"base_position\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D Base position in world frame coordinates (m)\""
-            "        },"
-            "        \"base_orientation\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 4,"
-            "            \"maxItems\": 4,"
-            "            \"description\": \"Base orientation quaternion [w, x, y, z] in world "
-            "frame coordinates\""
-            "        },"
-            "        \"base_linear_velocity\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D Base linear velocity in world frame coordinates "
-            "(m/s)\""
-            "        },"
-            "        \"base_angular_velocity\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D Base angular velocity in world frame coordinates "
-            "(rad/s)\""
-            "        },"
-            "        \"base_linear_acceleration\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D Base linear acceleration in world frame coordinates "
-            "(m/s^2)\""
-            "        },"
-            "        \"base_angular_acceleration\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D Base angular acceleration in world frame "
-            "coordinates (rad/s^2)\""
-            "        },"
-            "        \"imu_linear_acceleration_bias\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D IMU linear acceleration bias in IMU frame "
-            "coordinates (m/s^2)\""
-            "        },"
-            "        \"imu_angular_velocity_bias\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"number\""
-            "            },"
-            "            \"minItems\": 3,"
-            "            \"maxItems\": 3,"
-            "            \"description\": \"3D IMU angular velocity bias in IMU frame coordinates "
-            "(rad/s)\""
-            "        },"
-            "        \"num_contacts\": {"
-            "            \"type\": \"integer\","
-            "            \"description\": \"Number of contact points\""
-            "        },"
-            "        \"contact_names\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"string\""
-            "            },"
-            "            \"description\": \"Array of contact point names\""
-            "        },"
-            "        \"contacts\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"object\","
-            "                \"properties\": {"
-            "                    \"name\": {"
-            "                        \"type\": \"string\","
-            "                        \"description\": \"Contact point name\""
-            "                    },"
-            "                    \"position\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 3,"
-            "                        \"maxItems\": 3,"
-            "                        \"description\": \"3D contact position in world frame "
-            "coordinates (m)\""
-            "                    },"
-            "                    \"foot_position\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 3,"
-            "                        \"maxItems\": 3,"
-            "                        \"description\": \"3D foot position in world frame "
-            "coordinates (m)\""
-            "                    },"
-            "                    \"foot_orientation\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 4,"
-            "                        \"maxItems\": 4,"
-            "                        \"description\": \"Foot orientation quaternion [w, x, y, z] "
-            "in world frame coordinates\""
-            "                    },"
-            "                    \"foot_linear_velocity\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 3,"
-            "                        \"maxItems\": 3,"
-            "                        \"description\": \"3D foot linear velocity in world frame "
-            "coordinates (m/s)\""
-            "                    },"
-            "                    \"foot_angular_velocity\": {"
-            "                        \"type\": \"array\","
-            "                        \"items\": {"
-            "                            \"type\": \"number\""
-            "                        },"
-            "                        \"minItems\": 3,"
-            "                        \"maxItems\": 3,"
-            "                        \"description\": \"3D foot angular velocity in world frame "
-            "coordinates (rad/s)\""
-            "                    }"
-            "                },"
-            "                \"required\": [\"name\", \"position\"]"
-            "            },"
-            "            \"description\": \"Array of contact data objects\""
-            "        }"
-            "    },"
-            "    \"required\": [\"timestamp\", \"base_position\", \"base_orientation\", "
-            "\"base_linear_velocity\", \"base_angular_velocity\", \"base_linear_acceleration\", "
-            "\"base_angular_acceleration\", \"imu_linear_acceleration_bias\", "
-            "\"imu_angular_velocity_bias\", \"num_contacts\", \"contact_names\", \"contacts\"]"
-            "}";
-
-        schema.data = mcap::ByteArray(
-            reinterpret_cast<const std::byte*>(schema_data.data()),
-            reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
-        return schema;
     }
 
     mcap::Channel createChannel(uint16_t id, const std::string& topic) {
@@ -918,6 +446,7 @@ private:
     uint64_t joint_sequence_ = 0;
     uint64_t ft_sequence_ = 0;
     uint64_t tf_sequence_ = 0;
+    uint64_t leg_tf_sequence_ = 0;
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
@@ -958,6 +487,12 @@ void ProprioceptionLogger::log(const ContactState& contact_state) {
 void ProprioceptionLogger::log(const Eigen::Vector3d& position,
                                const Eigen::Quaterniond& orientation, double timestamp) {
     pimpl_->log(position, orientation, timestamp);
+}
+
+void ProprioceptionLogger::log(const std::map<std::string, Eigen::Vector3d>& positions,
+                               const std::map<std::string, Eigen::Quaterniond>& orientations,
+                               double timestamp) {
+    pimpl_->log(positions, orientations, timestamp);
 }
 
 }  // namespace serow
