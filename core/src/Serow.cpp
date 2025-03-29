@@ -118,32 +118,32 @@ bool Serow::initialize(const std::string& config_file) {
     }
 
     bool point_feet;
-    if (!checkConfigParam("point_feet", point_feet)) return false;
+    if (!checkConfigParam("point_feet", point_feet))
+        return false;
 
     // Initialize state
     State state(contacts_frame, point_feet);
     state_ = std::move(state);
 
     // Initialize attitude estimator
-    if (!checkConfigParam("imu_rate", params_.imu_rate)) return false;
+    if (!checkConfigParam("imu_rate", params_.imu_rate))
+        return false;
 
     double Kp, Ki;
-    if (!checkConfigParam("attitude_estimator_proportional_gain", Kp)) return false;
-    if (!checkConfigParam("attitude_estimator_integral_gain", Ki)) return false;
+    if (!checkConfigParam("attitude_estimator_proportional_gain", Kp))
+        return false;
+    if (!checkConfigParam("attitude_estimator_integral_gain", Ki))
+        return false;
 
     attitude_estimator_ = std::make_unique<Mahony>(params_.imu_rate, Kp, Ki);
-
-    // Initialize kinematic estimator
-    std::string model_path;
-    if (!checkConfigParam("model_path", model_path)) return false;
-    kinematic_estimator_ = std::make_unique<RobotKinematics>(findFilepath(model_path));
 
     // IMU bias calibration
     if (!checkConfigParam("calibrate_initial_imu_bias", params_.calibrate_initial_imu_bias))
         return false;
 
     if (!params_.calibrate_initial_imu_bias) {
-        if (!checkConfigArray("bias_acc", 3) || !checkConfigArray("bias_gyro", 3)) return false;
+        if (!checkConfigArray("bias_acc", 3) || !checkConfigArray("bias_gyro", 3))
+            return false;
 
         params_.bias_acc << config["bias_acc"][0], config["bias_acc"][1], config["bias_acc"][2];
         params_.bias_gyro << config["bias_gyro"][0], config["bias_gyro"][1], config["bias_gyro"][2];
@@ -153,26 +153,43 @@ bool Serow::initialize(const std::string& config_file) {
     }
 
     // Load other scalar parameters
-    if (!checkConfigParam("gyro_cutoff_frequency", params_.gyro_cutoff_frequency)) return false;
-    if (!checkConfigParam("force_torque_rate", params_.force_torque_rate)) return false;
-    if (!checkConfigParam("joint_rate", params_.joint_rate)) return false;
-    if (!checkConfigParam("estimate_joint_velocity", params_.estimate_joint_velocity)) return false;
-    if (!checkConfigParam("joint_cutoff_frequency", params_.joint_cutoff_frequency)) return false;
-    if (!checkConfigParam("joint_position_variance", params_.joint_position_variance)) return false;
+    if (!checkConfigParam("gyro_cutoff_frequency", params_.gyro_cutoff_frequency))
+        return false;
+    if (!checkConfigParam("force_torque_rate", params_.force_torque_rate))
+        return false;
+    if (!checkConfigParam("joint_rate", params_.joint_rate))
+        return false;
+    if (!checkConfigParam("estimate_joint_velocity", params_.estimate_joint_velocity))
+        return false;
+    if (!checkConfigParam("joint_cutoff_frequency", params_.joint_cutoff_frequency))
+        return false;
+    if (!checkConfigParam("joint_position_variance", params_.joint_position_variance))
+        return false;
     if (!checkConfigParam("angular_momentum_cutoff_frequency",
                           params_.angular_momentum_cutoff_frequency))
         return false;
-    if (!checkConfigParam("mass", params_.mass)) return false;
-    if (!checkConfigParam("g", params_.g)) return false;
-    if (!checkConfigParam("tau_0", params_.tau_0)) return false;
-    if (!checkConfigParam("tau_1", params_.tau_1)) return false;
-    if (!checkConfigParam("estimate_contact_status", params_.estimate_contact_status)) return false;
-    if (!checkConfigParam("high_threshold", params_.high_threshold)) return false;
-    if (!checkConfigParam("low_threshold", params_.low_threshold)) return false;
-    if (!checkConfigParam("median_window", params_.median_window)) return false;
-    if (!checkConfigParam("outlier_detection", params_.outlier_detection)) return false;
-    if (!checkConfigParam("convergence_cycles", params_.convergence_cycles)) return false;
-    if (!checkConfigParam("use_contacts_in_base_estimation", params_.is_contact_ekf)) return false;
+    if (!checkConfigParam("mass", params_.mass))
+        return false;
+    if (!checkConfigParam("g", params_.g))
+        return false;
+    if (!checkConfigParam("tau_0", params_.tau_0))
+        return false;
+    if (!checkConfigParam("tau_1", params_.tau_1))
+        return false;
+    if (!checkConfigParam("estimate_contact_status", params_.estimate_contact_status))
+        return false;
+    if (!checkConfigParam("high_threshold", params_.high_threshold))
+        return false;
+    if (!checkConfigParam("low_threshold", params_.low_threshold))
+        return false;
+    if (!checkConfigParam("median_window", params_.median_window))
+        return false;
+    if (!checkConfigParam("outlier_detection", params_.outlier_detection))
+        return false;
+    if (!checkConfigParam("convergence_cycles", params_.convergence_cycles))
+        return false;
+    if (!checkConfigParam("use_contacts_in_base_estimation", params_.is_contact_ekf))
+        return false;
     if (!checkConfigParam("enable_terrain_estimation", params_.enable_terrain_estimation))
         return false;
     if (!checkConfigParam("minimum_terrain_height_variance",
@@ -180,8 +197,10 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
 
     // Check rotation matrices
-    if (!checkConfigArray("R_base_to_gyro", 9)) return false;
-    if (!checkConfigArray("R_base_to_acc", 9)) return false;
+    if (!checkConfigArray("R_base_to_gyro", 9))
+        return false;
+    if (!checkConfigArray("R_base_to_acc", 9))
+        return false;
 
     if (!config["R_foot_to_force"].is_object()) {
         std::cerr << RED_COLOR << "Configuration: R_foot_to_force must be an object\n"
@@ -195,6 +214,13 @@ bool Serow::initialize(const std::string& config_file) {
                   << WHITE_COLOR;
         return false;
     }
+
+    // Initialize kinematic estimator
+    std::string model_path;
+    if (!checkConfigParam("model_path", model_path))
+        return false;
+    kinematic_estimator_ = std::make_unique<RobotKinematics>(findFilepath(model_path),
+                                                             params_.joint_position_variance);
 
     // Load matrices
     for (size_t i = 0; i < 3; i++) {
@@ -254,7 +280,8 @@ bool Serow::initialize(const std::string& config_file) {
                                                  "contact_position_slip_covariance"};
 
     for (const auto& cov_name : cov_arrays) {
-        if (!checkConfigArray(cov_name, 3)) return false;
+        if (!checkConfigArray(cov_name, 3))
+            return false;
     }
 
     // Optional covariance arrays
@@ -263,7 +290,8 @@ bool Serow::initialize(const std::string& config_file) {
                                                           "initial_contact_orientation_covariance"};
 
     for (const auto& cov_name : optional_cov_arrays) {
-        if (!config[cov_name].is_null() && !checkConfigArray(cov_name, 3)) return false;
+        if (!config[cov_name].is_null() && !checkConfigArray(cov_name, 3))
+            return false;
     }
 
     // Load covariance values
@@ -390,7 +418,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                    std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
     // Early return if not initialized and no FT measurement
     if (!is_initialized_) {
-        if (!ft.has_value()) return;
+        if (!ft.has_value())
+            return;
         is_initialized_ = true;
     }
 
@@ -445,8 +474,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (params_.calibrate_initial_imu_bias) {
         if (imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
             params_.bias_gyro += imu.angular_velocity;
-            params_.bias_acc.noalias() +=
-                imu.linear_acceleration -
+            params_.bias_acc.noalias() += imu.linear_acceleration -
                 R_world_to_base.transpose() * Eigen::Vector3d(0.0, 0.0, params_.g);
             imu_calibration_cycles_++;
             return;
@@ -469,8 +497,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     }
 
     // Update the kinematic structure
-    kinematic_estimator_->updateJointConfig(joints_position, joints_velocity,
-                                            params_.joint_position_variance);
+    kinematic_estimator_->updateJointConfig(joints_position, joints_velocity);
 
     // Update the joint state estimate - use std::move to avoid copies
     state.joint_state_.timestamp = joint_timestamp;
@@ -523,8 +550,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             if (params_.estimate_contact_status) {
                 if (contact_estimators_.count(frame) == 0) {
                     contact_estimators_.emplace(
-                        frame, ContactDetector(frame, params_.high_threshold, params_.low_threshold,
-                                               params_.mass, params_.g, params_.median_window));
+                        frame,
+                        ContactDetector(frame, params_.high_threshold, params_.low_threshold,
+                                        params_.mass, params_.g, params_.median_window));
                 }
             }
 
@@ -543,8 +571,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             // Process torque if not point feet
             if (!state.isPointFeet() && ft->at(frame).torque.has_value()) {
                 contacts_torque[frame].noalias() = foot_orientation.toRotationMatrix() *
-                                                   params_.R_foot_to_torque.at(frame) *
-                                                   ft->at(frame).torque.value();
+                    params_.R_foot_to_torque.at(frame) * ft->at(frame).torque.value();
             }
 
             // Estimate the contact status
@@ -691,8 +718,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Compute orientation noise for contacts
     std::map<std::string, Eigen::Matrix3d> kin_contacts_orientation_noise;
     for (const auto& frame : state.getContactsFrame()) {
-        const Eigen::Vector3d& lin_vel = kinematic_estimator_->linearVelocity(frame);
-        kin.contacts_position_noise[frame].noalias() = lin_vel * lin_vel.transpose();
+        const Eigen::Vector3d& lin_vel_noise = kinematic_estimator_->linearVelocityNoise(frame);
+        kin.contacts_position_noise[frame].noalias() = lin_vel_noise * lin_vel_noise.transpose();
 
         if (!state.isPointFeet()) {
             const Eigen::Vector3d& ang_vel = kinematic_estimator_->angularVelocityNoise(frame);
@@ -756,7 +783,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
     }
 
-    // Estimate the imu angular acceleration using the gyro 
+    // Estimate the imu angular acceleration using the gyro
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>(
             "Gyro Derivative", params_.imu_rate, params_.gyro_cutoff_frequency, 3);
@@ -781,12 +808,11 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         base_pose.linear() * (imu.angular_velocity - state.getImuAngularVelocityBias());
 
     const Eigen::Vector3d base_angular_acceleration = base_pose.linear() * imu.angular_acceleration;
-    kin.com_linear_acceleration.noalias() =
-        base_linear_acceleration +
+    kin.com_linear_acceleration.noalias() = base_linear_acceleration +
         base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
         base_angular_acceleration.cross(base_to_com_position);
 
-    // Update the state 
+    // Update the state
     state.base_state_.base_linear_acceleration = base_linear_acceleration;
     state.base_state_.base_angular_velocity = base_angular_velocity;
     state.base_state_.base_angular_acceleration = base_angular_acceleration;
