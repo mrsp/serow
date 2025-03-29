@@ -714,8 +714,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
         // Initialize terrain elevation mapper
         terrain_estimator_ = std::make_shared<TerrainElevation>();
-        terrain_estimator_->initializeLocalMap(terrain_height, 1e4);
-        terrain_estimator_->min_terrain_height_variance_ = params_.minimum_terrain_height_variance;
+        terrain_estimator_->initializeLocalMap(terrain_height, 1e4,
+                                               params_.minimum_terrain_height_variance);
     }
 
     // Handle orientation for non-point feet
@@ -926,9 +926,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         ((kin.timestamp - exteroception_logger_.getLastLocalMapTimestamp()) > 0.2)) {
         exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
             try {
-                std::cout << "Computing the local map" << std::endl;
-                // terrain_estimator_->updateLocalMap(ts);
-                std::cout << "Logging the local map" << std::endl;
                 exteroception_logger_.log(terrain_estimator_->getLocalMap());
             } catch (const std::exception& e) {
                 std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;

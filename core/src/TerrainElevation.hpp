@@ -76,19 +76,16 @@ public:
 
     void recenter(const std::array<float, 2>& location);
 
-    void initializeLocalMap(const float height, const float variance);
-
-    void updateLocalMap(double timestamp);
+    void initializeLocalMap(const float height, const float variance,
+                            const float min_variance = 1e-6);
 
     const LocalMapState& getLocalMap();
 
-    bool update(const std::array<float, 2>& loc, float height, float variance);
+    bool update(const std::array<float, 2>& loc, float height, float variance, double timestamp);
 
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc);
 
     const std::array<float, 2>& getMapOrigin();
-
-    float min_terrain_height_variance_{};
 
 private:
     void resetLocalMap();
@@ -146,6 +143,8 @@ private:
     std::array<float, 2> local_map_origin_d_{0.0, 0.0};
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
+
+    float min_terrain_height_variance_{};
 
     std::mutex mutex_;
     friend class TerrainElevationTest;  // Allow full access

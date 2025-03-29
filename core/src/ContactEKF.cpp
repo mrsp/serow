@@ -557,7 +557,7 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
 
                 // TODO: @sp make this a const parameter
                 if (!terrain_estimator->update(con_pos_xy, con_pos_z,
-                                               static_cast<float>(con_cov(2, 2)))) {
+                                               static_cast<float>(con_cov(2, 2)), kin.timestamp)) {
                     std::cout
                         << "Contact for " << cf
                         << "is not inside the terrain elevation map and thus height is not updated "
