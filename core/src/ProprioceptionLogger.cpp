@@ -891,7 +891,6 @@ private:
     uint64_t imu_sequence_ = 0;
     uint64_t joint_sequence_ = 0;
     uint64_t ft_sequence_ = 0;
-    double last_local_map_timestamp_{-1.0};
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;

@@ -32,6 +32,7 @@ public:
 
             // Create the logger with ROS2 profile
             writer_ = std::make_unique<mcap::McapWriter>();
+            // Configure MCAP options
             mcap::McapWriterOptions options("ros2");
             writer_->open(*file_writer_, options);
 
@@ -64,24 +65,87 @@ public:
         try {
             const double timestamp = local_map_state.timestamp;
             const auto& local_map = local_map_state.data;
-
+            
+            // Serialize PointCloud to JSON according to schema
             nlohmann::json json_data;
-            json_data["timestamp"] = timestamp;
-            json_data["map_size"] = map_size;
-
-            // Create array of points
-            nlohmann::json points = nlohmann::json::array();
-
-            for (size_t i = 0; i < map_size; ++i) {
-                const std::array<float, 3>& point = local_map[i];
-                points.push_back({static_cast<double>(point[0]), static_cast<double>(point[1]),
-                                  static_cast<double>(point[2])});
+            
+            // Add timestamp according to schema
+            json_data["timestamp"] = {
+                {"sec", static_cast<int64_t>(timestamp)},
+                {"nsec", static_cast<int32_t>((timestamp - static_cast<int64_t>(timestamp)) * 1e9)}
+            };
+            
+            // Add frame_id
+            json_data["frame_id"] = "";
+            
+            // Add pose (identity transform)
+            json_data["pose"] = {
+                {"position", {
+                    {"x", 0.0},
+                    {"y", 0.0},
+                    {"z", 0.0}
+                }},
+                {"orientation", {
+                    {"x", 0.0},
+                    {"y", 0.0},
+                    {"z", 0.0},
+                    {"w", 1.0}
+                }}
+            };
+            
+            // Add point stride (3 floats = 12 bytes)
+            json_data["point_stride"] = 12;
+            
+            // Add fields definition
+            json_data["fields"] = {
+                {
+                    {"name", "x"},
+                    {"offset", 0},
+                    {"type", 7}  // FLOAT32
+                },
+                {
+                    {"name", "y"},
+                    {"offset", 4},
+                    {"type", 7}  // FLOAT32
+                },
+                {
+                    {"name", "z"},
+                    {"offset", 8},
+                    {"type", 7}  // FLOAT32
+                }
+            };
+            
+            // Pack point data into binary buffer
+            std::vector<float> point_data;
+            point_data.reserve(local_map.size() * 3);
+            for (const auto& point : local_map) {
+                point_data.push_back(point[0]);
+                point_data.push_back(point[1]);
+                point_data.push_back(point[2]);
             }
-
-            json_data["points"] = points;
-
-            std::string json_str = json_data.dump(-1, ' ', true);
-
+            
+            // Convert binary data to base64
+            const char* base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            std::string base64_data;
+            const uint8_t* binary_data = reinterpret_cast<const uint8_t*>(point_data.data());
+            size_t binary_size = point_data.size() * sizeof(float);
+            
+            base64_data.reserve((binary_size + 2) / 3 * 4);
+            
+            for (size_t i = 0; i < binary_size; i += 3) {
+                uint32_t n = binary_data[i] << 16;
+                if (i + 1 < binary_size) n |= binary_data[i + 1] << 8;
+                if (i + 2 < binary_size) n |= binary_data[i + 2];
+                
+                base64_data += base64_chars[(n >> 18) & 63];
+                base64_data += base64_chars[(n >> 12) & 63];
+                base64_data += (i + 1 < binary_size) ? base64_chars[(n >> 6) & 63] : '=';
+                base64_data += (i + 2 < binary_size) ? base64_chars[n & 63] : '=';
+            }
+            
+            json_data["data"] = base64_data;
+            
+            std::string json_str = json_data.dump(-1, ' ', true);    
             writeMessage(1, local_map_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
             last_local_map_timestamp_ = timestamp;
@@ -123,7 +187,7 @@ private:
     // Reuse the original schema and channel initialization methods
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
-        schemas.push_back(createLocalMapSchema());
+        schemas.push_back(createPointCloudSchema());
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -132,47 +196,167 @@ private:
 
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
-        channels.push_back(createChannel(1, "/local-map"));
+        channels.push_back(createChannel(1, "/elevation-map"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
         }
     }
 
-    mcap::Schema createLocalMapSchema() {
+    // Create a schema for PointCloud
+    mcap::Schema createPointCloudSchema() {
         mcap::Schema schema;
-        schema.name = "LocalMap";
+        schema.name = "foxglove.PointCloud";
         schema.encoding = "jsonschema";
-        std::string schema_data =
-            "{"
-            "    \"$schema\": \"http://json-schema.org/draft-07/schema#\","
-            "    \"type\": \"object\","
-            "    \"properties\": {"
-            "        \"timestamp\": {"
-            "            \"type\": \"number\","
-            "            \"description\": \"Timestamp of the local map data\""
-            "        },"
-            "        \"map_size\": {"
-            "            \"type\": \"integer\","
-            "            \"description\": \"Size of the local map grid\""
-            "        },"
-            "        \"points\": {"
-            "            \"type\": \"array\","
-            "            \"items\": {"
-            "                \"type\": \"array\","
-            "                \"items\": {"
-            "                    \"type\": \"number\""
-            "                },"
-            "                \"minItems\": 3,"
-            "                \"maxItems\": 3,"
-            "                \"description\": \"[x, y, z] coordinates of a point in the map\""
-            "            },"
-            "            \"description\": \"Array of 3D points in the local map\""
-            "        }"
-            "    },"
-            "    \"required\": [\"timestamp\", \"map_size\", \"points\"]"
-            "}";
-
+        std::string schema_data = R"({
+            "title": "foxglove.PointCloud",
+            "description": "A collection of N-dimensional points, which may contain additional fields with information like normals, intensity, etc.",
+            "$comment": "Generated by https://github.com/foxglove/foxglove-sdk",
+            "type": "object",
+            "properties": {
+                "timestamp": {
+                    "type": "object",
+                    "title": "time",
+                    "properties": {
+                        "sec": {
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "nsec": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 999999999
+                        }
+                    },
+                    "description": "Timestamp of point cloud"
+                },
+                "frame_id": {
+                    "type": "string",
+                    "description": "Frame of reference"
+                },
+                "pose": {
+                    "title": "foxglove.Pose",
+                    "description": "The origin of the point cloud relative to the frame of reference",
+                    "type": "object",
+                    "properties": {
+                        "position": {
+                            "title": "foxglove.Vector3",
+                            "description": "Point denoting position in 3D space",
+                            "type": "object",
+                            "properties": {
+                                "x": {
+                                    "type": "number",
+                                    "description": "x coordinate length"
+                                },
+                                "y": {
+                                    "type": "number",
+                                    "description": "y coordinate length"
+                                },
+                                "z": {
+                                    "type": "number",
+                                    "description": "z coordinate length"
+                                }
+                            }
+                        },
+                        "orientation": {
+                            "title": "foxglove.Quaternion",
+                            "description": "Quaternion denoting orientation in 3D space",
+                            "type": "object",
+                            "properties": {
+                                "x": {
+                                    "type": "number",
+                                    "description": "x value"
+                                },
+                                "y": {
+                                    "type": "number",
+                                    "description": "y value"
+                                },
+                                "z": {
+                                    "type": "number",
+                                    "description": "z value"
+                                },
+                                "w": {
+                                    "type": "number",
+                                    "description": "w value"
+                                }
+                            }
+                        }
+                    }
+                },
+                "point_stride": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Number of bytes between points in the `data`"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "title": "foxglove.PackedElementField",
+                        "description": "A field present within each element in a byte array of packed elements.",
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Name of the field"
+                            },
+                            "offset": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "description": "Byte offset from start of data buffer"
+                            },
+                            "type": {
+                                "title": "foxglove.NumericType",
+                                "description": "Type of data in the field. Integers are stored using little-endian byte order.",
+                                "oneOf": [
+                                    {
+                                        "title": "UNKNOWN",
+                                        "const": 0
+                                    },
+                                    {
+                                        "title": "UINT8",
+                                        "const": 1
+                                    },
+                                    {
+                                        "title": "INT8",
+                                        "const": 2
+                                    },
+                                    {
+                                        "title": "UINT16",
+                                        "const": 3
+                                    },
+                                    {
+                                        "title": "INT16",
+                                        "const": 4
+                                    },
+                                    {
+                                        "title": "UINT32",
+                                        "const": 5
+                                    },
+                                    {
+                                        "title": "INT32",
+                                        "const": 6
+                                    },
+                                    {
+                                        "title": "FLOAT32",
+                                        "const": 7
+                                    },
+                                    {
+                                        "title": "FLOAT64",
+                                        "const": 8
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "description": "Fields in `data`. At least 2 coordinate fields from `x`, `y`, and `z` are required for each point's position; `red`, `green`, `blue`, and `alpha` are optional for customizing each point's color."
+                },
+                "data": {
+                    "type": "string",
+                    "contentEncoding": "base64",
+                    "description": "Point data, interpreted using `fields`"
+                }
+            }
+        })";
         schema.data = mcap::ByteArray(
             reinterpret_cast<const std::byte*>(schema_data.data()),
             reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
@@ -189,7 +373,7 @@ private:
     }
 
     // Sequence counters
-    uint64_t local_map_sequence_ = 0;
+    uint64_t local_map_sequence_{};
     double last_local_map_timestamp_{-1.0};
 
     // MCAP writing components
@@ -205,6 +389,7 @@ ExteroceptionLogger::~ExteroceptionLogger() = default;
 
 void ExteroceptionLogger::log(const LocalMapState& local_map_state) {
     pimpl_->log(local_map_state);
+    std::cout << "Logged exteroception data" << std::endl;
 }
 
 double ExteroceptionLogger::getLastLocalMapTimestamp() const {
