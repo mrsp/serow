@@ -914,6 +914,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                     if (ft.has_value()) {
                         proprioception_logger_.log(ft.value());
                     }
+                    proprioception_logger_.log(base_state.base_position,
+                                               base_state.base_orientation, base_state.timestamp);
 
                 } catch (const std::exception& e) {
                     std::cerr << "Error in proprioception logging thread: " << e.what()

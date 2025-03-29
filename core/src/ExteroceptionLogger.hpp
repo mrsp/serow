@@ -34,6 +34,7 @@
 #include <memory>
 #include <string>
 
+#include "Schemas.hpp"
 #include "TerrainElevation.hpp"
 
 namespace serow {

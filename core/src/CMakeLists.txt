@@ -51,7 +51,8 @@ set(serow_headers ${serow_headers}
     NaiveTerrainElevation.hpp
     ProprioceptionLogger.hpp
     ExteroceptionLogger.hpp
-    ThreadPool.hpp)
+    ThreadPool.hpp
+    Schemas.hpp)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_link_libraries(serow PUBLIC mcap 

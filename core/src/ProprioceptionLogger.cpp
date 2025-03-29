@@ -60,6 +60,31 @@ public:
         return static_cast<uint64_t>(timestamp * 1e9);
     }
 
+    void log(const Eigen::Vector3d& position, const Eigen::Quaterniond& orientation,
+             double timestamp) {
+        try {
+            nlohmann::json json_data = {
+                {"timestamp",
+                 {{"sec", static_cast<int>(timestamp)},
+                  {"nsec", static_cast<int>((timestamp - static_cast<int>(timestamp)) * 1e9)}}},
+                {"parent_frame_id", ""},
+                {"child_frame_id", "base_link"},
+                {"translation", {{"x", position.x()}, {"y", position.y()}, {"z", position.z()}}},
+                {"rotation",
+                 {{"x", orientation.x()},
+                  {"y", orientation.y()},
+                  {"z", orientation.z()},
+                  {"w", orientation.w()}}}};
+
+            std::string json_str = json_data.dump(-1, ' ', true);
+
+            writeMessage(7, tf_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging Proprioception: " << e.what() << std::endl;
+        }
+    }
+
     void log(const ImuMeasurement& imu_measurement) {
         try {
             // Create JSON message with explicit type handling
@@ -353,6 +378,7 @@ private:
         schemas.push_back(createContactStateSchema());
         schemas.push_back(createCentroidalStateSchema());
         schemas.push_back(createBaseStateSchema());
+        schemas.push_back(createTFSchema());
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -367,7 +393,7 @@ private:
         channels.push_back(createChannel(4, "ContactState"));
         channels.push_back(createChannel(5, "CentroidalState"));
         channels.push_back(createChannel(6, "BaseState"));
-
+        channels.push_back(createChannel(7, "/odom"));
         for (auto& channel : channels) {
             writer_->addChannel(channel);
         }
@@ -891,6 +917,7 @@ private:
     uint64_t imu_sequence_ = 0;
     uint64_t joint_sequence_ = 0;
     uint64_t ft_sequence_ = 0;
+    uint64_t tf_sequence_ = 0;
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
@@ -926,6 +953,11 @@ void ProprioceptionLogger::log(
 
 void ProprioceptionLogger::log(const ContactState& contact_state) {
     pimpl_->log(contact_state);
+}
+
+void ProprioceptionLogger::log(const Eigen::Vector3d& position,
+                               const Eigen::Quaterniond& orientation, double timestamp) {
+    pimpl_->log(position, orientation, timestamp);
 }
 
 }  // namespace serow

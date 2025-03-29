@@ -40,8 +40,8 @@
 #include <string>
 
 #include "Measurement.hpp"
+#include "Schemas.hpp"
 #include "State.hpp"
-#include "TerrainElevation.hpp"
 
 namespace serow {
 
@@ -64,6 +64,8 @@ public:
     void log(const ImuMeasurement& imu_measurement);
     void log(const std::map<std::string, JointMeasurement>& joints_measurement);
     void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurement);
+    void log(const Eigen::Vector3d& position, const Eigen::Quaterniond& orientation,
+             double timestamp);
 
 private:
     class Impl;  // Forward declaration of the implementation class
