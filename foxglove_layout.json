@@ -27,13 +27,13 @@
       },
       "cameraState": {
         "perspective": true,
-        "distance": 17.147499999967433,
-        "phi": 76.28432956381901,
-        "thetaOffset": 117.98869143780053,
+        "distance": 10.807201753216969,
+        "phi": 77.20531967571272,
+        "thetaOffset": 151.7196166792666,
         "targetOffset": [
-          2.410384649172669,
-          -3.8128833752747573,
-          2.0976415840635034e-16
+          4.7205750834606555,
+          -3.357289994762496,
+          1.1277461239524693e-16
         ],
         "target": [
           0,
@@ -72,55 +72,128 @@
       },
       "imageMode": {}
     },
+    "Plot!2nzyh5p": {
+      "paths": [
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_position.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "label": "base position x"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_position.y",
+          "enabled": true,
+          "color": "#f5774d",
+          "label": "base position y"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_position.z",
+          "enabled": true,
+          "color": "#f7df71",
+          "label": "base position z"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "Base Position",
+      "xAxisLabel": "Time (s)",
+      "yAxisLabel": "Position (m)"
+    },
+    "Plot!111kcau": {
+      "paths": [
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_orientation.w",
+          "enabled": true,
+          "color": "#4e98e2",
+          "label": "base orientation w"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_orientation.x",
+          "enabled": true,
+          "color": "#f5774d",
+          "label": "base orientation x"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_orientation.y",
+          "enabled": true,
+          "color": "#f7df71",
+          "label": "base orientation y"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_orientation.z",
+          "enabled": true,
+          "color": "#5cd6a9",
+          "label": "base orientation z"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "Base Orientation",
+      "yAxisLabel": "Quaternion coefficients",
+      "xAxisLabel": "Time (s)"
+    },
+    "Plot!28cwmot": {
+      "paths": [
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_linear_velocity.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "label": "base linear velocity x"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/base_state.base_linear_velocity.y",
+          "enabled": true,
+          "color": "#f5774d",
+          "label": "base linear velocity y"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/base_state.base_linear_velocity.z",
+          "enabled": true,
+          "color": "#f7df71",
+          "label": "base linear velocity z"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "Base Linear Velocity",
+      "xAxisLabel": "Time (s)",
+      "yAxisLabel": "Velocity (m/s)"
+    },
     "RawMessages!os6rgs": {
       "diffEnabled": false,
       "diffMethod": "custom",
       "diffTopicPath": "",
       "showFullMessageForDiff": false,
-      "topicPath": "",
+      "topicPath": "/base_state",
       "fontSize": 12
-    },
-    "Image!3mnp456": {
-      "cameraState": {
-        "distance": 20,
-        "perspective": true,
-        "phi": 60,
-        "target": [
-          0,
-          0,
-          0
-        ],
-        "targetOffset": [
-          0,
-          0,
-          0
-        ],
-        "targetOrientation": [
-          0,
-          0,
-          0,
-          1
-        ],
-        "thetaOffset": 45,
-        "fovy": 45,
-        "near": 0.5,
-        "far": 5000
-      },
-      "followMode": "follow-pose",
-      "scene": {},
-      "transforms": {},
-      "topics": {},
-      "layers": {},
-      "publish": {
-        "type": "point",
-        "poseTopic": "/move_base_simple/goal",
-        "pointTopic": "/clicked_point",
-        "poseEstimateTopic": "/initialpose",
-        "poseEstimateXDeviation": 0.5,
-        "poseEstimateYDeviation": 0.5,
-        "poseEstimateThetaDeviation": 0.26179939
-      },
-      "imageMode": {}
     }
   },
   "globalVariables": {},
@@ -131,10 +204,19 @@
   "layout": {
     "first": "3D!18i6zy7",
     "second": {
-      "first": "Image!3mnp456",
-      "second": "RawMessages!os6rgs",
+      "first": "Plot!2nzyh5p",
+      "second": {
+        "first": {
+          "first": "Plot!111kcau",
+          "second": "Plot!28cwmot",
+          "direction": "column"
+        },
+        "second": "RawMessages!os6rgs",
+        "direction": "column",
+        "splitPercentage": 55.95244480200231
+      },
       "direction": "column",
-      "splitPercentage": 30
+      "splitPercentage": 35.039370078740156
     },
     "direction": "row",
     "splitPercentage": 70
