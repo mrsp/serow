@@ -39,8 +39,11 @@ namespace serow {
  */
 class Serow {
 public:
-    /// @brief constructor
+    /// @brief Constructor
     Serow();
+
+    /// @brief Destructor
+    ~Serow();
 
     /// @brief initializes SEROW's configuration and internal state
     /// @param config configuration to initialize SEROW with

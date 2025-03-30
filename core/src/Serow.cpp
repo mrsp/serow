@@ -952,4 +952,19 @@ const std::shared_ptr<TerrainElevation>& Serow::getTerrainEstimator() const {
     return terrain_estimator_;
 }
 
+Serow::~Serow() {
+    if (proprioception_logger_job_) {
+        // Wait for all jobs to finish
+        while (proprioception_logger_job_->isRunning()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    if (exteroception_logger_job_) {
+        // Wait for all jobs to finish
+        while (exteroception_logger_job_->isRunning()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+}
+
 }  // namespace serow

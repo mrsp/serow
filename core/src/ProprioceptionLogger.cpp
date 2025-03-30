@@ -445,11 +445,11 @@ public:
             // Create SceneEntity
             auto entity = foxglove::CreateSceneEntity(
                 builder,
-                &time,                          // timestamp
-                builder.CreateString("world"),  // frame_id
-                builder.CreateString("7"),      // id
-                nullptr,                        // lifetime
-                false,                          // frame_locked
+                &time,                                  // timestamp
+                builder.CreateString("world"),          // frame_id
+                builder.CreateString("contact_point"),  // id
+                nullptr,                                // lifetime
+                false,                                  // frame_locked
                 builder.CreateVector(
                     std::vector<flatbuffers::Offset<foxglove::KeyValuePair>>()),  // metadata
                 empty_arrows,                                                     // arrows
