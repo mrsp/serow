@@ -13,9 +13,9 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
-#include <nlohmann/json.hpp>
 
 #include "ExteroceptionLogger.hpp"
+#include "PointCloud_generated.h"
 
 namespace serow {
 
@@ -67,72 +67,66 @@ public:
             const double timestamp = local_map_state.timestamp;
             const auto& local_map = local_map_state.data;
 
-            // Serialize PointCloud to JSON according to schema
-            nlohmann::json json_data;
+            // Create a FlatBuffer builder
+            flatbuffers::FlatBufferBuilder builder;
 
-            // Add timestamp according to schema
-            json_data["timestamp"] = {
-                {"sec", static_cast<int64_t>(timestamp)},
-                {"nsec",
-                 static_cast<int32_t>((timestamp - static_cast<int64_t>(timestamp)) * 1e9)}};
-
-            // Add frame_id
-            json_data["frame_id"] = "world";
-
-            // Add pose (identity transform)
-            json_data["pose"] = {{"position", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}}},
-                                 {"orientation", {{"x", 0.0}, {"y", 0.0}, {"z", 0.0}, {"w", 1.0}}}};
-
-            // Add point stride (3 floats = 12 bytes)
-            json_data["point_stride"] = 12;
-
-            // Add fields definition
-            json_data["fields"] = {{
-                                       {"name", "x"}, {"offset", 0}, {"type", 7}  // FLOAT32
-                                   },
-                                   {
-                                       {"name", "y"}, {"offset", 4}, {"type", 7}  // FLOAT32
-                                   },
-                                   {
-                                       {"name", "z"}, {"offset", 8}, {"type", 7}  // FLOAT32
-                                   }};
-
-            // Pack point data into binary buffer
+            // Sample points (every 50th point)
+            const size_t sample_interval = 50;
             std::vector<float> point_data;
-            point_data.reserve(local_map.size() * 3);
-            for (const auto& point : local_map) {
+            point_data.reserve((local_map.size() / sample_interval) * 3);
+            
+            for (size_t i = 0; i < local_map.size(); i += sample_interval) {
+                const auto& point = local_map[i];
                 point_data.push_back(point[0]);
                 point_data.push_back(point[1]);
                 point_data.push_back(point[2]);
             }
 
-            // Convert binary data to base64
-            const char* base64_chars =
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-            std::string base64_data;
-            const uint8_t* binary_data = reinterpret_cast<const uint8_t*>(point_data.data());
-            size_t binary_size = point_data.size() * sizeof(float);
+            // Create the timestamp
+            auto ts = foxglove::Time(
+                static_cast<int64_t>(timestamp),
+                static_cast<int32_t>((timestamp - static_cast<int64_t>(timestamp)) * 1e9)
+            );
 
-            base64_data.reserve((binary_size + 2) / 3 * 4);
+            // Create the pose (identity transform)
+            auto position = foxglove::CreateVector3(builder, 0.0, 0.0, 0.0);
+            auto orientation = foxglove::CreateQuaternion(builder, 0.0, 0.0, 0.0, 1.0);
+            auto pose = foxglove::CreatePose(builder, position, orientation);
 
-            for (size_t i = 0; i < binary_size; i += 3) {
-                uint32_t n = binary_data[i] << 16;
-                if (i + 1 < binary_size)
-                    n |= binary_data[i + 1] << 8;
-                if (i + 2 < binary_size)
-                    n |= binary_data[i + 2];
+            // Create the frame_id string
+            auto frame_id = builder.CreateString("world");
 
-                base64_data += base64_chars[(n >> 18) & 63];
-                base64_data += base64_chars[(n >> 12) & 63];
-                base64_data += (i + 1 < binary_size) ? base64_chars[(n >> 6) & 63] : '=';
-                base64_data += (i + 2 < binary_size) ? base64_chars[n & 63] : '=';
-            }
+            // Create fields for point data
+            std::vector<flatbuffers::Offset<foxglove::PackedElementField>> fields;
+            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("x"), 0, foxglove::NumericType_FLOAT32));
+            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("y"), 4, foxglove::NumericType_FLOAT32));
+            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("z"), 8, foxglove::NumericType_FLOAT32));
+            auto fields_vec = builder.CreateVector(fields);
 
-            json_data["data"] = base64_data;
+            // Convert float data to uint8_t for the data field
+            std::vector<uint8_t> binary_data;
+            binary_data.resize(point_data.size() * sizeof(float));
+            std::memcpy(binary_data.data(), point_data.data(), binary_data.size());
+            auto data_vec = builder.CreateVector(binary_data);
 
-            std::string json_str = json_data.dump(-1, ' ', true);
-            writeMessage(1, local_map_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
+            // Create the PointCloud
+            foxglove::PointCloudBuilder pc_builder(builder);
+            pc_builder.add_timestamp(&ts);
+            pc_builder.add_frame_id(frame_id);
+            pc_builder.add_pose(pose);
+            pc_builder.add_point_stride(12);  // 3 floats * 4 bytes
+            pc_builder.add_fields(fields_vec);
+            pc_builder.add_data(data_vec);
+            auto pointcloud = pc_builder.Finish();
+
+            // Finish the buffer
+            builder.Finish(pointcloud);
+
+            // Get the serialized data
+            uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+            writeMessage(1, local_map_sequence_++, timestamp, 
+                reinterpret_cast<const std::byte*>(buffer), size);
             last_local_map_timestamp_ = timestamp;
         } catch (const std::exception& e) {
             std::cerr << "Error logging local map: " << e.what() << std::endl;
@@ -193,7 +187,7 @@ private:
         channel.id = id;
         channel.topic = topic;
         channel.schemaId = id;
-        channel.messageEncoding = "json";
+        channel.messageEncoding = "flatbuffer";
         return channel;
     }
 

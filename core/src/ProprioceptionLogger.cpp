@@ -16,6 +16,8 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include "SceneEntity_generated.h"
+#include "FrameTransform_generated.h"
+#include "FrameTransforms_generated.h"
 
 namespace serow {
 
@@ -63,53 +65,128 @@ public:
 
     void log(const std::map<std::string, Eigen::Vector3d>& positions,
              const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp) {
-        nlohmann::json json_data = {{"timestamp", timestamp},
-                                    {"transforms", nlohmann::json::array()}};
+        try {
+            flatbuffers::FlatBufferBuilder builder;
 
-        for (const auto& [frame_id, position] : positions) {
-            nlohmann::json transform = {
-                {"timestamp",
-                 {{"sec", static_cast<int>(timestamp)},
-                  {"nsec", static_cast<int>((timestamp - static_cast<int>(timestamp)) * 1e9)}}},
-                {"parent_frame_id", "world"},
-                {"child_frame_id", frame_id},
-                {"translation", {{"x", position.x()}, {"y", position.y()}, {"z", position.z()}}},
-                {"rotation",
-                 {{"x", orientations.at(frame_id).x()},
-                  {"y", orientations.at(frame_id).y()},
-                  {"z", orientations.at(frame_id).z()},
-                  {"w", orientations.at(frame_id).w()}}}};
-            json_data["transforms"].push_back(transform);
+            // Convert timestamp to sec and nsec
+            int64_t sec = static_cast<int64_t>(timestamp);
+            int32_t nsec = static_cast<int32_t>((timestamp - sec) * 1e9);
+
+            // Create timestamp
+            auto timestamp_fb = foxglove::Time(sec, nsec);
+
+            // Create transforms vector
+            std::vector<flatbuffers::Offset<foxglove::FrameTransform>> transforms_vector;
+
+            for (const auto& [frame_id, position] : positions) {
+                // Create frame_id strings
+                auto parent_frame = builder.CreateString("world");
+                auto child_frame = builder.CreateString(frame_id);
+
+                // Create translation
+                auto translation = foxglove::CreateVector3(
+                    builder,
+                    position.x(),
+                    position.y(),
+                    position.z()
+                );
+
+                // Create rotation
+                const auto& quaternion = orientations.at(frame_id);
+                auto rotation = foxglove::CreateQuaternion(
+                    builder,
+                    quaternion.x(),
+                    quaternion.y(),
+                    quaternion.z(),
+                    quaternion.w()
+                );
+
+                // Create transform
+                auto transform = foxglove::CreateFrameTransform(
+                    builder,
+                    &timestamp_fb,
+                    parent_frame,
+                    child_frame,
+                    translation,
+                    rotation
+                );
+
+                transforms_vector.push_back(std::move(transform));
+            }
+
+            // Create transforms vector
+            auto transforms = builder.CreateVector(transforms_vector);
+
+            // Create the root message
+            foxglove::FrameTransformsBuilder tf_builder(builder);
+            tf_builder.add_transforms(transforms);
+            auto tf_array = tf_builder.Finish();
+
+            // Finish the buffer
+            builder.Finish(tf_array);
+
+            // Get the serialized data
+            uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+            writeMessage(6, leg_tf_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging feet transforms: " << e.what() << std::endl;
         }
-
-        std::string json_str = json_data.dump(-1, ' ', true);
-
-        writeMessage(8, leg_tf_sequence_++, timestamp,
-                     reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
     }
 
     void log(const Eigen::Vector3d& position, const Eigen::Quaterniond& orientation,
              double timestamp) {
         try {
-            nlohmann::json json_data = {
-                {"timestamp",
-                 {{"sec", static_cast<int>(timestamp)},
-                  {"nsec", static_cast<int>((timestamp - static_cast<int>(timestamp)) * 1e9)}}},
-                {"parent_frame_id", "world"},
-                {"child_frame_id", "base_link"},
-                {"translation", {{"x", position.x()}, {"y", position.y()}, {"z", position.z()}}},
-                {"rotation",
-                 {{"x", orientation.x()},
-                  {"y", orientation.y()},
-                  {"z", orientation.z()},
-                  {"w", orientation.w()}}}};
+            flatbuffers::FlatBufferBuilder builder;
 
-            std::string json_str = json_data.dump(-1, ' ', true);
+            // Convert timestamp to sec and nsec
+            int64_t sec = static_cast<int64_t>(timestamp);
+            int32_t nsec = static_cast<int32_t>((timestamp - sec) * 1e9);
 
-            writeMessage(7, tf_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
+            // Create timestamp
+            auto timestamp_fb = foxglove::Time(sec, nsec);
+
+            // Create frame_id strings
+            auto parent_frame = builder.CreateString("world");
+            auto child_frame = builder.CreateString("base");
+
+            // Create translation
+            auto translation = foxglove::CreateVector3(
+                builder,
+                position.x(),
+                position.y(),
+                position.z()
+            );
+
+            // Create rotation
+            auto rotation = foxglove::CreateQuaternion(
+                builder,
+                orientation.x(),
+                orientation.y(),
+                orientation.z(),
+                orientation.w()
+            );
+
+            // Create the root message
+            foxglove::FrameTransformBuilder tf_builder(builder);
+            tf_builder.add_translation(std::move(translation));
+            tf_builder.add_rotation(std::move(rotation));
+            tf_builder.add_timestamp(&timestamp_fb);
+            tf_builder.add_parent_frame_id(std::move(parent_frame));
+            tf_builder.add_child_frame_id(std::move(child_frame));
+            auto tf = tf_builder.Finish();
+
+            // Finish the buffer
+            builder.Finish(tf);
+
+            // Get the serialized data
+            uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+            writeMessage(5, tf_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging Proprioception: " << e.what() << std::endl;
+            std::cerr << "Error logging basetransform: " << e.what() << std::endl;
         }
     }
 
@@ -132,78 +209,6 @@ public:
                          reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
         } catch (const std::exception& e) {
             std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
-        }
-    }
-
-    void log(const std::map<std::string, JointMeasurement>& joints_measurement) {
-        if (joints_measurement.empty())
-            return;
-
-        try {
-            nlohmann::json json_data = {{"timestamp", joints_measurement.begin()->second.timestamp},
-                                        {"num_joints", joints_measurement.size()},
-                                        {"joint_names", nlohmann::json::array()},
-                                        {"joints", nlohmann::json::array()}};
-
-            // Populate joint names and measurements
-            for (const auto& [joint_name, _] : joints_measurement) {
-                json_data["joint_names"].push_back(joint_name);
-            }
-
-            for (const auto& [_, measurement] : joints_measurement) {
-                nlohmann::json joint_data = {{"position", measurement.position}};
-                if (measurement.velocity.has_value()) {
-                    joint_data["velocity"] = measurement.velocity.value();
-                }
-                json_data["joints"].push_back(joint_data);
-            }
-
-            std::string json_str = json_data.dump(-1, ' ', true);
-
-            writeMessage(2, joint_sequence_++, json_data["timestamp"],
-                         reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
-        } catch (const std::exception& e) {
-            std::cerr << "Error logging Joint measurement: " << e.what() << std::endl;
-        }
-    }
-
-    void log(const std::map<std::string, ForceTorqueMeasurement>& ft_measurements) {
-        if (ft_measurements.empty())
-            return;
-
-        try {
-            nlohmann::json json_data = {{"timestamp", ft_measurements.begin()->second.timestamp},
-                                        {"num_sensors", ft_measurements.size()},
-                                        {"sensor_names", nlohmann::json::array()},
-                                        {"sensors", nlohmann::json::array()}};
-
-            // Populate sensor names
-            for (const auto& [sensor_name, _] : ft_measurements) {
-                json_data["sensor_names"].push_back(sensor_name);
-            }
-
-            // Populate sensor measurements
-            for (const auto& [_, measurement] : ft_measurements) {
-                nlohmann::json sensor_data = {
-                    {"force",
-                     {measurement.force.x(), measurement.force.y(), measurement.force.z()}},
-                    {"cop", {measurement.cop.x(), measurement.cop.y(), measurement.cop.z()}}};
-
-                if (measurement.torque.has_value()) {
-                    sensor_data["torque"] = {measurement.torque.value().x(),
-                                             measurement.torque.value().y(),
-                                             measurement.torque.value().z()};
-                }
-
-                json_data["sensors"].push_back(sensor_data);
-            }
-
-            std::string json_str = json_data.dump(-1, ' ', true);
-
-            writeMessage(3, ft_sequence_++, json_data["timestamp"],
-                         reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
-        } catch (const std::exception& e) {
-            std::cerr << "Error logging Force-Torque measurement: " << e.what() << std::endl;
         }
     }
 
@@ -243,7 +248,7 @@ public:
 
             std::string json_str = json_data.dump(-1, ' ', true);
 
-            writeMessage(4, contact_sequence_++, contact_state.timestamp,
+            writeMessage(2, contact_sequence_++, contact_state.timestamp,
                          reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
         } catch (const std::exception& e) {
             std::cerr << "Error logging Contact State: " << e.what() << std::endl;
@@ -281,7 +286,7 @@ public:
 
             std::string json_str = json_data.dump(-1, ' ', true);
 
-            writeMessage(5, centroidal_sequence_++, centroidal_state.timestamp,
+            writeMessage(3, centroidal_sequence_++, centroidal_state.timestamp,
                          reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
         } catch (const std::exception& e) {
             std::cerr << "Error logging Centroidal State: " << e.what() << std::endl;
@@ -364,7 +369,7 @@ public:
 
             std::string json_str = json_data.dump(-1, ' ', true);
 
-            writeMessage(6, base_state_sequence_++, base_state.timestamp,
+            writeMessage(4, base_state_sequence_++, base_state.timestamp,
                          reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
         } catch (const std::exception& e) {
             std::cerr << "Error logging Base State: " << e.what() << std::endl;
@@ -421,7 +426,7 @@ public:
                 builder,
                 &time,                          // timestamp
                 builder.CreateString("world"),  // frame_id
-                builder.CreateString("9"),      // id
+                builder.CreateString("7"),      // id
                 nullptr,                        // lifetime
                 false,                          // frame_locked
                 builder.CreateVector(
@@ -442,9 +447,7 @@ public:
             // Get serialized data
             uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
-
-            std::cout << "Writing contact point message, size: " << size << " bytes" << std::endl;
-            writeMessage(9, contact_points_sequence_++, timestamp,
+            writeMessage(7, contact_points_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Contact Points: " << e.what() << std::endl;
@@ -481,8 +484,6 @@ private:
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
         schemas.push_back(createImuMeasurementSchema());
-        schemas.push_back(createJointMeasurementSchema());
-        schemas.push_back(createForceTorqueMeasurementSchema());
         schemas.push_back(createContactStateSchema());
         schemas.push_back(createCentroidalStateSchema());
         schemas.push_back(createBaseStateSchema());
@@ -497,15 +498,13 @@ private:
 
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
-        channels.push_back(createChannel(1, "ImuMeasurement"));
-        channels.push_back(createChannel(2, "JointMeasurement"));
-        channels.push_back(createChannel(3, "ForceTorqueMeasurement"));
-        channels.push_back(createChannel(4, "ContactState"));
-        channels.push_back(createChannel(5, "CentroidalState"));
-        channels.push_back(createChannel(6, "BaseState"));
-        channels.push_back(createChannel(7, "/odom"));
-        channels.push_back(createChannel(8, "/legs"));
-        channels.push_back(createChannel(9, "/contacts", "flatbuffer"));
+        channels.push_back(createChannel(1, "/imu"));
+        channels.push_back(createChannel(2, "/contact_state"));
+        channels.push_back(createChannel(3, "/centroidal_state"));
+        channels.push_back(createChannel(4, "/base_state"));
+        channels.push_back(createChannel(5, "/odom", "flatbuffer"));
+        channels.push_back(createChannel(6, "/legs", "flatbuffer"));
+        channels.push_back(createChannel(7, "/contacts", "flatbuffer"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
@@ -527,8 +526,6 @@ private:
     uint64_t centroidal_sequence_ = 0;
     uint64_t contact_sequence_ = 0;
     uint64_t imu_sequence_ = 0;
-    uint64_t joint_sequence_ = 0;
-    uint64_t ft_sequence_ = 0;
     uint64_t tf_sequence_ = 0;
     uint64_t leg_tf_sequence_ = 0;
     uint64_t contact_points_sequence_ = 0;
@@ -554,15 +551,6 @@ void ProprioceptionLogger::log(const CentroidalState& centroidal_state) {
 
 void ProprioceptionLogger::log(const ImuMeasurement& imu_measurement) {
     pimpl_->log(imu_measurement);
-}
-
-void ProprioceptionLogger::log(const std::map<std::string, JointMeasurement>& joints_measurement) {
-    pimpl_->log(joints_measurement);
-}
-
-void ProprioceptionLogger::log(
-    const std::map<std::string, ForceTorqueMeasurement>& ft_measurements) {
-    pimpl_->log(ft_measurements);
 }
 
 void ProprioceptionLogger::log(const ContactState& contact_state) {

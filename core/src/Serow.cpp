@@ -910,10 +910,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                     proprioception_logger_.log(centroidal_state);
                     proprioception_logger_.log(contact_state);
                     proprioception_logger_.log(imu);
-                    proprioception_logger_.log(joints);
-                    if (ft.has_value()) {
-                        proprioception_logger_.log(ft.value());
-                    }
                     proprioception_logger_.log(base_state.base_position,
                                                base_state.base_orientation, base_state.timestamp);
                     proprioception_logger_.log(base_state.feet_position,
@@ -928,16 +924,16 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             });
     }
 
-    // if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
-    //     ((kin.timestamp - exteroception_logger_.getLastLocalMapTimestamp()) > 0.2)) {
-    //     exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
-    //         try {
-    //             exteroception_logger_.log(terrain_estimator_->getLocalMap());
-    //         } catch (const std::exception& e) {
-    //             std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
-    //         }
-    //     });
-    // }
+    if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
+        ((kin.timestamp - exteroception_logger_.getLastLocalMapTimestamp()) > 0.2)) {
+        exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
+            try {
+                exteroception_logger_.log(terrain_estimator_->getLocalMap());
+            } catch (const std::exception& e) {
+                std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
+            }
+        });
+    }
 
     // Update the state
     state_ = std::move(state);
