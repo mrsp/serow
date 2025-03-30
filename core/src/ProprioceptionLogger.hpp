@@ -68,6 +68,7 @@ public:
              double timestamp);
     void log(const std::map<std::string, Eigen::Vector3d>& positions,
              const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp);
+    void log(const Eigen::Vector3d& contact_point, double timestamp);
 
 private:
     class Impl;  // Forward declaration of the implementation class

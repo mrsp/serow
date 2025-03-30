@@ -918,6 +918,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                                                base_state.base_orientation, base_state.timestamp);
                     proprioception_logger_.log(base_state.feet_position,
                                                base_state.feet_orientation, base_state.timestamp);
+                    proprioception_logger_.log(Eigen::Vector3d(base_state.base_position.x(),
+                                                               base_state.base_position.y(), 0.0),
+                                               base_state.timestamp);
                 } catch (const std::exception& e) {
                     std::cerr << "Error in proprioception logging thread: " << e.what()
                               << std::endl;

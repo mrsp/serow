@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include "SceneEntity_generated.h"
 
 namespace serow {
 
@@ -370,6 +371,86 @@ public:
         }
     }
 
+    void log(const Eigen::Vector3d& contact_position, double timestamp) {
+        try {
+            // Create FlatBuffers builder
+            flatbuffers::FlatBufferBuilder builder(1024);
+
+            // Create Time
+            auto time = foxglove::Time(
+                static_cast<int32_t>(timestamp),
+                static_cast<int32_t>((timestamp - static_cast<int32_t>(timestamp)) * 1e9));
+
+            // Create Pose (position and orientation)
+            auto position = foxglove::CreateVector3(builder, contact_position.x(),
+                                                    contact_position.y(), contact_position.z());
+            auto orientation =
+                foxglove::CreateQuaternion(builder, 1.0f, 0.0f, 0.0f, 0.0f);  // Identity
+                                                                              // quaternion
+            auto pose = foxglove::CreatePose(builder, position, orientation);
+
+            // Create Color (red, fully opaque)
+            auto color = foxglove::CreateColor(builder, 1.0f, 0.0f, 0.0f, 1.0f);
+
+            // Create SpherePrimitive with pose, radius, and color
+            auto sphere = foxglove::CreateSpherePrimitive(builder, pose, 0.1f, color);
+
+            // Create vector of sphere primitives
+            std::vector<flatbuffers::Offset<foxglove::SpherePrimitive>> spheres;
+            spheres.push_back(sphere);
+            auto spheres_vec = builder.CreateVector(spheres);
+
+            // Create empty vectors for other primitives
+            auto empty_arrows =
+                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::ArrowPrimitive>>());
+            auto empty_cubes =
+                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::CubePrimitive>>());
+            auto empty_cylinders = builder.CreateVector(
+                std::vector<flatbuffers::Offset<foxglove::CylinderPrimitive>>());
+            auto empty_lines =
+                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::LinePrimitive>>());
+            auto empty_triangles = builder.CreateVector(
+                std::vector<flatbuffers::Offset<foxglove::TriangleListPrimitive>>());
+            auto empty_texts =
+                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::TextPrimitive>>());
+            auto empty_models =
+                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::ModelPrimitive>>());
+
+            // Create SceneEntity
+            auto entity = foxglove::CreateSceneEntity(
+                builder,
+                &time,                          // timestamp
+                builder.CreateString("world"),  // frame_id
+                builder.CreateString("9"),      // id
+                nullptr,                        // lifetime
+                false,                          // frame_locked
+                builder.CreateVector(
+                    std::vector<flatbuffers::Offset<foxglove::KeyValuePair>>()),  // metadata
+                empty_arrows,                                                     // arrows
+                empty_cubes,                                                      // cubes
+                spheres_vec,                                                      // spheres
+                empty_cylinders,                                                  // cylinders
+                empty_lines,                                                      // lines
+                empty_triangles,                                                  // triangles
+                empty_texts,                                                      // texts
+                empty_models                                                      // models
+            );
+
+            // Finish the buffer
+            builder.Finish(entity);
+
+            // Get serialized data
+            uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
+            std::cout << "Writing contact point message, size: " << size << " bytes" << std::endl;
+            writeMessage(9, contact_points_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging Contact Points: " << e.what() << std::endl;
+        }
+    }
+
 private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) {
@@ -407,6 +488,7 @@ private:
         schemas.push_back(createBaseStateSchema());
         schemas.push_back(createTFSchema());
         schemas.push_back(createFrameTransformsSchema());
+        schemas.push_back(createSceneEntitySchema());
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -423,18 +505,20 @@ private:
         channels.push_back(createChannel(6, "BaseState"));
         channels.push_back(createChannel(7, "/odom"));
         channels.push_back(createChannel(8, "/legs"));
+        channels.push_back(createChannel(9, "/contacts", "flatbuffer"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
         }
     }
 
-    mcap::Channel createChannel(uint16_t id, const std::string& topic) {
+    mcap::Channel createChannel(uint16_t id, const std::string& topic,
+                                const std::string& encoding = "json") {
         mcap::Channel channel;
         channel.id = id;
         channel.topic = topic;
         channel.schemaId = id;
-        channel.messageEncoding = "json";
+        channel.messageEncoding = encoding;
         return channel;
     }
 
@@ -447,11 +531,12 @@ private:
     uint64_t ft_sequence_ = 0;
     uint64_t tf_sequence_ = 0;
     uint64_t leg_tf_sequence_ = 0;
+    uint64_t contact_points_sequence_ = 0;
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
     std::unique_ptr<mcap::McapWriter> writer_;
-};
+};  // namespace serow
 
 // Public interface implementation
 ProprioceptionLogger::ProprioceptionLogger(const std::string& filename)
@@ -493,6 +578,10 @@ void ProprioceptionLogger::log(const std::map<std::string, Eigen::Vector3d>& pos
                                const std::map<std::string, Eigen::Quaterniond>& orientations,
                                double timestamp) {
     pimpl_->log(positions, orientations, timestamp);
+}
+
+void ProprioceptionLogger::log(const Eigen::Vector3d& contact_point, double timestamp) {
+    pimpl_->log(contact_point, timestamp);
 }
 
 }  // namespace serow

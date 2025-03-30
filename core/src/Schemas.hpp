@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 
 #include "mcap/mcap.hpp"
@@ -843,6 +844,38 @@ static inline mcap::Schema createImuMeasurementSchema() {
         "    \"required\": [\"timestamp\", \"linear_acceleration\", \"angular_velocity\"]"
         "}";
 
+    schema.data = mcap::ByteArray(
+        reinterpret_cast<const std::byte*>(schema_data.data()),
+        reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
+    return schema;
+}
+
+static inline mcap::Schema createSceneEntitySchema() {
+    // Load the .bfbs file
+    std::string bfbs_path = "SceneEntity.bfbs";
+
+    // Add the source directory path if defined
+#ifdef SCHEMAS_DIR
+    bfbs_path = std::filesystem::path(SCHEMAS_DIR) / "SceneEntity.bfbs";
+#endif
+    std::ifstream schema_file(bfbs_path, std::ios::binary);
+    if (!schema_file.is_open()) {
+        throw std::runtime_error("Failed to open SceneEntity.bfbs at " + bfbs_path);
+    }
+
+    // Read the entire file into a vector
+    std::vector<uint8_t> schema_data((std::istreambuf_iterator<char>(schema_file)),
+                                     std::istreambuf_iterator<char>());
+    schema_file.close();
+
+    if (schema_data.empty()) {
+        throw std::runtime_error("SceneEntity.bfbs is empty");
+    }
+
+    // Define SceneEntity schema using .bfbs data
+    mcap::Schema schema;
+    schema.name = "foxglove.SceneEntity";
+    schema.encoding = "flatbuffer";
     schema.data = mcap::ByteArray(
         reinterpret_cast<const std::byte*>(schema_data.data()),
         reinterpret_cast<const std::byte*>(schema_data.data() + schema_data.size()));
