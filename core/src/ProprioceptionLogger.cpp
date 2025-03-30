@@ -14,14 +14,15 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
-#include <nlohmann/json.hpp>
-#include "SceneEntity_generated.h"
+#include "BaseState_generated.h"
+#include "CentroidalState_generated.h"
+#include "ContactState_generated.h"
 #include "FrameTransform_generated.h"
 #include "FrameTransforms_generated.h"
-#include "CentroidalState_generated.h"
-#include "Vector3_generated.h"
+#include "ImuState_generated.h"
+#include "SceneEntity_generated.h"
 #include "Time_generated.h"
-#include "BaseState_generated.h"
+#include "Vector3_generated.h"
 namespace serow {
 
 // Implementation class definition
@@ -87,32 +88,17 @@ public:
                 auto child_frame = builder.CreateString(frame_id);
 
                 // Create translation
-                auto translation = foxglove::CreateVector3(
-                    builder,
-                    position.x(),
-                    position.y(),
-                    position.z()
-                );
+                auto translation =
+                    foxglove::CreateVector3(builder, position.x(), position.y(), position.z());
 
                 // Create rotation
                 const auto& quaternion = orientations.at(frame_id);
-                auto rotation = foxglove::CreateQuaternion(
-                    builder,
-                    quaternion.x(),
-                    quaternion.y(),
-                    quaternion.z(),
-                    quaternion.w()
-                );
+                auto rotation = foxglove::CreateQuaternion(builder, quaternion.x(), quaternion.y(),
+                                                           quaternion.z(), quaternion.w());
 
                 // Create transform
                 auto transform = foxglove::CreateFrameTransform(
-                    builder,
-                    &timestamp_fb,
-                    parent_frame,
-                    child_frame,
-                    translation,
-                    rotation
-                );
+                    builder, &timestamp_fb, parent_frame, child_frame, translation, rotation);
 
                 transforms_vector.push_back(std::move(transform));
             }
@@ -155,21 +141,12 @@ public:
             auto child_frame = builder.CreateString("base");
 
             // Create translation
-            auto translation = foxglove::CreateVector3(
-                builder,
-                position.x(),
-                position.y(),
-                position.z()
-            );
+            auto translation =
+                foxglove::CreateVector3(builder, position.x(), position.y(), position.z());
 
             // Create rotation
-            auto rotation = foxglove::CreateQuaternion(
-                builder,
-                orientation.x(),
-                orientation.y(),
-                orientation.z(),
-                orientation.w()
-            );
+            auto rotation = foxglove::CreateQuaternion(builder, orientation.x(), orientation.y(),
+                                                       orientation.z(), orientation.w());
 
             // Create the root message
             foxglove::FrameTransformBuilder tf_builder(builder);
@@ -186,8 +163,8 @@ public:
             // Get the serialized data
             uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
-            writeMessage(5, tf_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(5, tf_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
+                         size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging basetransform: " << e.what() << std::endl;
         }
@@ -195,64 +172,120 @@ public:
 
     void log(const ImuMeasurement& imu_measurement) {
         try {
-            // Create JSON message with explicit type handling
-            nlohmann::json json_data = {
-                {"timestamp", imu_measurement.timestamp},
-                {"linear_acceleration",
-                 {imu_measurement.linear_acceleration.x(), imu_measurement.linear_acceleration.y(),
-                  imu_measurement.linear_acceleration.z()}},
-                {"angular_velocity",
-                 {imu_measurement.angular_velocity.x(), imu_measurement.angular_velocity.y(),
-                  imu_measurement.angular_velocity.z()}}};
+            flatbuffers::FlatBufferBuilder builder(1024);
 
-            // Convert JSON to string with consistent formatting
-            std::string json_str = json_data.dump(-1, ' ', true);
+            // Convert timestamp to sec and nsec
+            int64_t sec = static_cast<int64_t>(imu_measurement.timestamp);
+            int32_t nsec = static_cast<int32_t>((imu_measurement.timestamp - sec) * 1e9);
 
+            // Create Time
+            auto time = foxglove::Time(sec, nsec);
+
+            // Create linear acceleration vector
+            auto linear_acceleration = foxglove::CreateVector3(
+                builder, imu_measurement.linear_acceleration.x(),
+                imu_measurement.linear_acceleration.y(), imu_measurement.linear_acceleration.z());
+
+            // Create angular velocity vector
+            auto angular_velocity = foxglove::CreateVector3(
+                builder, imu_measurement.angular_velocity.x(), imu_measurement.angular_velocity.y(),
+                imu_measurement.angular_velocity.z());
+
+            // Create orientation quaternion (identity quaternion since it's not provided)
+            auto orientation = foxglove::CreateQuaternion(
+                builder, imu_measurement.orientation.w(), imu_measurement.orientation.x(),
+                imu_measurement.orientation.y(), imu_measurement.orientation.z());
+
+            // Create the root ImuState
+            auto imu_state = foxglove::CreateImuState(builder,
+                                                      &time,                // timestamp
+                                                      linear_acceleration,  // linear_acceleration
+                                                      angular_velocity,     // angular_velocity
+                                                      orientation);         // orientation
+
+            // Finish the buffer
+            builder.Finish(imu_state);
+
+            // Get the buffer and size
+            uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
+            // Write the message
             writeMessage(1, imu_sequence_++, imu_measurement.timestamp,
-                         reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
+            std::cerr << "Error logging IMU state: " << e.what() << std::endl;
         }
     }
 
     void log(const ContactState& contact_state) {
         try {
-            nlohmann::json json_data = {{"timestamp", contact_state.timestamp},
-                                        {"num_contacts", contact_state.contacts_status.size()},
-                                        {"contact_names", nlohmann::json::array()},
-                                        {"contacts", nlohmann::json::array()}};
+            // Create FlatBuffers builder
+            flatbuffers::FlatBufferBuilder builder(1024);
 
-            // Populate contact names
+            // Create Time
+            auto time = foxglove::Time(
+                static_cast<int32_t>(contact_state.timestamp),
+                static_cast<int32_t>(
+                    (contact_state.timestamp - static_cast<int32_t>(contact_state.timestamp)) *
+                    1e9));
+
+            // Create contact names vector
+            std::vector<flatbuffers::Offset<flatbuffers::String>> contact_names;
             for (const auto& [contact_name, _] : contact_state.contacts_status) {
-                json_data["contact_names"].push_back(contact_name);
+                contact_names.push_back(builder.CreateString(contact_name));
             }
+            auto contact_names_vec = builder.CreateVector(contact_names);
 
-            // Populate contact details
+            // Create contacts vector
+            std::vector<flatbuffers::Offset<foxglove::Contact>> contacts;
             for (const auto& [contact_name, status] : contact_state.contacts_status) {
-                nlohmann::json contact_data = {
-                    {"status", status},
-                    {"probability", contact_state.contacts_probability.at(contact_name)},
-                    {"force",
-                     {contact_state.contacts_force.at(contact_name).x(),
-                      contact_state.contacts_force.at(contact_name).y(),
-                      contact_state.contacts_force.at(contact_name).z()}}};
+                // Create force vector
+                auto force = foxglove::CreateVector3(
+                    builder, contact_state.contacts_force.at(contact_name).x(),
+                    contact_state.contacts_force.at(contact_name).y(),
+                    contact_state.contacts_force.at(contact_name).z());
 
+                // Create torque vector if available
+                flatbuffers::Offset<foxglove::Vector3> torque = 0;
                 if (contact_state.contacts_torque.has_value()) {
-                    const auto& torque = contact_state.contacts_torque.value();
-                    if (torque.count(contact_name) > 0) {
-                        contact_data["torque"] = {torque.at(contact_name).x(),
-                                                  torque.at(contact_name).y(),
-                                                  torque.at(contact_name).z()};
+                    const auto& torque_map = contact_state.contacts_torque.value();
+                    if (torque_map.count(contact_name) > 0) {
+                        torque = foxglove::CreateVector3(builder, torque_map.at(contact_name).x(),
+                                                         torque_map.at(contact_name).y(),
+                                                         torque_map.at(contact_name).z());
                     }
                 }
 
-                json_data["contacts"].push_back(contact_data);
+                // Create contact
+                auto contact = foxglove::CreateContact(
+                    builder,
+                    status,                                               // status
+                    contact_state.contacts_probability.at(contact_name),  // probability
+                    force,                                                // force
+                    torque);  // torque (will be null if not set)
+
+                contacts.push_back(contact);
             }
+            auto contacts_vec = builder.CreateVector(contacts);
 
-            std::string json_str = json_data.dump(-1, ' ', true);
+            // Create the root ContactState
+            auto contact_state_fb =
+                foxglove::CreateContactState(builder,
+                                             &time,              // timestamp
+                                             contact_names_vec,  // contact_names
+                                             contacts_vec);      // contacts
 
+            // Finish the buffer
+            builder.Finish(contact_state_fb);
+
+            // Get the buffer and size
+            uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
+            // Write the message
             writeMessage(2, contact_sequence_++, contact_state.timestamp,
-                         reinterpret_cast<const std::byte*>(json_str.data()), json_str.size());
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Contact State: " << e.what() << std::endl;
         }
@@ -267,49 +300,37 @@ public:
             int32_t nsec = static_cast<int32_t>((centroidal_state.timestamp - sec) * 1e9);
 
             auto timestamp = foxglove::Time(sec, nsec);
-            auto com_position = foxglove::CreateVector3(builder, 
-                centroidal_state.com_position.x(), 
-                centroidal_state.com_position.y(), 
-                centroidal_state.com_position.z());
-            auto com_linear_velocity = foxglove::CreateVector3(builder,
-                centroidal_state.com_linear_velocity.x(),
-                centroidal_state.com_linear_velocity.y(),
-                centroidal_state.com_linear_velocity.z());
-            auto external_forces = foxglove::CreateVector3(builder,
-                centroidal_state.external_forces.x(),
-                centroidal_state.external_forces.y(),
+            auto com_position = foxglove::CreateVector3(builder, centroidal_state.com_position.x(),
+                                                        centroidal_state.com_position.y(),
+                                                        centroidal_state.com_position.z());
+            auto com_linear_velocity = foxglove::CreateVector3(
+                builder, centroidal_state.com_linear_velocity.x(),
+                centroidal_state.com_linear_velocity.y(), centroidal_state.com_linear_velocity.z());
+            auto external_forces = foxglove::CreateVector3(
+                builder, centroidal_state.external_forces.x(), centroidal_state.external_forces.y(),
                 centroidal_state.external_forces.z());
-            auto cop_position = foxglove::CreateVector3(builder,
-                centroidal_state.cop_position.x(),
-                centroidal_state.cop_position.y(),
-                centroidal_state.cop_position.z());
-            auto com_linear_acceleration = foxglove::CreateVector3(builder,
-                centroidal_state.com_linear_acceleration.x(),
-                centroidal_state.com_linear_acceleration.y(),
-                centroidal_state.com_linear_acceleration.z());
-            auto angular_momentum = foxglove::CreateVector3(builder,
-                centroidal_state.angular_momentum.x(),
-                centroidal_state.angular_momentum.y(),
-                centroidal_state.angular_momentum.z());
-            auto angular_momentum_derivative = foxglove::CreateVector3(builder,
-                centroidal_state.angular_momentum_derivative.x(),
-                centroidal_state.angular_momentum_derivative.y(),
-                centroidal_state.angular_momentum_derivative.z());
+            auto cop_position = foxglove::CreateVector3(builder, centroidal_state.cop_position.x(),
+                                                        centroidal_state.cop_position.y(),
+                                                        centroidal_state.cop_position.z());
+            auto com_linear_acceleration =
+                foxglove::CreateVector3(builder, centroidal_state.com_linear_acceleration.x(),
+                                        centroidal_state.com_linear_acceleration.y(),
+                                        centroidal_state.com_linear_acceleration.z());
+            auto angular_momentum = foxglove::CreateVector3(
+                builder, centroidal_state.angular_momentum.x(),
+                centroidal_state.angular_momentum.y(), centroidal_state.angular_momentum.z());
+            auto angular_momentum_derivative =
+                foxglove::CreateVector3(builder, centroidal_state.angular_momentum_derivative.x(),
+                                        centroidal_state.angular_momentum_derivative.y(),
+                                        centroidal_state.angular_momentum_derivative.z());
 
             auto centroidal_state_fb = foxglove::CreateCentroidalState(
-                builder,
-                &timestamp,
-                com_position,
-                com_linear_velocity,
-                external_forces,
-                cop_position,
-                com_linear_acceleration,
-                angular_momentum,
-                angular_momentum_derivative
-            );
+                builder, &timestamp, com_position, com_linear_velocity, external_forces,
+                cop_position, com_linear_acceleration, angular_momentum,
+                angular_momentum_derivative);
 
             builder.Finish(centroidal_state_fb);
-            
+
             uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
             writeMessage(3, centroidal_sequence_++, centroidal_state.timestamp,
@@ -327,65 +348,50 @@ public:
             int32_t nsec = static_cast<int32_t>((base_state.timestamp - sec) * 1e9);
 
             auto timestamp = foxglove::Time(sec, nsec);
-            
-            auto base_position = foxglove::CreateVector3(builder, 
-                base_state.base_position.x(), 
-                base_state.base_position.y(), 
-                base_state.base_position.z());
 
-            auto base_orientation = foxglove::CreateQuaternion(builder,
-                base_state.base_orientation.w(),
-                base_state.base_orientation.x(),
-                base_state.base_orientation.y(),
-                base_state.base_orientation.z());
-            
-            auto base_linear_velocity = foxglove::CreateVector3(builder,
-                base_state.base_linear_velocity.x(),
-                base_state.base_linear_velocity.y(),
+            auto base_position =
+                foxglove::CreateVector3(builder, base_state.base_position.x(),
+                                        base_state.base_position.y(), base_state.base_position.z());
+
+            auto base_orientation = foxglove::CreateQuaternion(
+                builder, base_state.base_orientation.w(), base_state.base_orientation.x(),
+                base_state.base_orientation.y(), base_state.base_orientation.z());
+
+            auto base_linear_velocity = foxglove::CreateVector3(
+                builder, base_state.base_linear_velocity.x(), base_state.base_linear_velocity.y(),
                 base_state.base_linear_velocity.z());
-            
-            auto base_angular_velocity = foxglove::CreateVector3(builder,
-                base_state.base_angular_velocity.x(),
-                base_state.base_angular_velocity.y(),
+
+            auto base_angular_velocity = foxglove::CreateVector3(
+                builder, base_state.base_angular_velocity.x(), base_state.base_angular_velocity.y(),
                 base_state.base_angular_velocity.z());
-            
-            auto base_linear_acceleration = foxglove::CreateVector3(builder,
-                base_state.base_linear_acceleration.x(),
-                base_state.base_linear_acceleration.y(),
-                base_state.base_linear_acceleration.z());
-            
-            auto base_angular_acceleration = foxglove::CreateVector3(builder,
-                base_state.base_angular_acceleration.x(),
-                base_state.base_angular_acceleration.y(),
-                base_state.base_angular_acceleration.z());
-            
-            auto imu_angular_velocity_bias = foxglove::CreateVector3(builder,
-                base_state.imu_angular_velocity_bias.x(),
-                base_state.imu_angular_velocity_bias.y(),
-                base_state.imu_angular_velocity_bias.z());
-            
-            auto imu_linear_acceleration_bias = foxglove::CreateVector3(builder,
-                base_state.imu_linear_acceleration_bias.x(),
-                base_state.imu_linear_acceleration_bias.y(),
-                base_state.imu_linear_acceleration_bias.z());
-            
+
+            auto base_linear_acceleration = foxglove::CreateVector3(
+                builder, base_state.base_linear_acceleration.x(),
+                base_state.base_linear_acceleration.y(), base_state.base_linear_acceleration.z());
+
+            auto base_angular_acceleration = foxglove::CreateVector3(
+                builder, base_state.base_angular_acceleration.x(),
+                base_state.base_angular_acceleration.y(), base_state.base_angular_acceleration.z());
+
+            auto imu_angular_velocity_bias = foxglove::CreateVector3(
+                builder, base_state.imu_angular_velocity_bias.x(),
+                base_state.imu_angular_velocity_bias.y(), base_state.imu_angular_velocity_bias.z());
+
+            auto imu_linear_acceleration_bias =
+                foxglove::CreateVector3(builder, base_state.imu_linear_acceleration_bias.x(),
+                                        base_state.imu_linear_acceleration_bias.y(),
+                                        base_state.imu_linear_acceleration_bias.z());
+
             auto base_state_fb = foxglove::CreateBaseState(
-                builder,
-                &timestamp,
-                base_position,
-                base_orientation,
-                base_linear_velocity,
-                base_angular_velocity,
-                base_linear_acceleration,
-                base_angular_acceleration,
-                imu_angular_velocity_bias,
-                imu_linear_acceleration_bias);
-             
-            builder.Finish(base_state_fb);   
+                builder, &timestamp, base_position, base_orientation, base_linear_velocity,
+                base_angular_velocity, base_linear_acceleration, base_angular_acceleration,
+                imu_angular_velocity_bias, imu_linear_acceleration_bias);
+
+            builder.Finish(base_state_fb);
             uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
-            writeMessage(4, base_state_sequence_++, base_state.timestamp,
-                        reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(4, base_sequence_++, base_state.timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Base State: " << e.what() << std::endl;
         }
@@ -498,13 +504,13 @@ private:
     // Reuse the original schema and channel initialization methods
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
-        schemas.push_back(createImuMeasurementSchema());
-        schemas.push_back(createContactStateSchema());
-        schemas.push_back(createCentroidalStateSchema());
-        schemas.push_back(createBaseStateSchema());
-        schemas.push_back(createTFSchema());
-        schemas.push_back(createFrameTransformsSchema());
-        schemas.push_back(createSceneEntitySchema());
+        schemas.push_back(createSchema("ImuState"));
+        schemas.push_back(createSchema("ContactState"));
+        schemas.push_back(createSchema("CentroidalState"));
+        schemas.push_back(createSchema("BaseState"));
+        schemas.push_back(createSchema("FrameTransform"));
+        schemas.push_back(createSchema("FrameTransforms"));
+        schemas.push_back(createSchema("SceneEntity"));
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -513,31 +519,30 @@ private:
 
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
-        channels.push_back(createChannel(1, "/imu"));
+        channels.push_back(createChannel(1, "/imu_state"));
         channels.push_back(createChannel(2, "/contact_state"));
-        channels.push_back(createChannel(3, "/centroidal_state", "flatbuffer"));
-        channels.push_back(createChannel(4, "/base_state", "flatbuffer"));
-        channels.push_back(createChannel(5, "/odom", "flatbuffer"));
-        channels.push_back(createChannel(6, "/legs", "flatbuffer"));
-        channels.push_back(createChannel(7, "/contacts", "flatbuffer"));
+        channels.push_back(createChannel(3, "/centroidal_state"));
+        channels.push_back(createChannel(4, "/base_state"));
+        channels.push_back(createChannel(5, "/odom"));
+        channels.push_back(createChannel(6, "/legs"));
+        channels.push_back(createChannel(7, "/contacts"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
         }
     }
 
-    mcap::Channel createChannel(uint16_t id, const std::string& topic,
-                                const std::string& encoding = "json") {
+    mcap::Channel createChannel(uint16_t id, const std::string& topic) {
         mcap::Channel channel;
         channel.id = id;
         channel.topic = topic;
         channel.schemaId = id;
-        channel.messageEncoding = encoding;
+        channel.messageEncoding = "flatbuffer";
         return channel;
     }
 
     // Sequence counters
-    uint64_t base_state_sequence_ = 0;
+    uint64_t base_sequence_ = 0;
     uint64_t centroidal_sequence_ = 0;
     uint64_t contact_sequence_ = 0;
     uint64_t imu_sequence_ = 0;

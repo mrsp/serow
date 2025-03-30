@@ -477,6 +477,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Estimate the base frame attitude
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
+    imu.orientation = attitude_estimator_->getQ();
 
     // IMU bias calibration
     if (params_.calibrate_initial_imu_bias) {

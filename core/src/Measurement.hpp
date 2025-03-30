@@ -37,6 +37,7 @@ struct ImuMeasurement {
     double timestamp{};                      ///< Timestamp of the measurement (s)
     Eigen::Vector3d linear_acceleration{};   ///< Linear acceleration measured by IMU (m/s^2)
     Eigen::Vector3d angular_velocity{};      ///< Angular velocity measured by IMU (rad/s)
+    Eigen::Quaterniond orientation{};        ///< Orientation measured by IMU (quaternion)
     Eigen::Vector3d angular_acceleration{};  ///< Angular acceleration measured by IMU (rad/s^2)
     Eigen::Matrix3d angular_velocity_cov{};  ///< Covariance matrix of angular velocity (rad^2/s^2)
     Eigen::Matrix3d

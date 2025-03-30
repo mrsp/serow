@@ -74,7 +74,7 @@ public:
             const size_t sample_interval = 50;
             std::vector<float> point_data;
             point_data.reserve((local_map.size() / sample_interval) * 3);
-            
+
             for (size_t i = 0; i < local_map.size(); i += sample_interval) {
                 const auto& point = local_map[i];
                 point_data.push_back(point[0]);
@@ -85,8 +85,7 @@ public:
             // Create the timestamp
             auto ts = foxglove::Time(
                 static_cast<int64_t>(timestamp),
-                static_cast<int32_t>((timestamp - static_cast<int64_t>(timestamp)) * 1e9)
-            );
+                static_cast<int32_t>((timestamp - static_cast<int64_t>(timestamp)) * 1e9));
 
             // Create the pose (identity transform)
             auto position = foxglove::CreateVector3(builder, 0.0, 0.0, 0.0);
@@ -98,9 +97,12 @@ public:
 
             // Create fields for point data
             std::vector<flatbuffers::Offset<foxglove::PackedElementField>> fields;
-            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("x"), 0, foxglove::NumericType_FLOAT32));
-            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("y"), 4, foxglove::NumericType_FLOAT32));
-            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("z"), 8, foxglove::NumericType_FLOAT32));
+            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("x"),
+                                                                0, foxglove::NumericType_FLOAT32));
+            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("y"),
+                                                                4, foxglove::NumericType_FLOAT32));
+            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("z"),
+                                                                8, foxglove::NumericType_FLOAT32));
             auto fields_vec = builder.CreateVector(fields);
 
             // Convert float data to uint8_t for the data field
@@ -125,8 +127,8 @@ public:
             // Get the serialized data
             uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
-            writeMessage(1, local_map_sequence_++, timestamp, 
-                reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(1, local_map_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
             last_local_map_timestamp_ = timestamp;
         } catch (const std::exception& e) {
             std::cerr << "Error logging local map: " << e.what() << std::endl;
@@ -166,7 +168,7 @@ private:
     // Reuse the original schema and channel initialization methods
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
-        schemas.push_back(createPointCloudSchema());
+        schemas.push_back(createSchema("PointCloud"));
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
