@@ -904,20 +904,17 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (!proprioception_logger_job_->isRunning()) {
         proprioception_logger_job_->addJob(
             [this, base_state = state.base_state_, centroidal_state = state.centroidal_state_,
-             contact_state = state.contact_state_, imu = imu, joints = joints, ft = ft]() {
+             contact_state = state.contact_state_, imu = imu, joints = joints]() {
                 try {
                     // Log all state data to MCAP file
-                    proprioception_logger_.log(base_state);
-                    proprioception_logger_.log(centroidal_state);
-                    proprioception_logger_.log(contact_state);
                     proprioception_logger_.log(imu);
+                    proprioception_logger_.log(contact_state);
+                    proprioception_logger_.log(centroidal_state);
+                    proprioception_logger_.log(base_state);
                     proprioception_logger_.log(base_state.base_position,
                                                base_state.base_orientation, base_state.timestamp);
                     proprioception_logger_.log(base_state.feet_position,
                                                base_state.feet_orientation, base_state.timestamp);
-                    proprioception_logger_.log(Eigen::Vector3d(base_state.base_position.x(),
-                                                               base_state.base_position.y(), 0.0),
-                                               base_state.timestamp);
                 } catch (const std::exception& e) {
                     std::cerr << "Error in proprioception logging thread: " << e.what()
                               << std::endl;
