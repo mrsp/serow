@@ -82,7 +82,7 @@ public:
     void log(const ImuMeasurement& imu_measurement) {
         try {
             auto& builder = builders_[0];
-            builder.Reset();
+            builder.Clear();
 
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -117,10 +117,17 @@ public:
             // Finish the buffer
             builder.Finish(imu_state);
 
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
+            if (!buffer || size == 0) {
+                throw std::runtime_error("Invalid buffer state after Finish");
+            }
+
             // Write the message
             writeMessage(1, imu_sequence_++, imu_measurement.timestamp,
-                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()), 
-                         builder.GetSize());
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging IMU state: " << e.what() << std::endl;
         }
@@ -129,10 +136,9 @@ public:
 
     void log(const ContactState& contact_state) {
         try {
-            // Create FlatBuffers builder
             auto& builder = builders_[1];
-            builder.Reset();
-
+            builder.Clear();
+            
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
@@ -195,10 +201,13 @@ public:
             // Finish the buffer
             builder.Finish(contact_state_fb);
 
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
             // Write the message
             writeMessage(2, contact_sequence_++, contact_state.timestamp,
-                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()), 
-                         builder.GetSize());
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Contact State: " << e.what() << std::endl;
         }
@@ -207,8 +216,8 @@ public:
     void log(const CentroidalState& centroidal_state) {
         try {
             auto& builder = builders_[2];
-            builder.Reset();
-
+            builder.Clear();
+            
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
@@ -246,9 +255,12 @@ public:
 
             builder.Finish(centroidal_state_fb);
 
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
             writeMessage(3, centroidal_sequence_++, centroidal_state.timestamp,
-                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()),
-                         builder.GetSize());
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Centroidal State: " << e.what() << std::endl;
         }
@@ -257,7 +269,7 @@ public:
     void log(const BaseState& base_state) {
         try {
             auto& builder = builders_[3];
-            builder.Reset();
+            builder.Clear();
             
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -306,9 +318,12 @@ public:
 
             builder.Finish(base_state_fb);
             
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
             writeMessage(4, base_sequence_++, base_state.timestamp,
-                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()),
-                         builder.GetSize());
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Base State: " << e.what() << std::endl;
         }
@@ -318,8 +333,8 @@ public:
              double timestamp) {
         try {
             auto& builder = builders_[4];
-            builder.Reset();  
-
+            builder.Clear();
+            
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
@@ -348,10 +363,13 @@ public:
             auto tf = tf_builder.Finish();
             builder.Finish(tf);
 
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
             // Get the serialized data
             writeMessage(5, tf_sequence_++, timestamp, 
-                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()), 
-                         builder.GetSize());
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging basetransform: " << e.what() << std::endl;
         }
@@ -361,8 +379,8 @@ public:
              const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp) {
         try {
             auto& builder = builders_[5];
-            builder.Reset();
-
+            builder.Clear();
+            
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
@@ -409,10 +427,13 @@ public:
             // Finish the buffer
             builder.Finish(tf_array);
 
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
             // Get the serialized data
             writeMessage(6, leg_tf_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()), 
-                         builder.GetSize());
+                         reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging feet transforms: " << e.what() << std::endl;
         }
@@ -422,20 +443,24 @@ private:
     // Optimized message writing with reuse of message object
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) noexcept {
-        // Update message object with new values
-        mcap::Message message;
-        message.channelId = channel_id;
-        message.sequence = sequence;
-        message.logTime = convertToNanoseconds(timestamp);
-        message.publishTime = message.logTime;
-        message.dataSize = data_size;
-        message.data = data;
+        try {
+            // Update message object with new values
+            mcap::Message message;
+            message.channelId = channel_id;
+            message.sequence = sequence;
+            message.logTime = convertToNanoseconds(timestamp);
+            message.publishTime = message.logTime;
+            message.dataSize = data_size;
+            message.data = data;
 
-        // Write the message without additional error checking
-        auto status = writer_->write(message);
-        if (status.code != mcap::StatusCode::Success) {
-            std::cerr << "Failed to write message for channel " << channel_id 
-                      << ": " << status.message << std::endl;
+            // Write the message without additional error checking
+            auto status = writer_->write(message);
+            if (status.code != mcap::StatusCode::Success) {
+                std::cerr << "Failed to write message for channel " << channel_id 
+                          << ": " << status.message << std::endl;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error in writeMessage: " << e.what() << std::endl;
         }
     }
 
@@ -479,7 +504,7 @@ private:
     }
 
     // Constants
-    static constexpr size_t INITIAL_BUILDER_SIZE = 1024;
+    static constexpr size_t INITIAL_BUILDER_SIZE = 4096;
     
     // Sequence counters
     uint64_t base_sequence_ = 0;

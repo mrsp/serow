@@ -145,12 +145,6 @@ bool Serow::initialize(const std::string& config_file) {
 
     attitude_estimator_ = std::make_unique<Mahony>(params_.imu_rate, Kp, Ki);
 
-    // Initialize kinematic estimator
-    std::string model_path;
-    if (!checkConfigParam("model_path", model_path))
-        return false;
-    kinematic_estimator_ = std::make_unique<RobotKinematics>(findFilepath(model_path));
-
     // IMU bias calibration
     if (!checkConfigParam("calibrate_initial_imu_bias", params_.calibrate_initial_imu_bias))
         return false;
@@ -228,6 +222,13 @@ bool Serow::initialize(const std::string& config_file) {
                   << WHITE_COLOR;
         return false;
     }
+
+    // Initialize kinematic estimator
+    std::string model_path;
+    if (!checkConfigParam("model_path", model_path))
+        return false;
+    kinematic_estimator_ = std::make_unique<RobotKinematics>(findFilepath(model_path),
+                                                             params_.joint_position_variance);
 
     // Load matrices
     for (size_t i = 0; i < 3; i++) {
@@ -506,8 +507,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     }
 
     // Update the kinematic structure
-    kinematic_estimator_->updateJointConfig(joints_position, joints_velocity,
-                                            params_.joint_position_variance);
+    kinematic_estimator_->updateJointConfig(joints_position, joints_velocity);
 
     // Update the joint state estimate - use std::move to avoid copies
     state.joint_state_.timestamp = joint_timestamp;
@@ -729,8 +729,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Compute orientation noise for contacts
     std::map<std::string, Eigen::Matrix3d> kin_contacts_orientation_noise;
     for (const auto& frame : state.getContactsFrame()) {
-        const Eigen::Vector3d& lin_vel = kinematic_estimator_->linearVelocityNoise(frame);
-        kin.contacts_position_noise[frame].noalias() = lin_vel * lin_vel.transpose();
+        const Eigen::Vector3d& lin_vel_noise = kinematic_estimator_->linearVelocityNoise(frame);
+        kin.contacts_position_noise[frame].noalias() = lin_vel_noise * lin_vel_noise.transpose();
 
         if (!state.isPointFeet()) {
             const Eigen::Vector3d& ang_vel = kinematic_estimator_->angularVelocityNoise(frame);

@@ -52,7 +52,8 @@ public:
      * @param model_name Name of the URDF model file or robot model
      * @param verbose Verbosity flag for model loading (default: false)
      */
-    RobotKinematics(const std::string& model_name, bool verbose = false) {
+    RobotKinematics(const std::string& model_name, double joint_position_variance,
+                    bool verbose = false) {
         // Create the model
         pmodel_ = std::make_unique<pinocchio::Model>();
 
@@ -80,6 +81,8 @@ public:
         qmin_ = pmodel_->lowerPositionLimit;
         qmax_ = pmodel_->upperPositionLimit;
         dqmax_ = pmodel_->velocityLimit;
+        qn_.setOnes();
+        qn_ *= std::sqrt(joint_position_variance);
 
         // Set default values for continuous joints if limits are invalid
         for (int i = 0; i < qmin_.size(); i++) {
@@ -121,13 +124,10 @@ public:
      * @param joint_std Standard deviation for joint configuration noise
      */
     void updateJointConfig(const std::map<std::string, double>& qmap,
-                           const std::map<std::string, double>& qdotmap, double joint_std) {
+                           const std::map<std::string, double>& qdotmap) {
         mapJointNamesIDs(qmap, qdotmap);
         pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
         pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
-
-        qn_.setOnes();
-        qn_ *= joint_std;
     }
 
     /**
@@ -181,22 +181,25 @@ public:
      * @return Geometric Jacobian matrix
      */
     Eigen::MatrixXd geometricJacobian(const std::string& frame_name) const {
-        try {
-            pinocchio::Data::Matrix6x J(6, pmodel_->nv);
-            J.fill(0);
-            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+        pinocchio::Data::Matrix6x J(6, pmodel_->nv);
+        J.fill(0);
 
-            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
 
-            // Transform Jacobian from local frame to base frame
-            J.topRows(3) = (data_->oMf[link_number].rotation()) * J.topRows(3);
-            J.bottomRows(3) = (data_->oMf[link_number].rotation()) * J.bottomRows(3);
-            return J;
-        } catch (std::exception& e) {
-            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+        // Check if the frame index is invalid
+        if (link_number >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
+            std::cerr << "WARNING: Link name <" << frame_name << "> is invalid! ... "
                       << "Returning zeros" << std::endl;
             return Eigen::MatrixXd::Zero(6, ndofActuated());
         }
+
+        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+
+        // Transform Jacobian from local frame to base frame
+        J.topRows(3) = (data_->oMf[link_number].rotation()) * J.topRows(3);
+        J.bottomRows(3) = (data_->oMf[link_number].rotation()) * J.bottomRows(3);
+
+        return J;
     }
 
     /**
@@ -466,7 +469,7 @@ public:
      *       using a specific method that handles edge cases where the matrix is nearly singular.
      */
     Eigen::Vector4d rotationToQuaternion(const Eigen::Matrix3d& R) const {
-        double eps = 1e-6;     // Small value for numerical stability
+        double eps = 1e-6;  // Small value for numerical stability
         Eigen::Vector4d quat;  // Quaternion representation [w, x, y, z]
 
         // Compute quaternion components
