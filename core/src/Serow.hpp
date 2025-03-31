@@ -21,12 +21,15 @@
 #include "ContactDetector.hpp"
 #include "ContactEKF.hpp"
 #include "DerivativeEstimator.hpp"
+#include "ExteroceptionLogger.hpp"
 #include "LegOdometry.hpp"
 #include "Mahony.hpp"
 #include "Measurement.hpp"
+#include "ProprioceptionLogger.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 #include "TerrainElevation.hpp"
+#include "ThreadPool.hpp"
 
 namespace serow {
 
@@ -35,7 +38,13 @@ namespace serow {
  * @brief Implements the SEROW legged robot state estimator
  */
 class Serow {
-   public:
+public:
+    /// @brief Constructor
+    Serow();
+
+    /// @brief Destructor
+    ~Serow();
+
     /// @brief initializes SEROW's configuration and internal state
     /// @param config configuration to initialize SEROW with
     /// @return true if SEROW was initialized successfully
@@ -64,7 +73,7 @@ class Serow {
     /// @brief Returns the terrain_estimator_ object
     const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
 
-   private:
+private:
     struct Params {
         /// @brief total mass of the robot (kg)
         double mass{};
@@ -237,6 +246,13 @@ class Serow {
     size_t imu_calibration_cycles_{};
     /// @brief Terrain elevation mapper
     std::shared_ptr<TerrainElevation> terrain_estimator_;
+    /// @brief Data loggers
+    ProprioceptionLogger proprioception_logger_;
+    ExteroceptionLogger exteroception_logger_;
+    /// @brief Threadpool job for proprioceptive logging
+    std::unique_ptr<ThreadPool> proprioception_logger_job_;
+    /// @brief Threadpool job for exteroceptive logging
+    std::unique_ptr<ThreadPool> exteroception_logger_job_;
 };
 
 }  // namespace serow

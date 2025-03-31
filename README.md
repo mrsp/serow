@@ -38,8 +38,10 @@ export SEROW_PATH=<path-to-serow-package>
 * [Eigen](https://eigen.tuxfamily.org/dox/index.html) 3.4.0 and later
 * [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 2.2.1 and later
 * [json](https://github.com/nlohmann/json/tree/master)
+* [flatbuffers](https://github.com/google/flatbuffers)
 * cmake 3.16.3 and later
 * gcc 9.4.0 and later
+
 
 ## Install
 * `mkdir build && cd build`
@@ -50,6 +52,12 @@ export SEROW_PATH=<path-to-serow-package>
 * `cd test && mkdir build && cd build`
 * `cmake .. && make -j4`
 * `./nao_test`
+
+## Visualize data 
+* Logs are saved under `/tmp` 
+* Run [Foxglove](https://foxglove.dev/download)
+* Load the data
+* Import `foxglove_layout.json` 
 
 ### For running the mujoco data
 * `$ pip install h5py`

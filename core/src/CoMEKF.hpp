@@ -31,7 +31,7 @@ namespace serow {
  * @brief Class for nonlinear CoM estimation using an Extended Kalman Filter (EKF).
  */
 class CoMEKF {
-   private:
+private:
     std::optional<double> last_grf_timestamp_; /**< Previous ground reaction force timestamp, used
                                                   in the predict step */
     Eigen::Matrix<double, 9, 9> P_;            /**< State covariance matrix */
@@ -111,7 +111,7 @@ class CoMEKF {
     void updateState(CentroidalState& state, const Eigen::Matrix<double, 9, 1>& dx,
                      const Eigen::Matrix<double, 9, 9>& P) const;
 
-   public:
+public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /**

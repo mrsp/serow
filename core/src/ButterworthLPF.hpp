@@ -28,7 +28,7 @@ namespace serow {
  * @brief Class implementing a 2nd order Low Pass Butterworth Filter.
  */
 class ButterworthLPF {
-   private:
+private:
     double x_p_{};  /**< State at t-1 */
     double x_pp_{}; /**< State at t-2 */
     double y_p_{};  /**< Measurement at t-1 */
@@ -45,7 +45,7 @@ class ButterworthLPF {
 
     std::string name_{}; /**< The name of the filter, e.g., "LHipPitch" */
 
-   public:
+public:
     /**
      * @brief Resets the 2nd order Low Pass Butterworth filter state.
      * @param verbose If true, prints a reset message to the console.

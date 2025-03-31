@@ -1,0 +1,26 @@
+include "Time.fbs";
+include "Vector3.fbs";
+
+namespace foxglove;
+
+
+// Individual contact details
+table Contact {
+  status:bool (id: 0);
+  probability:double (id: 1);
+  force:Vector3 (id: 2);
+  torque:Vector3 (id: 3);  // Nullable field
+}
+
+// Root table representing the entire contact state
+table ContactState {
+  // Timestamp of the state (s)
+  timestamp:Time (id: 0);
+
+  contact_names:[string] (id: 1);
+  contacts:[Contact] (id: 2);
+}
+
+// Root type declaration
+root_type ContactState;
+

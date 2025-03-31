@@ -41,6 +41,11 @@ std::string findFilepath(const std::string& filename) {
     throw std::runtime_error("File '" + filename + "' not found.");
 }
 
+Serow::Serow() {
+    proprioception_logger_job_ = std::make_unique<ThreadPool>();
+    exteroception_logger_job_ = std::make_unique<ThreadPool>();
+}
+
 bool Serow::initialize(const std::string& config_file) {
     // Load configuration JSON
     auto config = json::parse(std::ifstream(findFilepath(config_file)));
@@ -77,6 +82,9 @@ bool Serow::initialize(const std::string& config_file) {
         }
 
         param_value = config[param_name];
+
+        // Create a threadpool job to log data to mcap file
+
         return true;
     };
 
@@ -443,6 +451,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     double joint_timestamp{};
     for (const auto& [key, value] : joints) {
         joints_position[key] = value.position;
+        joint_timestamp = value.timestamp;
 
         if (!params_.estimate_joint_velocity) {
             if (!value.velocity.has_value()) {
@@ -469,6 +478,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Estimate the base frame attitude
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
     const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
+    imu.orientation = attitude_estimator_->getQ();
 
     // IMU bias calibration
     if (params_.calibrate_initial_imu_bias) {
@@ -675,6 +685,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     // Prepare kinematic measurement
     KinematicMeasurement kin;
+    kin.timestamp = joint_timestamp;
     kin.contacts_status = state.contact_state_.contacts_status;
     kin.contacts_probability = state.contact_state_.contacts_probability;
     kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
@@ -704,8 +715,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
         // Initialize terrain elevation mapper
         terrain_estimator_ = std::make_shared<TerrainElevation>();
-        terrain_estimator_->initializeLocalMap(terrain_height, 1e4);
-        terrain_estimator_->min_terrain_height_variance_ = params_.minimum_terrain_height_variance;
+        terrain_estimator_->initializeLocalMap(terrain_height, 1e4,
+                                               params_.minimum_terrain_height_variance);
     }
 
     // Handle orientation for non-point feet
@@ -889,6 +900,39 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         state.is_valid_ = true;
     }
 
+    // Launch the threadpool jobs to log data
+    if (!proprioception_logger_job_->isRunning()) {
+        proprioception_logger_job_->addJob(
+            [this, base_state = state.base_state_, centroidal_state = state.centroidal_state_,
+             contact_state = state.contact_state_, imu = imu, joints = joints]() {
+                try {
+                    // Log all state data to MCAP file
+                    proprioception_logger_.log(imu);
+                    proprioception_logger_.log(contact_state);
+                    proprioception_logger_.log(centroidal_state);
+                    proprioception_logger_.log(base_state);
+                    proprioception_logger_.log(base_state.base_position,
+                                               base_state.base_orientation, base_state.timestamp);
+                    proprioception_logger_.log(base_state.feet_position,
+                                               base_state.feet_orientation, base_state.timestamp);
+                } catch (const std::exception& e) {
+                    std::cerr << "Error in proprioception logging thread: " << e.what()
+                              << std::endl;
+                }
+            });
+    }
+
+    if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
+        ((kin.timestamp - exteroception_logger_.getLastLocalMapTimestamp()) > 0.2)) {
+        exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
+            try {
+                exteroception_logger_.log(terrain_estimator_->getLocalMap());
+            } catch (const std::exception& e) {
+                std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
+            }
+        });
+    }
+
     // Update the state
     state_ = std::move(state);
 }
@@ -903,6 +947,21 @@ std::optional<State> Serow::getState(bool allow_invalid) {
 
 const std::shared_ptr<TerrainElevation>& Serow::getTerrainEstimator() const {
     return terrain_estimator_;
+}
+
+Serow::~Serow() {
+    if (proprioception_logger_job_) {
+        // Wait for all jobs to finish
+        while (proprioception_logger_job_->isRunning()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    if (exteroception_logger_job_) {
+        // Wait for all jobs to finish
+        while (exteroception_logger_job_->isRunning()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
 }
 
 }  // namespace serow

@@ -22,11 +22,11 @@ namespace serow {
  * @brief Implements a moving median filter for smoothing data streams
  */
 class MovingMedianFilter {
-   private:
+private:
     size_t window_size_;                ///< Size of the sliding window for median calculation
     std::deque<double> window_buffer_;  ///< Buffer to store the current window of values
 
-   public:
+public:
     /**
      * @brief Constructs a MovingMedianFilter object with a specified window size
      * @param window_size Size of the sliding window for median calculation
@@ -61,7 +61,7 @@ class MovingMedianFilter {
             // Even number of elements: return the mean of the two middle elements
             return (sorted_window[sorted_window.size() / 2 - 1] +
                     sorted_window[sorted_window.size() / 2]) /
-                   2;
+                2;
         } else {
             // Odd number of elements: return the middle element
             return sorted_window[sorted_window.size() / 2];

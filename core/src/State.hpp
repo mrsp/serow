@@ -27,6 +27,7 @@
 #include <set>
 #include <string>
 
+
 namespace serow {
 
 /**
@@ -183,7 +184,7 @@ struct JointState {
  * states.
  */
 class State {
-   public:
+public:
     State() = default;
     State(std::set<std::string> contacts_frame, bool point_feet);
     State(const State& other);
@@ -287,7 +288,7 @@ class State {
     /// Returns the mass of the robot
     double getMass() const;
 
-   private:
+private:
     /// Flag to indicate if the robot has point feet. False indicates flat feet contacts
     bool point_feet_{};
     /// Number of leg end-effectors
