@@ -50,8 +50,10 @@ void NaiveTerrainElevation::resetLocalMap() {
     }
 }
 
-void NaiveTerrainElevation::initializeLocalMap(const float height, const float variance) {
+void NaiveTerrainElevation::initializeLocalMap(const float height, const float variance,
+                                               const float min_variance) {
     default_elevation_ = ElevationCell(height, variance);
+    min_terrain_height_variance_ = min_variance;
     for (int i = 0; i < map_dim; ++i) {
         for (int j = 0; j < map_dim; ++j) {
             elevation_[i][j] = default_elevation_;
@@ -69,7 +71,8 @@ void NaiveTerrainElevation::updateLocalMapOriginAndBound(const std::array<float,
     local_map_bound_max_d_ = globalIndexToLocation(local_map_bound_max_i_);
 }
 
-bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height, float variance) {
+bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height, float variance,
+                                   double timestamp) {
     if (!inside(loc)) {
         return false;
     }
@@ -79,8 +82,6 @@ bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height
     ElevationCell& cell = elevation_[center_idx[0]][center_idx[1]];
     cell.contact = true;
     cell.updated = true;
-    const int64_t key = static_cast<int64_t>(center_idx[0]) << 32 | center_idx[1];
-    contact_cells.push_back(key);
 
     // Kalman filter update for the target cell
     const float prior_variance = cell.variance;
@@ -111,7 +112,7 @@ bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height
             elevation_[idx[0]][idx[1]] = cell;
         }
     }
-
+    timestamp_ = timestamp;
     return true;
 }
 
