@@ -34,7 +34,7 @@ public:
             // Create the logger with ROS2 profile
             writer_ = std::make_unique<mcap::McapWriter>();
             // Configure MCAP options
-            mcap::McapWriterOptions options("ros2");
+            mcap::McapWriterOptions options("");
             writer_->open(*file_writer_, options);
 
             // Initialize schemas and channels
