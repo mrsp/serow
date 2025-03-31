@@ -4,7 +4,10 @@
 .vscode/
 /docs
 /build
-/test/build/
-/test/results/
-/ros/devel/
-/ros/build/
+foxglove_layout.json:Zone.Identifier
+serow_layout.json:Zone.Identifier
+/evaluation/unit_tests/build/
+/evaluation/unit_tests/results/
+/evaluation/mujoco_test/build/
+/evaluation/mujoco_test/mujoco_data/*/est_*.bin
+/evaluation/mujoco_test/mujoco_data/*/serow_predictions.h5
