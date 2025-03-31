@@ -53,6 +53,12 @@ export SEROW_PATH=<path-to-serow-package>
 * `cmake .. && make -j4`
 * `./nao_test`
 
+## Visualize data 
+* Logs are saved under `/tmp` 
+* Run [Foxglove](https://foxglove.dev/download)
+* Load the data
+* Import `foxglove_layout.json` 
+
 ### For running the mujoco data
 * `$ pip install h5py`
 * `$ pip install matplotlib` 
