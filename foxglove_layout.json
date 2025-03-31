@@ -27,13 +27,13 @@
       },
       "cameraState": {
         "perspective": true,
-        "distance": 10.807201753216969,
-        "phi": 77.20531967571272,
+        "distance": 10.26684166555592,
+        "phi": 77.20531967571296,
         "thetaOffset": 151.7196166792666,
         "targetOffset": [
-          4.7205750834606555,
-          -3.357289994762496,
-          1.1277461239524693e-16
+          3.6450061245181438,
+          -3.4641658011440195,
+          7.713771997308806e-17
         ],
         "target": [
           0,
@@ -194,6 +194,41 @@
       "showFullMessageForDiff": false,
       "topicPath": "/base_state",
       "fontSize": 12
+    },
+    "Plot!1n9c7eg": {
+      "paths": [
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_angular_velocity.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "label": "base angular velocity x"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.base_angular_velocity.y",
+          "enabled": true,
+          "color": "#f5774d",
+          "label": "base angular velocity y"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/base_state.base_angular_velocity.z",
+          "enabled": true,
+          "color": "#f7df71",
+          "label": "base angular velocity y"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "xAxisLabel": "Time (s)",
+      "foxglovePanelTitle": "Base Angular Velocity"
     }
   },
   "globalVariables": {},
@@ -204,19 +239,22 @@
   "layout": {
     "first": "3D!18i6zy7",
     "second": {
-      "first": "Plot!2nzyh5p",
-      "second": {
+      "first": {
         "first": {
-          "first": "Plot!111kcau",
-          "second": "Plot!28cwmot",
-          "direction": "column"
+          "first": "Plot!2nzyh5p",
+          "second": "Plot!111kcau",
+          "direction": "row"
         },
-        "second": "RawMessages!os6rgs",
-        "direction": "column",
-        "splitPercentage": 55.95244480200231
+        "second": {
+          "first": "Plot!28cwmot",
+          "second": "Plot!1n9c7eg",
+          "direction": "row"
+        },
+        "direction": "column"
       },
+      "second": "RawMessages!os6rgs",
       "direction": "column",
-      "splitPercentage": 35.039370078740156
+      "splitPercentage": 55.95244480200231
     },
     "direction": "row",
     "splitPercentage": 70
