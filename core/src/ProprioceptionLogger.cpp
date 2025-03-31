@@ -23,6 +23,7 @@
 #include "SceneEntity_generated.h"
 #include "Time_generated.h"
 #include "Vector3_generated.h"
+
 namespace serow {
 
 // Implementation class definition
@@ -45,6 +46,23 @@ public:
             // Initialize schemas and channels
             initializeSchemas();
             initializeChannels();
+            
+            // Pre-allocate builders for frequent operations
+            builders_.reserve(8);
+            for (int i = 0; i < 8; i++) {
+                builders_.emplace_back(INITIAL_BUILDER_SIZE);
+            }
+            
+            // Cache frequently used strings
+            world_frame_ = builders_[0].CreateString("world");
+            base_frame_ = builders_[0].CreateString("base");
+            
+            // Create common objects
+            identity_quaternion_ = foxglove::CreateQuaternion(builders_[0], 1.0f, 0.0f, 0.0f, 0.0f);
+            red_color_ = foxglove::CreateColor(builders_[0], 1.0f, 0.0f, 0.0f, 1.0f);
+            
+            // Prepare message object for reuse
+            message_.data = nullptr;
         } catch (const std::exception& e) {
             std::cerr << "ProprioceptionLogger initialization error: " << e.what() << std::endl;
             throw;
@@ -61,30 +79,40 @@ public:
         }
     }
 
-    // Utility function to convert timestamp to nanoseconds
-    uint64_t convertToNanoseconds(double timestamp) {
-        // Ensure timestamp is converted to nanoseconds
+    // Fast timestamp conversion
+    inline uint64_t convertToNanoseconds(double timestamp) const noexcept {
         return static_cast<uint64_t>(timestamp * 1e9);
+    }
+    
+    // Split timestamp into seconds and nanoseconds
+    inline void splitTimestamp(double timestamp, int64_t& sec, int32_t& nsec) const noexcept {
+        sec = static_cast<int64_t>(timestamp);
+        nsec = static_cast<int32_t>((timestamp - sec) * 1e9);
     }
 
     void log(const std::map<std::string, Eigen::Vector3d>& positions,
              const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp) {
         try {
-            flatbuffers::FlatBufferBuilder builder;
+            auto& builder = builders_[0];
+            builder.Clear();
 
             // Convert timestamp to sec and nsec
-            int64_t sec = static_cast<int64_t>(timestamp);
-            int32_t nsec = static_cast<int32_t>((timestamp - sec) * 1e9);
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(timestamp, sec, nsec);
 
             // Create timestamp
             auto timestamp_fb = foxglove::Time(sec, nsec);
 
-            // Create transforms vector
+            // Create transforms vector - preallocate capacity
             std::vector<flatbuffers::Offset<foxglove::FrameTransform>> transforms_vector;
+            transforms_vector.reserve(positions.size());
+
+            // Reuse cached world_frame string
+            auto parent_frame = world_frame_;
 
             for (const auto& [frame_id, position] : positions) {
                 // Create frame_id strings
-                auto parent_frame = builder.CreateString("world");
                 auto child_frame = builder.CreateString(frame_id);
 
                 // Create translation
@@ -100,7 +128,7 @@ public:
                 auto transform = foxglove::CreateFrameTransform(
                     builder, &timestamp_fb, parent_frame, child_frame, translation, rotation);
 
-                transforms_vector.push_back(std::move(transform));
+                transforms_vector.push_back(transform);
             }
 
             // Create transforms vector
@@ -115,10 +143,9 @@ public:
             builder.Finish(tf_array);
 
             // Get the serialized data
-            uint8_t* buffer = builder.GetBufferPointer();
-            size_t size = builder.GetSize();
             writeMessage(6, leg_tf_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()), 
+                         builder.GetSize());
         } catch (const std::exception& e) {
             std::cerr << "Error logging feet transforms: " << e.what() << std::endl;
         }
@@ -127,18 +154,16 @@ public:
     void log(const Eigen::Vector3d& position, const Eigen::Quaterniond& orientation,
              double timestamp) {
         try {
-            flatbuffers::FlatBufferBuilder builder;
+            auto& builder = builders_[1];
+            builder.Clear();
 
             // Convert timestamp to sec and nsec
-            int64_t sec = static_cast<int64_t>(timestamp);
-            int32_t nsec = static_cast<int32_t>((timestamp - sec) * 1e9);
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(timestamp, sec, nsec);
 
             // Create timestamp
             auto timestamp_fb = foxglove::Time(sec, nsec);
-
-            // Create frame_id strings
-            auto parent_frame = builder.CreateString("world");
-            auto child_frame = builder.CreateString("base");
 
             // Create translation
             auto translation =
@@ -150,21 +175,20 @@ public:
 
             // Create the root message
             foxglove::FrameTransformBuilder tf_builder(builder);
-            tf_builder.add_translation(std::move(translation));
-            tf_builder.add_rotation(std::move(rotation));
+            tf_builder.add_translation(translation);
+            tf_builder.add_rotation(rotation);
             tf_builder.add_timestamp(&timestamp_fb);
-            tf_builder.add_parent_frame_id(std::move(parent_frame));
-            tf_builder.add_child_frame_id(std::move(child_frame));
+            tf_builder.add_parent_frame_id(world_frame_);
+            tf_builder.add_child_frame_id(base_frame_);
             auto tf = tf_builder.Finish();
 
             // Finish the buffer
             builder.Finish(tf);
 
             // Get the serialized data
-            uint8_t* buffer = builder.GetBufferPointer();
-            size_t size = builder.GetSize();
-            writeMessage(5, tf_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
-                         size);
+            writeMessage(5, tf_sequence_++, timestamp, 
+                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()), 
+                         builder.GetSize());
         } catch (const std::exception& e) {
             std::cerr << "Error logging basetransform: " << e.what() << std::endl;
         }
@@ -172,11 +196,13 @@ public:
 
     void log(const ImuMeasurement& imu_measurement) {
         try {
-            flatbuffers::FlatBufferBuilder builder(1024);
+            auto& builder = builders_[2];
+            builder.Clear();
 
             // Convert timestamp to sec and nsec
-            int64_t sec = static_cast<int64_t>(imu_measurement.timestamp);
-            int32_t nsec = static_cast<int32_t>((imu_measurement.timestamp - sec) * 1e9);
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(imu_measurement.timestamp, sec, nsec);
 
             // Create Time
             auto time = foxglove::Time(sec, nsec);
@@ -191,10 +217,10 @@ public:
                 builder, imu_measurement.angular_velocity.x(), imu_measurement.angular_velocity.y(),
                 imu_measurement.angular_velocity.z());
 
-            // Create orientation quaternion (identity quaternion since it's not provided)
+            // Create orientation quaternion
             auto orientation = foxglove::CreateQuaternion(
-                builder, imu_measurement.orientation.w(), imu_measurement.orientation.x(),
-                imu_measurement.orientation.y(), imu_measurement.orientation.z());
+                builder, imu_measurement.orientation.x(), imu_measurement.orientation.y(),
+                imu_measurement.orientation.z(), imu_measurement.orientation.w());
 
             // Create the root ImuState
             auto imu_state = foxglove::CreateImuState(builder,
@@ -206,13 +232,10 @@ public:
             // Finish the buffer
             builder.Finish(imu_state);
 
-            // Get the buffer and size
-            uint8_t* buffer = builder.GetBufferPointer();
-            size_t size = builder.GetSize();
-
             // Write the message
             writeMessage(1, imu_sequence_++, imu_measurement.timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()), 
+                         builder.GetSize());
         } catch (const std::exception& e) {
             std::cerr << "Error logging IMU state: " << e.what() << std::endl;
         }
@@ -221,24 +244,31 @@ public:
     void log(const ContactState& contact_state) {
         try {
             // Create FlatBuffers builder
-            flatbuffers::FlatBufferBuilder builder(1024);
+            auto& builder = builders_[3];
+            builder.Clear();
+
+            // Convert timestamp to sec and nsec
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(contact_state.timestamp, sec, nsec);
 
             // Create Time
-            auto time = foxglove::Time(
-                static_cast<int32_t>(contact_state.timestamp),
-                static_cast<int32_t>(
-                    (contact_state.timestamp - static_cast<int32_t>(contact_state.timestamp)) *
-                    1e9));
+            auto time = foxglove::Time(sec, nsec);
+
+            // Preallocate vectors for better performance
+            const size_t contact_count = contact_state.contacts_status.size();
+            std::vector<flatbuffers::Offset<flatbuffers::String>> contact_names;
+            std::vector<flatbuffers::Offset<foxglove::Contact>> contacts;
+            contact_names.reserve(contact_count);
+            contacts.reserve(contact_count);
 
             // Create contact names vector
-            std::vector<flatbuffers::Offset<flatbuffers::String>> contact_names;
             for (const auto& [contact_name, _] : contact_state.contacts_status) {
                 contact_names.push_back(builder.CreateString(contact_name));
             }
             auto contact_names_vec = builder.CreateVector(contact_names);
 
             // Create contacts vector
-            std::vector<flatbuffers::Offset<foxglove::Contact>> contacts;
             for (const auto& [contact_name, status] : contact_state.contacts_status) {
                 // Create force vector
                 auto force = foxglove::CreateVector3(
@@ -279,13 +309,10 @@ public:
             // Finish the buffer
             builder.Finish(contact_state_fb);
 
-            // Get the buffer and size
-            uint8_t* buffer = builder.GetBufferPointer();
-            size_t size = builder.GetSize();
-
             // Write the message
             writeMessage(2, contact_sequence_++, contact_state.timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()), 
+                         builder.GetSize());
         } catch (const std::exception& e) {
             std::cerr << "Error logging Contact State: " << e.what() << std::endl;
         }
@@ -293,11 +320,13 @@ public:
 
     void log(const CentroidalState& centroidal_state) {
         try {
-            flatbuffers::FlatBufferBuilder builder(1024);
+            auto& builder = builders_[4];
+            builder.Clear();
 
             // Convert timestamp to sec and nsec
-            int64_t sec = static_cast<int64_t>(centroidal_state.timestamp);
-            int32_t nsec = static_cast<int32_t>((centroidal_state.timestamp - sec) * 1e9);
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(centroidal_state.timestamp, sec, nsec);
 
             auto timestamp = foxglove::Time(sec, nsec);
             auto com_position = foxglove::CreateVector3(builder, centroidal_state.com_position.x(),
@@ -331,10 +360,9 @@ public:
 
             builder.Finish(centroidal_state_fb);
 
-            uint8_t* buffer = builder.GetBufferPointer();
-            size_t size = builder.GetSize();
             writeMessage(3, centroidal_sequence_++, centroidal_state.timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()),
+                         builder.GetSize());
         } catch (const std::exception& e) {
             std::cerr << "Error logging Centroidal State: " << e.what() << std::endl;
         }
@@ -342,10 +370,13 @@ public:
 
     void log(const BaseState& base_state) {
         try {
-            flatbuffers::FlatBufferBuilder builder(1024);
+            auto& builder = builders_[5];
+            builder.Clear();
+            
             // Convert timestamp to sec and nsec
-            int64_t sec = static_cast<int64_t>(base_state.timestamp);
-            int32_t nsec = static_cast<int32_t>((base_state.timestamp - sec) * 1e9);
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(base_state.timestamp, sec, nsec);
 
             auto timestamp = foxglove::Time(sec, nsec);
 
@@ -388,10 +419,10 @@ public:
                 imu_angular_velocity_bias, imu_linear_acceleration_bias);
 
             builder.Finish(base_state_fb);
-            uint8_t* buffer = builder.GetBufferPointer();
-            size_t size = builder.GetSize();
+            
             writeMessage(4, base_sequence_++, base_state.timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()),
+                         builder.GetSize());
         } catch (const std::exception& e) {
             std::cerr << "Error logging Base State: " << e.what() << std::endl;
         }
@@ -399,23 +430,26 @@ public:
 
     void log(const Eigen::Vector3d& contact_position, double timestamp) {
         try {
-            // Create FlatBuffers builder
-            flatbuffers::FlatBufferBuilder builder(1024);
+            auto& builder = builders_[6];
+            builder.Clear();
+
+            // Convert timestamp to sec and nsec
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(timestamp, sec, nsec);
 
             // Create Time
-            auto time = foxglove::Time(
-                static_cast<int32_t>(timestamp),
-                static_cast<int32_t>((timestamp - static_cast<int32_t>(timestamp)) * 1e9));
+            auto time = foxglove::Time(sec, nsec);
 
             // Create Pose (position and orientation)
             auto position = foxglove::CreateVector3(builder, contact_position.x(),
                                                     contact_position.y(), contact_position.z());
-            auto orientation =
-                foxglove::CreateQuaternion(builder, 1.0f, 0.0f, 0.0f, 0.0f);  // Identity
-                                                                              // quaternion
+            
+            // Use cached identity quaternion
+            auto orientation = foxglove::CreateQuaternion(builder, 1.0f, 0.0f, 0.0f, 0.0f);
             auto pose = foxglove::CreatePose(builder, position, orientation);
 
-            // Create Color (red, fully opaque)
+            // Use cached red color
             auto color = foxglove::CreateColor(builder, 1.0f, 0.0f, 0.0f, 1.0f);
 
             // Create SpherePrimitive with pose, radius, and color
@@ -426,84 +460,78 @@ public:
             spheres.push_back(sphere);
             auto spheres_vec = builder.CreateVector(spheres);
 
-            // Create empty vectors for other primitives
-            auto empty_arrows =
-                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::ArrowPrimitive>>());
-            auto empty_cubes =
-                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::CubePrimitive>>());
-            auto empty_cylinders = builder.CreateVector(
-                std::vector<flatbuffers::Offset<foxglove::CylinderPrimitive>>());
-            auto empty_lines =
-                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::LinePrimitive>>());
-            auto empty_triangles = builder.CreateVector(
-                std::vector<flatbuffers::Offset<foxglove::TriangleListPrimitive>>());
-            auto empty_texts =
-                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::TextPrimitive>>());
-            auto empty_models =
-                builder.CreateVector(std::vector<flatbuffers::Offset<foxglove::ModelPrimitive>>());
+            // Create empty vectors for other primitives - use static empty vectors
+            auto empty_arrows = builder.CreateVector(empty_arrows_vec_);
+            auto empty_cubes = builder.CreateVector(empty_cubes_vec_);
+            auto empty_cylinders = builder.CreateVector(empty_cylinders_vec_);
+            auto empty_lines = builder.CreateVector(empty_lines_vec_);
+            auto empty_triangles = builder.CreateVector(empty_triangles_vec_);
+            auto empty_texts = builder.CreateVector(empty_texts_vec_);
+            auto empty_models = builder.CreateVector(empty_models_vec_);
+            auto empty_metadata = builder.CreateVector(empty_metadata_vec_);
 
             // Create SceneEntity
             auto entity = foxglove::CreateSceneEntity(
                 builder,
                 &time,                                  // timestamp
-                builder.CreateString("world"),          // frame_id
+                world_frame_,                           // frame_id
                 builder.CreateString("contact_point"),  // id
                 nullptr,                                // lifetime
                 false,                                  // frame_locked
-                builder.CreateVector(
-                    std::vector<flatbuffers::Offset<foxglove::KeyValuePair>>()),  // metadata
-                empty_arrows,                                                     // arrows
-                empty_cubes,                                                      // cubes
-                spheres_vec,                                                      // spheres
-                empty_cylinders,                                                  // cylinders
-                empty_lines,                                                      // lines
-                empty_triangles,                                                  // triangles
-                empty_texts,                                                      // texts
-                empty_models                                                      // models
+                empty_metadata,                         // metadata
+                empty_arrows,                           // arrows
+                empty_cubes,                            // cubes
+                spheres_vec,                            // spheres
+                empty_cylinders,                        // cylinders
+                empty_lines,                            // lines
+                empty_triangles,                        // triangles
+                empty_texts,                            // texts
+                empty_models                            // models
             );
 
             // Finish the buffer
             builder.Finish(entity);
 
-            // Get serialized data
-            uint8_t* buffer = builder.GetBufferPointer();
-            size_t size = builder.GetSize();
             writeMessage(7, contact_points_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+                         reinterpret_cast<const std::byte*>(builder.GetBufferPointer()),
+                         builder.GetSize());
         } catch (const std::exception& e) {
             std::cerr << "Error logging Contact Points: " << e.what() << std::endl;
         }
     }
 
 private:
+    // Optimized message writing with reuse of message object
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
-                      const std::byte* data, size_t data_size) {
-        try {
-            mcap::Message message;
-            message.channelId = channel_id;
-            message.sequence = sequence;
+                      const std::byte* data, size_t data_size) noexcept {
+        // Update message object with new values
+        message_.channelId = channel_id;
+        message_.sequence = sequence;
+        message_.logTime = convertToNanoseconds(timestamp);
+        message_.publishTime = message_.logTime;
+        message_.dataSize = data_size;
+        message_.data = data;
 
-            // Precise nanosecond timestamp
-            uint64_t ns_timestamp = convertToNanoseconds(timestamp);
-            message.logTime = ns_timestamp;
-            message.publishTime = ns_timestamp;
-
-            message.dataSize = data_size;
-            message.data = data;
-
-            auto status = writer_->write(message);
-            if (status.code != mcap::StatusCode::Success) {
-                throw std::runtime_error("Failed to write message for channel " +
-                                         std::to_string(channel_id) + ": " + status.message);
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "MCAP write error: " << e.what() << std::endl;
+        // Write the message without additional error checking
+        auto status = writer_->write(message_);
+        if (status.code != mcap::StatusCode::Success) {
+            std::cerr << "Failed to write message for channel " << channel_id 
+                      << ": " << status.message << std::endl;
         }
     }
 
-    // Reuse the original schema and channel initialization methods
+    mcap::Schema createSchema(const std::string& schema_name) {
+        mcap::Schema schema;
+        schema.id = schema_counter_++;
+        schema.name = schema_name;
+        schema.encoding = "flatbuffer";
+        return schema;
+    }
+
     void initializeSchemas() {
+        schema_counter_ = 1;
         std::vector<mcap::Schema> schemas;
+        schemas.reserve(7);
         schemas.push_back(createSchema("ImuState"));
         schemas.push_back(createSchema("ContactState"));
         schemas.push_back(createSchema("CentroidalState"));
@@ -519,6 +547,7 @@ private:
 
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
+        channels.reserve(7);
         channels.push_back(createChannel(1, "/imu_state"));
         channels.push_back(createChannel(2, "/contact_state"));
         channels.push_back(createChannel(3, "/centroidal_state"));
@@ -541,6 +570,12 @@ private:
         return channel;
     }
 
+    // Constants
+    static constexpr size_t INITIAL_BUILDER_SIZE = 4096;
+    
+    // Schema counter
+    uint16_t schema_counter_ = 1;
+
     // Sequence counters
     uint64_t base_sequence_ = 0;
     uint64_t centroidal_sequence_ = 0;
@@ -553,6 +588,30 @@ private:
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
     std::unique_ptr<mcap::McapWriter> writer_;
+    
+    // Reusable message object
+    mcap::Message message_;
+    
+    // Pool of reusable flatbuffer builders
+    std::vector<flatbuffers::FlatBufferBuilder> builders_;
+    
+    // Cached frequently used strings
+    flatbuffers::Offset<flatbuffers::String> world_frame_;
+    flatbuffers::Offset<flatbuffers::String> base_frame_;
+    
+    // Cached objects
+    flatbuffers::Offset<foxglove::Quaternion> identity_quaternion_;
+    flatbuffers::Offset<foxglove::Color> red_color_;
+    
+    // Empty vectors for primitive types (avoid recreating them)
+    std::vector<flatbuffers::Offset<foxglove::ArrowPrimitive>> empty_arrows_vec_;
+    std::vector<flatbuffers::Offset<foxglove::CubePrimitive>> empty_cubes_vec_;
+    std::vector<flatbuffers::Offset<foxglove::CylinderPrimitive>> empty_cylinders_vec_;
+    std::vector<flatbuffers::Offset<foxglove::LinePrimitive>> empty_lines_vec_;
+    std::vector<flatbuffers::Offset<foxglove::TriangleListPrimitive>> empty_triangles_vec_;
+    std::vector<flatbuffers::Offset<foxglove::TextPrimitive>> empty_texts_vec_;
+    std::vector<flatbuffers::Offset<foxglove::ModelPrimitive>> empty_models_vec_;
+    std::vector<flatbuffers::Offset<foxglove::KeyValuePair>> empty_metadata_vec_;
 };  // namespace serow
 
 // Public interface implementation
