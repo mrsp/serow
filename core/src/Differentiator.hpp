@@ -29,7 +29,7 @@ namespace serow {
  * @brief Class for numerical differentiation using the first-order Euler method.
  */
 class Differentiator {
-   public:
+public:
     /**
      * @brief Initializes the numerical differentiator.
      * @param name Name of the filter, e.g., "LHipYawPitch".
@@ -47,7 +47,9 @@ class Differentiator {
      * @brief Sets the filter's sampling time.
      * @param dt Sampling time in seconds.
      */
-    void setParams(double dt) { dt_ = dt; }
+    void setParams(double dt) {
+        dt_ = dt;
+    }
 
     /**
      * @brief Differentiates the measurement with finite differences.
@@ -62,7 +64,7 @@ class Differentiator {
      */
     void reset(bool verbose = true);
 
-   private:
+private:
     /// Previous measurement
     double x_prev_{};
     /// Estimated derivative

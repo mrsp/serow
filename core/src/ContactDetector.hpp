@@ -33,7 +33,7 @@ namespace serow {
  * @brief Class for estimating contact status using a Schmitt-Trigger detector.
  */
 class ContactDetector {
-   public:
+public:
     /**
      * @brief Default constructor.
      */
@@ -85,21 +85,27 @@ class ContactDetector {
      * @brief Returns the estimated contact status.
      * @return The estimated contact status (0 or 1).
      */
-    int getContactStatus() { return contact_status_; }
+    int getContactStatus() {
+        return contact_status_;
+    }
 
     /**
      * @brief Returns the filtered vertical ground reaction force in world coordinates.
      * @return Filtered vertical ground reaction force in Newtons (N).
      */
-    double getContactForce() { return contact_force_; }
+    double getContactForce() {
+        return contact_force_;
+    }
 
     /**
      * @brief Returns the contact frame name where detection is done.
      * @return The name of the contact frame e.g., "l_foot_frame".
      */
-    std::string getContactFrame() { return contact_frame_; }
+    std::string getContactFrame() {
+        return contact_frame_;
+    }
 
-   private:
+private:
     std::unique_ptr<MovingMedianFilter> mdf_; /**< Rolling median filter. */
     int contact_status_{};                    /**< Estimated contact status (0 or 1). */
     double

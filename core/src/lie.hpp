@@ -166,7 +166,9 @@ inline Eigen::Vector3d logMap(const Eigen::Matrix3d& Rt) {
 /// @brief Computes the logarithmic map for a component in SO(3) group
 /// @param q quaternion in SO(3) group
 /// @return 3D twist in so(3) algebra
-inline Eigen::Vector3d logMap(const Eigen::Quaterniond& q) { return logMap(q.toRotationMatrix()); }
+inline Eigen::Vector3d logMap(const Eigen::Quaterniond& q) {
+    return logMap(q.toRotationMatrix());
+}
 
 /// @brief Performs the SO(3) group plus operation
 /// @param R 3x3 Rotation in SO(3) group

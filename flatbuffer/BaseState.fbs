@@ -1,0 +1,37 @@
+include "Time.fbs";
+include "Vector3.fbs";
+include "Quaternion.fbs";
+
+namespace foxglove;
+
+
+table BaseState {
+  // Timestamp of the state (s)
+  timestamp:Time (id: 0);
+  
+  // 3D Base position in world frame coordinates (m)
+  base_position: Vector3 (id: 1);
+  
+  // Base orientation quaternion [w, x, y, z] in world frame coordinates
+  base_orientation: Quaternion (id: 2);
+  
+  // 3D Base linear velocity in world frame coordinates (m/s)
+  base_linear_velocity: Vector3 (id: 3);
+  
+  // 3D Base angular velocity in world frame coordinates (rad/s)
+  base_angular_velocity: Vector3 (id: 4);
+  
+  // 3D Base linear acceleration in world frame coordinates (m/s^2)
+  base_linear_acceleration: Vector3 (id: 5);
+
+  // 3D Base angular acceleration in world frame coordinates (rad/s^2)
+  base_angular_acceleration: Vector3 (id: 6);
+  
+  // 3D IMU linear acceleration bias in IMU frame coordinates (m/s^2)
+  imu_linear_acceleration_bias: Vector3 (id: 7);
+  
+  // 3D IMU angular velocity bias in IMU frame coordinates (rad/s)
+  imu_angular_velocity_bias: Vector3 (id: 8);
+}
+
+root_type BaseState;

@@ -19,4 +19,5 @@ IncludeBlocks: Preserve
 SpaceBeforeParens: ControlStatements
 SpaceInEmptyParentheses: false
 SpacesInParentheses: false
+AlignTrailingComments: true
 

@@ -46,7 +46,7 @@ namespace serow {
  *        specifically for fusing IMU data, base leg contact measurements, and external odometry.
  */
 class ContactEKF {
-   public:
+public:
     /**
      * @brief Initializes the EKF with the initial robot state, contact frames, and other
      * parameters.
@@ -83,7 +83,7 @@ class ContactEKF {
                      std::optional<OdometryMeasurement> odom = std::nullopt,
                      std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
 
-   private:
+private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
     int contact_dim_{};                     ///< Dimension of contact-related variables.
@@ -194,7 +194,7 @@ class ContactEKF {
      */
     BaseState updateWithTerrain(const BaseState& state,
                                 const std::map<std::string, bool>& contacts_status,
-                                const TerrainElevation& terrain_estimator);
+                                std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**
      * @brief Updates the state of the robot with the provided state change and covariance matrix.
