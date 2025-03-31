@@ -27,13 +27,13 @@
       },
       "cameraState": {
         "perspective": true,
-        "distance": 10.26684166555592,
-        "phi": 77.20531967571296,
-        "thetaOffset": 151.7196166792666,
+        "distance": 8.362406704355655,
+        "phi": 77.20531967571308,
+        "thetaOffset": 151.71961667926664,
         "targetOffset": [
-          3.6450061245181438,
-          -3.4641658011440195,
-          7.713771997308806e-17
+          1.8566916405940272,
+          -3.5572740811900068,
+          6.388596301614617e-17
         ],
         "target": [
           0,
@@ -187,15 +187,100 @@
       "xAxisLabel": "Time (s)",
       "yAxisLabel": "Velocity (m/s)"
     },
-    "RawMessages!os6rgs": {
-      "diffEnabled": false,
-      "diffMethod": "custom",
-      "diffTopicPath": "",
-      "showFullMessageForDiff": false,
-      "topicPath": "/base_state",
-      "fontSize": 12
+    "Plot!11f3lhm": {
+      "paths": [
+        {
+          "timestampMethod": "publishTime",
+          "value": "/centroidal_state.com_position.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "label": "com position x"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/centroidal_state.com_position.y",
+          "enabled": true,
+          "color": "#f5774d",
+          "label": "com position y"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/centroidal_state.com_position.z",
+          "enabled": true,
+          "color": "#f7df71",
+          "label": "com position z"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "CoM Position",
+      "xAxisLabel": "Time (s)",
+      "yAxisLabel": "Position (m)"
     },
-    "Plot!1n9c7eg": {
+    "Plot!2khxdhs": {
+      "paths": [
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.imu_angular_velocity_bias.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "label": "gyro bias x"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.imu_angular_velocity_bias.y",
+          "enabled": true,
+          "color": "#f5774d",
+          "label": "gyro bias y"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.imu_angular_velocity_bias.z",
+          "enabled": true,
+          "color": "#f7df71",
+          "label": "gyro bias z"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.imu_linear_acceleration_bias.x",
+          "enabled": true,
+          "color": "#5cd6a9",
+          "label": "acc bias x"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.imu_linear_acceleration_bias.y",
+          "enabled": true,
+          "color": "#61cbff",
+          "label": "acc bias y"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/base_state.imu_linear_acceleration_bias.z",
+          "enabled": true,
+          "color": "#a395e2",
+          "label": "acc bias z"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "Imu biases",
+      "yAxisLabel": "Bias (rad/s or m/s^2)",
+      "xAxisLabel": "Time (s)"
+    },
+    "Plot!3mj4y9y": {
       "paths": [
         {
           "timestampMethod": "publishTime",
@@ -212,11 +297,11 @@
           "label": "base angular velocity y"
         },
         {
-          "timestampMethod": "receiveTime",
+          "timestampMethod": "publishTime",
           "value": "/base_state.base_angular_velocity.z",
           "enabled": true,
           "color": "#f7df71",
-          "label": "base angular velocity y"
+          "label": "base angular velocity z"
         }
       ],
       "showXAxisLabels": true,
@@ -227,8 +312,97 @@
       "isSynced": true,
       "xAxisVal": "timestamp",
       "sidebarDimension": 240,
+      "foxglovePanelTitle": "Base Angular Velocity",
       "xAxisLabel": "Time (s)",
-      "foxglovePanelTitle": "Base Angular Velocity"
+      "yAxisLabel": "Velocity (rad/s)"
+    },
+    "Plot!1wgtp5g": {
+      "paths": [
+        {
+          "timestampMethod": "publishTime",
+          "value": "/centroidal_state.com_linear_velocity.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "label": "com linear velocity x"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/centroidal_state.com_linear_velocity.y",
+          "enabled": true,
+          "color": "#f5774d",
+          "label": "com linear velocity y"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/centroidal_state.com_linear_velocity.z",
+          "enabled": true,
+          "color": "#f7df71",
+          "label": "com linear velocity z"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "CoM linear velocity",
+      "yAxisLabel": "Velocity (m/s)",
+      "xAxisLabel": "Time (s)"
+    },
+    "Plot!2598gov": {
+      "paths": [
+        {
+          "timestampMethod": "publishTime",
+          "value": "/centroidal_state.external_forces.x",
+          "enabled": true,
+          "color": "#4e98e2",
+          "label": "external force x"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/centroidal_state.external_forces.y",
+          "enabled": true,
+          "color": "#f5774d",
+          "label": "external force y"
+        },
+        {
+          "timestampMethod": "publishTime",
+          "value": "/centroidal_state.external_forces.z",
+          "enabled": true,
+          "color": "#f7df71",
+          "label": "external force z"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "foxglovePanelTitle": "External forces",
+      "yAxisLabel": "Force (N)",
+      "xAxisLabel": "Time (s)"
+    },
+    "RawMessages!os6rgs": {
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false,
+      "topicPath": "/base_state",
+      "fontSize": 12
+    },
+    "RawMessages!1v9jjez": {
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false,
+      "topicPath": "/contact_state",
+      "fontSize": 12
     }
   },
   "globalVariables": {},
@@ -240,21 +414,44 @@
     "first": "3D!18i6zy7",
     "second": {
       "first": {
+        "first": "Plot!2nzyh5p",
+        "second": "Plot!111kcau",
+        "direction": "row"
+      },
+      "second": {
         "first": {
-          "first": "Plot!2nzyh5p",
-          "second": "Plot!111kcau",
+          "first": {
+            "first": "Plot!28cwmot",
+            "second": {
+              "first": "Plot!11f3lhm",
+              "second": "Plot!2khxdhs",
+              "direction": "column"
+            },
+            "direction": "column",
+            "splitPercentage": 37.1395528442296
+          },
+          "second": {
+            "first": "Plot!3mj4y9y",
+            "second": {
+              "first": "Plot!1wgtp5g",
+              "second": "Plot!2598gov",
+              "direction": "column"
+            },
+            "direction": "column",
+            "splitPercentage": 37.1395528442296
+          },
           "direction": "row"
         },
         "second": {
-          "first": "Plot!28cwmot",
-          "second": "Plot!1n9c7eg",
+          "first": "RawMessages!os6rgs",
+          "second": "RawMessages!1v9jjez",
           "direction": "row"
         },
-        "direction": "column"
+        "direction": "column",
+        "splitPercentage": 55.95244480200231
       },
-      "second": "RawMessages!os6rgs",
       "direction": "column",
-      "splitPercentage": 55.95244480200231
+      "splitPercentage": 19.291338582677163
     },
     "direction": "row",
     "splitPercentage": 70
