@@ -25,7 +25,6 @@ public:
 
     const std::array<float, 2>& getMapOrigin() const;
 
-private:
     void resetLocalMap();
 
     void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
