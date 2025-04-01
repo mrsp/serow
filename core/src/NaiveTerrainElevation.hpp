@@ -19,16 +19,13 @@ public:
     void initializeLocalMap(const float height, const float variance,
                             const float min_variance = 1e-6);
 
-    std::array<int, 2> globalLocationToMapLocation(const std::array<float, 2>& global_location, 
-                                                   const float yaw) const;
+    int locationToGlobalIndex(const float loc) const;
 
-    int mapLocationToGlobalIndex(const float loc) const;
+    std::array<int, 2> locationToGlobalIndex(const std::array<float, 2>& loc) const;
 
-    std::array<int, 2> mapLocationToGlobalIndex(const std::array<float, 2>& loc) const;
+    std::array<float, 2> globalIndexToLocation(const std::array<int, 2>& id_g) const;
 
-    std::array<float, 2> globalIndexToMapLocation(const std::array<int, 2>& id_g) const;
-
-    const LocalMapState& getLocalMap();
+    std::array<int, 2> globalIndexToLocalIndex(const std::array<int, 2>& id_g) const;
 
     bool update(const std::array<float, 2>& loc, float height, float variance, double timestamp);
 
@@ -45,19 +42,9 @@ public:
 
     bool inside(const std::array<int, 2>& id_g) const;
 
-    bool inside(const std::array<float, 2>& location) const;
-
-    int globalIndexToArrayIndex(const int id_g, const int i) const;
-
-    std::array<int, 2> globalIndexToArrayIndex(const std::array<int, 2>& id_g) const;
+    bool inside(const std::array<float, 2>& loc) const;
 
     void resetCell(const int i, const int j);
-
-    int locationToGlobalIndex(const float loc) const;
-
-    std::array<int, 2> locationToGlobalIndex(const std::array<float, 2>& loc) const;
-
-    std::array<float, 2> globalIndexToLocation(const std::array<int, 2>& id_g) const;
 
 private:
     // Map data
@@ -69,6 +56,7 @@ private:
     std::array<int, 2> local_map_bound_max_i_{};
     std::array<int, 2> local_map_bound_min_i_{};
     std::array<float, 2> local_map_origin_d_{0.0, 0.0};
+
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
 
@@ -76,7 +64,6 @@ private:
     double timestamp_{};
 
     friend class TerrainElevationTest;  // Allow full access
-}; 
-
+};
 
 }  // namespace serow
