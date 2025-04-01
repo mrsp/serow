@@ -6,17 +6,11 @@
 #include <mutex>
 #include <optional>
 #include <vector>
+#include "common.hpp"
 
-namespace {
 
-static constexpr float resolution = 0.01;
-static constexpr float resolution_inv = 1.0 / resolution;
-static constexpr float radius = 0.05;
-static constexpr int radius_cells = static_cast<int>(radius * resolution_inv) + 1;
-static constexpr int map_dim = 1024;                // 2^7
-static constexpr int half_map_dim = map_dim / 2;    // 2^6
-static constexpr int map_size = map_dim * map_dim;  // 2^14 = 16.384
-static constexpr int half_map_size = map_size / 2;  // 2^13 = 8.192
+namespace serow {
+
 
 template <int N>
 inline int fast_mod(const int x) {
@@ -48,27 +42,6 @@ inline int normalize(const int x) {
     return (y < 0 ? y + range : y) + a;
 }
 
-}  // namespace
-
-namespace serow {
-
-struct ElevationCell {
-    float height{};
-    float variance{};
-    bool contact{};
-    bool updated{};
-    ElevationCell() = default;
-    ElevationCell(float height, float variance) {
-        this->height = height;
-        this->variance = variance;
-    }
-};
-
-struct LocalMapState {
-    double timestamp{};
-    std::array<std::array<float, 3>, map_size> data{};
-};
-
 class TerrainElevation {
     public:
     
@@ -82,6 +55,8 @@ class TerrainElevation {
     const LocalMapState& getLocalMap();
 
     bool update(const std::array<float, 2>& loc, float height, float variance, double timestamp);
+
+    bool set(const std::array<float, 2>& loc, const ElevationCell& elevation);
 
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc);
 

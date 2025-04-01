@@ -113,7 +113,6 @@ int TerrainElevation::localIndexToHashId(const std::array<int, 2>& id_in) const 
     return id[0] * map_dim + id[1];
 }
 
-
 int TerrainElevation::locationToGlobalIndex(const float loc) const {
     if (loc > 0.0) {
         return static_cast<int>(resolution_inv * loc + 0.5);
@@ -310,6 +309,15 @@ bool TerrainElevation::isHashIdValid(const int id) const {
     if (id < 0) {
         return false;
     }
+    return true;
+}
+
+bool TerrainElevation::set(const std::array<float, 2>& loc, const ElevationCell& elevation) {
+    if (!inside(loc)) {
+        return false;
+    }
+    const int idx = locationToHashId(loc);
+    elevation_[idx] = elevation;
     return true;
 }
 
