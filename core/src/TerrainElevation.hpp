@@ -41,10 +41,9 @@ inline int fast_mod(const int x) {
 }
 
 inline int normalize(const int x) {
-    // Since a = -half_map_dim and b = half_map_dim, the range is 2*half_map_dim + 1
     constexpr int a = -half_map_dim;
-
-    int range = 2 * half_map_dim + 1;
+    constexpr int b = half_map_dim;
+    constexpr int range = b - a + 1;
     int y = (x - a) % range;
     return (y < 0 ? y + range : y) + a;
 }
@@ -71,7 +70,8 @@ struct LocalMapState {
 };
 
 class TerrainElevation {
-public:
+    public:
+    
     void printMapInformation() const;
 
     void recenter(const std::array<float, 2>& location);
@@ -87,7 +87,6 @@ public:
 
     const std::array<float, 2>& getMapOrigin();
 
-private:
     void resetLocalMap();
 
     void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
@@ -99,7 +98,7 @@ private:
 
     void resetCell(const int& hash_id);
 
-    void clearOutOfMapCells(const std::vector<int>& clear_id);
+    void clearOutOfMapCells(const std::vector<int>& clear_id, const int i);
 
     int locationToGlobalIndex(const float loc) const;
 

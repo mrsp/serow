@@ -51,6 +51,143 @@ protected:
     }
 };
 
+// Test fast_mod function
+TEST_F(TerrainElevationTest, FastMod) {
+    EXPECT_EQ(fast_mod<16>(15), 15 % 16);
+    EXPECT_EQ(fast_mod<16>(-1), -1 % 16);
+    EXPECT_EQ(fast_mod<16>(16), 16 % 16);
+    EXPECT_EQ(fast_mod<16>(-17), -17 % 16);
+}
+
+TEST_F(TerrainElevationTest, FastModRandom) {
+    // Set up random number generation
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int64_t> dist(-1000000, 1000000);
+
+    // Test with different powers of 2
+    const std::vector<int> powers = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
+    
+    for (int power : powers) {
+        // Generate 100 random numbers for each power
+        for (int i = 0; i < 100; ++i) {
+            int64_t num = dist(gen);
+            
+            // Test with template parameter
+            switch (power) {
+                case 2: EXPECT_EQ(fast_mod<2>(num), num % 2); break;
+                case 4: EXPECT_EQ(fast_mod<4>(num), num % 4); break;
+                case 8: EXPECT_EQ(fast_mod<8>(num), num % 8); break;
+                case 16: EXPECT_EQ(fast_mod<16>(num), num % 16); break;
+                case 32: EXPECT_EQ(fast_mod<32>(num), num % 32); break;
+                case 64: EXPECT_EQ(fast_mod<64>(num), num % 64); break;
+                case 128: EXPECT_EQ(fast_mod<128>(num), num % 128); break;
+                case 256: EXPECT_EQ(fast_mod<256>(num), num % 256); break;
+                case 512: EXPECT_EQ(fast_mod<512>(num), num % 512); break;
+                case 1024: EXPECT_EQ(fast_mod<1024>(num), num % 1024); break;
+            }
+        }
+    }
+}
+
+TEST_F(TerrainElevationTest, FastModNegative) {
+    // Test with different powers of 2
+    const std::vector<int> powers = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
+    
+    // Test specific negative numbers
+    const std::vector<int64_t> negative_numbers = {
+        -1, -2, -3, -4, -5, -8, -16, -32, -64, -128,
+        -256, -512, -1024, -2048, -4096, -8192, -16384,
+        -32768, -65536, -131072, -262144, -524288, -1048576
+    };
+
+    for (int power : powers) {
+        for (int64_t num : negative_numbers) {
+            // Test with template parameter
+            switch (power) {
+                case 2: EXPECT_EQ(fast_mod<2>(num), num % 2); break;
+                case 4: EXPECT_EQ(fast_mod<4>(num), num % 4); break;
+                case 8: EXPECT_EQ(fast_mod<8>(num), num % 8); break;
+                case 16: EXPECT_EQ(fast_mod<16>(num), num % 16); break;
+                case 32: EXPECT_EQ(fast_mod<32>(num), num % 32); break;
+                case 64: EXPECT_EQ(fast_mod<64>(num), num % 64); break;
+                case 128: EXPECT_EQ(fast_mod<128>(num), num % 128); break;
+                case 256: EXPECT_EQ(fast_mod<256>(num), num % 256); break;
+                case 512: EXPECT_EQ(fast_mod<512>(num), num % 512); break;
+                case 1024: EXPECT_EQ(fast_mod<1024>(num), num % 1024); break;
+            }
+        }
+    }
+}
+
+// Test normalize function
+TEST_F(TerrainElevationTest, Normalize) {
+    static auto normalize_fn = [](int x, int a, int b) -> int {
+        int range = b - a + 1;
+        int y = (x - a) % range;
+        return (y < 0 ? y + range : y) + a;
+    };
+
+    EXPECT_EQ(normalize(15), normalize_fn(15, -map_dim, map_dim));
+    EXPECT_EQ(normalize(-1), normalize_fn(-1, -map_dim, map_dim));
+    EXPECT_EQ(normalize(16), normalize_fn(16, -map_dim, map_dim));
+    EXPECT_EQ(normalize(-17), normalize_fn(-17, -map_dim, map_dim));
+}
+
+TEST_F(TerrainElevationTest, NormalizeRandomAndEdgeCases) {
+    static auto normalize_fn = [](int x, int a, int b) -> int {
+        int range = b - a + 1;
+        int y = (x - a) % range;
+        return (y < 0 ? y + range : y) + a;
+    };
+
+    // Set up random number generation
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int64_t> dist(-1000000, 1000000);
+
+    // Test random numbers
+    for (int i = 0; i < 100; ++i) {
+        int64_t num = dist(gen);
+        EXPECT_EQ(normalize(num), normalize_fn(num, -half_map_dim, half_map_dim));
+    }
+
+    // Edge cases
+    const std::vector<int64_t> edge_cases = {
+        // Boundary values
+        -map_dim,           // Lower bound
+        map_dim,            // Upper bound
+        -map_dim - 1,       // Just below lower bound
+        map_dim + 1,        // Just above upper bound
+        
+        // Powers of 2
+        -2048, -1024, -512, -256, -128, -64, -32, -16, -8, -4, -2,
+        2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048,
+        
+        // Large numbers
+        -1000000, -500000, -100000, -50000, -10000,
+        10000, 50000, 100000, 500000, 1000000,
+        
+        // Special values
+        0, 1, -1,
+        std::numeric_limits<int>::min(),
+        std::numeric_limits<int>::max(),
+        std::numeric_limits<int>::min() + 1,
+        std::numeric_limits<int>::max() - 1
+    };
+
+    for (int64_t num : edge_cases) {
+        EXPECT_EQ(normalize(num), normalize_fn(num, -half_map_dim, half_map_dim))
+            << "Failed for number: " << num;
+    }
+
+    // Test sequences of numbers
+    for (int i = -half_map_dim - 10; i <= half_map_dim + 10; ++i) {
+        EXPECT_EQ(normalize(i), normalize_fn(i, -half_map_dim, half_map_dim))
+            << "Failed for number: " << i;
+    }
+}
+
 // Test basic initialization
 TEST_F(TerrainElevationTest, Initialization) {
     // Check if both implementations initialize the same by checking a point at origin
@@ -326,7 +463,90 @@ TEST_F(TerrainElevationTest, ComprehensiveGridTest) {
     std::cout << "Match percentage: " << match_percentage << "%" << std::endl;
 
     // Expect a high match percentage, but not necessarily 100% due to implementation differences
-    EXPECT_GT(match_percentage, 90.0f);
+    EXPECT_GT(match_percentage, 99.0f);
+}
+
+// Test coordinate conversion and hashing
+TEST_F(TerrainElevationTest, CoordinateConversionAndHashing) {
+    // Test various locations
+    std::vector<std::array<float, 2>> test_locations = {
+        {0.0f, 0.0f},           // Origin
+        {0.5f, 0.5f},           // Positive quadrant
+        {-0.5f, -0.5f},         // Negative quadrant
+        {1.0f, -1.0f},          // Mixed signs
+        {-1.0f, 1.0f},          // Mixed signs
+        {0.01f, 0.01f},         // Small values
+        {-0.01f, -0.01f},       // Small negative values
+        {5.0f, 5.0f},           // Large values
+        {-5.0f, -5.0f}          // Large negative values
+    };
+
+    for (const auto& loc : test_locations) {
+        // 1. Test location -> global index -> location
+        auto global_idx = terrain.locationToGlobalIndex(loc);
+        auto loc_from_global = terrain.globalIndexToLocation(global_idx);
+        EXPECT_TRUE(floatEqual(loc[0], loc_from_global[0]));
+        EXPECT_TRUE(floatEqual(loc[1], loc_from_global[1]));
+
+        // 2. Test global index -> local index -> global index
+        auto local_idx = terrain.globalIndexToLocalIndex(global_idx);
+        auto global_from_local = terrain.localIndexToGlobalIndex(local_idx);
+        EXPECT_EQ(global_idx[0], global_from_local[0]);
+        EXPECT_EQ(global_idx[1], global_from_local[1]);
+
+        // 3. Test local index -> hash ID -> local index
+        auto hash_id = terrain.localIndexToHashId(local_idx);
+        auto local_from_hash = terrain.hashIdToLocalIndex(hash_id);
+        EXPECT_EQ(local_idx[0], local_from_hash[0]);
+        EXPECT_EQ(local_idx[1], local_from_hash[1]);
+
+        // 4. Test hash ID -> global index -> hash ID
+        auto global_from_hash = terrain.hashIdToGlobalIndex(hash_id);
+        auto hash_from_global = terrain.globalIndexToHashId(global_from_hash);
+        EXPECT_EQ(hash_id, hash_from_global);
+
+        // 5. Test hash ID -> location -> hash ID
+        auto loc_from_hash = terrain.hashIdToLocation(hash_id);
+        auto hash_from_loc = terrain.locationToHashId(loc_from_hash);
+        EXPECT_EQ(hash_id, hash_from_loc);
+
+        // 6. Test location -> hash ID -> location
+        auto hash_from_loc_direct = terrain.locationToHashId(loc);
+        auto loc_from_hash_direct = terrain.hashIdToLocation(hash_from_loc_direct);
+        EXPECT_TRUE(floatEqual(loc[0], loc_from_hash_direct[0]));
+        EXPECT_TRUE(floatEqual(loc[1], loc_from_hash_direct[1]));
+
+        // 7. Verify hash ID is valid
+        EXPECT_TRUE(terrain.isHashIdValid(hash_id));
+
+        // 8. Verify the conversions work with the naive implementation
+        auto naive_global_idx = naive_terrain.locationToGlobalIndex(loc);
+        auto naive_loc = naive_terrain.globalIndexToLocation(naive_global_idx);
+        EXPECT_TRUE(floatEqual(loc[0], naive_loc[0]));
+        EXPECT_TRUE(floatEqual(loc[1], naive_loc[1]));
+    }
+
+    // Test edge cases
+    std::vector<std::array<float, 2>> edge_cases = {
+        {0.0f, 0.0f},           // Origin
+        {map_dim * resolution, map_dim * resolution},           // Map boundary
+        {-map_dim * resolution, -map_dim * resolution},         // Map boundary
+        {map_dim * resolution + 1.0f, map_dim * resolution + 1.0f},  // Outside map
+        {-map_dim * resolution - 1.0f, -map_dim * resolution - 1.0f} // Outside map
+    };
+
+    for (const auto& loc : edge_cases) {
+        // Test location -> hash ID conversion for edge cases
+        auto hash_id = terrain.locationToHashId(loc);
+        if (terrain.inside(loc)) {
+            EXPECT_TRUE(terrain.isHashIdValid(hash_id));
+        } else {
+            // For points outside the map, we expect the hash ID to be invalid
+            // or the point to be wrapped around to a valid position
+            auto wrapped_loc = terrain.hashIdToLocation(hash_id);
+            EXPECT_TRUE(terrain.inside(wrapped_loc));
+        }
+    }
 }
 
 }  // namespace serow
