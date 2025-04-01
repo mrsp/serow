@@ -67,12 +67,12 @@ protected:
 
 //     // Test with different powers of 2
 //     const std::vector<int> powers = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
-    
+
 //     for (int power : powers) {
 //         // Generate 100 random numbers for each power
 //         for (int i = 0; i < 100; ++i) {
 //             int64_t num = dist(gen);
-            
+
 //             // Test with template parameter
 //             switch (power) {
 //                 case 2: EXPECT_EQ(fast_mod<2>(num), num % 2); break;
@@ -93,7 +93,7 @@ protected:
 // TEST_F(TerrainElevationTest, FastModNegative) {
 //     // Test with different powers of 2
 //     const std::vector<int> powers = {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
-    
+
 //     // Test specific negative numbers
 //     const std::vector<int64_t> negative_numbers = {
 //         -1, -2, -3, -4, -5, -8, -16, -32, -64, -128,
@@ -159,15 +159,15 @@ protected:
 //         map_dim,            // Upper bound
 //         -map_dim - 1,       // Just below lower bound
 //         map_dim + 1,        // Just above upper bound
-        
+
 //         // Powers of 2
 //         -2048, -1024, -512, -256, -128, -64, -32, -16, -8, -4, -2,
 //         2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048,
-        
+
 //         // Large numbers
 //         -1000000, -500000, -100000, -50000, -10000,
 //         10000, 50000, 100000, 500000, 1000000,
-        
+
 //         // Special values
 //         0, 1, -1,
 //         std::numeric_limits<int>::min(),
@@ -317,11 +317,11 @@ protected:
 //     for (const auto& [loc, height, variance] : test_points) {
 //         bool success = terrain.update(loc, height, variance, timestamp);
 //         ASSERT_TRUE(success) << "Failed to update point at [" << loc[0] << ", " << loc[1] << "]";
-        
+
 //         auto elevation = terrain.getElevation(loc);
-//         ASSERT_TRUE(elevation.has_value()) << "Failed to get elevation for point at [" << loc[0] << ", " << loc[1] << "]";
-//         initial_data.push_back({loc, elevation.value()});
-//         timestamp += 0.1;
+//         ASSERT_TRUE(elevation.has_value()) << "Failed to get elevation for point at [" << loc[0]
+//         << ", " << loc[1] << "]"; initial_data.push_back({loc, elevation.value()}); timestamp +=
+//         0.1;
 //     }
 
 //     // Get the current map origin before recentering
@@ -340,46 +340,46 @@ protected:
 //     for (const auto& [original_loc, original_elevation] : initial_data) {
 //         // Convert original location to global indices
 //         auto original_global_idx = terrain.locationToGlobalIndex(original_loc);
-        
+
 //         // Get the new center in global indices
 //         auto new_center_global_idx = terrain.locationToGlobalIndex(new_center);
 //         auto original_center_global_idx = terrain.locationToGlobalIndex(original_origin);
-        
+
 //         // Calculate the shift in global index space
 //         std::array<int, 2> shift = {
 //             new_center_global_idx[0] - original_center_global_idx[0],
 //             new_center_global_idx[1] - original_center_global_idx[1]
 //         };
-        
+
 //         // Apply shift to get new global index
 //         std::array<int, 2> new_global_idx = {
 //             original_global_idx[0] - shift[0],
 //             original_global_idx[1] - shift[1]
 //         };
-        
+
 //         // Convert back to location
 //         auto new_loc = terrain.globalIndexToLocation(new_global_idx);
 
 //         // Get the elevation at the new location
 //         auto new_elevation = terrain.getElevation(new_loc);
-//         ASSERT_TRUE(new_elevation.has_value()) 
-//             << "Failed to get elevation after recenter for point at [" 
+//         ASSERT_TRUE(new_elevation.has_value())
+//             << "Failed to get elevation after recenter for point at ["
 //             << new_loc[0] << ", " << new_loc[1] << "]";
 
 //         // Compare the elevation values with more detailed error reporting
 //         EXPECT_TRUE(floatEqual(original_elevation.height, new_elevation.value().height))
-//             << "Height mismatch at [" << new_loc[0] << ", " << new_loc[1] 
-//             << "]: original=" << original_elevation.height 
+//             << "Height mismatch at [" << new_loc[0] << ", " << new_loc[1]
+//             << "]: original=" << original_elevation.height
 //             << ", new=" << new_elevation.value().height;
-        
+
 //         EXPECT_TRUE(floatEqual(original_elevation.variance, new_elevation.value().variance))
-//             << "Variance mismatch at [" << new_loc[0] << ", " << new_loc[1] 
-//             << "]: original=" << original_elevation.variance 
+//             << "Variance mismatch at [" << new_loc[0] << ", " << new_loc[1]
+//             << "]: original=" << original_elevation.variance
 //             << ", new=" << new_elevation.value().variance;
-        
+
 //         EXPECT_EQ(original_elevation.contact, new_elevation.value().contact)
 //             << "Contact flag mismatch at [" << new_loc[0] << ", " << new_loc[1] << "]";
-        
+
 //         EXPECT_EQ(original_elevation.updated, new_elevation.value().updated)
 //             << "Updated flag mismatch at [" << new_loc[0] << ", " << new_loc[1] << "]";
 //     }
@@ -397,9 +397,11 @@ protected:
 //     auto updated_elevation = terrain.getElevation(new_point);
 //     ASSERT_TRUE(updated_elevation.has_value());
 //     EXPECT_TRUE(floatEqual(updated_elevation.value().height, 0.3f))
-//         << "Height mismatch after update: expected=0.3, got=" << updated_elevation.value().height;
+//         << "Height mismatch after update: expected=0.3, got=" <<
+//         updated_elevation.value().height;
 //     EXPECT_TRUE(floatEqual(updated_elevation.value().variance, 0.02f))
-//         << "Variance mismatch after update: expected=0.02, got=" << updated_elevation.value().variance;
+//         << "Variance mismatch after update: expected=0.02, got=" <<
+//         updated_elevation.value().variance;
 // }
 
 // // Test random updates
@@ -596,8 +598,6 @@ protected:
 //     }
 // }
 
-
-
 TEST_F(TerrainElevationTest, NaiveRecenter) {
     naive_terrain.printMapInformation();
 
@@ -614,51 +614,50 @@ TEST_F(TerrainElevationTest, NaiveRecenter) {
     const float test_variance = 0.05f;
     const ElevationCell elevation(test_height, test_variance);
 
-    std::cout << "Setting test data" << std::endl;
     // Set map with test data
     for (const auto& point : test_points) {
         bool success = naive_terrain.setElevation(point, elevation);
-        ASSERT_TRUE(success) << "Failed to update point at [" << point[0] << ", " << point[1] << "]";
+        ASSERT_TRUE(success) << "Failed to update point at [" << point[0] << ", " << point[1]
+                             << "]";
     }
 
     // Store initial data for comparison
     std::vector<std::pair<std::array<float, 2>, ElevationCell>> initial_data;
     for (const auto& point : test_points) {
         auto cell = naive_terrain.getElevation(point);
-        ASSERT_TRUE(cell.has_value()) << "Failed to get elevation for point at [" << point[0] << ", " << point[1] << "]";
-        EXPECT_TRUE(elevationCellEqual(cell.value(), elevation)) << "Elevation mismatch at [" << point[0] << ", " << point[1] << "]";
+        ASSERT_TRUE(cell.has_value())
+            << "Failed to get elevation for point at [" << point[0] << ", " << point[1] << "]";
+        EXPECT_TRUE(elevationCellEqual(cell.value(), elevation))
+            << "Elevation mismatch at [" << point[0] << ", " << point[1] << "]";
         initial_data.push_back({point, cell.value()});
     }
-    
+
     // Test recentering with different shifts
     const std::vector<std::array<float, 2>> recenter_points = {
-        {0.2f, 0.2f},    // Small shift
-        {0.5f, 0.5f},    // Medium shift
-        {1.0f, 1.0f},    // Large shift
-        {-0.5f, -0.5f}   // Negative shift
+        {0.2f, 0.2f},   // Small shift
+        {0.5f, 0.5f},   // Medium shift
+        {1.0f, 1.0f},   // Large shift
+        {-0.5f, -0.5f}  // Negative shift
     };
 
-    // Get the current map origin before recentering
-    auto original_origin = naive_terrain.getMapOrigin();
-    std::cout << "Initial origin: [" << original_origin[0] << ", " << original_origin[1] << "]" << std::endl;
-    
     // Track cumulative shift for point transformation
     std::array<float, 2> cumulative_shift = {0.0f, 0.0f};
 
     for (const std::array<float, 2>& recenter_point : recenter_points) {
+        // Get the current map origin before recentering
+        auto original_origin = naive_terrain.getMapOrigin();
+
         // Calculate shift from last origin
-        std::array<float, 2> shift = {
-            recenter_point[0] - original_origin[0],
-            recenter_point[1] - original_origin[1]
-        };
-        
+        std::array<float, 2> shift = {recenter_point[0] - original_origin[0],
+                                      recenter_point[1] - original_origin[1]};
+
         // Update cumulative shift
         cumulative_shift[0] += shift[0];
         cumulative_shift[1] += shift[1];
-        
-        std::cout << "Recentering to [" << recenter_point[0] << ", " << recenter_point[1] 
+
+        std::cout << "Recentering to [" << recenter_point[0] << ", " << recenter_point[1]
                   << "], shift: [" << shift[0] << ", " << shift[1] << "]" << std::endl;
-                  
+
         // Recenter the map
         naive_terrain.recenter(recenter_point);
 
@@ -673,40 +672,41 @@ TEST_F(TerrainElevationTest, NaiveRecenter) {
         for (const auto& [original_point, original_cell] : initial_data) {
             // Calculate the new location after recentering
             // We need to shift the points in the opposite direction as the origin
-            const std::array<float, 2> new_point = {
-                original_point[0] - cumulative_shift[0],
-                original_point[1] - cumulative_shift[1]
-            };
-            
-            std::cout << "Original point [" << original_point[0] << ", " << original_point[1] 
-                      << "] should now be at [" << new_point[0] << ", " << new_point[1] << "]" << std::endl;
+            const std::array<float, 2> new_point = {original_point[0] - cumulative_shift[0],
+                                                    original_point[1] - cumulative_shift[1]};
 
+            std::cout << "Original point [" << original_point[0] << ", " << original_point[1]
+                      << "] should now be at [" << new_point[0] << ", " << new_point[1] << "]"
+                      << std::endl;
             // Check if the transformed point is inside the map bounds
             if (naive_terrain.inside(new_point)) {
                 // Get the cell at the new location
                 auto new_cell = naive_terrain.getElevation(new_point);
                 ASSERT_TRUE(new_cell.has_value())
-                    << "Failed to get elevation after recenter for point at [" 
-                    << new_point[0] << ", " << new_point[1] << "]";
+                    << "Failed to get elevation after recenter for point at [" << new_point[0]
+                    << ", " << new_point[1] << "]";
 
                 // Compare the elevation values
                 EXPECT_TRUE(floatEqual(original_cell.height, new_cell.value().height))
-                    << "Height mismatch at [" << new_point[0] << ", " << new_point[1] 
-                    << "]: original=" << original_cell.height 
+                    << "Height mismatch at [" << new_point[0] << ", " << new_point[1]
+                    << "]: original=" << original_cell.height
                     << ", new=" << new_cell.value().height;
-                
+
                 EXPECT_TRUE(floatEqual(original_cell.variance, new_cell.value().variance))
-                    << "Variance mismatch at [" << new_point[0] << ", " << new_point[1] 
-                    << "]: original=" << original_cell.variance 
+                    << "Variance mismatch at [" << new_point[0] << ", " << new_point[1]
+                    << "]: original=" << original_cell.variance
                     << ", new=" << new_cell.value().variance;
+
+                EXPECT_EQ(original_cell.contact, new_cell.value().contact)
+                    << "Contact flag mismatch at [" << new_point[0] << ", " << new_point[1] << "]";
+
+                EXPECT_EQ(original_cell.updated, new_cell.value().updated)
+                    << "Updated flag mismatch at [" << new_point[0] << ", " << new_point[1] << "]";
             } else {
-                std::cout << "Point [" << new_point[0] << ", " << new_point[1] 
+                std::cout << "Point [" << new_point[0] << ", " << new_point[1]
                           << "] is now outside the map, skipping checks" << std::endl;
             }
         }
-
-        // Update original_origin for next iteration
-        original_origin = new_origin;
     }
 }
 
@@ -739,8 +739,8 @@ TEST_F(TerrainElevationTest, NaiveRecenter) {
 //     }
 
 //     // Store initial data for comparison
-//     std::vector<std::pair<std::array<float, 2>, std::pair<ElevationCell, ElevationCell>>> initial_data;
-//     for (const auto& point : test_points) {
+//     std::vector<std::pair<std::array<float, 2>, std::pair<ElevationCell, ElevationCell>>>
+//     initial_data; for (const auto& point : test_points) {
 //         auto terrain_cell = terrain.getElevation(point);
 //         auto naive_cell = naive_terrain.getElevation(point);
 //         if (terrain_cell && naive_cell) {
@@ -763,7 +763,8 @@ TEST_F(TerrainElevationTest, NaiveRecenter) {
 
 //         // Verify that both maps have the same origin after recentering
 //         EXPECT_EQ(terrain.getMapOrigin(), naive_terrain.getMapOrigin())
-//             << "Map origins differ after recentering to " << recenter_point[0] << ", " << recenter_point[1];
+//             << "Map origins differ after recentering to " << recenter_point[0] << ", " <<
+//             recenter_point[1];
 
 //         // Check data consistency for each test point
 //         for (const auto& [original_point, original_cells] : initial_data) {
@@ -778,7 +779,7 @@ TEST_F(TerrainElevationTest, NaiveRecenter) {
 //             auto naive_cell = naive_terrain.getElevation(new_point);
 
 //             // Verify both maps have data at the new location
-//             EXPECT_TRUE(terrain_cell.has_value()) 
+//             EXPECT_TRUE(terrain_cell.has_value())
 //                 << "Terrain map missing data at " << new_point[0] << ", " << new_point[1];
 //             EXPECT_TRUE(naive_cell.has_value())
 //                 << "Naive map missing data at " << new_point[0] << ", " << new_point[1];
@@ -813,80 +814,89 @@ TEST_F(TerrainElevationTest, NaiveRecenter) {
 TEST_F(TerrainElevationTest, NaiveCoordinateTransformations) {
     // Test location to global index conversion
     std::vector<std::pair<std::array<float, 2>, std::array<int, 2>>> test_points = {
-        {{0.0f, 0.0f}, {0, 0}},           // Origin
-        {{0.5f, 0.5f}, {50, 50}},         // Positive quadrant
-        {{-0.5f, -0.5f}, {-50, -50}},     // Negative quadrant
-        {{1.0f, 1.0f}, {100, 100}},       // Edge case
-        {{-1.0f, -1.0f}, {-100, -100}},   // Edge case
-        {{0.01f, 0.01f}, {1, 1}},         // Small values
-        {{-0.01f, -0.01f}, {-1, -1}},     // Small negative values
-        {{0.99f, 0.99f}, {99, 99}},       // Just below 1
-        {{-0.99f, -0.99f}, {-99, -99}}    // Just above -1
+        {{0.0f, 0.0f}, {0, 0}},          // Origin
+        {{0.5f, 0.5f}, {50, 50}},        // Positive quadrant
+        {{-0.5f, -0.5f}, {-50, -50}},    // Negative quadrant
+        {{1.0f, 1.0f}, {100, 100}},      // Edge case
+        {{-1.0f, -1.0f}, {-100, -100}},  // Edge case
+        {{0.01f, 0.01f}, {1, 1}},        // Small values
+        {{-0.01f, -0.01f}, {-1, -1}},    // Small negative values
+        {{0.99f, 0.99f}, {99, 99}},      // Just below 1
+        {{-0.99f, -0.99f}, {-99, -99}}   // Just above -1
     };
 
     for (const auto& [loc, expected_global] : test_points) {
         auto global_idx = naive_terrain.locationToGlobalIndex(loc);
-        EXPECT_EQ(global_idx[0], expected_global[0]) 
+        EXPECT_EQ(global_idx[0], expected_global[0])
             << "Global x index mismatch for location [" << loc[0] << ", " << loc[1] << "]";
-        EXPECT_EQ(global_idx[1], expected_global[1]) 
+        EXPECT_EQ(global_idx[1], expected_global[1])
             << "Global y index mismatch for location [" << loc[0] << ", " << loc[1] << "]";
     }
 
-    // Test global index to array index conversion
+    // Test global index to local index conversion
     // First, set up a known map origin
     naive_terrain.initializeLocalMap(0.0f, 1.0f, 0.001f);
-    
-    // Test points with known global indices and expected array indices
+
+    // Test points with known global indices and expected local indices
     std::vector<std::pair<std::array<int, 2>, std::array<int, 2>>> test_indices = {
-        {{0, 0}, {100, 100}},             // Origin
-        {{50, 50}, {150, 150}},           // Positive quadrant
-        {{-50, -50}, {50, 50}},           // Negative quadrant
-        {{100, 100}, {200, 200}},         // Edge case
-        {{-100, -100}, {0, 0}},           // Edge case
-        {{1, 1}, {101, 101}},             // Small values
-        {{-1, -1}, {99, 99}},             // Small negative values
-        {{99, 99}, {199, 199}},           // Just below edge
-        {{-99, -99}, {1, 1}}              // Just above negative edge
+        {{0, 0}, {0, 0}},              // Origin
+        {{50, 50}, {50, 50}},          // Positive quadrant
+        {{-50, -50}, {-50, -50}},      // Negative quadrant
+        {{100, 100}, {100, 100}},      // Edge case
+        {{-100, -100}, {-100, -100}},  // Edge case
+        {{1, 1}, {1, 1}},              // Small values
+        {{-1, -1}, {-1, -1}},          // Small negative values
+        {{99, 99}, {99, 99}},          // Just below edge
+        {{-99, -99}, {-99, -99}}       // Just above negative edge
     };
 
-    for (const auto& [global_idx, expected_array] : test_indices) {
-        auto array_idx = naive_terrain.globalIndexToArrayIndex(global_idx);
-        EXPECT_EQ(array_idx[0], expected_array[0]) 
-            << "Array x index mismatch for global index [" << global_idx[0] << ", " << global_idx[1] << "]";
-        EXPECT_EQ(array_idx[1], expected_array[1]) 
-            << "Array y index mismatch for global index [" << global_idx[0] << ", " << global_idx[1] << "]";
+    for (const auto& [global_idx, expected_local] : test_indices) {
+        auto local_idx = naive_terrain.globalIndexToLocalIndex(global_idx);
+        EXPECT_EQ(local_idx[0], expected_local[0]) << "Local x index mismatch for global index ["
+                                                   << global_idx[0] << ", " << global_idx[1] << "]";
+        EXPECT_EQ(local_idx[1], expected_local[1]) << "Local y index mismatch for global index ["
+                                                   << global_idx[0] << ", " << global_idx[1] << "]";
     }
 
     // Test round-trip conversion
     for (const auto& [loc, _] : test_points) {
-        // Location -> Global Index -> Location
+        // Location -> Global Index -> Local Index -> Global Index
         auto global_idx = naive_terrain.locationToGlobalIndex(loc);
-        auto array_idx = naive_terrain.globalIndexToArrayIndex(global_idx);
-        auto global_back = naive_terrain.globalIndexToArrayIndex(array_idx);
-        
-        EXPECT_EQ(global_idx[0], global_back[0]) 
+        auto local_idx = naive_terrain.globalIndexToLocalIndex(global_idx);
+        auto global_back =
+            naive_terrain.locationToGlobalIndex(naive_terrain.globalIndexToLocation(global_idx));
+
+        EXPECT_EQ(global_idx[0], global_back[0])
             << "Round-trip x index mismatch for location [" << loc[0] << ", " << loc[1] << "]";
-        EXPECT_EQ(global_idx[1], global_back[1]) 
+        EXPECT_EQ(global_idx[1], global_back[1])
             << "Round-trip y index mismatch for location [" << loc[0] << ", " << loc[1] << "]";
     }
 
     // Test boundary conditions
     std::vector<std::array<float, 2>> boundary_points = {
-        {1.0f, 1.0f},     // Upper right corner
-        {-1.0f, -1.0f},   // Lower left corner
-        {1.0f, -1.0f},    // Upper left corner
-        {-1.0f, 1.0f}     // Lower right corner
+        {1.0f, 1.0f},    // Upper right corner
+        {-1.0f, -1.0f},  // Lower left corner
+        {1.0f, -1.0f},   // Upper left corner
+        {-1.0f, 1.0f}    // Lower right corner
     };
 
     for (const auto& loc : boundary_points) {
         auto global_idx = naive_terrain.locationToGlobalIndex(loc);
-        auto array_idx = naive_terrain.globalIndexToArrayIndex(global_idx);
-        
-        // Verify array indices are within bounds
-        EXPECT_GE(array_idx[0], 0) << "Array x index out of bounds for location [" << loc[0] << ", " << loc[1] << "]";
-        EXPECT_LT(array_idx[0], 200) << "Array x index out of bounds for location [" << loc[0] << ", " << loc[1] << "]";
-        EXPECT_GE(array_idx[1], 0) << "Array y index out of bounds for location [" << loc[0] << ", " << loc[1] << "]";
-        EXPECT_LT(array_idx[1], 200) << "Array y index out of bounds for location [" << loc[0] << ", " << loc[1] << "]";
+        auto local_idx = naive_terrain.globalIndexToLocalIndex(global_idx);
+
+        // Verify the point is inside the map bounds
+        EXPECT_TRUE(naive_terrain.inside(loc))
+            << "Boundary point [" << loc[0] << ", " << loc[1] << "] should be inside map bounds";
+
+        // Verify local indices are within map dimensions
+        EXPECT_GE(local_idx[0], -half_map_dim)
+            << "Local x index out of bounds for location [" << loc[0] << ", " << loc[1] << "]";
+        EXPECT_LT(local_idx[0], half_map_dim)
+            << "Local x index out of bounds for location [" << loc[0] << ", " << loc[1] << "]";
+        EXPECT_GE(local_idx[1], -half_map_dim)
+            << "Local y index out of bounds for location [" << loc[0] << ", " << loc[1] << "]";
+        EXPECT_LT(local_idx[1], half_map_dim)
+            << "Local y index out of bounds for location [" << loc[0] << ", " << loc[1] << "]";
     }
 }
 
