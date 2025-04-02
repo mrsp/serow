@@ -54,9 +54,9 @@ class TerrainElevation {
 
     const LocalMapState& getLocalMap();
 
-    bool update(const std::array<float, 2>& loc, float height, float variance, double timestamp);
+    bool update(const std::array<float, 2>& loc, float height, float variance);
 
-    bool set(const std::array<float, 2>& loc, const ElevationCell& elevation);
+    bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation);
 
     std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc);
 
@@ -70,6 +70,11 @@ class TerrainElevation {
     bool inside(const std::array<int, 2>& id_g) const;
 
     bool inside(const std::array<float, 2>& location) const;
+
+    std::array<ElevationCell, map_size> getElevationMap() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return elevation_;
+    }
 
     void resetCell(const int& hash_id);
 

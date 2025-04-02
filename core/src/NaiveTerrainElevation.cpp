@@ -92,8 +92,7 @@ void NaiveTerrainElevation::initializeLocalMap(const float height, const float v
     updateLocalMapOriginAndBound({0.0f, 0.0f}, {0, 0});
 }
 
-bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height, float variance,
-                                   double timestamp) {
+bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height, float variance) {
     if (!inside(loc)) {
         return false;
     }
@@ -136,7 +135,6 @@ bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height
             elevation_[local_idx[0]][local_idx[1]] = cell;
         }
     }
-    timestamp_ = timestamp;
     return true;
 }
 

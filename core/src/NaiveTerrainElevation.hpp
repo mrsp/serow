@@ -34,7 +34,7 @@ public:
 
     std::array<float, 2> localIndexToLocation(const std::array<int, 2>& id_l) const;
 
-    bool update(const std::array<float, 2>& loc, float height, float variance, double timestamp);
+    bool update(const std::array<float, 2>& loc, float height, float variance);
 
     bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation);
 

@@ -18,8 +18,11 @@ void TerrainElevation::printMapInformation() const {
 }
 
 bool TerrainElevation::inside(const std::array<int, 2>& id_g) const {
-    if ((abs(id_g[0] - local_map_origin_i_[0]) - half_map_dim) > 0 ||
-        (abs(id_g[1] - local_map_origin_i_[1]) - half_map_dim) > 0) {
+
+    int x_diff = abs(id_g[0] - local_map_origin_i_[0]);
+    int y_diff = abs(id_g[1] - local_map_origin_i_[1]);
+
+    if ((x_diff - half_map_dim) > 0 || (y_diff - half_map_dim) > 0) {
         return false;
     }
     return true;
@@ -129,11 +132,6 @@ std::array<float, 2> TerrainElevation::globalIndexToLocation(const std::array<in
     return {id_g[0] * resolution, id_g[1] * resolution};
 }
 
-std::array<float, 2> TerrainElevation::globalIndexToWorldLocation(
-    const std::array<int, 2>& id_g) const {
-    return {id_g[0] * resolution + local_map_origin_d_[0],
-            id_g[1] * resolution + local_map_origin_d_[1]};
-}
 
 std::array<int, 2> TerrainElevation::globalIndexToLocalIndex(const std::array<int, 2>& id_g) const {
     std::array<int, 2> id_l = {};
@@ -214,8 +212,7 @@ int TerrainElevation::globalIndexToHashId(const std::array<int, 2>& id_g) const 
     return localIndexToHashId(globalIndexToLocalIndex(id_g));
 }
 
-bool TerrainElevation::update(const std::array<float, 2>& loc, float height, float variance,
-                              double timestamp) {
+bool TerrainElevation::update(const std::array<float, 2>& loc, float height, float variance) {
     if (!inside(loc)) {
         return false;
     }
@@ -242,7 +239,6 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
     // Update height and variance
     cell.height = prior_height + kalman_gain * (height - prior_height);
     cell.variance = (1.0f - kalman_gain) * effective_prior_variance;
-    local_map_state_.data[center_hash_id] = {loc[0], loc[1], cell.height};
 
     // Process a square region centered on the robot
     for (int di = -radius_cells; di <= radius_cells; ++di) {
@@ -255,12 +251,9 @@ bool TerrainElevation::update(const std::array<float, 2>& loc, float height, flo
                 continue;
             }
             const auto hash_id = globalIndexToHashId(idx);
-            const auto world_loc = globalIndexToWorldLocation(idx);
-            local_map_state_.data[hash_id] = {world_loc[0], world_loc[1], cell.height};
             elevation_[hash_id] = cell;
         }
     }
-    local_map_state_.timestamp = timestamp;
     return true;
 }
 
@@ -289,21 +282,16 @@ void TerrainElevation::initializeLocalMap(const float height, const float varian
 
 void TerrainElevation::resetCell(const int& hash_id) {
     elevation_[hash_id] = default_elevation_;
-    const auto world_loc = globalIndexToWorldLocation(hashIdToGlobalIndex(hash_id));
-    local_map_state_.data[hash_id] = {world_loc[0], world_loc[1], default_elevation_.height};
 }
 
 void TerrainElevation::resetLocalMap() {
     for (size_t i = 0; i < map_size; i++) {
         elevation_[i] = default_elevation_;
-        const auto world_loc = globalIndexToWorldLocation(hashIdToGlobalIndex(i));
-        local_map_state_.data[i] = {world_loc[0], world_loc[1], default_elevation_.height};
     }
-    local_map_state_.timestamp = 0.0;
 }
 
 bool TerrainElevation::isHashIdValid(const int id) const {
-    if (id > map_size) {
+    if (id >= map_size) {
         return false;
     }
     if (id < 0) {
@@ -312,7 +300,7 @@ bool TerrainElevation::isHashIdValid(const int id) const {
     return true;
 }
 
-bool TerrainElevation::set(const std::array<float, 2>& loc, const ElevationCell& elevation) {
+bool TerrainElevation::setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation) {
     if (!inside(loc)) {
         return false;
     }

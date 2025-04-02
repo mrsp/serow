@@ -714,7 +714,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
 
         // Initialize terrain elevation mapper
-        terrain_estimator_ = std::make_shared<NaiveTerrainElevation>();
+        terrain_estimator_ = std::make_shared<TerrainElevation>();
         terrain_estimator_->initializeLocalMap(terrain_height, 1e4,
                                                params_.minimum_terrain_height_variance);
     }
@@ -937,11 +937,13 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                     const Eigen::Vector2f t_world_to_map = T_world_to_map.translation().head<2>().cast<float>();
                     for (int i = 0; i < map_dim; i +=downsample_factor) {
                         for (int j = 0; j < map_dim; j+=downsample_factor) {
-                            const auto& cell = terrain_map[i][j];
                             const auto x = (i - half_map_dim) * resolution;
                             const auto y = (j - half_map_dim) * resolution;
-                            const Eigen::Vector2f x_map = R_world_to_map * Eigen::Vector2f(x, y) + t_world_to_map;
-                            local_map.data.push_back({x_map[0], x_map[1], cell.height});
+                            const Eigen::Vector2f x_map = Eigen::Vector2f(x, y);
+                            //const auto& cell = terrain_map[i][j]; // For NaiveTerrainElevation
+                            const auto& cell = terrain_map[terrain_estimator_->locationToHashId(std::array<float, 2>{x, y})];
+                            const Eigen::Vector2f x_world = R_world_to_map * x_map + t_world_to_map;
+                            local_map.data.push_back({x_world[0], x_world[1], cell.height});
                         }
                     }
                     exteroception_logger_.log(local_map);
@@ -959,11 +961,11 @@ std::optional<State> Serow::getState(bool allow_invalid) {
     if (state_.is_valid_ || allow_invalid) {
         return state_;
     } else {
-        return std::nullopt;
+        return std::nullopt;    
     }
 }
 
-const std::shared_ptr<NaiveTerrainElevation>& Serow::getTerrainEstimator() const {
+const std::shared_ptr<TerrainElevation>& Serow::getTerrainEstimator() const {
     return terrain_estimator_;
 }
 

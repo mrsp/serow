@@ -28,7 +28,7 @@
 #include "ProprioceptionLogger.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
-#include "NaiveTerrainElevation.hpp"
+#include "TerrainElevation.hpp"
 #include "ThreadPool.hpp"
 
 namespace serow {
@@ -71,7 +71,7 @@ public:
     std::optional<State> getState(bool allow_invalid = false);
 
     /// @brief Returns the terrain_estimator_ object
-    const std::shared_ptr<NaiveTerrainElevation>& getTerrainEstimator() const;
+    const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
 
 private:
     struct Params {
@@ -245,7 +245,7 @@ private:
     size_t cycle_{};
     size_t imu_calibration_cycles_{};
     /// @brief Terrain elevation mapper
-    std::shared_ptr<NaiveTerrainElevation> terrain_estimator_;
+    std::shared_ptr<TerrainElevation> terrain_estimator_;
     /// @brief Data loggers
     ProprioceptionLogger proprioception_logger_;
     ExteroceptionLogger exteroception_logger_;

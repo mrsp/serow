@@ -245,7 +245,7 @@ BaseState ContactEKF::updateWithContacts(
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov,
-    std::shared_ptr<NaiveTerrainElevation> terrain_estimator) {
+    std::shared_ptr<TerrainElevation> terrain_estimator) {
     BaseState updated_state = state;
 
     // Compute the relative contacts position/orientation measurement noise
@@ -418,7 +418,7 @@ BaseState ContactEKF::updateWithOdometry(const BaseState& state,
 
 BaseState ContactEKF::updateWithTerrain(const BaseState& state,
                                         const std::map<std::string, bool>& contacts_status,
-                                        std::shared_ptr<NaiveTerrainElevation> terrain_estimator) {
+                                        std::shared_ptr<TerrainElevation> terrain_estimator) {
     BaseState updated_state = state;
     // Construct the innovation vector z, the linearized measurement matrix H, and the measurement
     // noise matrix R
@@ -538,7 +538,7 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
 // TODO: @sp Maybe consider passing the state by reference instead of having to copy
 BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom,
-                             std::shared_ptr<NaiveTerrainElevation> terrain_estimator) {
+                             std::shared_ptr<TerrainElevation> terrain_estimator) {
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
         for (const auto& [cf, cp] : kin.contacts_probability) {
@@ -556,8 +556,7 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
                 const Eigen::Matrix3d con_cov = T_world_to_base.linear() *
                      kin.contacts_position_noise.at(cf) * T_world_to_base.linear().transpose();
            
-                if (!terrain_estimator->update(con_pos_xy, con_pos_z,
-                                               static_cast<float>(con_cov(2, 2)), kin.timestamp)) {
+                if (!terrain_estimator->update(con_pos_xy, con_pos_z, static_cast<float>(con_cov(2, 2)))) {
                     std::cout
                         << "Contact for " << cf
                         << " is not inside the terrain elevation map and thus height is not updated "
