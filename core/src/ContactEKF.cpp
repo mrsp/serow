@@ -600,4 +600,8 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
     return updated_state;
 }
 
+const Eigen::Isometry3d& ContactEKF::getMapPose() const {
+    return T_world_to_map;
+}
+
 }  // namespace serow

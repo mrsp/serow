@@ -25,7 +25,7 @@ struct ElevationCell {
 
 struct LocalMapState {
     double timestamp{};
-    std::array<std::array<float, 3>, map_size> data{};
+    std::vector<std::array<float, 3>> data{};
 };
 
 }  // namespace serow

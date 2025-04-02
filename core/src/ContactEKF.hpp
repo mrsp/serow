@@ -82,6 +82,8 @@ public:
     BaseState update(const BaseState& state, const KinematicMeasurement& kin,
                      std::optional<OdometryMeasurement> odom = std::nullopt,
                      std::shared_ptr<NaiveTerrainElevation> terrain_estimator = nullptr);
+    
+    const Eigen::Isometry3d& getMapPose() const;
 
 private:
     int num_states_{};                      ///< Number of state variables.
