@@ -3,9 +3,10 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <vector>
-#include <mutex>
+
 
 #include "common.hpp"
 
@@ -57,6 +58,7 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         return elevation_;
     }
+
 private:
     // Map data
     ElevationCell elevation_[map_dim][map_dim];

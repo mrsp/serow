@@ -65,7 +65,7 @@ public:
     inline uint64_t convertToNanoseconds(double timestamp) const noexcept {
         return static_cast<uint64_t>(timestamp * 1e9);
     }
-    
+
     // Split timestamp into seconds and nanoseconds
     inline void splitTimestamp(double timestamp, int64_t& sec, int32_t& nsec) const noexcept {
         sec = static_cast<int64_t>(timestamp);
@@ -75,7 +75,6 @@ public:
     void log(const ImuMeasurement& imu_measurement) {
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
-
 
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -126,12 +125,10 @@ public:
         }
     }
 
-
     void log(const ContactState& contact_state) {
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
-            
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
@@ -210,7 +207,6 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
-            
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
@@ -263,7 +259,6 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
-            
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
@@ -310,7 +305,7 @@ public:
                 imu_angular_velocity_bias, imu_linear_acceleration_bias);
 
             builder.Finish(base_state_fb);
-            
+
             // Get the buffer pointer and size before any potential modifications
             const uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
@@ -335,10 +330,10 @@ public:
             // Create parent and child frame ids
             auto parent_frame = builder.CreateString("world");
             auto child_frame = builder.CreateString("base");
-            
+
             // Create timestamp
             auto timestamp_fb = foxglove::Time(sec, nsec);
-            
+
             // Create translation
             auto translation =
                 foxglove::CreateVector3(builder, position.x(), position.y(), position.z());
@@ -360,8 +355,8 @@ public:
             size_t size = builder.GetSize();
 
             // Get the serialized data
-            writeMessage(5, tf_sequence_++, timestamp, 
-                         reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(5, tf_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
+                         size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging basetransform: " << e.what() << std::endl;
         }
@@ -371,7 +366,7 @@ public:
              const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp) {
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
-            
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
@@ -447,8 +442,8 @@ private:
             // Write the message without additional error checking
             auto status = writer_->write(message);
             if (status.code != mcap::StatusCode::Success) {
-                std::cerr << "Failed to write message for channel " << channel_id 
-                          << ": " << status.message << std::endl;
+                std::cerr << "Failed to write message for channel " << channel_id << ": "
+                          << status.message << std::endl;
             }
         } catch (const std::exception& e) {
             std::cerr << "Error in writeMessage: " << e.what() << std::endl;
@@ -496,7 +491,7 @@ private:
 
     // Constants
     static constexpr size_t INITIAL_BUILDER_SIZE = 4096;
-    
+
     // Sequence counters
     uint64_t base_sequence_ = 0;
     uint64_t centroidal_sequence_ = 0;

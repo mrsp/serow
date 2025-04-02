@@ -925,28 +925,31 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
         ((kin.timestamp - exteroception_logger_.getLastLocalMapTimestamp()) > 0.2)) {
         exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
-                try {
-                    LocalMapState local_map;
-                    local_map.timestamp = ts;
-                    size_t downsample_factor = 2;
-                    size_t sample_size_per_dim = map_dim / downsample_factor;
-                    local_map.data.reserve(sample_size_per_dim * sample_size_per_dim);
-                    const auto terrain_map = terrain_estimator_->getElevationMap();
-                    const Eigen::Isometry3d& T_world_to_map = base_estimator_con_.getMapPose();
-                    const Eigen::Matrix2f R_world_to_map = T_world_to_map.linear().topLeftCorner<2, 2>().cast<float>();
-                    const Eigen::Vector2f t_world_to_map = T_world_to_map.translation().head<2>().cast<float>();
-                    for (int i = 0; i < map_dim; i +=downsample_factor) {
-                        for (int j = 0; j < map_dim; j+=downsample_factor) {
-                            const auto x = (i - half_map_dim) * resolution;
-                            const auto y = (j - half_map_dim) * resolution;
-                            const Eigen::Vector2f x_map = Eigen::Vector2f(x, y);
-                            //const auto& cell = terrain_map[i][j]; // For NaiveTerrainElevation
-                            const auto& cell = terrain_map[terrain_estimator_->locationToHashId(std::array<float, 2>{x, y})];
-                            const Eigen::Vector2f x_world = R_world_to_map * x_map + t_world_to_map;
-                            local_map.data.push_back({x_world[0], x_world[1], cell.height});
-                        }
+            try {
+                LocalMapState local_map;
+                local_map.timestamp = ts;
+                size_t downsample_factor = 2;
+                size_t sample_size_per_dim = map_dim / downsample_factor;
+                local_map.data.reserve(sample_size_per_dim * sample_size_per_dim);
+                const auto terrain_map = terrain_estimator_->getElevationMap();
+                const Eigen::Isometry3d& T_world_to_map = base_estimator_con_.getMapPose();
+                const Eigen::Matrix2f R_world_to_map =
+                    T_world_to_map.linear().topLeftCorner<2, 2>().cast<float>();
+                const Eigen::Vector2f t_world_to_map =
+                    T_world_to_map.translation().head<2>().cast<float>();
+                for (int i = 0; i < map_dim; i += downsample_factor) {
+                    for (int j = 0; j < map_dim; j += downsample_factor) {
+                        const auto x = (i - half_map_dim) * resolution;
+                        const auto y = (j - half_map_dim) * resolution;
+                        const Eigen::Vector2f x_map = Eigen::Vector2f(x, y);
+                        // const auto& cell = terrain_map[i][j]; // For NaiveTerrainElevation
+                        const auto& cell = terrain_map[terrain_estimator_->locationToHashId(
+                            std::array<float, 2>{x, y})];
+                        const Eigen::Vector2f x_world = R_world_to_map * x_map + t_world_to_map;
+                        local_map.data.push_back({x_world[0], x_world[1], cell.height});
                     }
-                    exteroception_logger_.log(local_map);
+                }
+                exteroception_logger_.log(local_map);
             } catch (const std::exception& e) {
                 std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
             }
@@ -961,7 +964,7 @@ std::optional<State> Serow::getState(bool allow_invalid) {
     if (state_.is_valid_ || allow_invalid) {
         return state_;
     } else {
-        return std::nullopt;    
+        return std::nullopt;
     }
 }
 

@@ -76,16 +76,36 @@ TEST_F(TerrainElevationTest, FastModRandom) {
 
             // Test with template parameter
             switch (power) {
-                case 2: EXPECT_EQ(fast_mod<2>(num), num % 2); break;
-                case 4: EXPECT_EQ(fast_mod<4>(num), num % 4); break;
-                case 8: EXPECT_EQ(fast_mod<8>(num), num % 8); break;
-                case 16: EXPECT_EQ(fast_mod<16>(num), num % 16); break;
-                case 32: EXPECT_EQ(fast_mod<32>(num), num % 32); break;
-                case 64: EXPECT_EQ(fast_mod<64>(num), num % 64); break;
-                case 128: EXPECT_EQ(fast_mod<128>(num), num % 128); break;
-                case 256: EXPECT_EQ(fast_mod<256>(num), num % 256); break;
-                case 512: EXPECT_EQ(fast_mod<512>(num), num % 512); break;
-                case 1024: EXPECT_EQ(fast_mod<1024>(num), num % 1024); break;
+                case 2:
+                    EXPECT_EQ(fast_mod<2>(num), num % 2);
+                    break;
+                case 4:
+                    EXPECT_EQ(fast_mod<4>(num), num % 4);
+                    break;
+                case 8:
+                    EXPECT_EQ(fast_mod<8>(num), num % 8);
+                    break;
+                case 16:
+                    EXPECT_EQ(fast_mod<16>(num), num % 16);
+                    break;
+                case 32:
+                    EXPECT_EQ(fast_mod<32>(num), num % 32);
+                    break;
+                case 64:
+                    EXPECT_EQ(fast_mod<64>(num), num % 64);
+                    break;
+                case 128:
+                    EXPECT_EQ(fast_mod<128>(num), num % 128);
+                    break;
+                case 256:
+                    EXPECT_EQ(fast_mod<256>(num), num % 256);
+                    break;
+                case 512:
+                    EXPECT_EQ(fast_mod<512>(num), num % 512);
+                    break;
+                case 1024:
+                    EXPECT_EQ(fast_mod<1024>(num), num % 1024);
+                    break;
             }
         }
     }
@@ -97,25 +117,44 @@ TEST_F(TerrainElevationTest, FastModNegative) {
 
     // Test specific negative numbers
     const std::vector<int64_t> negative_numbers = {
-        -1, -2, -3, -4, -5, -8, -16, -32, -64, -128,
-        -256, -512, -1024, -2048, -4096, -8192, -16384,
-        -32768, -65536, -131072, -262144, -524288, -1048576
-    };
+        -1,     -2,     -3,     -4,      -5,      -8,      -16,     -32,
+        -64,    -128,   -256,   -512,    -1024,   -2048,   -4096,   -8192,
+        -16384, -32768, -65536, -131072, -262144, -524288, -1048576};
 
     for (int power : powers) {
         for (int64_t num : negative_numbers) {
             // Test with template parameter
             switch (power) {
-                case 2: EXPECT_EQ(fast_mod<2>(num), num % 2); break;
-                case 4: EXPECT_EQ(fast_mod<4>(num), num % 4); break;
-                case 8: EXPECT_EQ(fast_mod<8>(num), num % 8); break;
-                case 16: EXPECT_EQ(fast_mod<16>(num), num % 16); break;
-                case 32: EXPECT_EQ(fast_mod<32>(num), num % 32); break;
-                case 64: EXPECT_EQ(fast_mod<64>(num), num % 64); break;
-                case 128: EXPECT_EQ(fast_mod<128>(num), num % 128); break;
-                case 256: EXPECT_EQ(fast_mod<256>(num), num % 256); break;
-                case 512: EXPECT_EQ(fast_mod<512>(num), num % 512); break;
-                case 1024: EXPECT_EQ(fast_mod<1024>(num), num % 1024); break;
+                case 2:
+                    EXPECT_EQ(fast_mod<2>(num), num % 2);
+                    break;
+                case 4:
+                    EXPECT_EQ(fast_mod<4>(num), num % 4);
+                    break;
+                case 8:
+                    EXPECT_EQ(fast_mod<8>(num), num % 8);
+                    break;
+                case 16:
+                    EXPECT_EQ(fast_mod<16>(num), num % 16);
+                    break;
+                case 32:
+                    EXPECT_EQ(fast_mod<32>(num), num % 32);
+                    break;
+                case 64:
+                    EXPECT_EQ(fast_mod<64>(num), num % 64);
+                    break;
+                case 128:
+                    EXPECT_EQ(fast_mod<128>(num), num % 128);
+                    break;
+                case 256:
+                    EXPECT_EQ(fast_mod<256>(num), num % 256);
+                    break;
+                case 512:
+                    EXPECT_EQ(fast_mod<512>(num), num % 512);
+                    break;
+                case 1024:
+                    EXPECT_EQ(fast_mod<1024>(num), num % 1024);
+                    break;
             }
         }
     }
@@ -156,26 +195,21 @@ TEST_F(TerrainElevationTest, NormalizeRandomAndEdgeCases) {
     // Edge cases
     const std::vector<int64_t> edge_cases = {
         // Boundary values
-        -map_dim,           // Lower bound
-        map_dim,            // Upper bound
-        -map_dim - 1,       // Just below lower bound
-        map_dim + 1,        // Just above upper bound
+        -map_dim,      // Lower bound
+        map_dim,       // Upper bound
+        -map_dim - 1,  // Just below lower bound
+        map_dim + 1,   // Just above upper bound
 
         // Powers of 2
-        -2048, -1024, -512, -256, -128, -64, -32, -16, -8, -4, -2,
-        2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048,
+        -2048, -1024, -512, -256, -128, -64, -32, -16, -8, -4, -2, 2, 4, 8, 16, 32, 64, 128, 256,
+        512, 1024, 2048,
 
         // Large numbers
-        -1000000, -500000, -100000, -50000, -10000,
-        10000, 50000, 100000, 500000, 1000000,
+        -1000000, -500000, -100000, -50000, -10000, 10000, 50000, 100000, 500000, 1000000,
 
         // Special values
-        0, 1, -1,
-        std::numeric_limits<int>::min(),
-        std::numeric_limits<int>::max(),
-        std::numeric_limits<int>::min() + 1,
-        std::numeric_limits<int>::max() - 1
-    };
+        0, 1, -1, std::numeric_limits<int>::min(), std::numeric_limits<int>::max(),
+        std::numeric_limits<int>::min() + 1, std::numeric_limits<int>::max() - 1};
 
     for (int64_t num : edge_cases) {
         EXPECT_EQ(normalize(num), normalize_fn(num, -half_map_dim, half_map_dim))

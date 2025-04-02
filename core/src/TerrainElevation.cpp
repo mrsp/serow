@@ -18,7 +18,6 @@ void TerrainElevation::printMapInformation() const {
 }
 
 bool TerrainElevation::inside(const std::array<int, 2>& id_g) const {
-
     int x_diff = abs(id_g[0] - local_map_origin_i_[0]);
     int y_diff = abs(id_g[1] - local_map_origin_i_[1]);
 
@@ -131,7 +130,6 @@ std::array<int, 2> TerrainElevation::locationToGlobalIndex(const std::array<floa
 std::array<float, 2> TerrainElevation::globalIndexToLocation(const std::array<int, 2>& id_g) const {
     return {id_g[0] * resolution, id_g[1] * resolution};
 }
-
 
 std::array<int, 2> TerrainElevation::globalIndexToLocalIndex(const std::array<int, 2>& id_g) const {
     std::array<int, 2> id_l = {};
@@ -300,7 +298,8 @@ bool TerrainElevation::isHashIdValid(const int id) const {
     return true;
 }
 
-bool TerrainElevation::setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation) {
+bool TerrainElevation::setElevation(const std::array<float, 2>& loc,
+                                    const ElevationCell& elevation) {
     if (!inside(loc)) {
         return false;
     }

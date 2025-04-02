@@ -46,7 +46,7 @@ std::array<int, 2> NaiveTerrainElevation::localIndexToGlobalIndex(
 
 std::array<int, 2> NaiveTerrainElevation::locationToLocalIndex(
     const std::array<float, 2>& loc) const {
-        return globalIndexToLocalIndex(locationToGlobalIndex(loc));
+    return globalIndexToLocalIndex(locationToGlobalIndex(loc));
 }
 
 std::array<float, 2> NaiveTerrainElevation::localIndexToLocation(
@@ -56,8 +56,8 @@ std::array<float, 2> NaiveTerrainElevation::localIndexToLocation(
 
 bool NaiveTerrainElevation::inside(const std::array<int, 2>& id_g) const {
     const std::array<int, 2> local_idx = globalIndexToLocalIndex(id_g);
-    if (local_idx[0] < 0 || local_idx[0] >= map_dim ||
-        local_idx[1] < 0 || local_idx[1] >= map_dim) {
+    if (local_idx[0] < 0 || local_idx[0] >= map_dim || local_idx[1] < 0 ||
+        local_idx[1] >= map_dim) {
         return false;
     }
     return true;
@@ -145,7 +145,6 @@ void NaiveTerrainElevation::recenter(const std::array<float, 2>& loc) {
 
     std::lock_guard<std::mutex> lock(mutex_);
 
-
     // If shift is too large, reset the entire map
     if (std::abs(shift[0]) >= half_map_dim || std::abs(shift[1]) >= half_map_dim) {
         resetLocalMap();
@@ -163,14 +162,14 @@ void NaiveTerrainElevation::recenter(const std::array<float, 2>& loc) {
 
     // Reset all cells to default
     resetLocalMap();
-    
+
     // Move the data according to the shift
     for (int old_i = 0; old_i < map_dim; ++old_i) {
         for (int old_j = 0; old_j < map_dim; ++old_j) {
             // Calculate the new position after shifting
             int new_i = old_i - shift[0];
             int new_j = old_j - shift[1];
-            
+
             // Check if the new position is within the map bounds
             if (new_i >= 0 && new_i < map_dim && new_j >= 0 && new_j < map_dim) {
                 // Move the data from the old position to the new position
@@ -183,9 +182,7 @@ void NaiveTerrainElevation::recenter(const std::array<float, 2>& loc) {
     updateLocalMapOriginAndBound(loc, new_origin_i);
 }
 
-std::optional<ElevationCell> NaiveTerrainElevation::getElevation(
-    const std::array<float, 2>& loc) {
-
+std::optional<ElevationCell> NaiveTerrainElevation::getElevation(const std::array<float, 2>& loc) {
     if (!inside(loc)) {
         return std::nullopt;
     }

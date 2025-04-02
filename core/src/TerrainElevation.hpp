@@ -8,9 +8,7 @@
 #include <vector>
 #include "common.hpp"
 
-
 namespace serow {
-
 
 template <int N>
 inline int fast_mod(const int x) {
@@ -43,8 +41,7 @@ inline int normalize(const int x) {
 }
 
 class TerrainElevation {
-    public:
-    
+public:
     void printMapInformation() const;
 
     void recenter(const std::array<float, 2>& location);

@@ -32,7 +32,7 @@
 namespace serow {
 
 class Mahony {
-   public:
+public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /** @fn  Mahony(double freq, double kp, double ki = 0.0)
@@ -53,28 +53,38 @@ class Mahony {
     /** @fn Eigen::Quaterniond getQ()
      *  @returns the orientation of IMU w.r.t the world frame as a quaternion
      */
-    Eigen::Quaterniond getQ() const { return q_; }
+    Eigen::Quaterniond getQ() const {
+        return q_;
+    }
 
     /** @fn  Eigen::Vector3d getAcc()
      *  @returns the linear acceleration of IMU in the world frame
      */
-    Eigen::Vector3d getAcc() const { return acc_; }
+    Eigen::Vector3d getAcc() const {
+        return acc_;
+    }
 
     /** @fn  Eigen::Vector3d getGyro()
      *  @returns the angular velocity of IMU in the world frame
      */
-    Eigen::Vector3d getGyro() const { return gyro_; }
+    Eigen::Vector3d getGyro() const {
+        return gyro_;
+    }
 
     /** @fn Eigen::Matrix3d getR()
      *  @returns the orientation of IMU w.r.t the world frame as a rotation matrix
      */
-    Eigen::Matrix3d getR() const { return R_; }
+    Eigen::Matrix3d getR() const {
+        return R_;
+    }
 
     /** @fn Eigen::Vector3d getEuler()
      *  @returns the orientation of IMU w.r.t the world frame as  euler angles in the RPY
      * convention
      */
-    Eigen::Vector3d getEuler() const { return q_.toRotationMatrix().eulerAngles(0, 1, 2); }
+    Eigen::Vector3d getEuler() const {
+        return q_.toRotationMatrix().eulerAngles(0, 1, 2);
+    }
 
     /** @fn filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc)
      *  @brief Computes the IMU orientation w.r.t the world frame of reference
@@ -163,7 +173,7 @@ class Mahony {
         gyro_ = R_ * gyro;
     }
 
-   private:
+private:
     /// IMU orientation w.r.t the world frame as a quaternion
     Eigen::Quaterniond q_ = Eigen::Quaterniond::Identity();
     /// IMU orientation w.r.t the world frame as a rotation matrix
