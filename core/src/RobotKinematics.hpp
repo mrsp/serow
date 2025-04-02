@@ -469,7 +469,7 @@ public:
      *       using a specific method that handles edge cases where the matrix is nearly singular.
      */
     Eigen::Vector4d rotationToQuaternion(const Eigen::Matrix3d& R) const {
-        double eps = 1e-6;  // Small value for numerical stability
+        double eps = 1e-6;     // Small value for numerical stability
         Eigen::Vector4d quat;  // Quaternion representation [w, x, y, z]
 
         // Compute quaternion components

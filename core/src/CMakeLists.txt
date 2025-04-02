@@ -62,6 +62,7 @@ set(serow_src ${serow_src}
     ThreadPool.cpp)
 
 set(serow_headers ${serow_headers} 
+    common.hpp
     Serow.hpp 
     State.hpp 
     BaseEKF.hpp
