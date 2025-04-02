@@ -901,31 +901,32 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     }
 
     // Launch the threadpool jobs to log data
-    // if (!proprioception_logger_job_->isRunning()) {
-    //     proprioception_logger_job_->addJob(
-    //         [this, base_state = state.base_state_, centroidal_state = state.centroidal_state_,
-    //          contact_state = state.contact_state_, imu = imu, joints = joints]() {
-    //             try {
-    //                 // Log all state data to MCAP file
-    //                 proprioception_logger_.log(imu);
-    //                 proprioception_logger_.log(contact_state);
-    //                 proprioception_logger_.log(centroidal_state);
-    //                 proprioception_logger_.log(base_state);
-    //                 proprioception_logger_.log(base_state.base_position,
-    //                                            base_state.base_orientation, base_state.timestamp);
-    //                 proprioception_logger_.log(base_state.feet_position,
-    //                                            base_state.feet_orientation, base_state.timestamp);
-    //             } catch (const std::exception& e) {
-    //                 std::cerr << "Error in proprioception logging thread: " << e.what()
-    //                           << std::endl;
-    //             }
-    //         });
-    // }
+    if (!proprioception_logger_job_->isRunning()) {
+        proprioception_logger_job_->addJob(
+            [this, base_state = state.base_state_, centroidal_state = state.centroidal_state_,
+             contact_state = state.contact_state_, imu = imu, joints = joints]() {
+                try {
+                    // Log all state data to MCAP file
+                    proprioception_logger_.log(imu);
+                    proprioception_logger_.log(contact_state);
+                    proprioception_logger_.log(centroidal_state);
+                    proprioception_logger_.log(base_state);
+                    proprioception_logger_.log(base_state.base_position,
+                                               base_state.base_orientation, base_state.timestamp);
+                    proprioception_logger_.log(base_state.feet_position,
+                                               base_state.feet_orientation, base_state.timestamp);
+                } catch (const std::exception& e) {
+                    std::cerr << "Error in proprioception logging thread: " << e.what()
+                              << std::endl;
+                }
+            });
+    }
 
     // if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
     //     ((kin.timestamp - exteroception_logger_.getLastLocalMapTimestamp()) > 0.2)) {
     //     exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
     //         try {
+
     //             exteroception_logger_.log(terrain_estimator_->getLocalMap());
     //         } catch (const std::exception& e) {
     //             std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;

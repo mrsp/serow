@@ -45,13 +45,6 @@ public:
             // Initialize schemas and channels
             initializeSchemas();
             initializeChannels();
-            
-            // Pre-allocate builders for frequent operations
-            builders_.reserve(6);
-            for (int i = 0; i < 6; i++) {
-                builders_.emplace_back(flatbuffers::FlatBufferBuilder{INITIAL_BUILDER_SIZE});
-            }
-            
         } catch (const std::exception& e) {
             std::cerr << "ProprioceptionLogger initialization error: " << e.what() << std::endl;
             throw;
@@ -81,8 +74,8 @@ public:
 
     void log(const ImuMeasurement& imu_measurement) {
         try {
-            auto& builder = builders_[0];
-            builder.Clear();
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
 
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -136,8 +129,8 @@ public:
 
     void log(const ContactState& contact_state) {
         try {
-            auto& builder = builders_[1];
-            builder.Clear();
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
             
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -215,8 +208,8 @@ public:
 
     void log(const CentroidalState& centroidal_state) {
         try {
-            auto& builder = builders_[2];
-            builder.Clear();
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
             
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -268,8 +261,8 @@ public:
 
     void log(const BaseState& base_state) {
         try {
-            auto& builder = builders_[3];
-            builder.Clear();
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
             
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -332,9 +325,8 @@ public:
     void log(const Eigen::Vector3d& position, const Eigen::Quaterniond& orientation,
              double timestamp) {
         try {
-            auto& builder = builders_[4];
-            builder.Clear();
-            
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
@@ -378,8 +370,7 @@ public:
     void log(const std::map<std::string, Eigen::Vector3d>& positions,
              const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp) {
         try {
-            auto& builder = builders_[5];
-            builder.Clear();
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
             
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -517,10 +508,6 @@ private:
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
     std::unique_ptr<mcap::McapWriter> writer_;
-    
-    
-    // Pool of reusable flatbuffer builders
-    std::vector<flatbuffers::FlatBufferBuilder> builders_;
 };  // namespace serow
 
 // Public interface implementation

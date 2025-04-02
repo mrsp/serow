@@ -5,6 +5,7 @@
 #include <iostream>
 #include <optional>
 #include <vector>
+#include <mutex>
 
 #include "common.hpp"
 
@@ -37,7 +38,7 @@ public:
 
     bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation);
 
-    std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) const;
+    std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc);
 
     const std::array<float, 2>& getMapOrigin() const;
 
@@ -68,6 +69,8 @@ private:
 
     float min_terrain_height_variance_{};
     double timestamp_{};
+
+    std::mutex mutex_;
 
     friend class TerrainElevationTest;  // Allow full access
 };
