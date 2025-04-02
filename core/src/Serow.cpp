@@ -928,7 +928,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                 try {
                     LocalMapState local_map;
                     local_map.timestamp = ts;
-                    size_t downsample_factor = 1;
+                    size_t downsample_factor = 2;
                     size_t sample_size_per_dim = map_dim / downsample_factor;
                     local_map.data.reserve(sample_size_per_dim * sample_size_per_dim);
                     const auto terrain_map = terrain_estimator_->getElevationMap();
@@ -938,8 +938,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                     for (int i = 0; i < map_dim; i +=downsample_factor) {
                         for (int j = 0; j < map_dim; j+=downsample_factor) {
                             const auto& cell = terrain_map[i][j];
-                            const auto x = i * resolution;
-                            const auto y = j * resolution;
+                            const auto x = (i - half_map_dim) * resolution;
+                            const auto y = (j - half_map_dim) * resolution;
                             const Eigen::Vector2f x_map = R_world_to_map * Eigen::Vector2f(x, y) + t_world_to_map;
                             local_map.data.push_back({x_map[0], x_map[1], cell.height});
                         }
