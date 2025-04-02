@@ -82,6 +82,8 @@ public:
     BaseState update(const BaseState& state, const KinematicMeasurement& kin,
                      std::optional<OdometryMeasurement> odom = std::nullopt,
                      std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
+    
+    const Eigen::Isometry3d& getMapPose() const;
 
 private:
     int num_states_{};                      ///< Number of state variables.
@@ -120,6 +122,8 @@ private:
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
+
+    Eigen::Isometry3d T_world_to_map{Eigen::Isometry3d::Identity()};
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.

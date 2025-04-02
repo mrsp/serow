@@ -27,7 +27,6 @@
 #include <set>
 #include <string>
 
-
 namespace serow {
 
 /**

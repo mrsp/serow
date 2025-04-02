@@ -169,10 +169,10 @@ int main() {
         // Store predictions
         std::vector<double> EstTimestamp;  // timestamp
         std::vector<double> base_pos_x, base_pos_y, base_pos_z, base_rot_x, base_rot_y, base_rot_z,
-            base_rot_w;  // Base pose(pos + quat)
-        std::vector<double> com_x, com_y, com_z;  // CoM position
-        std::vector<double> com_vel_x, com_vel_y, com_vel_z;  // CoM velocity
-        std::vector<double> extFx, extFy, extFz;  // External Force
+            base_rot_w;                                          // Base pose(pos + quat)
+        std::vector<double> com_x, com_y, com_z;                 // CoM position
+        std::vector<double> com_vel_x, com_vel_y, com_vel_z;     // CoM velocity
+        std::vector<double> extFx, extFy, extFz;                 // External Force
         std::vector<double> b_ax, b_ay, b_az, b_wx, b_wy, b_wz;  // IMU Biases
         std::vector<Eigen::Vector3d> FR_contact_position, FL_contact_position, RL_contact_position,
             RR_contact_position;

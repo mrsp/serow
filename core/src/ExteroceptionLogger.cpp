@@ -70,12 +70,10 @@ public:
             // Create a FlatBuffer builder
             flatbuffers::FlatBufferBuilder builder;
 
-            // Sample points (every 50th point)
-            const size_t sample_interval = 50;
             std::vector<float> point_data;
-            point_data.reserve((local_map.size() / sample_interval) * 3);
+            point_data.reserve(local_map.size() * 3);
 
-            for (size_t i = 0; i < local_map.size(); i += sample_interval) {
+            for (size_t i = 0; i < local_map.size(); i++) {
                 const auto& point = local_map[i];
                 point_data.push_back(point[0]);
                 point_data.push_back(point[1]);
