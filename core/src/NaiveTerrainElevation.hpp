@@ -27,6 +27,12 @@ public:
 
     std::array<int, 2> globalIndexToLocalIndex(const std::array<int, 2>& id_g) const;
 
+    std::array<int, 2> localIndexToGlobalIndex(const std::array<int, 2>& id_l) const;
+
+    std::array<int, 2> locationToLocalIndex(const std::array<float, 2>& loc) const;
+
+    std::array<float, 2> localIndexToLocation(const std::array<int, 2>& id_l) const;
+
     bool update(const std::array<float, 2>& loc, float height, float variance, double timestamp);
 
     bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation);

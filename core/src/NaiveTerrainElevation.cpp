@@ -15,6 +15,7 @@ void NaiveTerrainElevation::printMapInformation() const {
     std::cout << GREEN << "\tlocal map half dim: " << half_map_dim << WHITE << std::endl;
 }
 
+// Coordinate conversion functions
 int NaiveTerrainElevation::locationToGlobalIndex(const float loc) const {
     if (loc > 0.0) {
         return static_cast<int>(resolution_inv * loc + 0.5);
@@ -33,9 +34,30 @@ std::array<float, 2> NaiveTerrainElevation::globalIndexToLocation(
     return {(id_g[0] * resolution), (id_g[1] * resolution)};
 }
 
+std::array<int, 2> NaiveTerrainElevation::globalIndexToLocalIndex(
+    const std::array<int, 2>& id_g) const {
+    return {id_g[0] + half_map_dim, id_g[1] + half_map_dim};
+}
+
+std::array<int, 2> NaiveTerrainElevation::localIndexToGlobalIndex(
+    const std::array<int, 2>& id_l) const {
+    return {id_l[0] - half_map_dim, id_l[1] - half_map_dim};
+}
+
+std::array<int, 2> NaiveTerrainElevation::locationToLocalIndex(
+    const std::array<float, 2>& loc) const {
+        return globalIndexToLocalIndex(locationToGlobalIndex(loc));
+}
+
+std::array<float, 2> NaiveTerrainElevation::localIndexToLocation(
+    const std::array<int, 2>& id_l) const {
+    return globalIndexToLocation(localIndexToGlobalIndex(id_l));
+}
+
 bool NaiveTerrainElevation::inside(const std::array<int, 2>& id_g) const {
-    if ((abs(id_g[0] - local_map_origin_i_[0]) - half_map_dim) > 0 ||
-        (abs(id_g[1] - local_map_origin_i_[1]) - half_map_dim) > 0) {
+    const std::array<int, 2> local_idx = globalIndexToLocalIndex(id_g);
+    if (local_idx[0] < 0 || local_idx[0] >= map_dim ||
+        local_idx[1] < 0 || local_idx[1] >= map_dim) {
         return false;
     }
     return true;
@@ -44,11 +66,6 @@ bool NaiveTerrainElevation::inside(const std::array<int, 2>& id_g) const {
 bool NaiveTerrainElevation::inside(const std::array<float, 2>& loc) const {
     const std::array<int, 2> id_g = locationToGlobalIndex(loc);
     return inside(id_g);
-}
-
-std::array<int, 2> NaiveTerrainElevation::globalIndexToLocalIndex(
-    const std::array<int, 2>& id_g) const {
-    return {id_g[0] - local_map_origin_i_[0], id_g[1] - local_map_origin_i_[1]};
 }
 
 void NaiveTerrainElevation::resetCell(const int i, const int j) {
@@ -128,7 +145,7 @@ void NaiveTerrainElevation::recenter(const std::array<float, 2>& loc) {
                                       new_origin_i[1] - local_map_origin_i_[1]};
 
     // If shift is too large, reset the entire map
-    if (std::abs(shift[0]) >= map_dim || std::abs(shift[1]) >= map_dim) {
+    if (std::abs(shift[0]) >= half_map_dim || std::abs(shift[1]) >= half_map_dim) {
         resetLocalMap();
         updateLocalMapOriginAndBound(loc, new_origin_i);
         return;
@@ -142,19 +159,20 @@ void NaiveTerrainElevation::recenter(const std::array<float, 2>& loc) {
         }
     }
 
-    // Clear the current map first
+    // Reset all cells to default
     resetLocalMap();
-
-    // Shift the data to new positions
-    for (int i = 0; i < map_dim; ++i) {
-        for (int j = 0; j < map_dim; ++j) {
-            // Calculate source position in the temp map
-            const int src_i = i + shift[0];
-            const int src_j = j + shift[1];
-
-            // If source position is valid, copy data from temp map to the new position
-            if (src_i >= 0 && src_i < map_dim && src_j >= 0 && src_j < map_dim) {
-                elevation_[i][j] = temp_map[src_i][src_j];
+    
+    // Move the data according to the shift
+    for (int old_i = 0; old_i < map_dim; ++old_i) {
+        for (int old_j = 0; old_j < map_dim; ++old_j) {
+            // Calculate the new position after shifting
+            int new_i = old_i - shift[0];
+            int new_j = old_j - shift[1];
+            
+            // Check if the new position is within the map bounds
+            if (new_i >= 0 && new_i < map_dim && new_j >= 0 && new_j < map_dim) {
+                // Move the data from the old position to the new position
+                elevation_[new_i][new_j] = temp_map[old_i][old_j];
             }
         }
     }

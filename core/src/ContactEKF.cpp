@@ -431,10 +431,10 @@ BaseState ContactEKF::updateWithTerrain(const BaseState& state,
     for (const auto& [cf, cs] : contacts_status) {
         // Update only when the elevation at the contact points is available and updated in the map
         if (cs) {
+            const Eigen::Vector3d con_pos_map = T_world_to_map.inverse() * updated_state.contacts_position.at(cf);
             auto elevation = terrain_estimator->getElevation(
-                {static_cast<float>(updated_state.contacts_position.at(cf).x()),
-                 static_cast<float>(updated_state.contacts_position.at(cf).y())});
-
+                {static_cast<float>(con_pos_map.x()),
+                 static_cast<float>(con_pos_map.y())});
             if (elevation.has_value() && elevation.value().updated) {
                 // Construct the linearized measurement matrix H
                 H.setZero();
@@ -541,30 +541,28 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
                              std::shared_ptr<NaiveTerrainElevation> terrain_estimator) {
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
-        std::vector<std::array<float, 2>> con_locs;
         for (const auto& [cf, cp] : kin.contacts_probability) {
             if (cp > 0.15) {
-                const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
-                const Eigen::Vector3d& r = state.base_position;
-                const Eigen::Vector3d con_pos = r + R * kin.base_to_foot_positions.at(cf);
-                const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos.x()),
-                                                         static_cast<float>(con_pos.y())};
-                const float con_pos_z = static_cast<float>(con_pos.z());
+                Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
+                T_world_to_base.translation() = state.base_position;
+                T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
+                const Eigen::Vector3d con_pos_world = T_world_to_base * kin.base_to_foot_positions.at(cf);
+                const Eigen::Vector3d con_pos_map = T_world_to_map.inverse() * con_pos_world;
+                const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_map.x()),
+                                                         static_cast<float>(con_pos_map.y())};
+                const float con_pos_z = static_cast<float>(con_pos_world.z());
 
                 // Transform measurement noise to world frame
-                const Eigen::Matrix3d con_cov =
-                    R * kin.contacts_position_noise.at(cf) * R.transpose();
-
-                // TODO: @sp make this a const parameter
+                const Eigen::Matrix3d con_cov = T_world_to_base.linear() *
+                     kin.contacts_position_noise.at(cf) * T_world_to_base.linear().transpose();
+           
                 if (!terrain_estimator->update(con_pos_xy, con_pos_z,
                                                static_cast<float>(con_cov(2, 2)), kin.timestamp)) {
                     std::cout
                         << "Contact for " << cf
-                        << "is not inside the terrain elevation map and thus height is not updated "
+                        << " is not inside the terrain elevation map and thus height is not updated "
                         << std::endl;
-                } else {
-                    con_locs.push_back(con_pos_xy);
-                }
+                } 
             }
         }
     }
@@ -585,15 +583,17 @@ BaseState ContactEKF::update(const BaseState& state, const KinematicMeasurement&
     // recenter the terrain mapper
     if (terrain_estimator) {
         updated_state = updateWithTerrain(updated_state, kin.contacts_status, terrain_estimator);
-        // TODO: @sp make this a const parameter
         // Recenter the map
         const std::array<float, 2> base_pos_xy = {
             static_cast<float>(updated_state.base_position.x()),
             static_cast<float>(updated_state.base_position.y())};
         const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
-        if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 1.5) ||
-            (abs(base_pos_xy[1] - map_origin_xy[1]) > 1.5)) {
+        if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 0.5) ||
+            (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.5)) {
             terrain_estimator->recenter(base_pos_xy);
+            // Update the transform from world to map
+            T_world_to_map.translation() = updated_state.base_position;
+            T_world_to_map.linear() = updated_state.base_orientation.toRotationMatrix();
         }
     }
 
