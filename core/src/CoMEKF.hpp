@@ -83,10 +83,9 @@ private:
      * coordinates.
      * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world
      * coordinates.
-     * @return The updated EKF state.
      */
-    CentroidalState updateWithCoMAcceleration(
-        const CentroidalState& state, const Eigen::Vector3d& com_linear_acceleration,
+    void updateWithCoMAcceleration(
+        CentroidalState& state, const Eigen::Vector3d& com_linear_acceleration,
         const Eigen::Vector3d& cop_position, const Eigen::Vector3d& ground_reaction_force,
         const Eigen::Matrix3d& com_linear_acceleration_cov,
         const Eigen::Vector3d& com_angular_momentum_derivative);
@@ -96,11 +95,10 @@ private:
      * @param state The EKF state used in the computation.
      * @param com_position The CoM position in world coordinates.
      * @param com_position_cov The CoM position covariance in world coordinates.
-     * @return The updated EKF state.
      */
-    CentroidalState updateWithCoMPosition(const CentroidalState& state,
-                                          const Eigen::Vector3d& com_position,
-                                          const Eigen::Matrix3d& com_position_cov);
+    void updateWithCoMPosition(CentroidalState& state,
+                               const Eigen::Vector3d& com_position,
+                               const Eigen::Matrix3d& com_position_cov);
 
     /**
      * @brief Updates the EKF state.
@@ -129,29 +127,24 @@ public:
      * @param state The EKF state used in prediction.
      * @param kin The KinematicMeasurement used in the computation.
      * @param grf The GroundReactionForceMeasurement used in the computation.
-     * @return The predicted EKF state.
      */
-    CentroidalState predict(const CentroidalState& state, const KinematicMeasurement& kin,
-                            const GroundReactionForceMeasurement& grf);
+    void predict(CentroidalState& state, const KinematicMeasurement& kin, const GroundReactionForceMeasurement& grf);
 
     /**
      * @brief Realizes the EKF update step with a CoM position measurement.
      * @param state The EKF state used for the update.
      * @param kin The KinematicMeasurement used in the computation.
-     * @return The updated EKF state.
      */
-    CentroidalState updateWithKinematics(const CentroidalState& state,
-                                         const KinematicMeasurement& kin);
+    void updateWithKinematics(CentroidalState& state, const KinematicMeasurement& kin);
 
     /**
      * @brief Realizes the EKF update step with a CoM linear acceleration measurement.
      * @param state The EKF state used for the update.
      * @param kin The KinematicMeasurement used in the computation.
      * @param grf The GroundReactionForceMeasurement used in the computation.
-     * @return The updated EKF state.
      */
-    CentroidalState updateWithImu(const CentroidalState& state, const KinematicMeasurement& kin,
-                                  const GroundReactionForceMeasurement& grf);
+    void updateWithImu(CentroidalState& state, const KinematicMeasurement& kin, 
+                       const GroundReactionForceMeasurement& grf);
 };
 
 }  // namespace serow

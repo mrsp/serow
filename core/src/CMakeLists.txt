@@ -95,3 +95,50 @@ target_link_libraries(serow PUBLIC mcap
 install(FILES ${serow_headers} DESTINATION include/serow)
 install(TARGETS serow DESTINATION lib/)
 install(FILES serowConfig.cmake DESTINATION lib/cmake/serow)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Eigen-specific optimizations
+    add_compile_options(-DEIGEN_VECTORIZE_SSE4_2)
+    add_compile_options(-DEIGEN_UNALIGNED_VECTORIZE)
+    add_compile_options(-DEIGEN_FAST_MATH)
+    add_compile_options(-DEIGEN_MAX_ALIGN_BYTES=64)
+    add_compile_options(-DEIGEN_MAX_STATIC_ALIGN_BYTES=64)
+    
+    # Matrix operation optimizations
+    add_compile_options(-ffast-math)
+    add_compile_options(-mavx2)
+    add_compile_options(-mfma)
+    add_compile_options(-funroll-loops)
+    add_compile_options(-funroll-all-loops)
+    
+    # Memory and cache optimizations
+    add_compile_options(-fprefetch-loop-arrays)
+    add_compile_options(-foptimize-sibling-calls)
+    add_compile_options(-foptimize-strlen)
+    
+    # Function inlining
+    add_compile_options(-finline-functions)
+    add_compile_options(-finline-limit=1000)
+    
+    # Link-time optimization
+    add_compile_options(-flto)
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -flto")
+    
+    # Thread pool optimizations
+    add_compile_options(-pthread)
+    add_compile_options(-fopenmp)
+endif()
+
+# Profile-guided optimization option
+option(ENABLE_PGO "Enable Profile Guided Optimization" OFF)
+if(ENABLE_PGO)
+    if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        if(PGO_TRAINING)
+            add_compile_options(-fprofile-generate)
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-generate")
+        else()
+            add_compile_options(-fprofile-use)
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-use")
+        endif()
+    endif()
+endif()

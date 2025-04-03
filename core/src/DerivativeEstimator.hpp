@@ -44,6 +44,8 @@ class DerivativeEstimator {
     std::vector<Differentiator> df_;
 
    public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     /// name of the estimator e.g. "com-angular-momentum"
     std::string name_{};
 
