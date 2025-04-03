@@ -23,11 +23,6 @@
  **/
 #pragma once
 
-#ifdef __linux__
-#include <eigen3/Eigen/Dense>
-#else
-#include <Eigen/Dense>
-#endif
 #include <fstream>
 #include <mcap/mcap.hpp>
 #include <mcap/writer.hpp>

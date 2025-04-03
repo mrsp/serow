@@ -82,43 +82,6 @@ struct BaseState {
     /// Holds contact frame name to 3D contact orientation covariance in world frame coordinates,
     /// (rad^2) only applies if the robot has flat feet
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_cov;
-
-    // Default constructor
-    BaseState() = default;
-
-    // Default copy constructor and copy assignment operator
-    BaseState(const BaseState&) = default;
-    BaseState& operator=(const BaseState&) = default;
-
-    // Move assignment operator
-    BaseState& operator=(BaseState&& other) noexcept {
-        if (this != &other) {
-            timestamp = std::move(other.timestamp);
-            base_position = std::move(other.base_position);
-            base_orientation = std::move(other.base_orientation);
-            base_linear_velocity = std::move(other.base_linear_velocity);
-            base_angular_velocity = std::move(other.base_angular_velocity);
-            base_linear_acceleration = std::move(other.base_linear_acceleration);
-            base_angular_acceleration = std::move(other.base_angular_acceleration);
-            imu_linear_acceleration_bias = std::move(other.imu_linear_acceleration_bias);
-            imu_angular_velocity_bias = std::move(other.imu_angular_velocity_bias);
-            contacts_position = std::move(other.contacts_position);
-            contacts_orientation = std::move(other.contacts_orientation);
-            feet_position = std::move(other.feet_position);
-            feet_orientation = std::move(other.feet_orientation);
-            feet_linear_velocity = std::move(other.feet_linear_velocity);
-            feet_angular_velocity = std::move(other.feet_angular_velocity);
-            base_position_cov = std::move(other.base_position_cov);
-            base_orientation_cov = std::move(other.base_orientation_cov);
-            base_linear_velocity_cov = std::move(other.base_linear_velocity_cov);
-            base_angular_velocity_cov = std::move(other.base_angular_velocity_cov);
-            imu_linear_acceleration_bias_cov = std::move(other.imu_linear_acceleration_bias_cov);
-            imu_angular_velocity_bias_cov = std::move(other.imu_angular_velocity_bias_cov);
-            contacts_position_cov = std::move(other.contacts_position_cov);
-            contacts_orientation_cov = std::move(other.contacts_orientation_cov);
-        }
-        return *this;
-    }
 };
 
 /**
@@ -184,13 +147,7 @@ struct JointState {
  */
 class State {
 public:
-    State() = default;
-    State(std::set<std::string> contacts_frame, bool point_feet);
-    State(const State& other);
-    State(State&& other);
-    State operator=(const State& other);
-    State& operator=(State&& other);
-    bool isPointFeet() const;
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /// State getters
     /// Returns the 3D base pose as a rigid transformation in world frame coordinates
@@ -286,6 +243,13 @@ public:
     const Eigen::Matrix3d& getCoMExternalForcesCov() const;
     /// Returns the mass of the robot
     double getMass() const;
+    /// Returns the number of leg end-effectors
+    int getNumLegEE() const;
+    /// Returns the flag to indicate if the robot has point feet
+    bool isPointFeet() const;
+
+    State() = default;
+    State(std::set<std::string> contacts_frame, bool point_feet);
 
 private:
     /// Flag to indicate if the robot has point feet. False indicates flat feet contacts
@@ -304,9 +268,6 @@ private:
     ContactState contact_state_;
     BaseState base_state_;
     CentroidalState centroidal_state_;
-
-    /// Lock for safely copying or moving the State
-    std::mutex mutex_;
 
     friend class Serow;
     friend class ContactEKF;

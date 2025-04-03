@@ -47,6 +47,8 @@ namespace serow {
 
 class ProprioceptionLogger {
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     ProprioceptionLogger(const std::string& log_file_path = "/tmp/serow_proprioception.mcap");
     ~ProprioceptionLogger();
 

@@ -279,6 +279,9 @@ void TerrainElevation::initializeLocalMap(const float height, const float varian
 }
 
 void TerrainElevation::resetCell(const int& hash_id) {
+    if (!isHashIdValid(hash_id)) {
+        return;
+    }
     elevation_[hash_id] = default_elevation_;
 }
 

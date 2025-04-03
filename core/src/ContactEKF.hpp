@@ -47,6 +47,8 @@ namespace serow {
  */
 class ContactEKF {
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     /**
      * @brief Initializes the EKF with the initial robot state, contact frames, and other
      * parameters.
@@ -65,10 +67,8 @@ public:
      * @param state Current state of the robot.
      * @param imu IMU measurements.
      * @param kin Kinematic measurements.
-     * @return Predicted state after applying prediction step of the EKF.
      */
-    BaseState predict(const BaseState& state, const ImuMeasurement& imu,
-                      const KinematicMeasurement& kin);
+    void predict(BaseState& state, const ImuMeasurement& imu, const KinematicMeasurement& kin);
 
     /**
      * @brief Updates the robot's state based on kinematic measurements (and optionally odometry
@@ -77,11 +77,10 @@ public:
      * @param kin Kinematic measurements.
      * @param odom Optional odometry measurements.
      * @param terrain Optional terrain measurements.
-     * @return Updated state after applying update step of the EKF.
      */
-    BaseState update(const BaseState& state, const KinematicMeasurement& kin,
-                     std::optional<OdometryMeasurement> odom = std::nullopt,
-                     std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
+    void update(BaseState& state, const KinematicMeasurement& kin, 
+                std::optional<OdometryMeasurement> odom = std::nullopt,
+                std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
     
     const Eigen::Isometry3d& getMapPose() const;
 
@@ -134,15 +133,13 @@ private:
      * @param contacts_status Status of leg contacts.
      * @param contacts_position Position of leg contacts.
      * @param contacts_orientations Orientations of leg contacts.
-     * @return Predicted state after applying discrete dynamics.
      */
-    BaseState computeDiscreteDynamics(
-        const BaseState& state, double dt, Eigen::Vector3d angular_velocity,
+    void computeDiscreteDynamics(
+        BaseState& state, double dt, Eigen::Vector3d angular_velocity,
         Eigen::Vector3d linear_acceleration,
         std::optional<std::map<std::string, bool>> contacts_status,
         std::optional<std::map<std::string, Eigen::Vector3d>> contacts_position,
-        std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientations =
-            std::nullopt);
+        std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientations = std::nullopt);
 
     /**
      * @brief Computes Jacobians for the prediction step of the EKF.
@@ -164,10 +161,9 @@ private:
      * @param contacts_orientation_noise Noise in orientation measurements (optional).
      * @param orientation_cov Covariance of orientation measurements (optional).
      * @param terrain_estimator Terrain elevation estimator (optional).
-     * @return Updated state after applying contact-related updates.
      */
-    BaseState updateWithContacts(
-        const BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
+    void updateWithContacts(
+        BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
         std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
         const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
         std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
@@ -182,23 +178,21 @@ private:
      * @param base_orientation Orientation of the robot's base.
      * @param base_position_cov Covariance of base position measurements.
      * @param base_orientation_cov Covariance of base orientation measurements.
-     * @return Updated state after applying odometry updates.
      */
-    BaseState updateWithOdometry(const BaseState& state, const Eigen::Vector3d& base_position,
-                                 const Eigen::Quaterniond& base_orientation,
-                                 const Eigen::Matrix3d& base_position_cov,
-                                 const Eigen::Matrix3d& base_orientation_cov);
+    void updateWithOdometry(BaseState& state, const Eigen::Vector3d& base_position,
+                            const Eigen::Quaterniond& base_orientation,
+                            const Eigen::Matrix3d& base_position_cov,
+                            const Eigen::Matrix3d& base_orientation_cov);
 
     /**
      * @brief Updates the robot's state based on terrain measurements.
      * @param state Current state of the robot.
      * @param contacts_status Status of leg contacts.
      * @param terrain_estimator Terrain elevation mapper.
-     * @return Updated state after applying terrain updates.
      */
-    BaseState updateWithTerrain(const BaseState& state,
-                                const std::map<std::string, bool>& contacts_status,
-                                std::shared_ptr<TerrainElevation> terrain_estimator);
+    void updateWithTerrain(BaseState& state,
+                           const std::map<std::string, bool>& contacts_status,
+                           std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**
      * @brief Updates the state of the robot with the provided state change and covariance matrix.
