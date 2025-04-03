@@ -39,6 +39,8 @@ namespace serow {
  */
 class Serow {
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     /// @brief Constructor
     Serow();
 

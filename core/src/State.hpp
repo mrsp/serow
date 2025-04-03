@@ -147,6 +147,8 @@ struct JointState {
  */
 class State {
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     /// State getters
     /// Returns the 3D base pose as a rigid transformation in world frame coordinates
     Eigen::Isometry3d getBasePose() const;

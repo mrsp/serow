@@ -44,6 +44,8 @@ namespace serow {
  */
 class BaseEKF {
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
     /**
      * @brief Initializes the EKF with the initial robot state and other parameters.
      * @param state Initial state of the robot.
