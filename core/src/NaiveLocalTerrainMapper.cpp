@@ -1,22 +1,11 @@
-#include "NaiveTerrainElevation.hpp"
+#include "NaiveLocalTerrainMapper.hpp"
 
 #include <algorithm>
 
 namespace serow {
 
-void NaiveTerrainElevation::printMapInformation() const {
-    const std::string GREEN = "\033[1;32m";
-    const std::string WHITE = "\033[1;37m";
-    std::cout << GREEN << "\tresolution: " << resolution << std::endl;
-    std::cout << GREEN << "\tinverse resolution: " << resolution_inv << std::endl;
-    std::cout << GREEN << "\tlocal map size: " << map_size << std::endl;
-    std::cout << GREEN << "\tlocal map half size: " << half_map_size << std::endl;
-    std::cout << GREEN << "\tlocal map dim: " << map_dim << std::endl;
-    std::cout << GREEN << "\tlocal map half dim: " << half_map_dim << WHITE << std::endl;
-}
-
 // Coordinate conversion functions
-int NaiveTerrainElevation::locationToGlobalIndex(const float loc) const {
+int NaiveLocalTerrainMapper::locationToGlobalIndex(const float loc) const {
     if (loc > 0.0) {
         return static_cast<int>(resolution_inv * loc + 0.5);
     } else {
@@ -24,37 +13,37 @@ int NaiveTerrainElevation::locationToGlobalIndex(const float loc) const {
     }
 }
 
-std::array<int, 2> NaiveTerrainElevation::locationToGlobalIndex(
+std::array<int, 2> NaiveLocalTerrainMapper::locationToGlobalIndex(
     const std::array<float, 2>& loc) const {
     return {locationToGlobalIndex(loc[0]), locationToGlobalIndex(loc[1])};
 }
 
-std::array<float, 2> NaiveTerrainElevation::globalIndexToLocation(
+std::array<float, 2> NaiveLocalTerrainMapper::globalIndexToLocation(
     const std::array<int, 2>& id_g) const {
     return {(id_g[0] * resolution), (id_g[1] * resolution)};
 }
 
-std::array<int, 2> NaiveTerrainElevation::globalIndexToLocalIndex(
+std::array<int, 2> NaiveLocalTerrainMapper::globalIndexToLocalIndex(
     const std::array<int, 2>& id_g) const {
     return {id_g[0] + half_map_dim, id_g[1] + half_map_dim};
 }
 
-std::array<int, 2> NaiveTerrainElevation::localIndexToGlobalIndex(
+std::array<int, 2> NaiveLocalTerrainMapper::localIndexToGlobalIndex(
     const std::array<int, 2>& id_l) const {
     return {id_l[0] - half_map_dim, id_l[1] - half_map_dim};
 }
 
-std::array<int, 2> NaiveTerrainElevation::locationToLocalIndex(
+std::array<int, 2> NaiveLocalTerrainMapper::locationToLocalIndex(
     const std::array<float, 2>& loc) const {
     return globalIndexToLocalIndex(locationToGlobalIndex(loc));
 }
 
-std::array<float, 2> NaiveTerrainElevation::localIndexToLocation(
+std::array<float, 2> NaiveLocalTerrainMapper::localIndexToLocation(
     const std::array<int, 2>& id_l) const {
     return globalIndexToLocation(localIndexToGlobalIndex(id_l));
 }
 
-bool NaiveTerrainElevation::inside(const std::array<int, 2>& id_g) const {
+bool NaiveLocalTerrainMapper::inside(const std::array<int, 2>& id_g) const {
     const std::array<int, 2> local_idx = globalIndexToLocalIndex(id_g);
     if (local_idx[0] < 0 || local_idx[0] >= map_dim || local_idx[1] < 0 ||
         local_idx[1] >= map_dim) {
@@ -63,16 +52,16 @@ bool NaiveTerrainElevation::inside(const std::array<int, 2>& id_g) const {
     return true;
 }
 
-bool NaiveTerrainElevation::inside(const std::array<float, 2>& loc) const {
+bool NaiveLocalTerrainMapper::inside(const std::array<float, 2>& loc) const {
     const std::array<int, 2> id_g = locationToGlobalIndex(loc);
     return inside(id_g);
 }
 
-void NaiveTerrainElevation::resetCell(const int i, const int j) {
+void NaiveLocalTerrainMapper::resetCell(const int i, const int j) {
     elevation_[i][j] = default_elevation_;
 }
 
-void NaiveTerrainElevation::resetLocalMap() {
+void NaiveLocalTerrainMapper::resetLocalMap() {
     for (int i = 0; i < map_dim; ++i) {
         for (int j = 0; j < map_dim; ++j) {
             elevation_[i][j] = default_elevation_;
@@ -80,8 +69,8 @@ void NaiveTerrainElevation::resetLocalMap() {
     }
 }
 
-void NaiveTerrainElevation::initializeLocalMap(const float height, const float variance,
-                                               const float min_variance) {
+void NaiveLocalTerrainMapper::initializeLocalMap(const float height, const float variance,
+                                                 const float min_variance) {
     default_elevation_ = ElevationCell(height, variance);
     min_terrain_height_variance_ = min_variance;
     for (int i = 0; i < map_dim; ++i) {
@@ -92,7 +81,8 @@ void NaiveTerrainElevation::initializeLocalMap(const float height, const float v
     updateLocalMapOriginAndBound({0.0f, 0.0f}, {0, 0});
 }
 
-bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height, float variance) {
+bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float height,
+                                     float variance) {
     if (!inside(loc)) {
         return false;
     }
@@ -138,7 +128,7 @@ bool NaiveTerrainElevation::update(const std::array<float, 2>& loc, float height
     return true;
 }
 
-void NaiveTerrainElevation::recenter(const std::array<float, 2>& loc) {
+void NaiveLocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
     const std::array<int, 2> new_origin_i = locationToGlobalIndex(loc);
     const std::array<int, 2> shift = {new_origin_i[0] - local_map_origin_i_[0],
                                       new_origin_i[1] - local_map_origin_i_[1]};
@@ -182,7 +172,8 @@ void NaiveTerrainElevation::recenter(const std::array<float, 2>& loc) {
     updateLocalMapOriginAndBound(loc, new_origin_i);
 }
 
-std::optional<ElevationCell> NaiveTerrainElevation::getElevation(const std::array<float, 2>& loc) {
+std::optional<ElevationCell> NaiveLocalTerrainMapper::getElevation(
+    const std::array<float, 2>& loc) {
     if (!inside(loc)) {
         return std::nullopt;
     }
@@ -192,12 +183,8 @@ std::optional<ElevationCell> NaiveTerrainElevation::getElevation(const std::arra
     return elevation_[local_idx[0]][local_idx[1]];
 }
 
-const std::array<float, 2>& NaiveTerrainElevation::getMapOrigin() const {
-    return local_map_origin_d_;
-}
-
-bool NaiveTerrainElevation::setElevation(const std::array<float, 2>& loc,
-                                         const ElevationCell& elevation) {
+bool NaiveLocalTerrainMapper::setElevation(const std::array<float, 2>& loc,
+                                           const ElevationCell& elevation) {
     if (!inside(loc)) {
         return false;
     }
@@ -208,8 +195,8 @@ bool NaiveTerrainElevation::setElevation(const std::array<float, 2>& loc,
     return true;
 }
 
-void NaiveTerrainElevation::updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
-                                                         const std::array<int, 2>& new_origin_i) {
+void NaiveLocalTerrainMapper::updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
+                                                           const std::array<int, 2>& new_origin_i) {
     // update local map origin and local map bound
     local_map_origin_i_ = new_origin_i;
     local_map_origin_d_ = new_origin_d;
@@ -222,6 +209,11 @@ void NaiveTerrainElevation::updateLocalMapOriginAndBound(const std::array<float,
     // the float map bound only consider the closed cell center
     local_map_bound_min_d_ = globalIndexToLocation(local_map_bound_min_i_);
     local_map_bound_max_d_ = globalIndexToLocation(local_map_bound_max_i_);
+}
+
+int NaiveLocalTerrainMapper::locationToHashId(const std::array<float, 2>& loc) const {
+    const std::array<int, 2> idx = locationToGlobalIndex(loc);
+    return idx[0] * map_dim + idx[1];
 }
 
 }  // namespace serow

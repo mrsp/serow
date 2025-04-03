@@ -2,6 +2,13 @@ find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(pinocchio REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
+# Add option for Python bindings
+option(PYTHON_BINDINGS "Build Python bindings" OFF)
+
+if(PYTHON_BINDINGS)
+    find_package(pybind11 REQUIRED)
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
   mcap_builder
@@ -55,8 +62,8 @@ set(serow_src ${serow_src}
     Differentiator.cpp 
     DerivativeEstimator.cpp
     OutlierDetector.cpp
-    TerrainElevation.cpp
-    NaiveTerrainElevation.cpp
+    LocalTerrainMapper.cpp
+    NaiveLocalTerrainMapper.cpp
     ProprioceptionLogger.cpp
     ExteroceptionLogger.cpp
     ThreadPool.cpp)
@@ -79,8 +86,8 @@ set(serow_headers ${serow_headers}
     MovingMedianFilter.hpp
     RobotKinematics.hpp
     OutlierDetector.hpp
-    TerrainElevation.hpp
-    NaiveTerrainElevation.hpp
+    LocalTerrainMapper.hpp
+    NaiveLocalTerrainMapper.hpp
     ProprioceptionLogger.hpp
     ExteroceptionLogger.hpp
     ThreadPool.hpp
@@ -91,6 +98,7 @@ add_library(serow SHARED ${serow_headers} ${serow_src})
 target_include_directories(serow PRIVATE ${CMAKE_BINARY_DIR}/generated)
 target_link_libraries(serow PUBLIC mcap 
                             PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
+set_target_properties(serow PROPERTIES LINKER_LANGUAGE CXX)
 
 install(FILES ${serow_headers} DESTINATION include/serow)
 install(TARGETS serow DESTINATION lib/)
