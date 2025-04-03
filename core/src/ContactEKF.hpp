@@ -33,10 +33,11 @@
 #include <iostream>
 #include <memory>
 
+#include "LocalTerrainMapper.hpp"
 #include "Measurement.hpp"  // Includes various sensor measurements
 #include "OutlierDetector.hpp"
 #include "State.hpp"  // Includes definitions of robot state variables
-#include "TerrainElevation.hpp"
+#include "common.hpp"
 
 namespace serow {
 
@@ -78,10 +79,10 @@ public:
      * @param odom Optional odometry measurements.
      * @param terrain Optional terrain measurements.
      */
-    void update(BaseState& state, const KinematicMeasurement& kin, 
+    void update(BaseState& state, const KinematicMeasurement& kin,
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
-    
+
     const Eigen::Isometry3d& getMapPose() const;
 
 private:
@@ -139,7 +140,8 @@ private:
         Eigen::Vector3d linear_acceleration,
         std::optional<std::map<std::string, bool>> contacts_status,
         std::optional<std::map<std::string, Eigen::Vector3d>> contacts_position,
-        std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientations = std::nullopt);
+        std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientations =
+            std::nullopt);
 
     /**
      * @brief Computes Jacobians for the prediction step of the EKF.
@@ -190,8 +192,7 @@ private:
      * @param contacts_status Status of leg contacts.
      * @param terrain_estimator Terrain elevation mapper.
      */
-    void updateWithTerrain(BaseState& state,
-                           const std::map<std::string, bool>& contacts_status,
+    void updateWithTerrain(BaseState& state, const std::map<std::string, bool>& contacts_status,
                            std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**

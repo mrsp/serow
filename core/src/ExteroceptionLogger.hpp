@@ -30,7 +30,7 @@
 #include <string>
 
 #include "Schemas.hpp"
-#include "TerrainElevation.hpp"
+#include "common.hpp"
 
 namespace serow {
 

@@ -714,7 +714,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
 
         // Initialize terrain elevation mapper
-        terrain_estimator_ = std::make_shared<TerrainElevation>();
+        terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
         terrain_estimator_->initializeLocalMap(terrain_height, 1e4,
                                                params_.minimum_terrain_height_variance);
     }
@@ -887,12 +887,12 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
 
         // Update CoM state with IMU measurements
-       com_estimator_.updateWithImu(state.centroidal_state_, kin, grf);
+        com_estimator_.updateWithImu(state.centroidal_state_, kin, grf);
     }
 
     // Update CoM state with kinematic measurements
     state.centroidal_state_.timestamp = kin.timestamp;
-   com_estimator_.updateWithKinematics(state.centroidal_state_, kin);
+    com_estimator_.updateWithKinematics(state.centroidal_state_, kin);
 
     // Check if state has converged
     if (!state.is_valid_ && cycle_++ > params_.convergence_cycles) {
