@@ -33,8 +33,8 @@ void CoMEKF::init(const CentroidalState& state, double mass, double g, double ra
     std::cout << "Nonlinear CoM Estimator Initialized Successfully" << std::endl;
 }
 
-CentroidalState CoMEKF::predict(const CentroidalState& state, const KinematicMeasurement& kin,
-                                const GroundReactionForceMeasurement& grf) {
+void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
+                     const GroundReactionForceMeasurement& grf) {
     double dt = nominal_dt_;
     if (last_grf_timestamp_.has_value()) {
         dt = grf.timestamp - last_grf_timestamp_.value();
@@ -42,7 +42,6 @@ CentroidalState CoMEKF::predict(const CentroidalState& state, const KinematicMea
     if (dt < nominal_dt_ / 2) {
         dt = nominal_dt_;
     }
-    CentroidalState predicted_state = state;
     const auto& [Ac, Lc] =
         computePredictionJacobians(state, grf.cop, grf.force, kin.com_angular_momentum_derivative);
 
@@ -59,21 +58,19 @@ CentroidalState CoMEKF::predict(const CentroidalState& state, const KinematicMea
     // Propagate the mean estimate, forward euler integration of dynamics f
     const Eigen::Matrix<double, 9, 1> f =
         computeContinuousDynamics(state, grf.cop, grf.force, kin.com_angular_momentum_derivative);
-    predicted_state.com_position += f(c_idx_) * dt;
-    predicted_state.com_linear_velocity += f(v_idx_) * dt;
-    predicted_state.external_forces += f(f_idx_) * dt;
+    state.com_position += f(c_idx_) * dt;
+    state.com_linear_velocity += f(v_idx_) * dt;
+    state.external_forces += f(f_idx_) * dt;
     last_grf_timestamp_ = grf.timestamp;
-    return predicted_state;
 }
 
-CentroidalState CoMEKF::updateWithKinematics(const CentroidalState& state,
-                                             const KinematicMeasurement& kin) {
-    return updateWithCoMPosition(state, kin.com_position, kin.com_position_cov);
+void CoMEKF::updateWithKinematics(CentroidalState& state, const KinematicMeasurement& kin) {
+    updateWithCoMPosition(state, kin.com_position, kin.com_position_cov);
 }
 
-CentroidalState CoMEKF::updateWithImu(const CentroidalState& state, const KinematicMeasurement& kin,
+void CoMEKF::updateWithImu(CentroidalState& state, const KinematicMeasurement& kin,
                                       const GroundReactionForceMeasurement& grf) {
-    return updateWithCoMAcceleration(state, kin.com_linear_acceleration, grf.cop, grf.force,
+    updateWithCoMAcceleration(state, kin.com_linear_acceleration, grf.cop, grf.force,
                                      kin.com_linear_acceleration_cov,
                                      kin.com_angular_momentum_derivative);
 }
@@ -130,12 +127,11 @@ CoMEKF::computePredictionJacobians(const CentroidalState& state,
     return std::make_tuple(Ac, Lc);
 }
 
-CentroidalState CoMEKF::updateWithCoMAcceleration(
-    const CentroidalState& state, const Eigen::Vector3d& com_linear_acceleration,
+void CoMEKF::updateWithCoMAcceleration(
+    CentroidalState& state, const Eigen::Vector3d& com_linear_acceleration,
     const Eigen::Vector3d& cop_position, const Eigen::Vector3d& ground_reaction_force,
     const Eigen::Matrix3d& com_linear_acceleration_cov,
     const Eigen::Vector3d& com_angular_momentum_derivative) {
-    CentroidalState updated_state = state;
     double den = state.com_position.z() - cop_position.z();
     if (den == 0.0) {
         std::cerr << "CoM and COP are at the same height, setting to 1e-6" << std::endl;
@@ -169,14 +165,12 @@ CentroidalState CoMEKF::updateWithCoMAcceleration(
     const Eigen::Matrix<double, 9, 3> K = P_ * H.transpose() * s.inverse();
     const Eigen::Matrix<double, 9, 1> dx = K * z;
     P_ = (I_ - K * H) * P_ * (I_ - K * H).transpose() + K * R * K.transpose();
-    updateState(updated_state, dx, P_);
-    return updated_state;
+    updateState(state, dx, P_);
 }
 
-CentroidalState CoMEKF::updateWithCoMPosition(const CentroidalState& state,
-                                              const Eigen::Vector3d& com_position,
-                                              const Eigen::Matrix3d& com_position_cov) {
-    CentroidalState updated_state = state;
+void CoMEKF::updateWithCoMPosition(CentroidalState& state,
+                                   const Eigen::Vector3d& com_position,
+                                   const Eigen::Matrix3d& com_position_cov) {
     const Eigen::Vector3d z = com_position - state.com_position;
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();
     H(c_idx_, c_idx_) = Eigen::Matrix3d::Identity();
@@ -186,8 +180,7 @@ CentroidalState CoMEKF::updateWithCoMPosition(const CentroidalState& state,
     const Eigen::Matrix<double, 9, 3> K = P_ * H.transpose() * s.inverse();
     const Eigen::Matrix<double, 9, 1> dx = K * z;
     P_ = (I_ - K * H) * P_ * (I_ - K * H).transpose() + K * R * K.transpose();
-    updateState(updated_state, dx, P_);
-    return updated_state;
+    updateState(state, dx, P_);
 }
 
 void CoMEKF::updateState(CentroidalState& state, const Eigen::Matrix<double, 9, 1>& dx,

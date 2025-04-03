@@ -63,22 +63,22 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> BaseEKF::computePredictionJacobians
 
     Eigen::MatrixXd Ac, Lc;
     Lc = Lc_;
-    Lc(v_idx_, ng_idx_).noalias() = -lie::so3::wedge(v);
+    Lc(v_idx_, ng_idx_) = -lie::so3::wedge(v);
 
     Ac.setZero(num_states_, num_states_);
-    Ac(v_idx_, v_idx_).noalias() = -lie::so3::wedge(angular_velocity);
+    Ac(v_idx_, v_idx_) = -lie::so3::wedge(angular_velocity);
     Ac(v_idx_, r_idx_).noalias() = lie::so3::wedge(R.transpose() * g_);
-    Ac(v_idx_, bg_idx_).noalias() = -lie::so3::wedge(v);
-    Ac(v_idx_, ba_idx_).noalias() = -Eigen::Matrix3d::Identity();
-    Ac(r_idx_, r_idx_).noalias() = -lie::so3::wedge(angular_velocity);
-    Ac(r_idx_, bg_idx_).noalias() = -Eigen::Matrix3d::Identity();
-    Ac(p_idx_, v_idx_).noalias() = R;
+    Ac(v_idx_, bg_idx_) = -lie::so3::wedge(v);
+    Ac(v_idx_, ba_idx_) = -Eigen::Matrix3d::Identity();
+    Ac(r_idx_, r_idx_) = -lie::so3::wedge(angular_velocity);
+    Ac(r_idx_, bg_idx_) = -Eigen::Matrix3d::Identity();
+    Ac(p_idx_, v_idx_) = R;
     Ac(p_idx_, r_idx_).noalias() = -R * lie::so3::wedge(v);
 
     return std::make_tuple(Ac, Lc);
 }
 
-BaseState BaseEKF::predict(const BaseState& state, const ImuMeasurement& imu) {
+void BaseEKF::predict(BaseState& state, const ImuMeasurement& imu) {
     double dt = nominal_dt_;
     if (last_imu_timestamp_.has_value()) {
         dt = imu.timestamp - last_imu_timestamp_.value();
@@ -89,8 +89,7 @@ BaseState BaseEKF::predict(const BaseState& state, const ImuMeasurement& imu) {
     // Compute the state and input-state Jacobians
     const auto& [Ac, Lc] = computePredictionJacobians(state, imu.angular_velocity);
     // Euler Discretization - First order Truncation
-    Eigen::MatrixXd Ad = I_;
-    Ad += Ac * dt;
+    const Eigen::MatrixXd Ad = I_ + Ac * dt;
 
     Eigen::MatrixXd Qc = Eigen::MatrixXd::Zero(num_inputs_, num_inputs_);
     // Covariance Q with full state + biases
@@ -100,62 +99,47 @@ BaseState BaseEKF::predict(const BaseState& state, const ImuMeasurement& imu) {
     Qc(nba_idx_, nba_idx_) = imu.linear_acceleration_bias_cov;
 
     // Predict the state error covariance
-    Eigen::MatrixXd Qd = Ad * Lc * Qc * Lc.transpose() * Ad.transpose() * dt;
+    const Eigen::MatrixXd Qd = Ad * Lc * Qc * Lc.transpose() * Ad.transpose() * dt;
     P_ = Ad * P_ * Ad.transpose() + Qd;
 
     // Predict the state
-    const BaseState& predicted_state =
-        computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration);
+    computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration);
     last_imu_timestamp_ = imu.timestamp;
-    return predicted_state;
 }
 
-BaseState BaseEKF::computeDiscreteDynamics(const BaseState& state, double dt,
-                                           Eigen::Vector3d angular_velocity,
-                                           Eigen::Vector3d linear_acceleration) {
-    BaseState predicted_state = state;
+void BaseEKF::computeDiscreteDynamics(BaseState& state, double dt,
+                                      Eigen::Vector3d angular_velocity,
+                                      Eigen::Vector3d linear_acceleration) {
     angular_velocity -= state.imu_angular_velocity_bias;
     linear_acceleration -= state.imu_linear_acceleration_bias;
 
     // Nonlinear Process Model
+    const Eigen::Vector3d v = state.base_linear_velocity;
+    const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
+    const Eigen::Vector3d r = state.base_position;
+    
     // Linear velocity
-    const Eigen::Vector3d& v = state.base_linear_velocity;
-    const Eigen::Matrix3d& R = state.base_orientation.toRotationMatrix();
-    predicted_state.base_linear_velocity = v.cross(angular_velocity);
-    predicted_state.base_linear_velocity += R.transpose() * g_;
-    predicted_state.base_linear_velocity += linear_acceleration;
-    predicted_state.base_linear_velocity *= dt;
-    predicted_state.base_linear_velocity += v;
+    state.base_linear_velocity.noalias() = (v.cross(angular_velocity) +  R.transpose() * g_ + linear_acceleration) * dt + v;
+    
     // Position
-    const Eigen::Vector3d& r = state.base_position;
-    predicted_state.base_position = R * v;
-    predicted_state.base_position *= dt;
-    predicted_state.base_position += r;
-
-    // Biases
-    predicted_state.imu_angular_velocity_bias = state.imu_angular_velocity_bias;
-    predicted_state.imu_linear_acceleration_bias = state.imu_linear_acceleration_bias;
+    state.base_position.noalias() = (R * v) * dt + r;
 
     // Orientation
-    predicted_state.base_orientation =
+    state.base_orientation =
         Eigen::Quaterniond(lie::so3::plus(R, angular_velocity * dt)).normalized();
-
-    return predicted_state;
 }
 
-BaseState BaseEKF::updateWithOdometry(const BaseState& state, const Eigen::Vector3d& base_position,
-                                      const Eigen::Quaterniond& base_orientation,
-                                      const Eigen::Matrix3d& base_position_cov,
-                                      const Eigen::Matrix3d& base_orientation_cov) {
-    BaseState updated_state = state;
-
+void BaseEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& base_position,
+                                 const Eigen::Quaterniond& base_orientation,
+                                 const Eigen::Matrix3d& base_position_cov,
+                                 const Eigen::Matrix3d& base_orientation_cov) {
     Eigen::MatrixXd H;
     H.setZero(6, num_states_);
     Eigen::MatrixXd R = Eigen::Matrix<double, 6, 6>::Zero();
 
     // Construct the innovation vector z
-    const Eigen::Vector3d& zp = base_position - state.base_position;
-    const Eigen::Vector3d& zq = lie::so3::minus(base_orientation, state.base_orientation);
+    const Eigen::Vector3d zp = base_position - state.base_position;
+    const Eigen::Vector3d zq = lie::so3::minus(base_orientation, state.base_orientation);
     Eigen::VectorXd z;
     z.setZero(6);
     z.head(3) = zp;
@@ -170,28 +154,24 @@ BaseState BaseEKF::updateWithOdometry(const BaseState& state, const Eigen::Vecto
     R.bottomRightCorner<3, 3>() = base_orientation_cov;
 
     const Eigen::Matrix<double, 6, 6> s = R + H * P_ * H.transpose();
-    const Eigen::MatrixXd& K = P_ * H.transpose() * s.inverse();
-    const Eigen::VectorXd& dx = K * z;
+    const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
+    const Eigen::VectorXd dx = K * z;
 
     P_ = (I_ - K * H) * P_;
-    updateState(updated_state, dx, P_);
-
-    return updated_state;
+    updateState(state, dx, P_);
 }
 
-BaseState BaseEKF::updateWithTwist(const BaseState& state,
-                                   const Eigen::Vector3d& base_linear_velocity,
-                                   const Eigen::Matrix3d& base_linear_velocity_cov,
-                                   const Eigen::Quaterniond& base_orientation,
-                                   const Eigen::Matrix3d& base_orientation_cov) {
-    BaseState updated_state = state;
-
+void BaseEKF::updateWithTwist(BaseState& state,
+                              const Eigen::Vector3d& base_linear_velocity,
+                              const Eigen::Matrix3d& base_linear_velocity_cov,
+                              const Eigen::Quaterniond& base_orientation,
+                              const Eigen::Matrix3d& base_orientation_cov) {
     const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
     // Construct the linearized measurement matrix H
     Eigen::MatrixXd H;
     H.setZero(6, num_states_);
     H.block(0, v_idx_[0], 3, 3) = R_world_to_base;
-    H.block(0, r_idx_[0], 3, 3) = -R_world_to_base * lie::so3::wedge(state.base_linear_velocity);
+    H.block(0, r_idx_[0], 3, 3).noalias() = -R_world_to_base * lie::so3::wedge(state.base_linear_velocity);
     H.block(3, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
     // Construct the innovation vector z
@@ -209,13 +189,10 @@ BaseState BaseEKF::updateWithTwist(const BaseState& state,
     const Eigen::VectorXd dx = K * z;
 
     P_ = (I_ - K * H) * P_;
-    updateState(updated_state, dx, P_);
-
-    return updated_state;
+    updateState(state, dx, P_);
 }
 
-BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
-                                   const Eigen::MatrixXd& P) const {
+BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const {
     BaseState updated_state = state;
     updated_state.base_position += dx(p_idx_);
     updated_state.base_position_cov = P(p_idx_, p_idx_);
@@ -232,8 +209,7 @@ BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd
     return updated_state;
 }
 
-void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
-                          const Eigen::MatrixXd& P) const {
+void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const {
     state.base_position += dx(p_idx_);
     state.base_position_cov = P(p_idx_, p_idx_);
     state.base_linear_velocity += dx(v_idx_);
@@ -248,19 +224,14 @@ void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
     state.imu_linear_acceleration_bias_cov = P(ba_idx_, ba_idx_);
 }
 
-BaseState BaseEKF::update(const BaseState& state, const KinematicMeasurement& kin,
-                          std::optional<OdometryMeasurement> odom) {
-    BaseState updated_state =
-        updateWithTwist(state, kin.base_linear_velocity, kin.base_linear_velocity_cov,
-                        kin.base_orientation, kin.base_orientation_cov);
+void BaseEKF::update(BaseState& state, const KinematicMeasurement& kin, std::optional<OdometryMeasurement> odom) {
+    updateWithTwist(state, kin.base_linear_velocity, kin.base_linear_velocity_cov, 
+                    kin.base_orientation, kin.base_orientation_cov);
 
     if (odom.has_value()) {
-        updated_state =
-            updateWithOdometry(updated_state, odom->base_position, odom->base_orientation,
-                               odom->base_position_cov, odom->base_orientation_cov);
+        updateWithOdometry(state, odom->base_position, odom->base_orientation, 
+                           odom->base_position_cov, odom->base_orientation_cov);
     }
-
-    return updated_state;
 }
 
 }  // namespace serow

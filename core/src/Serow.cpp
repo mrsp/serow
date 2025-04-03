@@ -745,9 +745,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Call the base estimator predict step
     state.base_state_.timestamp = imu.timestamp;
     if (params_.is_contact_ekf) {
-        state.base_state_ = base_estimator_con_.predict(state.base_state_, imu, kin);
+        base_estimator_con_.predict(state.base_state_, imu, kin);
     } else {
-        state.base_state_ = base_estimator_.predict(state.base_state_, imu);
+        base_estimator_.predict(state.base_state_, imu);
     }
 
     // Transform odometry measurements if available
@@ -770,10 +770,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     // Update base state with relative to base contacts
     if (params_.is_contact_ekf) {
-        state.base_state_ =
-            base_estimator_con_.update(state.base_state_, kin, odom, terrain_estimator_);
+        base_estimator_con_.update(state.base_state_, kin, odom, terrain_estimator_);
     } else {
-        state.base_state_ = base_estimator_.update(state.base_state_, kin, odom);
+        base_estimator_.update(state.base_state_, kin, odom);
 
         // Compute the contact pose in the world frame
         std::map<std::string, Eigen::Quaterniond> con_orient;
@@ -884,16 +883,16 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
         // Update CoM state if in contact
         if (den > 0.0) {
-            state.centroidal_state_ = com_estimator_.predict(state.centroidal_state_, kin, grf);
+            com_estimator_.predict(state.centroidal_state_, kin, grf);
         }
 
         // Update CoM state with IMU measurements
-        state.centroidal_state_ = com_estimator_.updateWithImu(state.centroidal_state_, kin, grf);
+       com_estimator_.updateWithImu(state.centroidal_state_, kin, grf);
     }
 
     // Update CoM state with kinematic measurements
     state.centroidal_state_.timestamp = kin.timestamp;
-    state.centroidal_state_ = com_estimator_.updateWithKinematics(state.centroidal_state_, kin);
+   com_estimator_.updateWithKinematics(state.centroidal_state_, kin);
 
     // Check if state has converged
     if (!state.is_valid_ && cycle_++ > params_.convergence_cycles) {

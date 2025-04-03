@@ -57,9 +57,8 @@ public:
      * @brief Predicts the robot's state forward based on IMU.
      * @param state Current state of the robot.
      * @param imu IMU measurements.
-     * @return Predicted state after applying prediction step of the EKF.
      */
-    BaseState predict(const BaseState& state, const ImuMeasurement& imu);
+    void predict(BaseState& state, const ImuMeasurement& imu);
 
     /**
      * @brief Updates the robot's state based on kinematic measurements and optionally odometry
@@ -67,11 +66,9 @@ public:
      * @param state Current state of the robot.
      * @param kin Kinematic measurements.
      * @param odom Optional odometry measurements.
-     * @param terrain Optional terrain measurements.
-     * @return Updated state after applying update step of the EKF.
      */
-    BaseState update(const BaseState& state, const KinematicMeasurement& kin,
-                     std::optional<OdometryMeasurement> odom = std::nullopt);
+    void update(BaseState& state, const KinematicMeasurement& kin,
+                std::optional<OdometryMeasurement> odom = std::nullopt);
 
 private:
     int num_states_{};          ///< Number of state variables.
@@ -106,11 +103,10 @@ private:
      * @param dt Time step for prediction.
      * @param angular_velocity Angular velocity measurements.
      * @param linear_acceleration Linear acceleration measurements.
-     * @return Predicted state after applying discrete dynamics.
      */
-    BaseState computeDiscreteDynamics(const BaseState& state, double dt,
-                                      Eigen::Vector3d angular_velocity,
-                                      Eigen::Vector3d linear_acceleration);
+    void computeDiscreteDynamics(BaseState& state, double dt,
+                                 Eigen::Vector3d angular_velocity,
+                                 Eigen::Vector3d linear_acceleration);
 
     /**
      * @brief Computes Jacobians for the prediction step of the EKF.
@@ -121,10 +117,10 @@ private:
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> computePredictionJacobians(
         const BaseState& state, Eigen::Vector3d angular_velocity);
 
-    BaseState updateWithTwist(const BaseState& state, const Eigen::Vector3d& base_linear_velocity,
-                              const Eigen::Matrix3d& base_linear_velocity_cov,
-                              const Eigen::Quaterniond& base_orientation,
-                              const Eigen::Matrix3d& base_orientation_cov);
+    void updateWithTwist(BaseState& state, const Eigen::Vector3d& base_linear_velocity,
+                         const Eigen::Matrix3d& base_linear_velocity_cov,
+                         const Eigen::Quaterniond& base_orientation,
+                         const Eigen::Matrix3d& base_orientation_cov);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
@@ -133,12 +129,11 @@ private:
      * @param base_orientation Orientation of the robot's base.
      * @param base_position_cov Covariance of base position measurements.
      * @param base_orientation_cov Covariance of base orientation measurements.
-     * @return Updated state after applying odometry updates.
      */
-    BaseState updateWithOdometry(const BaseState& state, const Eigen::Vector3d& base_position,
-                                 const Eigen::Quaterniond& base_orientation,
-                                 const Eigen::Matrix3d& base_position_cov,
-                                 const Eigen::Matrix3d& base_orientation_cov);
+     void updateWithOdometry(BaseState& state, const Eigen::Vector3d& base_position,
+                             const Eigen::Quaterniond& base_orientation,
+                             const Eigen::Matrix3d& base_position_cov,
+                             const Eigen::Matrix3d& base_orientation_cov);
 
     /**
      * @brief Updates the state of the robot with the provided state change and covariance matrix.
