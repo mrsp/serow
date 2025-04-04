@@ -410,10 +410,10 @@ void ContactEKF::updateWithTerrain(BaseState& state,
     for (const auto& [cf, cs] : contacts_status) {
         // Update only when the elevation at the contact points is available and updated in the map
         if (cs) {
-            const Eigen::Vector3d con_pos_map =
-                T_world_to_map_.inverse() * state.contacts_position.at(cf);
-            auto elevation = terrain_estimator->getElevation(
-                {static_cast<float>(con_pos_map.x()), static_cast<float>(con_pos_map.y())});
+            const std::array<float, 2> terrain_origin = terrain_estimator->getMapOrigin();
+            const std::array<float, 2> con_pos_xy = {static_cast<float>(state.contacts_position.at(cf).x()) - terrain_origin[0],
+                                                     static_cast<float>(state.contacts_position.at(cf).y()) - terrain_origin[1]};
+            auto elevation = terrain_estimator->getElevation(con_pos_xy);
             if (elevation.has_value() && elevation.value().updated) {
                 // Construct the linearized measurement matrix H
                 H.setZero();
@@ -523,9 +523,9 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
                 T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
                 const Eigen::Vector3d con_pos_world =
                     T_world_to_base * kin.base_to_foot_positions.at(cf);
-                const Eigen::Vector3d con_pos_map = T_world_to_map_.inverse() * con_pos_world;
-                const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_map.x()),
-                                                         static_cast<float>(con_pos_map.y())};
+                const std::array<float, 2> terrain_origin = terrain_estimator->getMapOrigin();
+                const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_world.x()) - terrain_origin[0],
+                                                         static_cast<float>(con_pos_world.y()) - terrain_origin[1]};
                 const float con_pos_z = static_cast<float>(con_pos_world.z());
 
                 // Transform measurement noise to world frame
@@ -564,15 +564,8 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
         if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 0.35) ||
             (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.35)) {
             terrain_estimator->recenter(base_pos_xy);
-            // Update the transform from world to map
-            T_world_to_map_.translation() = state.base_position;
-            T_world_to_map_.linear() = state.base_orientation.toRotationMatrix();
         }
     }
-}
-
-const Eigen::Isometry3d& ContactEKF::getMapPose() const {
-    return T_world_to_map_;
 }
 
 }  // namespace serow
