@@ -561,8 +561,8 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
         const std::array<float, 2> base_pos_xy = {static_cast<float>(state.base_position.x()),
                                                   static_cast<float>(state.base_position.y())};
         const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
-        if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 0.5) ||
-            (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.5)) {
+        if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 0.35) ||
+            (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.35)) {
             terrain_estimator->recenter(base_pos_xy);
             // Update the transform from world to map
             T_world_to_map_.translation() = state.base_position;
