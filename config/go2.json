@@ -225,5 +225,6 @@
     ],
     "T_base_to_odom": null,
     "enable_terrain_estimation": true,
+    "terrain_estimator": "naive",
     "minimum_terrain_height_variance": 1e-3
 }
