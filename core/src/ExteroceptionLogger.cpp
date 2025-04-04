@@ -24,6 +24,19 @@ class ExteroceptionLogger::Impl {
 public:
     explicit Impl(const std::string& filename) {
         try {
+            // First check if the file exists and is writable
+            if (std::filesystem::exists(filename)) {
+                if (!std::filesystem::is_regular_file(filename)) {
+                    throw std::runtime_error("Log path exists but is not a regular file: " +
+                                             filename);
+                }
+                // Check if we have write permissions
+                auto perms = std::filesystem::status(filename).permissions();
+                if ((perms & std::filesystem::perms::owner_write) == std::filesystem::perms::none) {
+                    throw std::runtime_error("Log file is not writable: " + filename);
+                }
+            }
+
             // Open the file with error checking
             file_writer_ = std::make_unique<mcap::FileWriter>();
             auto open_status = file_writer_->open(filename);
@@ -33,8 +46,8 @@ public:
 
             // Create the logger with ROS2 profile
             writer_ = std::make_unique<mcap::McapWriter>();
-            // Configure MCAP options
-            mcap::McapWriterOptions options("");
+            // Configure MCAP options with explicit version
+            mcap::McapWriterOptions options("ros2");
             writer_->open(*file_writer_, options);
 
             // Initialize schemas and channels
@@ -56,15 +69,14 @@ public:
         }
     }
 
-    // Utility function to convert timestamp to nanoseconds
-    uint64_t convertToNanoseconds(double timestamp) {
-        // Ensure timestamp is converted to nanoseconds
-        return static_cast<uint64_t>(timestamp * 1e9);
-    }
-
     void log(const LocalMapState& local_map_state) {
         try {
             const double timestamp = local_map_state.timestamp;
+
+            if (timestamp <= last_timestamp_) {
+                return;
+            }
+
             const auto& local_map = local_map_state.data;
 
             // Create a FlatBuffer builder
@@ -127,14 +139,14 @@ public:
             size_t size = builder.GetSize();
             writeMessage(1, local_map_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
-            last_local_map_timestamp_ = timestamp;
+            last_timestamp_ = timestamp;
         } catch (const std::exception& e) {
             std::cerr << "Error logging local map: " << e.what() << std::endl;
         }
     }
 
-    double getLastLocalMapTimestamp() const {
-        return last_local_map_timestamp_;
+    double getLastTimestamp() const {
+        return last_timestamp_;
     }
 
 private:
@@ -145,10 +157,13 @@ private:
             message.channelId = channel_id;
             message.sequence = sequence;
 
-            // Precise nanosecond timestamp
-            uint64_t ns_timestamp = convertToNanoseconds(timestamp);
+            // Ensure timestamp is in nanoseconds and consistent
+            // Convert to nanoseconds using std::chrono for precision
+            auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::duration<double>(timestamp));
+            uint64_t ns_timestamp = ns.count();
             message.logTime = ns_timestamp;
-            message.publishTime = ns_timestamp;
+            message.publishTime = ns_timestamp;  // Use same timestamp for both
 
             message.dataSize = data_size;
             message.data = data;
@@ -193,7 +208,7 @@ private:
 
     // Sequence counters
     uint64_t local_map_sequence_{};
-    double last_local_map_timestamp_{-1.0};
+    double last_timestamp_{-1.0};
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
@@ -210,8 +225,8 @@ void ExteroceptionLogger::log(const LocalMapState& local_map_state) {
     pimpl_->log(local_map_state);
 }
 
-double ExteroceptionLogger::getLastLocalMapTimestamp() const {
-    return pimpl_->getLastLocalMapTimestamp();
+double ExteroceptionLogger::getLastTimestamp() const {
+    return pimpl_->getLastTimestamp();
 }
 
 }  // namespace serow

@@ -123,7 +123,7 @@ private:
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
 
-    Eigen::Isometry3d T_world_to_map{Eigen::Isometry3d::Identity()};
+    Eigen::Isometry3d T_world_to_map_{Eigen::Isometry3d::Identity()};
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.

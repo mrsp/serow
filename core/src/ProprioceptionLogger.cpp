@@ -30,6 +30,19 @@ class ProprioceptionLogger::Impl {
 public:
     explicit Impl(const std::string& filename) {
         try {
+            // First check if the file exists and is writable
+            if (std::filesystem::exists(filename)) {
+                if (!std::filesystem::is_regular_file(filename)) {
+                    throw std::runtime_error("Log path exists but is not a regular file: " +
+                                             filename);
+                }
+                // Check if we have write permissions
+                auto perms = std::filesystem::status(filename).permissions();
+                if ((perms & std::filesystem::perms::owner_write) == std::filesystem::perms::none) {
+                    throw std::runtime_error("Log file is not writable: " + filename);
+                }
+            }
+
             // Open the file with error checking
             file_writer_ = std::make_unique<mcap::FileWriter>();
             auto open_status = file_writer_->open(filename);
@@ -39,7 +52,9 @@ public:
 
             // Create the logger with ROS2 profile
             writer_ = std::make_unique<mcap::McapWriter>();
-            mcap::McapWriterOptions options("");
+            // Configure MCAP options with explicit version
+            mcap::McapWriterOptions options("ros2");
+
             writer_->open(*file_writer_, options);
 
             // Initialize schemas and channels
@@ -59,11 +74,6 @@ public:
         } catch (const std::exception& e) {
             std::cerr << "Error closing MCAP writer: " << e.what() << std::endl;
         }
-    }
-
-    // Fast timestamp conversion
-    inline uint64_t convertToNanoseconds(double timestamp) const noexcept {
-        return static_cast<uint64_t>(timestamp * 1e9);
     }
 
     // Split timestamp into seconds and nanoseconds
@@ -312,6 +322,7 @@ public:
 
             writeMessage(4, base_sequence_++, base_state.timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
+            last_timestamp_ = base_state.timestamp;
         } catch (const std::exception& e) {
             std::cerr << "Error logging Base State: " << e.what() << std::endl;
         }
@@ -434,8 +445,15 @@ private:
             mcap::Message message;
             message.channelId = channel_id;
             message.sequence = sequence;
-            message.logTime = convertToNanoseconds(timestamp);
-            message.publishTime = message.logTime;
+
+            // Ensure timestamp is in nanoseconds and consistent
+            // Convert to nanoseconds using std::chrono for precision
+            auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::duration<double>(timestamp));
+            uint64_t ns_timestamp = ns.count();
+            message.logTime = ns_timestamp;
+            message.publishTime = ns_timestamp;  // Use same timestamp for both
+
             message.dataSize = data_size;
             message.data = data;
 
@@ -499,6 +517,7 @@ private:
     uint64_t imu_sequence_ = 0;
     uint64_t tf_sequence_ = 0;
     uint64_t leg_tf_sequence_ = 0;
+    double last_timestamp_{-1.0};
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;

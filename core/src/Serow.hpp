@@ -26,12 +26,12 @@
 #include "LocalTerrainMapper.hpp"
 #include "Mahony.hpp"
 #include "Measurement.hpp"
+#include "NaiveLocalTerrainMapper.hpp"
 #include "ProprioceptionLogger.hpp"
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 #include "ThreadPool.hpp"
 #include "common.hpp"
-
 
 namespace serow {
 

@@ -17,8 +17,8 @@
 #include <cmath>
 #include <iostream>
 #include <random>
-#include <serow/NaiveTerrainElevation.hpp>
-#include <serow/TerrainElevation.hpp>
+#include <serow/NaiveLocalTerrainMapper.hpp>
+#include <serow/LocalTerrainMapper.hpp>
 #include <serow/common.hpp>
 
 namespace serow {
@@ -36,8 +36,8 @@ protected:
     const float initial_variance = 1.0f;
     const float min_variance = 0.001f;
 
-    TerrainElevation terrain;
-    NaiveTerrainElevation naive_terrain;
+    LocalTerrainMapper terrain;
+    NaiveLocalTerrainMapper naive_terrain;
 
     // Utility function to compare floating point values
     bool floatEqual(float a, float b, float epsilon = 1e-5f) {
