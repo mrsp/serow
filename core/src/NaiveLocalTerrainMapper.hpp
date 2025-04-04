@@ -30,13 +30,7 @@ public:
 
     std::array<ElevationCell, map_size> getElevationMap() override {
         std::lock_guard<std::mutex> lock(mutex_);
-        std::array<ElevationCell, map_size> result;
-        for (int i = 0; i < map_dim; ++i) {
-            for (int j = 0; j < map_dim; ++j) {
-                result[i * map_dim + j] = elevation_[i][j];
-            }
-        }
-        return result;
+        return elevation_;
     }
 
     int locationToHashId(const std::array<float, 2>& loc) const override;
@@ -61,10 +55,9 @@ private:
     void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
                                       const std::array<int, 2>& new_origin_i) override;
 
-    void resetCell(const int i, const int j);
+    int localIndexToHashId(const std::array<int, 2>& id_l) const;
 
-    // Map data
-    ElevationCell elevation_[map_dim][map_dim];
+    int globalIndexToHashId(const std::array<int, 2>& id_g) const;
 
     std::mutex mutex_;
 
