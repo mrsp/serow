@@ -69,10 +69,9 @@ void CoMEKF::updateWithKinematics(CentroidalState& state, const KinematicMeasure
 }
 
 void CoMEKF::updateWithImu(CentroidalState& state, const KinematicMeasurement& kin,
-                                      const GroundReactionForceMeasurement& grf) {
+                           const GroundReactionForceMeasurement& grf) {
     updateWithCoMAcceleration(state, kin.com_linear_acceleration, grf.cop, grf.force,
-                                     kin.com_linear_acceleration_cov,
-                                     kin.com_angular_momentum_derivative);
+                              kin.com_linear_acceleration_cov, kin.com_angular_momentum_derivative);
 }
 
 Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(
@@ -127,11 +126,12 @@ CoMEKF::computePredictionJacobians(const CentroidalState& state,
     return std::make_tuple(Ac, Lc);
 }
 
-void CoMEKF::updateWithCoMAcceleration(
-    CentroidalState& state, const Eigen::Vector3d& com_linear_acceleration,
-    const Eigen::Vector3d& cop_position, const Eigen::Vector3d& ground_reaction_force,
-    const Eigen::Matrix3d& com_linear_acceleration_cov,
-    const Eigen::Vector3d& com_angular_momentum_derivative) {
+void CoMEKF::updateWithCoMAcceleration(CentroidalState& state,
+                                       const Eigen::Vector3d& com_linear_acceleration,
+                                       const Eigen::Vector3d& cop_position,
+                                       const Eigen::Vector3d& ground_reaction_force,
+                                       const Eigen::Matrix3d& com_linear_acceleration_cov,
+                                       const Eigen::Vector3d& com_angular_momentum_derivative) {
     double den = state.com_position.z() - cop_position.z();
     if (den == 0.0) {
         std::cerr << "CoM and COP are at the same height, setting to 1e-6" << std::endl;
@@ -168,8 +168,7 @@ void CoMEKF::updateWithCoMAcceleration(
     updateState(state, dx, P_);
 }
 
-void CoMEKF::updateWithCoMPosition(CentroidalState& state,
-                                   const Eigen::Vector3d& com_position,
+void CoMEKF::updateWithCoMPosition(CentroidalState& state, const Eigen::Vector3d& com_position,
                                    const Eigen::Matrix3d& com_position_cov) {
     const Eigen::Vector3d z = com_position - state.com_position;
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();
