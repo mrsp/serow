@@ -922,7 +922,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         ((kin.timestamp - exteroception_logger_.getLastTimestamp()) > 0.5)) {
         exteroception_logger_job_->addJob(
             [this, ts = kin.timestamp, T_world_to_base = state_.getBasePose(),
-             T_world_to_map_rec = base_estimator_con_.getMapPose()]() {
+             T_world_to_map = base_estimator_con_.getMapPose()]() {
                 try {
                     LocalMapState local_map;
                     local_map.timestamp = ts;
@@ -930,9 +930,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                     const size_t sample_size_per_dim = map_dim / downsample_factor;
                     local_map.data.reserve(sample_size_per_dim * sample_size_per_dim);
                     const auto terrain_map = terrain_estimator_->getElevationMap();
-                    const Eigen::Isometry3d T_bb = T_world_to_map_rec.inverse() * T_world_to_base;
-                    const Eigen::Isometry3d T_world_to_map = T_world_to_map_rec * T_bb;
-
+        
                     const Eigen::Matrix2f R_world_to_map =
                         T_world_to_map.linear().topLeftCorner<2, 2>().cast<float>();
                     const Eigen::Vector2f t_world_to_map =

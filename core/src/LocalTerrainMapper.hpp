@@ -42,7 +42,7 @@ inline int normalize(const int x) {
 
 class LocalTerrainMapper : public TerrainElevation {
 public:
-    void recenter(const std::array<float, 2>& location) override;
+    virtual void recenter(const std::array<float, 2>& loc, const float yaw = 0.0f) = 0;
 
     void initializeLocalMap(const float height, const float variance,
                             const float min_variance = 1e-6) override;
