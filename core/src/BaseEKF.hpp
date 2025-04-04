@@ -106,8 +106,7 @@ private:
      * @param angular_velocity Angular velocity measurements.
      * @param linear_acceleration Linear acceleration measurements.
      */
-    void computeDiscreteDynamics(BaseState& state, double dt,
-                                 Eigen::Vector3d angular_velocity,
+    void computeDiscreteDynamics(BaseState& state, double dt, Eigen::Vector3d angular_velocity,
                                  Eigen::Vector3d linear_acceleration);
 
     /**
@@ -132,10 +131,10 @@ private:
      * @param base_position_cov Covariance of base position measurements.
      * @param base_orientation_cov Covariance of base orientation measurements.
      */
-     void updateWithOdometry(BaseState& state, const Eigen::Vector3d& base_position,
-                             const Eigen::Quaterniond& base_orientation,
-                             const Eigen::Matrix3d& base_position_cov,
-                             const Eigen::Matrix3d& base_orientation_cov);
+    void updateWithOdometry(BaseState& state, const Eigen::Vector3d& base_position,
+                            const Eigen::Quaterniond& base_orientation,
+                            const Eigen::Matrix3d& base_position_cov,
+                            const Eigen::Matrix3d& base_orientation_cov);
 
     /**
      * @brief Updates the state of the robot with the provided state change and covariance matrix.

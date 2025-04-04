@@ -83,8 +83,6 @@ public:
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
 
-    const Eigen::Isometry3d& getMapPose() const;
-
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
