@@ -100,8 +100,6 @@ private:
 
     bool isHashIdValid(const int id) const;
 
-    std::array<ElevationCell, map_size> elevation_;
-
     std::mutex mutex_;
     friend class TerrainElevationTest;  // Allow full access
 };

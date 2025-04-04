@@ -74,6 +74,8 @@ protected:
     virtual void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
                                               const std::array<int, 2>& new_origin_i) = 0;
 
+    std::array<ElevationCell, map_size> elevation_;
+
     ElevationCell default_elevation_;
     float min_terrain_height_variance_{};
 
