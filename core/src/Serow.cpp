@@ -200,6 +200,8 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("enable_terrain_estimation", params_.enable_terrain_estimation))
         return false;
+    if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
+        return false;
     if (!checkConfigParam("minimum_terrain_height_variance",
                           params_.minimum_terrain_height_variance))
         return false;
@@ -711,7 +713,13 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
 
         // Initialize terrain elevation mapper
-        terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
+        if (params_.terrain_estimator_type == "naive") {
+            terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
+        } else if (params_.terrain_estimator_type == "local") {
+            terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
+        } else {
+            throw std::runtime_error("Invalid terrain estimator type: " + params_.terrain_estimator_type);
+        }
         terrain_estimator_->initializeLocalMap(terrain_height, 1e4,
                                                params_.minimum_terrain_height_variance);
     }

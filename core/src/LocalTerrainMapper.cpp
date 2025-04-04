@@ -45,7 +45,7 @@ void LocalTerrainMapper::updateLocalMapOriginAndBound(const std::array<float, 2>
     local_map_bound_max_d_ = globalIndexToLocation(local_map_bound_max_i_);
 };
 
-void LocalTerrainMapper::recenter(const std::array<float, 2>& loc, const float yaw) {
+void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
     // Compute the shifting index
     const std::array<int, 2> new_origin_i = locationToGlobalIndex(loc);
     const std::array<float, 2> new_origin_d = {new_origin_i[0] * resolution,
@@ -91,44 +91,6 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc, const float y
             continue;
         }
         clearOutOfMapCells(clear_id, i);
-    }
-
-    // Compute rotation matrix
-    const float cos_yaw = std::cos(yaw);
-    const float sin_yaw = std::sin(yaw);
-
-    // Create a temporary copy of the current data
-    std::array<ElevationCell, map_size> temp_map;
-    for (int i = 0; i < map_size; ++i) {
-        temp_map[i] = elevation_[i];
-    }
-
-    // Reset all cells to default
-    resetLocalMap();
-
-    // Move the data according to the shift and rotation
-    for (int old_i = 0; old_i < map_dim; ++old_i) {
-        for (int old_j = 0; old_j < map_dim; ++old_j) {
-            // Calculate the new position after shifting and rotating
-            const float old_x = (old_i - half_map_dim) * resolution;
-            const float old_y = (old_j - half_map_dim) * resolution;
-            
-            // Apply rotation
-            const float new_x = old_x * cos_yaw - old_y * sin_yaw;
-            const float new_y = old_x * sin_yaw + old_y * cos_yaw;
-            
-            // Apply translation
-            const int new_i = static_cast<int>(new_x * resolution_inv + 0.5) + half_map_dim;
-            const int new_j = static_cast<int>(new_y * resolution_inv + 0.5) + half_map_dim;
-
-            // Check if the new position is within the map bounds
-            if (new_i >= 0 && new_i < map_dim && new_j >= 0 && new_j < map_dim) {
-                // Move the data from the old position to the new position
-                const int new_hash_id = localIndexToHashId({new_i, new_j});
-                const int old_hash_id = localIndexToHashId({old_i, old_j});
-                elevation_[new_hash_id] = temp_map[old_hash_id];
-            }
-        }
     }
 
     updateLocalMapOriginAndBound(new_origin_d, new_origin_i);
