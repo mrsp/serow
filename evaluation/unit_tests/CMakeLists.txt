@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.0)
+cmake_minimum_required(VERSION 3.22.1...4.0.0)
 project(serow_tests VERSION 1.0.0 LANGUAGES CXX)
 
 # Default to C++17
@@ -11,7 +11,7 @@ include(FetchContent)
 FetchContent_Declare(
   googletest
   GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG release-1.11.0
+  GIT_TAG v1.14.0
 )
 
 FetchContent_MakeAvailable(googletest)

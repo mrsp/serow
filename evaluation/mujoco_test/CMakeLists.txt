@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.0)
+cmake_minimum_required(VERSION 3.22.1...4.0.0)
 project(serow_tests VERSION 1.0.0 LANGUAGES CXX)
 
 # Default to C++20

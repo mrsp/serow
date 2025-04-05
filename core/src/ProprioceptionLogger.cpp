@@ -457,6 +457,9 @@ private:
             message.dataSize = data_size;
             message.data = data;
 
+            // Protect the writer with a mutex
+            std::lock_guard<std::mutex> lock(writer_mutex_);
+
             // Write the message without additional error checking
             auto status = writer_->write(message);
             if (status.code != mcap::StatusCode::Success) {
@@ -522,6 +525,7 @@ private:
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
     std::unique_ptr<mcap::McapWriter> writer_;
+    std::mutex writer_mutex_;
 };  // namespace serow
 
 // Public interface implementation
