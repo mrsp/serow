@@ -83,6 +83,12 @@ public:
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
 
+    /**
+     * @brief Set the action for the EKF.
+     * @param action Action to set.
+     */
+    void setAction(const Eigen::VectorXd& action);
+
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
@@ -120,6 +126,14 @@ private:
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
+
+    double angular_velocity_action_cov_gain_{1.0};
+    double linear_acceleration_action_cov_gain_{1.0};
+    double angular_velocity_bias_action_cov_gain_{1.0};
+    double linear_acceleration_bias_action_cov_gain_{1.0};
+    double position_action_cov_gain_{1.0};
+    double orientation_action_cov_gain_{1.0};
+    double contact_position_action_cov_gain_{1.0};
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.

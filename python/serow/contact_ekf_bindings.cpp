@@ -41,5 +41,6 @@ PYBIND11_MODULE(contact_ekf, m) {
                 }
             },
             py::arg("state"), py::arg("kin"), py::arg("odom") = py::none(),
-            py::arg("terrain_estimator") = py::none());
+            py::arg("terrain_estimator") = py::none())
+        .def("set_action", &serow::ContactEKF::setAction, py::arg("action"));
 }

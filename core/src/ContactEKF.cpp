@@ -154,18 +154,21 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
 
     Eigen::MatrixXd Qc = Eigen::MatrixXd::Zero(num_inputs_, num_inputs_);
     // Covariance Q with full state + biases
-    Qc(ng_idx_, ng_idx_) = imu.angular_velocity_cov;
-    Qc(na_idx_, na_idx_) = imu.linear_acceleration_cov;
-    Qc(nbg_idx_, nbg_idx_) = imu.angular_velocity_bias_cov;
-    Qc(nba_idx_, nba_idx_) = imu.linear_acceleration_bias_cov;
+    Qc(ng_idx_, ng_idx_) = imu.angular_velocity_cov * angular_velocity_action_cov_gain_;
+    Qc(na_idx_, na_idx_) = imu.linear_acceleration_cov * linear_acceleration_action_cov_gain_;
+    Qc(nbg_idx_, nbg_idx_) = imu.angular_velocity_bias_cov * angular_velocity_bias_action_cov_gain_;
+    Qc(nba_idx_, nba_idx_) =
+        imu.linear_acceleration_bias_cov * linear_acceleration_bias_action_cov_gain_;
 
     for (const auto& [cf, cs] : kin.contacts_status) {
         const int contact_status = static_cast<int>(cs);
         Qc(npl_idx_.at(cf), npl_idx_.at(cf)).noalias() =
-            kin.position_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
+            kin.position_slip_cov * position_action_cov_gain_ +
+            (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         if (!point_feet_) {
             Qc(nrl_idx_.at(cf), nrl_idx_.at(cf)).noalias() =
-                kin.orientation_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
+                kin.orientation_slip_cov * orientation_action_cov_gain_ +
+                (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         }
     }
 
@@ -256,7 +259,8 @@ void ContactEKF::updateWithContacts(
         }
 
         contacts_position_noise.at(cf) = cs * contacts_position_noise.at(cf) +
-            (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + position_cov;
+            (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
+            position_cov * contact_position_action_cov_gain_;
 
         if (contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
@@ -568,6 +572,16 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
             terrain_estimator->recenter(base_pos_xy);
         }
     }
+}
+
+void ContactEKF::setAction(const Eigen::VectorXd& action) {
+    angular_velocity_action_cov_gain_ = action(0);
+    linear_acceleration_action_cov_gain_ = action(1);
+    angular_velocity_bias_action_cov_gain_ = action(2);
+    linear_acceleration_bias_action_cov_gain_ = action(3);
+    position_action_cov_gain_ = action(4);
+    orientation_action_cov_gain_ = action(5);
+    contact_position_action_cov_gain_ = action(6);
 }
 
 }  // namespace serow

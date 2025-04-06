@@ -103,11 +103,14 @@ def main():
     # Run a few prediction/update steps
     for i in range(10):
         # Update timestamps
-        dt = 0.001  # 1ms time step
+        dt = 0.001  # 1ms time stepS
         imu.timestamp += dt
         kin.timestamp += dt
         odom.timestamp += dt
         
+        # Set action
+        ekf.set_action(np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]))
+
         # Predict step
         ekf.predict(state, imu, kin)
         
