@@ -65,7 +65,6 @@ public:
         return elevation_;
     }
 
-    int locationToHashId(const std::array<float, 2>& loc) const override;
 
     // Coordinate conversion functions made public for testing
     std::array<int, 2> globalIndexToLocalIndex(const std::array<int, 2>& id_g) const;
@@ -75,8 +74,9 @@ public:
     std::array<int, 2> locationToGlobalIndex(const std::array<float, 2>& loc) const;
 
     // Hash ID related functions made public for testing
-    int localIndexToHashId(const std::array<int, 2>& id_in) const;
     bool isHashIdValid(const int id) const;
+    int locationToHashId(const std::array<float, 2>& loc) const override;
+    int localIndexToHashId(const std::array<int, 2>& id_in) const;
     std::array<int, 2> hashIdToLocalIndex(const int hash_id) const;
     std::array<int, 2> hashIdToGlobalIndex(const int hash_id) const;
     std::array<float, 2> hashIdToLocation(const int hash_id) const;
