@@ -12,7 +12,7 @@ bool LocalTerrainMapper::inside(const std::array<int, 2>& id_g) const {
     if ((x - half_map_dim) > 0 || (y - half_map_dim) > 0) {
         return false;
     }
-    
+
     return true;
 }
 
@@ -52,7 +52,7 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
 
     // Compute the delta shift
     const std::array<int, 2> shift_num = {new_origin_i[0] - local_map_origin_i_[0],
-                                         new_origin_i[1] - local_map_origin_i_[1]};
+                                          new_origin_i[1] - local_map_origin_i_[1]};
 
     // If shift is too large, reset the entire map
     if (std::abs(shift_num[0]) >= map_dim || std::abs(shift_num[1]) >= map_dim) {

@@ -65,7 +65,6 @@ public:
         return elevation_;
     }
 
-
     // Coordinate conversion functions made public for testing
     std::array<int, 2> globalIndexToLocalIndex(const std::array<int, 2>& id_g) const;
     std::array<int, 2> localIndexToGlobalIndex(const std::array<int, 2>& id_l) const;

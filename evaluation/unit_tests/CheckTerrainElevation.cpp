@@ -17,8 +17,8 @@
 #include <cmath>
 #include <iostream>
 #include <random>
-#include <serow/NaiveLocalTerrainMapper.hpp>
 #include <serow/LocalTerrainMapper.hpp>
+#include <serow/NaiveLocalTerrainMapper.hpp>
 #include <serow/common.hpp>
 
 namespace serow {
@@ -224,18 +224,19 @@ TEST_F(TerrainElevationTest, NormalizeRandomAndEdgeCases) {
 }
 
 TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
-    //Test recentering with valid origin
+    // Test recentering with valid origin
     std::array<float, 2> valid_origin = {1.0f, 1.0f};
     terrain.recenter(valid_origin);
     naive_terrain.recenter(valid_origin);
     EXPECT_EQ(terrain.getMapOrigin(), valid_origin);
     EXPECT_EQ(naive_terrain.getMapOrigin(), valid_origin);
 
-    // Update a few cells in the map and check if they are updated and that they are consistent 
+    // Update a few cells in the map and check if they are updated and that they are consistent
     // after recentering
-    std::array<float, 2> naive_update_location = {0.1f, 0.1f}; // Uses local to map coordinates
-    std::array<float, 2> update_location = {naive_update_location[0] + valid_origin[0], 
-                                            naive_update_location[1] + valid_origin[1]}; // Uses global to map coordinates
+    std::array<float, 2> naive_update_location = {0.1f, 0.1f};  // Uses local to map coordinates
+    std::array<float, 2> update_location = {
+        naive_update_location[0] + valid_origin[0],
+        naive_update_location[1] + valid_origin[1]};  // Uses global to map coordinates
     float update_height = 12.0f;
     float update_variance = 3.1f;
     const auto set_cell = ElevationCell(update_height, update_variance);
@@ -244,8 +245,6 @@ TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
 
     const auto cell = terrain.getElevation(update_location);
     const auto naive_cell = naive_terrain.getElevation(naive_update_location);
-    std::cout << "cell: " << cell.value().height << ", " << cell.value().variance << std::endl;
-    std::cout << "naive cell: " << naive_cell.value().height << ", " << naive_cell.value().variance << std::endl;
     EXPECT_TRUE(cell.has_value());
     EXPECT_TRUE(naive_cell.has_value());
     EXPECT_TRUE(elevationCellEqual(cell.value(), naive_cell.value()));
@@ -259,23 +258,16 @@ TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
 
     // Check if the cells are still consistent
     // Compute the shifted update location relative to the new origin
-    std::array<float, 2> shift = {
-        new_valid_origin[0] - valid_origin[0],
-        new_valid_origin[1] - valid_origin[1]
-    };
+    std::array<float, 2> shift = {new_valid_origin[0] - valid_origin[0],
+                                  new_valid_origin[1] - valid_origin[1]};
 
-    std::array<float, 2> shifted_update_location = {
-        naive_update_location[0] - shift[0],
-        naive_update_location[1] - shift[1]
-    };
+    std::array<float, 2> shifted_update_location = {naive_update_location[0] - shift[0],
+                                                    naive_update_location[1] - shift[1]};
 
     const auto new_cell = terrain.getElevation(update_location);
     const auto new_naive_cell = naive_terrain.getElevation(shifted_update_location);
     EXPECT_TRUE(new_cell.has_value());
     EXPECT_TRUE(new_naive_cell.has_value());
-    std::cout << "new cell: " << new_cell.value().height << ", " << new_cell.value().variance << std::endl;
-    std::cout << "new naive cell: " << new_naive_cell.value().height << ", " << new_naive_cell.value().variance << std::endl;
-    
     EXPECT_TRUE(elevationCellEqual(new_cell.value(), new_naive_cell.value()));
     EXPECT_TRUE(floatEqual(new_cell.value().height, update_height));
     EXPECT_TRUE(floatEqual(new_cell.value().variance, update_variance));
@@ -284,4 +276,3 @@ TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
 }
 
 }  // namespace serow
-    
