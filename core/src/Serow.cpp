@@ -715,7 +715,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         // Initialize terrain elevation mapper
         if (params_.terrain_estimator_type == "naive") {
             terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
-        } else if (params_.terrain_estimator_type == "local") {
+        } else if (params_.terrain_estimator_type == "fast") {
             terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
         } else {
             throw std::runtime_error("Invalid terrain estimator type: " +
@@ -941,12 +941,11 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
                     for (int i = 0; i < map_dim; i += downsample_factor) {
                         for (int j = 0; j < map_dim; j += downsample_factor) {
-                            float x = (i - half_map_dim) * resolution;
-                            float y = (j - half_map_dim) * resolution;
+                            float x = (i - half_map_dim) * resolution + map_origin_xy[0];
+                            float y = (j - half_map_dim) * resolution + map_origin_xy[1];
                             const auto& cell = terrain_map[terrain_estimator_->locationToHashId(
                                 std::array<float, 2>{x, y})];
-                            local_map.data.push_back(
-                                {x + map_origin_xy[0], y + map_origin_xy[1], cell.height});
+                            local_map.data.push_back({x, y, cell.height});
                         }
                     }
                     exteroception_logger_.log(local_map);

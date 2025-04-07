@@ -54,6 +54,7 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
     const std::array<int, 2> shift_num = {new_origin_i[0] - local_map_origin_i_[0],
                                           new_origin_i[1] - local_map_origin_i_[1]};
 
+    std::lock_guard<std::mutex> lock(mutex_);
     // If shift is too large, reset the entire map
     if (std::abs(shift_num[0]) >= map_dim || std::abs(shift_num[1]) >= map_dim) {
         resetLocalMap();
@@ -195,6 +196,7 @@ bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, f
     if (!inside(loc)) {
         return false;
     }
+    std::lock_guard<std::mutex> lock(mutex_);
 
     variance = std::max(variance, min_terrain_height_variance_);
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
@@ -241,6 +243,7 @@ std::optional<ElevationCell> LocalTerrainMapper::getElevation(const std::array<f
         return std::nullopt;
     }
     const int hash_id = locationToHashId(loc);
+    std::lock_guard<std::mutex> lock(mutex_);
     return elevation_[hash_id];
 }
 
@@ -280,6 +283,7 @@ bool LocalTerrainMapper::setElevation(const std::array<float, 2>& loc,
         return false;
     }
     const int idx = locationToHashId(loc);
+    std::lock_guard<std::mutex> lock(mutex_);
     elevation_[idx] = elevation;
     return true;
 }
