@@ -11,6 +11,9 @@
 
 namespace serow {
 
+// Forward declaration of test class
+class TerrainElevationTest;
+
 class NaiveLocalTerrainMapper : public TerrainElevation {
 public:
     void recenter(const std::array<float, 2>& loc) override;
@@ -61,7 +64,7 @@ private:
 
     std::mutex mutex_;
 
-    friend class TerrainElevationTest;  // Allow full access
+    friend class serow::TerrainElevationTest;  // Allow full access
 };
 
 }  // namespace serow

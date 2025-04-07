@@ -10,6 +10,9 @@
 
 namespace serow {
 
+// Forward declaration of test class
+class TerrainElevationTest;
+
 template <int N>
 inline int fast_mod(const int x) {
     static_assert((N & (N - 1)) == 0, "N must be a power of 2");
@@ -64,6 +67,21 @@ public:
 
     int locationToHashId(const std::array<float, 2>& loc) const override;
 
+    // Coordinate conversion functions made public for testing
+    std::array<int, 2> globalIndexToLocalIndex(const std::array<int, 2>& id_g) const;
+    std::array<int, 2> localIndexToGlobalIndex(const std::array<int, 2>& id_l) const;
+    std::array<float, 2> globalIndexToLocation(const std::array<int, 2>& id_g) const;
+    std::array<float, 2> localIndexToLocation(const std::array<int, 2>& id_l) const;
+    std::array<int, 2> locationToGlobalIndex(const std::array<float, 2>& loc) const;
+
+    // Hash ID related functions made public for testing
+    int localIndexToHashId(const std::array<int, 2>& id_in) const;
+    bool isHashIdValid(const int id) const;
+    std::array<int, 2> hashIdToLocalIndex(const int hash_id) const;
+    std::array<int, 2> hashIdToGlobalIndex(const int hash_id) const;
+    std::array<float, 2> hashIdToLocation(const int hash_id) const;
+    int globalIndexToHashId(const std::array<int, 2>& id_g) const;
+
 private:
     void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
                                       const std::array<int, 2>& new_origin_i) override;
@@ -76,31 +94,8 @@ private:
 
     int locationToGlobalIndex(const float loc) const;
 
-    std::array<int, 2> locationToGlobalIndex(const std::array<float, 2>& loc) const;
-
-    std::array<float, 2> globalIndexToLocation(const std::array<int, 2>& id_g) const;
-
-    std::array<float, 2> globalIndexToWorldLocation(const std::array<int, 2>& id_g) const;
-
-    std::array<int, 2> globalIndexToLocalIndex(const std::array<int, 2>& id_g) const;
-
-    std::array<int, 2> localIndexToGlobalIndex(const std::array<int, 2>& id_l) const;
-
-    std::array<float, 2> localIndexToLocation(const std::array<int, 2>& id_l) const;
-
-    std::array<int, 2> hashIdToLocalIndex(const int hash_id) const;
-
-    std::array<int, 2> hashIdToGlobalIndex(const int hash_id) const;
-
-    std::array<float, 2> hashIdToLocation(const int hash_id) const;
-
-    int localIndexToHashId(const std::array<int, 2>& id_in) const;
-
-    int globalIndexToHashId(const std::array<int, 2>& id_g) const;
-
-    bool isHashIdValid(const int id) const;
-
     std::mutex mutex_;
+
     friend class TerrainElevationTest;  // Allow full access
 };
 

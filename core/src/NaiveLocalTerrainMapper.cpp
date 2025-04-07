@@ -128,9 +128,8 @@ void NaiveLocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
                                       new_origin_i[1] - local_map_origin_i_[1]};
 
     std::lock_guard<std::mutex> lock(mutex_);
-
     // If shift is too large, reset the entire map
-    if (std::abs(shift[0]) >= half_map_dim || std::abs(shift[1]) >= half_map_dim) {
+    if (std::abs(shift[0]) >= map_dim || std::abs(shift[1]) >= map_dim) {
         resetLocalMap();
         updateLocalMapOriginAndBound(loc, new_origin_i);
         return;

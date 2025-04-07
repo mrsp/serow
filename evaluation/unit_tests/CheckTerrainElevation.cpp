@@ -223,4 +223,158 @@ TEST_F(TerrainElevationTest, NormalizeRandomAndEdgeCases) {
     }
 }
 
+TEST_F(TerrainElevationTest, LocalTerrainMapperCoordinateConversions) {
+    // Test the coordinate conversion functions
+    // Test with valid global indices
+    std::array<int, 2> valid_indices[] = {
+        {0, 0},                    // Origin
+        {100, 100},               // Positive indices
+        {half_map_dim-1, 0},      // Just inside edge x
+        {0, half_map_dim-1},      // Just inside edge y
+        {-half_map_dim+1, 0},     // Just inside edge -x
+        {0, -half_map_dim+1}      // Just inside edge -y
+    };
+
+    for (const auto& idx : valid_indices) {
+        EXPECT_TRUE(terrain.inside(idx)) << "Failed for index: " << idx[0] << ", " << idx[1];
+    }
+
+    for (const auto& idx : valid_indices) {
+        const auto local_idx = terrain.globalIndexToLocalIndex(idx);
+        const auto global_idx = terrain.localIndexToGlobalIndex(local_idx);
+        EXPECT_EQ(idx[0], global_idx[0]) << "Failed x conversion for index: " << idx[0] << ", " << idx[1];
+        EXPECT_EQ(idx[1], global_idx[1]) << "Failed y conversion for index: " << idx[0] << ", " << idx[1];
+    }
+    
+    // Test with invalid global indices
+    std::array<int, 2> invalid_indices[] = {
+        {half_map_dim+1, 0},      // Just outside edge x
+        {0, half_map_dim+1},      // Just outside edge y
+        {-half_map_dim-1, 0},     // Just outside edge -x
+        {0, -half_map_dim-1}      // Just outside edge -y
+    };
+
+    for (const auto& idx : invalid_indices) {
+        EXPECT_FALSE(terrain.inside(idx)) << "Failed for index: " << idx[0] << ", " << idx[1];
+    }
+
+    // Test with valid map locations
+    std::array<float, 2> valid_locations[] = {
+        {0.0f, 0.0f},                    // Origin
+        {1.0f, 1.0f},                    // 1 meter in x and y
+        {-1.0f, -1.0f},                  // -1 meter in x and y
+        {(half_map_dim-1) * resolution, 0.0f},  // Just inside edge x
+        {0.0f, (half_map_dim-1) * resolution},  // Just inside edge y
+        {(-half_map_dim+1) * resolution, 0.0f}, // Just inside edge -x
+        {0.0f, (-half_map_dim+1) * resolution}  // Just inside edge -y
+    };
+
+    for (const auto& loc : valid_locations) {
+        EXPECT_TRUE(terrain.inside(loc)) << "Failed for location: " << loc[0] << ", " << loc[1];
+        
+        // Test coordinate conversion
+        const auto idx = terrain.locationToGlobalIndex(loc);
+        const auto loc_back = terrain.globalIndexToLocation(idx);
+        EXPECT_NEAR(loc[0], loc_back[0], 1e-5f) << "Failed x conversion for location: " << loc[0] << ", " << loc[1];
+        EXPECT_NEAR(loc[1], loc_back[1], 1e-5f) << "Failed y conversion for location: " << loc[0] << ", " << loc[1];
+    }
+
+    // Test with invalid map locations
+    std::array<float, 2> invalid_locations[] = {
+        {(half_map_dim+1) * resolution, 0.0f},      // Just outside edge x
+        {0.0f, (half_map_dim+1) * resolution},      // Just outside edge y
+        {(-half_map_dim-1) * resolution, 0.0f},     // Just outside edge -x
+        {0.0f, (-half_map_dim-1) * resolution}      // Just outside edge -y
+    };
+
+    for (const auto& loc : invalid_locations) {
+        EXPECT_FALSE(terrain.inside(loc)) << "Failed for location: " << loc[0] << ", " << loc[1];
+    }
+
+    // Test with valid hash ids
+    for (const auto& idx : valid_indices) {
+        const int hash_id = terrain.globalIndexToHashId(idx);
+        EXPECT_TRUE(terrain.isHashIdValid(hash_id)) << "Failed for local index: " << idx[0] << ", " << idx[1];
+        
+        // Test hash ID to local index conversion
+        const auto idx_back = terrain.hashIdToGlobalIndex(hash_id);
+        EXPECT_EQ(idx[0], idx_back[0]) << "Failed x conversion for hash_id: " << hash_id;
+        EXPECT_EQ(idx[1], idx_back[1]) << "Failed y conversion for hash_id: " << hash_id;
+    }
+
+    // Test with invalid hash ids
+    const int invalid_hash_ids[] = {
+        -1,                   // Negative
+        map_size,             // Equal to size
+        map_size + 1,         // Just above size
+        map_size * 2,         // Way above size
+        std::numeric_limits<int>::max(),  // Max int
+        std::numeric_limits<int>::min()   // Min int
+    };
+
+    for (const int hash_id : invalid_hash_ids) {
+        EXPECT_FALSE(terrain.isHashIdValid(hash_id)) << "Failed for hash_id: " << hash_id;
+    }
+}
+
+// TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
+//     //Test recentering with valid origin
+//     std::array<float, 2> valid_origin = {1.0f, 1.0f};
+//     terrain.recenter(valid_origin);
+//     naive_terrain.recenter(valid_origin);
+//     EXPECT_EQ(terrain.getMapOrigin(), valid_origin);
+//     EXPECT_EQ(naive_terrain.getMapOrigin(), valid_origin);
+
+//     // Update a few cells in the map and check if they are updated and that they are consistent 
+//     // after recentering
+//     std::array<float, 2> update_location = {0.1f, 0.1f};
+//     float update_height = 2.0f;
+//     float update_variance = 0.1f;
+//     EXPECT_TRUE(terrain.update(update_location, update_height, update_variance));
+//     EXPECT_TRUE(naive_terrain.update(update_location, update_height, update_variance));
+
+//     const auto cell = terrain.getElevation(update_location);
+//     const auto naive_cell = naive_terrain.getElevation(update_location);
+//     EXPECT_TRUE(cell.has_value());
+//     EXPECT_TRUE(naive_cell.has_value());
+//     EXPECT_TRUE(elevationCellEqual(terrain.getElevation(update_location).value(), naive_terrain.getElevation(update_location).value()));
+
+//     // Test recentering again with valid origin
+//     std::array<float, 2> new_valid_origin = {1.2f, 1.2f};
+//     terrain.recenter(new_valid_origin);
+//     naive_terrain.recenter(new_valid_origin);
+//     EXPECT_EQ(terrain.getMapOrigin(), new_valid_origin);
+//     EXPECT_EQ(naive_terrain.getMapOrigin(), new_valid_origin);
+
+//     // Check if the cells are still consistent
+//     // Compute the shifted update location relative to the new origin
+//     std::array<float, 2> shift = {
+//         new_valid_origin[0] - valid_origin[0],
+//         new_valid_origin[1] - valid_origin[1]
+//     };
+
+//     std::array<float, 2> shifted_update_location = {
+//         update_location[0] - shift[0],
+//         update_location[1] - shift[1]
+//     };
+//     std::cout << "shift: " << shift[0] << ", " << shift[1] << std::endl;
+//     std::cout << "location prior to shift: " << update_location[0] << ", " << update_location[1] << std::endl;
+//     std::cout << "location after shift: " << shifted_update_location[0] << ", " << shifted_update_location[1] << std::endl;
+//     const auto new_cell = terrain.getElevation(shifted_update_location);
+//     const auto new_naive_cell = naive_terrain.getElevation(shifted_update_location);
+//     EXPECT_TRUE(new_cell.has_value());
+//     EXPECT_TRUE(new_naive_cell.has_value());
+//     std::cout << "old cell: " << cell.value().height << ", " << cell.value().variance << std::endl;
+//     std::cout << "old naive cell: " << naive_cell.value().height << ", " << naive_cell.value().variance << std::endl;
+//     std::cout << "new cell: " << new_cell.value().height << ", " << new_cell.value().variance << std::endl;
+//     std::cout << "new naive cell: " << new_naive_cell.value().height << ", " << new_naive_cell.value().variance << std::endl;
+    
+//     EXPECT_TRUE(elevationCellEqual(new_cell.value(), new_naive_cell.value()));
+//     EXPECT_TRUE(floatEqual(new_cell.value().height, update_height));
+//     EXPECT_TRUE(floatEqual(new_cell.value().variance, update_variance));
+//     EXPECT_TRUE(floatEqual(new_naive_cell.value().height, update_height));
+//     EXPECT_TRUE(floatEqual(new_naive_cell.value().variance, update_variance));
+// }
+
 }  // namespace serow
+    

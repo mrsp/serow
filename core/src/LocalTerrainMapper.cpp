@@ -3,12 +3,12 @@
 namespace serow {
 
 bool LocalTerrainMapper::inside(const std::array<int, 2>& id_g) const {
-    int x_diff = abs(id_g[0] - local_map_origin_i_[0]);
-    int y_diff = abs(id_g[1] - local_map_origin_i_[1]);
-
-    if ((x_diff - half_map_dim) > 0 || (y_diff - half_map_dim) > 0) {
+    int x = abs(id_g[0]);
+    int y = abs(id_g[1]);
+    if ((x - half_map_dim) > 0 || (y - half_map_dim) > 0) {
         return false;
     }
+    
     return true;
 }
 
@@ -48,28 +48,35 @@ void LocalTerrainMapper::updateLocalMapOriginAndBound(const std::array<float, 2>
 void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
     // Compute the shifting index
     const std::array<int, 2> new_origin_i = locationToGlobalIndex(loc);
-    const std::array<float, 2> new_origin_d = {new_origin_i[0] * resolution,
-                                               new_origin_i[1] * resolution};
+    const std::array<float, 2> new_origin_d = loc;
 
     // Compute the delta shift
     const std::array<int, 2> shift_num = {new_origin_i[0] - local_map_origin_i_[0],
-                                          new_origin_i[1] - local_map_origin_i_[1]};
-    for (size_t i = 0; i < 2; i++) {
-        if (fabs(shift_num[i]) > map_dim) {
-            // Clear all map
-            resetLocalMap();
-            updateLocalMapOriginAndBound(new_origin_d, new_origin_i);
-            return;
-        }
+                                         new_origin_i[1] - local_map_origin_i_[1]};
+
+    // If shift is too large, reset the entire map
+    if (std::abs(shift_num[0]) >= map_dim || std::abs(shift_num[1]) >= map_dim) {
+        resetLocalMap();
+        updateLocalMapOriginAndBound(new_origin_d, new_origin_i);
+        return;
     }
+
+    // Create a temporary copy of the current elevation data
+    std::array<ElevationCell, map_size> temp_elevation = elevation_;
 
     // Clear the memory out of the map size
     for (size_t i = 0; i < 2; i++) {
         if (shift_num[i] == 0) {
             continue;
         }
-        const int min_id_g = -half_map_dim + local_map_origin_i_[i];
-        const int min_id_l = fast_mod<map_dim>(min_id_g);
+        const int min_id_g = local_map_bound_min_i_[i];
+        int min_id_l = fast_mod<map_dim>(min_id_g);
+        if (min_id_l > half_map_dim) {
+            min_id_l -= map_dim;
+        } else if (min_id_l < -half_map_dim) {
+            min_id_l += map_dim;
+        }
+
         std::vector<int> clear_id;
         if (shift_num[i] > 0) {
             // forward shift, the min id should be cut
@@ -93,7 +100,20 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
         clearOutOfMapCells(clear_id, i);
     }
 
+    // Update the map origin and bounds
     updateLocalMapOriginAndBound(new_origin_d, new_origin_i);
+
+    // Copy the data to the new positions
+    for (int x = -half_map_dim; x <= half_map_dim; x++) {
+        for (int y = -half_map_dim; y <= half_map_dim; y++) {
+            std::array<int, 2> old_idx = {x - shift_num[0], y - shift_num[1]};
+            if (inside(old_idx)) {
+                int old_hash = localIndexToHashId(old_idx);
+                int new_hash = localIndexToHashId({x, y});
+                elevation_[new_hash] = temp_elevation[old_hash];
+            }
+        }
+    }
 }
 
 int LocalTerrainMapper::localIndexToHashId(const std::array<int, 2>& id_in) const {
@@ -102,7 +122,7 @@ int LocalTerrainMapper::localIndexToHashId(const std::array<int, 2>& id_in) cons
 }
 
 int LocalTerrainMapper::locationToGlobalIndex(const float loc) const {
-    if (loc > 0.0) {
+    if (loc >= 0.0) {
         return static_cast<int>(resolution_inv * loc + 0.5);
     } else {
         return static_cast<int>(resolution_inv * loc - 0.5);
@@ -116,7 +136,7 @@ std::array<int, 2> LocalTerrainMapper::locationToGlobalIndex(
 
 std::array<float, 2> LocalTerrainMapper::globalIndexToLocation(
     const std::array<int, 2>& id_g) const {
-    return {id_g[0] * resolution, id_g[1] * resolution};
+    return {static_cast<float>(id_g[0]) * resolution, static_cast<float>(id_g[1]) * resolution};
 }
 
 std::array<int, 2> LocalTerrainMapper::globalIndexToLocalIndex(
@@ -137,7 +157,7 @@ std::array<int, 2> LocalTerrainMapper::localIndexToGlobalIndex(
     const std::array<int, 2>& id_l) const {
     std::array<int, 2> id_g = {};
     for (size_t i = 0; i < 2; i++) {
-        const int min_id_g = -half_map_dim + local_map_origin_i_[i];
+        const int min_id_g = local_map_bound_min_i_[i];
         int min_id_l = fast_mod<map_dim>(min_id_g);
         if (min_id_l > half_map_dim) {
             min_id_l -= map_dim;
@@ -160,7 +180,7 @@ std::array<float, 2> LocalTerrainMapper::localIndexToLocation(
     const std::array<int, 2>& id_l) const {
     std::array<float, 2> loc = {};
     for (size_t i = 0; i < 2; i++) {
-        const int min_id_g = -half_map_dim + local_map_origin_i_[i];
+        const int min_id_g = local_map_bound_min_i_[i];
         int min_id_l = fast_mod<map_dim>(min_id_g);
         if (min_id_l > half_map_dim) {
             min_id_l -= map_dim;
@@ -181,8 +201,8 @@ std::array<float, 2> LocalTerrainMapper::localIndexToLocation(
 
 std::array<int, 2> LocalTerrainMapper::hashIdToLocalIndex(const int hash_id) const {
     const int id0 = hash_id / map_dim;
-    const int id1 = hash_id % map_dim;
-    return localIndexToGlobalIndex({id0 - half_map_dim, id1 - half_map_dim});
+    const int id1 = hash_id - id0 * map_dim;
+    return {id0 - half_map_dim, id1 - half_map_dim};
 }
 
 std::array<int, 2> LocalTerrainMapper::hashIdToGlobalIndex(const int hash_id) const {
