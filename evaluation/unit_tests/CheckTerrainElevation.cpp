@@ -317,64 +317,65 @@ TEST_F(TerrainElevationTest, LocalTerrainMapperCoordinateConversions) {
     }
 }
 
-// TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
-//     //Test recentering with valid origin
-//     std::array<float, 2> valid_origin = {1.0f, 1.0f};
-//     terrain.recenter(valid_origin);
-//     naive_terrain.recenter(valid_origin);
-//     EXPECT_EQ(terrain.getMapOrigin(), valid_origin);
-//     EXPECT_EQ(naive_terrain.getMapOrigin(), valid_origin);
+TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
+    //Test recentering with valid origin
+    std::array<float, 2> valid_origin = {1.0f, 1.0f};
+    terrain.recenter(valid_origin);
+    naive_terrain.recenter(valid_origin);
+    EXPECT_EQ(terrain.getMapOrigin(), valid_origin);
+    EXPECT_EQ(naive_terrain.getMapOrigin(), valid_origin);
 
-//     // Update a few cells in the map and check if they are updated and that they are consistent 
-//     // after recentering
-//     std::array<float, 2> update_location = {0.1f, 0.1f};
-//     float update_height = 2.0f;
-//     float update_variance = 0.1f;
-//     EXPECT_TRUE(terrain.update(update_location, update_height, update_variance));
-//     EXPECT_TRUE(naive_terrain.update(update_location, update_height, update_variance));
+    // Update a few cells in the map and check if they are updated and that they are consistent 
+    // after recentering
+    std::array<float, 2> update_location = {0.1f, 0.1f};
+    float update_height = 12.0f;
+    float update_variance = 3.1f;
+    const auto set_cell = ElevationCell(update_height, update_variance);
+    EXPECT_TRUE(terrain.setElevation(update_location, set_cell));
+    EXPECT_TRUE(naive_terrain.setElevation(update_location, set_cell));
 
-//     const auto cell = terrain.getElevation(update_location);
-//     const auto naive_cell = naive_terrain.getElevation(update_location);
-//     EXPECT_TRUE(cell.has_value());
-//     EXPECT_TRUE(naive_cell.has_value());
-//     EXPECT_TRUE(elevationCellEqual(terrain.getElevation(update_location).value(), naive_terrain.getElevation(update_location).value()));
+    const auto cell = terrain.getElevation(update_location);
+    const auto naive_cell = naive_terrain.getElevation(update_location);
+    std::cout << "cell: " << cell.value().height << ", " << cell.value().variance << std::endl;
+    std::cout << "naive cell: " << naive_cell.value().height << ", " << naive_cell.value().variance << std::endl;
+    EXPECT_TRUE(cell.has_value());
+    EXPECT_TRUE(naive_cell.has_value());
+    EXPECT_TRUE(elevationCellEqual(cell.value(), naive_cell.value()));
 
-//     // Test recentering again with valid origin
-//     std::array<float, 2> new_valid_origin = {1.2f, 1.2f};
-//     terrain.recenter(new_valid_origin);
-//     naive_terrain.recenter(new_valid_origin);
-//     EXPECT_EQ(terrain.getMapOrigin(), new_valid_origin);
-//     EXPECT_EQ(naive_terrain.getMapOrigin(), new_valid_origin);
+    // Test recentering again with valid origin
+    std::array<float, 2> new_valid_origin = {1.5f, 1.5f};
+    terrain.recenter(new_valid_origin);
+    naive_terrain.recenter(new_valid_origin);
+    EXPECT_EQ(terrain.getMapOrigin(), new_valid_origin);
+    EXPECT_EQ(naive_terrain.getMapOrigin(), new_valid_origin);
 
-//     // Check if the cells are still consistent
-//     // Compute the shifted update location relative to the new origin
-//     std::array<float, 2> shift = {
-//         new_valid_origin[0] - valid_origin[0],
-//         new_valid_origin[1] - valid_origin[1]
-//     };
+    // Check if the cells are still consistent
+    // Compute the shifted update location relative to the new origin
+    std::array<float, 2> shift = {
+        new_valid_origin[0] - valid_origin[0],
+        new_valid_origin[1] - valid_origin[1]
+    };
 
-//     std::array<float, 2> shifted_update_location = {
-//         update_location[0] - shift[0],
-//         update_location[1] - shift[1]
-//     };
-//     std::cout << "shift: " << shift[0] << ", " << shift[1] << std::endl;
-//     std::cout << "location prior to shift: " << update_location[0] << ", " << update_location[1] << std::endl;
-//     std::cout << "location after shift: " << shifted_update_location[0] << ", " << shifted_update_location[1] << std::endl;
-//     const auto new_cell = terrain.getElevation(shifted_update_location);
-//     const auto new_naive_cell = naive_terrain.getElevation(shifted_update_location);
-//     EXPECT_TRUE(new_cell.has_value());
-//     EXPECT_TRUE(new_naive_cell.has_value());
-//     std::cout << "old cell: " << cell.value().height << ", " << cell.value().variance << std::endl;
-//     std::cout << "old naive cell: " << naive_cell.value().height << ", " << naive_cell.value().variance << std::endl;
-//     std::cout << "new cell: " << new_cell.value().height << ", " << new_cell.value().variance << std::endl;
-//     std::cout << "new naive cell: " << new_naive_cell.value().height << ", " << new_naive_cell.value().variance << std::endl;
+    std::array<float, 2> shifted_update_location = {
+        update_location[0] - shift[0],
+        update_location[1] - shift[1]
+    };
+    std::cout << "shift: " << shift[0] << ", " << shift[1] << std::endl;
+    std::cout << "location prior to shift: " << update_location[0] << ", " << update_location[1] << std::endl;
+    std::cout << "location after shift: " << shifted_update_location[0] << ", " << shifted_update_location[1] << std::endl;
+    const auto new_cell = terrain.getElevation(shifted_update_location);
+    const auto new_naive_cell = naive_terrain.getElevation(shifted_update_location);
+    EXPECT_TRUE(new_cell.has_value());
+    EXPECT_TRUE(new_naive_cell.has_value());
+    std::cout << "new cell: " << new_cell.value().height << ", " << new_cell.value().variance << std::endl;
+    std::cout << "new naive cell: " << new_naive_cell.value().height << ", " << new_naive_cell.value().variance << std::endl;
     
-//     EXPECT_TRUE(elevationCellEqual(new_cell.value(), new_naive_cell.value()));
-//     EXPECT_TRUE(floatEqual(new_cell.value().height, update_height));
-//     EXPECT_TRUE(floatEqual(new_cell.value().variance, update_variance));
-//     EXPECT_TRUE(floatEqual(new_naive_cell.value().height, update_height));
-//     EXPECT_TRUE(floatEqual(new_naive_cell.value().variance, update_variance));
-// }
+    EXPECT_TRUE(elevationCellEqual(new_cell.value(), new_naive_cell.value()));
+    EXPECT_TRUE(floatEqual(new_cell.value().height, update_height));
+    EXPECT_TRUE(floatEqual(new_cell.value().variance, update_variance));
+    EXPECT_TRUE(floatEqual(new_naive_cell.value().height, update_height));
+    EXPECT_TRUE(floatEqual(new_naive_cell.value().variance, update_variance));
+}
 
 }  // namespace serow
     

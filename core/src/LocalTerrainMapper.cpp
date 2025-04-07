@@ -61,9 +61,6 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
         return;
     }
 
-    // Create a temporary copy of the current elevation data
-    std::array<ElevationCell, map_size> temp_elevation = elevation_;
-
     // Clear the memory out of the map size
     for (size_t i = 0; i < 2; i++) {
         if (shift_num[i] == 0) {
@@ -102,18 +99,6 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
 
     // Update the map origin and bounds
     updateLocalMapOriginAndBound(new_origin_d, new_origin_i);
-
-    // Copy the data to the new positions
-    for (int x = -half_map_dim; x <= half_map_dim; x++) {
-        for (int y = -half_map_dim; y <= half_map_dim; y++) {
-            std::array<int, 2> old_idx = {x - shift_num[0], y - shift_num[1]};
-            if (inside(old_idx)) {
-                int old_hash = localIndexToHashId(old_idx);
-                int new_hash = localIndexToHashId({x, y});
-                elevation_[new_hash] = temp_elevation[old_hash];
-            }
-        }
-    }
 }
 
 int LocalTerrainMapper::localIndexToHashId(const std::array<int, 2>& id_in) const {
@@ -143,7 +128,11 @@ std::array<int, 2> LocalTerrainMapper::globalIndexToLocalIndex(
     const std::array<int, 2>& id_g) const {
     std::array<int, 2> id_l = {};
     for (size_t i = 0; i < 2; i++) {
-        id_l[i] = fast_mod<map_dim>(id_g[i]);
+        // Calculate relative to origin
+        int rel_idx = id_g[i] - local_map_origin_i_[i];
+        // Apply modulo to keep within bounds
+        id_l[i] = fast_mod<map_dim>(rel_idx);
+        // Adjust to keep within [-half_map_dim, half_map_dim]
         if (id_l[i] > half_map_dim) {
             id_l[i] -= map_dim;
         } else if (id_l[i] < -half_map_dim) {
@@ -157,21 +146,17 @@ std::array<int, 2> LocalTerrainMapper::localIndexToGlobalIndex(
     const std::array<int, 2>& id_l) const {
     std::array<int, 2> id_g = {};
     for (size_t i = 0; i < 2; i++) {
-        const int min_id_g = local_map_bound_min_i_[i];
-        int min_id_l = fast_mod<map_dim>(min_id_g);
-        if (min_id_l > half_map_dim) {
-            min_id_l -= map_dim;
+        // Adjust local index to be positive for modulo arithmetic
+        int adj_id_l = id_l[i];
+        if (adj_id_l < 0) {
+            adj_id_l += map_dim;
         }
-        if (min_id_l < -half_map_dim) {
-            min_id_l += map_dim;
+        // Map back to global coordinates
+        id_g[i] = local_map_origin_i_[i] + adj_id_l;
+        // Adjust if we wrapped around
+        if (adj_id_l > half_map_dim) {
+            id_g[i] -= map_dim;
         }
-
-        int cur_dis_to_min_id = id_l[i] - min_id_l;
-        if (cur_dis_to_min_id < 0) {
-            cur_dis_to_min_id += map_dim;
-        }
-        int cur_id = cur_dis_to_min_id + min_id_g;
-        id_g[i] = cur_id;
     }
     return id_g;
 }
