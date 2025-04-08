@@ -38,6 +38,8 @@ public:
 
     int locationToHashId(const std::array<float, 2>& loc) const override;
 
+    std::array<float, 2> hashIdToLocation(const int hash_id) const override;
+
 private:
     int locationToGlobalIndex(const float loc) const;
 
@@ -52,6 +54,8 @@ private:
     std::array<int, 2> locationToLocalIndex(const std::array<float, 2>& loc) const;
 
     std::array<float, 2> localIndexToLocation(const std::array<int, 2>& id_l) const;
+
+    std::array<int, 2> hashIdToLocalIndex(const int hash_id) const;
 
     void resetLocalMap();
 

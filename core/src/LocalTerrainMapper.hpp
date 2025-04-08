@@ -78,7 +78,7 @@ public:
     int localIndexToHashId(const std::array<int, 2>& id_in) const;
     std::array<int, 2> hashIdToLocalIndex(const int hash_id) const;
     std::array<int, 2> hashIdToGlobalIndex(const int hash_id) const;
-    std::array<float, 2> hashIdToLocation(const int hash_id) const;
+    std::array<float, 2> hashIdToLocation(const int hash_id) const override;
     int globalIndexToHashId(const std::array<int, 2>& id_g) const;
 
 private:

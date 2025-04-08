@@ -206,6 +206,7 @@ int NaiveLocalTerrainMapper::globalIndexToHashId(const std::array<int, 2>& id_g)
     const std::array<int, 2> id_l = globalIndexToLocalIndex(id_g);
     return localIndexToHashId(id_l);
 }
+
 int NaiveLocalTerrainMapper::localIndexToHashId(const std::array<int, 2>& id_l) const {
     return id_l[0] * map_dim + id_l[1];
 }
@@ -214,6 +215,15 @@ int NaiveLocalTerrainMapper::locationToHashId(const std::array<float, 2>& loc) c
     const std::array<int, 2> id_g = locationToGlobalIndex(loc);
     const std::array<int, 2> id_l = globalIndexToLocalIndex(id_g);
     return localIndexToHashId(id_l);
+}
+
+std::array<int, 2> NaiveLocalTerrainMapper::hashIdToLocalIndex(const int hash_id) const {
+    return {hash_id / map_dim, hash_id % map_dim};
+}
+
+std::array<float, 2> NaiveLocalTerrainMapper::hashIdToLocation(const int hash_id) const {
+    const std::array<int, 2> id_l = hashIdToLocalIndex(hash_id);
+    return localIndexToLocation(id_l);
 }
 
 }  // namespace serow

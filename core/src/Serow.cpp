@@ -202,8 +202,7 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
         return false;
-    if (!checkConfigParam("minimum_terrain_height_variance",
-                          params_.minimum_terrain_height_variance))
+    if (!checkConfigParam("minimum_terrain_height_variance", params_.minimum_terrain_height_variance))
         return false;
 
     // Check rotation matrices
@@ -723,6 +722,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
         terrain_estimator_->initializeLocalMap(terrain_height, 1e4,
                                                params_.minimum_terrain_height_variance);
+        terrain_estimator_->recenter({0.0, 0.0});
     }
 
     // Handle orientation for non-point feet
@@ -930,7 +930,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
         ((kin.timestamp - exteroception_logger_.getLastTimestamp()) > 0.5)) {
         exteroception_logger_job_->addJob(
-            [this, ts = kin.timestamp, map_origin_xy = terrain_estimator_->getMapOrigin()]() {
+            [this, ts = kin.timestamp]() {
                 try {
                     LocalMapState local_map;
                     local_map.timestamp = ts;
@@ -941,11 +941,10 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
                     for (int i = 0; i < map_dim; i += downsample_factor) {
                         for (int j = 0; j < map_dim; j += downsample_factor) {
-                            float x = (i - half_map_dim) * resolution + map_origin_xy[0];
-                            float y = (j - half_map_dim) * resolution + map_origin_xy[1];
-                            const auto& cell = terrain_map[terrain_estimator_->locationToHashId(
-                                std::array<float, 2>{x, y})];
-                            local_map.data.push_back({x, y, cell.height});
+                            const int id = i * map_dim + j;
+                            const auto& cell = terrain_map[id];
+                            const std::array<float, 2> loc = terrain_estimator_->hashIdToLocation(id);
+                            local_map.data.push_back({loc[0], loc[1], cell.height});
                         }
                     }
                     exteroception_logger_.log(local_map);
