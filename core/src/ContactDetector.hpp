@@ -59,6 +59,7 @@ public:
         low_threshold_ = low_threshold;
         mass_ = mass;
         g_ = g;
+        is_new_contact_ = false;
         mdf_ = std::make_unique<MovingMedianFilter>(median_window);
     }
 
@@ -70,9 +71,11 @@ public:
      */
     void SchmittTrigger(double contact_force) {
         contact_force_ = mdf_->filter(std::clamp(contact_force, 0.0, mass_ * g_));
+        is_new_contact_ = false;
         if (contact_status_ == 0) {
             if (contact_force_ > high_threshold_) {
                 contact_status_ = 1;
+                is_new_contact_ = true;
             }
         } else {
             if (contact_force_ < low_threshold_) {
@@ -105,6 +108,14 @@ public:
         return contact_frame_;
     }
 
+    /**
+     * @brief Returns the flag to indicate if a new contact has been detected.
+     * @return True if a new contact has been detected, false otherwise.
+     */ 
+    bool isNewContact() {
+        return is_new_contact_;
+    }
+
 private:
     std::unique_ptr<MovingMedianFilter> mdf_; /**< Rolling median filter. */
     int contact_status_{};                    /**< Estimated contact status (0 or 1). */
@@ -118,6 +129,7 @@ private:
                                 Newtons (N). */
     double mass_{};          /**< Mass of the robot in kilograms (kg). */
     double g_{};             /**< Gravity constant in meters per second squared (m/s^2). */
+    bool is_new_contact_{};  /**< Flag to indicate if a new contact has been detected. */
 };
 
 }  // namespace serow

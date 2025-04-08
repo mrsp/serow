@@ -127,6 +127,8 @@ struct ContactState {
     std::map<std::string, Eigen::Vector3d> contacts_force;
     /// Holds contact frame name to 3D ground reaction torque in world frame coordinates (Nm)
     std::optional<std::map<std::string, Eigen::Vector3d>> contacts_torque;
+    /// Holds contact frame name to flag to indicate if a new contact has been detected
+    std::map<std::string, bool> is_new_contact;
 };
 
 /**

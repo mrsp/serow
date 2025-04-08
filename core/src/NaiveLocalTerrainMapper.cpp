@@ -61,6 +61,7 @@ void NaiveLocalTerrainMapper::resetLocalMap() {
     for (int i = 0; i < map_size; ++i) {
         elevation_[i] = default_elevation_;
     }
+    clearContactPoints();
 }
 
 void NaiveLocalTerrainMapper::initializeLocalMap(const float height, const float variance,

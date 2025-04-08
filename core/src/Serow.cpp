@@ -588,6 +588,8 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                 state_.contact_state_.contacts_status[frame] =
                     contact_estimators_.at(frame).getContactStatus();
                 den += contact_estimators_.at(frame).getContactForce();
+                state_.contact_state_.is_new_contact[frame] =
+                    contact_estimators_.at(frame).isNewContact();
             }
         }
 
@@ -685,6 +687,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     KinematicMeasurement kin;
     kin.timestamp = joint_timestamp;
     kin.contacts_status = state_.contact_state_.contacts_status;
+    kin.is_new_contact = state_.contact_state_.is_new_contact;
     kin.contacts_probability = state_.contact_state_.contacts_probability;
     kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
     kin.base_linear_velocity_cov = params_.base_linear_velocity_cov.asDiagonal();

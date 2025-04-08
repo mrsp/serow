@@ -434,6 +434,7 @@ void ContactEKF::updateWithTerrain(BaseState& state,
             }
         }
     }
+    terrain_estimator->interpolateContactPoints();
 }
 
 BaseState ContactEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
@@ -537,6 +538,10 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
                               << " is not inside the terrain elevation map and thus height is not "
                                  "updated "
                               << std::endl;
+                } else {
+                    if (kin.is_new_contact.at(cf)) {
+                        terrain_estimator->addContactPoint(con_pos_xy);
+                    }
                 }
             }
         }
