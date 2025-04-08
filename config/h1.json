@@ -6,7 +6,6 @@
         "1": "right_ankle_link"
     },
     "model_path": "h1.urdf",
-    "mass": 65.5,
     "g": 9.81,
     "joint_rate": 150.0,
     "estimate_joint_velocity": false,

@@ -176,8 +176,6 @@ bool Serow::initialize(const std::string& config_file) {
     if (!checkConfigParam("angular_momentum_cutoff_frequency",
                           params_.angular_momentum_cutoff_frequency))
         return false;
-    if (!checkConfigParam("mass", params_.mass))
-        return false;
     if (!checkConfigParam("g", params_.g))
         return false;
     if (!checkConfigParam("tau_0", params_.tau_0))
@@ -385,9 +383,8 @@ bool Serow::initialize(const std::string& config_file) {
             }
         }
     }
-
     // Initialize state uncertainty
-    state_.mass_ = params_.mass;
+    state_.mass_ = kinematic_estimator_->getTotalMass();
     state_.base_state_.base_position_cov = params_.initial_base_position_cov.asDiagonal();
     state_.base_state_.base_orientation_cov = params_.initial_base_orientation_cov.asDiagonal();
     state_.base_state_.base_linear_velocity_cov =
@@ -560,7 +557,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                     contact_estimators_.emplace(
                         frame,
                         ContactDetector(frame, params_.high_threshold, params_.low_threshold,
-                                        params_.mass, params_.g, params_.median_window));
+                                        state_.getMass(), params_.g, params_.median_window));
                 }
             }
 
@@ -651,7 +648,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
         // Create leg odometry
         leg_odometry_ = std::make_unique<LegOdometry>(
-            base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
+            base_to_foot_positions, base_to_foot_orientations, state_.getMass(), params_.tau_0,
             params_.tau_1, params_.joint_rate, params_.g, params_.eps);
 
         // Initialize the base and CoM estimators
@@ -664,7 +661,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                                  params_.outlier_detection);
         }
 
-        com_estimator_.init(state_.centroidal_state_, params_.mass, params_.g,
+        com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                             params_.force_torque_rate);
     }
 
