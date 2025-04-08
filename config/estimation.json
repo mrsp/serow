@@ -313,7 +313,7 @@
     // boolean: whether or not to enable the terrain estimator
     "enable_terrain_estimation": false,
     // string: terrain estimator to use
-    "terrain_estimator": "naive",
+    "terrain_estimator": "fast",
     // double: minimum terrain measurement uncertainty (m^2)
     // Only applies if enable_terrain_estimation = true
     "minimum_terrain_height_variance": 1e-3
