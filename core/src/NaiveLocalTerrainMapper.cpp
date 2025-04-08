@@ -25,12 +25,12 @@ std::array<float, 2> NaiveLocalTerrainMapper::globalIndexToLocation(
 
 std::array<int, 2> NaiveLocalTerrainMapper::globalIndexToLocalIndex(
     const std::array<int, 2>& id_g) const {
-    return {id_g[0] + half_map_dim, id_g[1] + half_map_dim};
+    return {id_g[0] + half_map_dim - local_map_origin_i_[0], id_g[1] + half_map_dim - local_map_origin_i_[1]};
 }
 
 std::array<int, 2> NaiveLocalTerrainMapper::localIndexToGlobalIndex(
     const std::array<int, 2>& id_l) const {
-    return {id_l[0] - half_map_dim, id_l[1] - half_map_dim};
+    return {id_l[0] + local_map_origin_i_[0] - half_map_dim, id_l[1] + local_map_origin_i_[1] - half_map_dim};
 }
 
 std::array<int, 2> NaiveLocalTerrainMapper::locationToLocalIndex(
@@ -44,9 +44,9 @@ std::array<float, 2> NaiveLocalTerrainMapper::localIndexToLocation(
 }
 
 bool NaiveLocalTerrainMapper::inside(const std::array<int, 2>& id_g) const {
-    const std::array<int, 2> local_idx = globalIndexToLocalIndex(id_g);
-    if (local_idx[0] < 0 || local_idx[0] >= map_dim || local_idx[1] < 0 ||
-        local_idx[1] >= map_dim) {
+    int x = abs(id_g[0] - local_map_origin_i_[0]);
+    int y = abs(id_g[1] - local_map_origin_i_[1]);
+    if ((x - half_map_dim) > 0 || (y - half_map_dim) > 0) {
         return false;
     }
     return true;

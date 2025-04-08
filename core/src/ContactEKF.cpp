@@ -523,7 +523,6 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
                 T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
                 const Eigen::Vector3d con_pos_world =
                     T_world_to_base * kin.base_to_foot_positions.at(cf);
-                // const std::array<float, 2> terrain_origin = terrain_estimator->getMapOrigin();
                 const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_world.x()),
                                                          static_cast<float>(con_pos_world.y())};
                 const float con_pos_z = static_cast<float>(con_pos_world.z());

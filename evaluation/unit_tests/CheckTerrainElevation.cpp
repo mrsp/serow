@@ -233,18 +233,16 @@ TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
 
     // Update a few cells in the map and check if they are updated and that they are consistent
     // after recentering
-    std::array<float, 2> naive_update_location = {0.1f, 0.1f};  // Uses local to map coordinates
-    std::array<float, 2> update_location = {
-        naive_update_location[0] + valid_origin[0],
-        naive_update_location[1] + valid_origin[1]};  // Uses global to map coordinates
+    std::array<float, 2> update_location = {1.1f, 1.1f};  // Uses local to map coordinates
+
     float update_height = 12.0f;
     float update_variance = 3.1f;
     const auto set_cell = ElevationCell(update_height, update_variance);
     EXPECT_TRUE(terrain.setElevation(update_location, set_cell));
-    EXPECT_TRUE(naive_terrain.setElevation(naive_update_location, set_cell));
+    EXPECT_TRUE(naive_terrain.setElevation(update_location, set_cell));
 
     const auto cell = terrain.getElevation(update_location);
-    const auto naive_cell = naive_terrain.getElevation(naive_update_location);
+    const auto naive_cell = naive_terrain.getElevation(update_location);
     EXPECT_TRUE(cell.has_value());
     EXPECT_TRUE(naive_cell.has_value());
     EXPECT_TRUE(elevationCellEqual(cell.value(), naive_cell.value()));
@@ -256,16 +254,8 @@ TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
     EXPECT_EQ(terrain.getMapOrigin(), new_valid_origin);
     EXPECT_EQ(naive_terrain.getMapOrigin(), new_valid_origin);
 
-    // Check if the cells are still consistent
-    // Compute the shifted update location relative to the new origin
-    std::array<float, 2> shift = {new_valid_origin[0] - valid_origin[0],
-                                  new_valid_origin[1] - valid_origin[1]};
-
-    std::array<float, 2> shifted_update_location = {naive_update_location[0] - shift[0],
-                                                    naive_update_location[1] - shift[1]};
-
     const auto new_cell = terrain.getElevation(update_location);
-    const auto new_naive_cell = naive_terrain.getElevation(shifted_update_location);
+    const auto new_naive_cell = naive_terrain.getElevation(update_location);
     EXPECT_TRUE(new_cell.has_value());
     EXPECT_TRUE(new_naive_cell.has_value());
     EXPECT_TRUE(elevationCellEqual(new_cell.value(), new_naive_cell.value()));

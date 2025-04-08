@@ -12,7 +12,6 @@ bool LocalTerrainMapper::inside(const std::array<int, 2>& id_g) const {
     if ((x - half_map_dim) > 0 || (y - half_map_dim) > 0) {
         return false;
     }
-
     return true;
 }
 
@@ -69,12 +68,6 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
         }
         const int min_id_g = local_map_bound_min_i_[i];
         const int min_id_l = fast_mod<map_dim>(min_id_g);
-        // if (min_id_l > half_map_dim) {
-        //     min_id_l -= map_dim;
-        // } else if (min_id_l < -half_map_dim) {
-        //     min_id_l += map_dim;
-        // }
-
         std::vector<int> clear_id;
         if (shift_num[i] > 0) {
             // forward shift, the min id should be cut
