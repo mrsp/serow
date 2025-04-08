@@ -79,8 +79,6 @@ public:
 
 private:
     struct Params {
-        /// @brief total mass of the robot (kg)
-        double mass{};
         /// @brief gravity constant (m/s^2)
         double g{};
         /// @brief whether or not to estimate initial values for the IMU gyro/accelerometer biases

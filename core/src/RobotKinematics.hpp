@@ -94,6 +94,8 @@ public:
             }
         }
 
+        computeTotalMass();
+
         // Output model information
         std::cout << "Joint Names " << std::endl;
         printJointNames();
@@ -348,6 +350,25 @@ public:
             return Eigen::MatrixXd::Zero(3, ndofActuated());
         }
     }
+    
+    /**
+     * @brief Computes recursively the total mass of the robot based on the urdf description of the robot
+     * @note Store the result to the member total_mass_
+     */
+    void computeTotalMass(){
+        total_mass_ = 0.0;
+        // Start from 1 since index 0 is typically the universe/world frame
+        for (int i = 0; i < pmodel_->nbodies; ++i) {
+            total_mass_ += pmodel_->inertias[i].mass();
+        }
+    }
+    
+    /**
+     * @brief Returns the total mass of the robot
+     */
+    double getTotalMass() const{
+        return total_mass_;
+    }
 
     /**
      * @brief Computes the position of the center of mass (CoM) of the robot model.
@@ -516,6 +537,8 @@ private:
     Eigen::VectorXd qdot_;
     /// Joint position measurement noises
     Eigen::VectorXd qn_;
+    /// Total mass of the robot
+    double total_mass_;
 };
 
 }  // namespace serow

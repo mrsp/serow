@@ -6,7 +6,6 @@
         "1": "rightFoot"
     },
     "model_path": "valkyrie.urdf",
-    "mass": 127.324,
     "g": 9.81,
     "joint_rate": 500.0,
     "estimate_joint_velocity": true,
