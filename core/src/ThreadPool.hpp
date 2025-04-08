@@ -34,11 +34,13 @@ public:
                 throw std::runtime_error("enqueue on stopped ThreadPool");
             }
             tasks_.emplace([task, this]() {
-                active_jobs_++;
                 try {
+                    active_jobs_++;
                     (*task)();
                 } catch (...) {
                     // Ensure we decrement even if task throws
+                    active_jobs_--;
+                    throw; // Re-throw the exception
                 }
                 active_jobs_--;
             });

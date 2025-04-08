@@ -17,8 +17,8 @@
 #include <cmath>
 #include <iostream>
 #include <random>
-#include <serow/NaiveLocalTerrainMapper.hpp>
 #include <serow/LocalTerrainMapper.hpp>
+#include <serow/NaiveLocalTerrainMapper.hpp>
 #include <serow/common.hpp>
 
 namespace serow {
@@ -221,6 +221,48 @@ TEST_F(TerrainElevationTest, NormalizeRandomAndEdgeCases) {
         EXPECT_EQ(normalize(i), normalize_fn(i, -half_map_dim, half_map_dim))
             << "Failed for number: " << i;
     }
+}
+
+TEST_F(TerrainElevationTest, TerrainMapperRecentering) {
+    // Test recentering with valid origin
+    std::array<float, 2> valid_origin = {1.0f, 1.0f};
+    terrain.recenter(valid_origin);
+    naive_terrain.recenter(valid_origin);
+    EXPECT_EQ(terrain.getMapOrigin(), valid_origin);
+    EXPECT_EQ(naive_terrain.getMapOrigin(), valid_origin);
+
+    // Update a few cells in the map and check if they are updated and that they are consistent
+    // after recentering
+    std::array<float, 2> update_location = {1.1f, 1.1f};  // Uses local to map coordinates
+
+    float update_height = 12.0f;
+    float update_variance = 3.1f;
+    const auto set_cell = ElevationCell(update_height, update_variance);
+    EXPECT_TRUE(terrain.setElevation(update_location, set_cell));
+    EXPECT_TRUE(naive_terrain.setElevation(update_location, set_cell));
+
+    const auto cell = terrain.getElevation(update_location);
+    const auto naive_cell = naive_terrain.getElevation(update_location);
+    EXPECT_TRUE(cell.has_value());
+    EXPECT_TRUE(naive_cell.has_value());
+    EXPECT_TRUE(elevationCellEqual(cell.value(), naive_cell.value()));
+
+    // Test recentering again with valid origin
+    std::array<float, 2> new_valid_origin = {1.5f, 1.5f};
+    terrain.recenter(new_valid_origin);
+    naive_terrain.recenter(new_valid_origin);
+    EXPECT_EQ(terrain.getMapOrigin(), new_valid_origin);
+    EXPECT_EQ(naive_terrain.getMapOrigin(), new_valid_origin);
+
+    const auto new_cell = terrain.getElevation(update_location);
+    const auto new_naive_cell = naive_terrain.getElevation(update_location);
+    EXPECT_TRUE(new_cell.has_value());
+    EXPECT_TRUE(new_naive_cell.has_value());
+    EXPECT_TRUE(elevationCellEqual(new_cell.value(), new_naive_cell.value()));
+    EXPECT_TRUE(floatEqual(new_cell.value().height, update_height));
+    EXPECT_TRUE(floatEqual(new_cell.value().variance, update_variance));
+    EXPECT_TRUE(floatEqual(new_naive_cell.value().height, update_height));
+    EXPECT_TRUE(floatEqual(new_naive_cell.value().variance, update_variance));
 }
 
 }  // namespace serow
