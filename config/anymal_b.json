@@ -7,40 +7,40 @@
     "2": "RL_foot",
     "3": "RR_foot"
   },
-  "model_path": "go1.champ.urdf",
+  "model_path": "go2.urdf",
   "g": 9.81,
   "joint_rate": 500.0,
   "estimate_joint_velocity": true,
   "joint_cutoff_frequency": 15.0,
-  "joint_position_variance": 0.01,
+  "joint_position_variance": 0.001,
   "angular_momentum_cutoff_frequency": 5.0,
-  "tau_0": 1.0,
-  "tau_1": 0.1,
-  "imu_rate": 800.0,
+  "tau_0": 0.1,
+  "tau_1": 0.0,
+  "imu_rate": 500.0,
   "R_base_to_gyro": [
     1.0,
     0.0,
     0.0,
     0.0,
-    1.0,
+    -1.0,
     0.0,
     0.0,
     0.0,
-    1.0
+    -1.0
   ],
   "R_base_to_acc": [
     1.0,
     0.0,
     0.0,
     0.0,
-    1.0,
+    -1.0,
     0.0,
     0.0,
     0.0,
-    1.0
+    -1.0
   ],
   "calibrate_initial_imu_bias": true,
-  "max_imu_calibration_cycles": 100,
+  "max_imu_calibration_cycles": 1000,
   "bias_gyro": [
     0.0,
     0.0,
@@ -52,7 +52,7 @@
     0.0
   ],
   "gyro_cutoff_frequency": 5.0,
-  "force_torque_rate": 100.0,
+  "force_torque_rate": 500.0,
   "R_foot_to_force": {
     "0": [
       1.0,
@@ -100,35 +100,35 @@
     ]
   },
   "R_foot_to_torque": null,
-  "attitude_estimator_proportional_gain": 1.0,
-  "attitude_estimator_integral_gain": 0.3,
+  "attitude_estimator_proportional_gain": 0.1,
+  "attitude_estimator_integral_gain": 0.0,
   "estimate_contact_status": true,
-  "high_threshold": 16.0,
-  "low_threshold": 15.0,
-  "median_window": 7,
+  "high_threshold": 4.0,
+  "low_threshold": 2.0,
+  "median_window": 13,
   "outlier_detection": true,
   "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [
-    1e-3,
-    1e-3,
-    1e-3
+    5e-5,
+    5e-5,
+    5e-5
   ],
   "imu_angular_velocity_bias_covariance": [
-    1e-5,
-    1e-5,
-    1e-5
+    1e-8,
+    1e-8,
+    1e-8
   ],
   "imu_linear_acceleration_covariance": [
-    1e-2,
-    1e-2,
-    1e-2
+    5e-3,
+    5e-3,
+    5e-3
   ],
   "imu_linear_acceleration_bias_covariance": [
-    1e-4,
-    1e-4,
-    1e-4
+    1e-8,
+    1e-8,
+    1e-8
   ],
-  "use_contacts_in_base_estimation": false,
+  "use_contacts_in_base_estimation": true,
   "base_linear_velocity_covariance": [
     5e-3,
     5e-3,
@@ -140,9 +140,9 @@
     1e-3
   ],
   "contact_position_covariance": [
-    1e-4,
-    1e-4,
-    1e-4
+    5e-6,
+    5e-6,
+    5e-5
   ],
   "contact_orientation_covariance": null,
   "contact_position_slip_covariance": [
@@ -223,7 +223,7 @@
     1.0
   ],
   "T_base_to_odom": null,
-  "enable_terrain_estimation": false,
+  "enable_terrain_estimation": true,
   "terrain_estimator": "naive",
   "minimum_terrain_height_variance": 1e-3
 }
