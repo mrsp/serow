@@ -75,9 +75,9 @@ public:
     virtual std::array<ElevationCell, map_size> getElevationMap() = 0;
 
     void addContactPoint(const std::array<float, 2>& point) {
-        contact_points_.push_back(point);
+        contact_points_.push_front(point);
         while (contact_points_.size() > 4) {
-            contact_points_.pop_front();
+            contact_points_.pop_back();
         }
     }
 
@@ -101,6 +101,13 @@ public:
             max_x = std::max(max_x, point[0]);
             min_y = std::min(min_y, point[1]);
             max_y = std::max(max_y, point[1]);
+        }
+
+        // Check if the bounding box is a valid one
+        if (min_x > max_x || min_y > max_y) {
+            std::cout << "Invalid bounding box, clearing contact points" << std::endl;
+            clearContactPoints();
+            return;
         }
 
         // Interpolate using inverse distance weighting
@@ -164,8 +171,9 @@ public:
             }
         }
 
-        // Remove the interpolated contact points
-        clearContactPoints();
+        // Remove the oldest two contact points
+        contact_points_.pop_back();
+        contact_points_.pop_back();
     }
 
 protected:
