@@ -11,6 +11,9 @@
 
 namespace serow {
 
+// Forward declaration of test class
+class TerrainElevationTest;
+
 class NaiveLocalTerrainMapper : public TerrainElevation {
 public:
     void recenter(const std::array<float, 2>& loc) override;
@@ -35,6 +38,8 @@ public:
 
     int locationToHashId(const std::array<float, 2>& loc) const override;
 
+    std::array<float, 2> hashIdToLocation(const int hash_id) const override;
+
 private:
     int locationToGlobalIndex(const float loc) const;
 
@@ -50,6 +55,8 @@ private:
 
     std::array<float, 2> localIndexToLocation(const std::array<int, 2>& id_l) const;
 
+    std::array<int, 2> hashIdToLocalIndex(const int hash_id) const;
+
     void resetLocalMap();
 
     void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
@@ -61,7 +68,7 @@ private:
 
     std::mutex mutex_;
 
-    friend class TerrainElevationTest;  // Allow full access
+    friend class serow::TerrainElevationTest;  // Allow full access
 };
 
 }  // namespace serow

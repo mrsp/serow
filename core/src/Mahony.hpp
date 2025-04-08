@@ -106,7 +106,7 @@ public:
         az = acc(2);
         // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer
         // normalization)
-        if (!((ax == 0.0f) && (ay == 0.0f) && (az == 0.0f))) {
+        if (!(std::abs(ax) < 1e-6 && std::abs(ay) < 1e-6 && std::abs(az) < 1e-6)) {
             // Normalize accelerometer measurement
             recipNorm = 1.0 / std::sqrt(ax * ax + ay * ay + az * az);
             ax *= recipNorm;

@@ -253,6 +253,6 @@
         1.0
     ],
     "enable_terrain_estimation": true,
-    "terrain_estimator": "naive",
+    "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3
 }
