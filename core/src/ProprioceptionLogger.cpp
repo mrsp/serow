@@ -328,53 +328,7 @@ public:
         }
     }
 
-    void log(const Eigen::Vector3d& position, const Eigen::Quaterniond& orientation,
-             double timestamp) {
-        try {
-            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
-
-            // Convert timestamp to sec and nsec
-            int64_t sec;
-            int32_t nsec;
-            splitTimestamp(timestamp, sec, nsec);
-
-            // Create parent and child frame ids
-            auto parent_frame = builder.CreateString("world");
-            auto child_frame = builder.CreateString("base");
-
-            // Create timestamp
-            auto timestamp_fb = foxglove::Time(sec, nsec);
-
-            // Create translation
-            auto translation =
-                foxglove::CreateVector3(builder, position.x(), position.y(), position.z());
-            // Create rotation
-            auto rotation = foxglove::CreateQuaternion(builder, orientation.x(), orientation.y(),
-                                                       orientation.z(), orientation.w());
-            // Create the root message
-            foxglove::FrameTransformBuilder tf_builder(builder);
-            tf_builder.add_translation(translation);
-            tf_builder.add_rotation(rotation);
-            tf_builder.add_timestamp(&timestamp_fb);
-            tf_builder.add_parent_frame_id(std::move(parent_frame));
-            tf_builder.add_child_frame_id(std::move(child_frame));
-            auto tf = tf_builder.Finish();
-            builder.Finish(tf);
-
-            // Get the buffer pointer and size before any potential modifications
-            const uint8_t* buffer = builder.GetBufferPointer();
-            size_t size = builder.GetSize();
-
-            // Get the serialized data
-            writeMessage(5, tf_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
-                         size);
-        } catch (const std::exception& e) {
-            std::cerr << "Error logging basetransform: " << e.what() << std::endl;
-        }
-    }
-
-    void log(const std::map<std::string, Eigen::Vector3d>& positions,
-             const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp) {
+    void log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double timestamp) {
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
@@ -388,21 +342,21 @@ public:
 
             // Create transforms vector - preallocate capacity
             std::vector<flatbuffers::Offset<foxglove::FrameTransform>> transforms_vector;
-            transforms_vector.reserve(positions.size());
+            transforms_vector.reserve(frame_tfs.size());
 
             // Reuse cached world_frame string
             auto parent_frame = builder.CreateString("world");
 
-            for (const auto& [frame_id, position] : positions) {
+            for (const auto& [frame_id, tf] : frame_tfs) {
                 // Create frame_id strings
                 auto child_frame = builder.CreateString(frame_id);
 
                 // Create translation
                 auto translation =
-                    foxglove::CreateVector3(builder, position.x(), position.y(), position.z());
+                    foxglove::CreateVector3(builder, tf.translation().x(), tf.translation().y(), tf.translation().z());
 
                 // Create rotation
-                const auto& quaternion = orientations.at(frame_id);
+                const auto& quaternion = Eigen::Quaterniond(tf.linear());
                 auto rotation = foxglove::CreateQuaternion(builder, quaternion.x(), quaternion.y(),
                                                            quaternion.z(), quaternion.w());
 
@@ -429,8 +383,7 @@ public:
             size_t size = builder.GetSize();
 
             // Get the serialized data
-            writeMessage(6, leg_tf_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(5, tfs_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging feet transforms: " << e.what() << std::endl;
         }
@@ -473,12 +426,11 @@ private:
 
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
-        schemas.reserve(6);
+        schemas.reserve(5);
         schemas.push_back(createSchema("ImuState"));
         schemas.push_back(createSchema("ContactState"));
         schemas.push_back(createSchema("CentroidalState"));
         schemas.push_back(createSchema("BaseState"));
-        schemas.push_back(createSchema("FrameTransform"));
         schemas.push_back(createSchema("FrameTransforms"));
 
         for (auto& schema : schemas) {
@@ -488,13 +440,12 @@ private:
 
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
-        channels.reserve(6);
+        channels.reserve(5);
         channels.push_back(createChannel(1, "/imu_state"));
         channels.push_back(createChannel(2, "/contact_state"));
         channels.push_back(createChannel(3, "/centroidal_state"));
         channels.push_back(createChannel(4, "/base_state"));
-        channels.push_back(createChannel(5, "/odom"));
-        channels.push_back(createChannel(6, "/legs"));
+        channels.push_back(createChannel(5, "/tfs"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
@@ -518,8 +469,7 @@ private:
     uint64_t centroidal_sequence_ = 0;
     uint64_t contact_sequence_ = 0;
     uint64_t imu_sequence_ = 0;
-    uint64_t tf_sequence_ = 0;
-    uint64_t leg_tf_sequence_ = 0;
+    uint64_t tfs_sequence_ = 0;
     double last_timestamp_{-1.0};
 
     // MCAP writing components
@@ -550,15 +500,8 @@ void ProprioceptionLogger::log(const ContactState& contact_state) {
     pimpl_->log(contact_state);
 }
 
-void ProprioceptionLogger::log(const Eigen::Vector3d& position,
-                               const Eigen::Quaterniond& orientation, double timestamp) {
-    pimpl_->log(position, orientation, timestamp);
-}
-
-void ProprioceptionLogger::log(const std::map<std::string, Eigen::Vector3d>& positions,
-                               const std::map<std::string, Eigen::Quaterniond>& orientations,
-                               double timestamp) {
-    pimpl_->log(positions, orientations, timestamp);
+void ProprioceptionLogger::log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double timestamp) {
+    pimpl_->log(frame_tfs, timestamp);
 }
 
 }  // namespace serow
