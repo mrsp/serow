@@ -108,6 +108,11 @@ bool Serow::initialize(const std::string& config_file) {
         return true;
     };
 
+    // Initialize base frame
+    if (!checkConfigParam("base_frame", params_.base_frame)) {
+        return false;   
+    }
+
     // Initialize contact frames
     std::set<std::string> contacts_frame;
     if (!config["foot_frames"].is_object()) {
@@ -897,6 +902,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     state_.centroidal_state_.timestamp = kin.timestamp;
     com_estimator_.updateWithKinematics(state_.centroidal_state_, kin);
 
+    // Update frame transformations
+    computeFrameTFs(base_pose);
+
     // Check if state has converged
     if (!state_.is_valid_ && cycle_++ > params_.convergence_cycles) {
         state_.is_valid_ = true;
@@ -906,17 +914,14 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (!proprioception_logger_job_->isRunning()) {
         proprioception_logger_job_->addJob(
             [this, base_state = state_.base_state_, centroidal_state = state_.centroidal_state_,
-             contact_state = state_.contact_state_, imu = imu, joints = joints]() {
+             contact_state = state_.contact_state_, imu = imu, frame_tfs = frame_tfs_]() {
                 try {
                     // Log all state data to MCAP file
                     proprioception_logger_.log(imu);
                     proprioception_logger_.log(contact_state);
                     proprioception_logger_.log(centroidal_state);
                     proprioception_logger_.log(base_state);
-                    proprioception_logger_.log(base_state.base_position,
-                                               base_state.base_orientation, base_state.timestamp);
-                    proprioception_logger_.log(base_state.feet_position,
-                                               base_state.feet_orientation, base_state.timestamp);
+                    proprioception_logger_.log(frame_tfs, base_state.timestamp);
                 } catch (const std::exception& e) {
                     std::cerr << "Error in proprioception logging thread: " << e.what()
                               << std::endl;
@@ -950,6 +955,21 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                 }
             });
     }
+}
+
+void Serow::computeFrameTFs(const Eigen::Isometry3d& base_pose) {
+    std::map<std::string, Eigen::Isometry3d> frame_tfs;
+    frame_tfs[params_.base_frame] = base_pose;
+    for (const auto& frame : kinematic_estimator_->frameNames()) {
+        if (frame != params_.base_frame) {
+            try {
+                frame_tfs[frame] = base_pose * kinematic_estimator_->linkTF(frame);
+            } catch (const std::exception& e) {
+                std::cerr << "Error in frame " << frame << " TF computation: " << e.what() << std::endl;
+            }
+        }
+    }
+    frame_tfs_ = std::move(frame_tfs);
 }
 
 std::optional<State> Serow::getState(bool allow_invalid) {

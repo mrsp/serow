@@ -97,10 +97,17 @@ public:
         computeTotalMass();
 
         // Output model information
-        std::cout << "Joint Names " << std::endl;
+        std::cout << "Joint Names: " << std::endl;
         printJointNames();
         std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
         std::cout << "Model loaded: " << model_name << std::endl;
+        std::cout << "Frame Names: " << std::endl;
+        for (const auto& frame : pmodel_->frames) {
+            if (frame.type == pinocchio::FrameType::BODY) {
+                std::cout << frame.name << std::endl;
+                frame_names_.push_back(frame.name);
+            }
+        }
     }
 
     /**
@@ -287,6 +294,27 @@ public:
         // Retrieve translation and quaternion representation of the frame's orientation
         lpose.head(3) = data_->oMf[link_number].translation();
         lpose.tail(4) = rotationToQuaternion(data_->oMf[link_number].rotation());
+
+        return lpose;
+    }
+
+    /**
+     * @brief Retrieves the rigid body transformation of a specified frame in the robot model.
+     * @param frame_name Name of the frame whose rigid body transformation is to be retrieved.
+     * @return Eigen::Isometry3d representing the rigid body transformation of the specified frame.
+     * @throws std::exception if the frame_name is invalid in the robot model.
+     * @note This function retrieves both translation and rotation of the frame's rigid body
+     * transformation.
+     */
+    Eigen::Isometry3d linkTF(const std::string& frame_name) const {
+        Eigen::Isometry3d lpose = Eigen::Isometry3d::Identity();  
+
+        // Get the frame index from the model based on the frame name
+        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+
+        // Retrieve translation and quaternion representation of the frame's orientation
+        lpose.translation() = data_->oMf[link_number].translation();
+        lpose.linear() = data_->oMf[link_number].rotation();
 
         return lpose;
     }
@@ -518,6 +546,15 @@ public:
         return quat;
     }
 
+    /**
+     * @brief Retrieves the names of all frames in the robot model.
+     * @return std::vector<std::string> containing the names of all frames.
+     * @note This function returns the stored frame names in the member variable frame_names_.
+     */
+    std::vector<std::string> frameNames() const {
+        return frame_names_;
+    }
+
 private:
     /// Pinocchio model
     std::unique_ptr<pinocchio::Model> pmodel_;
@@ -539,6 +576,8 @@ private:
     Eigen::VectorXd qn_;
     /// Total mass of the robot
     double total_mass_;
+    /// Frame names
+    std::vector<std::string> frame_names_;
 };
 
 }  // namespace serow
