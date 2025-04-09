@@ -27,7 +27,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/base.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/base.dae" />
       </geometry>
       <material
         name="">
@@ -140,7 +140,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/hip.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/hip.dae" />
       </geometry>
       <material
         name="">
@@ -195,7 +195,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/thigh.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/thigh.dae" />
       </geometry>
       <material
         name="">
@@ -250,7 +250,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/calf.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/calf.dae" />
       </geometry>
       <material
         name="">
@@ -349,7 +349,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/foot.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/foot.dae" />
       </geometry>
       <material
         name="">
@@ -399,7 +399,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="3.1415 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/hip.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/hip.dae" />
       </geometry>
       <material
         name="">
@@ -454,7 +454,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/thigh_mirror.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/thigh_mirror.dae" />
       </geometry>
       <material
         name="">
@@ -509,7 +509,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/calf_mirror.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/calf_mirror.dae" />
       </geometry>
       <material
         name="">
@@ -608,7 +608,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/foot.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/foot.dae" />
       </geometry>
       <material
         name="">
@@ -658,7 +658,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 3.1415 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/hip.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/hip.dae" />
       </geometry>
       <material
         name="">
@@ -713,7 +713,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/thigh.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/thigh.dae" />
       </geometry>
       <material
         name="">
@@ -768,7 +768,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/calf.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/calf.dae" />
       </geometry>
       <material
         name="">
@@ -867,7 +867,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/foot.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/foot.dae" />
       </geometry>
       <material
         name="">
@@ -917,7 +917,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="3.1415 3.1415 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/hip.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/hip.dae" />
       </geometry>
       <material
         name="">
@@ -972,7 +972,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/thigh_mirror.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/thigh_mirror.dae" />
       </geometry>
       <material
         name="">
@@ -1027,7 +1027,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/calf_mirror.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/calf_mirror.dae" />
       </geometry>
       <material
         name="">
@@ -1126,7 +1126,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://go2_description/dae/foot.dae" />
+          filename="https://raw.githubusercontent.com/unitreerobotics/unitree_ros/master/robots/go2_description/dae/foot.dae" />
       </geometry>
       <material
         name="">
