@@ -79,8 +79,8 @@ public:
 
 private:
     struct Params {
-        /// @brief total mass of the robot (kg)
-        double mass{};
+        /// @brief base frame name
+        std::string base_frame{};
         /// @brief gravity constant (m/s^2)
         double g{};
         /// @brief whether or not to estimate initial values for the IMU gyro/accelerometer biases
@@ -258,6 +258,14 @@ private:
     std::unique_ptr<ThreadPool> proprioception_logger_job_;
     /// @brief Threadpool job for exteroceptive logging
     std::unique_ptr<ThreadPool> exteroception_logger_job_;
+    /// @brief Frame transformations
+    std::map<std::string, Eigen::Isometry3d> frame_tfs_;
+
+    /**
+     * @brief Computes the frame transformations for all frames in the robot model
+     * @param base_pose The base pose of the robot
+     */
+    void computeFrameTFs(const Eigen::Isometry3d& base_pose);
 };
 
 }  // namespace serow

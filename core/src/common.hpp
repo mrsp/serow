@@ -68,6 +68,8 @@ public:
 
     virtual int locationToHashId(const std::array<float, 2>& loc) const = 0;
 
+    virtual std::array<float, 2> hashIdToLocation(const int hash_id) const = 0;
+
     virtual std::array<ElevationCell, map_size> getElevationMap() = 0;
 
 protected:

@@ -39,6 +39,7 @@ def load_gt_data(h5_file):
         RR_forces = np.array(f["/feet_force/RR"])
 
         imu = np.array(f["/imu/linear_acceleration"])
+        
     return positions, orientations, com_positions, imu, timestamps, FL_forces,FR_forces,RL_forces,RR_forces
 
 def print_meta(h5_file):
@@ -129,6 +130,21 @@ def compute_com_vel(com_pos, timestamps):
     
     return com_vel
 
+### Removes the bias from the initial pose (world frame is 0 0 0  0 0 0 1 at time t = 0 )
+def remove_gt_bias(positions,orientations):
+    # Get the initial position and orientation
+    initial_position = positions[0]  # Initial position at time t=0
+    q0 = orientations[0]  # Initial orientation at time t=0
+
+    # Modify the position and orientation to be relative to the world frame (t=0 as origin)
+    # Subtract initial position from all positions to set the initial position to (0, 0, 0)
+    positions = positions - initial_position
+    # You can modify the orientation similarly by applying the inverse of the initial quaternion.
+    # Assuming orientations are in quaternion format (x, y, z, w), we need to inverse the initial orientation
+    initial_orientation_inv = np.array([q0[0], -q0[1], -q0[2], -q0[3]]) 
+    orientations = np.array([quaternion_multiply(initial_orientation_inv, q) for q in orientations])
+    return positions, orientations
+    
 if __name__ == "__main__":
     gt_pos, gt_rot, com_pos, imu, timestamps,FL_forces,FR_forces,RL_forces,RR_forces = load_gt_data(measurement_file)
     est_pos_x, est_pos_y, est_pos_z,com_pos_x,com_pos_y,com_pos_z,com_vel_x,com_vel_y,com_vel_z, est_rot_x, est_rot_y, est_rot_z, est_rot_w, b_ax,b_ay,b_az,b_wx,b_wy,b_wz =  load_serow_preds(prediction_file)
@@ -162,6 +178,7 @@ if __name__ == "__main__":
     gt_pos = gt_pos[(size_diff):(-10)]
     gt_rot = gt_rot[(size_diff):(-10)]
     
+    gt_pos, gt_rot = remove_gt_bias(gt_pos, gt_rot)
     FL_forces = FL_forces[(size_diff):(-10)]    
     FR_forces = FR_forces[(size_diff):(-10)]
     RL_forces = RL_forces[(size_diff):(-10)]    

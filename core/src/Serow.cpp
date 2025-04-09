@@ -108,6 +108,11 @@ bool Serow::initialize(const std::string& config_file) {
         return true;
     };
 
+    // Initialize base frame
+    if (!checkConfigParam("base_frame", params_.base_frame)) {
+        return false;   
+    }
+
     // Initialize contact frames
     std::set<std::string> contacts_frame;
     if (!config["foot_frames"].is_object()) {
@@ -176,8 +181,6 @@ bool Serow::initialize(const std::string& config_file) {
     if (!checkConfigParam("angular_momentum_cutoff_frequency",
                           params_.angular_momentum_cutoff_frequency))
         return false;
-    if (!checkConfigParam("mass", params_.mass))
-        return false;
     if (!checkConfigParam("g", params_.g))
         return false;
     if (!checkConfigParam("tau_0", params_.tau_0))
@@ -202,8 +205,7 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
         return false;
-    if (!checkConfigParam("minimum_terrain_height_variance",
-                          params_.minimum_terrain_height_variance))
+    if (!checkConfigParam("minimum_terrain_height_variance", params_.minimum_terrain_height_variance))
         return false;
 
     // Check rotation matrices
@@ -386,9 +388,8 @@ bool Serow::initialize(const std::string& config_file) {
             }
         }
     }
-
     // Initialize state uncertainty
-    state_.mass_ = params_.mass;
+    state_.mass_ = kinematic_estimator_->getTotalMass();
     state_.base_state_.base_position_cov = params_.initial_base_position_cov.asDiagonal();
     state_.base_state_.base_orientation_cov = params_.initial_base_orientation_cov.asDiagonal();
     state_.base_state_.base_linear_velocity_cov =
@@ -561,7 +562,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                     contact_estimators_.emplace(
                         frame,
                         ContactDetector(frame, params_.high_threshold, params_.low_threshold,
-                                        params_.mass, params_.g, params_.median_window));
+                                        state_.getMass(), params_.g, params_.median_window));
                 }
             }
 
@@ -652,7 +653,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
         // Create leg odometry
         leg_odometry_ = std::make_unique<LegOdometry>(
-            base_to_foot_positions, base_to_foot_orientations, params_.mass, params_.tau_0,
+            base_to_foot_positions, base_to_foot_orientations, state_.getMass(), params_.tau_0,
             params_.tau_1, params_.joint_rate, params_.g, params_.eps);
 
         // Initialize the base and CoM estimators
@@ -665,7 +666,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                                  params_.outlier_detection);
         }
 
-        com_estimator_.init(state_.centroidal_state_, params_.mass, params_.g,
+        com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                             params_.force_torque_rate);
     }
 
@@ -715,7 +716,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         // Initialize terrain elevation mapper
         if (params_.terrain_estimator_type == "naive") {
             terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
-        } else if (params_.terrain_estimator_type == "local") {
+        } else if (params_.terrain_estimator_type == "fast") {
             terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
         } else {
             throw std::runtime_error("Invalid terrain estimator type: " +
@@ -723,6 +724,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         }
         terrain_estimator_->initializeLocalMap(terrain_height, 1e4,
                                                params_.minimum_terrain_height_variance);
+        terrain_estimator_->recenter({0.0, 0.0});
     }
 
     // Handle orientation for non-point feet
@@ -900,6 +902,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     state_.centroidal_state_.timestamp = kin.timestamp;
     com_estimator_.updateWithKinematics(state_.centroidal_state_, kin);
 
+    // Update frame transformations
+    computeFrameTFs(base_pose);
+
     // Check if state has converged
     if (!state_.is_valid_ && cycle_++ > params_.convergence_cycles) {
         state_.is_valid_ = true;
@@ -909,17 +914,14 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (!proprioception_logger_job_->isRunning()) {
         proprioception_logger_job_->addJob(
             [this, base_state = state_.base_state_, centroidal_state = state_.centroidal_state_,
-             contact_state = state_.contact_state_, imu = imu, joints = joints]() {
+             contact_state = state_.contact_state_, imu = imu, frame_tfs = frame_tfs_]() {
                 try {
                     // Log all state data to MCAP file
                     proprioception_logger_.log(imu);
                     proprioception_logger_.log(contact_state);
                     proprioception_logger_.log(centroidal_state);
                     proprioception_logger_.log(base_state);
-                    proprioception_logger_.log(base_state.base_position,
-                                               base_state.base_orientation, base_state.timestamp);
-                    proprioception_logger_.log(base_state.feet_position,
-                                               base_state.feet_orientation, base_state.timestamp);
+                    proprioception_logger_.log(frame_tfs, base_state.timestamp);
                 } catch (const std::exception& e) {
                     std::cerr << "Error in proprioception logging thread: " << e.what()
                               << std::endl;
@@ -930,7 +932,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
         ((kin.timestamp - exteroception_logger_.getLastTimestamp()) > 0.5)) {
         exteroception_logger_job_->addJob(
-            [this, ts = kin.timestamp, map_origin_xy = terrain_estimator_->getMapOrigin()]() {
+            [this, ts = kin.timestamp]() {
                 try {
                     LocalMapState local_map;
                     local_map.timestamp = ts;
@@ -941,12 +943,10 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
                     for (int i = 0; i < map_dim; i += downsample_factor) {
                         for (int j = 0; j < map_dim; j += downsample_factor) {
-                            float x = (i - half_map_dim) * resolution;
-                            float y = (j - half_map_dim) * resolution;
-                            const auto& cell = terrain_map[terrain_estimator_->locationToHashId(
-                                std::array<float, 2>{x, y})];
-                            local_map.data.push_back(
-                                {x + map_origin_xy[0], y + map_origin_xy[1], cell.height});
+                            const int id = i * map_dim + j;
+                            const auto& cell = terrain_map[id];
+                            const std::array<float, 2> loc = terrain_estimator_->hashIdToLocation(id);
+                            local_map.data.push_back({loc[0], loc[1], cell.height});
                         }
                     }
                     exteroception_logger_.log(local_map);
@@ -955,6 +955,21 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                 }
             });
     }
+}
+
+void Serow::computeFrameTFs(const Eigen::Isometry3d& base_pose) {
+    std::map<std::string, Eigen::Isometry3d> frame_tfs;
+    frame_tfs[params_.base_frame] = base_pose;
+    for (const auto& frame : kinematic_estimator_->frameNames()) {
+        if (frame != params_.base_frame) {
+            try {
+                frame_tfs[frame] = base_pose * kinematic_estimator_->linkTF(frame);
+            } catch (const std::exception& e) {
+                std::cerr << "Error in frame " << frame << " TF computation: " << e.what() << std::endl;
+            }
+        }
+    }
+    frame_tfs_ = std::move(frame_tfs);
 }
 
 std::optional<State> Serow::getState(bool allow_invalid) {

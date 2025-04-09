@@ -6,7 +6,6 @@
         "1": "rightFoot"
     },
     "model_path": "valkyrie.urdf",
-    "mass": 127.324,
     "g": 9.81,
     "joint_rate": 500.0,
     "estimate_joint_velocity": true,
@@ -248,6 +247,6 @@
         1.0
     ],
     "enable_terrain_estimation": false,
-    "terrain_estimator": "naive",
+    "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3
 }

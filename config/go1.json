@@ -8,7 +8,6 @@
     "3": "RR_foot"
   },
   "model_path": "go1.champ.urdf",
-  "mass": 12.0,
   "g": 9.81,
   "joint_rate": 500.0,
   "estimate_joint_velocity": true,
@@ -225,6 +224,6 @@
   ],
   "T_base_to_odom": null,
   "enable_terrain_estimation": false,
-  "terrain_estimator": "naive",
+  "terrain_estimator": "fast",
   "minimum_terrain_height_variance": 1e-3
 }
