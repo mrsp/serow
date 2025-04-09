@@ -64,10 +64,7 @@ public:
     void log(const CentroidalState& centroidal_state);
     void log(const ContactState& contact_state);
     void log(const ImuMeasurement& imu_measurement);
-    void log(const Eigen::Vector3d& position, const Eigen::Quaterniond& orientation,
-             double timestamp);
-    void log(const std::map<std::string, Eigen::Vector3d>& positions,
-             const std::map<std::string, Eigen::Quaterniond>& orientations, double timestamp);
+    void log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double timestamp);
 
 private:
     class Impl;  // Forward declaration of the implementation class
