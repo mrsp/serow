@@ -2,13 +2,6 @@ find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(pinocchio REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
-# Add option for Python bindings
-option(PYTHON_BINDINGS "Build Python bindings" OFF)
-
-if(PYTHON_BINDINGS)
-    find_package(pybind11 REQUIRED)
-endif()
-
 include(FetchContent)
 FetchContent_Declare(
   mcap_builder
