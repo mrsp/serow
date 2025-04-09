@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.22.1...4.0.0)
 project(serow_python)
 
 # Find required packages
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 REQUIRED)
 find_package(Eigen3 REQUIRED)
 
