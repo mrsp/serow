@@ -7,6 +7,12 @@ Open a terminal in the current directory
 ```
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 source ~/.bashrc
+```
+
+Install the dependencies
+
+```
+pip3 install -r requirements.txt
 python3 setup.py build_ext --inplace
 ```
 
@@ -16,3 +22,6 @@ Run the example with:
 ```
 python3 serow/example.py
 ```
+
+## Train with DDPG
+
