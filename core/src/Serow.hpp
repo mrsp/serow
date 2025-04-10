@@ -26,6 +26,7 @@
 #include "LocalTerrainMapper.hpp"
 #include "Mahony.hpp"
 #include "Measurement.hpp"
+#include "MeasurementLogger.hpp"
 #include "NaiveLocalTerrainMapper.hpp"
 #include "ProprioceptionLogger.hpp"
 #include "RobotKinematics.hpp"
@@ -216,6 +217,7 @@ private:
         Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
         std::string terrain_estimator_type{};
+        bool log_measurements{true};
     };
 
     /// @brief SEROW's configuration
@@ -254,10 +256,13 @@ private:
     /// @brief Data loggers
     ProprioceptionLogger proprioception_logger_;
     ExteroceptionLogger exteroception_logger_;
+    MeasurementLogger measurement_logger_;
     /// @brief Threadpool job for proprioceptive logging
     std::unique_ptr<ThreadPool> proprioception_logger_job_;
     /// @brief Threadpool job for exteroceptive logging
     std::unique_ptr<ThreadPool> exteroception_logger_job_;
+    /// @brief Threadpool job for measurement logging
+    std::unique_ptr<ThreadPool> measurement_logger_job_;
     /// @brief Frame transformations
     std::map<std::string, Eigen::Isometry3d> frame_tfs_;
 

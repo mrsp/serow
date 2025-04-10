@@ -59,7 +59,8 @@ set(serow_src ${serow_src}
     NaiveLocalTerrainMapper.cpp
     ProprioceptionLogger.cpp
     ExteroceptionLogger.cpp
-    ThreadPool.cpp)
+    ThreadPool.cpp
+    MeasurementLogger.cpp)
 
 set(serow_headers ${serow_headers} 
     common.hpp
@@ -84,7 +85,8 @@ set(serow_headers ${serow_headers}
     ProprioceptionLogger.hpp
     ExteroceptionLogger.hpp
     ThreadPool.hpp
-    Schemas.hpp)
+    Schemas.hpp
+    MeasurementLogger.hpp)
 
 
 add_library(serow SHARED ${serow_headers} ${serow_src})

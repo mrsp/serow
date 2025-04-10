@@ -44,6 +44,7 @@ std::string findFilepath(const std::string& filename) {
 Serow::Serow() {
     proprioception_logger_job_ = std::make_unique<ThreadPool>();
     exteroception_logger_job_ = std::make_unique<ThreadPool>();
+    measurement_logger_job_ = std::make_unique<ThreadPool>();
 }
 
 bool Serow::initialize(const std::string& config_file) {
@@ -955,7 +956,22 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                 }
             });
     }
+
+    if (params_.log_measurements && !measurement_logger_job_->isRunning()) {
+        measurement_logger_job_->addJob(
+            [this, kin = std::move(kin), imu = std::move(imu)]() {
+                try {
+                    // Log all measurement data to MCAP file
+                    measurement_logger_.log(imu);
+                    measurement_logger_.log(kin);
+                } catch (const std::exception& e) {
+                    std::cerr << "Error in measurement logging thread: " << e.what()
+                              << std::endl;
+                }
+            });
+    }
 }
+
 
 void Serow::computeFrameTFs(const Eigen::Isometry3d& base_pose) {
     std::map<std::string, Eigen::Isometry3d> frame_tfs;
@@ -994,6 +1010,12 @@ Serow::~Serow() {
     if (exteroception_logger_job_) {
         // Wait for all jobs to finish
         while (exteroception_logger_job_->isRunning()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    if (measurement_logger_job_) {
+        // Wait for all jobs to finish
+        while (measurement_logger_job_->isRunning()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
