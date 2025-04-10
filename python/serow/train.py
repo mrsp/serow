@@ -31,19 +31,9 @@ def main():
     
     ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
     
-    # Create IMU measurement
-    imu = imu_measurements[0]
-    
-    # Create kinematic measurement
-    kin = kinematic_measurements[0]
-    
     # Run a few prediction/update steps
-    for i in range(10):
-        # Update timestamps
-        dt = 0.001  # 1ms time stepS
-        imu.timestamp += dt
-        kin.timestamp += dt
-        
+    step = 0
+    for imu, kin in zip(imu_measurements, kinematic_measurements):
         # Set action
         ekf.set_action(np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]))
 
@@ -54,7 +44,7 @@ def main():
         ekf.update(state, kin, None, None)
         
         # Print some state information
-        print(f"\nStep {i+1}:")
+        print(f"\nStep {step}:")
         print(f"Position: {state.base_position}")
         print(f"Velocity: {state.base_linear_velocity}")
         print(f"Orientation: {state.base_orientation}")
@@ -68,6 +58,8 @@ def main():
             print("\nContact Orientations:")
             for frame_name, orientation in state.contacts_orientation.items():
                 print(f"{frame_name}: {orientation}")
+
+        step += 1
 
 if __name__ == "__main__":
     main() 
