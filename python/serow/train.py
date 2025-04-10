@@ -4,9 +4,14 @@ import numpy as np
 from serow import ContactEKF, BaseState
 from serow import ImuMeasurement, KinematicMeasurement, OdometryMeasurement
 from ddpg import DDPG
-
+from read_mcap import read_mcap_file
 
 def main():
+
+    # Read the measurement mcap file
+    kinematic_measurements, imu_measurements = read_mcap_file("/tmp/serow_measurements.mcap")
+
+    return
     # Initialize the EKF
     ekf = ContactEKF()
     

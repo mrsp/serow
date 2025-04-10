@@ -19,7 +19,7 @@
 #include "ContactState_generated.h"
 #include "FrameTransform_generated.h"
 #include "FrameTransforms_generated.h"
-#include "ImuState_generated.h"
+#include "ImuMeasurement_generated.h"
 #include "Time_generated.h"
 #include "Vector3_generated.h"
 
@@ -109,15 +109,15 @@ public:
                 builder, imu_measurement.orientation.x(), imu_measurement.orientation.y(),
                 imu_measurement.orientation.z(), imu_measurement.orientation.w());
 
-            // Create the root ImuState
-            auto imu_state = foxglove::CreateImuState(builder,
+            // Create the root ImuMeasurement
+            auto imu = foxglove::CreateImuMeasurement(builder,
                                                       &time,                // timestamp
                                                       linear_acceleration,  // linear_acceleration
                                                       angular_velocity,     // angular_velocity
                                                       orientation);         // orientation
 
             // Finish the buffer
-            builder.Finish(imu_state);
+            builder.Finish(imu);
 
             // Get the buffer pointer and size before any potential modifications
             const uint8_t* buffer = builder.GetBufferPointer();
@@ -131,7 +131,7 @@ public:
             writeMessage(1, imu_sequence_++, imu_measurement.timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging IMU state: " << e.what() << std::endl;
+            std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
         }
     }
 
@@ -427,7 +427,7 @@ private:
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
         schemas.reserve(5);
-        schemas.push_back(createSchema("ImuState"));
+        schemas.push_back(createSchema("ImuMeasurement"));
         schemas.push_back(createSchema("ContactState"));
         schemas.push_back(createSchema("CentroidalState"));
         schemas.push_back(createSchema("BaseState"));
@@ -441,11 +441,11 @@ private:
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
         channels.reserve(5);
-        channels.push_back(createChannel(1, "/imu_state"));
+        channels.push_back(createChannel(1, "/imu"));
         channels.push_back(createChannel(2, "/contact_state"));
         channels.push_back(createChannel(3, "/centroidal_state"));
         channels.push_back(createChannel(4, "/base_state"));
-        channels.push_back(createChannel(5, "/tfs"));
+        channels.push_back(createChannel(5, "/tf"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);

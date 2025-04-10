@@ -17,7 +17,7 @@
 #include <iostream>
 #include <mutex>
 
-#include "ImuState_generated.h"
+#include "ImuMeasurement_generated.h"
 #include "KinematicMeasurement_generated.h"
 
 namespace serow {
@@ -106,15 +106,52 @@ public:
                 builder, imu_measurement.orientation.x(), imu_measurement.orientation.y(),
                 imu_measurement.orientation.z(), imu_measurement.orientation.w());
 
+
+            // Create linear acceleration covariance matrix
+            auto linear_acceleration_cov = foxglove::CreateMatrix3(
+                builder, imu_measurement.linear_acceleration_cov(0, 0), imu_measurement.linear_acceleration_cov(0, 1),
+                imu_measurement.linear_acceleration_cov(0, 2), imu_measurement.linear_acceleration_cov(1, 0),
+                imu_measurement.linear_acceleration_cov(1, 1), imu_measurement.linear_acceleration_cov(1, 2),
+                imu_measurement.linear_acceleration_cov(2, 0), imu_measurement.linear_acceleration_cov(2, 1),
+                imu_measurement.linear_acceleration_cov(2, 2));
+
+            // Create angular velocity covariance matrix
+            auto angular_velocity_cov = foxglove::CreateMatrix3(
+                builder, imu_measurement.angular_velocity_cov(0, 0), imu_measurement.angular_velocity_cov(0, 1),
+                imu_measurement.angular_velocity_cov(0, 2), imu_measurement.angular_velocity_cov(1, 0),
+                imu_measurement.angular_velocity_cov(1, 1), imu_measurement.angular_velocity_cov(1, 2),
+                imu_measurement.angular_velocity_cov(2, 0), imu_measurement.angular_velocity_cov(2, 1),
+                imu_measurement.angular_velocity_cov(2, 2));
+
+            // Create angular velocity bias covariance matrix
+            auto angular_velocity_bias_cov = foxglove::CreateMatrix3(
+                builder, imu_measurement.angular_velocity_bias_cov(0, 0), imu_measurement.angular_velocity_bias_cov(0, 1),
+                imu_measurement.angular_velocity_bias_cov(0,     2), imu_measurement.angular_velocity_bias_cov(1, 0),
+                imu_measurement.angular_velocity_bias_cov(1, 1), imu_measurement.angular_velocity_bias_cov(1, 2),
+                imu_measurement.angular_velocity_bias_cov(2, 0), imu_measurement.angular_velocity_bias_cov(2, 1),
+                imu_measurement.angular_velocity_bias_cov(2, 2));
+
+            // Create linear acceleration bias covariance matrix
+            auto linear_acceleration_bias_cov = foxglove::CreateMatrix3(
+                builder, imu_measurement.linear_acceleration_bias_cov(0, 0), imu_measurement.linear_acceleration_bias_cov(0, 1),
+                imu_measurement.linear_acceleration_bias_cov(0, 2), imu_measurement.linear_acceleration_bias_cov(1, 0),
+                imu_measurement.linear_acceleration_bias_cov(1, 1), imu_measurement.linear_acceleration_bias_cov(1, 2),
+                imu_measurement.linear_acceleration_bias_cov(2, 0), imu_measurement.linear_acceleration_bias_cov(2, 1),
+                imu_measurement.linear_acceleration_bias_cov(2, 2));
+
             // Create the root ImuState
-            auto imu_state = foxglove::CreateImuState(builder,
+            auto imu = foxglove::CreateImuMeasurement(builder,
                                                       &time,                // timestamp
                                                       linear_acceleration,  // linear_acceleration
                                                       angular_velocity,     // angular_velocity
-                                                      orientation);         // orientation
+                                                      orientation,          // orientation
+                                                      linear_acceleration_cov, // linear_acceleration_cov
+                                                      angular_velocity_cov, // angular_velocity_cov
+                                                      angular_velocity_bias_cov, // angular_velocity_bias_cov
+                                                      linear_acceleration_bias_cov); // linear_acceleration_bias_cov
 
             // Finish the buffer
-            builder.Finish(imu_state);
+            builder.Finish(imu);
 
             // Get the buffer pointer and size before any potential modifications
             const uint8_t* buffer = builder.GetBufferPointer();
@@ -128,7 +165,7 @@ public:
             writeMessage(1, imu_sequence_++, imu_measurement.timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging IMU state: " << e.what() << std::endl;
+            std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
         }
     }
 
@@ -343,7 +380,7 @@ private:
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
         schemas.reserve(2);
-        schemas.push_back(createSchema("ImuState"));
+        schemas.push_back(createSchema("ImuMeasurement"));
         schemas.push_back(createSchema("KinematicMeasurement"));
 
         for (auto& schema : schemas) {

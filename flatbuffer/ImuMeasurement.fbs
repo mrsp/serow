@@ -1,16 +1,20 @@
 include "Time.fbs";
 include "Vector3.fbs";
 include "Quaternion.fbs";
+include "Matrix3.fbs";
 
 namespace foxglove;
 
-
-table ImuState {
+table ImuMeasurement {
   timestamp:Time (id: 0);
   linear_acceleration:Vector3 (id: 1);
   angular_velocity:Vector3 (id: 2);
   orientation:Quaternion (id: 3);
+  linear_acceleration_cov:Matrix3 (id: 4);
+  angular_velocity_cov:Matrix3 (id: 5);
+  angular_velocity_bias_cov:Matrix3 (id: 6);
+  linear_acceleration_bias_cov:Matrix3 (id: 7);
 }
 
 // Root type declaration
-root_type ImuState;
+root_type ImuMeasurement;
