@@ -40,6 +40,14 @@ PYBIND11_MODULE(measurement, m) {
         .def_readwrite("timestamp", &serow::ImuMeasurement::timestamp)
         .def_readwrite("angular_velocity", &serow::ImuMeasurement::angular_velocity)
         .def_readwrite("linear_acceleration", &serow::ImuMeasurement::linear_acceleration)
+        .def_property(
+            "orientation",
+            [](const serow::ImuMeasurement& self) {
+                return quaternion_to_numpy(self.orientation);
+            },
+            [](serow::ImuMeasurement& self, const py::array_t<double>& arr) {
+                self.orientation = numpy_to_quaternion(arr);
+            })
         .def_readwrite("angular_velocity_cov", &serow::ImuMeasurement::angular_velocity_cov)
         .def_readwrite("linear_acceleration_cov", &serow::ImuMeasurement::linear_acceleration_cov)
         .def_readwrite("angular_velocity_bias_cov",

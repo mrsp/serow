@@ -4,98 +4,38 @@ import numpy as np
 from serow import ContactEKF, BaseState
 from serow import ImuMeasurement, KinematicMeasurement, OdometryMeasurement
 from ddpg import DDPG
-from read_mcap import read_mcap_file
+from read_mcap import read_initial_base_state, read_kinematic_measurements, read_imu_measurements
 
 def main():
 
     # Read the measurement mcap file
-    kinematic_measurements, imu_measurements = read_mcap_file("/tmp/serow_measurements.mcap")
+    kinematic_measurements = read_kinematic_measurements("/tmp/serow_measurements.mcap")
+    imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
+    initial_state = read_initial_base_state("/tmp/serow_proprioception.mcap")
 
-    return
+    # Get the contacts frame
+    contacts_frame = set(initial_state.contacts_position.keys())
+    print(f"Contacts frame: {contacts_frame}")
+
     # Initialize the EKF
     ekf = ContactEKF()
     
     # Create initial state
-    contacts_frame = {"left_foot", "right_foot"}  
-    state = BaseState()
-    state.timestamp = 0.0
-    state.base_position = np.array([0.0, 0.0, 1.0])  # Start 1m above ground
-    state.base_orientation = np.array([1.0, 0.0, 0.0, 0.0])  # Identity quaternion
-    state.base_linear_velocity = np.array([0.0, 0.0, 0.0])
-    state.imu_angular_velocity_bias = np.array([0.0, 0.0, 0.0])
-    state.imu_linear_acceleration_bias = np.array([0.0, 0.0, 0.0])
+    state = initial_state
 
-    # Initialize contact positions (example for a bipedal robot)
-    state.contacts_position = {frame: np.array([0.0, 0.1, 0.0]) if frame == "left_foot" else np.array([0.0, -0.1, 0.0]) for frame in contacts_frame}
-    state.contacts_orientation = {frame: np.array([1.0, 0.0, 0.0, 0.0]) for frame in contacts_frame}
-    
-    # Initialize covariances
-    state.base_position_cov = np.eye(3) * 0.01  # 10cm uncertainty
-    state.base_orientation_cov = np.eye(3) * 0.01  # ~5.7 degrees uncertainty
-    state.base_linear_velocity_cov = np.eye(3) * 0.1  # 0.3 m/s uncertainty
-    state.imu_angular_velocity_bias_cov = np.eye(3) * 0.0001
-    state.imu_linear_acceleration_bias_cov = np.eye(3) * 0.0001
-    
-    # Initialize contact position and orientation covariances
-    state.contacts_position_cov = {frame: np.eye(3) * 0.01 for frame in contacts_frame}
-    state.contacts_orientation_cov = {frame: np.eye(3) * 0.01 for frame in contacts_frame}
-    
-    
-    print("Contact frames:", contacts_frame)
-    print("Contact position covariances:", state.contacts_position_cov)
-    print("Contact orientation covariances:", state.contacts_orientation_cov)
     # Initialize the EKF
-    point_feet = False  # Assuming point feet or flat feet
+    point_feet = True  # Assuming point feet or flat feet
     g = 9.81  # Gravity constant
-    imu_rate = 1000.0  # IMU update rate in Hz
+    imu_rate = 500.0  # IMU update rate in Hz
     outlier_detection = False  # Enable outlier detection
     
     ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
     
     # Create IMU measurement
-    imu = ImuMeasurement()
-    imu.timestamp = 0.001  # 1ms after initialization
-    imu.angular_velocity = np.array([0.0, 0.0, 0.0])  # No rotation
-    imu.linear_acceleration = np.array([0.0, 0.0, -g])  # Gravity only
-    imu.angular_velocity_cov = np.eye(3) * 0.0001
-    imu.linear_acceleration_cov = np.eye(3) * 0.0001
-    imu.angular_velocity_bias_cov = np.eye(3) * 0.000001
-    imu.linear_acceleration_bias_cov = np.eye(3) * 0.000001
+    imu = imu_measurements[0]
     
     # Create kinematic measurement
-    kin = KinematicMeasurement()
-    kin.timestamp = 0.001
-    kin.contacts_status = {
-        "left_foot": True,  # Left foot in contact
-        "right_foot": True  # Right foot in contact
-    }
-    kin.contacts_probability = {
-        "left_foot": 1.0,
-        "right_foot": 1.0
-    }
-    kin.contacts_position = {
-        "left_foot": np.array([0.0, 0.1, 0.0]),
-        "right_foot": np.array([0.0, -0.1, 0.0])
-    }
-    kin.contacts_orientation = {
-        "left_foot": np.array([1.0, 0.0, 0.0, 0.0]),
-        "right_foot": np.array([1.0, 0.0, 0.0, 0.0])
-    }
-    kin.position_slip_cov = np.eye(3) * 0.0001
-    kin.orientation_slip_cov = np.eye(3) * 0.0001
-    kin.contacts_position_noise = {
-        "left_foot": np.eye(3) * 0.0001,
-        "right_foot": np.eye(3) * 0.0001
-    }
-    kin.contacts_orientation_noise = {
-        "left_foot": np.eye(3) * 0.0001,
-        "right_foot": np.eye(3) * 0.0001
-    }
-    kin.base_to_foot_positions = {
-        "left_foot": np.array([0.0, 0.1, 0.0]),
-        "right_foot": np.array([0.0, -0.1, 0.0])
-    }
-    
+    kin = kinematic_measurements[0]
     
     # Run a few prediction/update steps
     for i in range(10):
@@ -118,10 +58,16 @@ def main():
         print(f"Position: {state.base_position}")
         print(f"Velocity: {state.base_linear_velocity}")
         print(f"Orientation: {state.base_orientation}")
-        print(f"Left foot position: {state.contacts_position['left_foot']}")
-        print(f"Right foot position: {state.contacts_position['right_foot']}")
-        print(f"Left foot orientation: {state.contacts_orientation['left_foot']}")
-        print(f"Right foot orientation: {state.contacts_orientation['right_foot']}")
+
+        # Print contact positions and orientations
+        print("\nContact Positions:")
+        for frame_name, position in state.contacts_position.items():
+            print(f"{frame_name}: {position}")
+        
+        if state.contacts_orientation:
+            print("\nContact Orientations:")
+            for frame_name, orientation in state.contacts_orientation.items():
+                print(f"{frame_name}: {orientation}")
 
 if __name__ == "__main__":
     main() 

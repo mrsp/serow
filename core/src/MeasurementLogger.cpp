@@ -139,6 +139,11 @@ public:
                 imu_measurement.linear_acceleration_bias_cov(2, 0), imu_measurement.linear_acceleration_bias_cov(2, 1),
                 imu_measurement.linear_acceleration_bias_cov(2, 2));
 
+            // Create angular acceleration vector
+            auto angular_acceleration = foxglove::CreateVector3(
+                builder, imu_measurement.angular_acceleration.x(), imu_measurement.angular_acceleration.y(),
+                imu_measurement.angular_acceleration.z());
+
             // Create the root ImuState
             auto imu = foxglove::CreateImuMeasurement(builder,
                                                       &time,                // timestamp
@@ -148,7 +153,8 @@ public:
                                                       linear_acceleration_cov, // linear_acceleration_cov
                                                       angular_velocity_cov, // angular_velocity_cov
                                                       angular_velocity_bias_cov, // angular_velocity_bias_cov
-                                                      linear_acceleration_bias_cov); // linear_acceleration_bias_cov
+                                                      linear_acceleration_bias_cov, // linear_acceleration_bias_cov
+                                                      angular_acceleration); // angular_acceleration
 
             // Finish the buffer
             builder.Finish(imu);

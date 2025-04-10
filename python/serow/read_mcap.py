@@ -2,6 +2,7 @@ import mcap
 from mcap.reader import make_reader
 import numpy as np
 from serow.measurement import KinematicMeasurement, ImuMeasurement
+from serow.state import BaseState
 import flatbuffers
 import sys
 import os
@@ -23,8 +24,6 @@ else:
 
 try:
     from foxglove.Vector3 import Vector3
-    from foxglove.KinematicMeasurement import KinematicMeasurement as FbKinematicMeasurement
-    from foxglove.ImuMeasurement import ImuMeasurement as FbImuMeasurement
     from foxglove.Quaternion import Quaternion
     from foxglove.Matrix3 import Matrix3
     from foxglove.StringBoolEntry import StringBoolEntry
@@ -33,6 +32,9 @@ try:
     from foxglove.StringMatrix3Entry import StringMatrix3Entry
     from foxglove.StringQuaternionEntry import StringQuaternionEntry
     from foxglove.Time import Time
+    from foxglove.BaseState import BaseState as FbBaseState
+    from foxglove.KinematicMeasurement import KinematicMeasurement as FbKinematicMeasurement
+    from foxglove.ImuMeasurement import ImuMeasurement as FbImuMeasurement
 except ImportError as e:
     raise ImportError(f"Failed to import FlatBuffer schemas. Please ensure the project is built with Python code generation enabled. Error: {e}")
 
@@ -324,19 +326,222 @@ def decode_kinematic_measurement(data: bytes) -> KinematicMeasurement:
     
     return msg
 
-def read_mcap_file(file_path: str):
+def decode_base_state(data: bytes) -> BaseState:
+    """Decode a FlatBuffer message into an BaseState object."""
+    fb_msg = FbBaseState.GetRootAsBaseState(data, 0)
+    msg = BaseState()
+    
+    # Decode timestamp
+    timestamp = fb_msg.Timestamp()
+    if timestamp:
+        msg.timestamp = timestamp.Sec() + timestamp.Nsec() * 1e-9
+    
+    # Decode base position
+    if fb_msg.BasePosition():
+        msg.base_position = np.array([
+            fb_msg.BasePosition().X(),
+            fb_msg.BasePosition().Y(),
+            fb_msg.BasePosition().Z()
+        ])
+    
+    # Decode base orientation
+    if fb_msg.BaseOrientation():
+        msg.base_orientation = np.array([
+            fb_msg.BaseOrientation().W(),
+            fb_msg.BaseOrientation().X(),
+            fb_msg.BaseOrientation().Y(),
+            fb_msg.BaseOrientation().Z()
+        ])
+    
+    # Decode base linear velocity
+    if fb_msg.BaseLinearVelocity():
+        msg.base_linear_velocity = np.array([
+            fb_msg.BaseLinearVelocity().X(),
+            fb_msg.BaseLinearVelocity().Y(),
+            fb_msg.BaseLinearVelocity().Z()
+        ])
+    
+    # Decode base angular velocity
+    if fb_msg.BaseAngularVelocity():
+        msg.base_angular_velocity = np.array([
+            fb_msg.BaseAngularVelocity().X(),
+            fb_msg.BaseAngularVelocity().Y(),
+            fb_msg.BaseAngularVelocity().Z()
+        ])
+    
+    # Decode base linear acceleration
+    if fb_msg.BaseLinearAcceleration():
+        msg.base_linear_acceleration = np.array([
+            fb_msg.BaseLinearAcceleration().X(),
+            fb_msg.BaseLinearAcceleration().Y(),
+            fb_msg.BaseLinearAcceleration().Z()
+        ])
+    
+    # Decode base angular acceleration
+    if fb_msg.BaseAngularAcceleration():
+        msg.base_angular_acceleration = np.array([
+            fb_msg.BaseAngularAcceleration().X(),
+            fb_msg.BaseAngularAcceleration().Y(),
+            fb_msg.BaseAngularAcceleration().Z()
+        ])
+    
+    # Decode IMU linear acceleration bias
+    if fb_msg.ImuLinearAccelerationBias():
+        msg.imu_linear_acceleration_bias = np.array([
+            fb_msg.ImuLinearAccelerationBias().X(),
+            fb_msg.ImuLinearAccelerationBias().Y(),
+            fb_msg.ImuLinearAccelerationBias().Z()
+        ])
+    
+    # Decode IMU angular velocity bias
+    if fb_msg.ImuAngularVelocityBias():
+        msg.imu_angular_velocity_bias = np.array([
+            fb_msg.ImuAngularVelocityBias().X(),
+            fb_msg.ImuAngularVelocityBias().Y(),
+            fb_msg.ImuAngularVelocityBias().Z()
+        ])
+    
+    
+    # Decode covariance matrices
+    if fb_msg.BasePositionCov():
+        matrix = fb_msg.BasePositionCov()
+        msg.base_position_cov = np.array([
+            [matrix.M00(), matrix.M01(), matrix.M02()],
+            [matrix.M10(), matrix.M11(), matrix.M12()],
+            [matrix.M20(), matrix.M21(), matrix.M22()]
+        ])
+    
+    if fb_msg.BaseOrientationCov():
+        matrix = fb_msg.BaseOrientationCov()
+        msg.base_orientation_cov = np.array([
+            [matrix.M00(), matrix.M01(), matrix.M02()],
+            [matrix.M10(), matrix.M11(), matrix.M12()],
+            [matrix.M20(), matrix.M21(), matrix.M22()]
+        ])
+    
+    if fb_msg.BaseLinearVelocityCov():
+        matrix = fb_msg.BaseLinearVelocityCov()
+        msg.base_linear_velocity_cov = np.array([
+            [matrix.M00(), matrix.M01(), matrix.M02()],
+            [matrix.M10(), matrix.M11(), matrix.M12()],
+            [matrix.M20(), matrix.M21(), matrix.M22()]
+        ])
+    
+    if fb_msg.BaseAngularVelocityCov():
+        matrix = fb_msg.BaseAngularVelocityCov()
+        msg.base_angular_velocity_cov = np.array([
+            [matrix.M00(), matrix.M01(), matrix.M02()],
+            [matrix.M10(), matrix.M11(), matrix.M12()],
+            [matrix.M20(), matrix.M21(), matrix.M22()]
+        ])
+    
+    if fb_msg.ImuLinearAccelerationBiasCov():
+        matrix = fb_msg.ImuLinearAccelerationBiasCov()
+        msg.imu_linear_acceleration_bias_cov = np.array([
+            [matrix.M00(), matrix.M01(), matrix.M02()],
+            [matrix.M10(), matrix.M11(), matrix.M12()],
+            [matrix.M20(), matrix.M21(), matrix.M22()]
+        ])
+    
+    if fb_msg.ImuAngularVelocityBiasCov():
+        matrix = fb_msg.ImuAngularVelocityBiasCov()
+        msg.imu_angular_velocity_bias_cov = np.array([
+            [matrix.M00(), matrix.M01(), matrix.M02()],
+            [matrix.M10(), matrix.M11(), matrix.M12()],
+            [matrix.M20(), matrix.M21(), matrix.M22()]
+        ])
+    
+    # Decode contact positions
+    msg.contacts_position = {
+        contact.FrameName().decode(): np.array([
+            contact.Position().X(),
+            contact.Position().Y(),
+            contact.Position().Z()
+        ])
+        for i in range(fb_msg.ContactsPositionLength())
+        for contact in [fb_msg.ContactsPosition(i)]
+    }
+    
+    # Decode contact orientations
+    if fb_msg.ContactsOrientationLength() > 0:
+        msg.contacts_orientation = {
+            contact.FrameName().decode(): np.array([
+                contact.Orientation().W(),
+                contact.Orientation().X(),
+                contact.Orientation().Y(),
+                contact.Orientation().Z()
+            ])
+            for i in range(fb_msg.ContactsOrientationLength())
+            for contact in [fb_msg.ContactsOrientation(i)]
+        }
+    
+    # Decode contact position covariances
+    msg.contacts_position_cov = {
+        contact.FrameName().decode(): np.array([
+            [matrix.M00(), matrix.M01(), matrix.M02()],
+            [matrix.M10(), matrix.M11(), matrix.M12()],
+            [matrix.M20(), matrix.M21(), matrix.M22()]
+        ])
+        for i in range(fb_msg.ContactsPositionCovLength())
+        for contact in [fb_msg.ContactsPositionCov(i)]
+        for matrix in [contact.Covariance()]
+    }
+    
+    # Decode contact orientation covariances
+    if fb_msg.ContactsOrientationCovLength() > 0:
+        msg.contacts_orientation_cov = {
+            contact.FrameName().decode(): np.array([
+                [matrix.M00(), matrix.M01(), matrix.M02()],
+                [matrix.M10(), matrix.M11(), matrix.M12()],
+                [matrix.M20(), matrix.M21(), matrix.M22()]
+            ])
+            for i in range(fb_msg.ContactsOrientationCovLength())
+            for contact in [fb_msg.ContactsOrientationCov(i)]
+            for matrix in [contact.Covariance()]
+        }
+    
+    return msg
+
+def read_imu_measurements(file_path: str):
+    """Read and decode messages from an MCAP file."""
+    with open(file_path, "rb") as f:
+        reader = make_reader(f)
+        imu_measurements = []
+        
+        for schema, channel, message in reader.iter_messages():
+            if channel.topic == "/imu":
+                msg = decode_imu_measurement(message.data)
+                imu_measurements.append(msg)
+        
+        return imu_measurements
+
+def read_kinematic_measurements(file_path: str):
     """Read and decode messages from an MCAP file."""
     with open(file_path, "rb") as f:
         reader = make_reader(f)
         kinematic_measurements = []
-        imu_measurements = []
         
         for schema, channel, message in reader.iter_messages():
             if channel.topic == "/kin":
                 msg = decode_kinematic_measurement(message.data)
                 kinematic_measurements.append(msg)
-            elif channel.topic == "/imu":
-                msg = decode_imu_measurement(message.data)
-                imu_measurements.append(msg)
         
-        return kinematic_measurements, imu_measurements
+        return kinematic_measurements
+
+def read_initial_base_state(file_path: str):
+    """Read and decode the initial base state from an MCAP file.
+    
+    Args:
+        file_path: Path to the MCAP file
+        
+    Returns:
+        BaseState: The decoded initial base state, or None if not found
+    """
+    with open(file_path, "rb") as f:
+        reader = make_reader(f)
+        
+        for schema, channel, message in reader.iter_messages():
+            if channel.topic == "/base_state":
+                return decode_base_state(message.data)
+        
+        return None

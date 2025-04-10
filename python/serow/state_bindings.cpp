@@ -48,9 +48,11 @@ PYBIND11_MODULE(state, m) {
                 self.base_orientation = numpy_to_quaternion(arr);
             })
         .def_readwrite("base_linear_velocity", &serow::BaseState::base_linear_velocity)
+        .def_readwrite("base_angular_velocity", &serow::BaseState::base_angular_velocity)
+        .def_readwrite("base_linear_acceleration", &serow::BaseState::base_linear_acceleration)
+        .def_readwrite("base_angular_acceleration", &serow::BaseState::base_angular_acceleration)
         .def_readwrite("imu_angular_velocity_bias", &serow::BaseState::imu_angular_velocity_bias)
-        .def_readwrite("imu_linear_acceleration_bias",
-                       &serow::BaseState::imu_linear_acceleration_bias)
+        .def_readwrite("imu_linear_acceleration_bias", &serow::BaseState::imu_linear_acceleration_bias)
         .def_readwrite("contacts_position", &serow::BaseState::contacts_position)
         .def_property(
             "contacts_orientation",
@@ -74,10 +76,9 @@ PYBIND11_MODULE(state, m) {
         .def_readwrite("base_position_cov", &serow::BaseState::base_position_cov)
         .def_readwrite("base_orientation_cov", &serow::BaseState::base_orientation_cov)
         .def_readwrite("base_linear_velocity_cov", &serow::BaseState::base_linear_velocity_cov)
-        .def_readwrite("imu_angular_velocity_bias_cov",
-                       &serow::BaseState::imu_angular_velocity_bias_cov)
-        .def_readwrite("imu_linear_acceleration_bias_cov",
-                       &serow::BaseState::imu_linear_acceleration_bias_cov)
+        .def_readwrite("base_angular_velocity_cov", &serow::BaseState::base_angular_velocity_cov)
+        .def_readwrite("imu_angular_velocity_bias_cov", &serow::BaseState::imu_angular_velocity_bias_cov)
+        .def_readwrite("imu_linear_acceleration_bias_cov", &serow::BaseState::imu_linear_acceleration_bias_cov)
         .def_readwrite("contacts_position_cov", &serow::BaseState::contacts_position_cov)
         .def_readwrite("contacts_orientation_cov", &serow::BaseState::contacts_orientation_cov);
 }

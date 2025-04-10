@@ -14,6 +14,7 @@ table ImuMeasurement {
   angular_velocity_cov:Matrix3 (id: 5);
   angular_velocity_bias_cov:Matrix3 (id: 6);
   linear_acceleration_bias_cov:Matrix3 (id: 7);
+  angular_acceleration:Vector3 (id: 8);
 }
 
 // Root type declaration
