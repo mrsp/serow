@@ -53,47 +53,35 @@ table BaseState {
   // 3D IMU angular velocity bias in IMU frame coordinates (rad/s)
   imu_angular_velocity_bias: Vector3 (id: 8);
 
-  // 3D Base linear acceleration bias in world frame coordinates (m/s^2)
-  base_linear_acceleration_bias: Vector3 (id: 9);
-
-  // 3D Base angular velocity bias in world frame coordinates (rad/s)
-  base_angular_velocity_bias: Vector3 (id: 10);
-
-  // 3x3 Covariance matrix for base linear acceleration bias
-  base_linear_acceleration_bias_cov: Matrix3 (id: 11);
-
-  // 3x3 Covariance matrix for base angular velocity bias
-  base_angular_velocity_bias_cov: Matrix3 (id: 12);
-
   // Base position covariance in world frame coordinates (m^2)
-  base_position_cov: Matrix3 (id: 13);
+  base_position_cov: Matrix3 (id: 9);
 
   // Base orientation covariance in world frame coordinates (rad^2)
-  base_orientation_cov: Matrix3 (id: 14);
+  base_orientation_cov: Matrix3 (id: 10);
 
   // Base linear velocity covariance in world frame coordinates (m^2/s^2)
-  base_linear_velocity_cov: Matrix3 (id: 15);
+  base_linear_velocity_cov: Matrix3 (id: 11);
 
   // Base angular velocity covariance in world frame coordinates (rad^2/s^2)
-  base_angular_velocity_cov: Matrix3 (id: 16);
+  base_angular_velocity_cov: Matrix3 (id: 12);
 
   // IMU acceleration bias covariance in local imu frame coordinates (m^2/s^4)
-  imu_linear_acceleration_bias_cov: Matrix3 (id: 17);
+  imu_linear_acceleration_bias_cov: Matrix3 (id: 13);
 
   // IMU gyro rate bias covariance in local imu frame coordinates (rad^2/s^2)
-  imu_angular_velocity_bias_cov: Matrix3 (id: 18);
+  imu_angular_velocity_bias_cov: Matrix3 (id: 14);
 
   // Contact positions in world frame coordinates (m)
-  contacts_position: [ContactPosition] (id: 19);
+  contacts_position: [ContactPosition] (id: 15);
 
   // Contact orientations in world frame coordinates (only for flat feet)
-  contacts_orientation: [ContactOrientation] (id: 20);
+  contacts_orientation: [ContactOrientation] (id: 16);
 
   // Contact position covariances in world frame coordinates (m^2)
-  contacts_position_cov: [ContactPositionCov] (id: 21);
+  contacts_position_cov: [ContactPositionCov] (id: 17);
 
   // Contact orientation covariances in world frame coordinates (rad^2)
-  contacts_orientation_cov: [ContactOrientationCov] (id: 22);
+  contacts_orientation_cov: [ContactOrientationCov] (id: 18);
 }
 
 root_type BaseState;

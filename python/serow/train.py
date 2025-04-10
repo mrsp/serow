@@ -5,6 +5,47 @@ from serow import ContactEKF, BaseState
 from serow import ImuMeasurement, KinematicMeasurement, OdometryMeasurement
 from ddpg import DDPG
 from read_mcap import read_initial_base_state, read_kinematic_measurements, read_imu_measurements
+import matplotlib.pyplot as plt
+
+def visualize_measurements(kinematic_measurements, imu_measurements, initial_state):
+    # Get the contacts status for each frame
+    contacts_status = {}
+    times = []
+    for kin in kinematic_measurements:
+        times.append(kin.timestamp)
+        for frame_name, status in kin.contacts_status:
+            print(f"Frame name: {frame_name}, status: {status}")
+            if frame_name not in contacts_status:
+                contacts_status[frame_name] = []
+            contacts_status[frame_name].append(status)
+    
+    print(f"Contacts status: {contacts_status}")
+    # Create a figure with subplots for each contact frame
+    n_frames = len(contacts_status.keys())
+    n_cols = 2  # Number of columns in the subplot grid
+    n_rows = (n_frames + n_cols - 1) // n_cols  # Ceiling division
+    
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(15, 5*n_rows))
+    fig.suptitle('Contact Status for Each Frame', fontsize=16)
+    
+    # Flatten the axs array if it's 2D
+    if n_rows > 1:
+        axs = axs.flatten()
+    
+    # Plot each contact frame's status
+    for i, (frame_name, status) in enumerate(contacts_status.items()):
+        axs[i].plot(times, status)
+        axs[i].set_title(f"{frame_name}")
+        axs[i].set_xlabel("Timestamp")
+        axs[i].set_ylabel("Status")
+        axs[i].grid(True)
+    
+    # Hide any unused subplots
+    for i in range(n_frames, len(axs)):
+        axs[i].set_visible(False)
+    
+    plt.tight_layout()
+    plt.show()
 
 def main():
 
@@ -13,6 +54,11 @@ def main():
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     initial_state = read_initial_base_state("/tmp/serow_proprioception.mcap")
 
+    print(f"Kinematic measurements: {len(kinematic_measurements)}")
+
+    # Visualize the measurements
+    visualize_measurements(kinematic_measurements, imu_measurements, initial_state)
+    return;
     # Get the contacts frame
     contacts_frame = set(initial_state.contacts_position.keys())
     print(f"Contacts frame: {contacts_frame}")

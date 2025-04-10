@@ -310,27 +310,7 @@ public:
                 base_state.imu_linear_acceleration_bias.y(),
                 base_state.imu_linear_acceleration_bias.z());
 
-            auto base_linear_acceleration_bias = foxglove::CreateVector3(
-                builder, base_state.base_linear_acceleration_bias.x(),
-                base_state.base_linear_acceleration_bias.y(),
-                base_state.base_linear_acceleration_bias.z());
-
-            auto base_angular_velocity_bias = foxglove::CreateVector3(
-                builder, base_state.base_angular_velocity_bias.x(),
-                base_state.base_angular_velocity_bias.y(),
-                base_state.base_angular_velocity_bias.z());
-
             // Create all matrix fields
-            auto base_linear_acceleration_bias_cov = foxglove::CreateMatrix3(
-                builder, base_state.base_linear_acceleration_bias_cov(0,0), base_state.base_linear_acceleration_bias_cov(0,1), base_state.base_linear_acceleration_bias_cov(0,2),
-                base_state.base_linear_acceleration_bias_cov(1,0), base_state.base_linear_acceleration_bias_cov(1,1), base_state.base_linear_acceleration_bias_cov(1,2),
-                base_state.base_linear_acceleration_bias_cov(2,0), base_state.base_linear_acceleration_bias_cov(2,1), base_state.base_linear_acceleration_bias_cov(2,2));
-
-            auto base_angular_velocity_bias_cov = foxglove::CreateMatrix3(
-                builder, base_state.base_angular_velocity_bias_cov(0,0), base_state.base_angular_velocity_bias_cov(0,1), base_state.base_angular_velocity_bias_cov(0,2),
-                base_state.base_angular_velocity_bias_cov(1,0), base_state.base_angular_velocity_bias_cov(1,1), base_state.base_angular_velocity_bias_cov(1,2),
-                base_state.base_angular_velocity_bias_cov(2,0), base_state.base_angular_velocity_bias_cov(2,1), base_state.base_angular_velocity_bias_cov(2,2));
-
             auto base_position_cov = foxglove::CreateMatrix3(
                 builder, base_state.base_position_cov(0,0), base_state.base_position_cov(0,1), base_state.base_position_cov(0,2),
                 base_state.base_position_cov(1,0), base_state.base_position_cov(1,1), base_state.base_position_cov(1,2),
@@ -412,9 +392,7 @@ public:
             auto base_state_fb = foxglove::CreateBaseState(
                 builder, &timestamp, base_position, base_orientation, base_linear_velocity,
                 base_angular_velocity, base_linear_acceleration, base_angular_acceleration,
-                imu_angular_velocity_bias, imu_linear_acceleration_bias,
-                base_linear_acceleration_bias, base_angular_velocity_bias,
-                base_linear_acceleration_bias_cov, base_angular_velocity_bias_cov,
+                imu_linear_acceleration_bias, imu_angular_velocity_bias,
                 base_position_cov, base_orientation_cov, base_linear_velocity_cov,
                 base_angular_velocity_cov, imu_linear_acceleration_bias_cov,
                 imu_angular_velocity_bias_cov, contacts_position, contacts_orientation,

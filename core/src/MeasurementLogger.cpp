@@ -106,7 +106,6 @@ public:
                 builder, imu_measurement.orientation.x(), imu_measurement.orientation.y(),
                 imu_measurement.orientation.z(), imu_measurement.orientation.w());
 
-
             // Create linear acceleration covariance matrix
             auto linear_acceleration_cov = foxglove::CreateMatrix3(
                 builder, imu_measurement.linear_acceleration_cov(0, 0), imu_measurement.linear_acceleration_cov(0, 1),
