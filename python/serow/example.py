@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from serow import ContactEKF, BaseState, ImuMeasurement, KinematicMeasurement, OdometryMeasurement
+from serow import ContactEKF, BaseState
+from serow import ImuMeasurement, KinematicMeasurement, OdometryMeasurement
 
 def main():
     # Initialize the EKF

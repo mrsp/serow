@@ -33,15 +33,18 @@ endif()
 # Add Python module
 pybind11_add_module(contact_ekf contact_ekf_bindings.cpp)
 pybind11_add_module(state state_bindings.cpp)
-
+pybind11_add_module(measurement measurement_bindings.cpp)
 # Set include directories
 target_include_directories(contact_ekf PRIVATE ${CMAKE_SOURCE_DIR}/../../core/src)
 target_include_directories(state PRIVATE ${CMAKE_SOURCE_DIR}/../../core/src)
+target_include_directories(measurement PRIVATE ${CMAKE_SOURCE_DIR}/../../core/src)
 
 # Link against Eigen and core library
 target_link_libraries(contact_ekf PRIVATE Eigen3::Eigen ${SEROW_CORE_LIB})
 target_link_libraries(state PRIVATE Eigen3::Eigen ${SEROW_CORE_LIB})
+target_link_libraries(measurement PRIVATE Eigen3::Eigen ${SEROW_CORE_LIB})
 
 # Set C++ standard
 set_target_properties(contact_ekf PROPERTIES CXX_STANDARD 17)
 set_target_properties(state PROPERTIES CXX_STANDARD 17) 
+set_target_properties(measurement PROPERTIES CXX_STANDARD 17)

@@ -1,5 +1,6 @@
 from .contact_ekf import ContactEKF
-from .state import BaseState, ImuMeasurement, KinematicMeasurement, OdometryMeasurement
+from .state import BaseState
+from .measurement import ImuMeasurement, KinematicMeasurement, OdometryMeasurement
 
 __all__ = [
     'ContactEKF',

@@ -35,7 +35,7 @@ py::array_t<double> quaternion_to_numpy(const Eigen::Quaterniond& q) {
 }
 
 PYBIND11_MODULE(state, m) {
-    m.doc() = "Python bindings for State classes";
+    m.doc() = "Python bindings for BaseState class";
 
     py::class_<serow::BaseState>(m, "BaseState")
         .def(py::init<>())
@@ -80,70 +80,4 @@ PYBIND11_MODULE(state, m) {
                        &serow::BaseState::imu_linear_acceleration_bias_cov)
         .def_readwrite("contacts_position_cov", &serow::BaseState::contacts_position_cov)
         .def_readwrite("contacts_orientation_cov", &serow::BaseState::contacts_orientation_cov);
-
-    py::class_<serow::ImuMeasurement>(m, "ImuMeasurement")
-        .def(py::init<>())
-        .def_readwrite("timestamp", &serow::ImuMeasurement::timestamp)
-        .def_readwrite("angular_velocity", &serow::ImuMeasurement::angular_velocity)
-        .def_readwrite("linear_acceleration", &serow::ImuMeasurement::linear_acceleration)
-        .def_readwrite("angular_velocity_cov", &serow::ImuMeasurement::angular_velocity_cov)
-        .def_readwrite("linear_acceleration_cov", &serow::ImuMeasurement::linear_acceleration_cov)
-        .def_readwrite("angular_velocity_bias_cov",
-                       &serow::ImuMeasurement::angular_velocity_bias_cov)
-        .def_readwrite("linear_acceleration_bias_cov",
-                       &serow::ImuMeasurement::linear_acceleration_bias_cov)
-        .def_readwrite("angular_acceleration", &serow::ImuMeasurement::angular_acceleration);
-
-    py::class_<serow::KinematicMeasurement>(m, "KinematicMeasurement")
-        .def(py::init<>())
-        .def_readwrite("timestamp", &serow::KinematicMeasurement::timestamp)
-        .def_readwrite("contacts_position", &serow::KinematicMeasurement::contacts_position)
-        .def_property(
-            "contacts_orientation",
-            [](const serow::KinematicMeasurement& self) {
-                std::map<std::string, py::array_t<double>> result;
-                if (self.contacts_orientation) {
-                    for (const auto& [name, quat] : *self.contacts_orientation) {
-                        result[name] = quaternion_to_numpy(quat);
-                    }
-                }
-                return result;
-            },
-            [](serow::KinematicMeasurement& self,
-               const std::map<std::string, py::array_t<double>>& orientations) {
-                std::map<std::string, Eigen::Quaterniond> eigen_orientations;
-                for (const auto& [name, arr] : orientations) {
-                    eigen_orientations[name] = numpy_to_quaternion(arr);
-                }
-                self.contacts_orientation = eigen_orientations;
-            })
-        .def_readwrite("contacts_status", &serow::KinematicMeasurement::contacts_status)
-        .def_readwrite("contacts_probability", &serow::KinematicMeasurement::contacts_probability)
-        .def_readwrite("position_slip_cov", &serow::KinematicMeasurement::position_slip_cov)
-        .def_readwrite("orientation_slip_cov", &serow::KinematicMeasurement::orientation_slip_cov)
-        .def_readwrite("contacts_position_noise",
-                       &serow::KinematicMeasurement::contacts_position_noise)
-        .def_readwrite("contacts_orientation_noise",
-                       &serow::KinematicMeasurement::contacts_orientation_noise)
-        .def_readwrite("com_position", &serow::KinematicMeasurement::com_position)
-        .def_readwrite("com_position_cov", &serow::KinematicMeasurement::com_position_cov)
-        .def_readwrite("com_angular_momentum_derivative",
-                       &serow::KinematicMeasurement::com_angular_momentum_derivative)
-        .def_readwrite("base_to_foot_positions",
-                       &serow::KinematicMeasurement::base_to_foot_positions);
-
-    py::class_<serow::OdometryMeasurement>(m, "OdometryMeasurement")
-        .def(py::init<>())
-        .def_readwrite("timestamp", &serow::OdometryMeasurement::timestamp)
-        .def_readwrite("base_position", &serow::OdometryMeasurement::base_position)
-        .def_property(
-            "base_orientation",
-            [](const serow::OdometryMeasurement& self) {
-                return quaternion_to_numpy(self.base_orientation);
-            },
-            [](serow::OdometryMeasurement& self, const py::array_t<double>& arr) {
-                self.base_orientation = numpy_to_quaternion(arr);
-            })
-        .def_readwrite("base_position_cov", &serow::OdometryMeasurement::base_position_cov)
-        .def_readwrite("base_orientation_cov", &serow::OdometryMeasurement::base_orientation_cov);
 }

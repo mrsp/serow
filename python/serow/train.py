@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from serow import ContactEKF, BaseState, ImuMeasurement, KinematicMeasurement
+from serow import ContactEKF, BaseState
+from serow import ImuMeasurement, KinematicMeasurement, OdometryMeasurement
 from ddpg import DDPG
 
 
