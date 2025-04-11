@@ -77,7 +77,7 @@ public:
     /// @brief Returns the terrain_estimator_ object
     const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
 
-private:
+// public:
     struct Params {
         /// @brief base frame name
         std::string base_frame{};

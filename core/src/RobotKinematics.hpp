@@ -95,12 +95,12 @@ public:
         }
 
         computeTotalMass();
-
+        std::cout << "Model loaded: " << model_name << std::endl;
+        std::cout << "Total mass: " << total_mass_ << std::endl;
         // Output model information
         std::cout << "Joint Names: " << std::endl;
         printJointNames();
         std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
-        std::cout << "Model loaded: " << model_name << std::endl;
         std::cout << "Frame Names: " << std::endl;
         for (const auto& frame : pmodel_->frames) {
             if (frame.type == pinocchio::FrameType::BODY) {

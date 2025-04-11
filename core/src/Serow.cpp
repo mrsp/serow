@@ -505,7 +505,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             }
         }
     }
-
     // Update the kinematic structure
     kinematic_estimator_->updateJointConfig(joints_position, joints_velocity);
 
