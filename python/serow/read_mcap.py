@@ -26,11 +26,6 @@ try:
     from foxglove.Vector3 import Vector3
     from foxglove.Quaternion import Quaternion
     from foxglove.Matrix3 import Matrix3
-    from foxglove.StringBoolEntry import StringBoolEntry
-    from foxglove.StringDoubleEntry import StringDoubleEntry
-    from foxglove.StringVector3Entry import StringVector3Entry
-    from foxglove.StringMatrix3Entry import StringMatrix3Entry
-    from foxglove.StringQuaternionEntry import StringQuaternionEntry
     from foxglove.Time import Time
     from foxglove.BaseState import BaseState as FbBaseState
     from foxglove.KinematicMeasurement import KinematicMeasurement as FbKinematicMeasurement
@@ -43,18 +38,10 @@ def decode_imu_measurement(data: bytes) -> ImuMeasurement:
     fb_msg = FbImuMeasurement.GetRootAsImuMeasurement(data, 0)
     msg = ImuMeasurement()
     
-    # Decode timestamp - access fields directly from the table
-    timestamp_offset = fb_msg.Timestamp()
-    if timestamp_offset:
-        msg.timestamp = timestamp_offset.Sec() + timestamp_offset.Nsec() * 1e-9
-    
-    # Decode angular velocity
-    if fb_msg.AngularVelocity():
-        msg.angular_velocity = np.array([
-            fb_msg.AngularVelocity().X(),
-            fb_msg.AngularVelocity().Y(),
-            fb_msg.AngularVelocity().Z()
-        ])
+    # Decode timestamp
+    timestamp = fb_msg.Timestamp()
+    if timestamp:
+        msg.timestamp = timestamp.Sec() + timestamp.Nsec() * 1e-9
     
     # Decode linear acceleration
     if fb_msg.LinearAcceleration():
@@ -64,19 +51,36 @@ def decode_imu_measurement(data: bytes) -> ImuMeasurement:
             fb_msg.LinearAcceleration().Z()
         ])
     
-    # Decode angular velocity covariance
-    if fb_msg.AngularVelocityCov():
-        matrix = fb_msg.AngularVelocityCov()
-        msg.angular_velocity_cov = np.array([
-            [matrix.M00(), matrix.M01(), matrix.M02()],
-            [matrix.M10(), matrix.M11(), matrix.M12()],
-            [matrix.M20(), matrix.M21(), matrix.M22()]
+    # Decode angular velocity
+    if fb_msg.AngularVelocity():
+        msg.angular_velocity = np.array([
+            fb_msg.AngularVelocity().X(),
+            fb_msg.AngularVelocity().Y(),
+            fb_msg.AngularVelocity().Z()
+        ])
+    
+    # Decode orientation
+    if fb_msg.Orientation():
+        msg.orientation = np.array([
+            fb_msg.Orientation().W(),
+            fb_msg.Orientation().X(),
+            fb_msg.Orientation().Y(),
+            fb_msg.Orientation().Z()
         ])
     
     # Decode linear acceleration covariance
     if fb_msg.LinearAccelerationCov():
         matrix = fb_msg.LinearAccelerationCov()
         msg.linear_acceleration_cov = np.array([
+            [matrix.M00(), matrix.M01(), matrix.M02()],
+            [matrix.M10(), matrix.M11(), matrix.M12()],
+            [matrix.M20(), matrix.M21(), matrix.M22()]
+        ])
+    
+    # Decode angular velocity covariance
+    if fb_msg.AngularVelocityCov():
+        matrix = fb_msg.AngularVelocityCov()
+        msg.angular_velocity_cov = np.array([
             [matrix.M00(), matrix.M01(), matrix.M02()],
             [matrix.M10(), matrix.M11(), matrix.M12()],
             [matrix.M20(), matrix.M21(), matrix.M22()]
@@ -108,15 +112,6 @@ def decode_imu_measurement(data: bytes) -> ImuMeasurement:
             fb_msg.AngularAcceleration().Z()
         ])
     
-    # Decode orientation
-    if fb_msg.Orientation():
-        msg.orientation = np.array([
-            fb_msg.Orientation().W(),
-            fb_msg.Orientation().X(),
-            fb_msg.Orientation().Y(),
-            fb_msg.Orientation().Z()
-        ])
-    
     return msg
 
 def decode_kinematic_measurement(data: bytes) -> KinematicMeasurement:
@@ -125,7 +120,9 @@ def decode_kinematic_measurement(data: bytes) -> KinematicMeasurement:
     msg = KinematicMeasurement()
     
     # Decode timestamp
-    msg.timestamp = fb_msg.Timestamp()
+    timestamp = fb_msg.Timestamp()
+    if timestamp:
+        msg.timestamp = timestamp.Sec() + timestamp.Nsec() * 1e-9
     
     # Decode base linear velocity
     if fb_msg.BaseLinearVelocity():
@@ -144,82 +141,63 @@ def decode_kinematic_measurement(data: bytes) -> KinematicMeasurement:
             fb_msg.BaseOrientation().Z()
         ])
     
-    # Decode contacts status
-    msg.contacts_status = {}
-    for i in range(fb_msg.ContactsStatusLength()):
-        entry = fb_msg.ContactsStatus(i)
-        msg.contacts_status[entry.Key().decode()] = entry.Value()
-    
-    # Decode contacts probability
-    msg.contacts_probability = {}
-    for i in range(fb_msg.ContactsProbabilityLength()):
-        entry = fb_msg.ContactsProbability(i)
-        msg.contacts_probability[entry.Key().decode()] = entry.Value()
-    
-    # Decode contacts position
-    msg.contacts_position = {}
-    for i in range(fb_msg.ContactsPositionLength()):
-        entry = fb_msg.ContactsPosition(i)
-        msg.contacts_position[entry.Key().decode()] = np.array([
-            entry.Value().X(),
-            entry.Value().Y(),
-            entry.Value().Z()
-        ])
-    
-    # Decode base to foot positions
-    msg.base_to_foot_positions = {}
-    for i in range(fb_msg.BaseToFootPositionsLength()):
-        entry = fb_msg.BaseToFootPositions(i)
-        msg.base_to_foot_positions[entry.Key().decode()] = np.array([
-            entry.Value().X(),
-            entry.Value().Y(),
-            entry.Value().Z()
-        ])
-    
-    # Decode contacts position noise
-    msg.contacts_position_noise = {}
-    for i in range(fb_msg.ContactsPositionNoiseLength()):
-        entry = fb_msg.ContactsPositionNoise(i)
-        matrix = entry.Value()
-        msg.contacts_position_noise[entry.Key().decode()] = np.array([
-            [matrix.M00(), matrix.M01(), matrix.M02()],
-            [matrix.M10(), matrix.M11(), matrix.M12()],
-            [matrix.M20(), matrix.M21(), matrix.M22()]
-        ])
-    
-    # Decode contacts orientation
-    if fb_msg.ContactsOrientationLength() > 0:
-        msg.contacts_orientation = {}
-        for i in range(fb_msg.ContactsOrientationLength()):
-            entry = fb_msg.ContactsOrientation(i)
-            msg.contacts_orientation[entry.Key().decode()] = np.array([
-                entry.Value().W(),
-                entry.Value().X(),
-                entry.Value().Y(),
-                entry.Value().Z()
+    # Decode contact names and status
+    contacts_status = {}
+    contacts_probability = {}
+    contacts_position = {}
+    base_to_foot_positions = {}
+    contacts_position_noise = {}
+    contacts_orientation = {}
+    contacts_orientation_noise = {}
+
+    for i in range(fb_msg.ContactNamesLength()):
+        name = fb_msg.ContactNames(i).decode()
+        if i < fb_msg.ContactsStatusLength():
+            contacts_status[name] = fb_msg.ContactsStatus(i)
+        if i < fb_msg.ContactsProbabilityLength():
+            contacts_probability[name] = fb_msg.ContactsProbability(i)
+        if i < fb_msg.ContactsPositionLength():
+            pos = fb_msg.ContactsPosition(i)
+            contacts_position[name] = np.array([pos.X(), pos.Y(), pos.Z()])
+        if i < fb_msg.BaseToFootPositionsLength():
+            pos = fb_msg.BaseToFootPositions(i)
+            base_to_foot_positions[name] = np.array([pos.X(), pos.Y(), pos.Z()])
+        if i < fb_msg.ContactsPositionNoiseLength():
+            matrix = fb_msg.ContactsPositionNoise(i)
+            contacts_position_noise[name] = np.array([
+                [matrix.M00(), matrix.M01(), matrix.M02()],
+                [matrix.M10(), matrix.M11(), matrix.M12()],
+                [matrix.M20(), matrix.M21(), matrix.M22()]
             ])
-    
-    # Decode contacts orientation noise
-    if fb_msg.ContactsOrientationNoiseLength() > 0:
-        msg.contacts_orientation_noise = {}
-        for i in range(fb_msg.ContactsOrientationNoiseLength()):
-            entry = fb_msg.ContactsOrientationNoise(i)
-            matrix = entry.Value()
-            msg.contacts_orientation_noise[entry.Key().decode()] = np.array([
+        if i < fb_msg.ContactsOrientationLength():
+            quat = fb_msg.ContactsOrientation(i)
+            contacts_orientation[name] = np.array([
+                quat.W(), quat.X(), quat.Y(), quat.Z()
+            ])
+        if i < fb_msg.ContactsOrientationNoiseLength():
+            matrix = fb_msg.ContactsOrientationNoise(i)
+            contacts_orientation_noise[name] = np.array([
                 [matrix.M00(), matrix.M01(), matrix.M02()],
                 [matrix.M10(), matrix.M11(), matrix.M12()],
                 [matrix.M20(), matrix.M21(), matrix.M22()]
             ])
     
-    # Decode COM angular momentum derivative
+    msg.contacts_status = contacts_status
+    msg.contacts_probability = contacts_probability
+    msg.contacts_position = contacts_position
+    msg.base_to_foot_positions = base_to_foot_positions
+    msg.contacts_position_noise = contacts_position_noise
+    msg.contacts_orientation = contacts_orientation
+    msg.contacts_orientation_noise = contacts_orientation_noise
+
+    # Decode COM measurements
     if fb_msg.ComAngularMomentumDerivative():
-        msg.com_angular_momentum_derivative = np.array([
+       msg.com_angular_momentum_derivative = np.array([
             fb_msg.ComAngularMomentumDerivative().X(),
             fb_msg.ComAngularMomentumDerivative().Y(),
             fb_msg.ComAngularMomentumDerivative().Z()
         ])
     
-    # Decode COM position
     if fb_msg.ComPosition():
         msg.com_position = np.array([
             fb_msg.ComPosition().X(),
@@ -227,7 +205,6 @@ def decode_kinematic_measurement(data: bytes) -> KinematicMeasurement:
             fb_msg.ComPosition().Z()
         ])
     
-    # Decode COM linear acceleration
     if fb_msg.ComLinearAcceleration():
         msg.com_linear_acceleration = np.array([
             fb_msg.ComLinearAcceleration().X(),
@@ -401,7 +378,6 @@ def decode_base_state(data: bytes) -> BaseState:
             fb_msg.ImuAngularVelocityBias().Z()
         ])
     
-    
     # Decode covariance matrices
     if fb_msg.BasePositionCov():
         matrix = fb_msg.BasePositionCov()
@@ -452,54 +428,46 @@ def decode_base_state(data: bytes) -> BaseState:
         ])
     
     # Decode contact positions
-    msg.contacts_position = {
-        contact.FrameName().decode(): np.array([
-            contact.Position().X(),
-            contact.Position().Y(),
-            contact.Position().Z()
+    contacts_position = {}
+    for i in range(fb_msg.ContactsPositionLength()):
+        pos = fb_msg.ContactsPosition(i)
+        contacts_position[fb_msg.ContactNames(i).decode()] = np.array([
+            pos.X(), pos.Y(), pos.Z()
         ])
-        for i in range(fb_msg.ContactsPositionLength())
-        for contact in [fb_msg.ContactsPosition(i)]
-    }
     
     # Decode contact orientations
-    if fb_msg.ContactsOrientationLength() > 0:
-        msg.contacts_orientation = {
-            contact.FrameName().decode(): np.array([
-                contact.Orientation().W(),
-                contact.Orientation().X(),
-                contact.Orientation().Y(),
-                contact.Orientation().Z()
-            ])
-            for i in range(fb_msg.ContactsOrientationLength())
-            for contact in [fb_msg.ContactsOrientation(i)]
-        }
+    contacts_orientation = {}
+    for i in range(fb_msg.ContactsOrientationLength()):
+        quat = fb_msg.ContactsOrientation(i)
+        contacts_orientation[fb_msg.ContactNames(i).decode()] = np.array([
+            quat.W(), quat.X(), quat.Y(), quat.Z()
+        ])
     
     # Decode contact position covariances
-    msg.contacts_position_cov = {
-        contact.FrameName().decode(): np.array([
+    contacts_position_cov = {}
+    for i in range(fb_msg.ContactsPositionCovLength()):
+        matrix = fb_msg.ContactsPositionCov(i)
+        contacts_position_cov[fb_msg.ContactNames(i).decode()] = np.array([
             [matrix.M00(), matrix.M01(), matrix.M02()],
             [matrix.M10(), matrix.M11(), matrix.M12()],
             [matrix.M20(), matrix.M21(), matrix.M22()]
         ])
-        for i in range(fb_msg.ContactsPositionCovLength())
-        for contact in [fb_msg.ContactsPositionCov(i)]
-        for matrix in [contact.Covariance()]
-    }
     
     # Decode contact orientation covariances
-    if fb_msg.ContactsOrientationCovLength() > 0:
-        msg.contacts_orientation_cov = {
-            contact.FrameName().decode(): np.array([
-                [matrix.M00(), matrix.M01(), matrix.M02()],
-                [matrix.M10(), matrix.M11(), matrix.M12()],
-                [matrix.M20(), matrix.M21(), matrix.M22()]
-            ])
-            for i in range(fb_msg.ContactsOrientationCovLength())
-            for contact in [fb_msg.ContactsOrientationCov(i)]
-            for matrix in [contact.Covariance()]
-        }
+    contacts_orientation_cov = {}
+    for i in range(fb_msg.ContactsOrientationCovLength()):
+        matrix = fb_msg.ContactsOrientationCov(i)
+        contacts_orientation_cov[fb_msg.ContactNames(i).decode()] = np.array([
+            [matrix.M00(), matrix.M01(), matrix.M02()],
+            [matrix.M10(), matrix.M11(), matrix.M12()],
+            [matrix.M20(), matrix.M21(), matrix.M22()]
+        ])
     
+    msg.contacts_position = contacts_position
+    msg.contacts_orientation = contacts_orientation
+    msg.contacts_position_cov = contacts_position_cov
+    msg.contacts_orientation_cov = contacts_orientation_cov
+
     return msg
 
 def read_imu_measurements(file_path: str):

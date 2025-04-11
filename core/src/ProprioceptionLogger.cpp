@@ -276,6 +276,13 @@ public:
 
             auto timestamp = foxglove::Time(sec, nsec);
 
+            // Create contact names vector
+            std::vector<flatbuffers::Offset<flatbuffers::String>> contact_names_vec;
+            for (const auto& [frame_name, _] : base_state.contacts_position) {
+                contact_names_vec.push_back(builder.CreateString(frame_name));
+            }
+            auto contact_names = builder.CreateVector(contact_names_vec);
+
             // Create all vector fields
             auto base_position = foxglove::CreateVector3(builder, base_state.base_position.x(),
                                                         base_state.base_position.y(), 
@@ -301,14 +308,14 @@ public:
                 builder, base_state.base_angular_acceleration.x(),
                 base_state.base_angular_acceleration.y(), base_state.base_angular_acceleration.z());
 
-            auto imu_angular_velocity_bias = foxglove::CreateVector3(
-                builder, base_state.imu_angular_velocity_bias.x(),
-                base_state.imu_angular_velocity_bias.y(), base_state.imu_angular_velocity_bias.z());
-
             auto imu_linear_acceleration_bias = foxglove::CreateVector3(
                 builder, base_state.imu_linear_acceleration_bias.x(),
                 base_state.imu_linear_acceleration_bias.y(),
                 base_state.imu_linear_acceleration_bias.z());
+
+            auto imu_angular_velocity_bias = foxglove::CreateVector3(
+                builder, base_state.imu_angular_velocity_bias.x(),
+                base_state.imu_angular_velocity_bias.y(), base_state.imu_angular_velocity_bias.z());
 
             // Create all matrix fields
             auto base_position_cov = foxglove::CreateMatrix3(
@@ -342,61 +349,68 @@ public:
                 base_state.imu_angular_velocity_bias_cov(2,0), base_state.imu_angular_velocity_bias_cov(2,1), base_state.imu_angular_velocity_bias_cov(2,2));
 
             // Create contact position vectors
-            std::vector<flatbuffers::Offset<foxglove::ContactPosition>> contacts_position_vec;
-            for (const auto& [frame_name, position] : base_state.contacts_position) {
-                auto pos = foxglove::CreateVector3(builder, position.x(), position.y(), position.z());
-                auto frame_name_offset = builder.CreateString(frame_name);
-                contacts_position_vec.push_back(foxglove::CreateContactPosition(builder, frame_name_offset, pos));
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> contacts_position_vec;
+            for (const auto& [_, position] : base_state.contacts_position) {
+                contacts_position_vec.push_back(foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
             }
             auto contacts_position = builder.CreateVector(contacts_position_vec);
 
             // Create contact orientation vectors
-            std::vector<flatbuffers::Offset<foxglove::ContactOrientation>> contacts_orientation_vec;
+            std::vector<flatbuffers::Offset<foxglove::Quaternion>> contacts_orientation_vec;
             if (base_state.contacts_orientation) {
-                for (const auto& [frame_name, orientation] : *base_state.contacts_orientation) {
-                    auto ori = foxglove::CreateQuaternion(builder, orientation.w(), orientation.x(), 
-                                                        orientation.y(), orientation.z());
-                    auto frame_name_offset = builder.CreateString(frame_name);
-                    contacts_orientation_vec.push_back(foxglove::CreateContactOrientation(builder, frame_name_offset, ori));
+                for (const auto& [_, orientation] : *base_state.contacts_orientation) {
+                    contacts_orientation_vec.push_back(foxglove::CreateQuaternion(builder, 
+                        orientation.w(), orientation.x(), orientation.y(), orientation.z()));
                 }
             }
             auto contacts_orientation = builder.CreateVector(contacts_orientation_vec);
 
             // Create contact position covariance vectors
-            std::vector<flatbuffers::Offset<foxglove::ContactPositionCov>> contacts_position_cov_vec;
-            for (const auto& [frame_name, cov] : base_state.contacts_position_cov) {
-                auto matrix = foxglove::CreateMatrix3(builder, 
+            std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_position_cov_vec;
+            for (const auto& [_, cov] : base_state.contacts_position_cov) {
+                contacts_position_cov_vec.push_back(foxglove::CreateMatrix3(builder, 
                     cov(0,0), cov(0,1), cov(0,2),
                     cov(1,0), cov(1,1), cov(1,2),
-                    cov(2,0), cov(2,1), cov(2,2));
-                auto frame_name_offset = builder.CreateString(frame_name);
-                contacts_position_cov_vec.push_back(foxglove::CreateContactPositionCov(builder, frame_name_offset, matrix));
+                    cov(2,0), cov(2,1), cov(2,2)));
             }
             auto contacts_position_cov = builder.CreateVector(contacts_position_cov_vec);
 
             // Create contact orientation covariance vectors
-            std::vector<flatbuffers::Offset<foxglove::ContactOrientationCov>> contacts_orientation_cov_vec;
+            std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_orientation_cov_vec;
             if (base_state.contacts_orientation_cov) {
-                for (const auto& [frame_name, cov] : *base_state.contacts_orientation_cov) {
-                    auto matrix = foxglove::CreateMatrix3(builder, 
+                for (const auto& [_, cov] : *base_state.contacts_orientation_cov) {
+                    contacts_orientation_cov_vec.push_back(foxglove::CreateMatrix3(builder, 
                         cov(0,0), cov(0,1), cov(0,2),
                         cov(1,0), cov(1,1), cov(1,2),
-                        cov(2,0), cov(2,1), cov(2,2));
-                    auto frame_name_offset = builder.CreateString(frame_name);
-                    contacts_orientation_cov_vec.push_back(foxglove::CreateContactOrientationCov(builder, frame_name_offset, matrix));
+                        cov(2,0), cov(2,1), cov(2,2)));
                 }
             }
             auto contacts_orientation_cov = builder.CreateVector(contacts_orientation_cov_vec);
 
-            // Create the BaseState message
+            // Create the BaseState message with fields in the correct order according to IDs
             auto base_state_fb = foxglove::CreateBaseState(
-                builder, &timestamp, base_position, base_orientation, base_linear_velocity,
-                base_angular_velocity, base_linear_acceleration, base_angular_acceleration,
-                imu_linear_acceleration_bias, imu_angular_velocity_bias,
-                base_position_cov, base_orientation_cov, base_linear_velocity_cov,
-                base_angular_velocity_cov, imu_linear_acceleration_bias_cov,
-                imu_angular_velocity_bias_cov, contacts_position, contacts_orientation,
-                contacts_position_cov, contacts_orientation_cov);
+                builder, 
+                &timestamp,                    // id: 0
+                contact_names,                 // id: 1
+                base_position,                 // id: 2
+                base_orientation,              // id: 3
+                base_linear_velocity,          // id: 4
+                base_angular_velocity,         // id: 5
+                base_linear_acceleration,      // id: 6
+                base_angular_acceleration,     // id: 7
+                imu_linear_acceleration_bias,  // id: 8
+                imu_angular_velocity_bias,     // id: 9
+                base_position_cov,             // id: 10
+                base_orientation_cov,          // id: 11
+                base_linear_velocity_cov,      // id: 12
+                base_angular_velocity_cov,     // id: 13
+                imu_linear_acceleration_bias_cov, // id: 14
+                imu_angular_velocity_bias_cov, // id: 15
+                contacts_position,             // id: 16
+                contacts_orientation,          // id: 17
+                contacts_position_cov,         // id: 18
+                contacts_orientation_cov       // id: 19
+            );
 
             builder.Finish(base_state_fb);
 
