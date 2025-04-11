@@ -7,8 +7,8 @@ from ddpg import DDPG
 from read_mcap import read_initial_base_state, read_kinematic_measurements, read_imu_measurements
 import matplotlib.pyplot as plt
 
-def main():
 
+def main():
     # Read the measurement mcap file
     kinematic_measurements = read_kinematic_measurements("/tmp/serow_measurements.mcap")
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
@@ -17,18 +17,13 @@ def main():
     # Get the contacts frame
     contacts_frame = set(initial_state.contacts_position.keys())
     print(f"Contacts frame: {contacts_frame}")
-
+    
     # Initialize the EKF
     ekf = ContactEKF()
     
     # Create initial state
     state = initial_state
-    print(state.contacts_position)
-    print(state.contacts_orientation)
-    print(state.contacts_position_cov)
-    print(state.contacts_orientation_cov)
 
-    return
     # Initialize the EKF
     point_feet = True  # Assuming point feet or flat feet
     g = 9.81  # Gravity constant

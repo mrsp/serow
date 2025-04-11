@@ -262,7 +262,7 @@ void ContactEKF::updateWithContacts(
             (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
             position_cov * contact_position_action_cov_gain_;
 
-        if (contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
+        if (!point_feet_ &&contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
                 cs * contacts_orientation_noise.value().at(cf) +
                 (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + orientation_cov.value();
