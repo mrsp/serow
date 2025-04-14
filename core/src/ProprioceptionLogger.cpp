@@ -76,6 +76,10 @@ public:
         }
     }
 
+    void setStartTime(double timestamp) {
+        start_time_ = timestamp;
+    }
+
     // Split timestamp into seconds and nanoseconds
     inline void splitTimestamp(double timestamp, int64_t& sec, int32_t& nsec) const noexcept {
         sec = static_cast<int64_t>(timestamp);
@@ -284,9 +288,9 @@ public:
             auto contact_names = builder.CreateVector(contact_names_vec);
 
             // Create all vector fields
-            auto base_position = foxglove::CreateVector3(builder, base_state.base_position.x(),
-                                                        base_state.base_position.y(), 
-                                                        base_state.base_position.z());
+            auto base_position =
+                foxglove::CreateVector3(builder, base_state.base_position.x(),
+                                        base_state.base_position.y(), base_state.base_position.z());
 
             auto base_orientation = foxglove::CreateQuaternion(
                 builder, base_state.base_orientation.w(), base_state.base_orientation.x(),
@@ -308,10 +312,10 @@ public:
                 builder, base_state.base_angular_acceleration.x(),
                 base_state.base_angular_acceleration.y(), base_state.base_angular_acceleration.z());
 
-            auto imu_linear_acceleration_bias = foxglove::CreateVector3(
-                builder, base_state.imu_linear_acceleration_bias.x(),
-                base_state.imu_linear_acceleration_bias.y(),
-                base_state.imu_linear_acceleration_bias.z());
+            auto imu_linear_acceleration_bias =
+                foxglove::CreateVector3(builder, base_state.imu_linear_acceleration_bias.x(),
+                                        base_state.imu_linear_acceleration_bias.y(),
+                                        base_state.imu_linear_acceleration_bias.z());
 
             auto imu_angular_velocity_bias = foxglove::CreateVector3(
                 builder, base_state.imu_angular_velocity_bias.x(),
@@ -319,39 +323,68 @@ public:
 
             // Create all matrix fields
             auto base_position_cov = foxglove::CreateMatrix3(
-                builder, base_state.base_position_cov(0,0), base_state.base_position_cov(0,1), base_state.base_position_cov(0,2),
-                base_state.base_position_cov(1,0), base_state.base_position_cov(1,1), base_state.base_position_cov(1,2),
-                base_state.base_position_cov(2,0), base_state.base_position_cov(2,1), base_state.base_position_cov(2,2));
+                builder, base_state.base_position_cov(0, 0), base_state.base_position_cov(0, 1),
+                base_state.base_position_cov(0, 2), base_state.base_position_cov(1, 0),
+                base_state.base_position_cov(1, 1), base_state.base_position_cov(1, 2),
+                base_state.base_position_cov(2, 0), base_state.base_position_cov(2, 1),
+                base_state.base_position_cov(2, 2));
 
             auto base_orientation_cov = foxglove::CreateMatrix3(
-                builder, base_state.base_orientation_cov(0,0), base_state.base_orientation_cov(0,1), base_state.base_orientation_cov(0,2),
-                base_state.base_orientation_cov(1,0), base_state.base_orientation_cov(1,1), base_state.base_orientation_cov(1,2),
-                base_state.base_orientation_cov(2,0), base_state.base_orientation_cov(2,1), base_state.base_orientation_cov(2,2));
+                builder, base_state.base_orientation_cov(0, 0),
+                base_state.base_orientation_cov(0, 1), base_state.base_orientation_cov(0, 2),
+                base_state.base_orientation_cov(1, 0), base_state.base_orientation_cov(1, 1),
+                base_state.base_orientation_cov(1, 2), base_state.base_orientation_cov(2, 0),
+                base_state.base_orientation_cov(2, 1), base_state.base_orientation_cov(2, 2));
 
-            auto base_linear_velocity_cov = foxglove::CreateMatrix3(
-                builder, base_state.base_linear_velocity_cov(0,0), base_state.base_linear_velocity_cov(0,1), base_state.base_linear_velocity_cov(0,2),
-                base_state.base_linear_velocity_cov(1,0), base_state.base_linear_velocity_cov(1,1), base_state.base_linear_velocity_cov(1,2),
-                base_state.base_linear_velocity_cov(2,0), base_state.base_linear_velocity_cov(2,1), base_state.base_linear_velocity_cov(2,2));
+            auto base_linear_velocity_cov =
+                foxglove::CreateMatrix3(builder, base_state.base_linear_velocity_cov(0, 0),
+                                        base_state.base_linear_velocity_cov(0, 1),
+                                        base_state.base_linear_velocity_cov(0, 2),
+                                        base_state.base_linear_velocity_cov(1, 0),
+                                        base_state.base_linear_velocity_cov(1, 1),
+                                        base_state.base_linear_velocity_cov(1, 2),
+                                        base_state.base_linear_velocity_cov(2, 0),
+                                        base_state.base_linear_velocity_cov(2, 1),
+                                        base_state.base_linear_velocity_cov(2, 2));
 
-            auto base_angular_velocity_cov = foxglove::CreateMatrix3(
-                builder, base_state.base_angular_velocity_cov(0,0), base_state.base_angular_velocity_cov(0,1), base_state.base_angular_velocity_cov(0,2),
-                base_state.base_angular_velocity_cov(1,0), base_state.base_angular_velocity_cov(1,1), base_state.base_angular_velocity_cov(1,2),
-                base_state.base_angular_velocity_cov(2,0), base_state.base_angular_velocity_cov(2,1), base_state.base_angular_velocity_cov(2,2));
+            auto base_angular_velocity_cov =
+                foxglove::CreateMatrix3(builder, base_state.base_angular_velocity_cov(0, 0),
+                                        base_state.base_angular_velocity_cov(0, 1),
+                                        base_state.base_angular_velocity_cov(0, 2),
+                                        base_state.base_angular_velocity_cov(1, 0),
+                                        base_state.base_angular_velocity_cov(1, 1),
+                                        base_state.base_angular_velocity_cov(1, 2),
+                                        base_state.base_angular_velocity_cov(2, 0),
+                                        base_state.base_angular_velocity_cov(2, 1),
+                                        base_state.base_angular_velocity_cov(2, 2));
 
-            auto imu_linear_acceleration_bias_cov = foxglove::CreateMatrix3(
-                builder, base_state.imu_linear_acceleration_bias_cov(0,0), base_state.imu_linear_acceleration_bias_cov(0,1), base_state.imu_linear_acceleration_bias_cov(0,2),
-                base_state.imu_linear_acceleration_bias_cov(1,0), base_state.imu_linear_acceleration_bias_cov(1,1), base_state.imu_linear_acceleration_bias_cov(1,2),
-                base_state.imu_linear_acceleration_bias_cov(2,0), base_state.imu_linear_acceleration_bias_cov(2,1), base_state.imu_linear_acceleration_bias_cov(2,2));
+            auto imu_linear_acceleration_bias_cov =
+                foxglove::CreateMatrix3(builder, base_state.imu_linear_acceleration_bias_cov(0, 0),
+                                        base_state.imu_linear_acceleration_bias_cov(0, 1),
+                                        base_state.imu_linear_acceleration_bias_cov(0, 2),
+                                        base_state.imu_linear_acceleration_bias_cov(1, 0),
+                                        base_state.imu_linear_acceleration_bias_cov(1, 1),
+                                        base_state.imu_linear_acceleration_bias_cov(1, 2),
+                                        base_state.imu_linear_acceleration_bias_cov(2, 0),
+                                        base_state.imu_linear_acceleration_bias_cov(2, 1),
+                                        base_state.imu_linear_acceleration_bias_cov(2, 2));
 
-            auto imu_angular_velocity_bias_cov = foxglove::CreateMatrix3(
-                builder, base_state.imu_angular_velocity_bias_cov(0,0), base_state.imu_angular_velocity_bias_cov(0,1), base_state.imu_angular_velocity_bias_cov(0,2),
-                base_state.imu_angular_velocity_bias_cov(1,0), base_state.imu_angular_velocity_bias_cov(1,1), base_state.imu_angular_velocity_bias_cov(1,2),
-                base_state.imu_angular_velocity_bias_cov(2,0), base_state.imu_angular_velocity_bias_cov(2,1), base_state.imu_angular_velocity_bias_cov(2,2));
+            auto imu_angular_velocity_bias_cov =
+                foxglove::CreateMatrix3(builder, base_state.imu_angular_velocity_bias_cov(0, 0),
+                                        base_state.imu_angular_velocity_bias_cov(0, 1),
+                                        base_state.imu_angular_velocity_bias_cov(0, 2),
+                                        base_state.imu_angular_velocity_bias_cov(1, 0),
+                                        base_state.imu_angular_velocity_bias_cov(1, 1),
+                                        base_state.imu_angular_velocity_bias_cov(1, 2),
+                                        base_state.imu_angular_velocity_bias_cov(2, 0),
+                                        base_state.imu_angular_velocity_bias_cov(2, 1),
+                                        base_state.imu_angular_velocity_bias_cov(2, 2));
 
             // Create contact position vectors
             std::vector<flatbuffers::Offset<foxglove::Vector3>> contacts_position_vec;
             for (const auto& [_, position] : base_state.contacts_position) {
-                contacts_position_vec.push_back(foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
+                contacts_position_vec.push_back(
+                    foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
             }
             auto contacts_position = builder.CreateVector(contacts_position_vec);
 
@@ -359,8 +392,9 @@ public:
             std::vector<flatbuffers::Offset<foxglove::Quaternion>> contacts_orientation_vec;
             if (base_state.contacts_orientation) {
                 for (const auto& [_, orientation] : *base_state.contacts_orientation) {
-                    contacts_orientation_vec.push_back(foxglove::CreateQuaternion(builder, 
-                        orientation.w(), orientation.x(), orientation.y(), orientation.z()));
+                    contacts_orientation_vec.push_back(
+                        foxglove::CreateQuaternion(builder, orientation.w(), orientation.x(),
+                                                   orientation.y(), orientation.z()));
                 }
             }
             auto contacts_orientation = builder.CreateVector(contacts_orientation_vec);
@@ -368,10 +402,9 @@ public:
             // Create contact position covariance vectors
             std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_position_cov_vec;
             for (const auto& [_, cov] : base_state.contacts_position_cov) {
-                contacts_position_cov_vec.push_back(foxglove::CreateMatrix3(builder, 
-                    cov(0,0), cov(0,1), cov(0,2),
-                    cov(1,0), cov(1,1), cov(1,2),
-                    cov(2,0), cov(2,1), cov(2,2)));
+                contacts_position_cov_vec.push_back(
+                    foxglove::CreateMatrix3(builder, cov(0, 0), cov(0, 1), cov(0, 2), cov(1, 0),
+                                            cov(1, 1), cov(1, 2), cov(2, 0), cov(2, 1), cov(2, 2)));
             }
             auto contacts_position_cov = builder.CreateVector(contacts_position_cov_vec);
 
@@ -379,38 +412,37 @@ public:
             std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_orientation_cov_vec;
             if (base_state.contacts_orientation_cov) {
                 for (const auto& [_, cov] : *base_state.contacts_orientation_cov) {
-                    contacts_orientation_cov_vec.push_back(foxglove::CreateMatrix3(builder, 
-                        cov(0,0), cov(0,1), cov(0,2),
-                        cov(1,0), cov(1,1), cov(1,2),
-                        cov(2,0), cov(2,1), cov(2,2)));
+                    contacts_orientation_cov_vec.push_back(foxglove::CreateMatrix3(
+                        builder, cov(0, 0), cov(0, 1), cov(0, 2), cov(1, 0), cov(1, 1), cov(1, 2),
+                        cov(2, 0), cov(2, 1), cov(2, 2)));
                 }
             }
             auto contacts_orientation_cov = builder.CreateVector(contacts_orientation_cov_vec);
 
             // Create the BaseState message with fields in the correct order according to IDs
-            auto base_state_fb = foxglove::CreateBaseState(
-                builder, 
-                &timestamp,                    // id: 0
-                contact_names,                 // id: 1
-                base_position,                 // id: 2
-                base_orientation,              // id: 3
-                base_linear_velocity,          // id: 4
-                base_angular_velocity,         // id: 5
-                base_linear_acceleration,      // id: 6
-                base_angular_acceleration,     // id: 7
-                imu_linear_acceleration_bias,  // id: 8
-                imu_angular_velocity_bias,     // id: 9
-                base_position_cov,             // id: 10
-                base_orientation_cov,          // id: 11
-                base_linear_velocity_cov,      // id: 12
-                base_angular_velocity_cov,     // id: 13
-                imu_linear_acceleration_bias_cov, // id: 14
-                imu_angular_velocity_bias_cov, // id: 15
-                contacts_position,             // id: 16
-                contacts_orientation,          // id: 17
-                contacts_position_cov,         // id: 18
-                contacts_orientation_cov       // id: 19
-            );
+            auto base_state_fb =
+                foxglove::CreateBaseState(builder,
+                                          &timestamp,                        // id: 0
+                                          contact_names,                     // id: 1
+                                          base_position,                     // id: 2
+                                          base_orientation,                  // id: 3
+                                          base_linear_velocity,              // id: 4
+                                          base_angular_velocity,             // id: 5
+                                          base_linear_acceleration,          // id: 6
+                                          base_angular_acceleration,         // id: 7
+                                          imu_linear_acceleration_bias,      // id: 8
+                                          imu_angular_velocity_bias,         // id: 9
+                                          base_position_cov,                 // id: 10
+                                          base_orientation_cov,              // id: 11
+                                          base_linear_velocity_cov,          // id: 12
+                                          base_angular_velocity_cov,         // id: 13
+                                          imu_linear_acceleration_bias_cov,  // id: 14
+                                          imu_angular_velocity_bias_cov,     // id: 15
+                                          contacts_position,                 // id: 16
+                                          contacts_orientation,              // id: 17
+                                          contacts_position_cov,             // id: 18
+                                          contacts_orientation_cov           // id: 19
+                );
 
             builder.Finish(base_state_fb);
 
@@ -450,8 +482,8 @@ public:
                 auto child_frame = builder.CreateString(frame_id);
 
                 // Create translation
-                auto translation =
-                    foxglove::CreateVector3(builder, tf.translation().x(), tf.translation().y(), tf.translation().z());
+                auto translation = foxglove::CreateVector3(
+                    builder, tf.translation().x(), tf.translation().y(), tf.translation().z());
 
                 // Create rotation
                 const auto& quaternion = Eigen::Quaterniond(tf.linear());
@@ -481,10 +513,15 @@ public:
             size_t size = builder.GetSize();
 
             // Get the serialized data
-            writeMessage(5, tfs_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(5, tfs_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
+                         size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging feet transforms: " << e.what() << std::endl;
         }
+    }
+
+    bool isInitialized() const {
+        return start_time_.has_value();
     }
 
 private:
@@ -492,6 +529,10 @@ private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) noexcept {
         try {
+            if (!start_time_.has_value()) {
+                start_time_ = 0.0;
+            }
+
             // Update message object with new values
             mcap::Message message;
             message.channelId = channel_id;
@@ -569,6 +610,7 @@ private:
     uint64_t imu_sequence_ = 0;
     uint64_t tfs_sequence_ = 0;
     double last_timestamp_{-1.0};
+    std::optional<double> start_time_;
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
@@ -598,8 +640,17 @@ void ProprioceptionLogger::log(const ContactState& contact_state) {
     pimpl_->log(contact_state);
 }
 
-void ProprioceptionLogger::log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double timestamp) {
+void ProprioceptionLogger::log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs,
+                               double timestamp) {
     pimpl_->log(frame_tfs, timestamp);
+}
+
+void ProprioceptionLogger::setStartTime(double timestamp) {
+    pimpl_->setStartTime(timestamp);
+}
+
+bool ProprioceptionLogger::isInitialized() const {
+    return pimpl_->isInitialized();
 }
 
 }  // namespace serow

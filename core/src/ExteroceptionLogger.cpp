@@ -69,6 +69,10 @@ public:
         }
     }
 
+    void setStartTime(double timestamp) {
+        start_time_ = timestamp;
+    }
+
     void log(const LocalMapState& local_map_state) {
         try {
             const double timestamp = local_map_state.timestamp;
@@ -149,10 +153,18 @@ public:
         return last_timestamp_;
     }
 
+    bool isInitialized() const {
+        return start_time_.has_value();
+    }
+
 private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) {
         try {
+            if (!start_time_.has_value()) {
+                start_time_ = 0.0;
+            }
+
             mcap::Message message;
             message.channelId = channel_id;
             message.sequence = sequence;
@@ -160,7 +172,7 @@ private:
             // Ensure timestamp is in nanoseconds and consistent
             // Convert to nanoseconds using std::chrono for precision
             auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::duration<double>(timestamp));
+                std::chrono::duration<double>(timestamp - start_time_.value()));
             uint64_t ns_timestamp = ns.count();
             message.logTime = ns_timestamp;
             message.publishTime = ns_timestamp;  // Use same timestamp for both
@@ -209,7 +221,7 @@ private:
     // Sequence counters
     uint64_t local_map_sequence_{};
     double last_timestamp_{-1.0};
-
+    std::optional<double> start_time_;
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
     std::unique_ptr<mcap::McapWriter> writer_;
@@ -227,6 +239,14 @@ void ExteroceptionLogger::log(const LocalMapState& local_map_state) {
 
 double ExteroceptionLogger::getLastTimestamp() const {
     return pimpl_->getLastTimestamp();
+}
+
+void ExteroceptionLogger::setStartTime(double timestamp) {
+    pimpl_->setStartTime(timestamp);
+}
+
+bool ExteroceptionLogger::isInitialized() const {
+    return pimpl_->isInitialized();
 }
 
 }  // namespace serow

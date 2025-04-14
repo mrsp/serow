@@ -111,7 +111,7 @@ bool Serow::initialize(const std::string& config_file) {
 
     // Initialize base frame
     if (!checkConfigParam("base_frame", params_.base_frame)) {
-        return false;   
+        return false;
     }
 
     // Initialize contact frames
@@ -206,7 +206,8 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
         return false;
-    if (!checkConfigParam("minimum_terrain_height_variance", params_.minimum_terrain_height_variance))
+    if (!checkConfigParam("minimum_terrain_height_variance",
+                          params_.minimum_terrain_height_variance))
         return false;
 
     // Check rotation matrices
@@ -917,6 +918,10 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             [this, base_state = state_.base_state_, centroidal_state = state_.centroidal_state_,
              contact_state = state_.contact_state_, imu = imu, frame_tfs = frame_tfs_]() {
                 try {
+                    if (!proprioception_logger_.isInitialized()) {
+                        proprioception_logger_.setStartTime(
+                            std::min(base_state.timestamp, imu.timestamp));
+                    }
                     // Log all state data to MCAP file
                     proprioception_logger_.log(imu);
                     proprioception_logger_.log(contact_state);
@@ -932,46 +937,49 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
         ((kin.timestamp - exteroception_logger_.getLastTimestamp()) > 0.5)) {
-        exteroception_logger_job_->addJob(
-            [this, ts = kin.timestamp]() {
-                try {
-                    LocalMapState local_map;
-                    local_map.timestamp = ts;
-                    const size_t downsample_factor = 2;
-                    const size_t sample_size_per_dim = map_dim / downsample_factor;
-                    local_map.data.reserve(sample_size_per_dim * sample_size_per_dim);
-                    const auto terrain_map = terrain_estimator_->getElevationMap();
-
-                    for (int i = 0; i < map_dim; i += downsample_factor) {
-                        for (int j = 0; j < map_dim; j += downsample_factor) {
-                            const int id = i * map_dim + j;
-                            const auto& cell = terrain_map[id];
-                            const std::array<float, 2> loc = terrain_estimator_->hashIdToLocation(id);
-                            local_map.data.push_back({loc[0], loc[1], cell.height});
-                        }
-                    }
-                    exteroception_logger_.log(local_map);
-                } catch (const std::exception& e) {
-                    std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
+        exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
+            try {
+                if (!exteroception_logger_.isInitialized()) {
+                    exteroception_logger_.setStartTime(ts);
                 }
-            });
+
+                LocalMapState local_map;
+                local_map.timestamp = ts;
+                const size_t downsample_factor = 2;
+                const size_t sample_size_per_dim = map_dim / downsample_factor;
+                local_map.data.reserve(sample_size_per_dim * sample_size_per_dim);
+                const auto terrain_map = terrain_estimator_->getElevationMap();
+
+                for (int i = 0; i < map_dim; i += downsample_factor) {
+                    for (int j = 0; j < map_dim; j += downsample_factor) {
+                        const int id = i * map_dim + j;
+                        const auto& cell = terrain_map[id];
+                        const std::array<float, 2> loc = terrain_estimator_->hashIdToLocation(id);
+                        local_map.data.push_back({loc[0], loc[1], cell.height});
+                    }
+                }
+                exteroception_logger_.log(local_map);
+            } catch (const std::exception& e) {
+                std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
+            }
+        });
     }
 
     if (params_.log_measurements && !measurement_logger_job_->isRunning()) {
-        measurement_logger_job_->addJob(
-            [this, kin = std::move(kin), imu = std::move(imu)]() {
-                try {
-                    // Log all measurement data to MCAP file
-                    measurement_logger_.log(imu);
-                    measurement_logger_.log(kin);
-                } catch (const std::exception& e) {
-                    std::cerr << "Error in measurement logging thread: " << e.what()
-                              << std::endl;
+        measurement_logger_job_->addJob([this, kin = std::move(kin), imu = std::move(imu)]() {
+            try {
+                if (!measurement_logger_.isInitialized()) {
+                    measurement_logger_.setStartTime(std::min(imu.timestamp, kin.timestamp));
                 }
-            });
+                // Log all measurement data to MCAP file
+                measurement_logger_.log(imu);
+                measurement_logger_.log(kin);
+            } catch (const std::exception& e) {
+                std::cerr << "Error in measurement logging thread: " << e.what() << std::endl;
+            }
+        });
     }
 }
-
 
 void Serow::computeFrameTFs(const Eigen::Isometry3d& base_pose) {
     std::map<std::string, Eigen::Isometry3d> frame_tfs;
@@ -981,7 +989,8 @@ void Serow::computeFrameTFs(const Eigen::Isometry3d& base_pose) {
             try {
                 frame_tfs[frame] = base_pose * kinematic_estimator_->linkTF(frame);
             } catch (const std::exception& e) {
-                std::cerr << "Error in frame " << frame << " TF computation: " << e.what() << std::endl;
+                std::cerr << "Error in frame " << frame << " TF computation: " << e.what()
+                          << std::endl;
             }
         }
     }

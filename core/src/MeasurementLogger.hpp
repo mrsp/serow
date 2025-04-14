@@ -57,6 +57,8 @@ public:
 
     void log(const ImuMeasurement& imu_measurement);
     void log(const KinematicMeasurement& kinematic_measurement);
+    void setStartTime(double timestamp);
+    bool isInitialized() const;
 
 private:
     class Impl;  // Forward declaration of the implementation class
