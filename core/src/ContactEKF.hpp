@@ -89,6 +89,18 @@ public:
      */
     void setAction(const Eigen::VectorXd& action);
 
+    /**
+     * @brief Get the contact innovation and covariance for a given contact frame.
+     * @param contact_frame Name of the contact frame.
+     * @param innovation Innovation of the contact position.
+     * @param covariance Covariance of the contact position.
+     * @return True if the contact innovation and covariance are available, false otherwise.
+     */
+    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+                                      Eigen::Matrix3d& covariance) const;
+    bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+                                         Eigen::Matrix3d& covariance) const;
+
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
@@ -134,6 +146,9 @@ private:
     double position_action_cov_gain_{1.0};
     double orientation_action_cov_gain_{1.0};
     double contact_position_action_cov_gain_{1.0};
+
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_orientation_innovation_;
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.

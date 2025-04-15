@@ -42,5 +42,21 @@ PYBIND11_MODULE(contact_ekf, m) {
             },
             py::arg("state"), py::arg("kin"), py::arg("odom") = py::none(),
             py::arg("terrain_estimator") = py::none())
-        .def("set_action", &serow::ContactEKF::setAction, py::arg("action"));
+        .def("set_action", &serow::ContactEKF::setAction, py::arg("action"))
+        .def("get_contact_position_innovation", 
+            [](serow::ContactEKF& self, const std::string& contact_frame) {
+                Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
+                Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+                bool success = self.getContactPositionInnovation(contact_frame, innovation, covariance);
+                return std::make_tuple(success, innovation, covariance);
+            },
+            py::arg("contact_frame"))
+        .def("get_contact_orientation_innovation", 
+            [](serow::ContactEKF& self, const std::string& contact_frame) {
+                Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
+                Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+                bool success = self.getContactOrientationInnovation(contact_frame, innovation, covariance);
+                return std::make_tuple(success, innovation, covariance);
+            },
+            py::arg("contact_frame"));
 }

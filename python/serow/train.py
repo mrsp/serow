@@ -43,7 +43,16 @@ def main():
         
         # Update step (pass None for both optional parameters)
         ekf.update(state, kin, None, None)
-        
+
+        for cf in contacts_frame:
+            innovation = np.zeros(3)
+            covariance = np.zeros((3, 3))
+            success, innovation, covariance = ekf.get_contact_position_innovation(cf)
+            if success:
+                print(f"Contact frame: {cf}")
+                print(f"Innovation: {innovation}")
+                print(f"Covariance: {covariance}")
+
         # Print some state information
         print(f"\nStep {step}:")
         print(f"Position: {state.base_position}")

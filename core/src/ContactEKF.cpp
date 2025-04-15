@@ -275,6 +275,7 @@ void ContactEKF::updateWithContacts(
         Eigen::MatrixXd H(3, num_states_);
         Eigen::MatrixXd K(num_states_, 3);
         Eigen::Vector3d z;
+        Eigen::Matrix3d s;
         // Iterative ESKF update
         for (size_t iter = 0; iter < num_iter; iter++) {
             H.setZero();
@@ -287,7 +288,7 @@ void ContactEKF::updateWithContacts(
             H.block(0, r_idx_[0], 3, 3) = lie::so3::wedge(x);
 
             // Normal ESKF update
-            const Eigen::Matrix3d s = contacts_position_noise.at(cf) + H * P_ * H.transpose();
+            s.noalias() = contacts_position_noise.at(cf) + H * P_ * H.transpose();
             K.noalias() = P_ * H.transpose() * s.inverse();
             const Eigen::VectorXd dx = K * z;
             updateState(state, dx, P_);
@@ -307,7 +308,7 @@ void ContactEKF::updateWithContacts(
                 if (contact_outlier_detector.zeta > contact_outlier_detector.threshold) {
                     const Eigen::Matrix3d R_z =
                         contacts_position_noise.at(cf) / contact_outlier_detector.zeta;
-                    const Eigen::Matrix3d s = R_z + H * P_ * H.transpose();
+                    s.noalias() = R_z + H * P_ * H.transpose();
                     K.noalias() = P_ * H.transpose() * s.inverse();
                     const Eigen::VectorXd dx = K * z;
                     P_i = (I_ - K * H) * P_;
@@ -326,10 +327,11 @@ void ContactEKF::updateWithContacts(
                     P_i = P_;
                     break;
                 }
-            }
+            }            
             P_ = std::move(P_i);
             state = std::move(updated_state_i);
         }
+        contact_position_innovation_[cf] = {z, s};
     }
 
     // Optionally update the state with the relative contacts orientation
@@ -339,6 +341,7 @@ void ContactEKF::updateWithContacts(
             Eigen::MatrixXd H(3, num_states_);
             Eigen::MatrixXd K(num_states_, 3);
             Eigen::Vector3d z;
+            Eigen::Matrix3d s;
             // Iterative ESKF update
             for (size_t iter = 0; iter < num_iter; iter++) {
                 // Construct the innovation vector z
@@ -352,7 +355,7 @@ void ContactEKF::updateWithContacts(
                 H.block(0, r_idx_[0], 3, 3) = -x.toRotationMatrix();
                 H.block(0, rl_idx_.at(cf)[0], 3, 3) = Eigen::Matrix3d::Identity();
 
-                const Eigen::Matrix3d s =
+                s.noalias() =
                     contacts_position_noise.at(cf) / contact_outlier_detector.zeta +
                     H * P_ * H.transpose();
                 K.noalias() = P_ * H.transpose() * s.inverse();
@@ -364,6 +367,7 @@ void ContactEKF::updateWithContacts(
                 }
             }
             P_ = (I_ - K * H) * P_;
+            contact_orientation_innovation_[cf] = {z, s};
         }
     }
 }
@@ -579,6 +583,30 @@ void ContactEKF::setAction(const Eigen::VectorXd& action) {
     position_action_cov_gain_ = action(4);
     orientation_action_cov_gain_ = action(5);
     contact_position_action_cov_gain_ = action(6);
+}
+
+bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,    
+                                              Eigen::Matrix3d& covariance) const {
+    if (contact_position_innovation_.find(contact_frame) != contact_position_innovation_.end()) {
+        innovation = contact_position_innovation_.at(contact_frame).first;
+        covariance = contact_position_innovation_.at(contact_frame).second;
+        return true;
+    }
+    return false;
+}
+
+bool ContactEKF::getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,    
+                                                 Eigen::Matrix3d& covariance) const {
+    if (point_feet_) {
+        return false;
+    }
+
+    if (contact_orientation_innovation_.find(contact_frame) != contact_orientation_innovation_.end()) {
+        innovation = contact_orientation_innovation_.at(contact_frame).first;
+        covariance = contact_orientation_innovation_.at(contact_frame).second;
+        return true;
+    }
+    return false;
 }
 
 }  // namespace serow
