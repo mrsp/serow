@@ -576,13 +576,13 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
 }
 
 void ContactEKF::setAction(const Eigen::VectorXd& action) {
-    angular_velocity_action_cov_gain_ = action(0);
-    linear_acceleration_action_cov_gain_ = action(1);
-    angular_velocity_bias_action_cov_gain_ = action(2);
-    linear_acceleration_bias_action_cov_gain_ = action(3);
-    position_action_cov_gain_ = action(4);
-    orientation_action_cov_gain_ = action(5);
-    contact_position_action_cov_gain_ = action(6);
+    angular_velocity_action_cov_gain_ = 1.0 / action(0);
+    linear_acceleration_action_cov_gain_ = 1.0 / action(1);
+    angular_velocity_bias_action_cov_gain_ = 1.0 / action(2);
+    linear_acceleration_bias_action_cov_gain_ = 1.0 / action(3);
+    position_action_cov_gain_ = 1.0 / action(4);
+    orientation_action_cov_gain_ = 1.0 / action(5);
+    contact_position_action_cov_gain_ = 1.0 / action(6);
 }
 
 bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,    

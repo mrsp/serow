@@ -17,3 +17,4 @@ serow_layout.json:Zone.Identifier
 /python/serow/contact_ekf.*.so
 /python/serow/state.*.so
 /python/serow/measurement.*.so
+/python/trained_policy.pth

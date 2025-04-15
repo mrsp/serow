@@ -18,7 +18,7 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
-        x = torch.tanh(self.layer3(x)) * self.max_action
+        x = torch.sigmoid(self.layer3(x)) * self.max_action
         return x
 
 # Critic Network
@@ -74,7 +74,7 @@ class DDPG:
         
         # Add Gaussian noise for exploration
         noise = noise_scale * np.random.normal(size=action.shape)
-        action = np.clip(action + noise, -self.max_action, self.max_action)
+        action = np.clip(action + noise, 0.01, self.max_action)
         return action
 
     def train(self):
