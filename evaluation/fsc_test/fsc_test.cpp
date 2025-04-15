@@ -156,6 +156,7 @@ int main() {
 
         // Read Joint States
         auto joint_positions = readHDF5(INPUT_FILE, "joint_states/positions");
+        auto joint_velocities = readHDF5(INPUT_FILE, "joint_states/velocities");
 
         // Read Feet Forces
         auto feet_force_FR = readHDF5(INPUT_FILE, "feet_force/FR");
@@ -226,40 +227,40 @@ int main() {
             std::map<std::string, serow::JointMeasurement> joints;
             joints.insert({"LF_HAA",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][0]}});
+                                                   .position = joint_positions[i][0], .velocity = joint_velocities[i][0]}});
             joints.insert({"LF_HFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][1]}});
+                                                   .position = joint_positions[i][1], .velocity = joint_velocities[i][1]}});
             joints.insert({"LF_KFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][2]}});
+                                                   .position = joint_positions[i][2], .velocity = joint_velocities[i][2]}});
             joints.insert({"RF_HAA",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][3]}});
+                                                   .position = joint_positions[i][3], .velocity = joint_velocities[i][3]}});
             joints.insert({"RF_HFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][4]}});
+                                                   .position = joint_positions[i][4], .velocity = joint_velocities[i][4]}});
             joints.insert({"RF_KFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][5]}});
+                                                   .position = joint_positions[i][5], .velocity = joint_velocities[i][5]}});
             joints.insert({"LH_HAA",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][6]}});
+                                                   .position = joint_positions[i][6], .velocity = joint_velocities[i][6]}});
             joints.insert({"LH_HFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][7]}});
+                                                   .position = joint_positions[i][7], .velocity = joint_velocities[i][7]}});
             joints.insert({"LH_KFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][8]}});
+                                                   .position = joint_positions[i][8], .velocity = joint_velocities[i][8]}});
             joints.insert({"RH_HAA",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][9]}});
+                                                   .position = joint_positions[i][9], .velocity = joint_velocities[i][9]}});
             joints.insert({"RH_HFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][10]}});
+                                                   .position = joint_positions[i][10], .velocity = joint_velocities[i][10]}});
             joints.insert({"RH_KFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][11]}});
+                                                   .position = joint_positions[i][11], .velocity = joint_velocities[i][11]}});
 
             SEROW.filter(imu, joints, force_torque);
 
@@ -270,8 +271,8 @@ int main() {
 
             // Store the Estimates
             auto basePos = state->getBasePosition();
-            // auto baseOrient = state->getBaseOrientation();
-            auto baseOrient = SEROW.attitude_estimator_->getQ();
+            auto baseOrient = state->getBaseOrientation();
+            // auto baseOrient = SEROW.attitude_estimator_->getQ(); // MAHONY ORIENTATION
             auto ExternalForces = state->getCoMExternalForces();
             auto CoMPosition = state->getCoMPosition();
             auto CoMVelocity = state->getCoMLinearVelocity();
