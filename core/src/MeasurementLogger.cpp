@@ -83,10 +83,20 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = imu_measurement.timestamp;
+            }
+            const double timestamp = imu_measurement.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(imu_measurement.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
             // Create Time
             auto time = foxglove::Time(sec, nsec);
@@ -184,7 +194,7 @@ public:
             }
 
             // Write the message
-            writeMessage(1, imu_sequence_++, imu_measurement.timestamp,
+            writeMessage(1, imu_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
@@ -195,12 +205,22 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = kinematic_measurement.timestamp;
+            }
+            const double timestamp = kinematic_measurement.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(kinematic_measurement.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
-            auto timestamp = foxglove::Time(sec, nsec);
+            auto time = foxglove::Time(sec, nsec);
 
             // Create all vector fields
             auto base_linear_velocity =
@@ -420,7 +440,7 @@ public:
 
             // Create the KinematicMeasurement message
             auto measurement = foxglove::CreateKinematicMeasurement(
-                builder, &timestamp, base_linear_velocity, base_orientation, contact_names,
+                builder, &time, base_linear_velocity, base_orientation, contact_names,
                 contacts_status, contacts_probability, contacts_position, base_to_foot,
                 contacts_position_noise, contacts_orientation, contacts_orientation_noise,
                 com_angular_momentum_derivative, com_position, com_linear_acceleration,
@@ -435,7 +455,7 @@ public:
             const uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
 
-            writeMessage(2, kin_sequence_++, kinematic_measurement.timestamp,
+            writeMessage(2, kin_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Kinematic Measurement: " << e.what() << std::endl;
@@ -455,10 +475,6 @@ private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) noexcept {
         try {
-            if (!start_time_.has_value()) {
-                start_time_ = 0.0;
-            }
-
             // Update message object with new values
             mcap::Message message;
             message.channelId = channel_id;
@@ -467,7 +483,7 @@ private:
             // Ensure timestamp is in nanoseconds and consistent
             // Convert to nanoseconds using std::chrono for precision
             auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::duration<double>(timestamp - start_time_.value()));
+                std::chrono::duration<double>(timestamp));
             uint64_t ns_timestamp = ns.count();
             message.logTime = ns_timestamp;
             message.publishTime = ns_timestamp;  // Use same timestamp for both

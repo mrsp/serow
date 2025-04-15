@@ -75,7 +75,15 @@ public:
 
     void log(const LocalMapState& local_map_state) {
         try {
-            const double timestamp = local_map_state.timestamp;
+            if (!start_time_.has_value()) {
+                start_time_ = local_map_state.timestamp;
+            }
+            const double timestamp = local_map_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
 
             if (timestamp <= last_timestamp_) {
                 return;
@@ -97,7 +105,7 @@ public:
             }
 
             // Create the timestamp
-            auto ts = foxglove::Time(
+            auto time = foxglove::Time(
                 static_cast<int64_t>(timestamp),
                 static_cast<int32_t>((timestamp - static_cast<int64_t>(timestamp)) * 1e9));
 
@@ -127,7 +135,7 @@ public:
 
             // Create the PointCloud
             foxglove::PointCloudBuilder pc_builder(builder);
-            pc_builder.add_timestamp(&ts);
+            pc_builder.add_timestamp(&time);
             pc_builder.add_frame_id(frame_id);
             pc_builder.add_pose(pose);
             pc_builder.add_point_stride(12);  // 3 floats * 4 bytes
@@ -161,10 +169,6 @@ private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) {
         try {
-            if (!start_time_.has_value()) {
-                start_time_ = 0.0;
-            }
-
             mcap::Message message;
             message.channelId = channel_id;
             message.sequence = sequence;
@@ -172,7 +176,7 @@ private:
             // Ensure timestamp is in nanoseconds and consistent
             // Convert to nanoseconds using std::chrono for precision
             auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::duration<double>(timestamp - start_time_.value()));
+                std::chrono::duration<double>(timestamp));
             uint64_t ns_timestamp = ns.count();
             message.logTime = ns_timestamp;
             message.publishTime = ns_timestamp;  // Use same timestamp for both

@@ -90,10 +90,20 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = imu_measurement.timestamp;
+            }
+            const double timestamp = imu_measurement.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(imu_measurement.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
             // Create Time
             auto time = foxglove::Time(sec, nsec);
@@ -132,7 +142,7 @@ public:
             }
 
             // Write the message
-            writeMessage(1, imu_sequence_++, imu_measurement.timestamp,
+            writeMessage(1, imu_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
@@ -143,10 +153,20 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = contact_state.timestamp;
+            }
+            const double timestamp = contact_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(contact_state.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
             // Create Time
             auto time = foxglove::Time(sec, nsec);
@@ -210,7 +230,7 @@ public:
             size_t size = builder.GetSize();
 
             // Write the message
-            writeMessage(2, contact_sequence_++, contact_state.timestamp,
+            writeMessage(2, contact_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Contact State: " << e.what() << std::endl;
@@ -221,12 +241,22 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = centroidal_state.timestamp;
+            }
+            const double timestamp = centroidal_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(centroidal_state.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
-            auto timestamp = foxglove::Time(sec, nsec);
+            auto time = foxglove::Time(sec, nsec);
             auto com_position = foxglove::CreateVector3(builder, centroidal_state.com_position.x(),
                                                         centroidal_state.com_position.y(),
                                                         centroidal_state.com_position.z());
@@ -252,7 +282,7 @@ public:
                                         centroidal_state.angular_momentum_derivative.z());
 
             auto centroidal_state_fb = foxglove::CreateCentroidalState(
-                builder, &timestamp, com_position, com_linear_velocity, external_forces,
+                builder, &time, com_position, com_linear_velocity, external_forces,
                 cop_position, com_linear_acceleration, angular_momentum,
                 angular_momentum_derivative);
 
@@ -262,7 +292,7 @@ public:
             const uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
 
-            writeMessage(3, centroidal_sequence_++, centroidal_state.timestamp,
+            writeMessage(3, centroidal_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Centroidal State: " << e.what() << std::endl;
@@ -273,12 +303,22 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = base_state.timestamp;
+            }
+            const double timestamp = base_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(base_state.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
-            auto timestamp = foxglove::Time(sec, nsec);
+            auto time = foxglove::Time(sec, nsec);
 
             // Create contact names vector
             std::vector<flatbuffers::Offset<flatbuffers::String>> contact_names_vec;
@@ -422,7 +462,7 @@ public:
             // Create the BaseState message with fields in the correct order according to IDs
             auto base_state_fb =
                 foxglove::CreateBaseState(builder,
-                                          &timestamp,                        // id: 0
+                                          &time,                             // id: 0
                                           contact_names,                     // id: 1
                                           base_position,                     // id: 2
                                           base_orientation,                  // id: 3
@@ -450,17 +490,26 @@ public:
             const uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
 
-            writeMessage(4, base_sequence_++, base_state.timestamp,
+            writeMessage(4, base_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
-            last_timestamp_ = base_state.timestamp;
         } catch (const std::exception& e) {
             std::cerr << "Error logging Base State: " << e.what() << std::endl;
         }
     }
 
-    void log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double timestamp) {
+    void log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double ts) {
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
+            if (!start_time_.has_value()) {
+                start_time_ = ts;
+            }
+            const double timestamp = ts - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
 
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -468,7 +517,7 @@ public:
             splitTimestamp(timestamp, sec, nsec);
 
             // Create timestamp
-            auto timestamp_fb = foxglove::Time(sec, nsec);
+            auto time = foxglove::Time(sec, nsec);
 
             // Create transforms vector - preallocate capacity
             std::vector<flatbuffers::Offset<foxglove::FrameTransform>> transforms_vector;
@@ -492,7 +541,7 @@ public:
 
                 // Create transform
                 auto transform = foxglove::CreateFrameTransform(
-                    builder, &timestamp_fb, parent_frame, child_frame, translation, rotation);
+                    builder, &time, parent_frame, child_frame, translation, rotation);
 
                 transforms_vector.push_back(transform);
             }
@@ -529,10 +578,6 @@ private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) noexcept {
         try {
-            if (!start_time_.has_value()) {
-                start_time_ = 0.0;
-            }
-
             // Update message object with new values
             mcap::Message message;
             message.channelId = channel_id;
@@ -609,7 +654,6 @@ private:
     uint64_t contact_sequence_ = 0;
     uint64_t imu_sequence_ = 0;
     uint64_t tfs_sequence_ = 0;
-    double last_timestamp_{-1.0};
     std::optional<double> start_time_;
 
     // MCAP writing components
