@@ -89,8 +89,8 @@ def evaluate_policy(initial_state, contacts_frame, point_feet, g, imu_rate, outl
                 state.base_orientation
             ])
             
-            # Get action from trained policy (no noise for evaluation)
-            action = agent.get_action(x, noise_scale=0.0)
+            # Get action from trained policy
+            action = agent.get_action(x)
             ekf.set_action(action)
             
             # Predict and update
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     state_dim = 10  # 3 position, 3 velocity, 4 orientation
     action_dim = 7  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 100.0  # Maximum value for actions
+    max_action = 10.0  # Maximum value for actions
     
     # Initialize the DDPG agent
     agent = DDPG(state_dim, action_dim, max_action)
