@@ -8,7 +8,7 @@ import random
 import copy
 
 class OUNoise:
-    def __init__(self, size, mu=0.0, theta=0.15, sigma=0.2):
+    def __init__(self, size, mu=0.0, theta=0.15, sigma=0.3):
         self.mu = mu * np.ones(size)
         self.theta = theta
         self.sigma = sigma
@@ -24,11 +24,11 @@ class OUNoise:
         return self.state
 
 class DDPG:
-    def __init__(self, actor, critic,state_dim, action_dim, max_action, min_action, device='cpu'):
+    def __init__(self, actor, critic, state_dim, action_dim, max_action, min_action, device='cpu'):
         self.device = torch.device(device)
         self.actor = actor.to(self.device)
         self.actor_target = copy.deepcopy(actor)
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-4)
 
         self.critic = critic.to(self.device)
         self.critic_target = copy.deepcopy(critic)
@@ -38,13 +38,15 @@ class DDPG:
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         self.buffer = deque(maxlen=1000000)
-        self.batch_size = 128
+        self.batch_size = 256
         self.gamma = 0.99
-        self.tau = 0.005
+        self.tau = 0.001
         self.min_action = min_action
         self.max_action = max_action
 
-        self.noise = OUNoise(action_dim)
+        self.noise = OUNoise(action_dim, sigma=0.3)
+        self.noise_scale = 1.0
+        self.noise_decay = 0.9995
 
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -57,8 +59,9 @@ class DDPG:
         with torch.no_grad():
             action = self.actor(state).cpu().numpy()[0]
         if add_noise:
-            noise = self.noise.sample()
+            noise = self.noise.sample() * self.noise_scale
             action = np.clip(action + noise, self.min_action, self.max_action)
+            self.noise_scale *= self.noise_decay
         return action
 
     def train(self):
@@ -84,15 +87,17 @@ class DDPG:
         critic_loss = F.mse_loss(current_Q, target_Q)
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
         self.critic_optimizer.step()
         
         # Actor update
         actor_loss = -self.critic(states, self.actor(states)).mean()
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1.0)
         self.actor_optimizer.step()
         
-        # Soft update for target networks
+        # Soft update target networks
         for target_param, param in zip(self.actor_target.parameters(), self.actor.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
         for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):

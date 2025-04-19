@@ -19,6 +19,7 @@ class Actor(nn.Module):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
         x = F.relu(self.layer3(x))
+        x = torch.clamp(x, -self.max_action, self.max_action)
         return x
 
 class Critic(nn.Module):
@@ -42,7 +43,7 @@ class InvertedPendulum:
         self.g = 9.81
         self.l = 1.0
         self.m = 1.0
-        self.max_angle = np.pi / 4
+        self.max_angle = np.pi  # Allow full rotation
         self.max_angular_vel = 8.0
         self.max_torque = 2.0
         self.dt = 0.02
@@ -50,7 +51,10 @@ class InvertedPendulum:
         self.reset()
 
     def reset(self):
-        self.state = np.array([0.0, 0.0])  # [theta, theta_dot]
+        # Start with a small random angle near upright
+        theta = np.random.uniform(-0.1, 0.1)
+        theta_dot = np.random.uniform(-0.1, 0.1)
+        self.state = np.array([theta, theta_dot])
         return self.state
 
     def step(self, action):
@@ -62,8 +66,15 @@ class InvertedPendulum:
         theta_dot = np.clip(theta_dot, -self.max_angular_vel, self.max_angular_vel)
         theta = np.arctan2(np.sin(theta), np.cos(theta))
         self.state = np.array([theta, theta_dot])
-        reward = 1.0 - abs(theta) / self.max_angle
-        done = abs(theta) > self.max_angle
+        
+        # Improved reward function that considers both angle and angular velocity
+        angle_cost = 0.1 * theta**2
+        velocity_cost = 0.01 * theta_dot**2
+        action_cost = 0.001 * action**2
+        reward = float(1.0 - (angle_cost + velocity_cost + action_cost))  # Convert to float
+        
+        # Only terminate if the pendulum falls too far
+        done = abs(theta) > np.pi/2
         return self.state, reward, done
 
 # Unit tests for DDPG with Inverted Pendulum
@@ -145,17 +156,35 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
     #     self.assertGreater(avg_reward, 50.0, f"Average reward {avg_reward} is too low, expected > 50.0")
 
     def test_policy_evaluation(self):
-        # Train the agent briefly
+        # Train the agent for longer
         state = self.env.reset()
-        for _ in range(1000):
+        total_steps = 0
+        max_steps = 100000  # Increased training steps
+        episode_reward = 0.0  # Initialize as float
+        episode_steps = 0
+        best_reward = float('-inf')
+        
+        for step in range(max_steps):
             action = self.agent.get_action(state)
             next_state, reward, done = self.env.step(action)
             self.agent.add_to_buffer(state, action, reward, next_state, done)
             self.agent.train()
-            state = next_state if not done else self.env.reset()
+            
+            episode_reward += float(reward)  # Ensure reward is float
+            episode_steps += 1
+            state = next_state
+            
+            if done or episode_steps >= 1000:  # Maximum episode length
+                if episode_reward > best_reward:
+                    best_reward = episode_reward
+                print(f"Step {step}, Episode Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
+                state = self.env.reset()
+                episode_reward = 0.0  # Reset as float
+                episode_steps = 0
+        
         # Evaluate the policy and collect data for plotting
         state = self.env.reset()
-        total_reward = 0
+        total_reward = 0.0  # Initialize as float
         max_steps = 200
         states = []
         actions = []
@@ -163,12 +192,11 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         for step in range(max_steps):
             action = self.agent.get_action(state, add_noise=False)
             next_state, reward, done = self.env.step(action)
-            # Ensure state is a 1D array
             state_flat = np.array(state).reshape(-1)
             states.append(state_flat)
             actions.append(action)
-            rewards.append(reward)
-            total_reward += reward
+            rewards.append(float(reward))  # Ensure reward is float
+            total_reward += float(reward)  # Ensure reward is float
             state = next_state
             if done:
                 break
@@ -209,7 +237,6 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         plt.grid(True)
 
         plt.tight_layout()
-        plt.savefig('pendulum_evaluation_plots.png')
         plt.show()
 
 if __name__ == '__main__':
