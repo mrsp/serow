@@ -18,7 +18,13 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
         initial_state = dataset['states'][0]
 
         best_reward = float('-inf')
-        max_episode = 100
+        max_episode = 40
+        
+        # Convergence check parameters
+        window_size = 10  # Number of episodes to consider for convergence
+        reward_window = []  # Store rewards for convergence check
+        convergence_threshold = 0.1  # Threshold for reward variation
+        min_episodes = 20  # Minimum episodes before checking convergence
 
         for episode in range(max_episode):            
             # Initialize the EKF
@@ -50,19 +56,24 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                 ekf.update(state, kin, None, None)
 
                 # Compute the reward based on NIS
-                reward = 0
+                reward = float('-inf')
+                nis = []
                 for cf in contacts_frame:
+                    success = False
                     innovation = np.zeros(3)
                     covariance = np.zeros((3, 3))
                     success, innovation, covariance = ekf.get_contact_position_innovation(cf)
                     if success:
-                        nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                        reward += -nis
+                        # nis.append(innovation.dot(innovation))
+                        nis.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
 
-                reward /= len(contacts_frame)
+                if len(nis) == 0:
+                    continue
                 
+                reward = -np.mean(nis)
                 episode_reward += reward
                 episode_steps += 1
+
                 # Compute the next state
                 next_x = np.concatenate([
                     state.base_position,
@@ -81,8 +92,25 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                 
             if episode_reward > best_reward:
                 best_reward = episode_reward
+                
             print(f"Episode {episode}, Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
-
+            
+            # Update reward window and check convergence
+            reward_window.append(episode_reward)
+            if len(reward_window) > window_size:
+                reward_window.pop(0)
+                
+            if episode >= min_episodes and len(reward_window) == window_size:
+                # Calculate mean and standard deviation of rewards in the window
+                mean_reward = np.mean(reward_window)
+                std_reward = np.std(reward_window)
+                
+                # Check if rewards have converged (low variation)
+                if std_reward < convergence_threshold:
+                    print(f"\nTraining converged after {episode + 1} episodes!")
+                    print(f"Mean reward in last {window_size} episodes: {mean_reward:.2f}")
+                    print(f"Standard deviation: {std_reward:.2f}")
+                    break
         break
 
 def evaluate_policy(dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=False):
@@ -138,23 +166,18 @@ def evaluate_policy(dataset, contacts_frame, point_feet, g, imu_rate, outlier_de
             
             # Calculate reward
             reward = 0
+            nis = []
             for cf in contacts_frame:
                 innovation = np.zeros(3)
                 covariance = np.zeros((3, 3))
                 success, innovation, covariance = ekf.get_contact_position_innovation(cf)
                 if success:
-                    nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                    # More balanced reward function:
-                    # - Moderate scaling
-                    # - Gentler asymmetry
-                    # - Smoother transitions
-                    if nis < 3.0:
-                        # Slightly more sensitive to overconfidence
-                        reward += 1.5 * np.exp(-0.4 * (nis - 3.0)**2)
-                    else:
-                        # Slightly more tolerant of underconfidence
-                        reward += 1.5 * np.exp(-0.2 * (nis - 3.0)**2)
+                    nis.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
             
+            if len(nis) == 0:
+                continue
+            
+            reward = -np.mean(nis)
             rewards.append(reward)
             step += 1
             

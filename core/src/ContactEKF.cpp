@@ -241,6 +241,10 @@ void ContactEKF::updateWithContacts(
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov,
     std::shared_ptr<TerrainElevation> terrain_estimator) {
+    
+    contact_position_innovation_.clear();
+    contact_orientation_innovation_.clear();
+    
     // Compute the relative contacts position/orientation measurement noise
     for (const auto& [cf, cp] : contacts_status) {
         const int cs = cp ? 1 : 0;
