@@ -6,7 +6,7 @@ from ddpg import DDPG
 from read_mcap import read_initial_base_state, read_kinematic_measurements, read_imu_measurements
 import matplotlib.pyplot as plt
 import torch
-
+from ac import Actor, Critic
 
 def train_policy(initial_state, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, kinematic_measurements, imu_measurements):
     # Initialize the EKF
@@ -220,10 +220,15 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     state_dim = 10  # 3 position, 3 velocity, 4 orientation
     action_dim = 7  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 10.0  # Maximum value for actions
-    
+    max_action = 100.0  # Maximum value for actions
+    min_action = 1e-6  # Minimum value for actions
+
+    # Initialize the actor and critic
+    actor = Actor(state_dim, action_dim, max_action)
+    critic = Critic(state_dim, action_dim)
+
     # Initialize the DDPG agent
-    agent = DDPG(state_dim, action_dim, max_action)
+    agent = DDPG(actor, critic, state_dim, action_dim, max_action, min_action)
 
     # Try to load a trained policy if it exists
     try:
