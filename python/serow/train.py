@@ -1,76 +1,103 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from serow import ContactEKF
-from ddpg import DDPG
-from read_mcap import read_initial_base_state, read_kinematic_measurements, read_imu_measurements
 import matplotlib.pyplot as plt
 import torch
+from serow import ContactEKF
+from ddpg import DDPG
+from read_mcap import read_base_states, read_kinematic_measurements, read_imu_measurements
 from ac import Actor, Critic
 
-def train_policy(initial_state, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, kinematic_measurements, imu_measurements):
-    # Initialize the EKF
-    ekf.init(initial_state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
-    
-    # Initialize the state
-    state = initial_state   
-
-    # Run a few prediction/update steps
-    step = 0
-    for imu, kin in zip(imu_measurements, kinematic_measurements):
-        # Get the current state - properly format as a flat array
-        x = np.concatenate([
-            state.base_position,  # 3D position
-            state.base_linear_velocity,  # 3D velocity
-            state.base_orientation  # 4D quaternion
-        ])
+def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent):
+    for dataset in datasets:
+        # Get the kinematic measurements and imu measurements from the dataset
+        kinematic_measurements = dataset['kinematic']
+        imu_measurements = dataset['imu']
         
-        # Set action
-        action = agent.get_action(x)
-        ekf.set_action(action)
+        # Reset to initial state
+        initial_state = dataset['states'][0]
 
-        # Predict step
-        ekf.predict(state, imu, kin)
-        
-        # Update step (pass None for both optional parameters)
-        ekf.update(state, kin, None, None)
+        best_reward = float('-inf')
+        max_episode = 100
 
-        # Compute the reward based on NIS
-        reward = 0
-        for cf in contacts_frame:
-            innovation = np.zeros(3)
-            covariance = np.zeros((3, 3))
-            success, innovation, covariance = ekf.get_contact_position_innovation(cf)
-            if success:
-                nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                # Ideal NIS value is 3 (dimension of measurement)
-                # Reward peaks at NIS = 3 and decreases as NIS deviates from 3
-                # Using a Gaussian-like reward centered at 3
-                reward += np.exp(-0.5 * (nis - 3.0)**2)
+        for episode in range(max_episode):            
+            # Initialize the EKF
+            ekf = ContactEKF()
+            ekf.init(initial_state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
+            
+            # Initialize the state
+            state = initial_state   
 
-        # Compute the next state
-        next_x = np.concatenate([
-            state.base_position,
-            state.base_linear_velocity,
-            state.base_orientation
-        ])
+            episode_reward = 0.0
+            episode_steps = 0
+            done = False
+            for imu, kin in zip(imu_measurements, kinematic_measurements):
+                # Get the current state - properly format as a flat array
+                x = np.concatenate([
+                    state.base_position,  # 3D position
+                    state.base_linear_velocity,  # 3D velocity
+                    state.base_orientation  # 4D quaternion
+                ])
+                
+                # Set action
+                action = agent.get_action(x, add_noise=True)
+                ekf.set_action(action)
 
-        # Add to buffer
-        agent.add_to_buffer(x, action, reward, next_x, False)
+                # Predict step
+                ekf.predict(state, imu, kin)
+                
+                # Update step (pass None for both optional parameters)
+                ekf.update(state, kin, None, None)
 
-        print(f"\nStep {step}:")
-        print(f"reward: {reward}")
+                # Compute the reward based on NIS
+                reward = 0
+                for cf in contacts_frame:
+                    innovation = np.zeros(3)
+                    covariance = np.zeros((3, 3))
+                    success, innovation, covariance = ekf.get_contact_position_innovation(cf)
+                    if success:
+                        nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
+                        reward += -nis
 
-        # Train the agent
-        agent.train()
-        step += 1
+                reward /= len(contacts_frame)
+                
+                episode_reward += reward
+                episode_steps += 1
+                # Compute the next state
+                next_x = np.concatenate([
+                    state.base_position,
+                    state.base_linear_velocity,
+                    state.base_orientation
+                ])
 
-def evaluate_policy(initial_state, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, kinematic_measurements, imu_measurements, save_policy=False):
+                # Add to buffer
+                agent.add_to_buffer(x, action, reward, next_x, done)
+
+                # Train the agent
+                agent.train()
+                
+                if done:
+                    break
+                
+            if episode_reward > best_reward:
+                best_reward = episode_reward
+            print(f"Episode {episode}, Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
+
+        break
+
+def evaluate_policy(dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=False):
         # After training, evaluate the policy
         print("\nEvaluating trained policy...")
         
+        # Get the kinematic measurements and imu measurements from the dataset
+        kinematic_measurements = dataset['kinematic']
+        imu_measurements = dataset['imu']
+        
         # Reset to initial state
-        state = initial_state
+        state = dataset['states'][0]
+        
+        # Initialize the EKF
+        ekf = ContactEKF()
         ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
         
         # Store trajectories for visualization
@@ -117,11 +144,16 @@ def evaluate_policy(initial_state, contacts_frame, point_feet, g, imu_rate, outl
                 success, innovation, covariance = ekf.get_contact_position_innovation(cf)
                 if success:
                     nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                    # Ideal NIS value is 3 (dimension of measurement)
-                    # Reward peaks at NIS = 3 and decreases as NIS deviates from 3
-                    # Using a Gaussian-like reward centered at 3
-                    reward += np.exp(-0.5 * (nis - 3.0)**2)
-            
+                    # More balanced reward function:
+                    # - Moderate scaling
+                    # - Gentler asymmetry
+                    # - Smoother transitions
+                    if nis < 3.0:
+                        # Slightly more sensitive to overconfidence
+                        reward += 1.5 * np.exp(-0.4 * (nis - 3.0)**2)
+                    else:
+                        # Slightly more tolerant of underconfidence
+                        reward += 1.5 * np.exp(-0.2 * (nis - 3.0)**2)
             
             rewards.append(reward)
             step += 1
@@ -202,16 +234,36 @@ if __name__ == "__main__":
     # Read the measurement mcap file
     kinematic_measurements = read_kinematic_measurements("/tmp/serow_measurements.mcap")
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
-    initial_state = read_initial_base_state("/tmp/serow_proprioception.mcap")
+    states = read_base_states("/tmp/serow_proprioception.mcap")
+
+    # Calculate the size of each dataset
+    total_size = len(kinematic_measurements)
+    N = 10  # Number of datasets
+    dataset_size = total_size // N  # Size of each dataset
+
+    # Create N contiguous datasets
+    train_datasets = []
+    for i in range(N):
+        start_idx = i * dataset_size
+        end_idx = start_idx + dataset_size
+        
+        # Create a dataset with measurements and states from start_idx to end_idx
+        dataset = {
+            'kinematic': kinematic_measurements[start_idx:end_idx],
+            'imu': imu_measurements[start_idx:end_idx],
+            'states': states[start_idx:end_idx]
+        }
+        train_datasets.append(dataset)
+
+    # Pick a random dataset for testing
+    test_dataset = train_datasets[np.random.randint(0, N)]
+    train_datasets.remove(test_dataset)
 
     # Get the contacts frame
-    contacts_frame = set(initial_state.contacts_position.keys())
+    contacts_frame = set(states[0].contacts_position.keys())
     print(f"Contacts frame: {contacts_frame}")
-    
-    # Initialize the EKF
-    ekf = ContactEKF()
-
-    # Initialize the EKF
+        
+    # Parameters
     point_feet = True  # Assuming point feet or flat feet
     g = 9.81  # Gravity constant
     imu_rate = 500.0  # IMU update rate in Hz
@@ -228,7 +280,7 @@ if __name__ == "__main__":
     critic = Critic(state_dim, action_dim)
 
     # Initialize the DDPG agent
-    agent = DDPG(actor, critic, state_dim, action_dim, max_action, min_action)
+    agent = DDPG(actor, critic, state_dim, action_dim, max_action, min_action, device='cuda')
 
     # Try to load a trained policy if it exists
     try:
@@ -238,9 +290,9 @@ if __name__ == "__main__":
         print("Loaded trained policy from 'trained_policy.pth'")
     except FileNotFoundError:
         print("No trained policy found. Training new policy...")
-        train_policy(initial_state, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, kinematic_measurements, imu_measurements)
+        train_policy(train_datasets, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent)
         # Save the trained policy
-        evaluate_policy(initial_state, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, kinematic_measurements, imu_measurements, save_policy=True)
+        evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=True)
     else:
         # Just evaluate the loaded policy
-        evaluate_policy(initial_state, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, kinematic_measurements, imu_measurements, save_policy=False)
+        evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=False)

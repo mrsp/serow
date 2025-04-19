@@ -331,7 +331,9 @@ void ContactEKF::updateWithContacts(
             P_ = std::move(P_i);
             state = std::move(updated_state_i);
         }
-        contact_position_innovation_[cf] = {z, s};
+        if (contacts_status.at(cf)) {
+            contact_position_innovation_[cf] = {z, s};
+        }
     }
 
     // Optionally update the state with the relative contacts orientation
@@ -367,7 +369,9 @@ void ContactEKF::updateWithContacts(
                 }
             }
             P_ = (I_ - K * H) * P_;
-            contact_orientation_innovation_[cf] = {z, s};
+            if (contacts_status.at(cf)) {
+                contact_orientation_innovation_[cf] = {z, s};
+            }
         }
     }
 }

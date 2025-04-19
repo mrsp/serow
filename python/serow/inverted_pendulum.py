@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 import numpy as np
 import unittest
-import matplotlib.pyplot as plt
 
 from ddpg import DDPG
 
@@ -36,7 +36,6 @@ class Critic(nn.Module):
         x = self.layer3(x)
         return x
 
-
 # Inverted Pendulum Environment
 class InvertedPendulum:
     def __init__(self):
@@ -63,8 +62,6 @@ class InvertedPendulum:
         theta_ddot = (self.g / self.l) * np.sin(theta) + (action / (self.m * self.l**2))
         theta_dot = theta_dot + theta_ddot * self.dt
         theta = theta + theta_dot * self.dt
-        theta_dot = np.clip(theta_dot, -self.max_angular_vel, self.max_angular_vel)
-        theta = np.arctan2(np.sin(theta), np.cos(theta))
         self.state = np.array([theta, theta_dot])
         
         # Improved reward function that considers both angle and angular velocity
@@ -82,8 +79,8 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
     def setUp(self):
         self.state_dim = 2  # [theta, theta_dot]
         self.action_dim = 1  # torque
-        self.max_action = 2.0
-        self.min_action = -2.0
+        self.max_action = 10.0
+        self.min_action = -10.0
         self.actor = Actor(self.state_dim, self.action_dim, self.max_action)
         self.critic = Critic(self.state_dim, self.action_dim)
         self.agent = DDPG(self.actor, self.critic, self.state_dim, self.action_dim, self.max_action, self.min_action)
@@ -103,7 +100,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         state = self.env.reset()
         action = self.agent.get_action(state)
         self.assertEqual(action.shape, (self.action_dim,))
-        self.assertTrue(np.all(action >= -self.max_action) and np.all(action <= self.max_action))
+        self.assertTrue(np.all(action >= -self.min_action) and np.all(action <= self.max_action))
 
     def test_add_to_buffer(self):
         state = self.env.reset()
@@ -133,38 +130,17 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         except Exception as e:
             self.fail(f"Training failed with error: {e}")
 
-    # def test_policy_learning(self):
-    #     # Train the agent for a few episodes
-    #     episodes = 50
-    #     max_steps = 200
-    #     rewards = []
-    #     for episode in range(episodes):
-    #         state = self.env.reset()
-    #         episode_reward = 0
-    #         for step in range(max_steps):
-    #             action = self.agent.get_action(state, add_noise=episode < episodes // 2)
-    #             next_state, reward, done = self.env.step(action)
-    #             self.agent.add_to_buffer(state, action, reward, next_state, done)
-    #             self.agent.train()
-    #             episode_reward += reward
-    #             state = next_state
-    #             if done:
-    #                 break
-    #         rewards.append(episode_reward)
-    #     # Check if the average reward in the last 10 episodes is reasonable
-    #     avg_reward = np.mean(rewards[-10:])
-    #     self.assertGreater(avg_reward, 50.0, f"Average reward {avg_reward} is too low, expected > 50.0")
-
     def test_policy_evaluation(self):
         # Train the agent for longer
         state = self.env.reset()
         total_steps = 0
-        max_steps = 100000  # Increased training steps
+        max_steps = 100000 
         episode_reward = 0.0  # Initialize as float
         episode_steps = 0
         best_reward = float('-inf')
         
         for step in range(max_steps):
+            total_steps += 1
             action = self.agent.get_action(state)
             next_state, reward, done = self.env.step(action)
             self.agent.add_to_buffer(state, action, reward, next_state, done)
@@ -200,6 +176,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             state = next_state
             if done:
                 break
+        
         # Convert to numpy arrays with consistent shapes
         states = np.array(states)
         actions = np.array(actions)

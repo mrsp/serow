@@ -496,20 +496,20 @@ def read_kinematic_measurements(file_path: str):
         
         return kinematic_measurements
 
-def read_initial_base_state(file_path: str):
-    """Read and decode the initial base state from an MCAP file.
+def read_base_states(file_path: str):
+    """Read and decode the base states from an MCAP file.
     
     Args:
         file_path: Path to the MCAP file
         
     Returns:
-        BaseState: The decoded initial base state, or None if not found
+        BaseState: The decoded base states, or None if not found
     """
     with open(file_path, "rb") as f:
         reader = make_reader(f)
-        
+        base_states = []    
         for schema, channel, message in reader.iter_messages():
             if channel.topic == "/base_state":
-                return decode_base_state(message.data)
+                base_states.append(decode_base_state(message.data))
         
-        return None
+        return base_states
