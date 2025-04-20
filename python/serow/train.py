@@ -36,7 +36,6 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
 
             episode_reward = 0.0
             episode_steps = 0
-            done = False
             for imu, kin in zip(imu_measurements, kinematic_measurements):
                 # Get the current state - properly format as a flat array
                 x = np.concatenate([
@@ -64,7 +63,6 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                     covariance = np.zeros((3, 3))
                     success, innovation, covariance = ekf.get_contact_position_innovation(cf)
                     if success:
-                        # nis.append(innovation.dot(innovation))
                         nis.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
 
                 if len(nis) == 0:
@@ -82,13 +80,10 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                 ])
 
                 # Add to buffer
-                agent.add_to_buffer(x, action, reward, next_x, done)
+                agent.add_to_buffer(x, action, reward, next_x, False)
 
                 # Train the agent
                 agent.train()
-                
-                if done:
-                    break
                 
             if episode_reward > best_reward:
                 best_reward = episode_reward

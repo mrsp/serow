@@ -18,8 +18,7 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
-        x = F.relu(self.layer3(x))
-        x = torch.clamp(x, -self.max_action, self.max_action)
+        x = torch.tanh(self.layer3(x)) * self.max_action
         return x
 
 class Critic(nn.Module):
@@ -45,42 +44,52 @@ class InvertedPendulum:
         self.max_angle = np.pi  # Allow full rotation
         self.max_angular_vel = 8.0
         self.max_torque = 2.0
-        self.dt = 0.02
+        self.dt = 0.05
         self.state = None
         self.reset()
 
+    def angle_normalize(self, x):
+        return ((x + np.pi) % (2 * np.pi)) - np.pi
+
     def reset(self):
         # Start with a small random angle near upright
-        theta = np.random.uniform(-0.1, 0.1)
-        theta_dot = np.random.uniform(-0.1, 0.1)
-        self.state = np.array([theta, theta_dot])
+        theta = np.random.uniform(-np.pi, np.pi)
+        theta_dot = np.random.uniform(-1.0, 1.0)
+        # Convert to [cos(theta), sin(theta), theta_dot] representation
+        self.state = np.array([np.cos(theta), np.sin(theta), theta_dot])
         return self.state
 
     def step(self, action):
         action = np.clip(action, -self.max_torque, self.max_torque)
-        theta, theta_dot = self.state
+        done = 0.0
+        # Recover theta from cos(theta) and sin(theta)
+        cos_theta, sin_theta, theta_dot = self.state
+        theta = np.arctan2(sin_theta, cos_theta)
+        
+        # Calculate next state
         theta_ddot = (self.g / self.l) * np.sin(theta) + (action / (self.m * self.l**2))
         theta_dot = theta_dot + theta_ddot * self.dt
-        theta = theta + theta_dot * self.dt
-        self.state = np.array([theta, theta_dot])
+        theta = self.angle_normalize(theta + theta_dot * self.dt)
         
-        # Improved reward function that considers both angle and angular velocity
-        angle_cost = 0.1 * theta**2
-        velocity_cost = 0.01 * theta_dot**2
-        action_cost = 0.001 * action**2
-        reward = float(1.0 - (angle_cost + velocity_cost + action_cost))  # Convert to float
+        # Convert back to [cos(theta), sin(theta), theta_dot] representation
+        self.state = np.array([np.cos(theta), np.sin(theta), theta_dot])
         
-        # Only terminate if the pendulum falls too far
-        done = abs(theta) > np.pi/2
+        # Improved reward function using cos(theta) and sin(theta)
+        # The upright position is when cos(theta) = 1, sin(theta) = 0
+        angle_cost = theta**2
+        angledot_cost = 0.1 * theta_dot**2
+        torque_cost = 0.001 * action**2
+        reward = - float(angle_cost) - float(angledot_cost) - float(torque_cost)
+        
         return self.state, reward, done
 
 # Unit tests for DDPG with Inverted Pendulum
 class TestDDPGInvertedPendulum(unittest.TestCase):
     def setUp(self):
-        self.state_dim = 2  # [theta, theta_dot]
+        self.state_dim = 3  # [cos(theta), sin(theta), theta_dot]
         self.action_dim = 1  # torque
-        self.max_action = 10.0
-        self.min_action = -10.0
+        self.max_action = 2.0
+        self.min_action = -2.0
         self.actor = Actor(self.state_dim, self.action_dim, self.max_action)
         self.critic = Critic(self.state_dim, self.action_dim)
         self.agent = DDPG(self.actor, self.critic, self.state_dim, self.action_dim, self.max_action, self.min_action)
@@ -98,9 +107,9 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
 
     def test_get_action(self):
         state = self.env.reset()
-        action = self.agent.get_action(state)
+        action = self.agent.get_action(state, add_noise=True)
         self.assertEqual(action.shape, (self.action_dim,))
-        self.assertTrue(np.all(action >= -self.min_action) and np.all(action <= self.max_action))
+        self.assertTrue(np.all(action >= self.min_action) and np.all(action <= self.max_action))
 
     def test_add_to_buffer(self):
         state = self.env.reset()
@@ -134,34 +143,31 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         # Train the agent for longer
         state = self.env.reset()
         total_steps = 0
-        max_steps = 100000 
+        max_steps = 200 
         episode_reward = 0.0  # Initialize as float
-        episode_steps = 0
         best_reward = float('-inf')
         
-        for step in range(max_steps):
-            total_steps += 1
-            action = self.agent.get_action(state)
-            next_state, reward, done = self.env.step(action)
-            self.agent.add_to_buffer(state, action, reward, next_state, done)
-            self.agent.train()
+        for episode in range(100):
+            for step in range(max_steps):
+                total_steps += 1
+                action = self.agent.get_action(state)
+                next_state, reward, done = self.env.step(action)
+                self.agent.add_to_buffer(state, action, reward, next_state, done)
+                self.agent.train()
             
-            episode_reward += float(reward)  # Ensure reward is float
-            episode_steps += 1
-            state = next_state
-            
-            if done or episode_steps >= 1000:  # Maximum episode length
-                if episode_reward > best_reward:
-                    best_reward = episode_reward
-                print(f"Step {step}, Episode Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
-                state = self.env.reset()
-                episode_reward = 0.0  # Reset as float
-                episode_steps = 0
+                episode_reward += float(reward)  # Ensure reward is float
+                state = next_state
+                
+                if done or step == max_steps - 1:
+                    if episode_reward > best_reward:
+                        best_reward = episode_reward
+                    print(f"Step {step}, Episode Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
+                    state = self.env.reset()
+                    episode_reward = 0.0  # Reset as float
         
         # Evaluate the policy and collect data for plotting
         state = self.env.reset()
         total_reward = 0.0  # Initialize as float
-        max_steps = 200
         states = []
         actions = []
         rewards = []
@@ -169,7 +175,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             action = self.agent.get_action(state, add_noise=False)
             next_state, reward, done = self.env.step(action)
             state_flat = np.array(state).reshape(-1)
-            states.append(state_flat)
+            states.append(np.array([np.arctan2(state_flat[1], state_flat[0]),  state_flat[2]]))
             actions.append(action)
             rewards.append(float(reward))  # Ensure reward is float
             total_reward += float(reward)  # Ensure reward is float
@@ -187,8 +193,8 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
 
         # State plot (angle and angular velocity)
         plt.subplot(1, 3, 1)
-        plt.plot(states[:, 0], label='Angle (theta)')
-        plt.plot(states[:, 1], label='Angular Velocity (theta_dot)')
+        plt.plot(states[:, 0], label='Angle (rad)')
+        plt.plot(states[:, 1], label='Angular Velocity (rad/s)')
         plt.xlabel('Time Step')
         plt.ylabel('State')
         plt.title('Pendulum State')
@@ -200,7 +206,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         plt.plot(actions, label='Torque')
         plt.xlabel('Time Step')
         plt.ylabel('Action')
-        plt.title('Applied Torque')
+        plt.title('Applied Torque (Nm)')
         plt.legend()
         plt.grid(True)
 

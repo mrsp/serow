@@ -28,7 +28,7 @@ class DDPG:
         self.device = torch.device(device)
         self.actor = actor.to(self.device)
         self.actor_target = copy.deepcopy(actor)
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-4)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-3)
 
         self.critic = critic.to(self.device)
         self.critic_target = copy.deepcopy(critic)
@@ -40,13 +40,13 @@ class DDPG:
         self.buffer = deque(maxlen=1000000)
         self.batch_size = 256
         self.gamma = 0.99
-        self.tau = 0.001
+        self.tau = 0.01
         self.min_action = min_action
         self.max_action = max_action
 
         self.noise = OUNoise(action_dim, sigma=0.3)
-        self.noise_scale = 1.0
-        self.noise_decay = 0.9995
+        self.noise_scale = 2.0
+        self.noise_decay = 0.999
 
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -60,8 +60,9 @@ class DDPG:
             action = self.actor(state).cpu().numpy()[0]
         if add_noise:
             noise = self.noise.sample() * self.noise_scale
-            action = np.clip(action + noise, self.min_action, self.max_action)
+            action = action + noise
             self.noise_scale *= self.noise_decay
+        action = np.clip(action, self.min_action, self.max_action)
         return action
 
     def train(self):
@@ -69,20 +70,25 @@ class DDPG:
             return
         batch = random.sample(self.buffer, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
-        # Ensure states and next_states are properly shaped
-        states = np.array([np.array(s).reshape(-1) for s in states])
-        next_states = np.array([np.array(s).reshape(-1) for s in next_states])
+        
+        # Convert states and next_states to numpy arrays with consistent shapes
+        states = np.array([np.array(s).flatten() for s in states])
+        next_states = np.array([np.array(s).flatten() for s in next_states])
+        
+        # Convert to tensors
         states = torch.FloatTensor(states).to(self.device)
         actions = torch.FloatTensor(np.array(actions)).to(self.device)
         rewards = torch.FloatTensor(np.array(rewards)).unsqueeze(1).to(self.device)
         next_states = torch.FloatTensor(next_states).to(self.device)
-        dones = torch.FloatTensor(np.array(dones)).unsqueeze(1).to(self.device)
+        
+        # Ensure dones are scalar values
+        dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
         
         # Critic update
         with torch.no_grad():
             next_actions = self.actor_target(next_states)
             target_Q = self.critic_target(next_states, next_actions)
-            target_Q = rewards + (1 - dones) * self.gamma * target_Q
+            target_Q = rewards + (1.0 - dones) * self.gamma * target_Q
         current_Q = self.critic(states, actions)
         critic_loss = F.mse_loss(current_Q, target_Q)
         self.critic_optimizer.zero_grad()
@@ -99,6 +105,6 @@ class DDPG:
         
         # Soft update target networks
         for target_param, param in zip(self.actor_target.parameters(), self.actor.parameters()):
-            target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+            target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
         for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
-            target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+            target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
