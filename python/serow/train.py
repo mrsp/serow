@@ -51,7 +51,7 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                 # Predict step
                 ekf.predict(state, imu, kin)
                 
-                # Update step (pass None for both optional parameters)
+                # Update step 
                 ekf.update(state, kin, None, None)
 
                 # Compute the reward based on NIS
@@ -289,7 +289,7 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     state_dim = 10  # 3 position, 3 velocity, 4 orientation
-    action_dim = 7  # Based on the action vector used in ContactEKF.setAction()
+    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
     max_action = 100.0  # Maximum value for actions
     min_action = 1e-6  # Minimum value for actions
 
