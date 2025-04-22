@@ -12,18 +12,18 @@ class PPO:
         self.actor = actor.to(self.device)
         self.critic = critic.to(self.device)
         
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-3)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-3)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=3e-4)
         
         self.buffer = deque(maxlen=1000000)
-        self.batch_size = 128
+        self.batch_size = 256
         self.gamma = 0.99
         self.gae_lambda = 0.95
         self.clip_param = 0.2
         self.entropy_coef = 0.01
-        self.value_loss_coef = 0.5
-        self.max_grad_norm = 0.5
-        self.ppo_epochs = 5
+        self.value_loss_coef = 1.0
+        self.max_grad_norm = 1.0
+        self.ppo_epochs = 20
         self.min_action = min_action
         self.max_action = max_action
         
@@ -34,28 +34,15 @@ class PPO:
         self.buffer.append((state, action, reward, next_state, done, value, log_prob))
     
     def get_action(self, state, deterministic=False):
-        state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
         with torch.no_grad():
-            # Assuming actor outputs mean and log_std
-            action_mean, action_log_std = self.actor(state)
-            action_std = torch.exp(action_log_std)
-            
-            if deterministic:
-                action = action_mean
-                log_prob = torch.tensor(0.0).to(self.device)
-            else:
-                # Create a normal distribution and sample
-                normal = torch.distributions.Normal(action_mean, action_std)
-                action = normal.sample()
-                # Clip action to ensure it stays within bounds
-                action = torch.clamp(action, self.min_action, self.max_action)
-                log_prob = self.calculate_log_probs(action, action_mean, action_std)
-            
-            # Get value estimate
+            action, log_prob = self.actor.get_action(state, deterministic)
             value = self.critic(state)
+        return (
+            action.squeeze(0).detach().cpu().numpy(),  # Flatten single-batch action
+            value.item(),                              # Extract scalar value
+            log_prob.item()                            # Extract scalar log_prob
+        )
 
-        return action.detach().cpu().numpy()[0], value.detach().cpu().numpy()[0], log_prob.detach().cpu().numpy()[0]
-    
     def calculate_log_probs(self, action, mean, std):
         # Calculate log probability of action under the Gaussian policy
         normal = torch.distributions.Normal(mean, std)
@@ -109,20 +96,22 @@ class PPO:
         if advantages.numel() > 1 and advantages.std() > 1e-8:
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         
-        # Create mini-batches
-        indices = np.arange(len(self.buffer))
-        np.random.shuffle(indices)
-        for start in range(0, len(self.buffer), self.batch_size):
-            batch_indices = indices[start:start + self.batch_size]
-            batch_states = states[batch_indices]
-            batch_actions = actions[batch_indices]
-            batch_advantages = advantages[batch_indices]
-            batch_returns = returns[batch_indices]
-            batch_old_log_probs = old_log_probs[batch_indices]
+        # Loop structure: outer = epochs, inner = batches
+        dataset_size = len(states)
+        for _ in range(self.ppo_epochs):
+            indices = np.arange(dataset_size)
+            np.random.shuffle(indices)
             
-            # PPO update loop
-            for _ in range(self.ppo_epochs):
-                # Actor update
+            for start in range(0, dataset_size, self.batch_size):
+                batch_indices = indices[start:start + self.batch_size]
+                batch_states = states[batch_indices]
+                batch_actions = actions[batch_indices]
+                batch_advantages = advantages[batch_indices]
+                batch_returns = returns[batch_indices]
+                batch_old_log_probs = old_log_probs[batch_indices]
+                
+                # === Combined Actor-Critic update ===
+                # Get current policy outputs
                 action_means, action_log_stds = self.actor(batch_states)
                 action_stds = torch.exp(action_log_stds)
                 current_log_probs = self.calculate_log_probs(batch_actions, action_means, action_stds)
@@ -130,32 +119,32 @@ class PPO:
                 # Calculate entropy for exploration
                 entropy = torch.distributions.Normal(action_means, action_stds).entropy().mean()
                 
-                # Compute policy loss with clipping
+                # Calculate policy loss with clipping
                 ratio = torch.exp(current_log_probs - batch_old_log_probs)
                 surr1 = ratio * batch_advantages
                 surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
                 policy_loss = -torch.min(surr1, surr2).mean()
                 
-                # Actor loss
-                actor_loss = policy_loss - self.entropy_coef * entropy
-                
-                # Update actor
-                self.actor_optimizer.zero_grad()
-                actor_loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
-                self.actor_optimizer.step()
-                
-                # Critic update
+                # Calculate value loss
                 current_values = self.critic(batch_states)
-                value_loss = self.value_loss_coef * F.mse_loss(current_values, batch_returns)
+                value_loss = F.mse_loss(current_values, batch_returns)
                 
-                # Update critic
+                # Combine losses
+                loss = policy_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy
+                
+                # Single backward pass and optimization step
+                self.actor_optimizer.zero_grad()
                 self.critic_optimizer.zero_grad()
-                value_loss.backward()
+                loss.backward()
+                
+                # Clip gradients for both networks
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
                 torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
+                
+                # Single optimization step
+                self.actor_optimizer.step()
                 self.critic_optimizer.step()
-        
-        # Clear buffer after processing all data
+
         self.buffer.clear()
     
     def save_models(self, path):
