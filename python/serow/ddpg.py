@@ -74,10 +74,11 @@ class DDPG:
         # Convert states and next_states to numpy arrays with consistent shapes
         states = np.array([np.array(s).flatten() for s in states])
         next_states = np.array([np.array(s).flatten() for s in next_states])
-        
+        actions = np.array([np.array(a).flatten() for a in actions])
+
         # Convert to tensors
         states = torch.FloatTensor(states).to(self.device)
-        actions = torch.FloatTensor(np.array(actions)).to(self.device)
+        actions = torch.FloatTensor(actions).to(self.device)
         rewards = torch.FloatTensor(np.array(rewards)).unsqueeze(1).to(self.device)
         next_states = torch.FloatTensor(next_states).to(self.device)
         

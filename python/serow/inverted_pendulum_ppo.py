@@ -21,13 +21,14 @@ class Actor(nn.Module):
         x = F.relu(self.layer2(x))
         mean = self.mean_layer(x)
         log_std = self.log_std_layer(x)
-        log_std = torch.clamp(log_std, min=-20, max=2)
+        log_std = torch.clamp(log_std, min=-20, max=0.5)  # Std up to exp(0.5) ≈ 1.65
         return mean, log_std
 
     def get_action(self, state, deterministic=False):
         # Convert state to tensor and ensure correct shape
         state = torch.FloatTensor(state).reshape(1, -1)
         mean, log_std = self.forward(state)
+
         if deterministic:
             # For deterministic actions, apply tanh to mean and scale
             action = torch.tanh(mean) * self.max_action
@@ -42,9 +43,9 @@ class Actor(nn.Module):
             action = tanh_action * self.max_action
 
             # Log prob with correction for tanh squashing
-            log_prob = normal.log_prob(z) - torch.log(1 - tanh_action.pow(2) + 1e-6)
+            log_prob = normal.log_prob(z) - torch.log(torch.clamp(1 - tanh_action.pow(2), min=1e-8))
             log_prob = log_prob.sum(dim=-1, keepdim=True)
-        
+
         # Detach and convert to numpy
         action = action.detach().numpy()[0]  # Remove batch dimension and convert to numpy
         log_prob = log_prob.detach().item()  # Convert scalar tensor to Python float
@@ -104,11 +105,10 @@ class InvertedPendulum:
         
         # Improved reward function using cos(theta) and sin(theta)
         # The upright position is when cos(theta) = 1, sin(theta) = 0
-        angle_cost = 1.0 * theta**2
         angledot_cost = 0.1 * theta_dot**2
         torque_cost = 0.001 * action**2
-        reward = - angle_cost - angledot_cost - torque_cost
-        done = False # abs(theta) > np.pi or abs(theta_dot) > self.max_angular_vel
+        reward = float(np.cos(theta)) - float(angledot_cost) - float(torque_cost)
+        # done = 1.0 if (abs(theta) > np.pi / 2 or abs(theta_dot) > self.max_angular_vel) else 0.0
         return self.state, reward, done
 
 # Unit tests for PPO with Inverted Pendulum
@@ -157,7 +157,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         # Fill buffer with some transitions
         state = self.env.reset()
         for _ in range(100):
-            action, log_prob = self.agent.actor.get_action(state)
+            action, log_prob = self.agent.actor.get_action(state, deterministic=False)
             value = self.agent.critic(torch.FloatTensor(state).reshape(1, -1)).item()
             next_state, reward, done = self.env.step(action)
             self.agent.add_to_buffer(state, action, reward, next_state, done, value, log_prob)
@@ -170,32 +170,49 @@ class TestPPOInvertedPendulum(unittest.TestCase):
             self.fail(f"Training failed with error: {e}")
 
     def test_policy_evaluation(self):
-        max_steps = 200 
-        best_reward = float('-inf')
+        max_episodes = 200
+        max_steps_per_episode = 5096
+        update_steps = 128  # Train after collecting this many timesteps
+        
         episode_rewards = []
-        update_every = 10
-        for episode in range(100):
+        best_reward = float('-inf')
+        collected_steps = 0
+        
+        for episode in range(max_episodes):
             state = self.env.reset()
-            total_steps = 0
             episode_reward = 0.0
-            for step in range(max_steps):
-                action, log_prob = self.agent.actor.get_action(state)
+            for step in range(max_steps_per_episode):
+                # Get action from policy
+                action, log_prob = self.agent.actor.get_action(state, deterministic=False)
                 value = self.agent.critic(torch.FloatTensor(state).reshape(1, -1)).item()
+                
+                # Execute action in environment
                 next_state, reward, done = self.env.step(action)
+                
+                # Add to buffer
                 self.agent.add_to_buffer(state, action, reward, next_state, done, value, log_prob)
-            
-                episode_reward += float(reward)  # Ensure reward is float
-                state = next_state
-                total_steps += 1
-
-                if total_steps % update_every == 0:
+                
+                episode_reward += reward
+                collected_steps += 1
+                
+                # Critical: Reset environment when episode ends
+                if done > 0.0:
+                    state = self.env.reset()
+                else:
+                    state = next_state
+                    
+                # Train policy if we've collected enough steps
+                if collected_steps >= update_steps:
                     self.agent.train()
+                    collected_steps = 0
+                    
+                if done or step == max_steps_per_episode - 1:
+                    break
 
-                if done or step == max_steps - 1:
-                    episode_rewards.append(episode_reward)
-                    if episode_reward > best_reward:
-                        best_reward = episode_reward
-                    print(f"Step {step}, Episode Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
+            episode_rewards.append(episode_reward)
+            if episode_reward > best_reward:
+                best_reward = episode_reward
+            print(f"Episode {episode}, Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
         
         plt.figure(figsize=(10, 5))
         plt.plot(np.array(episode_rewards), label='Episode Rewards')
@@ -213,7 +230,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         states = []
         actions = []
         rewards = []
-        for step in range(max_steps):
+        for step in range(max_steps_per_episode):
             action, _ = self.agent.actor.get_action(state, deterministic=True)
             next_state, reward, done = self.env.step(action)
             state_flat = np.array(state).reshape(-1)

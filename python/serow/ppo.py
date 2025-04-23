@@ -12,23 +12,31 @@ class PPO:
         self.actor = actor.to(self.device)
         self.critic = critic.to(self.device)
         
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=3e-4)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=3e-4)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-3)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-4)
         
         self.buffer = deque(maxlen=1000000)
-        self.batch_size = 256
+        self.batch_size = 64
         self.gamma = 0.99
         self.gae_lambda = 0.95
         self.clip_param = 0.2
         self.entropy_coef = 0.01
         self.value_loss_coef = 1.0
-        self.max_grad_norm = 1.0
-        self.ppo_epochs = 20
+        self.max_grad_norm = 0.1
+        self.ppo_epochs = 10
         self.min_action = min_action
         self.max_action = max_action
         
         self.state_dim = state_dim
         self.action_dim = action_dim
+        
+        self.reward_mean = 0.0
+        self.reward_std = 1.0
+        self.reward_count = 0
+        
+        self.best_reward = float('-inf')
+        self.patience = 10
+        self.no_improvement_count = 0
     
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
         self.buffer.append((state, action, reward, next_state, done, value, log_prob))
@@ -53,7 +61,7 @@ class PPO:
         # Calculate Generalized Advantage Estimation
         advantages = torch.zeros_like(rewards)
         returns = torch.zeros_like(rewards)
-        
+
         gae = 0
         for t in reversed(range(len(rewards))):
             if t == len(rewards) - 1:
@@ -64,7 +72,7 @@ class PPO:
             delta = rewards[t] + self.gamma * next_value * (1 - dones[t]) - values[t]
             gae = delta + self.gamma * self.gae_lambda * (1 - dones[t]) * gae
             advantages[t] = gae
-            
+
         returns = advantages + values
         return advantages, returns
     
@@ -78,12 +86,25 @@ class PPO:
         # Convert states and next_states to numpy arrays with consistent shapes
         states = np.array([np.array(s).flatten() for s in states])
         next_states = np.array([np.array(s).flatten() for s in next_states])
+        actions = np.array([np.array(a).flatten() for a in actions])
+        rewards = np.array(rewards)
+        
+        # Update reward statistics
+        self.reward_count += len(rewards)
+        delta = rewards - self.reward_mean
+        self.reward_mean += delta.sum() / self.reward_count
+        delta2 = rewards - self.reward_mean
+        self.reward_std += (delta * delta2).sum() / self.reward_count
+        
+        # Normalize rewards
+        rewards = (rewards - self.reward_mean) / (self.reward_std + 1e-8)
+        rewards = np.clip(rewards, -10, 10)
         
         states = torch.FloatTensor(states).to(self.device)
-        actions = torch.FloatTensor(np.array(actions)).to(self.device)
-        rewards = torch.FloatTensor(np.array(rewards)).unsqueeze(1).to(self.device)
+        actions = torch.FloatTensor(actions).to(self.device)
+        rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
         next_states = torch.FloatTensor(next_states).to(self.device)
-        dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
+        dones = torch.FloatTensor(np.array(dones)).unsqueeze(1).to(self.device)
         old_values = torch.FloatTensor(np.array(values)).unsqueeze(1).to(self.device)
         old_log_probs = torch.FloatTensor(np.array(old_log_probs)).unsqueeze(1).to(self.device)
         
@@ -93,8 +114,19 @@ class PPO:
         
         # Compute GAE and returns
         advantages, returns = self.compute_gae(rewards, old_values, next_values, dones)
-        if advantages.numel() > 1 and advantages.std() > 1e-8:
-            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        
+        # Early stopping check
+        current_reward = returns.mean().item()
+        if current_reward > self.best_reward:
+            self.best_reward = current_reward
+            self.no_improvement_count = 0
+        else:
+            self.no_improvement_count += 1
+            if self.no_improvement_count >= self.patience:
+                # print("Early stopping triggered due to no improvement")
+                self.buffer.clear()
+                return
         
         # Loop structure: outer = epochs, inner = batches
         dataset_size = len(states)
@@ -125,9 +157,17 @@ class PPO:
                 surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
                 policy_loss = -torch.min(surr1, surr2).mean()
                 
-                # Calculate value loss
+                # Calculate value loss with clipping
                 current_values = self.critic(batch_states)
-                value_loss = F.mse_loss(current_values, batch_returns)
+                value_pred_clipped = old_values[batch_indices] + torch.clamp(
+                    current_values - old_values[batch_indices],
+                    -self.clip_param,
+                    self.clip_param
+                )
+                value_loss = torch.max(
+                    F.mse_loss(current_values, batch_returns),
+                    F.mse_loss(value_pred_clipped, batch_returns)
+                )
                 
                 # Combine losses
                 loss = policy_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy
