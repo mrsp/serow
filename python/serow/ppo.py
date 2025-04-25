@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from collections import deque
-import random
 
 class PPO:
     def __init__(self, actor, critic, state_dim, action_dim, max_action, min_action, device='cpu'):
@@ -30,12 +29,8 @@ class PPO:
         self.state_dim = state_dim
         self.action_dim = action_dim
         
-        self.reward_mean = 0.0
-        self.reward_std = 1.0
-        self.reward_count = 0
-        
         self.best_reward = float('-inf')
-        self.patience = 10
+        self.patience = 15
         self.no_improvement_count = 0
     
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
@@ -113,7 +108,6 @@ class PPO:
         else:
             self.no_improvement_count += 1
             if self.no_improvement_count >= self.patience:
-                # print("Early stopping triggered due to no improvement")
                 self.buffer.clear()
                 return
         
