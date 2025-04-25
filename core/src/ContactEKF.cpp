@@ -154,21 +154,21 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
 
     Eigen::MatrixXd Qc = Eigen::MatrixXd::Zero(num_inputs_, num_inputs_);
     // Covariance Q with full state + biases
-    Qc(ng_idx_, ng_idx_) = imu.angular_velocity_cov + angular_velocity_action_cov_gain_ * Eigen::Matrix3d::Identity();
-    Qc(na_idx_, na_idx_) = imu.linear_acceleration_cov + linear_acceleration_action_cov_gain_ * Eigen::Matrix3d::Identity();
-    Qc(nbg_idx_, nbg_idx_) = imu.angular_velocity_bias_cov + angular_velocity_bias_action_cov_gain_ * Eigen::Matrix3d::Identity();
+    Qc(ng_idx_, ng_idx_) = imu.angular_velocity_cov * angular_velocity_action_cov_gain_;
+    Qc(na_idx_, na_idx_) = imu.linear_acceleration_cov * linear_acceleration_action_cov_gain_;
+    Qc(nbg_idx_, nbg_idx_) = imu.angular_velocity_bias_cov * angular_velocity_bias_action_cov_gain_;
     Qc(nba_idx_, nba_idx_) =
-        imu.linear_acceleration_bias_cov + linear_acceleration_bias_action_cov_gain_ * Eigen::Matrix3d::Identity();
+        imu.linear_acceleration_bias_cov * linear_acceleration_bias_action_cov_gain_;
 
     for (const auto& [cf, cs] : kin.contacts_status) {
         const int contact_status = static_cast<int>(cs);
         Qc(npl_idx_.at(cf), npl_idx_.at(cf)).noalias() =
-            kin.position_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity() + 
-            position_action_cov_gain_ * Eigen::Matrix3d::Identity();
+            kin.position_slip_cov * position_action_cov_gain_ 
+                + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity(); 
         if (!point_feet_) {
             Qc(nrl_idx_.at(cf), nrl_idx_.at(cf)).noalias() =
-                kin.orientation_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity() + 
-                orientation_action_cov_gain_ * Eigen::Matrix3d::Identity();
+                kin.orientation_slip_cov * orientation_action_cov_gain_ 
+                    + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         }
     }
 
@@ -264,13 +264,13 @@ void ContactEKF::updateWithContacts(
 
         contacts_position_noise.at(cf) = cs * contacts_position_noise.at(cf) +
             (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
-            position_cov + contact_position_action_cov_gain_ * Eigen::Matrix3d::Identity();
+            position_cov * contact_position_action_cov_gain_;
 
         if (!point_feet_ && contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
                 cs * contacts_orientation_noise.value().at(cf) +
                 (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + orientation_cov.value() 
-                + contact_orientation_action_cov_gain_ * Eigen::Matrix3d::Identity();
+                * contact_orientation_action_cov_gain_;
         }
     }
 
@@ -589,15 +589,15 @@ void ContactEKF::setAction(const Eigen::VectorXd& action) {
         throw std::invalid_argument("Action size must be 6 + 2 if point_feet is false");
     }
 
-    angular_velocity_action_cov_gain_ = 1.0 / action(0);
-    linear_acceleration_action_cov_gain_ = 1.0 / action(1);
-    angular_velocity_bias_action_cov_gain_ = 1.0 / action(2);
-    linear_acceleration_bias_action_cov_gain_ = 1.0 / action(3);
-    position_action_cov_gain_ = 1.0 / action(4);
-    contact_position_action_cov_gain_ = 1.0 / action(5);
+    angular_velocity_action_cov_gain_ = action(0);
+    linear_acceleration_action_cov_gain_ = action(1);
+    angular_velocity_bias_action_cov_gain_ = action(2);
+    linear_acceleration_bias_action_cov_gain_ = action(3);
+    position_action_cov_gain_ = action(4);
+    contact_position_action_cov_gain_ = action(5);
     if (!point_feet_) {
-        orientation_action_cov_gain_ = 1.0 / action(6);
-        contact_orientation_action_cov_gain_ = 1.0 / action(7);
+        orientation_action_cov_gain_ = action(6);
+        contact_orientation_action_cov_gain_ = action(7);
     }
 }
 

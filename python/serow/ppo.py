@@ -64,8 +64,8 @@ class PPO:
             else:
                 next_value = values[t + 1]
                 
-            delta = rewards[t] + self.gamma * next_value * (1 - dones[t]) - values[t]
-            gae = delta + self.gamma * self.gae_lambda * (1 - dones[t]) * gae
+            delta = rewards[t] + self.gamma * next_value * (1.0 - dones[t]) - values[t]
+            gae = delta + self.gamma * self.gae_lambda * (1.0 - dones[t]) * gae
             advantages[t] = gae
 
         returns = advantages + values
@@ -98,7 +98,11 @@ class PPO:
         
         # Compute GAE and returns
         advantages, returns = self.compute_gae(rewards, old_values, next_values, dones)
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        # Standardize advantages with a check for zero variance
+        advantages_mean = advantages.mean()
+        advantages_std = advantages.std()
+        advantages = (advantages - advantages_mean) / advantages_std
         
         # Early stopping check
         current_reward = returns.mean().item()
@@ -113,10 +117,14 @@ class PPO:
         
         # Loop structure: outer = epochs, inner = batches
         dataset_size = len(states)
+        if (dataset_size == 1):
+            print("Dataset size is 1, need more data to train")
+            return
+        
         for _ in range(self.ppo_epochs):
             indices = np.arange(dataset_size)
             np.random.shuffle(indices)
-            
+
             for start in range(0, dataset_size, self.batch_size):
                 batch_indices = indices[start:start + self.batch_size]
                 batch_states = states[batch_indices]

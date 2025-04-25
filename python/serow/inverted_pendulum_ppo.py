@@ -223,7 +223,6 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         plt.legend()
         plt.show()
 
-
         # Evaluate the policy and collect data for plotting
         state = self.env.reset()
         total_reward = 0.0  # Initialize as float
