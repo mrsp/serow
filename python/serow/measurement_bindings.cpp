@@ -122,4 +122,17 @@ PYBIND11_MODULE(measurement, m) {
             })
         .def_readwrite("base_position_cov", &serow::OdometryMeasurement::base_position_cov)
         .def_readwrite("base_orientation_cov", &serow::OdometryMeasurement::base_orientation_cov);
+
+    py::class_<serow::BasePoseGroundTruth>(m, "BasePoseGroundTruth")
+        .def(py::init<>())
+        .def_readwrite("timestamp", &serow::BasePoseGroundTruth::timestamp)
+        .def_readwrite("position", &serow::BasePoseGroundTruth::position)
+        .def_property(
+            "orientation",
+            [](const serow::BasePoseGroundTruth& self) {
+                return quaternion_to_numpy(self.orientation);
+            },
+            [](serow::BasePoseGroundTruth& self, const py::array_t<double>& arr) {
+                self.orientation = numpy_to_quaternion(arr);
+            });
 }

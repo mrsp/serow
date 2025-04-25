@@ -17,3 +17,8 @@ echo -e "from foxglove.Matrix3 import Matrix3\n
 from foxglove.Quaternion import Quaternion\n
 from foxglove.Time import Time\n
 from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/BaseState.py)" > ../build/generated/foxglove/BaseState.py
+
+# Add imports to FrameTransform.py
+echo -e "from foxglove.Quaternion import Quaternion\n
+from foxglove.Time import Time\n
+from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/FrameTransform.py)" > ../build/generated/foxglove/FrameTransform.py 

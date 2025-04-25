@@ -1,7 +1,7 @@
 import mcap
 from mcap.reader import make_reader
 import numpy as np
-from serow.measurement import KinematicMeasurement, ImuMeasurement
+from serow.measurement import KinematicMeasurement, ImuMeasurement, BasePoseGroundTruth
 from serow.state import BaseState
 import flatbuffers
 import sys
@@ -30,6 +30,7 @@ try:
     from foxglove.BaseState import BaseState as FbBaseState
     from foxglove.KinematicMeasurement import KinematicMeasurement as FbKinematicMeasurement
     from foxglove.ImuMeasurement import ImuMeasurement as FbImuMeasurement
+    from foxglove.FrameTransform import FrameTransform as FbFrameTransform
 except ImportError as e:
     raise ImportError(f"Failed to import FlatBuffer schemas. Please ensure the project is built with Python code generation enabled. Error: {e}")
 
@@ -470,6 +471,34 @@ def decode_base_state(data: bytes) -> BaseState:
 
     return msg
 
+def decode_base_pose_ground_truth(data: bytes) -> BasePoseGroundTruth:
+    """Decode a FlatBuffer message into an BasePoseGroundTruth object."""
+    fb_msg = FbFrameTransform.GetRootAsFrameTransform(data, 0)
+    msg = BasePoseGroundTruth()
+    
+    # Decode timestamp
+    if fb_msg.Timestamp():
+        msg.timestamp = fb_msg.Timestamp().Sec() + fb_msg.Timestamp().Nsec() * 1e-9
+    
+    # Decode position
+    if fb_msg.Translation():   
+        msg.position = np.array([
+            fb_msg.Translation().X(),
+            fb_msg.Translation().Y(),
+            fb_msg.Translation().Z()
+        ])              
+    
+    # Decode orientation
+    if fb_msg.Rotation():
+        msg.orientation = np.array([
+            fb_msg.Rotation().W(),
+            fb_msg.Rotation().X(),
+            fb_msg.Rotation().Y(),
+            fb_msg.Rotation().Z()
+        ])
+    
+    return msg
+
 def read_imu_measurements(file_path: str):
     """Read and decode messages from an MCAP file."""
     with open(file_path, "rb") as f:
@@ -513,3 +542,22 @@ def read_base_states(file_path: str):
                 base_states.append(decode_base_state(message.data))
         
         return base_states
+
+def read_base_pose_ground_truth(file_path: str):
+    """Read and decode the base pose ground truth from an MCAP file.
+    
+    Args:
+        file_path: Path to the MCAP file
+        
+    Returns:
+        BasePoseGroundTruth: The decoded base pose ground truth, or None if not found
+    """
+    with open(file_path, "rb") as f:
+        reader = make_reader(f)
+        base_pose_ground_truth = []
+        for schema, channel, message in reader.iter_messages():
+            if channel.topic == "/base_pose_ground_truth":
+                msg = decode_base_pose_ground_truth(message.data)
+                base_pose_ground_truth.append(msg)
+        
+        return base_pose_ground_truth
