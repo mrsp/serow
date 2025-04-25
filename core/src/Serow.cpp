@@ -428,7 +428,8 @@ bool Serow::initialize(const std::string& config_file) {
 void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
                    std::optional<std::map<std::string, ForceTorqueMeasurement>> ft,
                    std::optional<OdometryMeasurement> odom,
-                   std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
+                   std::optional<std::map<std::string, ContactMeasurement>> contacts_probability,
+                   std::optional<BasePoseGroundTruth> base_pose_ground_truth) {
     // Early return if not initialized and no FT measurement
     if (!is_initialized_) {
         if (!ft.has_value())
@@ -966,7 +967,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     }
 
     if (params_.log_measurements && !measurement_logger_job_->isRunning()) {
-        measurement_logger_job_->addJob([this, kin = std::move(kin), imu = std::move(imu)]() {
+        measurement_logger_job_->addJob([this, kin = std::move(kin), imu = std::move(imu), base_pose_ground_truth = std::move(base_pose_ground_truth)]() {
             try {
                 if (!measurement_logger_.isInitialized()) {
                     measurement_logger_.setStartTime(std::min(imu.timestamp, kin.timestamp));
@@ -974,6 +975,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                 // Log all measurement data to MCAP file
                 measurement_logger_.log(imu);
                 measurement_logger_.log(kin);
+                if (base_pose_ground_truth.has_value()) {
+                    measurement_logger_.log(base_pose_ground_truth.value());
+                }
             } catch (const std::exception& e) {
                 std::cerr << "Error in measurement logging thread: " << e.what() << std::endl;
             }

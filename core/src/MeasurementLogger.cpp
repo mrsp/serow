@@ -19,6 +19,7 @@
 
 #include "ImuMeasurement_generated.h"
 #include "KinematicMeasurement_generated.h"
+#include "FrameTransform_generated.h"
 
 namespace serow {
 
@@ -462,6 +463,64 @@ public:
         }
     }
 
+    void log(const BasePoseGroundTruth& base_pose_ground_truth) {
+        try {
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
+            if (!start_time_.has_value()) {
+                start_time_ = base_pose_ground_truth.timestamp;
+            }
+            const double timestamp = base_pose_ground_truth.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
+            // Convert timestamp to sec and nsec
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(timestamp, sec, nsec);
+
+            // Create timestamp
+            auto time = foxglove::Time(sec, nsec);
+
+            // Reuse cached world_frame string
+            auto parent_frame = builder.CreateString("world");
+
+            // Create frame_id strings
+            auto child_frame = builder.CreateString("base");
+
+            // Create translation
+            auto translation = foxglove::CreateVector3(
+                builder, base_pose_ground_truth.position.x(), base_pose_ground_truth.position.y(),
+                base_pose_ground_truth.position.z());
+
+            // Create rotation
+            const auto& quaternion = base_pose_ground_truth.orientation;
+            auto rotation = foxglove::CreateQuaternion(builder, quaternion.x(), quaternion.y(),
+                                                       quaternion.z(), quaternion.w());
+
+            // Create transform
+            auto transform = foxglove::CreateFrameTransform(
+                builder, &time, parent_frame, child_frame, translation, rotation);
+
+            // Finish the buffer
+            builder.Finish(transform);
+
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
+            // Get the serialized data
+            writeMessage(3, base_pose_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging base pose ground truth: " << e.what() << std::endl;
+        }
+    }
+
+
     void setStartTime(double timestamp) {
         start_time_ = timestamp;
     }
@@ -507,10 +566,11 @@ private:
 
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
-        schemas.reserve(2);
+        schemas.reserve(3);
         schemas.push_back(createSchema("ImuMeasurement"));
         schemas.push_back(createSchema("KinematicMeasurement"));
-
+        schemas.push_back(createSchema("FrameTransform"));
+        
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
         }
@@ -521,6 +581,7 @@ private:
         channels.reserve(2);
         channels.push_back(createChannel(1, "/imu"));
         channels.push_back(createChannel(2, "/kin"));
+        channels.push_back(createChannel(3, "/base_pose_ground_truth"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
@@ -542,6 +603,7 @@ private:
     // Sequence counters
     uint64_t kin_sequence_ = 0;
     uint64_t imu_sequence_ = 0;
+    uint64_t base_pose_sequence_ = 0;
     std::optional<double> start_time_;
 
     // MCAP writing components
@@ -562,6 +624,10 @@ void MeasurementLogger::log(const ImuMeasurement& imu_measurement) {
 
 void MeasurementLogger::log(const KinematicMeasurement& kinematic_measurement) {
     pimpl_->log(kinematic_measurement);
+}
+
+void MeasurementLogger::log(const BasePoseGroundTruth& base_pose_ground_truth) {
+    pimpl_->log(base_pose_ground_truth);
 }
 
 void MeasurementLogger::setStartTime(double timestamp) {

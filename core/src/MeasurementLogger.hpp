@@ -57,6 +57,7 @@ public:
 
     void log(const ImuMeasurement& imu_measurement);
     void log(const KinematicMeasurement& kinematic_measurement);
+    void log(const BasePoseGroundTruth& base_pose_ground_truth);
     void setStartTime(double timestamp);
     bool isInitialized() const;
 

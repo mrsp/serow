@@ -63,11 +63,13 @@ public:
     /// @param odom an optional exteroceptive base odometry measurement
     /// @param contact_probabilities optional leg end-effector contact probabilities if not provided
     /// they will be estimated from the corresponding F/T measurement
+    /// @param base_pose_ground_truth optional ground truth base pose measurement for logging
     void filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
                 std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::optional<std::map<std::string, ContactMeasurement>> contact_probabilities =
-                    std::nullopt);
+                    std::nullopt,
+                std::optional<BasePoseGroundTruth> base_pose_ground_truth = std::nullopt);
 
     /// @brief fetches SEROW's internal state
     /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a

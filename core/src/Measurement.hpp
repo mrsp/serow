@@ -159,4 +159,14 @@ struct TerrainMeasurement {
  */
 using ContactMeasurement = double;
 
+/**
+ * @struct BasePoseGroundTruth
+ * @brief Represents base pose measurements including position and orientation
+ */
+struct BasePoseGroundTruth {
+    double timestamp{};
+    Eigen::Vector3d position{Eigen::Vector3d::Zero()};
+    Eigen::Quaterniond orientation{Eigen::Quaterniond::Identity()};
+};
+
 }  // namespace serow
