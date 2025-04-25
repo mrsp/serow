@@ -12,17 +12,17 @@ class PPO:
         self.actor = actor.to(self.device)
         self.critic = critic.to(self.device)
         
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-3)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-4)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=3e-4)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=3e-4)
         
         self.buffer = deque(maxlen=1000000)
         self.batch_size = 64
         self.gamma = 0.99
         self.gae_lambda = 0.95
         self.clip_param = 0.2
-        self.entropy_coef = 0.01
+        self.entropy_coef = 0.5
         self.value_loss_coef = 1.0
-        self.max_grad_norm = 0.1
+        self.max_grad_norm = 0.5
         self.ppo_epochs = 10
         self.min_action = min_action
         self.max_action = max_action
@@ -88,17 +88,6 @@ class PPO:
         next_states = np.array([np.array(s).flatten() for s in next_states])
         actions = np.array([np.array(a).flatten() for a in actions])
         rewards = np.array(rewards)
-        
-        # Update reward statistics
-        self.reward_count += len(rewards)
-        delta = rewards - self.reward_mean
-        self.reward_mean += delta.sum() / self.reward_count
-        delta2 = rewards - self.reward_mean
-        self.reward_std += (delta * delta2).sum() / self.reward_count
-        
-        # Normalize rewards
-        rewards = (rewards - self.reward_mean) / (self.reward_std + 1e-8)
-        rewards = np.clip(rewards, -10, 10)
         
         states = torch.FloatTensor(states).to(self.device)
         actions = torch.FloatTensor(actions).to(self.device)

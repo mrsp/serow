@@ -17,8 +17,8 @@ class Actor(nn.Module):
         self.max_action = max_action
 
     def forward(self, state):
-        x = F.relu(self.layer1(state))
-        x = F.relu(self.layer2(x))
+        x = F.tanh(self.layer1(state))
+        x = F.tanh(self.layer2(x))
         mean = self.mean_layer(x)
         log_std = self.log_std_layer(x)
         log_std = torch.clamp(log_std, min=-20, max=0.5)  # Std up to exp(0.5) ≈ 1.65
@@ -108,7 +108,7 @@ class InvertedPendulum:
         angledot_cost = 0.1 * theta_dot**2
         torque_cost = 0.001 * action**2
         reward = float(np.cos(theta)) - float(angledot_cost) - float(torque_cost)
-        # done = 1.0 if (abs(theta) > np.pi / 2 or abs(theta_dot) > self.max_angular_vel) else 0.0
+        done = 1.0 if (abs(theta_dot) > self.max_angular_vel) else 0.0
         return self.state, reward, done
 
 # Unit tests for PPO with Inverted Pendulum
@@ -171,8 +171,8 @@ class TestPPOInvertedPendulum(unittest.TestCase):
 
     def test_policy_evaluation(self):
         max_episodes = 200
-        max_steps_per_episode = 5096
-        update_steps = 128  # Train after collecting this many timesteps
+        max_steps_per_episode = 2048
+        update_steps = 64  # Train after collecting this many timesteps
         
         episode_rewards = []
         best_reward = float('-inf')
