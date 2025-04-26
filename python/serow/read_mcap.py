@@ -567,7 +567,6 @@ if __name__ == "__main__":
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     state = read_base_states("/tmp/serow_proprioception.mcap")[0]
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
-
     contacts_frame = set(state.contacts_position.keys())
     print(f"Contacts frame: {contacts_frame}")
         
@@ -590,9 +589,10 @@ if __name__ == "__main__":
         # Update step 
         ekf.update(state, kin, None, None)
         
-        base_positions.append(state.base_position)
-        base_orientations.append(state.base_orientation)
-
+        # Append the current state to the list
+        base_positions.append(state.base_position.copy())
+        base_orientations.append(state.base_orientation.copy())
+        
     # plot the base position vs the ground truth
     base_position = np.array(base_positions)
     base_orientation = np.array(base_orientations)
@@ -600,6 +600,7 @@ if __name__ == "__main__":
     # plot the base pose vs the ground truth
     base_ground_truth_position = np.array([gt.position for gt in base_pose_ground_truth])
     base_ground_truth_orientation = np.array([gt.orientation for gt in base_pose_ground_truth])
+
     plt.figure()
     plt.plot(base_ground_truth_position[:, 0], label="gt x")
     plt.plot(base_position[:, 0], label="base x")

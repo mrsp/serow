@@ -168,12 +168,12 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
     for (const auto& [cf, cs] : kin.contacts_status) {
         const int contact_status = static_cast<int>(cs);
         Qc(npl_idx_.at(cf), npl_idx_.at(cf)).noalias() =
-            kin.position_slip_cov * position_action_cov_gain_.at(cf)
-                + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity(); 
+            kin.position_slip_cov * position_action_cov_gain_.at(cf) +
+            (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         if (!point_feet_) {
             Qc(nrl_idx_.at(cf), nrl_idx_.at(cf)).noalias() =
-                kin.orientation_slip_cov * orientation_action_cov_gain_.at(cf)
-                    + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
+                kin.orientation_slip_cov * orientation_action_cov_gain_.at(cf) +
+                (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         }
     }
 
@@ -246,10 +246,9 @@ void ContactEKF::updateWithContacts(
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov,
     std::shared_ptr<TerrainElevation> terrain_estimator) {
-    
     contact_position_innovation_.clear();
     contact_orientation_innovation_.clear();
-    
+
     // Compute the relative contacts position/orientation measurement noise
     for (const auto& [cf, cp] : contacts_status) {
         const int cs = cp ? 1 : 0;
@@ -274,8 +273,8 @@ void ContactEKF::updateWithContacts(
         if (!point_feet_ && contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
                 cs * contacts_orientation_noise.value().at(cf) +
-                (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + orientation_cov.value() 
-                * contact_orientation_action_cov_gain_.at(cf);
+                (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
+                orientation_cov.value() * contact_orientation_action_cov_gain_.at(cf);
         }
     }
 
@@ -286,13 +285,13 @@ void ContactEKF::updateWithContacts(
         Eigen::MatrixXd K(num_states_, 3);
         Eigen::Vector3d z;
         Eigen::Matrix3d s;
-        
+
         // Iterative ESKF update
         for (size_t iter = 0; iter < num_iter; iter++) {
             H.setZero();
             const Eigen::Vector3d x = state.base_orientation.toRotationMatrix().transpose() *
                 (state.contacts_position.at(cf) - state.base_position);
-            z = cp - x; 
+            z = cp - x;
             H.block(0, p_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix().transpose();
             H.block(0, pl_idx_.at(cf)[0], 3, 3) =
                 state.base_orientation.toRotationMatrix().transpose();
@@ -338,7 +337,7 @@ void ContactEKF::updateWithContacts(
                     P_i = P_;
                     break;
                 }
-            }            
+            }
             P_ = std::move(P_i);
             state = std::move(updated_state_i);
         }
@@ -368,8 +367,7 @@ void ContactEKF::updateWithContacts(
                 H.block(0, r_idx_[0], 3, 3) = -x.toRotationMatrix();
                 H.block(0, rl_idx_.at(cf)[0], 3, 3) = Eigen::Matrix3d::Identity();
 
-                s.noalias() =
-                    contacts_position_noise.at(cf) / contact_outlier_detector.zeta +
+                s.noalias() = contacts_position_noise.at(cf) / contact_outlier_detector.zeta +
                     H * P_ * H.transpose();
                 K.noalias() = P_ * H.transpose() * s.inverse();
                 const Eigen::VectorXd dx = K * z;
@@ -594,17 +592,18 @@ void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action)
     if (action.size() != 2 + 2 * !point_feet_) {
         throw std::invalid_argument("Action size must be 2 + 2 if point_feet is false");
     }
-    
+
     position_action_cov_gain_.at(cf) = action(0);
     contact_position_action_cov_gain_.at(cf) = action(1);
-    if (!point_feet_ && orientation_action_cov_gain_.count(cf) > 0 
-        && contact_orientation_action_cov_gain_.count(cf) > 0) {
+    if (!point_feet_ && orientation_action_cov_gain_.count(cf) > 0 &&
+        contact_orientation_action_cov_gain_.count(cf) > 0) {
         orientation_action_cov_gain_.at(cf) = action(2);
         contact_orientation_action_cov_gain_.at(cf) = action(3);
     }
 }
 
-bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,    
+bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame,
+                                              Eigen::Vector3d& innovation,
                                               Eigen::Matrix3d& covariance) const {
     if (contact_position_innovation_.find(contact_frame) != contact_position_innovation_.end()) {
         innovation = contact_position_innovation_.at(contact_frame).first;
@@ -614,13 +613,15 @@ bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame, 
     return false;
 }
 
-bool ContactEKF::getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,    
+bool ContactEKF::getContactOrientationInnovation(const std::string& contact_frame,
+                                                 Eigen::Vector3d& innovation,
                                                  Eigen::Matrix3d& covariance) const {
     if (point_feet_) {
         return false;
     }
 
-    if (contact_orientation_innovation_.find(contact_frame) != contact_orientation_innovation_.end()) {
+    if (contact_orientation_innovation_.find(contact_frame) !=
+        contact_orientation_innovation_.end()) {
         innovation = contact_orientation_innovation_.at(contact_frame).first;
         covariance = contact_orientation_innovation_.at(contact_frame).second;
         return true;
