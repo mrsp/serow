@@ -85,9 +85,10 @@ public:
 
     /**
      * @brief Set the action for the EKF.
+     * @param contact_frame Name of the contact frame.
      * @param action Action to set.
      */
-    void setAction(const Eigen::VectorXd& action);
+    void setAction(const std::string& contact_frame, const Eigen::VectorXd& action);
 
     /**
      * @brief Get the contact innovation and covariance for a given contact frame.
@@ -139,14 +140,10 @@ private:
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
 
-    double angular_velocity_action_cov_gain_{1.0};
-    double linear_acceleration_action_cov_gain_{1.0};
-    double angular_velocity_bias_action_cov_gain_{1.0};
-    double linear_acceleration_bias_action_cov_gain_{1.0};
-    double position_action_cov_gain_{1.0};
-    double orientation_action_cov_gain_{1.0};
-    double contact_position_action_cov_gain_{1.0};
-    double contact_orientation_action_cov_gain_{1.0};
+    std::map<std::string, double> position_action_cov_gain_;
+    std::map<std::string, double> orientation_action_cov_gain_;
+    std::map<std::string, double> contact_position_action_cov_gain_;
+    std::map<std::string, double> contact_orientation_action_cov_gain_;
     
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_orientation_innovation_;

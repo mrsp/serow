@@ -8,6 +8,8 @@
 #include "State.hpp"
 #include "common.hpp"
 
+#include <tuple>
+
 namespace py = pybind11;
 
 PYBIND11_MODULE(contact_ekf, m) {
@@ -42,7 +44,7 @@ PYBIND11_MODULE(contact_ekf, m) {
             },
             py::arg("state"), py::arg("kin"), py::arg("odom") = py::none(),
             py::arg("terrain_estimator") = py::none())
-        .def("set_action", &serow::ContactEKF::setAction, py::arg("action"))
+        .def("set_action", &serow::ContactEKF::setAction, py::arg("contact_frame"), py::arg("action"))
         .def("get_contact_position_innovation", 
             [](serow::ContactEKF& self, const std::string& contact_frame) {
                 Eigen::Vector3d innovation = Eigen::Vector3d::Zero();

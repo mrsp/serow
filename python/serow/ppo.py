@@ -6,32 +6,26 @@ import torch.optim as optim
 from collections import deque
 
 class PPO:
-    def __init__(self, actor, critic, state_dim, action_dim, max_action, min_action, device='cpu'):
+    def __init__(self, actor, critic, params, device='cpu'):
+        self.buffer = deque(maxlen=1000000)
         self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
         self.actor = actor.to(self.device)
         self.critic = critic.to(self.device)
-        
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=3e-4)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=3e-4)
-        
-        self.buffer = deque(maxlen=1000000)
-        self.batch_size = 64
-        self.gamma = 0.99
-        self.gae_lambda = 0.95
-        self.clip_param = 0.2
-        self.entropy_coef = 0.5
-        self.value_loss_coef = 1.0
-        self.max_grad_norm = 0.5
-        self.ppo_epochs = 10
-        self.min_action = min_action
-        self.max_action = max_action
-        
-        self.state_dim = state_dim
-        self.action_dim = action_dim
-        
-        self.best_reward = float('-inf')
-        self.patience = 15
-        self.no_improvement_count = 0
+        self.state_dim = params['state_dim']
+        self.action_dim = params['action_dim']
+
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=params['actor_lr'])
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=params['critic_lr'])
+        self.batch_size = params['batch_size']
+        self.gamma = params['gamma']
+        self.gae_lambda = params['gae_lambda']
+        self.clip_param = params['clip_param']
+        self.entropy_coef = params['entropy_coef']
+        self.value_loss_coef = params['value_loss_coef']
+        self.max_grad_norm = params['max_grad_norm']
+        self.ppo_epochs = params['ppo_epochs']
+        self.min_action = params['min_action']
+        self.max_action = params['max_action']
     
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
         self.buffer.append((state, action, reward, next_state, done, value, log_prob))
@@ -72,9 +66,9 @@ class PPO:
         return advantages, returns
     
     def train(self):
-        if len(self.buffer) == 0:
+        if len(self.buffer) < self.batch_size:
             return
-        
+
         # Convert buffer to tensors
         states, actions, rewards, next_states, dones, values, old_log_probs = zip(*self.buffer)
         
@@ -99,28 +93,11 @@ class PPO:
         # Compute GAE and returns
         advantages, returns = self.compute_gae(rewards, old_values, next_values, dones)
 
-        # Standardize advantages with a check for zero variance
-        advantages_mean = advantages.mean()
-        advantages_std = advantages.std()
-        advantages = (advantages - advantages_mean) / advantages_std
-        
-        # Early stopping check
-        current_reward = returns.mean().item()
-        if current_reward > self.best_reward:
-            self.best_reward = current_reward
-            self.no_improvement_count = 0
-        else:
-            self.no_improvement_count += 1
-            if self.no_improvement_count >= self.patience:
-                self.buffer.clear()
-                return
+        # Standardize advantages
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         
         # Loop structure: outer = epochs, inner = batches
         dataset_size = len(states)
-        if (dataset_size == 1):
-            print("Dataset size is 1, need more data to train")
-            return
-        
         for _ in range(self.ppo_epochs):
             indices = np.arange(dataset_size)
             np.random.shuffle(indices)
@@ -133,15 +110,17 @@ class PPO:
                 batch_returns = returns[batch_indices]
                 batch_old_log_probs = old_log_probs[batch_indices]
                 
-                # === Combined Actor-Critic update ===
                 # Get current policy outputs
                 action_means, action_log_stds = self.actor(batch_states)
                 action_stds = torch.exp(action_log_stds)
                 current_log_probs = self.calculate_log_probs(batch_actions, action_means, action_stds)
                 
                 # Calculate entropy for exploration
-                entropy = torch.distributions.Normal(action_means, action_stds).entropy().mean()
-                
+                if (self.entropy_coef > 0):
+                    entropy = torch.distributions.Normal(action_means, action_stds).entropy().mean()
+                else:
+                    entropy = 0 
+
                 # Calculate policy loss with clipping
                 ratio = torch.exp(current_log_probs - batch_old_log_probs)
                 surr1 = ratio * batch_advantages
@@ -159,10 +138,10 @@ class PPO:
                     F.mse_loss(current_values, batch_returns),
                     F.mse_loss(value_pred_clipped, batch_returns)
                 )
-                
+
                 # Combine losses
                 loss = policy_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy
-                
+
                 # Single backward pass and optimization step
                 self.actor_optimizer.zero_grad()
                 self.critic_optimizer.zero_grad()

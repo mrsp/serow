@@ -11,26 +11,37 @@ from read_mcap import read_base_states, read_kinematic_measurements, read_imu_me
 
 USE_GROUND_TRUTH = True
 
+# Actor network per leg end-effector
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action, min_action):
         super(Actor, self).__init__()
+        # Initialize layers with smaller weights
         self.layer1 = nn.Linear(state_dim, 128)
         self.layer2 = nn.Linear(128, 64)
         self.mean_layer = nn.Linear(64, action_dim)
         self.log_std_layer = nn.Linear(64, action_dim)
+        
+        # Initialize weights with smaller values
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.orthogonal_(m.weight, gain=0.01)
+                nn.init.constant_(m.bias, 0.0)
+        
         self.max_action = max_action
         self.min_action = min_action
 
     def forward(self, state):
-        x = F.relu(self.layer1(state))
-        x = F.relu(self.layer2(x))
+        # Use tanh for more stable gradients
+        x = torch.tanh(self.layer1(state))
+        x = torch.tanh(self.layer2(x))
         mean = self.mean_layer(x)
         log_std = self.log_std_layer(x)
-        log_std = torch.clamp(log_std, min=-20, max=0.5)  # Std up to exp(0.5) ≈ 1.65
+        # Constrain log_std to a smaller range
+        log_std = torch.clamp(log_std, min=-3, max=0.5)
         return mean, log_std
 
     def get_action(self, state, deterministic=False):
-        state = torch.FloatTensor(state).reshape(1, -1)
+        state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
         mean, log_std = self.forward(state)
         
         # Calculate the range once
@@ -45,17 +56,15 @@ class Actor(nn.Module):
             normal = torch.distributions.Normal(mean, std)
             z = normal.rsample()
             
-            # Transform to bounded range
-            sigmoid_z = torch.sigmoid(z)
-            action = sigmoid_z * action_range + self.min_action
+            # Transform to bounded range with tanh for more stable gradients
+            tanh_z = torch.tanh(z)
+            action = (tanh_z + 1.0) * 0.5 * action_range + self.min_action
             
-            # Correct log prob adjustment:
-            # log |det(jacobian)| = log(action_range * sigmoid(z) * (1 - sigmoid(z)))
-            log_det_jacobian = torch.log(action_range * sigmoid_z * (1 - sigmoid_z))
-            log_prob = normal.log_prob(z) - log_det_jacobian
+            # Correct log prob adjustment for tanh
+            log_prob = normal.log_prob(z) - torch.log(torch.clamp(1 - tanh_z.pow(2), min=1e-8))
             log_prob = log_prob.sum(dim=-1, keepdim=True)
 
-        return action.detach().numpy()[0], log_prob.detach().item()
+        return action.detach().cpu().numpy()[0], log_prob.detach().cpu().item()
 
 class Critic(nn.Module):
     def __init__(self, state_dim):
@@ -169,7 +178,6 @@ def logMap(R):
         omega = magnitude * np.array([R32 - R23, R13 - R31, R21 - R12]);
     return omega;
 
-
 def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent):
     for dataset in datasets:
         # Get the kinematic measurements and imu measurements from the dataset
@@ -180,11 +188,16 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
         # Reset to initial state
         initial_state = dataset['states'][0]
 
-        best_reward = float('-inf')
+        best_reward = {}
+        episode_rewards = {}
+        collected_steps = {}
+        for cf in contacts_frame:
+            best_reward[cf] = float('-inf')
+            episode_rewards[cf] = []
+            collected_steps[cf] = 0
+
         max_episode = 50
         update_steps = 64  # Train after collecting this many timesteps
-        collected_steps = 0
-        episode_rewards = []  # Store rewards for convergence check
 
         for episode in range(max_episode):            
             # Initialize the EKF
@@ -193,20 +206,60 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
             
             # Initialize the state
             state = initial_state   
+            episode_reward = {}
+            for cf in contacts_frame:
+                episode_reward[cf] = 0.0
 
-            episode_reward = 0.0
             for imu, kin, gt in zip(imu_measurements, kinematic_measurements, base_pose_ground_truth):
                 # Get the current state - properly format as a flat array
                 x = np.concatenate([
-                    state.base_position,  # 3D position
-                    state.base_linear_velocity,  # 3D velocity
-                    state.base_orientation  # 4D quaternion
+                    state.base_position,
+                    state.base_linear_velocity,
+                    state.base_orientation,
                 ])
 
-                # Set action
-                action, log_prob = agent.actor.get_action(x, deterministic=False)
-                value = agent.critic(torch.FloatTensor(x).reshape(1, -1)).item()
-                ekf.set_action(action)
+                reward = {}
+                action = {}
+                log_prob = {}
+                value = {}
+                for cf in contacts_frame:
+                    if not kin.contacts_status[cf]:
+                        continue
+
+                    # Set action
+                    action[cf], log_prob[cf] = agent[cf].actor.get_action(x, deterministic=False)
+                    value[cf] = agent[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agent[cf].critic.parameters()).device)).item()
+                    ekf.set_action(cf, action[cf])
+
+                    # Compute the reward based on GT or NIS
+                    reward[cf] = float('-inf')
+                    if USE_GROUND_TRUTH:
+                        # Calculate errors
+                        position_error = np.linalg.norm(state.base_position - gt.position)
+                        orientation_error = np.linalg.norm(
+                            logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
+                                   quaternion_to_rotation_matrix(state.base_orientation)))
+                        
+                        # Calculate rewards with improvement focus
+                        position_reward = -1.0 * position_error # Much smaller position error weight
+                        orientation_reward = -0.5 * orientation_error # Much smaller orientation error weight
+                        
+                        reward[cf] =  + position_reward + orientation_reward 
+
+                    else:
+                        success = False
+                        innovation = np.zeros(3)
+                        covariance = np.zeros((3, 3))
+                        success, innovation, covariance = ekf.get_contact_position_innovation(cf)
+                        if success:
+                            # Calculate innovation reward
+                            innovation_reward = -0.001 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
+                            
+                            # Combine rewards
+                            reward[cf] = innovation_reward
+
+                    episode_reward[cf] += reward[cf]
+                    collected_steps[cf] += 1
 
                 # Predict step
                 ekf.predict(state, imu, kin)
@@ -214,31 +267,7 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                 # Update step 
                 ekf.update(state, kin, None, None)
 
-                # Compute the reward based on GT or NIS
-                reward = float('-inf')
-                done = 0.0
-                if USE_GROUND_TRUTH:
-                    reward = -np.linalg.norm(state.base_position - gt.position) 
-                    - np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(state.base_orientation)))
-                else:
-                    r = []
-                    for cf in contacts_frame:
-                        success = False
-                        innovation = np.zeros(3)
-                        covariance = np.zeros((3, 3))
-                        success, innovation, covariance = ekf.get_contact_position_innovation(cf)
-                        if success:
-                            r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
-
-                    if len(r) == 0:
-                        continue
-                    else:
-                        reward = -np.mean(r)
-
-                episode_reward += reward
-                collected_steps += 1
-
-                # Compute the next state
+                 # Compute the next state
                 next_x = np.concatenate([
                     state.base_position,
                     state.base_linear_velocity,
@@ -246,183 +275,188 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                 ])
 
                 # Add to buffer
-                agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
-
-                # Train policy if we've collected enough steps
-                if collected_steps >= update_steps:
-                    agent.train()
-                    collected_steps = 0
-            
-            episode_rewards.append(episode_reward)
-            if episode_reward > best_reward:
-                best_reward = episode_reward
+                for cf in contacts_frame:
+                    if not kin.contacts_status[cf]:
+                        continue
                 
-            print(f"Episode {episode}, Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
+                    agent[cf].add_to_buffer(x, action[cf], reward[cf], next_x, 0.0, value[cf], log_prob[cf])
+
+                    # Train policy if we've collected enough steps
+                    if collected_steps[cf] >= update_steps:
+                        agent[cf].train()
+                        collected_steps[cf] = 0
             
+            episode_rewards[cf].append(episode_reward[cf])
+            if episode_reward[cf] > best_reward[cf]:
+                best_reward[cf] = episode_reward[cf]
+                
+            print(f"Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
+        
+    for cf in contacts_frame:
         plt.figure(figsize=(10, 5))
-        plt.plot(np.array(episode_rewards), label='Episode Rewards')
+        plt.plot(np.array(episode_rewards[cf]), label='Episode Rewards')
         plt.xlabel('Episode')
         plt.ylabel('Reward')
-        plt.title('Episode Rewards')
+        plt.title(f'Episode Rewards for {cf}')
         plt.grid(True)
         plt.legend()
         plt.show()
 
-def evaluate_policy(dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=False):
-        # After training, evaluate the policy
-        print("\nEvaluating trained policy...")
+# def evaluate_policy(dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=False):
+#         # After training, evaluate the policy
+#         print("\nEvaluating trained policy...")
         
-        # Get the kinematic measurements and imu measurements from the dataset
-        kinematic_measurements = dataset['kinematic']
-        imu_measurements = dataset['imu']
-        base_pose_ground_truth = dataset['base_pose_ground_truth']
+#         # Get the kinematic measurements and imu measurements from the dataset
+#         kinematic_measurements = dataset['kinematic']
+#         imu_measurements = dataset['imu']
+#         base_pose_ground_truth = dataset['base_pose_ground_truth']
 
-        # Reset to initial state
-        state = dataset['states'][0]
+#         # Reset to initial state
+#         state = dataset['states'][0]
         
-        # Initialize the EKF
-        ekf = ContactEKF()
-        ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
+#         # Initialize the EKF
+#         ekf = ContactEKF()
+#         ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
         
-        # Store trajectories for visualization
-        positions = []
-        velocities = []
-        orientations = []
-        rewards = []
+#         # Store trajectories for visualization
+#         positions = []
+#         velocities = []
+#         orientations = []
+#         rewards = []
         
-        # Run evaluation episodes
-        step = 0
-        for imu, kin, gt in zip(imu_measurements, kinematic_measurements, base_pose_ground_truth):
-            # Get state and action
-            x = np.concatenate([
-                state.base_position,
-                state.base_linear_velocity,
-                state.base_orientation
-            ])
+#         # Run evaluation episodes
+#         step = 0
+#         for imu, kin, gt in zip(imu_measurements, kinematic_measurements, base_pose_ground_truth):
+#             # Get state and action
+#             x = np.concatenate([
+#                 state.base_position,
+#                 state.base_linear_velocity,
+#                 state.base_orientation
+#             ])
             
-            # Get action from trained policy
-            action, _ = agent.actor.get_action(x, deterministic=True)
-            ekf.set_action(action)
+#             # Get action from trained policy
+#             action, _ = agent.actor.get_action(x, deterministic=True)
+#             ekf.set_action(action)
             
-            # Predict and update
-            ekf.predict(state, imu, kin)
-            ekf.update(state, kin, None, None)
+#             # Predict and update
+#             ekf.predict(state, imu, kin)
+#             ekf.update(state, kin, None, None)
             
-            # Store trajectories
-            positions.append(np.array(state.base_position))
-            velocities.append(np.array(state.base_linear_velocity))
-            orientations.append(np.array(state.base_orientation))
+#             # Store trajectories
+#             positions.append(np.array(state.base_position))
+#             velocities.append(np.array(state.base_linear_velocity))
+#             orientations.append(np.array(state.base_orientation))
             
-            # Print state changes every 100 steps
-            if step % 100 == 0:
-                print(f"\nStep {step}:")
-                print(f"Position: {state.base_position}")
-                print(f"Velocity: {state.base_linear_velocity}")
-                print(f"Action: {action}")
+#             # Print state changes every 100 steps
+#             if step % 100 == 0:
+#                 print(f"\nStep {step}:")
+#                 print(f"Position: {state.base_position}")
+#                 print(f"Velocity: {state.base_linear_velocity}")
+#                 print(f"Action: {action}")
             
-            # Compute the reward based on GT or NIS
-            reward = float('-inf')
-            if USE_GROUND_TRUTH:
-                reward = -np.linalg.norm(state.base_position - gt.position) 
-                - np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(state.base_orientation)))
-            else:
-                r = []
-                for cf in contacts_frame:
-                    success = False
-                    innovation = np.zeros(3)
-                    covariance = np.zeros((3, 3))
-                    success, innovation, covariance = ekf.get_contact_position_innovation(cf)
-                    if success:
-                        r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
+#             # Compute the reward based on GT or NIS
+#             reward = float('-inf')
+#             if USE_GROUND_TRUTH:
+#                 reward = -np.linalg.norm(state.base_position - gt.position) 
+#                 - np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(state.base_orientation)))
+#             else:
+#                 r = []
+#                 for cf in contacts_frame:
+#                     success = False
+#                     innovation = np.zeros(3)
+#                     covariance = np.zeros((3, 3))
+#                     success, innovation, covariance = ekf.get_contact_position_innovation(cf)
+#                     if success:
+#                         r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
 
-                if len(r) == 0:
-                    continue
-                else:
-                    reward = -np.mean(r)
-            rewards.append(reward)
-            step += 1
+#                 if len(r) == 0:
+#                     continue
+#                 else:
+#                     reward = -np.mean(r)
+#             rewards.append(reward)
+#             step += 1
             
-        # Convert to numpy arrays for plotting
-        positions = np.array(positions)
-        velocities = np.array(velocities)
-        orientations = np.array(orientations)
-        rewards = np.array(rewards)
+#         # Convert to numpy arrays for plotting
+#         positions = np.array(positions)
+#         velocities = np.array(velocities)
+#         orientations = np.array(orientations)
+#         rewards = np.array(rewards)
 
-        ground_truth_positions = np.array([pose.position for pose in base_pose_ground_truth])
-        ground_truth_orientations = np.array([pose.orientation for pose in base_pose_ground_truth])
+#         ground_truth_positions = np.array([pose.position for pose in base_pose_ground_truth])
+#         ground_truth_orientations = np.array([pose.orientation for pose in base_pose_ground_truth])
 
-        # Plot results
-        plt.figure(figsize=(15, 10))
+#         # Plot results
+#         plt.figure(figsize=(15, 10))
         
-        # Position trajectory
-        plt.subplot(2, 2, 1)
-        plt.plot(positions[:, 0], label='x')
-        plt.plot(positions[:, 1], label='y')
-        plt.plot(positions[:, 2], label='z')
-        plt.plot(ground_truth_positions[:, 0], label='x_gt')
-        plt.plot(ground_truth_positions[:, 1], label='y_gt')
-        plt.plot(ground_truth_positions[:, 2], label='z_gt')
-        plt.xlabel('Time Step')
-        plt.ylabel('Position')
-        plt.title('Base Position Trajectory')
-        plt.legend()
-        plt.grid(True)
+#         # Position trajectory
+#         plt.subplot(2, 2, 1)
+#         plt.plot(positions[:, 0], label='x')
+#         plt.plot(positions[:, 1], label='y')
+#         plt.plot(positions[:, 2], label='z')
+#         plt.plot(ground_truth_positions[:, 0], label='x_gt')
+#         plt.plot(ground_truth_positions[:, 1], label='y_gt')
+#         plt.plot(ground_truth_positions[:, 2], label='z_gt')
+#         plt.xlabel('Time Step')
+#         plt.ylabel('Position')
+#         plt.title('Base Position Trajectory')
+#         plt.legend()
+#         plt.grid(True)
         
-        # Velocity components
-        plt.subplot(2, 2, 2)
-        plt.plot(velocities[:, 0], label='Vx')
-        plt.plot(velocities[:, 1], label='Vy')
-        plt.plot(velocities[:, 2], label='Vz')
-        plt.xlabel('Time Step')
-        plt.ylabel('Velocity')
-        plt.title('Base Linear Velocity')
-        plt.legend()
-        plt.grid(True)
+#         # Velocity components
+#         plt.subplot(2, 2, 2)
+#         plt.plot(velocities[:, 0], label='Vx')
+#         plt.plot(velocities[:, 1], label='Vy')
+#         plt.plot(velocities[:, 2], label='Vz')
+#         plt.xlabel('Time Step')
+#         plt.ylabel('Velocity')
+#         plt.title('Base Linear Velocity')
+#         plt.legend()
+#         plt.grid(True)
         
-        # Orientation (quaternion components)
-        plt.subplot(2, 2, 3)
-        plt.plot(orientations[:, 0], label='w')
-        plt.plot(orientations[:, 1], label='x')
-        plt.plot(orientations[:, 2], label='y')
-        plt.plot(orientations[:, 3], label='z')
-        plt.plot(ground_truth_orientations[:, 0], label='w_gt')
-        plt.plot(ground_truth_orientations[:, 1], label='x_gt')
-        plt.plot(ground_truth_orientations[:, 2], label='y_gt')
-        plt.plot(ground_truth_orientations[:, 3], label='z_gt')
-        plt.xlabel('Time Step')
-        plt.ylabel('Quaternion Components')
-        plt.title('Base Orientation')
-        plt.legend()
-        plt.grid(True)
+#         # Orientation (quaternion components)
+#         plt.subplot(2, 2, 3)
+#         plt.plot(orientations[:, 0], label='w')
+#         plt.plot(orientations[:, 1], label='x')
+#         plt.plot(orientations[:, 2], label='y')
+#         plt.plot(orientations[:, 3], label='z')
+#         plt.plot(ground_truth_orientations[:, 0], label='w_gt')
+#         plt.plot(ground_truth_orientations[:, 1], label='x_gt')
+#         plt.plot(ground_truth_orientations[:, 2], label='y_gt')
+#         plt.plot(ground_truth_orientations[:, 3], label='z_gt')
+#         plt.xlabel('Time Step')
+#         plt.ylabel('Quaternion Components')
+#         plt.title('Base Orientation')
+#         plt.legend()
+#         plt.grid(True)
         
-        # Reward over time
-        plt.subplot(2, 2, 4)
-        plt.plot(rewards)
-        plt.xlabel('Time Step')
-        plt.ylabel('Reward')
-        plt.title('Reward Over Time')
-        plt.grid(True)
+#         # Reward over time
+#         plt.subplot(2, 2, 4)
+#         plt.plot(rewards)
+#         plt.xlabel('Time Step')
+#         plt.ylabel('Reward')
+#         plt.title('Reward Over Time')
+#         plt.grid(True)
         
-        plt.tight_layout()
-        plt.show()
+#         plt.tight_layout()
+#         plt.show()
         
-        # Print evaluation metrics
-        print("\nPolicy Evaluation Metrics:")
-        print(f"Average Reward: {np.mean(rewards):.4f}")
-        print(f"Max Reward: {np.max(rewards):.4f}")
-        print(f"Min Reward: {np.min(rewards):.4f}")
-        print(f"Final Position: {positions[-1]}")
-        print(f"Final Velocity: {velocities[-1]}")
-        print(f"Final Orientation: {orientations[-1]}")
+#         # Print evaluation metrics
+#         print("\nPolicy Evaluation Metrics:")
+#         print(f"Average Reward: {np.mean(rewards):.4f}")
+#         print(f"Max Reward: {np.max(rewards):.4f}")
+#         print(f"Min Reward: {np.min(rewards):.4f}")
+#         print(f"Final Position: {positions[-1]}")
+#         print(f"Final Velocity: {velocities[-1]}")
+#         print(f"Final Orientation: {orientations[-1]}")
 
-        # Save the trained policy
-        if (save_policy):
-            torch.save({
-                'actor_state_dict': agent.actor.state_dict(),
-                'critic_state_dict': agent.critic.state_dict(),
-                'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
-                'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
-            }, 'trained_policy.pth')
+#         # Save the trained policy
+#         if (save_policy):
+#             torch.save({
+#                 'actor_state_dict': agent.actor.state_dict(),
+#                 'critic_state_dict': agent.critic.state_dict(),
+#                 'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
+#                 'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
+#             }, 'trained_policy.pth')
 
 if __name__ == "__main__":
     # Read the measurement mcap file
@@ -467,28 +501,48 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     state_dim = 10  # 3 position, 3 velocity, 4 orientation
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 10.0  # Maximum value for actions
-    min_action = 0.01  # Minimum value for actions
+    action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
+    max_action = 1.0  # Reduced from 10.0
+    min_action = 0.1  # Increased from 0.01
+
+    params = {
+        'state_dim': state_dim,
+        'action_dim': action_dim,
+        'max_action': max_action,
+        'min_action': min_action,
+        'clip_param': 0.2,
+        'value_loss_coef': 0.5,
+        'entropy_coef': 0.5,
+        'gamma': 0.99,
+        'gae_lambda': 0.95,
+        'ppo_epochs': 10,
+        'batch_size': 64,
+        'max_grad_norm': 0.5,
+        'actor_lr': 1e-4,
+        'critic_lr': 1e-4,
+    }
 
     # Initialize the actor and critic
-    actor = Actor(state_dim, action_dim, max_action, min_action)
-    critic = Critic(state_dim)
-
-    # Initialize the DDPG agent
-    agent = PPO(actor, critic, state_dim, action_dim, max_action, min_action)
+    agent = {}
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = 'cpu'
+    for cf in contacts_frame:
+        actor = Actor(state_dim, action_dim, max_action, min_action).to(device)
+        critic = Critic(state_dim).to(device)
+        # Initialize the DDPG agent
+        agent[cf] = PPO(actor, critic, params, device=device)
 
     # Try to load a trained policy if it exists
-    try:
-        checkpoint = torch.load('trained_policy.pth')
-        agent.actor.load_state_dict(checkpoint['actor_state_dict'])
-        agent.critic.load_state_dict(checkpoint['critic_state_dict'])
-        print("Loaded trained policy from 'trained_policy.pth'")
-    except FileNotFoundError:
-        print("No trained policy found. Training new policy...")
-        train_policy(train_datasets, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent)
-        # Save the trained policy
-        evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=True)
-    else:
-        # Just evaluate the loaded policy
-        evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=False)
+    # try:
+    #     checkpoint = torch.load('trained_policy.pth')
+    #     agent.actor.load_state_dict(checkpoint['actor_state_dict'])
+    #     agent.critic.load_state_dict(checkpoint['critic_state_dict'])
+    #     print("Loaded trained policy from 'trained_policy.pth'")
+    # except FileNotFoundError:
+    #     print("No trained policy found. Training new policy...")
+    train_policy(train_datasets, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent)
+    # Save the trained policy
+    # evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=True)
+    # else:
+    #     # Just evaluate the loaded policy
+    #     evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=False)

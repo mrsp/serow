@@ -25,8 +25,8 @@ class Actor(nn.Module):
         return mean, log_std
 
     def get_action(self, state, deterministic=False):
-        # Convert state to tensor and ensure correct shape
-        state = torch.FloatTensor(state).reshape(1, -1)
+        # Convert state to tensor and ensure correct shape and device
+        state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
         mean, log_std = self.forward(state)
 
         if deterministic:
@@ -47,8 +47,8 @@ class Actor(nn.Module):
             log_prob = log_prob.sum(dim=-1, keepdim=True)
 
         # Detach and convert to numpy
-        action = action.detach().numpy()[0]  # Remove batch dimension and convert to numpy
-        log_prob = log_prob.detach().item()  # Convert scalar tensor to Python float
+        action = action.detach().cpu().numpy()[0]  # Remove batch dimension and convert to numpy
+        log_prob = log_prob.detach().cpu().item()  # Convert scalar tensor to Python float
         return action, log_prob
     
 class Critic(nn.Module):
@@ -118,9 +118,33 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         self.action_dim = 1  # torque
         self.max_action = 2.0
         self.min_action = -2.0
-        self.actor = Actor(self.state_dim, self.action_dim, self.max_action)
-        self.critic = Critic(self.state_dim)
-        self.agent = PPO(self.actor, self.critic, self.state_dim, self.action_dim, self.max_action, self.min_action)
+        
+        # Create device
+        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = 'cpu'
+        
+        # Create models and move to device
+        self.actor = Actor(self.state_dim, self.action_dim, self.max_action).to(self.device)
+        self.critic = Critic(self.state_dim).to(self.device)
+
+        params = {
+            'state_dim': 3,
+            'action_dim': 1,
+            'max_action': 2.0,
+            'min_action': -2.0,
+            'clip_param': 0.2,
+            'value_loss_coef': 1.0,
+            'entropy_coef': 0.5,
+            'gamma': 0.99,
+            'gae_lambda': 0.95,
+            'ppo_epochs': 10,
+            'batch_size': 64,
+            'max_grad_norm': 0.5,
+            'actor_lr': 3e-4,
+            'critic_lr': 3e-4,
+        }
+
+        self.agent = PPO(self.actor, self.critic, params, device=self.device)
         self.env = InvertedPendulum()
 
     def test_initialization(self):
@@ -140,7 +164,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
     def test_add_to_buffer(self):
         state = self.env.reset()
         action, log_prob = self.agent.actor.get_action(state)
-        value = self.agent.critic(torch.FloatTensor(state).reshape(1, -1)).item()
+        value = self.agent.critic(torch.FloatTensor(state).reshape(1, -1).to(self.device)).item()
         next_state, reward, done = self.env.step(action)
         self.agent.add_to_buffer(state, action, reward, next_state, done, value, log_prob)
         self.assertEqual(len(self.agent.buffer), 1)
@@ -158,7 +182,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         state = self.env.reset()
         for _ in range(100):
             action, log_prob = self.agent.actor.get_action(state, deterministic=False)
-            value = self.agent.critic(torch.FloatTensor(state).reshape(1, -1)).item()
+            value = self.agent.critic(torch.FloatTensor(state).reshape(1, -1).to(self.device)).item()
             next_state, reward, done = self.env.step(action)
             self.agent.add_to_buffer(state, action, reward, next_state, done, value, log_prob)
             state = next_state if not done else self.env.reset()
@@ -184,7 +208,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
             for step in range(max_steps_per_episode):
                 # Get action from policy
                 action, log_prob = self.agent.actor.get_action(state, deterministic=False)
-                value = self.agent.critic(torch.FloatTensor(state).reshape(1, -1)).item()
+                value = self.agent.critic(torch.FloatTensor(state).reshape(1, -1).to(self.device)).item()
                 
                 # Execute action in environment
                 next_state, reward, done = self.env.step(action)

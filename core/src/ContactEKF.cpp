@@ -78,6 +78,12 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
 
     for (const auto& contact_frame : contacts_frame_) {
+        position_action_cov_gain_[contact_frame] = 1.0;
+        contact_position_action_cov_gain_[contact_frame] = 1.0;
+        if (!point_feet_) {
+            orientation_action_cov_gain_[contact_frame] = 1.0;
+            contact_orientation_action_cov_gain_[contact_frame] = 1.0;
+        }
         if (state.contacts_position_cov.count(contact_frame)) {
             P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) =
                 state.contacts_position_cov.at(contact_frame);
@@ -154,20 +160,19 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
 
     Eigen::MatrixXd Qc = Eigen::MatrixXd::Zero(num_inputs_, num_inputs_);
     // Covariance Q with full state + biases
-    Qc(ng_idx_, ng_idx_) = imu.angular_velocity_cov * angular_velocity_action_cov_gain_;
-    Qc(na_idx_, na_idx_) = imu.linear_acceleration_cov * linear_acceleration_action_cov_gain_;
-    Qc(nbg_idx_, nbg_idx_) = imu.angular_velocity_bias_cov * angular_velocity_bias_action_cov_gain_;
-    Qc(nba_idx_, nba_idx_) =
-        imu.linear_acceleration_bias_cov * linear_acceleration_bias_action_cov_gain_;
+    Qc(ng_idx_, ng_idx_) = imu.angular_velocity_cov;
+    Qc(na_idx_, na_idx_) = imu.linear_acceleration_cov;
+    Qc(nbg_idx_, nbg_idx_) = imu.angular_velocity_bias_cov;
+    Qc(nba_idx_, nba_idx_) = imu.linear_acceleration_bias_cov;
 
     for (const auto& [cf, cs] : kin.contacts_status) {
         const int contact_status = static_cast<int>(cs);
         Qc(npl_idx_.at(cf), npl_idx_.at(cf)).noalias() =
-            kin.position_slip_cov * position_action_cov_gain_ 
+            kin.position_slip_cov * position_action_cov_gain_.at(cf)
                 + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity(); 
         if (!point_feet_) {
             Qc(nrl_idx_.at(cf), nrl_idx_.at(cf)).noalias() =
-                kin.orientation_slip_cov * orientation_action_cov_gain_ 
+                kin.orientation_slip_cov * orientation_action_cov_gain_.at(cf)
                     + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         }
     }
@@ -264,13 +269,13 @@ void ContactEKF::updateWithContacts(
 
         contacts_position_noise.at(cf) = cs * contacts_position_noise.at(cf) +
             (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
-            position_cov * contact_position_action_cov_gain_;
+            position_cov * contact_position_action_cov_gain_.at(cf);
 
         if (!point_feet_ && contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
                 cs * contacts_orientation_noise.value().at(cf) +
                 (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 + orientation_cov.value() 
-                * contact_orientation_action_cov_gain_;
+                * contact_orientation_action_cov_gain_.at(cf);
         }
     }
 
@@ -584,20 +589,17 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
     }
 }
 
-void ContactEKF::setAction(const Eigen::VectorXd& action) {
-    if (action.size() != 6 + 2 * !point_feet_) {
-        throw std::invalid_argument("Action size must be 6 + 2 if point_feet is false");
+void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
+    if (action.size() != 2 + 2 * !point_feet_) {
+        throw std::invalid_argument("Action size must be 2 + 2 if point_feet is false");
     }
-
-    angular_velocity_action_cov_gain_ = action(0);
-    linear_acceleration_action_cov_gain_ = action(1);
-    angular_velocity_bias_action_cov_gain_ = action(2);
-    linear_acceleration_bias_action_cov_gain_ = action(3);
-    position_action_cov_gain_ = action(4);
-    contact_position_action_cov_gain_ = action(5);
-    if (!point_feet_) {
-        orientation_action_cov_gain_ = action(6);
-        contact_orientation_action_cov_gain_ = action(7);
+    
+    position_action_cov_gain_.at(cf) = action(0);
+    contact_position_action_cov_gain_.at(cf) = action(1);
+    if (!point_feet_ && orientation_action_cov_gain_.count(cf) > 0 
+        && contact_orientation_action_cov_gain_.count(cf) > 0) {
+        orientation_action_cov_gain_.at(cf) = action(2);
+        contact_orientation_action_cov_gain_.at(cf) = action(3);
     }
 }
 
