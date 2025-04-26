@@ -1,11 +1,10 @@
 import mcap
 from mcap.reader import make_reader
 import numpy as np
-from serow.measurement import KinematicMeasurement, ImuMeasurement, BasePoseGroundTruth
-from serow.state import BaseState
-import flatbuffers
+import serow
 import sys
 import os
+import matplotlib.pyplot as plt
 
 # Add the build directory to Python path to find generated schemas
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # This points to serow directory
@@ -34,10 +33,10 @@ try:
 except ImportError as e:
     raise ImportError(f"Failed to import FlatBuffer schemas. Please ensure the project is built with Python code generation enabled. Error: {e}")
 
-def decode_imu_measurement(data: bytes) -> ImuMeasurement:
+def decode_imu_measurement(data: bytes) -> serow.ImuMeasurement:
     """Decode a FlatBuffer message into an ImuMeasurement object."""
     fb_msg = FbImuMeasurement.GetRootAsImuMeasurement(data, 0)
-    msg = ImuMeasurement()
+    msg = serow.ImuMeasurement()
     
     # Decode timestamp
     timestamp = fb_msg.Timestamp()
@@ -115,10 +114,10 @@ def decode_imu_measurement(data: bytes) -> ImuMeasurement:
     
     return msg
 
-def decode_kinematic_measurement(data: bytes) -> KinematicMeasurement:
+def decode_kinematic_measurement(data: bytes) -> serow.KinematicMeasurement:
     """Decode a FlatBuffer message into a KinematicMeasurement object."""
     fb_msg = FbKinematicMeasurement.GetRootAsKinematicMeasurement(data, 0)
-    msg = KinematicMeasurement()
+    msg = serow.KinematicMeasurement()
     
     # Decode timestamp
     timestamp = fb_msg.Timestamp()
@@ -304,10 +303,10 @@ def decode_kinematic_measurement(data: bytes) -> KinematicMeasurement:
     
     return msg
 
-def decode_base_state(data: bytes) -> BaseState:
+def decode_base_state(data: bytes) -> serow.BaseState:
     """Decode a FlatBuffer message into an BaseState object."""
     fb_msg = FbBaseState.GetRootAsBaseState(data, 0)
-    msg = BaseState()
+    msg = serow.BaseState()
     
     # Decode timestamp
     timestamp = fb_msg.Timestamp()
@@ -471,10 +470,10 @@ def decode_base_state(data: bytes) -> BaseState:
 
     return msg
 
-def decode_base_pose_ground_truth(data: bytes) -> BasePoseGroundTruth:
+def decode_base_pose_ground_truth(data: bytes) -> serow.BasePoseGroundTruth:
     """Decode a FlatBuffer message into an BasePoseGroundTruth object."""
     fb_msg = FbFrameTransform.GetRootAsFrameTransform(data, 0)
-    msg = BasePoseGroundTruth()
+    msg = serow.BasePoseGroundTruth()
     
     # Decode timestamp
     if fb_msg.Timestamp():
@@ -561,3 +560,64 @@ def read_base_pose_ground_truth(file_path: str):
                 base_pose_ground_truth.append(msg)
         
         return base_pose_ground_truth
+
+if __name__ == "__main__":
+    # Read the measurement mcap file
+    kinematic_measurements = read_kinematic_measurements("/tmp/serow_measurements.mcap")
+    imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
+    state = read_base_states("/tmp/serow_proprioception.mcap")[0]
+    base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
+
+    contacts_frame = set(state.contacts_position.keys())
+    print(f"Contacts frame: {contacts_frame}")
+        
+    # Parameters
+    point_feet = True  # Assuming point feet or flat feet
+    g = 9.81  # Gravity constant
+    imu_rate = 500.0  # IMU update rate in Hz
+    outlier_detection = False  # Enable outlier detection
+
+    # Initialize the EKF
+    ekf = serow.ContactEKF()
+    ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
+
+    base_positions = []
+    base_orientations = []
+    for imu, kin in zip(imu_measurements, kinematic_measurements):
+        # Predict step
+        ekf.predict(state, imu, kin)
+
+        # Update step 
+        ekf.update(state, kin, None, None)
+        
+        base_positions.append(state.base_position)
+        base_orientations.append(state.base_orientation)
+
+    # plot the base position vs the ground truth
+    base_position = np.array(base_positions)
+    base_orientation = np.array(base_orientations)
+
+    # plot the base pose vs the ground truth
+    base_ground_truth_position = np.array([gt.position for gt in base_pose_ground_truth])
+    base_ground_truth_orientation = np.array([gt.orientation for gt in base_pose_ground_truth])
+    plt.figure()
+    plt.plot(base_ground_truth_position[:, 0], label="gt x")
+    plt.plot(base_position[:, 0], label="base x")
+    plt.plot(base_ground_truth_position[:, 1], label="gt y")
+    plt.plot(base_position[:, 1], label="base y")
+    plt.plot(base_ground_truth_position[:, 2], label="gt z")
+    plt.plot(base_position[:, 2], label="base z")
+    plt.legend()
+    plt.show()
+
+    plt.figure()
+    plt.plot(base_ground_truth_orientation[:, 0], label="gt w")
+    plt.plot(base_orientation[:, 0], label="base w")
+    plt.plot(base_ground_truth_orientation[:, 1], label="gt x")
+    plt.plot(base_orientation[:, 1], label="base x")
+    plt.plot(base_ground_truth_orientation[:, 2], label="gt y")
+    plt.plot(base_orientation[:, 2], label="base y")
+    plt.plot(base_ground_truth_orientation[:, 3], label="gt z")
+    plt.plot(base_orientation[:, 3], label="base z")
+    plt.legend()
+    plt.show()

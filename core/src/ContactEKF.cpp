@@ -286,12 +286,13 @@ void ContactEKF::updateWithContacts(
         Eigen::MatrixXd K(num_states_, 3);
         Eigen::Vector3d z;
         Eigen::Matrix3d s;
+        
         // Iterative ESKF update
         for (size_t iter = 0; iter < num_iter; iter++) {
             H.setZero();
             const Eigen::Vector3d x = state.base_orientation.toRotationMatrix().transpose() *
                 (state.contacts_position.at(cf) - state.base_position);
-            z = cp - x;
+            z = cp - x; 
             H.block(0, p_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix().transpose();
             H.block(0, pl_idx_.at(cf)[0], 3, 3) =
                 state.base_orientation.toRotationMatrix().transpose();
