@@ -22,3 +22,11 @@ from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/BaseStat
 echo -e "from foxglove.Quaternion import Quaternion\n
 from foxglove.Time import Time\n
 from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/FrameTransform.py)" > ../build/generated/foxglove/FrameTransform.py 
+
+# Add imports to ForceTorqueMeasurements.py
+echo -e "from foxglove.Time import Time\n
+from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/ForceTorqueMeasurements.py)" > ../build/generated/foxglove/ForceTorqueMeasurements.py
+ 
+# Add imports to JointMeasurements.py
+echo -e "from foxglove.Time import Time\n
+from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/JointMeasurements.py)" > ../build/generated/foxglove/JointMeasurements.py 

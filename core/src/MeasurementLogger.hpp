@@ -56,8 +56,10 @@ public:
     MeasurementLogger& operator=(MeasurementLogger&&) noexcept = default;
 
     void log(const ImuMeasurement& imu_measurement);
-    void log(const KinematicMeasurement& kinematic_measurement);
+    // void log(const KinematicMeasurement& kinematic_measurement);
     void log(const BasePoseGroundTruth& base_pose_ground_truth);
+    void log(const std::map<std::string, JointMeasurement>& joints);
+    void log(const std::map<std::string, ForceTorqueMeasurement>& ft);
     void setStartTime(double timestamp);
     bool isInitialized() const;
 

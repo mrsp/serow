@@ -42,9 +42,7 @@ std::string findFilepath(const std::string& filename) {
 }
 
 Serow::Serow() {
-    proprioception_logger_job_ = std::make_unique<ThreadPool>();
-    exteroception_logger_job_ = std::make_unique<ThreadPool>();
-    measurement_logger_job_ = std::make_unique<ThreadPool>();
+
 }
 
 bool Serow::initialize(const std::string& config_file) {
@@ -208,6 +206,10 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("minimum_terrain_height_variance",
                           params_.minimum_terrain_height_variance))
+        return false;
+
+    // Read log directory parameter
+    if (!checkConfigParam("log_dir", params_.log_dir))
         return false;
 
     // Check rotation matrices
@@ -421,6 +423,13 @@ bool Serow::initialize(const std::string& config_file) {
         params_.initial_com_linear_velocity_cov.asDiagonal();
     state_.centroidal_state_.external_forces_cov = params_.initial_external_forces_cov.asDiagonal();
 
+    proprioception_logger_job_ = std::make_unique<ThreadPool>();
+    exteroception_logger_job_ = std::make_unique<ThreadPool>();
+    measurement_logger_job_ = std::make_unique<ThreadPool>();
+    proprioception_logger_ = std::make_unique<ProprioceptionLogger>(params_.log_dir + "/serow_proprioception.mcap");
+    exteroception_logger_ = std::make_unique<ExteroceptionLogger>(params_.log_dir + "/serow_exteroception.mcap");
+    measurement_logger_ = std::make_unique<MeasurementLogger>(params_.log_dir + "/serow_measurements.mcap");
+
     std::cout << "Configuration initialized" << std::endl;
     return true;
 }
@@ -445,6 +454,27 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                                          "> does not exist in the force measurements");
             }
         }
+    }
+
+    if (params_.log_measurements && !measurement_logger_job_->isRunning()) {
+        measurement_logger_job_->addJob([this, imu = imu, joints = joints, ft = ft, base_pose_ground_truth = std::move(base_pose_ground_truth)]() {
+            try {
+                if (!measurement_logger_->isInitialized()) {
+                    measurement_logger_->setStartTime(imu.timestamp);
+                }
+                // Log all measurement data to MCAP file
+                measurement_logger_->log(imu);
+                measurement_logger_->log(joints);
+                if (ft.has_value()) {
+                    measurement_logger_->log(ft.value());
+                }
+                if (base_pose_ground_truth.has_value()) {
+                    measurement_logger_->log(base_pose_ground_truth.value());
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Error in measurement logging thread: " << e.what() << std::endl;
+            }
+        });
     }
 
     // Estimate joint velocities
@@ -919,16 +949,16 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             [this, base_state = state_.base_state_, centroidal_state = state_.centroidal_state_,
              contact_state = state_.contact_state_, imu = imu, frame_tfs = frame_tfs_]() {
                 try {
-                    if (!proprioception_logger_.isInitialized()) {
-                        proprioception_logger_.setStartTime(
+                    if (!proprioception_logger_->isInitialized()) {
+                        proprioception_logger_->setStartTime(
                             std::min(base_state.timestamp, imu.timestamp));
                     }
                     // Log all state data to MCAP file
-                    proprioception_logger_.log(imu);
-                    proprioception_logger_.log(contact_state);
-                    proprioception_logger_.log(centroidal_state);
-                    proprioception_logger_.log(base_state);
-                    proprioception_logger_.log(frame_tfs, base_state.timestamp);
+                    proprioception_logger_->log(imu);
+                    proprioception_logger_->log(contact_state);
+                    proprioception_logger_->log(centroidal_state);
+                    proprioception_logger_->log(base_state);
+                    proprioception_logger_->log(frame_tfs, base_state.timestamp);
                 } catch (const std::exception& e) {
                     std::cerr << "Error in proprioception logging thread: " << e.what()
                               << std::endl;
@@ -936,12 +966,12 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
             });
     }
 
-    if (terrain_estimator_ && !exteroception_logger_job_->isRunning() &&
-        ((kin.timestamp - exteroception_logger_.getLastTimestamp()) > 0.5)) {
+    if (terrain_estimator_ && !exteroception_logger_job_->isRunning() && exteroception_logger_ &&
+        ((kin.timestamp - exteroception_logger_->getLastTimestamp()) > 0.5)) {
         exteroception_logger_job_->addJob([this, ts = kin.timestamp]() {
             try {
-                if (!exteroception_logger_.isInitialized()) {
-                    exteroception_logger_.setStartTime(ts);
+                if (!exteroception_logger_->isInitialized()) {
+                    exteroception_logger_->setStartTime(ts);
                 }
 
                 LocalMapState local_map;
@@ -959,27 +989,9 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                         local_map.data.push_back({loc[0], loc[1], cell.height});
                     }
                 }
-                exteroception_logger_.log(local_map);
+                exteroception_logger_->log(local_map);
             } catch (const std::exception& e) {
                 std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
-            }
-        });
-    }
-
-    if (params_.log_measurements && !measurement_logger_job_->isRunning()) {
-        measurement_logger_job_->addJob([this, kin = std::move(kin), imu = std::move(imu), base_pose_ground_truth = std::move(base_pose_ground_truth)]() {
-            try {
-                if (!measurement_logger_.isInitialized()) {
-                    measurement_logger_.setStartTime(std::min(imu.timestamp, kin.timestamp));
-                }
-                // Log all measurement data to MCAP file
-                measurement_logger_.log(imu);
-                measurement_logger_.log(kin);
-                if (base_pose_ground_truth.has_value()) {
-                    measurement_logger_.log(base_pose_ground_truth.value());
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Error in measurement logging thread: " << e.what() << std::endl;
             }
         });
     }
@@ -1007,6 +1019,23 @@ std::optional<State> Serow::getState(bool allow_invalid) {
     } else {
         return std::nullopt;
     }
+}
+
+std::optional<BaseState> Serow::getBaseState(bool allow_invalid) {
+    if (state_.is_valid_ || allow_invalid) {
+        return state_.base_state_;
+    } else {
+        return std::nullopt;
+    }
+}
+
+bool Serow::setAction(const std::string& cf, const Eigen::VectorXd& action) {
+    if (params_.is_contact_ekf) {
+        base_estimator_con_.setAction(cf, action);
+    } else {
+        return false;
+    }
+    return true;
 }
 
 const std::shared_ptr<TerrainElevation>& Serow::getTerrainEstimator() const {

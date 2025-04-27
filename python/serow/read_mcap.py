@@ -29,7 +29,10 @@ try:
     from foxglove.BaseState import BaseState as FbBaseState
     from foxglove.KinematicMeasurement import KinematicMeasurement as FbKinematicMeasurement
     from foxglove.ImuMeasurement import ImuMeasurement as FbImuMeasurement
-    from foxglove.FrameTransform import FrameTransform as FbFrameTransform
+    from foxglove.FrameTransform import FrameTransform as FbFrameTransform  
+    from foxglove.JointMeasurements import JointMeasurements as FbJointMeasurements
+    from foxglove.ForceTorqueMeasurements import ForceTorqueMeasurements as FbForceTorqueMeasurements
+
 except ImportError as e:
     raise ImportError(f"Failed to import FlatBuffer schemas. Please ensure the project is built with Python code generation enabled. Error: {e}")
 
@@ -498,6 +501,61 @@ def decode_base_pose_ground_truth(data: bytes) -> serow.BasePoseGroundTruth:
     
     return msg
 
+def decode_joint_measurement(data: bytes) -> dict[str, serow.JointMeasurement]:
+    """Decode a FlatBuffer message into a dictionary of JointMeasurement objects."""
+    fb_msg = FbJointMeasurements.GetRootAsJointMeasurements(data, 0)
+    joint_measurements = {}
+    
+    # Decode timestamp
+    timestamp = fb_msg.Timestamp()
+    timestamp_sec = 0.0
+    if timestamp:
+        timestamp_sec = timestamp.Sec() + timestamp.Nsec() * 1e-9
+    
+    # Decode joint names and positions
+    for i in range(fb_msg.NamesLength()):
+        joint_name = fb_msg.Names(i).decode()
+        msg = serow.JointMeasurement()
+        msg.timestamp = timestamp_sec
+        
+        if i < fb_msg.PositionsLength():
+            msg.position = fb_msg.Positions(i)
+        if i < fb_msg.VelocitiesLength():
+            msg.velocity = fb_msg.Velocities(i)
+        
+        joint_measurements[joint_name] = msg
+    
+    return joint_measurements
+
+def decode_force_torque_measurement(data: bytes) -> dict[str, serow.ForceTorqueMeasurement]:
+    """Decode a FlatBuffer message into a dictionary of ForceTorqueMeasurement objects."""
+    fb_msg = FbForceTorqueMeasurements.GetRootAsForceTorqueMeasurements(data, 0)
+    ft_measurements = {}
+    
+    # Decode timestamp
+    timestamp = fb_msg.Timestamp()
+    timestamp_sec = 0.0
+    if timestamp:
+        timestamp_sec = timestamp.Sec() + timestamp.Nsec() * 1e-9
+    
+    # Decode frame names and force/torque values
+    for i in range(fb_msg.FrameNamesLength()):
+        frame_name = fb_msg.FrameNames(i).decode()
+        msg = serow.ForceTorqueMeasurement()
+        msg.timestamp = timestamp_sec
+        
+        if i < fb_msg.ForcesLength():
+            force = fb_msg.Forces(i)
+            msg.force = np.array([force.X(), force.Y(), force.Z()])
+        
+        if i < fb_msg.TorquesLength():
+            torque = fb_msg.Torques(i)
+            msg.torque = np.array([torque.X(), torque.Y(), torque.Z()])
+        
+        ft_measurements[frame_name] = msg
+    
+    return ft_measurements
+
 def read_imu_measurements(file_path: str):
     """Read and decode messages from an MCAP file."""
     with open(file_path, "rb") as f:
@@ -513,16 +571,26 @@ def read_imu_measurements(file_path: str):
 
 def read_kinematic_measurements(file_path: str):
     """Read and decode messages from an MCAP file."""
-    with open(file_path, "rb") as f:
-        reader = make_reader(f)
-        kinematic_measurements = []
-        
-        for schema, channel, message in reader.iter_messages():
-            if channel.topic == "/kin":
-                msg = decode_kinematic_measurement(message.data)
-                kinematic_measurements.append(msg)
-        
-        return kinematic_measurements
+    try:
+        with open(file_path, "rb") as f:
+            print(f"Successfully opened file: {file_path}")
+            reader = make_reader(f)
+            print("Successfully created MCAP reader")
+            kinematic_measurements = []
+            
+            for schema, channel, message in reader.iter_messages():
+                if channel.topic == "/kin":
+                    msg = decode_kinematic_measurement(message.data)
+                    kinematic_measurements.append(msg)
+            
+            print(f"Found {len(kinematic_measurements)} kinematic measurements")
+            return kinematic_measurements
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        raise
+    except Exception as e:
+        print(f"Error reading MCAP file: {str(e)}")
+        raise
 
 def read_base_states(file_path: str):
     """Read and decode the base states from an MCAP file.
@@ -561,37 +629,75 @@ def read_base_pose_ground_truth(file_path: str):
         
         return base_pose_ground_truth
 
+def read_joint_measurements(file_path: str):
+    """Read and decode joint measurement messages from an MCAP file."""
+    try:
+        with open(file_path, "rb") as f:
+            print(f"Successfully opened file: {file_path}")
+            reader = make_reader(f)
+            print("Successfully created MCAP reader")
+            joint_measurements_list = []
+            
+            for schema, channel, message in reader.iter_messages():
+                if channel.topic == "/joints":
+                    joint_measurements = decode_joint_measurement(message.data)
+                    joint_measurements_list.append(joint_measurements)
+            
+            print(f"Found {len(joint_measurements_list)} joint measurements")
+            return joint_measurements_list
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        raise
+    except Exception as e:
+        print(f"Error reading MCAP file: {str(e)}")
+        raise
+
+def read_force_torque_measurements(file_path: str):
+    """Read and decode force-torque measurement messages from an MCAP file."""
+    try:
+        with open(file_path, "rb") as f:
+            print(f"Successfully opened file: {file_path}")
+            reader = make_reader(f)
+            print("Successfully created MCAP reader")
+            ft_measurements_list = []
+            
+            for schema, channel, message in reader.iter_messages():
+                if channel.topic == "/ft":
+                    ft_measurements = decode_force_torque_measurement(message.data)
+                    ft_measurements_list.append(ft_measurements)
+            
+            print(f"Found {len(ft_measurements_list)} force-torque measurements")
+            return ft_measurements_list
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        raise
+    except Exception as e:
+        print(f"Error reading MCAP file: {str(e)}")
+        raise
+
 if __name__ == "__main__":
+    serow_framework = serow.Serow()
+    serow_framework.initialize("go2_rl.json")
+    print("Initialized SEROW")
+
     # Read the measurement mcap file
-    kinematic_measurements = read_kinematic_measurements("/tmp/serow_measurements.mcap")
-    imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     state = read_base_states("/tmp/serow_proprioception.mcap")[0]
+    imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
+    joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
+    force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
     contacts_frame = set(state.contacts_position.keys())
     print(f"Contacts frame: {contacts_frame}")
         
-    # Parameters
-    point_feet = True  # Assuming point feet or flat feet
-    g = 9.81  # Gravity constant
-    imu_rate = 500.0  # IMU update rate in Hz
-    outlier_detection = False  # Enable outlier detection
-
-    # Initialize the EKF
-    ekf = serow.ContactEKF()
-    ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
-
     base_positions = []
     base_orientations = []
-    for imu, kin in zip(imu_measurements, kinematic_measurements):
-        # Predict step
-        ekf.predict(state, imu, kin)
-
-        # Update step 
-        ekf.update(state, kin, None, None)
-        
+    for imu, joint, ft in zip(imu_measurements, joint_measurements, force_torque_measurements):
+        serow_framework.filter(imu, joint, ft, None, None)
+        base_state = serow_framework.get_base_state()
         # Append the current state to the list
-        base_positions.append(state.base_position.copy())
-        base_orientations.append(state.base_orientation.copy())
+        if base_state is not None:
+            base_positions.append(base_state.base_position.copy())
+            base_orientations.append(base_state.base_orientation.copy())
         
     # plot the base position vs the ground truth
     base_position = np.array(base_positions)

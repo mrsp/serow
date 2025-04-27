@@ -77,6 +77,18 @@ public:
     /// @return SEROW's internal state if available
     std::optional<State> getState(bool allow_invalid = false);
 
+    /// @brief fetches SEROW's base state   
+    /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
+    /// valid estimate
+    /// @return SEROW's base state if available
+    std::optional<BaseState> getBaseState(bool allow_invalid = false);
+
+    /// @brief Sets the action for a given contact frame
+    /// @param cf the contact frame name
+    /// @param action the action to set
+    /// @return true if the action was set successfully
+    bool setAction(const std::string& cf, const Eigen::VectorXd& action);
+
     /// @brief Returns the terrain_estimator_ object
     const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
 
@@ -220,6 +232,8 @@ private:
         Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
         std::string terrain_estimator_type{};
         bool log_measurements{true};
+        /// @brief directory where log files will be stored
+        std::string log_dir{"/tmp"};
     };
 
     /// @brief SEROW's configuration
@@ -256,9 +270,9 @@ private:
     /// @brief Terrain elevation mapper
     std::shared_ptr<TerrainElevation> terrain_estimator_;
     /// @brief Data loggers
-    ProprioceptionLogger proprioception_logger_;
-    ExteroceptionLogger exteroception_logger_;
-    MeasurementLogger measurement_logger_;
+    std::unique_ptr<ProprioceptionLogger> proprioception_logger_;
+    std::unique_ptr<ExteroceptionLogger> exteroception_logger_;
+    std::unique_ptr<MeasurementLogger> measurement_logger_;
     /// @brief Threadpool job for proprioceptive logging
     std::unique_ptr<ThreadPool> proprioception_logger_job_;
     /// @brief Threadpool job for exteroceptive logging

@@ -18,7 +18,8 @@
 #include <mutex>
 
 #include "ImuMeasurement_generated.h"
-#include "KinematicMeasurement_generated.h"
+#include "JointMeasurements_generated.h"
+#include "ForceTorqueMeasurements_generated.h"
 #include "FrameTransform_generated.h"
 
 namespace serow {
@@ -202,266 +203,266 @@ public:
         }
     }
 
-    void log(const KinematicMeasurement& kinematic_measurement) {
-        try {
-            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+    // void log(const KinematicMeasurement& kinematic_measurement) {
+    //     try {
+    //         flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
-            if (!start_time_.has_value()) {
-                start_time_ = kinematic_measurement.timestamp;
-            }
-            const double timestamp = kinematic_measurement.timestamp - start_time_.value();
+    //         if (!start_time_.has_value()) {
+    //             start_time_ = kinematic_measurement.timestamp;
+    //         }
+    //         const double timestamp = kinematic_measurement.timestamp - start_time_.value();
 
-            if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
-                return;
-            }
+    //         if (timestamp < 0) {
+    //             std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+    //             return;
+    //         }
 
-            // Convert timestamp to sec and nsec
-            int64_t sec;
-            int32_t nsec;
-            splitTimestamp(timestamp, sec, nsec);
+    //         // Convert timestamp to sec and nsec
+    //         int64_t sec;
+    //         int32_t nsec;
+    //         splitTimestamp(timestamp, sec, nsec);
 
-            auto time = foxglove::Time(sec, nsec);
+    //         auto time = foxglove::Time(sec, nsec);
 
-            // Create all vector fields
-            auto base_linear_velocity =
-                foxglove::CreateVector3(builder, kinematic_measurement.base_linear_velocity.x(),
-                                        kinematic_measurement.base_linear_velocity.y(),
-                                        kinematic_measurement.base_linear_velocity.z());
+    //         // Create all vector fields
+    //         auto base_linear_velocity =
+    //             foxglove::CreateVector3(builder, kinematic_measurement.base_linear_velocity.x(),
+    //                                     kinematic_measurement.base_linear_velocity.y(),
+    //                                     kinematic_measurement.base_linear_velocity.z());
 
-            auto base_orientation =
-                foxglove::CreateQuaternion(builder, kinematic_measurement.base_orientation.w(),
-                                           kinematic_measurement.base_orientation.x(),
-                                           kinematic_measurement.base_orientation.y(),
-                                           kinematic_measurement.base_orientation.z());
+    //         auto base_orientation =
+    //             foxglove::CreateQuaternion(builder, kinematic_measurement.base_orientation.w(),
+    //                                        kinematic_measurement.base_orientation.x(),
+    //                                        kinematic_measurement.base_orientation.y(),
+    //                                        kinematic_measurement.base_orientation.z());
 
-            auto com_angular_momentum_derivative = foxglove::CreateVector3(
-                builder, kinematic_measurement.com_angular_momentum_derivative.x(),
-                kinematic_measurement.com_angular_momentum_derivative.y(),
-                kinematic_measurement.com_angular_momentum_derivative.z());
+    //         auto com_angular_momentum_derivative = foxglove::CreateVector3(
+    //             builder, kinematic_measurement.com_angular_momentum_derivative.x(),
+    //             kinematic_measurement.com_angular_momentum_derivative.y(),
+    //             kinematic_measurement.com_angular_momentum_derivative.z());
 
-            auto com_position = foxglove::CreateVector3(
-                builder, kinematic_measurement.com_position.x(),
-                kinematic_measurement.com_position.y(), kinematic_measurement.com_position.z());
+    //         auto com_position = foxglove::CreateVector3(
+    //             builder, kinematic_measurement.com_position.x(),
+    //             kinematic_measurement.com_position.y(), kinematic_measurement.com_position.z());
 
-            auto com_linear_acceleration =
-                foxglove::CreateVector3(builder, kinematic_measurement.com_linear_acceleration.x(),
-                                        kinematic_measurement.com_linear_acceleration.y(),
-                                        kinematic_measurement.com_linear_acceleration.z());
+    //         auto com_linear_acceleration =
+    //             foxglove::CreateVector3(builder, kinematic_measurement.com_linear_acceleration.x(),
+    //                                     kinematic_measurement.com_linear_acceleration.y(),
+    //                                     kinematic_measurement.com_linear_acceleration.z());
 
-            // Create all matrix fields
-            auto base_linear_velocity_cov = foxglove::CreateMatrix3(
-                builder, kinematic_measurement.base_linear_velocity_cov(0, 0),
-                kinematic_measurement.base_linear_velocity_cov(0, 1),
-                kinematic_measurement.base_linear_velocity_cov(0, 2),
-                kinematic_measurement.base_linear_velocity_cov(1, 0),
-                kinematic_measurement.base_linear_velocity_cov(1, 1),
-                kinematic_measurement.base_linear_velocity_cov(1, 2),
-                kinematic_measurement.base_linear_velocity_cov(2, 0),
-                kinematic_measurement.base_linear_velocity_cov(2, 1),
-                kinematic_measurement.base_linear_velocity_cov(2, 2));
+    //         // Create all matrix fields
+    //         auto base_linear_velocity_cov = foxglove::CreateMatrix3(
+    //             builder, kinematic_measurement.base_linear_velocity_cov(0, 0),
+    //             kinematic_measurement.base_linear_velocity_cov(0, 1),
+    //             kinematic_measurement.base_linear_velocity_cov(0, 2),
+    //             kinematic_measurement.base_linear_velocity_cov(1, 0),
+    //             kinematic_measurement.base_linear_velocity_cov(1, 1),
+    //             kinematic_measurement.base_linear_velocity_cov(1, 2),
+    //             kinematic_measurement.base_linear_velocity_cov(2, 0),
+    //             kinematic_measurement.base_linear_velocity_cov(2, 1),
+    //             kinematic_measurement.base_linear_velocity_cov(2, 2));
 
-            auto base_orientation_cov =
-                foxglove::CreateMatrix3(builder, kinematic_measurement.base_orientation_cov(0, 0),
-                                        kinematic_measurement.base_orientation_cov(0, 1),
-                                        kinematic_measurement.base_orientation_cov(0, 2),
-                                        kinematic_measurement.base_orientation_cov(1, 0),
-                                        kinematic_measurement.base_orientation_cov(1, 1),
-                                        kinematic_measurement.base_orientation_cov(1, 2),
-                                        kinematic_measurement.base_orientation_cov(2, 0),
-                                        kinematic_measurement.base_orientation_cov(2, 1),
-                                        kinematic_measurement.base_orientation_cov(2, 2));
+    //         auto base_orientation_cov =
+    //             foxglove::CreateMatrix3(builder, kinematic_measurement.base_orientation_cov(0, 0),
+    //                                     kinematic_measurement.base_orientation_cov(0, 1),
+    //                                     kinematic_measurement.base_orientation_cov(0, 2),
+    //                                     kinematic_measurement.base_orientation_cov(1, 0),
+    //                                     kinematic_measurement.base_orientation_cov(1, 1),
+    //                                     kinematic_measurement.base_orientation_cov(1, 2),
+    //                                     kinematic_measurement.base_orientation_cov(2, 0),
+    //                                     kinematic_measurement.base_orientation_cov(2, 1),
+    //                                     kinematic_measurement.base_orientation_cov(2, 2));
 
-            auto position_slip_cov =
-                foxglove::CreateMatrix3(builder, kinematic_measurement.position_slip_cov(0, 0),
-                                        kinematic_measurement.position_slip_cov(0, 1),
-                                        kinematic_measurement.position_slip_cov(0, 2),
-                                        kinematic_measurement.position_slip_cov(1, 0),
-                                        kinematic_measurement.position_slip_cov(1, 1),
-                                        kinematic_measurement.position_slip_cov(1, 2),
-                                        kinematic_measurement.position_slip_cov(2, 0),
-                                        kinematic_measurement.position_slip_cov(2, 1),
-                                        kinematic_measurement.position_slip_cov(2, 2));
+    //         auto position_slip_cov =
+    //             foxglove::CreateMatrix3(builder, kinematic_measurement.position_slip_cov(0, 0),
+    //                                     kinematic_measurement.position_slip_cov(0, 1),
+    //                                     kinematic_measurement.position_slip_cov(0, 2),
+    //                                     kinematic_measurement.position_slip_cov(1, 0),
+    //                                     kinematic_measurement.position_slip_cov(1, 1),
+    //                                     kinematic_measurement.position_slip_cov(1, 2),
+    //                                     kinematic_measurement.position_slip_cov(2, 0),
+    //                                     kinematic_measurement.position_slip_cov(2, 1),
+    //                                     kinematic_measurement.position_slip_cov(2, 2));
 
-            auto orientation_slip_cov =
-                foxglove::CreateMatrix3(builder, kinematic_measurement.orientation_slip_cov(0, 0),
-                                        kinematic_measurement.orientation_slip_cov(0, 1),
-                                        kinematic_measurement.orientation_slip_cov(0, 2),
-                                        kinematic_measurement.orientation_slip_cov(1, 0),
-                                        kinematic_measurement.orientation_slip_cov(1, 1),
-                                        kinematic_measurement.orientation_slip_cov(1, 2),
-                                        kinematic_measurement.orientation_slip_cov(2, 0),
-                                        kinematic_measurement.orientation_slip_cov(2, 1),
-                                        kinematic_measurement.orientation_slip_cov(2, 2));
+    //         auto orientation_slip_cov =
+    //             foxglove::CreateMatrix3(builder, kinematic_measurement.orientation_slip_cov(0, 0),
+    //                                     kinematic_measurement.orientation_slip_cov(0, 1),
+    //                                     kinematic_measurement.orientation_slip_cov(0, 2),
+    //                                     kinematic_measurement.orientation_slip_cov(1, 0),
+    //                                     kinematic_measurement.orientation_slip_cov(1, 1),
+    //                                     kinematic_measurement.orientation_slip_cov(1, 2),
+    //                                     kinematic_measurement.orientation_slip_cov(2, 0),
+    //                                     kinematic_measurement.orientation_slip_cov(2, 1),
+    //                                     kinematic_measurement.orientation_slip_cov(2, 2));
 
-            auto position_cov = foxglove::CreateMatrix3(
-                builder, kinematic_measurement.position_cov(0, 0),
-                kinematic_measurement.position_cov(0, 1), kinematic_measurement.position_cov(0, 2),
-                kinematic_measurement.position_cov(1, 0), kinematic_measurement.position_cov(1, 1),
-                kinematic_measurement.position_cov(1, 2), kinematic_measurement.position_cov(2, 0),
-                kinematic_measurement.position_cov(2, 1), kinematic_measurement.position_cov(2, 2));
+    //         auto position_cov = foxglove::CreateMatrix3(
+    //             builder, kinematic_measurement.position_cov(0, 0),
+    //             kinematic_measurement.position_cov(0, 1), kinematic_measurement.position_cov(0, 2),
+    //             kinematic_measurement.position_cov(1, 0), kinematic_measurement.position_cov(1, 1),
+    //             kinematic_measurement.position_cov(1, 2), kinematic_measurement.position_cov(2, 0),
+    //             kinematic_measurement.position_cov(2, 1), kinematic_measurement.position_cov(2, 2));
 
-            auto orientation_cov =
-                foxglove::CreateMatrix3(builder, kinematic_measurement.orientation_cov(0, 0),
-                                        kinematic_measurement.orientation_cov(0, 1),
-                                        kinematic_measurement.orientation_cov(0, 2),
-                                        kinematic_measurement.orientation_cov(1, 0),
-                                        kinematic_measurement.orientation_cov(1, 1),
-                                        kinematic_measurement.orientation_cov(1, 2),
-                                        kinematic_measurement.orientation_cov(2, 0),
-                                        kinematic_measurement.orientation_cov(2, 1),
-                                        kinematic_measurement.orientation_cov(2, 2));
+    //         auto orientation_cov =
+    //             foxglove::CreateMatrix3(builder, kinematic_measurement.orientation_cov(0, 0),
+    //                                     kinematic_measurement.orientation_cov(0, 1),
+    //                                     kinematic_measurement.orientation_cov(0, 2),
+    //                                     kinematic_measurement.orientation_cov(1, 0),
+    //                                     kinematic_measurement.orientation_cov(1, 1),
+    //                                     kinematic_measurement.orientation_cov(1, 2),
+    //                                     kinematic_measurement.orientation_cov(2, 0),
+    //                                     kinematic_measurement.orientation_cov(2, 1),
+    //                                     kinematic_measurement.orientation_cov(2, 2));
 
-            auto com_position_process_cov = foxglove::CreateMatrix3(
-                builder, kinematic_measurement.com_position_process_cov(0, 0),
-                kinematic_measurement.com_position_process_cov(0, 1),
-                kinematic_measurement.com_position_process_cov(0, 2),
-                kinematic_measurement.com_position_process_cov(1, 0),
-                kinematic_measurement.com_position_process_cov(1, 1),
-                kinematic_measurement.com_position_process_cov(1, 2),
-                kinematic_measurement.com_position_process_cov(2, 0),
-                kinematic_measurement.com_position_process_cov(2, 1),
-                kinematic_measurement.com_position_process_cov(2, 2));
+    //         auto com_position_process_cov = foxglove::CreateMatrix3(
+    //             builder, kinematic_measurement.com_position_process_cov(0, 0),
+    //             kinematic_measurement.com_position_process_cov(0, 1),
+    //             kinematic_measurement.com_position_process_cov(0, 2),
+    //             kinematic_measurement.com_position_process_cov(1, 0),
+    //             kinematic_measurement.com_position_process_cov(1, 1),
+    //             kinematic_measurement.com_position_process_cov(1, 2),
+    //             kinematic_measurement.com_position_process_cov(2, 0),
+    //             kinematic_measurement.com_position_process_cov(2, 1),
+    //             kinematic_measurement.com_position_process_cov(2, 2));
 
-            auto com_linear_velocity_process_cov = foxglove::CreateMatrix3(
-                builder, kinematic_measurement.com_linear_velocity_process_cov(0, 0),
-                kinematic_measurement.com_linear_velocity_process_cov(0, 1),
-                kinematic_measurement.com_linear_velocity_process_cov(0, 2),
-                kinematic_measurement.com_linear_velocity_process_cov(1, 0),
-                kinematic_measurement.com_linear_velocity_process_cov(1, 1),
-                kinematic_measurement.com_linear_velocity_process_cov(1, 2),
-                kinematic_measurement.com_linear_velocity_process_cov(2, 0),
-                kinematic_measurement.com_linear_velocity_process_cov(2, 1),
-                kinematic_measurement.com_linear_velocity_process_cov(2, 2));
+    //         auto com_linear_velocity_process_cov = foxglove::CreateMatrix3(
+    //             builder, kinematic_measurement.com_linear_velocity_process_cov(0, 0),
+    //             kinematic_measurement.com_linear_velocity_process_cov(0, 1),
+    //             kinematic_measurement.com_linear_velocity_process_cov(0, 2),
+    //             kinematic_measurement.com_linear_velocity_process_cov(1, 0),
+    //             kinematic_measurement.com_linear_velocity_process_cov(1, 1),
+    //             kinematic_measurement.com_linear_velocity_process_cov(1, 2),
+    //             kinematic_measurement.com_linear_velocity_process_cov(2, 0),
+    //             kinematic_measurement.com_linear_velocity_process_cov(2, 1),
+    //             kinematic_measurement.com_linear_velocity_process_cov(2, 2));
 
-            auto external_forces_process_cov = foxglove::CreateMatrix3(
-                builder, kinematic_measurement.external_forces_process_cov(0, 0),
-                kinematic_measurement.external_forces_process_cov(0, 1),
-                kinematic_measurement.external_forces_process_cov(0, 2),
-                kinematic_measurement.external_forces_process_cov(1, 0),
-                kinematic_measurement.external_forces_process_cov(1, 1),
-                kinematic_measurement.external_forces_process_cov(1, 2),
-                kinematic_measurement.external_forces_process_cov(2, 0),
-                kinematic_measurement.external_forces_process_cov(2, 1),
-                kinematic_measurement.external_forces_process_cov(2, 2));
+    //         auto external_forces_process_cov = foxglove::CreateMatrix3(
+    //             builder, kinematic_measurement.external_forces_process_cov(0, 0),
+    //             kinematic_measurement.external_forces_process_cov(0, 1),
+    //             kinematic_measurement.external_forces_process_cov(0, 2),
+    //             kinematic_measurement.external_forces_process_cov(1, 0),
+    //             kinematic_measurement.external_forces_process_cov(1, 1),
+    //             kinematic_measurement.external_forces_process_cov(1, 2),
+    //             kinematic_measurement.external_forces_process_cov(2, 0),
+    //             kinematic_measurement.external_forces_process_cov(2, 1),
+    //             kinematic_measurement.external_forces_process_cov(2, 2));
 
-            auto com_position_cov =
-                foxglove::CreateMatrix3(builder, kinematic_measurement.com_position_cov(0, 0),
-                                        kinematic_measurement.com_position_cov(0, 1),
-                                        kinematic_measurement.com_position_cov(0, 2),
-                                        kinematic_measurement.com_position_cov(1, 0),
-                                        kinematic_measurement.com_position_cov(1, 1),
-                                        kinematic_measurement.com_position_cov(1, 2),
-                                        kinematic_measurement.com_position_cov(2, 0),
-                                        kinematic_measurement.com_position_cov(2, 1),
-                                        kinematic_measurement.com_position_cov(2, 2));
+    //         auto com_position_cov =
+    //             foxglove::CreateMatrix3(builder, kinematic_measurement.com_position_cov(0, 0),
+    //                                     kinematic_measurement.com_position_cov(0, 1),
+    //                                     kinematic_measurement.com_position_cov(0, 2),
+    //                                     kinematic_measurement.com_position_cov(1, 0),
+    //                                     kinematic_measurement.com_position_cov(1, 1),
+    //                                     kinematic_measurement.com_position_cov(1, 2),
+    //                                     kinematic_measurement.com_position_cov(2, 0),
+    //                                     kinematic_measurement.com_position_cov(2, 1),
+    //                                     kinematic_measurement.com_position_cov(2, 2));
 
-            auto com_linear_acceleration_cov = foxglove::CreateMatrix3(
-                builder, kinematic_measurement.com_linear_acceleration_cov(0, 0),
-                kinematic_measurement.com_linear_acceleration_cov(0, 1),
-                kinematic_measurement.com_linear_acceleration_cov(0, 2),
-                kinematic_measurement.com_linear_acceleration_cov(1, 0),
-                kinematic_measurement.com_linear_acceleration_cov(1, 1),
-                kinematic_measurement.com_linear_acceleration_cov(1, 2),
-                kinematic_measurement.com_linear_acceleration_cov(2, 0),
-                kinematic_measurement.com_linear_acceleration_cov(2, 1),
-                kinematic_measurement.com_linear_acceleration_cov(2, 2));
+    //         auto com_linear_acceleration_cov = foxglove::CreateMatrix3(
+    //             builder, kinematic_measurement.com_linear_acceleration_cov(0, 0),
+    //             kinematic_measurement.com_linear_acceleration_cov(0, 1),
+    //             kinematic_measurement.com_linear_acceleration_cov(0, 2),
+    //             kinematic_measurement.com_linear_acceleration_cov(1, 0),
+    //             kinematic_measurement.com_linear_acceleration_cov(1, 1),
+    //             kinematic_measurement.com_linear_acceleration_cov(1, 2),
+    //             kinematic_measurement.com_linear_acceleration_cov(2, 0),
+    //             kinematic_measurement.com_linear_acceleration_cov(2, 1),
+    //             kinematic_measurement.com_linear_acceleration_cov(2, 2));
 
-            // Create contact names vector
-            std::vector<flatbuffers::Offset<flatbuffers::String>> contact_names_vec;
-            for (const auto& [frame_name, _] : kinematic_measurement.contacts_position) {
-                contact_names_vec.push_back(builder.CreateString(frame_name));
-            }
-            auto contact_names = builder.CreateVector(contact_names_vec);
+    //         // Create contact names vector
+    //         std::vector<flatbuffers::Offset<flatbuffers::String>> contact_names_vec;
+    //         for (const auto& [frame_name, _] : kinematic_measurement.contacts_position) {
+    //             contact_names_vec.push_back(builder.CreateString(frame_name));
+    //         }
+    //         auto contact_names = builder.CreateVector(contact_names_vec);
 
-            // Create contact status vector
-            std::vector<bool> contacts_status_vec;
-            for (const auto& [_, status] : kinematic_measurement.contacts_status) {
-                contacts_status_vec.push_back(status);
-            }
-            auto contacts_status = builder.CreateVector(contacts_status_vec);
+    //         // Create contact status vector
+    //         std::vector<bool> contacts_status_vec;
+    //         for (const auto& [_, status] : kinematic_measurement.contacts_status) {
+    //             contacts_status_vec.push_back(status);
+    //         }
+    //         auto contacts_status = builder.CreateVector(contacts_status_vec);
 
-            // Create contact probability vector
-            std::vector<double> contacts_probability_vec;
-            for (const auto& [_, probability] : kinematic_measurement.contacts_probability) {
-                contacts_probability_vec.push_back(probability);
-            }
-            auto contacts_probability = builder.CreateVector(contacts_probability_vec);
+    //         // Create contact probability vector
+    //         std::vector<double> contacts_probability_vec;
+    //         for (const auto& [_, probability] : kinematic_measurement.contacts_probability) {
+    //             contacts_probability_vec.push_back(probability);
+    //         }
+    //         auto contacts_probability = builder.CreateVector(contacts_probability_vec);
 
-            // Create contact position vector
-            std::vector<flatbuffers::Offset<foxglove::Vector3>> contacts_position_vec;
-            for (const auto& [_, position] : kinematic_measurement.contacts_position) {
-                contacts_position_vec.push_back(
-                    foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
-            }
-            auto contacts_position = builder.CreateVector(contacts_position_vec);
+    //         // Create contact position vector
+    //         std::vector<flatbuffers::Offset<foxglove::Vector3>> contacts_position_vec;
+    //         for (const auto& [_, position] : kinematic_measurement.contacts_position) {
+    //             contacts_position_vec.push_back(
+    //                 foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
+    //         }
+    //         auto contacts_position = builder.CreateVector(contacts_position_vec);
 
-            // Create base to foot position vector
-            std::vector<flatbuffers::Offset<foxglove::Vector3>> base_to_foot_vec;
-            for (const auto& [_, position] : kinematic_measurement.base_to_foot_positions) {
-                base_to_foot_vec.push_back(
-                    foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
-            }
-            auto base_to_foot = builder.CreateVector(base_to_foot_vec);
+    //         // Create base to foot position vector
+    //         std::vector<flatbuffers::Offset<foxglove::Vector3>> base_to_foot_vec;
+    //         for (const auto& [_, position] : kinematic_measurement.base_to_foot_positions) {
+    //             base_to_foot_vec.push_back(
+    //                 foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
+    //         }
+    //         auto base_to_foot = builder.CreateVector(base_to_foot_vec);
 
-            // Create contact position noise vector
-            std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_position_noise_vec;
-            for (const auto& [_, noise] : kinematic_measurement.contacts_position_noise) {
-                contacts_position_noise_vec.push_back(foxglove::CreateMatrix3(
-                    builder, noise(0, 0), noise(0, 1), noise(0, 2), noise(1, 0), noise(1, 1),
-                    noise(1, 2), noise(2, 0), noise(2, 1), noise(2, 2)));
-            }
-            auto contacts_position_noise = builder.CreateVector(contacts_position_noise_vec);
+    //         // Create contact position noise vector
+    //         std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_position_noise_vec;
+    //         for (const auto& [_, noise] : kinematic_measurement.contacts_position_noise) {
+    //             contacts_position_noise_vec.push_back(foxglove::CreateMatrix3(
+    //                 builder, noise(0, 0), noise(0, 1), noise(0, 2), noise(1, 0), noise(1, 1),
+    //                 noise(1, 2), noise(2, 0), noise(2, 1), noise(2, 2)));
+    //         }
+    //         auto contacts_position_noise = builder.CreateVector(contacts_position_noise_vec);
 
-            // Create contact orientation vector if present
-            flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<foxglove::Quaternion>>>
-                contacts_orientation;
-            if (kinematic_measurement.contacts_orientation) {
-                std::vector<flatbuffers::Offset<foxglove::Quaternion>> contacts_orientation_vec;
-                for (const auto& [_, orientation] : *kinematic_measurement.contacts_orientation) {
-                    contacts_orientation_vec.push_back(
-                        foxglove::CreateQuaternion(builder, orientation.w(), orientation.x(),
-                                                   orientation.y(), orientation.z()));
-                }
-                contacts_orientation = builder.CreateVector(contacts_orientation_vec);
-            }
+    //         // Create contact orientation vector if present
+    //         flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<foxglove::Quaternion>>>
+    //             contacts_orientation;
+    //         if (kinematic_measurement.contacts_orientation) {
+    //             std::vector<flatbuffers::Offset<foxglove::Quaternion>> contacts_orientation_vec;
+    //             for (const auto& [_, orientation] : *kinematic_measurement.contacts_orientation) {
+    //                 contacts_orientation_vec.push_back(
+    //                     foxglove::CreateQuaternion(builder, orientation.w(), orientation.x(),
+    //                                                orientation.y(), orientation.z()));
+    //             }
+    //             contacts_orientation = builder.CreateVector(contacts_orientation_vec);
+    //         }
 
-            // Create contact orientation noise vector if present
-            flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<foxglove::Matrix3>>>
-                contacts_orientation_noise;
-            if (kinematic_measurement.contacts_orientation_noise) {
-                std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_orientation_noise_vec;
-                for (const auto& [_, noise] : *kinematic_measurement.contacts_orientation_noise) {
-                    contacts_orientation_noise_vec.push_back(foxglove::CreateMatrix3(
-                        builder, noise(0, 0), noise(0, 1), noise(0, 2), noise(1, 0), noise(1, 1),
-                        noise(1, 2), noise(2, 0), noise(2, 1), noise(2, 2)));
-                }
-                contacts_orientation_noise = builder.CreateVector(contacts_orientation_noise_vec);
-            }
+    //         // Create contact orientation noise vector if present
+    //         flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<foxglove::Matrix3>>>
+    //             contacts_orientation_noise;
+    //         if (kinematic_measurement.contacts_orientation_noise) {
+    //             std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_orientation_noise_vec;
+    //             for (const auto& [_, noise] : *kinematic_measurement.contacts_orientation_noise) {
+    //                 contacts_orientation_noise_vec.push_back(foxglove::CreateMatrix3(
+    //                     builder, noise(0, 0), noise(0, 1), noise(0, 2), noise(1, 0), noise(1, 1),
+    //                     noise(1, 2), noise(2, 0), noise(2, 1), noise(2, 2)));
+    //             }
+    //             contacts_orientation_noise = builder.CreateVector(contacts_orientation_noise_vec);
+    //         }
 
-            // Create the KinematicMeasurement message
-            auto measurement = foxglove::CreateKinematicMeasurement(
-                builder, &time, base_linear_velocity, base_orientation, contact_names,
-                contacts_status, contacts_probability, contacts_position, base_to_foot,
-                contacts_position_noise, contacts_orientation, contacts_orientation_noise,
-                com_angular_momentum_derivative, com_position, com_linear_acceleration,
-                base_linear_velocity_cov, base_orientation_cov, position_slip_cov,
-                orientation_slip_cov, position_cov, orientation_cov, com_position_process_cov,
-                com_linear_velocity_process_cov, external_forces_process_cov, com_position_cov,
-                com_linear_acceleration_cov);
+    //         // Create the KinematicMeasurement message
+    //         auto measurement = foxglove::CreateKinematicMeasurement(
+    //             builder, &time, base_linear_velocity, base_orientation, contact_names,
+    //             contacts_status, contacts_probability, contacts_position, base_to_foot,
+    //             contacts_position_noise, contacts_orientation, contacts_orientation_noise,
+    //             com_angular_momentum_derivative, com_position, com_linear_acceleration,
+    //             base_linear_velocity_cov, base_orientation_cov, position_slip_cov,
+    //             orientation_slip_cov, position_cov, orientation_cov, com_position_process_cov,
+    //             com_linear_velocity_process_cov, external_forces_process_cov, com_position_cov,
+    //             com_linear_acceleration_cov);
 
-            builder.Finish(measurement);
+    //         builder.Finish(measurement);
 
-            // Get the buffer pointer and size before any potential modifications
-            const uint8_t* buffer = builder.GetBufferPointer();
-            size_t size = builder.GetSize();
+    //         // Get the buffer pointer and size before any potential modifications
+    //         const uint8_t* buffer = builder.GetBufferPointer();
+    //         size_t size = builder.GetSize();
 
-            writeMessage(2, kin_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
-        } catch (const std::exception& e) {
-            std::cerr << "Error logging Kinematic Measurement: " << e.what() << std::endl;
-        }
-    }
+    //         writeMessage(2, kin_sequence_++, timestamp,
+    //                      reinterpret_cast<const std::byte*>(buffer), size);
+    //     } catch (const std::exception& e) {
+    //         std::cerr << "Error logging Kinematic Measurement: " << e.what() << std::endl;
+    //     }
+    // }
 
     void log(const BasePoseGroundTruth& base_pose_ground_truth) {
         try {
@@ -513,13 +514,145 @@ public:
             size_t size = builder.GetSize();
 
             // Get the serialized data
-            writeMessage(3, base_pose_sequence_++, timestamp,
+            writeMessage(4, base_pose_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging base pose ground truth: " << e.what() << std::endl;
         }
     }
 
+    void log(const std::map<std::string, JointMeasurement>& joints) {
+        try {
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
+            if (!start_time_.has_value()) {
+                start_time_ = joints.begin()->second.timestamp;
+            }
+            const double timestamp = joints.begin()->second.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
+            // Convert timestamp to sec and nsec
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(timestamp, sec, nsec);
+
+            // Create timestamp
+            auto time = foxglove::Time(sec, nsec);
+
+            // Create joint names vector
+            std::vector<flatbuffers::Offset<flatbuffers::String>> joint_names_vec;
+            for (const auto& [joint_name, _] : joints) {
+                joint_names_vec.push_back(builder.CreateString(joint_name));
+            }
+            auto joint_names = builder.CreateVector(joint_names_vec);
+
+            // Create joint positions vector
+            std::vector<double> joint_positions_vec;
+            for (const auto& [_, measurement] : joints) {
+                joint_positions_vec.push_back(measurement.position);
+            }
+            auto joint_positions = builder.CreateVector(joint_positions_vec);
+
+            // Create joint velocities vector
+            std::vector<double> joint_velocities_vec;
+            for (const auto& [_, measurement] : joints) {
+                if (measurement.velocity.has_value()) {
+                    joint_velocities_vec.push_back(measurement.velocity.value());
+                } else {
+                    joint_velocities_vec.push_back(0.0);
+                }
+            }
+            auto joint_velocities = builder.CreateVector(joint_velocities_vec);
+
+            // Create the joint measurement message
+            auto measurement = foxglove::CreateJointMeasurements(
+                builder, &time, joint_names, joint_positions, joint_velocities);
+
+            builder.Finish(measurement);
+
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
+            // Get the serialized data
+            writeMessage(2, joints_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging joint measurement: " << e.what() << std::endl;
+        }
+    }
+
+    void log(const std::map<std::string, ForceTorqueMeasurement>& ft) {
+        try {
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
+            if (!start_time_.has_value()) {
+                start_time_ = ft.begin()->second.timestamp;
+            }
+            const double timestamp = ft.begin()->second.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
+            // Convert timestamp to sec and nsec
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(timestamp, sec, nsec);
+
+            // Create timestamp
+            auto time = foxglove::Time(sec, nsec);
+
+            // Create frame names vector
+            std::vector<flatbuffers::Offset<flatbuffers::String>> frame_names_vec;
+            for (const auto& [frame_name, _] : ft) {
+                frame_names_vec.push_back(builder.CreateString(frame_name));
+            }
+            auto frame_names = builder.CreateVector(frame_names_vec);
+
+            // Create forces vector
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> forces_vec;
+            for (const auto& [_, measurement] : ft) {
+                forces_vec.push_back(foxglove::CreateVector3(
+                    builder, measurement.force.x(), measurement.force.y(), measurement.force.z()));
+            }
+            auto forces = builder.CreateVector(forces_vec);
+
+            // Create torques vector
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> torques_vec;
+            for (const auto& [_, measurement] : ft) {
+                if (measurement.torque.has_value()) {
+                    torques_vec.push_back(foxglove::CreateVector3(
+                        builder, measurement.torque.value().x(), measurement.torque.value().y(),
+                        measurement.torque.value().z()));
+                } else {
+                    torques_vec.push_back(foxglove::CreateVector3(builder, 0.0, 0.0, 0.0));
+                }
+            }
+            auto torques = builder.CreateVector(torques_vec);
+
+            // Create the force torque measurement message
+            auto measurement = foxglove::CreateForceTorqueMeasurements(
+                builder, &time, frame_names, forces, torques);
+
+            builder.Finish(measurement);
+
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
+            // Get the serialized data
+            writeMessage(3, ft_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging force torque measurement: " << e.what() << std::endl;
+        }
+    }
 
     void setStartTime(double timestamp) {
         start_time_ = timestamp;
@@ -566,9 +699,10 @@ private:
 
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
-        schemas.reserve(3);
+        schemas.reserve(4);
         schemas.push_back(createSchema("ImuMeasurement"));
-        schemas.push_back(createSchema("KinematicMeasurement"));
+        schemas.push_back(createSchema("JointMeasurements"));
+        schemas.push_back(createSchema("ForceTorqueMeasurements"));
         schemas.push_back(createSchema("FrameTransform"));
         
         for (auto& schema : schemas) {
@@ -578,10 +712,11 @@ private:
 
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
-        channels.reserve(2);
+        channels.reserve(4);
         channels.push_back(createChannel(1, "/imu"));
-        channels.push_back(createChannel(2, "/kin"));
-        channels.push_back(createChannel(3, "/base_pose_ground_truth"));
+        channels.push_back(createChannel(2, "/joints"));
+        channels.push_back(createChannel(3, "/ft"));
+        channels.push_back(createChannel(4, "/base_pose_ground_truth"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
@@ -601,8 +736,9 @@ private:
     static constexpr size_t INITIAL_BUILDER_SIZE = 4096;
 
     // Sequence counters
-    uint64_t kin_sequence_ = 0;
     uint64_t imu_sequence_ = 0;
+    uint64_t joints_sequence_ = 0;
+    uint64_t ft_sequence_ = 0;
     uint64_t base_pose_sequence_ = 0;
     std::optional<double> start_time_;
 
@@ -622,12 +758,20 @@ void MeasurementLogger::log(const ImuMeasurement& imu_measurement) {
     pimpl_->log(imu_measurement);
 }
 
-void MeasurementLogger::log(const KinematicMeasurement& kinematic_measurement) {
-    pimpl_->log(kinematic_measurement);
-}
+// void MeasurementLogger::log(const KinematicMeasurement& kinematic_measurement) {
+//     pimpl_->log(kinematic_measurement);
+// }
 
 void MeasurementLogger::log(const BasePoseGroundTruth& base_pose_ground_truth) {
     pimpl_->log(base_pose_ground_truth);
+}
+
+void MeasurementLogger::log(const std::map<std::string, JointMeasurement>& joints) {
+    pimpl_->log(joints);
+}
+
+void MeasurementLogger::log(const std::map<std::string, ForceTorqueMeasurement>& ft) {
+    pimpl_->log(ft);
 }
 
 void MeasurementLogger::setStartTime(double timestamp) {

@@ -12,6 +12,7 @@
 #include "State.hpp"
 #include "LocalTerrainMapper.hpp"
 #include "common.hpp"
+#include "Serow.hpp"
 
 namespace py = pybind11;
 
@@ -87,24 +88,39 @@ PYBIND11_MODULE(serow, m) {
         .def_readwrite("contacts_position_cov", &serow::BaseState::contacts_position_cov, "Map of contact position covariances (string to 3x3 matrix)")
         .def_readwrite("contacts_orientation_cov", &serow::BaseState::contacts_orientation_cov, "Map of contact orientation covariances (string to 3x3 matrix)");
 
-    // Binding for ImuMeasurement
-    py::class_<serow::ImuMeasurement>(m, "ImuMeasurement", "Represents IMU sensor measurements")
+    // Binding for JointMeasurement
+    py::class_<serow::JointMeasurement>(m, "JointMeasurement", "Represents a joint measurement")
         .def(py::init<>(), "Default constructor")
-        .def_readwrite("timestamp", &serow::ImuMeasurement::timestamp, "Timestamp of the measurement")
-        .def_readwrite("angular_velocity", &serow::ImuMeasurement::angular_velocity, "Angular velocity (3D vector)")
-        .def_readwrite("linear_acceleration", &serow::ImuMeasurement::linear_acceleration, "Linear acceleration (3D vector)")
+        .def_readwrite("timestamp", &serow::JointMeasurement::timestamp, "Timestamp of the measurement (s)")
+        .def_readwrite("position", &serow::JointMeasurement::position, "Joint position measurement (rad)")
+        .def_readwrite("velocity", &serow::JointMeasurement::velocity, "Optional joint velocity measurement (rad/s)");
+
+    // Binding for ImuMeasurement
+    py::class_<serow::ImuMeasurement>(m, "ImuMeasurement", "Represents IMU measurements")
+        .def(py::init<>(), "Default constructor")
+        .def_readwrite("timestamp", &serow::ImuMeasurement::timestamp, "Timestamp of the measurement (s)")
+        .def_readwrite("linear_acceleration", &serow::ImuMeasurement::linear_acceleration, "Linear acceleration measured by IMU (m/s^2)")
+        .def_readwrite("angular_velocity", &serow::ImuMeasurement::angular_velocity, "Angular velocity measured by IMU (rad/s)")
         .def_property(
             "orientation",
             [](const serow::ImuMeasurement& self) { return quaternion_to_numpy(self.orientation); },
             [](serow::ImuMeasurement& self, const py::array_t<double>& arr) {
                 self.orientation = numpy_to_quaternion(arr);
             },
-            "Orientation as a quaternion (w, x, y, z)")
-        .def_readwrite("angular_velocity_cov", &serow::ImuMeasurement::angular_velocity_cov, "Angular velocity covariance (3x3 matrix)")
-        .def_readwrite("linear_acceleration_cov", &serow::ImuMeasurement::linear_acceleration_cov, "Linear acceleration covariance (3x3 matrix)")
-        .def_readwrite("angular_velocity_bias_cov", &serow::ImuMeasurement::angular_velocity_bias_cov, "Angular velocity bias covariance (3x3 matrix)")
-        .def_readwrite("linear_acceleration_bias_cov", &serow::ImuMeasurement::linear_acceleration_bias_cov, "Linear acceleration bias covariance (3x3 matrix)")
-        .def_readwrite("angular_acceleration", &serow::ImuMeasurement::angular_acceleration, "Angular acceleration (3D vector)");
+            "Orientation measured by IMU (quaternion)")
+        .def_readwrite("angular_acceleration", &serow::ImuMeasurement::angular_acceleration, "Angular acceleration measured by IMU (rad/s^2)")
+        .def_readwrite("angular_velocity_cov", &serow::ImuMeasurement::angular_velocity_cov, "Covariance matrix of angular velocity (rad^2/s^2)")
+        .def_readwrite("linear_acceleration_cov", &serow::ImuMeasurement::linear_acceleration_cov, "Covariance matrix of linear acceleration (m^2/s^4)")
+        .def_readwrite("angular_velocity_bias_cov", &serow::ImuMeasurement::angular_velocity_bias_cov, "Covariance matrix of angular velocity bias (rad^2/s^2)")
+        .def_readwrite("linear_acceleration_bias_cov", &serow::ImuMeasurement::linear_acceleration_bias_cov, "Covariance matrix of linear acceleration bias (m^2/s^4)");
+
+    // Binding for ForceTorqueMeasurement
+    py::class_<serow::ForceTorqueMeasurement>(m, "ForceTorqueMeasurement", "Represents force-torque sensor measurements")
+        .def(py::init<>(), "Default constructor")
+        .def_readwrite("timestamp", &serow::ForceTorqueMeasurement::timestamp, "Timestamp of the measurement (s)")
+        .def_readwrite("force", &serow::ForceTorqueMeasurement::force, "Force measured by force-torque sensor (N)")
+        .def_readwrite("cop", &serow::ForceTorqueMeasurement::cop, "Center of pressure (COP) measured by force-torque sensor (m)")
+        .def_readwrite("torque", &serow::ForceTorqueMeasurement::torque, "Optional torque measured by force-torque sensor (Nm)");
 
     // Binding for KinematicMeasurement
     py::class_<serow::KinematicMeasurement>(m, "KinematicMeasurement", "Represents kinematic measurements")
@@ -240,4 +256,53 @@ PYBIND11_MODULE(serow, m) {
              },
              py::arg("contact_frame"),
              "Gets the contact orientation innovation and covariance for a given contact frame");
+
+    // Binding for Serow
+    py::class_<serow::Serow>(m, "Serow", "Main SEROW estimator class")
+        .def(py::init<>(), "Default constructor")
+        .def("initialize", &serow::Serow::initialize,
+             py::arg("config"),
+             "Initializes SEROW's configuration and internal state")
+        .def("filter",
+             [](serow::Serow& self, const serow::ImuMeasurement& imu,
+                const std::map<std::string, serow::JointMeasurement>& joints,
+                py::object ft, py::object odom, py::object contact_probabilities,
+                py::object base_pose_ground_truth) {
+                 // Convert Python objects to C++ optional types
+                 std::optional<std::map<std::string, serow::ForceTorqueMeasurement>> ft_opt;
+                 if (!ft.is_none()) {
+                     ft_opt = ft.cast<std::map<std::string, serow::ForceTorqueMeasurement>>();
+                 }
+
+                 std::optional<serow::OdometryMeasurement> odom_opt;
+                 if (!odom.is_none()) {
+                     odom_opt = odom.cast<serow::OdometryMeasurement>();
+                 }
+
+                 std::optional<std::map<std::string, serow::ContactMeasurement>> contact_prob_opt;
+                 if (!contact_probabilities.is_none()) {
+                     contact_prob_opt = contact_probabilities.cast<std::map<std::string, serow::ContactMeasurement>>();
+                 }
+
+                 std::optional<serow::BasePoseGroundTruth> ground_truth_opt;
+                 if (!base_pose_ground_truth.is_none()) {
+                     ground_truth_opt = base_pose_ground_truth.cast<serow::BasePoseGroundTruth>();
+                 }
+
+                 self.filter(imu, joints, ft_opt, odom_opt, contact_prob_opt, ground_truth_opt);
+             },
+             py::arg("imu"),
+             py::arg("joints"),
+             py::arg("ft") = py::none(),
+             py::arg("odom") = py::none(),
+             py::arg("contact_probabilities") = py::none(),
+             py::arg("base_pose_ground_truth") = py::none(),
+             "Runs SEROW's estimator and updates the internal state")
+        .def("get_base_state", &serow::Serow::getBaseState,
+             py::arg("allow_invalid") = false,
+             "Gets the base state of the robot")
+        .def("set_action", &serow::Serow::setAction,
+             py::arg("contact_frame"),
+             py::arg("action"),
+             "Sets the action for a given contact frame");
 }
