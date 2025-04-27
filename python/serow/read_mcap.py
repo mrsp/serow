@@ -681,16 +681,15 @@ if __name__ == "__main__":
     print("Initialized SEROW")
 
     # Read the measurement mcap file
-    state = read_base_states("/tmp/serow_proprioception.mcap")[0]
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
-    contacts_frame = set(state.contacts_position.keys())
-    print(f"Contacts frame: {contacts_frame}")
         
     base_positions = []
     base_orientations = []
+    base_timestamps = []
+    
     for imu, joint, ft in zip(imu_measurements, joint_measurements, force_torque_measurements):
         serow_framework.filter(imu, joint, ft, None, None)
         base_state = serow_framework.get_base_state()
@@ -698,33 +697,101 @@ if __name__ == "__main__":
         if base_state is not None:
             base_positions.append(base_state.base_position.copy())
             base_orientations.append(base_state.base_orientation.copy())
+            base_timestamps.append(base_state.timestamp)
         
-    # plot the base position vs the ground truth
+    # Convert to numpy arrays
     base_position = np.array(base_positions)
     base_orientation = np.array(base_orientations)
+    base_timestamps = np.array(base_timestamps)
 
-    # plot the base pose vs the ground truth
+    # Extract ground truth data with timestamps
+    gt_timestamps = np.array([gt.timestamp for gt in base_pose_ground_truth])
     base_ground_truth_position = np.array([gt.position for gt in base_pose_ground_truth])
     base_ground_truth_orientation = np.array([gt.orientation for gt in base_pose_ground_truth])
 
-    plt.figure()
-    plt.plot(base_ground_truth_position[:, 0], label="gt x")
-    plt.plot(base_position[:, 0], label="base x")
-    plt.plot(base_ground_truth_position[:, 1], label="gt y")
-    plt.plot(base_position[:, 1], label="base y")
-    plt.plot(base_ground_truth_position[:, 2], label="gt z")
-    plt.plot(base_position[:, 2], label="base z")
+    # Find the common time range
+    start_time = max(base_timestamps[0], gt_timestamps[0])
+    end_time = min(base_timestamps[-1], gt_timestamps[-1])
+
+    # Create a high-resolution common time grid
+    common_timestamps = np.linspace(start_time, end_time, 1000)
+    
+    # Interpolate base position
+    base_position_interp = np.zeros((len(common_timestamps), 3))
+    for i in range(3):  # x, y, z
+        base_position_interp[:, i] = np.interp(common_timestamps, base_timestamps, base_position[:, i])
+    
+    # Interpolate ground truth position
+    gt_position_interp = np.zeros((len(common_timestamps), 3))
+    for i in range(3):  # x, y, z
+        gt_position_interp[:, i] = np.interp(common_timestamps, gt_timestamps, base_ground_truth_position[:, i])
+
+    # Interpolate orientations
+    base_orientation_interp = np.zeros((len(common_timestamps), 4))
+    gt_orientation_interp = np.zeros((len(common_timestamps), 4))
+    for i in range(4):  # w, x, y, z
+        base_orientation_interp[:, i] = np.interp(common_timestamps, base_timestamps, base_orientation[:, i])
+        gt_orientation_interp[:, i] = np.interp(common_timestamps, gt_timestamps, base_ground_truth_orientation[:, i])
+
+    # Compute the initial rigid body transformation from the first timestamp
+    R = np.eye(3)
+    t = gt_position_interp[0] - base_position_interp[0]
+    
+    # Apply transformation to base position
+    base_position_aligned = (R @ base_position_interp.T).T + t
+    base_orientation_aligned = base_orientation_interp
+
+    # Print transformation details
+    print("Rotation matrix:")
+    print(R)
+    print("\nTranslation vector:")
+    print(t)
+    
+    # Plot the synchronized and aligned data
+    plt.figure(figsize=(12, 8))
+    plt.subplot(2, 1, 1)
+    plt.plot(common_timestamps, gt_position_interp[:, 0], label="gt x")
+    plt.plot(common_timestamps, base_position_aligned[:, 0], label="base x (aligned)")
+    plt.plot(common_timestamps, gt_position_interp[:, 1], label="gt y")
+    plt.plot(common_timestamps, base_position_aligned[:, 1], label="base y (aligned)")
+    plt.plot(common_timestamps, gt_position_interp[:, 2], label="gt z")
+    plt.plot(common_timestamps, base_position_aligned[:, 2], label="base z (aligned)")
+    plt.xlabel('Time (s)')
+    plt.ylabel('Position (m)')
+    plt.title('Base Position vs Ground Truth (Spatially Aligned)')
     plt.legend()
+    plt.grid(True)
+
+    plt.subplot(2, 1, 2)
+    plt.plot(common_timestamps, gt_orientation_interp[:, 0], label="gt w")
+    plt.plot(common_timestamps, base_orientation_aligned[:, 0], label="base w")
+    plt.plot(common_timestamps, gt_orientation_interp[:, 1], label="gt x")
+    plt.plot(common_timestamps, base_orientation_aligned[:, 1], label="base x")
+    plt.plot(common_timestamps, gt_orientation_interp[:, 2], label="gt y")
+    plt.plot(common_timestamps, base_orientation_aligned[:, 2], label="base y")
+    plt.plot(common_timestamps, gt_orientation_interp[:, 3], label="gt z")
+    plt.plot(common_timestamps, base_orientation_aligned[:, 3], label="base z")
+    plt.xlabel('Time (s)')
+    plt.ylabel('Quaternion Components')
+    plt.title('Base Orientation vs Ground Truth')
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
     plt.show()
 
-    plt.figure()
-    plt.plot(base_ground_truth_orientation[:, 0], label="gt w")
-    plt.plot(base_orientation[:, 0], label="base w")
-    plt.plot(base_ground_truth_orientation[:, 1], label="gt x")
-    plt.plot(base_orientation[:, 1], label="base x")
-    plt.plot(base_ground_truth_orientation[:, 2], label="gt y")
-    plt.plot(base_orientation[:, 2], label="base y")
-    plt.plot(base_ground_truth_orientation[:, 3], label="gt z")
-    plt.plot(base_orientation[:, 3], label="base z")
-    plt.legend()
+    # Plot 3D trajectories
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(gt_position_interp[:, 0], gt_position_interp[:, 1], gt_position_interp[:, 2], 
+            label='Ground Truth', color='blue')
+    ax.plot(base_position_interp[:, 0], base_position_interp[:, 1], base_position_interp[:, 2], 
+            label='Base Position (Original)', color='red', alpha=0.3)
+    ax.plot(base_position_aligned[:, 0], base_position_aligned[:, 1], base_position_aligned[:, 2], 
+            label='Base Position (Aligned)', color='green')
+    ax.set_xlabel('X (m)')
+    ax.set_ylabel('Y (m)')
+    ax.set_zlabel('Z (m)')
+    ax.set_title('3D Trajectories (Aligned at Start)')
+    ax.legend()
     plt.show()
