@@ -187,7 +187,7 @@ def logMap(R):
 
 def train_policy(datasets, contacts_frame, agents):
     for dataset in datasets:
-        # Get the kinematic measurements and imu measurements from the dataset
+        # Get the measurements and the ground truth
         imu_measurements = dataset['imu']
         joint_measurements = dataset['joints']
         force_torque_measurements = dataset['ft']
@@ -205,7 +205,7 @@ def train_policy(datasets, contacts_frame, agents):
             episode_rewards[cf] = []
             collected_steps[cf] = 0
 
-        max_episode = 50
+        max_episode = 1
         update_steps = 64  # Train after collecting this many timesteps
 
         for episode in range(max_episode):            
@@ -226,11 +226,6 @@ def train_policy(datasets, contacts_frame, agents):
                                            joint_measurements, 
                                            force_torque_measurements, 
                                            base_pose_ground_truth):
-                # Get the current status of the contacts
-                contact_status = {}
-                for cf in contacts_frame:
-                    contact_status[cf] = state.get_contact_status(cf)
-
                 x = np.concatenate([
                     state.get_base_position(),
                     state.get_base_linear_velocity(),
@@ -243,6 +238,11 @@ def train_policy(datasets, contacts_frame, agents):
                     state = serow_framework.get_state(allow_invalid=True)
                     filtered = True
                     continue
+                
+                # Get the current status of the contacts
+                contact_status = {}
+                for cf in contacts_frame:
+                    contact_status[cf] = state.get_contact_status(cf)
 
                 reward = {}
                 action = {}
@@ -267,8 +267,8 @@ def train_policy(datasets, contacts_frame, agents):
                                    quaternion_to_rotation_matrix(state.get_base_orientation())))
                         
                         # Calculate rewards with improvement focus
-                        position_reward = -1.0 * position_error # Much smaller position error weight
-                        orientation_reward = -0.5 * orientation_error # Much smaller orientation error weight
+                        position_reward = -1.0 * position_error 
+                        orientation_reward = -0.5 * orientation_error 
                         
                         reward[cf] = position_reward + orientation_reward 
 
@@ -325,161 +325,179 @@ def train_policy(datasets, contacts_frame, agents):
         plt.legend()
         plt.show()
 
-# def evaluate_policy(dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=False):
-#         # After training, evaluate the policy
-#         print("\nEvaluating trained policy...")
+def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
+        # After training, evaluate the policy
+        print("\nEvaluating trained policy...")
         
-#         # Get the kinematic measurements and imu measurements from the dataset
-#         kinematic_measurements = dataset['kinematic']
-#         imu_measurements = dataset['imu']
-#         base_pose_ground_truth = dataset['base_pose_ground_truth']
+        # Get the measurements and the ground truth
+        imu_measurements = dataset['imu']
+        joint_measurements = dataset['joints']
+        force_torque_measurements = dataset['ft']
+        base_pose_ground_truth = dataset['base_pose_ground_truth']
 
-#         # Reset to initial state
-#         state = dataset['states'][0]
-        
-#         # Initialize the EKF
-#         ekf = ContactEKF()
-#         ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
-        
-#         # Store trajectories for visualization
-#         positions = []
-#         velocities = []
-#         orientations = []
-#         rewards = []
-        
-#         # Run evaluation episodes
-#         step = 0
-#         for imu, kin, gt in zip(imu_measurements, kinematic_measurements, base_pose_ground_truth):
-#             # Get state and action
-#             x = np.concatenate([
-#                 state.base_position,
-#                 state.base_linear_velocity,
-#                 state.base_orientation
-#             ])
-            
-#             # Get action from trained policy
-#             action, _ = agent.actor.get_action(x, deterministic=True)
-#             ekf.set_action(action)
-            
-#             # Predict and update
-#             ekf.predict(state, imu, kin)
-#             ekf.update(state, kin, None, None)
-            
-#             # Store trajectories
-#             positions.append(np.array(state.base_position))
-#             velocities.append(np.array(state.base_linear_velocity))
-#             orientations.append(np.array(state.base_orientation))
-            
-#             # Print state changes every 100 steps
-#             if step % 100 == 0:
-#                 print(f"\nStep {step}:")
-#                 print(f"Position: {state.base_position}")
-#                 print(f"Velocity: {state.base_linear_velocity}")
-#                 print(f"Action: {action}")
-            
-#             # Compute the reward based on GT or NIS
-#             reward = float('-inf')
-#             if USE_GROUND_TRUTH:
-#                 reward = -np.linalg.norm(state.base_position - gt.position) 
-#                 - np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(state.base_orientation)))
-#             else:
-#                 r = []
-#                 for cf in contacts_frame:
-#                     success = False
-#                     innovation = np.zeros(3)
-#                     covariance = np.zeros((3, 3))
-#                     success, innovation, covariance = ekf.get_contact_position_innovation(cf)
-#                     if success:
-#                         r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
+        # Reset to initial state
+        initial_base_state = dataset['base_states'][0]
+        initial_contact_state = dataset['contact_states'][0]
 
-#                 if len(r) == 0:
-#                     continue
-#                 else:
-#                     reward = -np.mean(r)
-#             rewards.append(reward)
-#             step += 1
+        # Initialize SEROW
+        serow_framework = serow.Serow()
+        serow_framework.initialize("go2_rl.json")
+        state = serow_framework.get_state(allow_invalid=True)
+        state.set_base_state(initial_base_state)
+        state.set_contact_state(initial_contact_state)
+        
+        # Store trajectories for visualization
+        positions = []
+        velocities = []
+        orientations = []
+        rewards = []
+        
+        # Run evaluation episodes
+        step = 0
+        for imu, joints, ft, gt in zip(imu_measurements, 
+                                       joint_measurements, 
+                                       force_torque_measurements, 
+                                       base_pose_ground_truth):
+            # Get state and action
+            x = np.concatenate([
+                state.get_base_position(),
+                state.get_base_linear_velocity(),
+                state.get_base_orientation()
+            ])
             
-#         # Convert to numpy arrays for plotting
-#         positions = np.array(positions)
-#         velocities = np.array(velocities)
-#         orientations = np.array(orientations)
-#         rewards = np.array(rewards)
+            if (step == 0):
+                serow_framework.filter(imu, joints, ft, None, None)
+                state = serow_framework.get_state(allow_invalid=True)
+                continue
 
-#         ground_truth_positions = np.array([pose.position for pose in base_pose_ground_truth])
-#         ground_truth_orientations = np.array([pose.orientation for pose in base_pose_ground_truth])
+            # Get action from trained policy
+            for cf in contacts_frame:
+                action, _ = agents[cf].actor.get_action(x, deterministic=True)
+                serow_framework.set_action(cf, action)
+            
+            # Predict and update
+            serow_framework.filter(imu, joints, ft, None, None)
+            state = serow_framework.get_state(allow_invalid=True)
+            
+            # Store trajectories
+            positions.append(np.array(state.base_position))
+            velocities.append(np.array(state.base_linear_velocity))
+            orientations.append(np.array(state.base_orientation))
+            
+            # Compute the reward based on GT or NIS
+            reward = float('-inf')
+            if USE_GROUND_TRUTH:
+                # Calculate errors
+                position_error = np.linalg.norm(state.get_base_position() - gt.position)
+                orientation_error = np.linalg.norm(
+                    logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
+                           quaternion_to_rotation_matrix(state.get_base_orientation())))
+                        
+                # Calculate rewards with improvement focus
+                position_reward = -1.0 * position_error 
+                orientation_reward = -0.5 * orientation_error 
 
-#         # Plot results
-#         plt.figure(figsize=(15, 10))
-        
-#         # Position trajectory
-#         plt.subplot(2, 2, 1)
-#         plt.plot(positions[:, 0], label='x')
-#         plt.plot(positions[:, 1], label='y')
-#         plt.plot(positions[:, 2], label='z')
-#         plt.plot(ground_truth_positions[:, 0], label='x_gt')
-#         plt.plot(ground_truth_positions[:, 1], label='y_gt')
-#         plt.plot(ground_truth_positions[:, 2], label='z_gt')
-#         plt.xlabel('Time Step')
-#         plt.ylabel('Position')
-#         plt.title('Base Position Trajectory')
-#         plt.legend()
-#         plt.grid(True)
-        
-#         # Velocity components
-#         plt.subplot(2, 2, 2)
-#         plt.plot(velocities[:, 0], label='Vx')
-#         plt.plot(velocities[:, 1], label='Vy')
-#         plt.plot(velocities[:, 2], label='Vz')
-#         plt.xlabel('Time Step')
-#         plt.ylabel('Velocity')
-#         plt.title('Base Linear Velocity')
-#         plt.legend()
-#         plt.grid(True)
-        
-#         # Orientation (quaternion components)
-#         plt.subplot(2, 2, 3)
-#         plt.plot(orientations[:, 0], label='w')
-#         plt.plot(orientations[:, 1], label='x')
-#         plt.plot(orientations[:, 2], label='y')
-#         plt.plot(orientations[:, 3], label='z')
-#         plt.plot(ground_truth_orientations[:, 0], label='w_gt')
-#         plt.plot(ground_truth_orientations[:, 1], label='x_gt')
-#         plt.plot(ground_truth_orientations[:, 2], label='y_gt')
-#         plt.plot(ground_truth_orientations[:, 3], label='z_gt')
-#         plt.xlabel('Time Step')
-#         plt.ylabel('Quaternion Components')
-#         plt.title('Base Orientation')
-#         plt.legend()
-#         plt.grid(True)
-        
-#         # Reward over time
-#         plt.subplot(2, 2, 4)
-#         plt.plot(rewards)
-#         plt.xlabel('Time Step')
-#         plt.ylabel('Reward')
-#         plt.title('Reward Over Time')
-#         plt.grid(True)
-        
-#         plt.tight_layout()
-#         plt.show()
-        
-#         # Print evaluation metrics
-#         print("\nPolicy Evaluation Metrics:")
-#         print(f"Average Reward: {np.mean(rewards):.4f}")
-#         print(f"Max Reward: {np.max(rewards):.4f}")
-#         print(f"Min Reward: {np.min(rewards):.4f}")
-#         print(f"Final Position: {positions[-1]}")
-#         print(f"Final Velocity: {velocities[-1]}")
-#         print(f"Final Orientation: {orientations[-1]}")
+                reward = position_reward + orientation_reward 
+            else:
+                r = []
+                for cf in contacts_frame:
+                    success = False
+                    innovation = np.zeros(3)
+                    covariance = np.zeros((3, 3))
+                    success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+                    if success:
+                        r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
 
-#         # Save the trained policy
-#         if (save_policy):
-#             torch.save({
-#                 'actor_state_dict': agent.actor.state_dict(),
-#                 'critic_state_dict': agent.critic.state_dict(),
-#                 'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
-#                 'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
-#             }, 'trained_policy.pth')
+                if len(r) == 0:
+                    continue
+                else:
+                    reward = -np.mean(r)
+            rewards.append(reward)
+            step += 1
+            
+        # Convert to numpy arrays for plotting
+        positions = np.array(positions)
+        velocities = np.array(velocities)
+        orientations = np.array(orientations)
+        rewards = np.array(rewards)
+
+        ground_truth_positions = np.array([pose.position for pose in base_pose_ground_truth])
+        ground_truth_orientations = np.array([pose.orientation for pose in base_pose_ground_truth])
+
+        # Plot results
+        plt.figure(figsize=(15, 10))
+        
+        # Position trajectory
+        plt.subplot(2, 2, 1)
+        plt.plot(positions[:, 0], label='x')
+        plt.plot(positions[:, 1], label='y')
+        plt.plot(positions[:, 2], label='z')
+        plt.plot(ground_truth_positions[:, 0], label='x_gt')
+        plt.plot(ground_truth_positions[:, 1], label='y_gt')
+        plt.plot(ground_truth_positions[:, 2], label='z_gt')
+        plt.xlabel('Time Step')
+        plt.ylabel('Position')
+        plt.title('Base Position Trajectory')
+        plt.legend()
+        plt.grid(True)
+        
+        # Velocity components
+        plt.subplot(2, 2, 2)
+        plt.plot(velocities[:, 0], label='Vx')
+        plt.plot(velocities[:, 1], label='Vy')
+        plt.plot(velocities[:, 2], label='Vz')
+        plt.xlabel('Time Step')
+        plt.ylabel('Velocity')
+        plt.title('Base Linear Velocity')
+        plt.legend()
+        plt.grid(True)
+        
+        # Orientation (quaternion components)
+        plt.subplot(2, 2, 3)
+        plt.plot(orientations[:, 0], label='w')
+        plt.plot(orientations[:, 1], label='x')
+        plt.plot(orientations[:, 2], label='y')
+        plt.plot(orientations[:, 3], label='z')
+        plt.plot(ground_truth_orientations[:, 0], label='w_gt')
+        plt.plot(ground_truth_orientations[:, 1], label='x_gt')
+        plt.plot(ground_truth_orientations[:, 2], label='y_gt')
+        plt.plot(ground_truth_orientations[:, 3], label='z_gt')
+        plt.xlabel('Time Step')
+        plt.ylabel('Quaternion Components')
+        plt.title('Base Orientation')
+        plt.legend()
+        plt.grid(True)
+        
+        # Reward over time
+        plt.subplot(2, 2, 4)
+        plt.plot(rewards)
+        plt.xlabel('Time Step')
+        plt.ylabel('Reward')
+        plt.title('Reward Over Time')
+        plt.grid(True)
+        
+        plt.tight_layout()
+        plt.show()
+        
+        # Print evaluation metrics
+        print("\nPolicy Evaluation Metrics:")
+        print(f"Average Reward: {np.mean(rewards):.4f}")
+        print(f"Max Reward: {np.max(rewards):.4f}")
+        print(f"Min Reward: {np.min(rewards):.4f}")
+        print(f"Final Position: {positions[-1]}")
+        print(f"Final Velocity: {velocities[-1]}")
+        print(f"Final Orientation: {orientations[-1]}")
+
+        # Save the trained policy for each contact frame
+        if save_policy:
+            for cf in contacts_frame:
+                torch.save({
+                    'actor_state_dict': agents[cf].actor.state_dict(),
+                    'critic_state_dict': agents[cf].critic.state_dict(),
+                    'actor_optimizer_state_dict': agents[cf].actor_optimizer.state_dict(),
+                    'critic_optimizer_state_dict': agents[cf].critic_optimizer.state_dict(),
+                }, f'policy/trained_policy_{cf}.pth')
+                print(f"Saved policy for {cf} to 'policy/trained_policy_{cf}.pth'")
 
 if __name__ == "__main__":
     # Read the data
@@ -549,23 +567,29 @@ if __name__ == "__main__":
     agents = {}
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = 'cpu'
+    loaded = False
     for cf in contacts_frame:
         print(f"Initializing agent for {cf}")
         actor = Actor(state_dim, action_dim, max_action, min_action).to(device)
         critic = Critic(state_dim).to(device)
         agents[cf] = PPO(actor, critic, params, device=device)
 
-    # Try to load a trained policy if it exists
-    # try:
-    #     checkpoint = torch.load('trained_policy.pth')
-    #     agent.actor.load_state_dict(checkpoint['actor_state_dict'])
-    #     agent.critic.load_state_dict(checkpoint['critic_state_dict'])
-    #     print("Loaded trained policy from 'trained_policy.pth'")
-    # except FileNotFoundError:
-    #     print("No trained policy found. Training new policy...")
-    train_policy(train_datasets, contacts_frame, agents)
-    # Save the trained policy
-    # evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=True)
-    # else:
-    #     # Just evaluate the loaded policy
-    #     evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=False)
+    # Try to load a trained policy for this contact frame if it exists
+    try:
+        for cf in contacts_frame:
+            checkpoint = torch.load(f'policy/trained_policy_{cf}.pth')
+            agents[cf].actor.load_state_dict(checkpoint['actor_state_dict'])
+            agents[cf].critic.load_state_dict(checkpoint['critic_state_dict'])
+            print(f"Loaded trained policy for {cf} from 'policy/trained_policy_{cf}.pth'")
+            loaded = True
+    except FileNotFoundError:
+        print(f"No trained policy found for {cf}. Training new policy...")
+        loaded = False
+
+    if not loaded:
+        # Train the policy
+        train_policy(train_datasets, contacts_frame, agents)
+        evaluate_policy(test_dataset, contacts_frame, agents, save_policy=True)
+    else:
+        # Just evaluate the loaded policy
+        evaluate_policy(test_dataset, contacts_frame, agents, save_policy=False)
