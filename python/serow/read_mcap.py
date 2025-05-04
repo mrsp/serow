@@ -600,24 +600,30 @@ def decode_force_torque_measurement(data: bytes) -> dict[str, serow.ForceTorqueM
 
 def read_imu_measurements(file_path: str):
     """Read and decode messages from an MCAP file."""
-    with open(file_path, "rb") as f:
-        reader = make_reader(f)
-        imu_measurements = []
-        
-        for schema, channel, message in reader.iter_messages():
-            if channel.topic == "/imu":
-                msg = decode_imu_measurement(message.data)
-                imu_measurements.append(msg)
-        
-        return imu_measurements
+    try:
+        with open(file_path, "rb") as f:
+            reader = make_reader(f)
+            imu_measurements = []
+            
+            for schema, channel, message in reader.iter_messages():
+                if channel.topic == "/imu":
+                    msg = decode_imu_measurement(message.data)
+                    imu_measurements.append(msg)
+            
+            print(f"Found {len(imu_measurements)} IMU measurements")
+            return imu_measurements
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        raise
+    except Exception as e:
+        print(f"Error reading MCAP file: {str(e)}")
+        raise
 
 def read_kinematic_measurements(file_path: str):
     """Read and decode messages from an MCAP file."""
     try:
         with open(file_path, "rb") as f:
-            print(f"Successfully opened file: {file_path}")
             reader = make_reader(f)
-            print("Successfully created MCAP reader")
             kinematic_measurements = []
             
             for schema, channel, message in reader.iter_messages():
@@ -643,14 +649,22 @@ def read_base_states(file_path: str):
     Returns:
         BaseState: The decoded base states, or None if not found
     """
-    with open(file_path, "rb") as f:
-        reader = make_reader(f)
-        base_states = []    
-        for schema, channel, message in reader.iter_messages():
-            if channel.topic == "/base_state":
-                base_states.append(decode_base_state(message.data))
+    try:
+        with open(file_path, "rb") as f:
+            reader = make_reader(f)
+            base_states = []    
+            for schema, channel, message in reader.iter_messages():
+                if channel.topic == "/base_state":
+                    base_states.append(decode_base_state(message.data))
         
-        return base_states
+            print(f"Found {len(base_states)} base states")
+            return base_states
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        raise
+    except Exception as e:
+        print(f"Error reading MCAP file: {str(e)}")
+        raise
 
 def read_contact_states(file_path: str):
     """Read and decode the contact states from an MCAP file.
@@ -687,23 +701,29 @@ def read_base_pose_ground_truth(file_path: str):
     Returns:
         BasePoseGroundTruth: The decoded base pose ground truth, or None if not found
     """
-    with open(file_path, "rb") as f:
-        reader = make_reader(f)
-        base_pose_ground_truth = []
-        for schema, channel, message in reader.iter_messages():
-            if channel.topic == "/base_pose_ground_truth":
-                msg = decode_base_pose_ground_truth(message.data)
-                base_pose_ground_truth.append(msg)
-        
-        return base_pose_ground_truth
+    try:
+        with open(file_path, "rb") as f:
+            reader = make_reader(f)
+            base_pose_ground_truth = []
+            for schema, channel, message in reader.iter_messages():
+                if channel.topic == "/base_pose_ground_truth":
+                    msg = decode_base_pose_ground_truth(message.data)
+                    base_pose_ground_truth.append(msg)
+            
+            print(f"Found {len(base_pose_ground_truth)} base pose ground truth")
+            return base_pose_ground_truth
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        raise
+    except Exception as e:
+        print(f"Error reading MCAP file: {str(e)}")
+        raise
 
 def read_joint_measurements(file_path: str):
     """Read and decode joint measurement messages from an MCAP file."""
     try:
         with open(file_path, "rb") as f:
-            print(f"Successfully opened file: {file_path}")
             reader = make_reader(f)
-            print("Successfully created MCAP reader")
             joint_measurements_list = []
             
             for schema, channel, message in reader.iter_messages():
@@ -724,9 +744,7 @@ def read_force_torque_measurements(file_path: str):
     """Read and decode force-torque measurement messages from an MCAP file."""
     try:
         with open(file_path, "rb") as f:
-            print(f"Successfully opened file: {file_path}")
             reader = make_reader(f)
-            print("Successfully created MCAP reader")
             ft_measurements_list = []
             
             for schema, channel, message in reader.iter_messages():

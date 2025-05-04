@@ -52,8 +52,9 @@ public:
 
     /// @brief initializes SEROW's configuration and internal state
     /// @param config configuration to initialize SEROW with
+    /// @param initial_state optional initial state to initialize SEROW with
     /// @return true if SEROW was initialized successfully
-    bool initialize(const std::string& config);
+    bool initialize(const std::string& config, std::optional<State> initial_state = std::nullopt);
 
     /// @brief runs SEROW's estimator and updates the internal state
     /// @param imu base imu measurement includes linear acceleration and angular velocity
@@ -96,6 +97,10 @@ public:
 
     /// @brief Returns the terrain_estimator_ object
     const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
+
+    /// @brief Returns true if SEROW is initialized
+    /// @return true if SEROW is initialized
+    bool isInitialized() const;
 
 private:
     struct Params {

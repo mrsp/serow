@@ -271,6 +271,7 @@ PYBIND11_MODULE(serow, m) {
         .def(py::init<>(), "Default constructor")
         .def("initialize", &serow::Serow::initialize,
              py::arg("config"),
+             py::arg("initial_state") = py::none(),
              "Initializes SEROW's configuration and internal state")
         .def("filter",
              [](serow::Serow& self, const serow::ImuMeasurement& imu,
@@ -313,9 +314,92 @@ PYBIND11_MODULE(serow, m) {
         .def("get_contact_state", &serow::Serow::getContactState,
              py::arg("allow_invalid") = false,
              "Gets the contact state of the robot")
+        .def("get_state", &serow::Serow::getState,
+             py::arg("allow_invalid") = false,
+             "Gets the complete state of the robot")
         .def("set_action", &serow::Serow::setAction,
              py::arg("contact_frame"),
              py::arg("action"),
-             "Sets the action for a given contact frame");
+             "Sets the action for a given contact frame")
+        .def("is_initialized", &serow::Serow::isInitialized,
+             "Returns true if SEROW is initialized");
+
+    // Binding for CentroidalState
+    py::class_<serow::CentroidalState>(m, "CentroidalState", "Represents the centroidal state of the robot")
+        .def(py::init<>(), "Default constructor")
+        .def_readwrite("timestamp", &serow::CentroidalState::timestamp, "Timestamp of the state")
+        .def_readwrite("com_position", &serow::CentroidalState::com_position, "Center of mass position (3D vector)")
+        .def_readwrite("com_linear_velocity", &serow::CentroidalState::com_linear_velocity, "Center of mass linear velocity (3D vector)")
+        .def_readwrite("external_forces", &serow::CentroidalState::external_forces, "External forces at the CoM (3D vector)")
+        .def_readwrite("cop_position", &serow::CentroidalState::cop_position, "Center of pressure position (3D vector)")
+        .def_readwrite("com_linear_acceleration", &serow::CentroidalState::com_linear_acceleration, "Center of mass linear acceleration (3D vector)")
+        .def_readwrite("angular_momentum", &serow::CentroidalState::angular_momentum, "Angular momentum around the CoM (3D vector)")
+        .def_readwrite("angular_momentum_derivative", &serow::CentroidalState::angular_momentum_derivative, "Angular momentum derivative around the CoM (3D vector)")
+        .def_readwrite("com_position_cov", &serow::CentroidalState::com_position_cov, "Center of mass position covariance (3x3 matrix)")
+        .def_readwrite("com_linear_velocity_cov", &serow::CentroidalState::com_linear_velocity_cov, "Center of mass linear velocity covariance (3x3 matrix)")
+        .def_readwrite("external_forces_cov", &serow::CentroidalState::external_forces_cov, "External forces covariance (3x3 matrix)");
+
+    // Binding for JointState
+    py::class_<serow::JointState>(m, "JointState", "Represents the joint state of the robot")
+        .def(py::init<>(), "Default constructor")
+        .def_readwrite("timestamp", &serow::JointState::timestamp, "Timestamp of the state")
+        .def_readwrite("joints_position", &serow::JointState::joints_position, "Map of joint positions (string to double)")
+        .def_readwrite("joints_velocity", &serow::JointState::joints_velocity, "Map of joint velocities (string to double)");
+
+    // Binding for State
+    py::class_<serow::State>(m, "State", "Represents the overall state of the robot")
+        .def(py::init<>(), "Default constructor")
+        .def(py::init<std::set<std::string>, bool>(), 
+             py::arg("contacts_frame"), 
+             py::arg("point_feet"),
+             "Constructor with contact frames and point feet flag")
+        .def("get_base_pose", &serow::State::getBasePose, "Returns the base pose as a rigid transformation")
+        .def("get_base_position", &serow::State::getBasePosition, "Returns the base position")
+        .def("get_base_orientation", [](const serow::State& self) {
+            return quaternion_to_numpy(self.getBaseOrientation());
+        }, "Returns the base orientation")
+        .def("get_base_linear_velocity", &serow::State::getBaseLinearVelocity, "Returns the base linear velocity")
+        .def("get_base_angular_velocity", &serow::State::getBaseAngularVelocity, "Returns the base angular velocity")
+        .def("get_imu_linear_acceleration_bias", &serow::State::getImuLinearAccelerationBias, "Returns the IMU linear acceleration bias")
+        .def("get_imu_angular_velocity_bias", &serow::State::getImuAngularVelocityBias, "Returns the IMU angular velocity bias")
+        .def("get_contacts_frame", &serow::State::getContactsFrame, "Returns the active contact frame names")
+        .def("get_contact_position", &serow::State::getContactPosition, "Returns the contact position for a given frame")
+        .def("get_contact_orientation", &serow::State::getContactOrientation, "Returns the contact orientation for a given frame")
+        .def("get_contact_pose", &serow::State::getContactPose, "Returns the contact pose for a given frame")
+        .def("get_contact_status", &serow::State::getContactStatus, "Returns the contact status for a given frame")
+        .def("get_contact_force", &serow::State::getContactForce, "Returns the contact force for a given frame")
+        .def("get_foot_position", &serow::State::getFootPosition, "Returns the foot position for a given frame")
+        .def("get_foot_orientation", &serow::State::getFootOrientation, "Returns the foot orientation for a given frame")
+        .def("get_foot_pose", &serow::State::getFootPose, "Returns the foot pose for a given frame")
+        .def("get_foot_linear_velocity", &serow::State::getFootLinearVelocity, "Returns the foot linear velocity for a given frame")
+        .def("get_foot_angular_velocity", &serow::State::getFootAngularVelocity, "Returns the foot angular velocity for a given frame")
+        .def("get_com_position", &serow::State::getCoMPosition, "Returns the center of mass position")
+        .def("get_com_linear_velocity", &serow::State::getCoMLinearVelocity, "Returns the center of mass linear velocity")
+        .def("get_com_external_forces", &serow::State::getCoMExternalForces, "Returns the center of mass external forces")
+        .def("get_com_angular_momentum", &serow::State::getCoMAngularMomentum, "Returns the center of mass angular momentum")
+        .def("get_com_angular_momentum_rate", &serow::State::getCoMAngularMomentumRate, "Returns the center of mass angular momentum rate")
+        .def("get_com_linear_acceleration", &serow::State::getCoMLinearAcceleration, "Returns the center of mass linear acceleration")
+        .def("get_cop_position", &serow::State::getCOPPosition, "Returns the center of pressure position")
+        .def("get_base_pose_cov", &serow::State::getBasePoseCov, "Returns the base pose covariance")
+        .def("get_base_velocity_cov", &serow::State::getBaseVelocityCov, "Returns the base velocity covariance")
+        .def("get_base_position_cov", &serow::State::getBasePositionCov, "Returns the base position covariance")
+        .def("get_base_orientation_cov", &serow::State::getBaseOrientationCov, "Returns the base orientation covariance")
+        .def("get_base_linear_velocity_cov", &serow::State::getBaseLinearVelocityCov, "Returns the base linear velocity covariance")
+        .def("get_base_angular_velocity_cov", &serow::State::getBaseAngularVelocityCov, "Returns the base angular velocity covariance")
+        .def("get_imu_linear_acceleration_bias_cov", &serow::State::getImuLinearAccelerationBiasCov, "Returns the IMU linear acceleration bias covariance")
+        .def("get_imu_angular_velocity_bias_cov", &serow::State::getImuAngularVelocityBiasCov, "Returns the IMU angular velocity bias covariance")
+        .def("get_contact_pose_cov", &serow::State::getContactPoseCov, "Returns the contact pose covariance for a given frame")
+        .def("get_contact_position_cov", &serow::State::getContactPositionCov, "Returns the contact position covariance for a given frame")
+        .def("get_contact_orientation_cov", &serow::State::getContactOrientationCov, "Returns the contact orientation covariance for a given frame")
+        .def("get_com_position_cov", &serow::State::getCoMPositionCov, "Returns the center of mass position covariance")
+        .def("get_com_linear_velocity_cov", &serow::State::getCoMLinearVelocityCov, "Returns the center of mass linear velocity covariance")
+        .def("get_com_external_forces_cov", &serow::State::getCoMExternalForcesCov, "Returns the center of mass external forces covariance")
+        .def("get_mass", &serow::State::getMass, "Returns the mass of the robot")
+        .def("get_num_leg_ee", &serow::State::getNumLegEE, "Returns the number of leg end-effectors")
+        .def("is_point_feet", &serow::State::isPointFeet, "Returns whether the robot has point feet")
+        .def("set_base_state", &serow::State::setBaseState, py::arg("base_state"), "Sets the base state of the robot")
+        .def("set_contact_state", &serow::State::setContactState, py::arg("contact_state"), "Sets the contact state of the robot")
+        .def("set_centroidal_state", &serow::State::setCentroidalState, py::arg("centroidal_state"), "Sets the centroidal state of the robot")
+        .def("set_joint_state", &serow::State::setJointState, py::arg("joint_state"), "Sets the joint state of the robot");
 }
 

@@ -590,8 +590,7 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
     const size_t num_actions = 2 + 2 * !point_feet_;
-    
-    if (action.size() != num_actions) {
+     if (action.size() != static_cast<Eigen::Index>(num_actions)) {
         throw std::invalid_argument("Action size must be 2 + 2 if point_feet is false");
     }
 

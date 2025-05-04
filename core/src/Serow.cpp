@@ -45,7 +45,7 @@ Serow::Serow() {
 
 }
 
-bool Serow::initialize(const std::string& config_file) {
+bool Serow::initialize(const std::string& config_file, std::optional<State> initial_state) {
     // Load configuration JSON
     auto config = json::parse(std::ifstream(findFilepath(config_file)));
 
@@ -81,9 +81,6 @@ bool Serow::initialize(const std::string& config_file) {
         }
 
         param_value = config[param_name];
-
-        // Create a threadpool job to log data to mcap file
-
         return true;
     };
 
@@ -134,8 +131,12 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
 
     // Initialize state
-    State state(contacts_frame, point_feet);
-    state_ = std::move(state);
+    if (initial_state) {
+        state_ = initial_state.value();
+    } else {
+        State state(contacts_frame, point_feet);
+        state_ = std::move(state);
+    }
 
     // Initialize attitude estimator
     if (!checkConfigParam("imu_rate", params_.imu_rate))
@@ -1096,6 +1097,10 @@ Serow::~Serow() {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
+}
+
+bool Serow::isInitialized() const {
+    return is_initialized_;
 }
 
 }  // namespace serow

@@ -293,4 +293,20 @@ int State::getNumLegEE() const {
     return num_leg_ee_;
 }
 
+void State::setBaseState(const BaseState& base_state) {
+    base_state_ = base_state;
+}
+
+void State::setContactState(const ContactState& contact_state) {
+    contact_state_ = contact_state;
+}
+
+void State::setCentroidalState(const CentroidalState& centroidal_state) {
+    centroidal_state_ = centroidal_state;
+}
+
+void State::setJointState(const JointState& joint_state) {
+    joint_state_ = joint_state;
+}
+
 }  // namespace serow

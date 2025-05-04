@@ -185,7 +185,7 @@ def logMap(R):
         omega = magnitude * np.array([R32 - R23, R13 - R31, R21 - R12]);
     return omega;
 
-def train_policy(datasets, contacts_frame, agent):
+def train_policy(datasets, contacts_frame, agents):
     for dataset in datasets:
         # Get the kinematic measurements and imu measurements from the dataset
         imu_measurements = dataset['imu']
@@ -211,51 +211,66 @@ def train_policy(datasets, contacts_frame, agent):
         for episode in range(max_episode):            
             serow_framework = serow.Serow()
             serow_framework.initialize("go2_rl.json")
-            print("Initialized SEROW")
-            
+            state = serow_framework.get_state(allow_invalid=True)
+            filtered = False
+
             # Initialize the state
-            base_state = initial_base_state
-            contact_state = initial_contact_state
+            state.set_base_state(initial_base_state)
+            state.set_contact_state(initial_contact_state)
+
             episode_reward = {}
             for cf in contacts_frame:
                 episode_reward[cf] = 0.0
+            
+            for imu, joints, ft, gt in zip(imu_measurements, 
+                                           joint_measurements, 
+                                           force_torque_measurements, 
+                                           base_pose_ground_truth):
+                # Get the current status of the contacts
+                contact_status = {}
+                for cf in contacts_frame:
+                    contact_status[cf] = state.get_contact_status(cf)
 
-            for imu, joints, ft, gt in zip(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth):
-                # Get the current state - properly format as a flat array
                 x = np.concatenate([
-                    base_state.base_position,
-                    base_state.base_linear_velocity,
-                    base_state.base_orientation,
+                    state.get_base_position(),
+                    state.get_base_linear_velocity(),
+                    state.get_base_orientation()
                 ])
+               
+                if not filtered:
+                    # Run the filter to initialize internal variables
+                    serow_framework.filter(imu, joints, ft, None, None)
+                    state = serow_framework.get_state(allow_invalid=True)
+                    filtered = True
+                    continue
 
                 reward = {}
                 action = {}
                 log_prob = {}
                 value = {}
                 for cf in contacts_frame:
-                    if not contact_state.contacts_status[cf]:
+                    if not contact_status[cf]:
                         continue
 
                     # Set action
-                    action[cf], log_prob[cf] = agent[cf].actor.get_action(x, deterministic=False)
-                    value[cf] = agent[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agent[cf].critic.parameters()).device)).item()
-                    print(f"Action: {action[cf]}")
+                    action[cf], log_prob[cf] = agents[cf].actor.get_action(x, deterministic=False)
+                    value[cf] = agents[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agents[cf].critic.parameters()).device)).item()
                     serow_framework.set_action(cf, action[cf])
 
                     # Compute the reward based on GT or NIS
                     reward[cf] = float('-inf')
                     if USE_GROUND_TRUTH:
                         # Calculate errors
-                        position_error = np.linalg.norm(base_state.base_position - gt.position)
+                        position_error = np.linalg.norm(state.get_base_position() - gt.position)
                         orientation_error = np.linalg.norm(
                             logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-                                   quaternion_to_rotation_matrix(base_state.base_orientation)))
+                                   quaternion_to_rotation_matrix(state.get_base_orientation())))
                         
                         # Calculate rewards with improvement focus
                         position_reward = -1.0 * position_error # Much smaller position error weight
                         orientation_reward = -0.5 * orientation_error # Much smaller orientation error weight
                         
-                        reward[cf] =  + position_reward + orientation_reward 
+                        reward[cf] = position_reward + orientation_reward 
 
                     else:
                         success = False
@@ -273,26 +288,25 @@ def train_policy(datasets, contacts_frame, agent):
                     collected_steps[cf] += 1
 
                 serow_framework.filter(imu, joints, ft, None, None)
-                base_state = serow_framework.get_base_state()
-                contact_state = serow_framework.get_contact_state()
+                state = serow_framework.get_state(allow_invalid=True)
 
                  # Compute the next state
                 next_x = np.concatenate([
-                    base_state.base_position,
-                    base_state.base_linear_velocity,
-                    base_state.base_orientation
+                    state.get_base_position(),
+                    state.get_base_linear_velocity(),
+                    state.get_base_orientation()
                 ])
 
                 # Add to buffer
                 for cf in contacts_frame:
-                    if not contact_state.contacts_status[cf]:
+                    if not contact_status[cf]:
                         continue
                 
-                    agent[cf].add_to_buffer(x, action[cf], reward[cf], next_x, 0.0, value[cf], log_prob[cf])
+                    agents[cf].add_to_buffer(x, action[cf], reward[cf], next_x, 0.0, value[cf], log_prob[cf])
 
                     # Train policy if we've collected enough steps
                     if collected_steps[cf] >= update_steps:
-                        agent[cf].train()
+                        agents[cf].train()
                         collected_steps[cf] = 0
             
             episode_rewards[cf].append(episode_reward[cf])
@@ -468,7 +482,7 @@ def train_policy(datasets, contacts_frame, agent):
 #             }, 'trained_policy.pth')
 
 if __name__ == "__main__":
-    # Read the measurement mcap file
+    # Read the data
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
@@ -532,14 +546,14 @@ if __name__ == "__main__":
     }
 
     # Initialize the actor and critic
-    agent = {}
+    agents = {}
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = 'cpu'
     for cf in contacts_frame:
+        print(f"Initializing agent for {cf}")
         actor = Actor(state_dim, action_dim, max_action, min_action).to(device)
         critic = Critic(state_dim).to(device)
-        # Initialize the DDPG agent
-        agent[cf] = PPO(actor, critic, params, device=device)
+        agents[cf] = PPO(actor, critic, params, device=device)
 
     # Try to load a trained policy if it exists
     # try:
@@ -549,7 +563,7 @@ if __name__ == "__main__":
     #     print("Loaded trained policy from 'trained_policy.pth'")
     # except FileNotFoundError:
     #     print("No trained policy found. Training new policy...")
-    train_policy(train_datasets, contacts_frame, agent)
+    train_policy(train_datasets, contacts_frame, agents)
     # Save the trained policy
     # evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=True)
     # else:

@@ -39,7 +39,7 @@
         0.0,
         -1.0
     ],
-    "calibrate_initial_imu_bias": true,
+    "calibrate_initial_imu_bias": false,
     "max_imu_calibration_cycles": 1000,
     "bias_gyro": [
         0.0,
@@ -227,5 +227,5 @@
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3,
     "T_base_to_ground_truth": null,
-    "log_dir": "/tmp/serow_logs",
+    "log_dir": "/tmp/serow_logs"
 }
