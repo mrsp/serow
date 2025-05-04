@@ -15,4 +15,4 @@ serow_layout.json:Zone.Identifier
 /python/build/
 /python/serow.egg-info/
 /python/serow/serow.*.so
-/python/trained_policy.pth
+/python/serow/policy/trained_policy_*.pth

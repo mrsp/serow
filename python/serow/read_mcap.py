@@ -6,6 +6,8 @@ import sys
 import os
 import matplotlib.pyplot as plt
 
+USE_GROUND_TRUTH = True
+
 # Add the build directory to Python path to find generated schemas
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # This points to serow directory
 build_dir = os.path.join(project_root, 'build', 'generated')
@@ -35,6 +37,105 @@ try:
     from foxglove.ContactState import ContactState as FbContactState
 except ImportError as e:
     raise ImportError(f"Failed to import FlatBuffer schemas. Please ensure the project is built with Python code generation enabled. Error: {e}")
+
+def quaternion_to_rotation_matrix(q):
+    """
+    Convert a quaternion to a rotation matrix.
+    
+    Parameters:
+    q : numpy array with shape (4,)
+        The quaternion in the form [w, x, y, z]
+        
+    Returns:
+    numpy array with shape (3, 3)
+        The corresponding rotation matrix
+    """
+    # Ensure q is normalized
+    q = q / np.linalg.norm(q)
+    
+    # Extract the values from q
+    w, x, y, z = q
+    
+    # Compute the rotation matrix
+    R = np.array([
+        [1 - 2*y*y - 2*z*z,     2*x*y - 2*w*z,     2*x*z + 2*w*y],
+        [    2*x*y + 2*w*z, 1 - 2*x*x - 2*z*z,     2*y*z - 2*w*x],
+        [    2*x*z - 2*w*y,     2*y*z + 2*w*x, 1 - 2*x*x - 2*y*y]
+    ])
+    
+    return R
+
+def logMap(R):
+    R11 = R[0, 0];
+    R12 = R[0, 1];
+    R13 = R[0, 2];
+    R21 = R[1, 0];
+    R22 = R[1, 1];
+    R23 = R[1, 2];
+    R31 = R[2, 0];
+    R32 = R[2, 1];
+    R33 = R[2, 2];
+
+    trace = R.trace();
+
+    omega = np.zeros(3)
+
+    # Special case when trace == -1, i.e., when theta = +-pi, +-3pi, +-5pi, etc.
+    if (trace + 1.0 < 1e-3) :
+        if (R33 > R22 and R33 > R11) :
+            # R33 is the largest diagonal, a=3, b=1, c=2
+            W = R21 - R12;
+            Q1 = 2.0 + 2.0 * R33;
+            Q2 = R31 + R13
+            Q3 = R23 + R32
+            r = np.sqrt(Q1)
+            one_over_r = 1 / r
+            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W)
+            sgn_w = -1.0 if W < 0 else 1.0
+            mag = np.pi - (2 * sgn_w * W) / norm
+            scale = 0.5 * one_over_r * mag
+            omega = sgn_w * scale * np.array([Q2, Q3, Q1])
+        elif (R22 > R11):
+            # R22 is the largest diagonal, a=2, b=3, c=1
+            W = R13 - R31;
+            Q1 = 2.0 + 2.0 * R22;
+            Q2 = R23 + R32;
+            Q3 = R12 + R21;
+            r = np.sqrt(Q1);
+            one_over_r = 1 / r;
+            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W);
+            sgn_w = -1.0 if W < 0 else 1.0;
+            mag = np.pi - (2 * sgn_w * W) / norm;
+            scale = 0.5 * one_over_r * mag;
+            omega = sgn_w * scale * np.array([Q3, Q1, Q2]);
+        else:
+            # R11 is the largest diagonal, a=1, b=2, c=3
+            W = R32 - R23;
+            Q1 = 2.0 + 2.0 * R11;
+            Q2 = R12 + R21;
+            Q3 = R31 + R13;
+            r = np.sqrt(Q1);
+            one_over_r = 1 / r;
+            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W);
+            sgn_w = -1.0 if W < 0 else 1.0;
+            mag = np.pi - (2 * sgn_w * W) / norm;
+            scale = 0.5 * one_over_r * mag;
+            omega = sgn_w * scale * np.array([Q1, Q2, Q3])
+    else:
+        magnitude = 0.0;
+        tr_3 = trace - 3.0;  # could be non-negative if the matrix is off orthogonal
+        if (tr_3 < -1e-6):
+            # this is the normal case -1 < trace < 3
+            theta = np.arccos((trace - 1.0) / 2.0)
+            magnitude = theta / (2.0 * np.sin(theta))
+        else:
+            # when theta near 0, +-2pi, +-4pi, etc. (trace near 3.0)
+            # use Taylor expansion: theta \approx 1/2-(t-3)/12 + O((t-3)^2)
+            # see https://github.com/borglab/gtsam/issues/746 for details
+            magnitude = 0.5 - tr_3 / 12.0 + tr_3 * tr_3 / 60.0;
+
+        omega = magnitude * np.array([R32 - R23, R13 - R31, R21 - R12]);
+    return omega;
 
 def decode_imu_measurement(data: bytes) -> serow.ImuMeasurement:
     """Decode a FlatBuffer message into an ImuMeasurement object."""
@@ -761,29 +862,66 @@ def read_force_torque_measurements(file_path: str):
         print(f"Error reading MCAP file: {str(e)}")
         raise
 
-if __name__ == "__main__":
-    serow_framework = serow.Serow()
-    serow_framework.initialize("go2_rl.json")
-    print("Initialized SEROW")
 
-    # Read the measurement mcap file
-    imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
-    joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
-    force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
-    base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
-        
+def filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, agents = None):
     base_positions = []
     base_orientations = []
     base_timestamps = []
-    
-    for imu, joint, ft in zip(imu_measurements, joint_measurements, force_torque_measurements):
+    rewards = []
+    contacts_frame = state.get_contacts_frame()
+
+    for imu, joint, ft, gt in zip(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth):
+        if agents is not None:
+            x = np.concatenate([
+                state.get_base_position(),
+                state.get_base_linear_velocity(),
+                state.get_base_orientation()
+            ])
+
+            for cf in contacts_frame:
+                if not state.get_contact_status(cf):
+                    continue
+
+                # Set action
+                action, _ = agents[cf].actor.get_action(x, deterministic=True)
+                serow_framework.set_action(cf, action)
+
+        
         serow_framework.filter(imu, joint, ft, None, None)
-        base_state = serow_framework.get_base_state()
+        state = serow_framework.get_state(allow_invalid=True)
+        
+        if USE_GROUND_TRUTH:
+            # Calculate errors
+            position_error = np.linalg.norm(state.get_base_position() - gt.position)
+            orientation_error = np.linalg.norm(
+                logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
+                       quaternion_to_rotation_matrix(state.get_base_orientation())))
+                        
+            # Calculate rewards with improvement focus
+            position_reward = -1.0 * position_error 
+            orientation_reward = -0.5 * orientation_error 
+            reward = position_reward + orientation_reward 
+        else:
+            r = []
+            for cf in contacts_frame:
+                success = False
+                innovation = np.zeros(3)
+                covariance = np.zeros((3, 3))
+                success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+                if success:
+                    r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
+
+            if len(r) == 0:
+                continue
+            else:
+                reward = -np.mean(r)
+        rewards.append(reward)
+
         # Append the current state to the list
-        if base_state is not None:
-            base_positions.append(base_state.base_position.copy())
-            base_orientations.append(base_state.base_orientation.copy())
-            base_timestamps.append(base_state.timestamp)
+        if state is not None:
+            base_positions.append(state.get_base_position())
+            base_orientations.append(state.get_base_orientation())
+            base_timestamps.append(imu.timestamp)
         
     # Convert to numpy arrays
     base_position = np.array(base_positions)
@@ -832,16 +970,19 @@ if __name__ == "__main__":
     print(R)
     print("\nTranslation vector:")
     print(t)
-    
-    # Plot the synchronized and aligned data
+
+    return common_timestamps, base_position_aligned, base_orientation_aligned, gt_position_interp, gt_orientation_interp, rewards
+
+def plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, rewards = None):
+     # Plot the synchronized and aligned data
     plt.figure(figsize=(12, 8))
     plt.subplot(2, 1, 1)
-    plt.plot(common_timestamps, gt_position_interp[:, 0], label="gt x")
-    plt.plot(common_timestamps, base_position_aligned[:, 0], label="base x (aligned)")
-    plt.plot(common_timestamps, gt_position_interp[:, 1], label="gt y")
-    plt.plot(common_timestamps, base_position_aligned[:, 1], label="base y (aligned)")
-    plt.plot(common_timestamps, gt_position_interp[:, 2], label="gt z")
-    plt.plot(common_timestamps, base_position_aligned[:, 2], label="base z (aligned)")
+    plt.plot(timestamps, gt_position[:, 0], label="gt x")
+    plt.plot(timestamps, base_position[:, 0], label="base x (aligned)")
+    plt.plot(timestamps, gt_position[:, 1], label="gt y")
+    plt.plot(timestamps, base_position[:, 1], label="base y (aligned)")
+    plt.plot(timestamps, gt_position[:, 2], label="gt z")
+    plt.plot(timestamps, base_position[:, 2], label="base z (aligned)")
     plt.xlabel('Time (s)')
     plt.ylabel('Position (m)')
     plt.title('Base Position vs Ground Truth (Spatially Aligned)')
@@ -849,14 +990,14 @@ if __name__ == "__main__":
     plt.grid(True)
 
     plt.subplot(2, 1, 2)
-    plt.plot(common_timestamps, gt_orientation_interp[:, 0], label="gt w")
-    plt.plot(common_timestamps, base_orientation_aligned[:, 0], label="base w")
-    plt.plot(common_timestamps, gt_orientation_interp[:, 1], label="gt x")
-    plt.plot(common_timestamps, base_orientation_aligned[:, 1], label="base x")
-    plt.plot(common_timestamps, gt_orientation_interp[:, 2], label="gt y")
-    plt.plot(common_timestamps, base_orientation_aligned[:, 2], label="base y")
-    plt.plot(common_timestamps, gt_orientation_interp[:, 3], label="gt z")
-    plt.plot(common_timestamps, base_orientation_aligned[:, 3], label="base z")
+    plt.plot(timestamps, gt_orientation[:, 0], label="gt w")
+    plt.plot(timestamps, base_orientation[:, 0], label="base w")
+    plt.plot(timestamps, gt_orientation[:, 1], label="gt x")
+    plt.plot(timestamps, base_orientation[:, 1], label="base x")
+    plt.plot(timestamps, gt_orientation[:, 2], label="gt y")
+    plt.plot(timestamps, base_orientation[:, 2], label="base y")
+    plt.plot(timestamps, gt_orientation[:, 3], label="gt z")
+    plt.plot(timestamps, base_orientation[:, 3], label="base z")
     plt.xlabel('Time (s)')
     plt.ylabel('Quaternion Components')
     plt.title('Base Orientation vs Ground Truth')
@@ -869,15 +1010,40 @@ if __name__ == "__main__":
     # Plot 3D trajectories
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(111, projection='3d')
-    ax.plot(gt_position_interp[:, 0], gt_position_interp[:, 1], gt_position_interp[:, 2], 
+    ax.plot(gt_position[:, 0], gt_position[:, 1], gt_position[:, 2], 
             label='Ground Truth', color='blue')
-    ax.plot(base_position_interp[:, 0], base_position_interp[:, 1], base_position_interp[:, 2], 
-            label='Base Position (Original)', color='red', alpha=0.3)
-    ax.plot(base_position_aligned[:, 0], base_position_aligned[:, 1], base_position_aligned[:, 2], 
-            label='Base Position (Aligned)', color='green')
+    ax.plot(base_position[:, 0], base_position[:, 1], base_position[:, 2], 
+            label='Base Position', color='green')
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
     ax.set_zlabel('Z (m)')
-    ax.set_title('3D Trajectories (Aligned at Start)')
+    ax.set_title('3D Trajectories')
     ax.legend()
     plt.show()
+    
+    if rewards is not None:
+        plt.figure(figsize=(12, 8))
+        plt.plot(rewards)
+        plt.xlabel('Time (s)')
+        plt.ylabel('Reward')
+        plt.title('Reward vs Time')
+        plt.show()
+
+if __name__ == "__main__":
+    # Read the measurement mcap file
+    imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
+    joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
+    force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
+    base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
+
+    # Initialize SEROW
+    serow_framework = serow.Serow()
+    serow_framework.initialize("go2_rl.json")
+    state = serow_framework.get_state(allow_invalid=True)
+
+    # Run SEROW
+    timestamps, base_position, base_orientation, gt_position, gt_orientation, rewards = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state)
+    
+    # Plot the trajectories
+    plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, None)
+   

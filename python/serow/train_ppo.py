@@ -13,10 +13,13 @@ from read_mcap import(
     read_force_torque_measurements, 
     read_joint_measurements, 
     read_imu_measurements, 
-    read_base_pose_ground_truth
+    read_base_pose_ground_truth,
+    filter,
+    plot_trajectories,
+    logMap,
+    quaternion_to_rotation_matrix,
+    USE_GROUND_TRUTH
 )
-
-USE_GROUND_TRUTH = True
 
 # Actor network per leg end-effector
 class Actor(nn.Module):
@@ -86,105 +89,6 @@ class Critic(nn.Module):
         x = self.layer3(x)
         return x
 
-def quaternion_to_rotation_matrix(q):
-    """
-    Convert a quaternion to a rotation matrix.
-    
-    Parameters:
-    q : numpy array with shape (4,)
-        The quaternion in the form [w, x, y, z]
-        
-    Returns:
-    numpy array with shape (3, 3)
-        The corresponding rotation matrix
-    """
-    # Ensure q is normalized
-    q = q / np.linalg.norm(q)
-    
-    # Extract the values from q
-    w, x, y, z = q
-    
-    # Compute the rotation matrix
-    R = np.array([
-        [1 - 2*y*y - 2*z*z,     2*x*y - 2*w*z,     2*x*z + 2*w*y],
-        [    2*x*y + 2*w*z, 1 - 2*x*x - 2*z*z,     2*y*z - 2*w*x],
-        [    2*x*z - 2*w*y,     2*y*z + 2*w*x, 1 - 2*x*x - 2*y*y]
-    ])
-    
-    return R
-
-def logMap(R):
-    R11 = R[0, 0];
-    R12 = R[0, 1];
-    R13 = R[0, 2];
-    R21 = R[1, 0];
-    R22 = R[1, 1];
-    R23 = R[1, 2];
-    R31 = R[2, 0];
-    R32 = R[2, 1];
-    R33 = R[2, 2];
-
-    trace = R.trace();
-
-    omega = np.zeros(3)
-
-    # Special case when trace == -1, i.e., when theta = +-pi, +-3pi, +-5pi, etc.
-    if (trace + 1.0 < 1e-3) :
-        if (R33 > R22 and R33 > R11) :
-            # R33 is the largest diagonal, a=3, b=1, c=2
-            W = R21 - R12;
-            Q1 = 2.0 + 2.0 * R33;
-            Q2 = R31 + R13
-            Q3 = R23 + R32
-            r = np.sqrt(Q1)
-            one_over_r = 1 / r
-            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W)
-            sgn_w = -1.0 if W < 0 else 1.0
-            mag = np.pi - (2 * sgn_w * W) / norm
-            scale = 0.5 * one_over_r * mag
-            omega = sgn_w * scale * np.array([Q2, Q3, Q1])
-        elif (R22 > R11):
-            # R22 is the largest diagonal, a=2, b=3, c=1
-            W = R13 - R31;
-            Q1 = 2.0 + 2.0 * R22;
-            Q2 = R23 + R32;
-            Q3 = R12 + R21;
-            r = np.sqrt(Q1);
-            one_over_r = 1 / r;
-            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W);
-            sgn_w = -1.0 if W < 0 else 1.0;
-            mag = np.pi - (2 * sgn_w * W) / norm;
-            scale = 0.5 * one_over_r * mag;
-            omega = sgn_w * scale * np.array([Q3, Q1, Q2]);
-        else:
-            # R11 is the largest diagonal, a=1, b=2, c=3
-            W = R32 - R23;
-            Q1 = 2.0 + 2.0 * R11;
-            Q2 = R12 + R21;
-            Q3 = R31 + R13;
-            r = np.sqrt(Q1);
-            one_over_r = 1 / r;
-            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W);
-            sgn_w = -1.0 if W < 0 else 1.0;
-            mag = np.pi - (2 * sgn_w * W) / norm;
-            scale = 0.5 * one_over_r * mag;
-            omega = sgn_w * scale * np.array([Q1, Q2, Q3])
-    else:
-        magnitude = 0.0;
-        tr_3 = trace - 3.0;  # could be non-negative if the matrix is off orthogonal
-        if (tr_3 < -1e-6):
-            # this is the normal case -1 < trace < 3
-            theta = np.arccos((trace - 1.0) / 2.0)
-            magnitude = theta / (2.0 * np.sin(theta))
-        else:
-            # when theta near 0, +-2pi, +-4pi, etc. (trace near 3.0)
-            # use Taylor expansion: theta \approx 1/2-(t-3)/12 + O((t-3)^2)
-            # see https://github.com/borglab/gtsam/issues/746 for details
-            magnitude = 0.5 - tr_3 / 12.0 + tr_3 * tr_3 / 60.0;
-
-        omega = magnitude * np.array([R32 - R23, R13 - R31, R21 - R12]);
-    return omega;
-
 def train_policy(datasets, contacts_frame, agents):
     for dataset in datasets:
         # Get the measurements and the ground truth
@@ -212,7 +116,6 @@ def train_policy(datasets, contacts_frame, agents):
             serow_framework = serow.Serow()
             serow_framework.initialize("go2_rl.json")
             state = serow_framework.get_state(allow_invalid=True)
-            filtered = False
 
             # Initialize the state
             state.set_base_state(initial_base_state)
@@ -232,13 +135,6 @@ def train_policy(datasets, contacts_frame, agents):
                     state.get_base_orientation()
                 ])
                
-                if not filtered:
-                    # Run the filter to initialize internal variables
-                    serow_framework.filter(imu, joints, ft, None, None)
-                    state = serow_framework.get_state(allow_invalid=True)
-                    filtered = True
-                    continue
-                
                 # Get the current status of the contacts
                 contact_status = {}
                 for cf in contacts_frame:
@@ -346,147 +242,17 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         state.set_base_state(initial_base_state)
         state.set_contact_state(initial_contact_state)
         
-        # Store trajectories for visualization
-        positions = []
-        velocities = []
-        orientations = []
-        rewards = []
-        
-        # Run evaluation episodes
-        step = 0
-        for imu, joints, ft, gt in zip(imu_measurements, 
-                                       joint_measurements, 
-                                       force_torque_measurements, 
-                                       base_pose_ground_truth):
-            # Get state and action
-            x = np.concatenate([
-                state.get_base_position(),
-                state.get_base_linear_velocity(),
-                state.get_base_orientation()
-            ])
-            
-            if (step == 0):
-                serow_framework.filter(imu, joints, ft, None, None)
-                state = serow_framework.get_state(allow_invalid=True)
-                continue
+        # Run SEROW
+        timestamps, base_position, base_orientation, gt_position, gt_orientation, rewards = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, agents)
 
-            # Get action from trained policy
-            for cf in contacts_frame:
-                action, _ = agents[cf].actor.get_action(x, deterministic=True)
-                serow_framework.set_action(cf, action)
-            
-            # Predict and update
-            serow_framework.filter(imu, joints, ft, None, None)
-            state = serow_framework.get_state(allow_invalid=True)
-            
-            # Store trajectories
-            positions.append(np.array(state.base_position))
-            velocities.append(np.array(state.base_linear_velocity))
-            orientations.append(np.array(state.base_orientation))
-            
-            # Compute the reward based on GT or NIS
-            reward = float('-inf')
-            if USE_GROUND_TRUTH:
-                # Calculate errors
-                position_error = np.linalg.norm(state.get_base_position() - gt.position)
-                orientation_error = np.linalg.norm(
-                    logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-                           quaternion_to_rotation_matrix(state.get_base_orientation())))
-                        
-                # Calculate rewards with improvement focus
-                position_reward = -1.0 * position_error 
-                orientation_reward = -0.5 * orientation_error 
+        # Plot the trajectories
+        plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, rewards)
 
-                reward = position_reward + orientation_reward 
-            else:
-                r = []
-                for cf in contacts_frame:
-                    success = False
-                    innovation = np.zeros(3)
-                    covariance = np.zeros((3, 3))
-                    success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-                    if success:
-                        r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
-
-                if len(r) == 0:
-                    continue
-                else:
-                    reward = -np.mean(r)
-            rewards.append(reward)
-            step += 1
-            
-        # Convert to numpy arrays for plotting
-        positions = np.array(positions)
-        velocities = np.array(velocities)
-        orientations = np.array(orientations)
-        rewards = np.array(rewards)
-
-        ground_truth_positions = np.array([pose.position for pose in base_pose_ground_truth])
-        ground_truth_orientations = np.array([pose.orientation for pose in base_pose_ground_truth])
-
-        # Plot results
-        plt.figure(figsize=(15, 10))
-        
-        # Position trajectory
-        plt.subplot(2, 2, 1)
-        plt.plot(positions[:, 0], label='x')
-        plt.plot(positions[:, 1], label='y')
-        plt.plot(positions[:, 2], label='z')
-        plt.plot(ground_truth_positions[:, 0], label='x_gt')
-        plt.plot(ground_truth_positions[:, 1], label='y_gt')
-        plt.plot(ground_truth_positions[:, 2], label='z_gt')
-        plt.xlabel('Time Step')
-        plt.ylabel('Position')
-        plt.title('Base Position Trajectory')
-        plt.legend()
-        plt.grid(True)
-        
-        # Velocity components
-        plt.subplot(2, 2, 2)
-        plt.plot(velocities[:, 0], label='Vx')
-        plt.plot(velocities[:, 1], label='Vy')
-        plt.plot(velocities[:, 2], label='Vz')
-        plt.xlabel('Time Step')
-        plt.ylabel('Velocity')
-        plt.title('Base Linear Velocity')
-        plt.legend()
-        plt.grid(True)
-        
-        # Orientation (quaternion components)
-        plt.subplot(2, 2, 3)
-        plt.plot(orientations[:, 0], label='w')
-        plt.plot(orientations[:, 1], label='x')
-        plt.plot(orientations[:, 2], label='y')
-        plt.plot(orientations[:, 3], label='z')
-        plt.plot(ground_truth_orientations[:, 0], label='w_gt')
-        plt.plot(ground_truth_orientations[:, 1], label='x_gt')
-        plt.plot(ground_truth_orientations[:, 2], label='y_gt')
-        plt.plot(ground_truth_orientations[:, 3], label='z_gt')
-        plt.xlabel('Time Step')
-        plt.ylabel('Quaternion Components')
-        plt.title('Base Orientation')
-        plt.legend()
-        plt.grid(True)
-        
-        # Reward over time
-        plt.subplot(2, 2, 4)
-        plt.plot(rewards)
-        plt.xlabel('Time Step')
-        plt.ylabel('Reward')
-        plt.title('Reward Over Time')
-        plt.grid(True)
-        
-        plt.tight_layout()
-        plt.show()
-        
         # Print evaluation metrics
         print("\nPolicy Evaluation Metrics:")
         print(f"Average Reward: {np.mean(rewards):.4f}")
         print(f"Max Reward: {np.max(rewards):.4f}")
         print(f"Min Reward: {np.min(rewards):.4f}")
-        print(f"Final Position: {positions[-1]}")
-        print(f"Final Velocity: {velocities[-1]}")
-        print(f"Final Orientation: {orientations[-1]}")
 
         # Save the trained policy for each contact frame
         if save_policy:

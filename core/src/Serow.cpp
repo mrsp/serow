@@ -453,6 +453,18 @@ bool Serow::initialize(const std::string& config_file, std::optional<State> init
     exteroception_logger_ = std::make_unique<ExteroceptionLogger>(params_.log_dir + "/serow_exteroception.mcap");
     measurement_logger_ = std::make_unique<MeasurementLogger>(params_.log_dir + "/serow_measurements.mcap");
 
+    // Initialize the base and CoM estimators
+    if (params_.is_contact_ekf) {
+        base_estimator_con_.init(state_.base_state_, state_.getContactsFrame(),
+                                state_.isPointFeet(), params_.g, params_.imu_rate,
+                                params_.outlier_detection);
+    } else {
+        base_estimator_.init(state_.base_state_, params_.g, params_.imu_rate,
+                            params_.outlier_detection);
+    }
+    com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
+                        params_.force_torque_rate);
+
     std::cout << "Configuration initialized" << std::endl;
     return true;
 }
@@ -716,19 +728,6 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
         leg_odometry_ = std::make_unique<LegOdometry>(
             base_to_foot_positions, base_to_foot_orientations, state_.getMass(), params_.tau_0,
             params_.tau_1, params_.joint_rate, params_.g, params_.eps);
-
-        // Initialize the base and CoM estimators
-        if (params_.is_contact_ekf) {
-            base_estimator_con_.init(state_.base_state_, state_.getContactsFrame(),
-                                     state_.isPointFeet(), params_.g, params_.imu_rate,
-                                     params_.outlier_detection);
-        } else {
-            base_estimator_.init(state_.base_state_, params_.g, params_.imu_rate,
-                                 params_.outlier_detection);
-        }
-
-        com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
-                            params_.force_torque_rate);
     }
 
     // Perform leg odometry estimation
