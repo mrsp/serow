@@ -30,3 +30,10 @@ from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/ForceTor
 # Add imports to JointMeasurements.py
 echo -e "from foxglove.Time import Time\n
 from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/JointMeasurements.py)" > ../build/generated/foxglove/JointMeasurements.py 
+
+# Add imports to ContactState.py
+echo -e "from foxglove.Time import Time\n
+from foxglove.Contact import Contact\n$(cat ../build/generated/foxglove/ContactState.py)" > ../build/generated/foxglove/ContactState.py
+
+# Add imports to Contact.py
+echo -e "from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/Contact.py)" > ../build/generated/foxglove/Contact.py

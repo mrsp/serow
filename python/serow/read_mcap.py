@@ -32,7 +32,7 @@ try:
     from foxglove.FrameTransform import FrameTransform as FbFrameTransform  
     from foxglove.JointMeasurements import JointMeasurements as FbJointMeasurements
     from foxglove.ForceTorqueMeasurements import ForceTorqueMeasurements as FbForceTorqueMeasurements
-
+    from foxglove.ContactState import ContactState as FbContactState
 except ImportError as e:
     raise ImportError(f"Failed to import FlatBuffer schemas. Please ensure the project is built with Python code generation enabled. Error: {e}")
 
@@ -473,6 +473,48 @@ def decode_base_state(data: bytes) -> serow.BaseState:
 
     return msg
 
+def decode_contact_state(data: bytes) -> serow.ContactState:
+    """Decode a FlatBuffer message into an ContactState object."""
+    fb_msg = FbContactState.GetRootAsContactState(data, 0)
+    msg = serow.ContactState()
+    
+    # Decode timestamp  
+    timestamp = fb_msg.Timestamp()
+    if timestamp:
+        msg.timestamp = timestamp.Sec() + timestamp.Nsec() * 1e-9
+    
+    # Decode contact statuses and other fields
+    contacts_status = {}
+    contacts_probability = {}
+    contacts_force = {}
+    contacts_torque = {}
+    
+    for i in range(fb_msg.ContactsLength()):
+        contact = fb_msg.Contacts(i)
+        name = fb_msg.ContactNames(i).decode()
+        
+        contacts_status[name] = contact.Status()
+        contacts_probability[name] = contact.Probability()
+        
+        # Decode force
+        force = contact.Force()
+        if force:
+            contacts_force[name] = np.array([force.X(), force.Y(), force.Z()])
+            
+        # Decode torque if available
+        torque = contact.Torque()
+        if torque:
+            if name not in contacts_torque:
+                contacts_torque[name] = np.array([torque.X(), torque.Y(), torque.Z()])
+    
+    msg.contacts_status = contacts_status
+    msg.contacts_probability = contacts_probability
+    msg.contacts_force = contacts_force
+    if contacts_torque:
+        msg.contacts_torque = contacts_torque
+
+    return msg
+
 def decode_base_pose_ground_truth(data: bytes) -> serow.BasePoseGroundTruth:
     """Decode a FlatBuffer message into an BasePoseGroundTruth object."""
     fb_msg = FbFrameTransform.GetRootAsFrameTransform(data, 0)
@@ -609,6 +651,32 @@ def read_base_states(file_path: str):
                 base_states.append(decode_base_state(message.data))
         
         return base_states
+
+def read_contact_states(file_path: str):
+    """Read and decode the contact states from an MCAP file.
+    
+    Args:
+        file_path: Path to the MCAP file
+        
+    Returns:
+        ContactState: The decoded contact states, or None if not found
+    """
+    try:
+        with open(file_path, "rb") as f:
+            reader = make_reader(f)
+            contact_states = []
+            for schema, channel, message in reader.iter_messages():
+                if channel.topic == "/contact_state":
+                    msg = decode_contact_state(message.data)
+                    contact_states.append(msg)
+            print(f"Found {len(contact_states)} contact states")
+            return contact_states   
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        raise
+    except Exception as e:
+        print(f"Error reading MCAP file: {str(e)}")
+        raise
 
 def read_base_pose_ground_truth(file_path: str):
     """Read and decode the base pose ground truth from an MCAP file.

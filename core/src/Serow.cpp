@@ -212,10 +212,24 @@ bool Serow::initialize(const std::string& config_file) {
     if (!checkConfigParam("log_dir", params_.log_dir))
         return false;
 
-    // Check rotation matrices
+    // Create log directory if it doesn't exist
+    try {
+        if (!std::filesystem::exists(params_.log_dir)) {
+            std::filesystem::create_directories(params_.log_dir);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << RED_COLOR << "Failed to create log directory: " << e.what() << "\n" << WHITE_COLOR;
+        return false;
+    }
+
+    // Check TFs
     if (!checkConfigArray("R_base_to_gyro", 9))
         return false;
     if (!checkConfigArray("R_base_to_acc", 9))
+        return false;
+    
+    bool has_ground_truth = !config["T_base_to_ground_truth"].is_null();
+    if (has_ground_truth && !checkConfigArray("T_base_to_ground_truth", 16))
         return false;
 
     if (!config["R_foot_to_force"].is_object()) {
@@ -267,6 +281,14 @@ bool Serow::initialize(const std::string& config_file) {
                         config["R_foot_to_torque"][k_str][3 * i + j];
                 }
                 k++;
+            }
+        }
+    }
+
+    if (has_ground_truth) {
+        for (size_t i = 0; i < 4; i++) {
+            for (size_t j = 0; j < 4; j++) {
+                params_.T_base_to_ground_truth(i, j) = config["T_base_to_ground_truth"][4 * i + j];
             }
         }
     }
@@ -469,7 +491,12 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                     measurement_logger_->log(ft.value());
                 }
                 if (base_pose_ground_truth.has_value()) {
-                    measurement_logger_->log(base_pose_ground_truth.value());
+                    // Make a copy of the ground truth value
+                    auto gt = base_pose_ground_truth.value();
+                    // Transform the base pose to the ground truth frame
+                    gt.position = params_.T_base_to_ground_truth * gt.position;
+                    gt.orientation = Eigen::Quaterniond(params_.T_base_to_ground_truth.linear() * gt.orientation.toRotationMatrix());
+                    measurement_logger_->log(gt);
                 }
             } catch (const std::exception& e) {
                 std::cerr << "Error in measurement logging thread: " << e.what() << std::endl;
@@ -1024,6 +1051,14 @@ std::optional<State> Serow::getState(bool allow_invalid) {
 std::optional<BaseState> Serow::getBaseState(bool allow_invalid) {
     if (state_.is_valid_ || allow_invalid) {
         return state_.base_state_;
+    } else {
+        return std::nullopt;
+    }
+}
+
+std::optional<ContactState> Serow::getContactState(bool allow_invalid) {
+    if (state_.is_valid_ || allow_invalid) {
+        return state_.contact_state_;
     } else {
         return std::nullopt;
     }

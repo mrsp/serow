@@ -5,9 +5,16 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from serow import ContactEKF
+import serow
 from ppo import PPO
-from read_mcap import read_base_states, read_kinematic_measurements, read_imu_measurements, read_base_pose_ground_truth
+from read_mcap import(
+    read_base_states, 
+    read_contact_states, 
+    read_force_torque_measurements, 
+    read_joint_measurements, 
+    read_imu_measurements, 
+    read_base_pose_ground_truth
+)
 
 USE_GROUND_TRUTH = True
 
@@ -178,15 +185,17 @@ def logMap(R):
         omega = magnitude * np.array([R32 - R23, R13 - R31, R21 - R12]);
     return omega;
 
-def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent):
+def train_policy(datasets, contacts_frame, agent):
     for dataset in datasets:
         # Get the kinematic measurements and imu measurements from the dataset
-        kinematic_measurements = dataset['kinematic']
         imu_measurements = dataset['imu']
+        joint_measurements = dataset['joints']
+        force_torque_measurements = dataset['ft']
         base_pose_ground_truth = dataset['base_pose_ground_truth']
-
+        
         # Reset to initial state
-        initial_state = dataset['states'][0]
+        initial_base_state = dataset['base_states'][0]
+        initial_contact_state = dataset['contact_states'][0]
 
         best_reward = {}
         episode_rewards = {}
@@ -200,22 +209,23 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
         update_steps = 64  # Train after collecting this many timesteps
 
         for episode in range(max_episode):            
-            # Initialize the EKF
-            ekf = ContactEKF()
-            ekf.init(initial_state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
+            serow_framework = serow.Serow()
+            serow_framework.initialize("go2_rl.json")
+            print("Initialized SEROW")
             
             # Initialize the state
-            state = initial_state   
+            base_state = initial_base_state
+            contact_state = initial_contact_state
             episode_reward = {}
             for cf in contacts_frame:
                 episode_reward[cf] = 0.0
 
-            for imu, kin, gt in zip(imu_measurements, kinematic_measurements, base_pose_ground_truth):
+            for imu, joints, ft, gt in zip(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth):
                 # Get the current state - properly format as a flat array
                 x = np.concatenate([
-                    state.base_position,
-                    state.base_linear_velocity,
-                    state.base_orientation,
+                    base_state.base_position,
+                    base_state.base_linear_velocity,
+                    base_state.base_orientation,
                 ])
 
                 reward = {}
@@ -223,22 +233,23 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                 log_prob = {}
                 value = {}
                 for cf in contacts_frame:
-                    if not kin.contacts_status[cf]:
+                    if not contact_state.contacts_status[cf]:
                         continue
 
                     # Set action
                     action[cf], log_prob[cf] = agent[cf].actor.get_action(x, deterministic=False)
                     value[cf] = agent[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agent[cf].critic.parameters()).device)).item()
-                    ekf.set_action(cf, action[cf])
+                    print(f"Action: {action[cf]}")
+                    serow_framework.set_action(cf, action[cf])
 
                     # Compute the reward based on GT or NIS
                     reward[cf] = float('-inf')
                     if USE_GROUND_TRUTH:
                         # Calculate errors
-                        position_error = np.linalg.norm(state.base_position - gt.position)
+                        position_error = np.linalg.norm(base_state.base_position - gt.position)
                         orientation_error = np.linalg.norm(
                             logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-                                   quaternion_to_rotation_matrix(state.base_orientation)))
+                                   quaternion_to_rotation_matrix(base_state.base_orientation)))
                         
                         # Calculate rewards with improvement focus
                         position_reward = -1.0 * position_error # Much smaller position error weight
@@ -250,7 +261,7 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                         success = False
                         innovation = np.zeros(3)
                         covariance = np.zeros((3, 3))
-                        success, innovation, covariance = ekf.get_contact_position_innovation(cf)
+                        success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
                         if success:
                             # Calculate innovation reward
                             innovation_reward = -0.001 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
@@ -261,22 +272,20 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
                     episode_reward[cf] += reward[cf]
                     collected_steps[cf] += 1
 
-                # Predict step
-                ekf.predict(state, imu, kin)
-                
-                # Update step 
-                ekf.update(state, kin, None, None)
+                serow_framework.filter(imu, joints, ft, None, None)
+                base_state = serow_framework.get_base_state()
+                contact_state = serow_framework.get_contact_state()
 
                  # Compute the next state
                 next_x = np.concatenate([
-                    state.base_position,
-                    state.base_linear_velocity,
-                    state.base_orientation
+                    base_state.base_position,
+                    base_state.base_linear_velocity,
+                    base_state.base_orientation
                 ])
 
                 # Add to buffer
                 for cf in contacts_frame:
-                    if not kin.contacts_status[cf]:
+                    if not contact_state.contacts_status[cf]:
                         continue
                 
                     agent[cf].add_to_buffer(x, action[cf], reward[cf], next_x, 0.0, value[cf], log_prob[cf])
@@ -460,13 +469,17 @@ def train_policy(datasets, contacts_frame, point_feet, g, imu_rate, outlier_dete
 
 if __name__ == "__main__":
     # Read the measurement mcap file
-    kinematic_measurements = read_kinematic_measurements("/tmp/serow_measurements.mcap")
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
-    states = read_base_states("/tmp/serow_proprioception.mcap")
+    joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
+    force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
-
+    base_states = read_base_states("/tmp/serow_proprioception.mcap")
+    contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
+    
     # Calculate the size of each dataset
-    total_size = len(kinematic_measurements)
+    total_size = len(contact_states)
+    print(f"Total size: {total_size}")
+
     N = 10  # Number of datasets
     dataset_size = total_size // N  # Size of each dataset
 
@@ -478,9 +491,11 @@ if __name__ == "__main__":
         
         # Create a dataset with measurements and states from start_idx to end_idx
         dataset = {
-            'kinematic': kinematic_measurements[start_idx:end_idx],
             'imu': imu_measurements[start_idx:end_idx],
-            'states': states[start_idx:end_idx],
+            'joints': joint_measurements[start_idx:end_idx],
+            'ft': force_torque_measurements[start_idx:end_idx],
+            'base_states': base_states[start_idx:end_idx],
+            'contact_states': contact_states[start_idx:end_idx],
             'base_pose_ground_truth': base_pose_ground_truth[start_idx:end_idx]
         }
         train_datasets.append(dataset)
@@ -490,20 +505,14 @@ if __name__ == "__main__":
     train_datasets.remove(test_dataset)
 
     # Get the contacts frame
-    contacts_frame = set(states[0].contacts_position.keys())
+    contacts_frame = set(contact_states[0].contacts_status.keys())
     print(f"Contacts frame: {contacts_frame}")
-        
-    # Parameters
-    point_feet = True  # Assuming point feet or flat feet
-    g = 9.81  # Gravity constant
-    imu_rate = 500.0  # IMU update rate in Hz
-    outlier_detection = False  # Enable outlier detection
 
     # Define the dimensions of your state and action spaces
     state_dim = 10  # 3 position, 3 velocity, 4 orientation
     action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 1.0  # Reduced from 10.0
-    min_action = 0.1  # Increased from 0.01
+    max_action = 1.0 
+    min_action = 0.1  
 
     params = {
         'state_dim': state_dim,
@@ -540,7 +549,7 @@ if __name__ == "__main__":
     #     print("Loaded trained policy from 'trained_policy.pth'")
     # except FileNotFoundError:
     #     print("No trained policy found. Training new policy...")
-    train_policy(train_datasets, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent)
+    train_policy(train_datasets, contacts_frame, agent)
     # Save the trained policy
     # evaluate_policy(test_dataset, contacts_frame, point_feet, g, imu_rate, outlier_detection, agent, save_policy=True)
     # else:

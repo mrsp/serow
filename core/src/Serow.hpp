@@ -77,6 +77,11 @@ public:
     /// @return SEROW's internal state if available
     std::optional<State> getState(bool allow_invalid = false);
 
+    /// @brief fetches SEROW's contact state
+    /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
+    /// @return SEROW's contact state if available
+    std::optional<ContactState> getContactState(bool allow_invalid = false);
+
     /// @brief fetches SEROW's base state   
     /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
     /// valid estimate
@@ -234,6 +239,8 @@ private:
         bool log_measurements{true};
         /// @brief directory where log files will be stored
         std::string log_dir{"/tmp"};
+        /// @brief offset between the base frame and the ground truth base frame
+        Eigen::Isometry3d T_base_to_ground_truth{Eigen::Isometry3d::Identity()};
     };
 
     /// @brief SEROW's configuration

@@ -226,5 +226,23 @@
     "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3,
+    "T_base_to_ground_truth": [
+        1.0,
+        0.0,
+        0.0,
+        -0.29036208,
+        0.0,
+        1.0,
+        0.0,
+        -0.00184138,
+        0.0,
+        0.0,
+        1.0,
+        -0.01750215,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+    ],
     "log_dir": "/tmp/"
 }

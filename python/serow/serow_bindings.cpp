@@ -88,6 +88,15 @@ PYBIND11_MODULE(serow, m) {
         .def_readwrite("contacts_position_cov", &serow::BaseState::contacts_position_cov, "Map of contact position covariances (string to 3x3 matrix)")
         .def_readwrite("contacts_orientation_cov", &serow::BaseState::contacts_orientation_cov, "Map of contact orientation covariances (string to 3x3 matrix)");
 
+    // Binding for ContactState
+    py::class_<serow::ContactState>(m, "ContactState", "Represents the contact state of a humanoid robot")
+        .def(py::init<>(), "Default constructor")
+        .def_readwrite("timestamp", &serow::ContactState::timestamp, "Timestamp of the contact state")
+        .def_readwrite("contacts_status", &serow::ContactState::contacts_status, "Map of contact statuses (string to bool)")
+        .def_readwrite("contacts_probability", &serow::ContactState::contacts_probability, "Map of contact probabilities (string to double)")
+        .def_readwrite("contacts_force", &serow::ContactState::contacts_force, "Map of contact forces (string to 3D vector)")
+        .def_readwrite("contacts_torque", &serow::ContactState::contacts_torque, "Map of contact torques (string to 3D vector)");
+
     // Binding for JointMeasurement
     py::class_<serow::JointMeasurement>(m, "JointMeasurement", "Represents a joint measurement")
         .def(py::init<>(), "Default constructor")
@@ -301,8 +310,12 @@ PYBIND11_MODULE(serow, m) {
         .def("get_base_state", &serow::Serow::getBaseState,
              py::arg("allow_invalid") = false,
              "Gets the base state of the robot")
+        .def("get_contact_state", &serow::Serow::getContactState,
+             py::arg("allow_invalid") = false,
+             "Gets the contact state of the robot")
         .def("set_action", &serow::Serow::setAction,
              py::arg("contact_frame"),
              py::arg("action"),
              "Sets the action for a given contact frame");
 }
+

@@ -226,5 +226,6 @@
     "enable_terrain_estimation": false,
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3,
-    "log_dir": "/tmp/serow_logs"
+    "T_base_to_ground_truth": null,
+    "log_dir": "/tmp/serow_logs",
 }
