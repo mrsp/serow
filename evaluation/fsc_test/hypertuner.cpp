@@ -40,14 +40,7 @@ std::vector<std::string> param_names = {
   "attitude_estimator_proportional_gain",
   "attitude_estimator_integral_gain",
   "joint_position_variance",
-  "base_linear_velocity_covariance[0]",
-  "base_linear_velocity_covariance[1]",
-  "base_linear_velocity_covariance[2]",
-  
-  "base_orientation_covariance[0]",
-  "base_orientation_covariance[1]",
-  "base_orientation_covariance[2]",
-  
+
   "contact_position_covariance[0]",
   "contact_position_covariance[1]",
   "contact_position_covariance[2]",
