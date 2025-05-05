@@ -34,6 +34,9 @@ sudo make install
 
 
 ### Run the hypertuner
+Place the .h5 dataset under fsc_test/anymal_fsc/fsc.h5 and then:
+
+
 Go to fsc_test/ and build.
 
 * The fsc_test executable runs serow on anymal_fsc/fsc.h5 dataset
