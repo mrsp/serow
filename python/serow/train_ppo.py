@@ -97,7 +97,7 @@ def train_policy(datasets, contacts_frame, agents):
         episode_rewards[cf] = []
         collected_steps[cf] = 0
 
-    for dataset in datasets:
+    for i, dataset in enumerate(datasets):
         # Get the measurements and the ground truth
         imu_measurements = dataset['imu']
         joint_measurements = dataset['joints']
@@ -124,11 +124,10 @@ def train_policy(datasets, contacts_frame, agents):
             for cf in contacts_frame:
                 episode_reward[cf] = 0.0
             
-            step_count = 0
-            for imu, joints, ft, gt in zip(imu_measurements, 
-                                           joint_measurements, 
-                                           force_torque_measurements, 
-                                           base_pose_ground_truth):
+            for step, (imu, joints, ft, gt) in enumerate(zip(imu_measurements, 
+                                                             joint_measurements, 
+                                                             force_torque_measurements, 
+                                                             base_pose_ground_truth)):
                 actions = {}
                 log_probs = {}
                 values = {}
@@ -167,13 +166,12 @@ def train_policy(datasets, contacts_frame, agents):
                             agents[cf].train()
                             collected_steps[cf] = 0
                 
-                step_count += 1
-                if step_count % 100 == 0:  # Print progress every 100 steps
+                if step % 100 == 0:  # Print progress every 100 steps
                     for cf in contacts_frame:
-                        print(f"Episode {episode}, Step {step_count}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
+                        print(f"Episode {episode}, Step {step}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
             
             for cf in contacts_frame:   
-                print(f"Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
+                print(f"Dataset {i}, Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
                 episode_rewards[cf].append(episode_reward[cf])
                 if episode_reward[cf] > best_reward[cf]:
                     best_reward[cf] = episode_reward[cf]
@@ -298,6 +296,7 @@ if __name__ == "__main__":
     print(f"Total size: {total_size}")
 
     N = 10  # Number of datasets
+    M = 5 # Dataset to test
     dataset_size = total_size // N  # Size of each dataset
 
     # Create N contiguous datasets
@@ -318,7 +317,7 @@ if __name__ == "__main__":
         train_datasets.append(dataset)
 
     # Pick a random dataset for testing
-    test_dataset = train_datasets[np.random.randint(0, N)]
+    test_dataset = train_datasets[M]
     train_datasets.remove(test_dataset)
 
     # Get the contacts frame
