@@ -387,16 +387,16 @@ int main()
 {
     // Define optimizer params
     bayesopt::Parameters params;
-    params.n_init_samples = 40; //100 
-    params.n_iterations = 150;  //400
+    params.n_init_samples = 30; //100 
+    params.n_iterations = 100;  //400
     params.kernel.name = "kMaternARD5";
     params.surr_name = "sGaussianProcess";
     params.verbose_level = 2;
     params.crit_name = "cEI";
-    params.n_iter_relearn = 5;  // Re-learn GP hyperparameters every 10 iterations
-    params.noise = 0.0;  // Helps with numerical stability if your cost function isn't perfectly deterministic
-    params.force_jump = 0.0; // Ensures smoother optimization paths (useful if the cost is smooth)
-    params.epsilon = 0.0; // Exploitation threshold for EI
+    params.n_iter_relearn = 10;  // Re-learn GP hyperparameters every 10 iterations
+    params.noise = 0.01;  // Helps with numerical stability if your cost function isn't perfectly deterministic
+    params.force_jump = 0.1; // Ensures smoother optimization paths (useful if the cost is smooth)
+    params.epsilon = 0.01; // Exploitation threshold for EI
     params.random_seed = 42;
     // Search bounds: define range for each parameter
     SerowOptimizer optimizer(param_names.size(), params);
