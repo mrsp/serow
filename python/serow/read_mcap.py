@@ -862,77 +862,45 @@ def read_force_torque_measurements(file_path: str):
         print(f"Error reading MCAP file: {str(e)}")
         raise
 
+def run_step(imu, joint, ft, gt, serow_framework, state, actions):
+    # Set the actions
+    for cf, action in actions.items():
+        serow_framework.set_action(cf, action)
 
-def filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, agents = None):
-    base_positions = []
-    base_orientations = []
-    base_timestamps = []
-    rewards = []
-    contacts_frame = state.get_contacts_frame()
-
-    for imu, joint, ft, gt in zip(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth):
-        if agents is not None:
-            x = np.concatenate([
-                state.get_base_position(),
-                state.get_base_linear_velocity(),
-                state.get_base_orientation()
-            ])
-
-            for cf in contacts_frame:
-                if not state.get_contact_status(cf):
-                    continue
-
-                # Set action
-                action, _ = agents[cf].actor.get_action(x, deterministic=True)
-                serow_framework.set_action(cf, action)
-
+    # Run the filter
+    serow_framework.filter(imu, joint, ft, None, None)
+    
+    # Get the state
+    state = serow_framework.get_state(allow_invalid=True)
         
-        serow_framework.filter(imu, joint, ft, None, None)
-        state = serow_framework.get_state(allow_invalid=True)
-        
-        if USE_GROUND_TRUTH:
-            # Calculate errors
-            position_error = np.linalg.norm(state.get_base_position() - gt.position)
-            orientation_error = np.linalg.norm(
-                logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-                       quaternion_to_rotation_matrix(state.get_base_orientation())))
+    # Compute the reward
+    if USE_GROUND_TRUTH:
+        # Calculate errors
+        position_error = np.linalg.norm(state.get_base_position() - gt.position)
+        orientation_error = np.linalg.norm(
+            logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
+                   quaternion_to_rotation_matrix(state.get_base_orientation())))
                         
-            # Calculate rewards with improvement focus
-            position_reward = -1.0 * position_error 
-            orientation_reward = -0.5 * orientation_error 
-            reward = position_reward + orientation_reward 
-        else:
-            r = []
-            for cf in contacts_frame:
-                success = False
-                innovation = np.zeros(3)
-                covariance = np.zeros((3, 3))
-                success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-                if success:
-                    r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
+        # Calculate rewards with improvement focus
+        position_reward = -1.0 * position_error 
+        orientation_reward = -0.5 * orientation_error 
+        reward = position_reward + orientation_reward 
+    else:
+        r = []
+        for cf in state.get_contacts_frame():
+            success = False
+            innovation = np.zeros(3)
+            covariance = np.zeros((3, 3))
+            success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+            if success:
+                r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
 
-            if len(r) == 0:
-                continue
-            else:
-                reward = -np.mean(r)
-        rewards.append(reward)
+        if not len(r) == 0:
+            reward = -np.mean(r)
 
-        # Append the current state to the list
-        if state is not None:
-            base_positions.append(state.get_base_position())
-            base_orientations.append(state.get_base_orientation())
-            base_timestamps.append(imu.timestamp)
-        
-    # Convert to numpy arrays
-    base_position = np.array(base_positions)
-    base_orientation = np.array(base_orientations)
-    base_timestamps = np.array(base_timestamps)
+    return imu.timestamp, state, reward
 
-    # Extract ground truth data with timestamps
-    gt_timestamps = np.array([gt.timestamp for gt in base_pose_ground_truth])
-    base_ground_truth_position = np.array([gt.position for gt in base_pose_ground_truth])
-    base_ground_truth_orientation = np.array([gt.orientation for gt in base_pose_ground_truth])
-
+def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, gt_position, gt_orientation):
     # Find the common time range
     start_time = max(base_timestamps[0], gt_timestamps[0])
     end_time = min(base_timestamps[-1], gt_timestamps[-1])
@@ -948,14 +916,14 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
     # Interpolate ground truth position
     gt_position_interp = np.zeros((len(common_timestamps), 3))
     for i in range(3):  # x, y, z
-        gt_position_interp[:, i] = np.interp(common_timestamps, gt_timestamps, base_ground_truth_position[:, i])
+        gt_position_interp[:, i] = np.interp(common_timestamps, gt_timestamps, gt_position[:, i])
 
     # Interpolate orientations
     base_orientation_interp = np.zeros((len(common_timestamps), 4))
     gt_orientation_interp = np.zeros((len(common_timestamps), 4))
     for i in range(4):  # w, x, y, z
         base_orientation_interp[:, i] = np.interp(common_timestamps, base_timestamps, base_orientation[:, i])
-        gt_orientation_interp[:, i] = np.interp(common_timestamps, gt_timestamps, base_ground_truth_orientation[:, i])
+        gt_orientation_interp[:, i] = np.interp(common_timestamps, gt_timestamps, gt_orientation[:, i])
 
     # Compute the initial rigid body transformation from the first timestamp
     R = np.eye(3)
@@ -971,9 +939,40 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
     print("\nTranslation vector:")
     print(t)
 
-    return common_timestamps, base_position_aligned, base_orientation_aligned, gt_position_interp, gt_orientation_interp, rewards
+    return common_timestamps, base_position_aligned, base_orientation_aligned, gt_position_interp, gt_orientation_interp
 
-def plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, rewards = None):
+def filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state):
+    base_positions = []
+    base_orientations = []
+    base_timestamps = []
+    cumulative_reward = 0.0
+
+    for imu, joint, ft, gt in zip(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth):
+        action = {}
+        for cf in state.get_contacts_frame():
+            action[cf] = np.ones(2)
+
+        timestamp, state, reward = run_step(imu, joint, ft, gt, serow_framework, state, action)
+        base_timestamps.append(timestamp)
+        base_positions.append(state.get_base_position())
+        base_orientations.append(state.get_base_orientation()) 
+        cumulative_reward += reward
+
+    # Convert to numpy arrays
+    base_position = np.array(base_positions)
+    base_orientation = np.array(base_orientations)
+    base_timestamps = np.array(base_timestamps)
+
+    # Extract ground truth data with timestamps
+    gt_timestamps = np.array([gt.timestamp for gt in base_pose_ground_truth])
+    base_ground_truth_position = np.array([gt.position for gt in base_pose_ground_truth])
+    base_ground_truth_orientation = np.array([gt.orientation for gt in base_pose_ground_truth])
+
+    timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned = sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, base_ground_truth_position, base_ground_truth_orientation)
+
+    return timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, cumulative_reward
+
+def plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_rewards = None):
      # Plot the synchronized and aligned data
     plt.figure(figsize=(12, 8))
     plt.subplot(2, 1, 1)
@@ -1021,13 +1020,14 @@ def plot_trajectories(timestamps, base_position, base_orientation, gt_position, 
     ax.legend()
     plt.show()
     
-    if rewards is not None:
-        plt.figure(figsize=(12, 8))
-        plt.plot(rewards)
-        plt.xlabel('Time (s)')
-        plt.ylabel('Reward')
-        plt.title('Reward vs Time')
-        plt.show()
+    if cumulative_rewards is not None:
+        for cf in cumulative_rewards:
+            plt.figure(figsize=(12, 8))
+            plt.plot(cumulative_rewards[cf])
+            plt.xlabel('steps')
+            plt.ylabel('Cumulative Reward')
+            plt.title(f'Cumulative Reward for {cf} over steps')
+            plt.show()
 
 if __name__ == "__main__":
     # Read the measurement mcap file
@@ -1042,8 +1042,9 @@ if __name__ == "__main__":
     state = serow_framework.get_state(allow_invalid=True)
 
     # Run SEROW
-    timestamps, base_position, base_orientation, gt_position, gt_orientation, rewards = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state)
-    
+    timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_reward = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state)
+    print(f"Baseline cumulative reward: {cumulative_reward}")
+
     # Plot the trajectories
     plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, None)
    

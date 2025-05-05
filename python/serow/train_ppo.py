@@ -14,11 +14,9 @@ from read_mcap import(
     read_joint_measurements, 
     read_imu_measurements, 
     read_base_pose_ground_truth,
-    filter,
+    run_step,
     plot_trajectories,
-    logMap,
-    quaternion_to_rotation_matrix,
-    USE_GROUND_TRUTH
+    sync_and_align_data
 )
 
 # Actor network per leg end-effector
@@ -90,6 +88,15 @@ class Critic(nn.Module):
         return x
 
 def train_policy(datasets, contacts_frame, agents):
+    best_reward = {}
+    episode_rewards = {}
+    collected_steps = {}
+
+    for cf in contacts_frame:
+        best_reward[cf] = float('-inf')
+        episode_rewards[cf] = []
+        collected_steps[cf] = 0
+
     for dataset in datasets:
         # Get the measurements and the ground truth
         imu_measurements = dataset['imu']
@@ -101,18 +108,10 @@ def train_policy(datasets, contacts_frame, agents):
         initial_base_state = dataset['base_states'][0]
         initial_contact_state = dataset['contact_states'][0]
 
-        best_reward = {}
-        episode_rewards = {}
-        collected_steps = {}
-        for cf in contacts_frame:
-            best_reward[cf] = float('-inf')
-            episode_rewards[cf] = []
-            collected_steps[cf] = 0
-
         max_episode = 1
         update_steps = 64  # Train after collecting this many timesteps
 
-        for episode in range(max_episode):            
+        for episode in range(max_episode):
             serow_framework = serow.Serow()
             serow_framework.initialize("go2_rl.json")
             state = serow_framework.get_state(allow_invalid=True)
@@ -125,66 +124,30 @@ def train_policy(datasets, contacts_frame, agents):
             for cf in contacts_frame:
                 episode_reward[cf] = 0.0
             
+            step_count = 0
             for imu, joints, ft, gt in zip(imu_measurements, 
                                            joint_measurements, 
                                            force_torque_measurements, 
                                            base_pose_ground_truth):
+                actions = {}
+                log_probs = {}
+                values = {}
+                contact_status = {}
+                for cf in contacts_frame:
+                    contact_status[cf] = state.get_contact_status(cf)
+
                 x = np.concatenate([
                     state.get_base_position(),
                     state.get_base_linear_velocity(),
                     state.get_base_orientation()
                 ])
-               
-                # Get the current status of the contacts
-                contact_status = {}
-                for cf in contacts_frame:
-                    contact_status[cf] = state.get_contact_status(cf)
 
-                reward = {}
-                action = {}
-                log_prob = {}
-                value = {}
-                for cf in contacts_frame:
-                    if not contact_status[cf]:
-                        continue
+                for cf in state.get_contacts_frame():
+                    if contact_status[cf]:
+                        actions[cf], log_probs[cf] = agents[cf].actor.get_action(x, deterministic=False)
+                        values[cf] = agents[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agents[cf].critic.parameters()).device)).item()
 
-                    # Set action
-                    action[cf], log_prob[cf] = agents[cf].actor.get_action(x, deterministic=False)
-                    value[cf] = agents[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agents[cf].critic.parameters()).device)).item()
-                    serow_framework.set_action(cf, action[cf])
-
-                    # Compute the reward based on GT or NIS
-                    reward[cf] = float('-inf')
-                    if USE_GROUND_TRUTH:
-                        # Calculate errors
-                        position_error = np.linalg.norm(state.get_base_position() - gt.position)
-                        orientation_error = np.linalg.norm(
-                            logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-                                   quaternion_to_rotation_matrix(state.get_base_orientation())))
-                        
-                        # Calculate rewards with improvement focus
-                        position_reward = -1.0 * position_error 
-                        orientation_reward = -0.5 * orientation_error 
-                        
-                        reward[cf] = position_reward + orientation_reward 
-
-                    else:
-                        success = False
-                        innovation = np.zeros(3)
-                        covariance = np.zeros((3, 3))
-                        success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-                        if success:
-                            # Calculate innovation reward
-                            innovation_reward = -0.001 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                            
-                            # Combine rewards
-                            reward[cf] = innovation_reward
-
-                    episode_reward[cf] += reward[cf]
-                    collected_steps[cf] += 1
-
-                serow_framework.filter(imu, joints, ft, None, None)
-                state = serow_framework.get_state(allow_invalid=True)
+                _, state, reward = run_step(imu, joints, ft, gt, serow_framework, state, actions)
 
                  # Compute the next state
                 next_x = np.concatenate([
@@ -195,25 +158,35 @@ def train_policy(datasets, contacts_frame, agents):
 
                 # Add to buffer
                 for cf in contacts_frame:
-                    if not contact_status[cf]:
-                        continue
-                
-                    agents[cf].add_to_buffer(x, action[cf], reward[cf], next_x, 0.0, value[cf], log_prob[cf])
+                    if contact_status[cf]:
+                        episode_reward[cf] += reward
+                        agents[cf].add_to_buffer(x, actions[cf], reward, next_x, 0.0, values[cf], log_probs[cf])
 
-                    # Train policy if we've collected enough steps
-                    if collected_steps[cf] >= update_steps:
-                        agents[cf].train()
-                        collected_steps[cf] = 0
-            
-            episode_rewards[cf].append(episode_reward[cf])
-            if episode_reward[cf] > best_reward[cf]:
-                best_reward[cf] = episode_reward[cf]
+                        # Train policy if we've collected enough steps
+                        if collected_steps[cf] >= update_steps:
+                            agents[cf].train()
+                            collected_steps[cf] = 0
                 
-            print(f"Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
-        
+                step_count += 1
+                if step_count % 100 == 0:  # Print progress every 100 steps
+                    for cf in contacts_frame:
+                        print(f"Episode {episode}, Step {step_count}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
+            
+            for cf in contacts_frame:   
+                print(f"Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
+                episode_rewards[cf].append(episode_reward[cf])
+                if episode_reward[cf] > best_reward[cf]:
+                    best_reward[cf] = episode_reward[cf]
+
+    # Convert episode_rewards to numpy arrays
+    for cf in contacts_frame:
+        episode_rewards[cf] = np.array(episode_rewards[cf])
+        print(f"Debug - Final rewards array for {cf}: {episode_rewards[cf]}")
+
+    # Plot rewards for each contact frame
     for cf in contacts_frame:
         plt.figure(figsize=(10, 5))
-        plt.plot(np.array(episode_rewards[cf]), label='Episode Rewards')
+        plt.plot(episode_rewards[cf], label='Episode Rewards')
         plt.xlabel('Episode')
         plt.ylabel('Reward')
         plt.title(f'Episode Rewards for {cf}')
@@ -243,16 +216,62 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         state.set_contact_state(initial_contact_state)
         
         # Run SEROW
-        timestamps, base_position, base_orientation, gt_position, gt_orientation, rewards = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, agents)
+        timestamps = []
+        base_positions = []
+        base_orientations = []
+        cumulative_rewards = {}
+        for cf in contacts_frame:
+            cumulative_rewards[cf] = []
+
+        gt_positions = []
+        gt_orientations = []
+        gt_timestamps = []
+
+        for imu, joints, ft, gt in zip(imu_measurements, 
+                                           joint_measurements, 
+                                           force_torque_measurements, 
+                                           base_pose_ground_truth):
+            x = np.concatenate([
+                state.get_base_position(),
+                state.get_base_linear_velocity(),
+                state.get_base_orientation()
+            ])
+
+            actions = {}
+            for cf in contacts_frame:
+                actions[cf], _ = agents[cf].actor.get_action(x, deterministic=True)
+
+            timestamp, state, reward = run_step(imu, joints, ft, gt, serow_framework, state, actions)
+            
+            timestamps.append(timestamp)
+            base_positions.append(state.get_base_position())
+            base_orientations.append(state.get_base_orientation())
+            gt_positions.append(gt.position)
+            gt_orientations.append(gt.orientation)
+            gt_timestamps.append(gt.timestamp)
+            for cf in contacts_frame:
+                cumulative_rewards[cf].append(reward)
+
+        # Convert to numpy arrays
+        timestamps = np.array(timestamps)
+        base_positions = np.array(base_positions)
+        base_orientations = np.array(base_orientations)
+        gt_positions = np.array(gt_positions)
+        gt_orientations = np.array(gt_orientations)
+        cumulative_rewards = {cf: np.array(cumulative_rewards[cf]) for cf in contacts_frame}
+
+        # Sync and align the data
+        timestamps, base_positions, base_orientations, gt_positions, gt_orientations = sync_and_align_data(timestamps, base_positions, base_orientations, gt_timestamps, gt_positions, gt_orientations)
 
         # Plot the trajectories
-        plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, rewards)
+        plot_trajectories(timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards)
 
         # Print evaluation metrics
         print("\nPolicy Evaluation Metrics:")
-        print(f"Average Reward: {np.mean(rewards):.4f}")
-        print(f"Max Reward: {np.max(rewards):.4f}")
-        print(f"Min Reward: {np.min(rewards):.4f}")
+        for cf in contacts_frame:
+            print(f"Average Cumulative Reward for {cf}: {np.mean(cumulative_rewards[cf]):.4f}")
+            print(f"Max Cumulative Reward for {cf}: {np.max(cumulative_rewards[cf]):.4f}")
+            print(f"Min Cumulative Reward for {cf}: {np.min(cumulative_rewards[cf]):.4f}")
 
         # Save the trained policy for each contact frame
         if save_policy:
