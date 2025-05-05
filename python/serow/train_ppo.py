@@ -181,16 +181,27 @@ def train_policy(datasets, contacts_frame, agents):
         episode_rewards[cf] = np.array(episode_rewards[cf])
         print(f"Debug - Final rewards array for {cf}: {episode_rewards[cf]}")
 
-    # Plot rewards for each contact frame
-    for cf in contacts_frame:
-        plt.figure(figsize=(10, 5))
-        plt.plot(episode_rewards[cf], label='Episode Rewards')
-        plt.xlabel('Episode')
-        plt.ylabel('Reward')
-        plt.title(f'Episode Rewards for {cf}')
-        plt.grid(True)
-        plt.legend()
-        plt.show()
+    # Create a single figure with subplots for each contact frame
+    n_cf = len(contacts_frame)
+    fig, axes = plt.subplots(n_cf, 1, figsize=(10, 5*n_cf))
+    if n_cf == 1:
+        axes = [axes]  # Make axes iterable for single subplot case
+    
+    for ax, cf in zip(axes, contacts_frame):
+        ax.plot(episode_rewards[cf], label='Episode Rewards')
+        ax.plot(np.convolve(episode_rewards[cf], np.ones(10)/10, mode='valid'), label='Smoothed Rewards')
+        ax.fill_between(range(len(episode_rewards[cf])), 
+                       episode_rewards[cf] - np.std(episode_rewards[cf]), 
+                       episode_rewards[cf] + np.std(episode_rewards[cf]), 
+                       alpha=0.2)
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Reward')
+        ax.set_title(f'Episode Rewards for {cf}')
+        ax.grid(True)
+        ax.legend()
+    
+    plt.tight_layout()
+    plt.show()
 
 def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         # After training, evaluate the policy
@@ -226,9 +237,9 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         gt_timestamps = []
 
         for imu, joints, ft, gt in zip(imu_measurements, 
-                                           joint_measurements, 
-                                           force_torque_measurements, 
-                                           base_pose_ground_truth):
+                                       joint_measurements, 
+                                       force_torque_measurements, 
+                                       base_pose_ground_truth):
             x = np.concatenate([
                 state.get_base_position(),
                 state.get_base_linear_velocity(),
@@ -259,7 +270,7 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         cumulative_rewards = {cf: np.array(cumulative_rewards[cf]) for cf in contacts_frame}
 
         # Sync and align the data
-        timestamps, base_positions, base_orientations, gt_positions, gt_orientations = sync_and_align_data(timestamps, base_positions, base_orientations, gt_timestamps, gt_positions, gt_orientations)
+        timestamps, base_positions, base_orientations, gt_positions, gt_orientations = sync_and_align_data(timestamps, base_positions, base_orientations, gt_timestamps, gt_positions, gt_orientations, align = False)
 
         # Plot the trajectories
         plot_trajectories(timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards)
@@ -270,7 +281,7 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
             print(f"Average Cumulative Reward for {cf}: {np.mean(cumulative_rewards[cf]):.4f}")
             print(f"Max Cumulative Reward for {cf}: {np.max(cumulative_rewards[cf]):.4f}")
             print(f"Min Cumulative Reward for {cf}: {np.min(cumulative_rewards[cf]):.4f}")
-
+            print("-------------------------------------------------")
         # Save the trained policy for each contact frame
         if save_policy:
             for cf in contacts_frame:
@@ -291,6 +302,17 @@ if __name__ == "__main__":
     base_states = read_base_states("/tmp/serow_proprioception.mcap")
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
     
+    offset = len(imu_measurements) - len(base_states)
+
+    imu_measurements = imu_measurements[offset:]
+    joint_measurements = joint_measurements[offset:]
+    force_torque_measurements = force_torque_measurements[offset:]
+    base_pose_ground_truth = base_pose_ground_truth[offset:]
+
+    # Dataset length
+    dataset_length = len(imu_measurements)
+    print(f"Dataset length: {dataset_length}")
+
     # Calculate the size of each dataset
     total_size = len(contact_states)
     print(f"Total size: {total_size}")

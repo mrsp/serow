@@ -130,14 +130,6 @@ bool Serow::initialize(const std::string& config_file, std::optional<State> init
     if (!checkConfigParam("point_feet", point_feet))
         return false;
 
-    // Initialize state
-    if (initial_state) {
-        state_ = initial_state.value();
-    } else {
-        State state(contacts_frame, point_feet);
-        state_ = std::move(state);
-    }
-
     // Initialize attitude estimator
     if (!checkConfigParam("imu_rate", params_.imu_rate))
         return false;
@@ -260,7 +252,7 @@ bool Serow::initialize(const std::string& config_file, std::optional<State> init
             params_.R_base_to_acc(i, j) = config["R_base_to_acc"][3 * i + j];
 
             size_t k = 0;
-            for (const auto& frame : state_.getContactsFrame()) {
+            for (const auto& frame : contacts_frame) {
                 std::string k_str = std::to_string(k);
 
                 if (!config["R_foot_to_force"][k_str][3 * i + j].is_number_float()) {
@@ -341,12 +333,6 @@ bool Serow::initialize(const std::string& config_file, std::optional<State> init
         }
     };
 
-    // Load bias values from configuration
-    for (size_t i = 0; i < 3; i++) {
-        state_.base_state_.imu_angular_velocity_bias[i] = config["bias_gyro"][i];
-        state_.base_state_.imu_linear_acceleration_bias[i] = config["bias_acc"][i];
-    }
-
     // Load all covariance vectors
     loadCovarianceVector("imu_angular_velocity_covariance", params_.angular_velocity_cov);
     loadCovarianceVector("imu_angular_velocity_bias_covariance", params_.angular_velocity_bias_cov);
@@ -415,36 +401,51 @@ bool Serow::initialize(const std::string& config_file, std::optional<State> init
             }
         }
     }
-    // Initialize state uncertainty
-    state_.mass_ = kinematic_estimator_->getTotalMass();
-    state_.base_state_.base_position_cov = params_.initial_base_position_cov.asDiagonal();
-    state_.base_state_.base_orientation_cov = params_.initial_base_orientation_cov.asDiagonal();
-    state_.base_state_.base_linear_velocity_cov =
-        params_.initial_base_linear_velocity_cov.asDiagonal();
-    state_.base_state_.imu_angular_velocity_bias_cov =
-        params_.initial_imu_angular_velocity_bias_cov.asDiagonal();
-    state_.base_state_.imu_linear_acceleration_bias_cov =
-        params_.initial_imu_linear_acceleration_bias_cov.asDiagonal();
 
-    // Initialize contact covariances
-    std::map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
-    for (const auto& cf : state_.getContactsFrame()) {
-        state_.base_state_.contacts_position_cov[cf] =
-            params_.initial_contact_position_cov.asDiagonal();
-        if (!state_.isPointFeet()) {
-            contacts_orientation_cov[cf] = params_.initial_contact_orientation_cov.asDiagonal();
+    if (!initial_state.has_value()) {
+        // Initialize state
+        State state(contacts_frame, point_feet);
+        state_ = std::move(state);
+
+        // Load bias values from configuration
+        for (size_t i = 0; i < 3; i++) {
+            state_.base_state_.imu_angular_velocity_bias[i] = config["bias_gyro"][i];
+            state_.base_state_.imu_linear_acceleration_bias[i] = config["bias_acc"][i];
         }
-    }
 
-    if (!contacts_orientation_cov.empty()) {
-        state_.base_state_.contacts_orientation_cov = std::move(contacts_orientation_cov);
-    }
+        // Initialize state uncertainty
+        state_.mass_ = kinematic_estimator_->getTotalMass();
+        state_.base_state_.base_position_cov = params_.initial_base_position_cov.asDiagonal();
+        state_.base_state_.base_orientation_cov = params_.initial_base_orientation_cov.asDiagonal();
+        state_.base_state_.base_linear_velocity_cov =
+            params_.initial_base_linear_velocity_cov.asDiagonal();
+        state_.base_state_.imu_angular_velocity_bias_cov =
+            params_.initial_imu_angular_velocity_bias_cov.asDiagonal();
+        state_.base_state_.imu_linear_acceleration_bias_cov =
+            params_.initial_imu_linear_acceleration_bias_cov.asDiagonal();
 
-    // Initialize centroidal state
-    state_.centroidal_state_.com_position_cov = params_.initial_com_position_cov.asDiagonal();
-    state_.centroidal_state_.com_linear_velocity_cov =
-        params_.initial_com_linear_velocity_cov.asDiagonal();
-    state_.centroidal_state_.external_forces_cov = params_.initial_external_forces_cov.asDiagonal();
+        // Initialize contact covariances
+        std::map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
+        for (const auto& cf : state_.getContactsFrame()) {
+            state_.base_state_.contacts_position_cov[cf] =
+                params_.initial_contact_position_cov.asDiagonal();
+            if (!state_.isPointFeet()) {
+                contacts_orientation_cov[cf] = params_.initial_contact_orientation_cov.asDiagonal();
+            }
+        }
+
+        if (!contacts_orientation_cov.empty()) {
+            state_.base_state_.contacts_orientation_cov = std::move(contacts_orientation_cov);
+        }
+
+        // Initialize centroidal state
+        state_.centroidal_state_.com_position_cov = params_.initial_com_position_cov.asDiagonal();
+        state_.centroidal_state_.com_linear_velocity_cov =
+            params_.initial_com_linear_velocity_cov.asDiagonal();
+        state_.centroidal_state_.external_forces_cov = params_.initial_external_forces_cov.asDiagonal();
+    } else {
+        state_ = initial_state.value();
+    }
 
     proprioception_logger_job_ = std::make_unique<ThreadPool>();
     exteroception_logger_job_ = std::make_unique<ThreadPool>();

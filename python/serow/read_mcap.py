@@ -38,6 +38,53 @@ try:
 except ImportError as e:
     raise ImportError(f"Failed to import FlatBuffer schemas. Please ensure the project is built with Python code generation enabled. Error: {e}")
 
+def rotation_matrix_to_quaternion(R):
+    """
+    Convert a rotation matrix to a quaternion.
+    
+    Parameters: 
+    R : numpy array with shape (3, 3)
+        The rotation matrix
+        
+    Returns:
+    numpy array with shape (4,)
+        The corresponding quaternion
+    """
+    # Compute the trace of the matrix
+    trace = np.trace(R)
+    q = np.array([1.0, 0.0, 0.0, 0.0])
+
+    # Check if the matrix is close to a pure rotation matrix
+    if trace > 0:
+        S = np.sqrt(trace + 1.0) * 2.0  # S=4*qw
+        qw = 0.25 * S
+        qx = (R[2, 1] - R[1, 2]) / S
+        qy = (R[0, 2] - R[2, 0]) / S
+        qz = (R[1, 0] - R[0, 1]) / S
+        q = np.array([qw, qx, qy, qz])   
+    else:
+        # Compute the largest diagonal element
+        if R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+            S = np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2.0  # S=4*qx
+            qx = 0.25 * S
+            qy = (R[1, 0] + R[0, 1]) / S
+            qz = (R[2, 0] + R[0, 2]) / S
+            qw = (R[2, 1] - R[1, 2]) / S
+        elif R[1, 1] > R[2, 2]:
+            S = np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2.0  # S=4*qy  
+            qy = 0.25 * S       
+            qx = (R[1, 0] + R[0, 1]) / S
+            qz = (R[2, 1] + R[1, 2]) / S
+            qw = (R[0, 2] - R[2, 0]) / S
+        else:
+            S = np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2.0  # S=4*qz  
+            qz = 0.25 * S
+            qx = (R[2, 0] + R[0, 2]) / S
+            qy = (R[2, 1] + R[1, 2]) / S
+            qw = (R[1, 0] - R[0, 1]) / S
+        q = np.array([qw, qx, qy, qz])
+    return q / np.linalg.norm(q)
+
 def quaternion_to_rotation_matrix(q):
     """
     Convert a quaternion to a rotation matrix.
@@ -900,7 +947,7 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
 
     return imu.timestamp, state, reward
 
-def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, gt_position, gt_orientation):
+def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, gt_position, gt_orientation, align = False):
     # Find the common time range
     start_time = max(base_timestamps[0], gt_timestamps[0])
     end_time = min(base_timestamps[-1], gt_timestamps[-1])
@@ -925,23 +972,29 @@ def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_tim
         base_orientation_interp[:, i] = np.interp(common_timestamps, base_timestamps, base_orientation[:, i])
         gt_orientation_interp[:, i] = np.interp(common_timestamps, gt_timestamps, gt_orientation[:, i])
 
-    # Compute the initial rigid body transformation from the first timestamp
-    R = np.eye(3)
-    t = gt_position_interp[0] - base_position_interp[0]
-    
-    # Apply transformation to base position
-    base_position_aligned = (R @ base_position_interp.T).T + t
-    base_orientation_aligned = base_orientation_interp
+    if align:
+        # Compute the initial rigid body transformation from the first timestamp
+        R_gt = quaternion_to_rotation_matrix(gt_orientation_interp[0])
+        R_base = quaternion_to_rotation_matrix(base_orientation_interp[0])
+        R = R_gt.transpose() @ R_base
+        t = base_position_interp[0] - R @ gt_position_interp[0]
 
-    # Print transformation details
-    print("Rotation matrix:")
-    print(R)
-    print("\nTranslation vector:")
-    print(t)
+        # Apply transformation to base position and orientation
+        for i in range(len(common_timestamps)):
+            gt_position_interp[i] = R @ gt_position_interp[i] + t
+            gt_orientation_interp[i] = rotation_matrix_to_quaternion(R @ quaternion_to_rotation_matrix(gt_orientation_interp[i]))
 
-    return common_timestamps, base_position_aligned, base_orientation_aligned, gt_position_interp, gt_orientation_interp
+        # Print transformation details
+        print("Rotation matrix from gt to base:")
+        print(R)
+        print("\nTranslation vector from gt to base:")
+        print(t)
+    else:
+        print("Not spatially aligning data")
 
-def filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state):
+    return common_timestamps, base_position_interp, base_orientation_interp, gt_position_interp, gt_orientation_interp
+
+def filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align = False):
     base_positions = []
     base_orientations = []
     base_timestamps = []
@@ -968,7 +1021,7 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
     base_ground_truth_position = np.array([gt.position for gt in base_pose_ground_truth])
     base_ground_truth_orientation = np.array([gt.orientation for gt in base_pose_ground_truth])
 
-    timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned = sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, base_ground_truth_position, base_ground_truth_orientation)
+    timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned = sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, base_ground_truth_position, base_ground_truth_orientation, align)
 
     return timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, cumulative_reward
 
@@ -1021,13 +1074,20 @@ def plot_trajectories(timestamps, base_position, base_orientation, gt_position, 
     plt.show()
     
     if cumulative_rewards is not None:
-        for cf in cumulative_rewards:
-            plt.figure(figsize=(12, 8))
-            plt.plot(cumulative_rewards[cf])
-            plt.xlabel('steps')
-            plt.ylabel('Cumulative Reward')
-            plt.title(f'Cumulative Reward for {cf} over steps')
-            plt.show()
+        n_cf = len(cumulative_rewards)
+        fig, axes = plt.subplots(n_cf, 1, figsize=(12, 4*n_cf))
+        if n_cf == 1:
+            axes = [axes]  # Make axes iterable for single subplot case
+        
+        for ax, cf in zip(axes, cumulative_rewards):
+            ax.plot(cumulative_rewards[cf])
+            ax.set_xlabel('steps')
+            ax.set_ylabel('Cumulative Reward')
+            ax.set_title(f'Cumulative Reward for {cf} over steps')
+            ax.grid(True)
+        
+        plt.tight_layout()
+        plt.show()
 
 if __name__ == "__main__":
     # Read the measurement mcap file
@@ -1035,6 +1095,14 @@ if __name__ == "__main__":
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
+    base_states = read_base_states("/tmp/serow_proprioception.mcap")
+    contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
+
+    # offset = len(imu_measurements) - len(base_states)
+    # imu_measurements = imu_measurements[offset:]
+    # joint_measurements = joint_measurements[offset:]
+    # force_torque_measurements = force_torque_measurements[offset:]
+    # base_pose_ground_truth = base_pose_ground_truth[offset:]
 
     # Initialize SEROW
     serow_framework = serow.Serow()
@@ -1042,7 +1110,7 @@ if __name__ == "__main__":
     state = serow_framework.get_state(allow_invalid=True)
 
     # Run SEROW
-    timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_reward = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state)
+    timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_reward = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=False)
     print(f"Baseline cumulative reward: {cumulative_reward}")
 
     # Plot the trajectories

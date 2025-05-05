@@ -78,6 +78,13 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
 
     for (const auto& contact_frame : contacts_frame_) {
+        P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) = state.contacts_position_cov.at(contact_frame);
+        if (!point_feet_) {
+            P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) = state.contacts_orientation_cov.value().at(contact_frame);
+        }
+    }
+
+    for (const auto& contact_frame : contacts_frame_) {
         position_action_cov_gain_[contact_frame] = 1.0;
         contact_position_action_cov_gain_[contact_frame] = 1.0;
         if (!point_feet_) {
