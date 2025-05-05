@@ -1108,6 +1108,9 @@ if __name__ == "__main__":
     serow_framework = serow.Serow()
     serow_framework.initialize("go2_rl.json")
     state = serow_framework.get_state(allow_invalid=True)
+    # state.set_base_state(base_states[0])
+    # state.set_contact_state(contact_states[0])
+    # serow_framework.set_state(state)
 
     # Run SEROW
     timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_reward = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=False)

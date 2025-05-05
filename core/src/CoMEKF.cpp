@@ -33,6 +33,14 @@ void CoMEKF::init(const CentroidalState& state, double mass, double g, double ra
     std::cout << "Nonlinear CoM Estimator Initialized Successfully" << std::endl;
 }
 
+void CoMEKF::setState(const CentroidalState& state) {
+    P_ = I_;
+    P_(c_idx_, c_idx_) = state.com_position_cov;
+    P_(v_idx_, v_idx_) = state.com_linear_velocity_cov;
+    P_(f_idx_, f_idx_) = state.external_forces_cov;
+    last_grf_timestamp_ = state.timestamp;
+}
+
 void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
                      const GroundReactionForceMeasurement& grf) {
     double dt = nominal_dt_;

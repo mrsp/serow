@@ -271,7 +271,6 @@ PYBIND11_MODULE(serow, m) {
         .def(py::init<>(), "Default constructor")
         .def("initialize", &serow::Serow::initialize,
              py::arg("config"),
-             py::arg("initial_state") = py::none(),
              "Initializes SEROW's configuration and internal state")
         .def("filter",
              [](serow::Serow& self, const serow::ImuMeasurement& imu,
@@ -322,7 +321,10 @@ PYBIND11_MODULE(serow, m) {
              py::arg("action"),
              "Sets the action for a given contact frame")
         .def("is_initialized", &serow::Serow::isInitialized,
-             "Returns true if SEROW is initialized");
+             "Returns true if SEROW is initialized")
+        .def("set_state", &serow::Serow::setState,
+             py::arg("state"),
+             "Sets the state of the robot");
 
     // Binding for CentroidalState
     py::class_<serow::CentroidalState>(m, "CentroidalState", "Represents the centroidal state of the robot")

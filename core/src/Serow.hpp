@@ -50,11 +50,10 @@ public:
     /// @brief Destructor
     ~Serow();
 
-    /// @brief initializes SEROW's configuration and internal state
+    /// @brief initializes SEROW's configuration 
     /// @param config configuration to initialize SEROW with
-    /// @param initial_state optional initial state to initialize SEROW with
     /// @return true if SEROW was initialized successfully
-    bool initialize(const std::string& config, std::optional<State> initial_state = std::nullopt);
+    bool initialize(const std::string& config);
 
     /// @brief runs SEROW's estimator and updates the internal state
     /// @param imu base imu measurement includes linear acceleration and angular velocity
@@ -101,6 +100,13 @@ public:
     /// @brief Returns true if SEROW is initialized
     /// @return true if SEROW is initialized
     bool isInitialized() const;
+
+    /// @brief Resets SEROW's state and estimators
+    void reset();
+
+    /// @brief Sets the state of SEROW's internal state also resets the estimators
+    /// @param state the state to set
+    void setState(const State& state);
 
 private:
     struct Params {
@@ -246,6 +252,14 @@ private:
         std::string log_dir{"/tmp"};
         /// @brief offset between the base frame and the ground truth base frame
         Eigen::Isometry3d T_base_to_ground_truth{Eigen::Isometry3d::Identity()};
+        /// @brief proportional gain for the base attitude estimator
+        double Kp{0.0};
+        /// @brief integral gain for the base attitude estimator
+        double Ki{0.0};
+        /// @brief set of contact frames
+        std::set<std::string> contacts_frame{};
+        /// @brief whether or not the robot has point feet
+        bool point_feet{false};
     };
 
     /// @brief SEROW's configuration
@@ -299,6 +313,9 @@ private:
      * @param base_pose The base pose of the robot
      */
     void computeFrameTFs(const Eigen::Isometry3d& base_pose);
+
+    /// @brief Stops SEROW's logging threads
+    void stopLogging();
 };
 
 }  // namespace serow

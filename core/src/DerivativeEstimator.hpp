@@ -85,6 +85,13 @@ class DerivativeEstimator {
      * @brief Default constructor.
      */
     DerivativeEstimator() = default;
+
+    /**
+     * @brief Sets the state of the estimator.
+     * @param x The signal.
+     * @param x_dot The signal's derivative.
+     */
+    void setState(const Eigen::VectorXd& x, const Eigen::VectorXd& x_dot);
 };
 
 }  // namespace serow

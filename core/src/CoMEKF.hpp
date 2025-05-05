@@ -145,6 +145,12 @@ public:
      */
     void updateWithImu(CentroidalState& state, const KinematicMeasurement& kin, 
                        const GroundReactionForceMeasurement& grf);
+
+    /**
+     * @brief Sets the state of the EKF.
+     * @param state The state to set.
+     */
+    void setState(const CentroidalState& state);
 };
 
 }  // namespace serow

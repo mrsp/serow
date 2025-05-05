@@ -102,6 +102,12 @@ public:
     bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
                                          Eigen::Matrix3d& covariance) const;
 
+    /**
+     * @brief Sets the state of the EKF.
+     * @param state The state to set.
+     */
+    void setState(const BaseState& state);
+
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.

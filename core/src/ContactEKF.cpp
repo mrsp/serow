@@ -69,7 +69,30 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
         }
     }
 
-    // Initialize the error state covariance
+    // Set the initialstate
+    setState(state);
+
+    // Compute some parts of the Input-Noise Jacobian once since they are constants
+    // gyro (0), acc (3), gyro_bias (6), acc_bias (9), leg end effectors (12 - 12 + contact_dim * N)
+    Lc_.setZero(num_states_, num_inputs_);
+    Lc_(v_idx_, na_idx_) = -Eigen::Matrix3d::Identity();
+    Lc_(r_idx_, ng_idx_) = -Eigen::Matrix3d::Identity();
+    Lc_(bg_idx_, nbg_idx_) = Eigen::Matrix3d::Identity();
+    Lc_(ba_idx_, nba_idx_) = Eigen::Matrix3d::Identity();
+
+    for (const auto& contact_frame : contacts_frame_) {
+        Lc_(pl_idx_.at(contact_frame), npl_idx_.at(contact_frame)) = -Eigen::Matrix3d::Identity();
+        if (!point_feet_) {
+            Lc_(rl_idx_.at(contact_frame), nrl_idx_.at(contact_frame)) =
+                -Eigen::Matrix3d::Identity();
+        }
+    }
+
+    std::cout << "Contact EKF Initialized Successfully" << std::endl;
+}
+
+void ContactEKF::setState(const BaseState& state) {
+    // Set the error state covariance
     P_ = I_;
     P_(v_idx_, v_idx_) = state.base_linear_velocity_cov;
     P_(r_idx_, r_idx_) = state.base_orientation_cov;
@@ -101,24 +124,7 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
                 state.contacts_orientation_cov.value().at(contact_frame);
         }
     }
-
-    // Compute some parts of the Input-Noise Jacobian once since they are constants
-    // gyro (0), acc (3), gyro_bias (6), acc_bias (9), leg end effectors (12 - 12 + contact_dim * N)
-    Lc_.setZero(num_states_, num_inputs_);
-    Lc_(v_idx_, na_idx_) = -Eigen::Matrix3d::Identity();
-    Lc_(r_idx_, ng_idx_) = -Eigen::Matrix3d::Identity();
-    Lc_(bg_idx_, nbg_idx_) = Eigen::Matrix3d::Identity();
-    Lc_(ba_idx_, nba_idx_) = Eigen::Matrix3d::Identity();
-
-    for (const auto& contact_frame : contacts_frame_) {
-        Lc_(pl_idx_.at(contact_frame), npl_idx_.at(contact_frame)) = -Eigen::Matrix3d::Identity();
-        if (!point_feet_) {
-            Lc_(rl_idx_.at(contact_frame), nrl_idx_.at(contact_frame)) =
-                -Eigen::Matrix3d::Identity();
-        }
-    }
-
-    std::cout << "Contact EKF Initialized Successfully" << std::endl;
+    last_imu_timestamp_ = state.timestamp;
 }
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobians(
