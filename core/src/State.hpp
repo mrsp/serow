@@ -247,6 +247,14 @@ public:
     int getNumLegEE() const;
     /// Returns the flag to indicate if the robot has point feet
     bool isPointFeet() const;
+    /// Returns the flag to indicate if the state is valid
+    bool isValid() const;
+    /// Returns the flag to indicate if the state is initialized
+    bool isInitialized() const;
+    /// Sets the flag to indicate if the state is valid
+    void setValid(bool valid);
+    /// Sets the flag to indicate if the state is initialized
+    void setInitialized(bool initialized);
 
     State() = default;
     State(std::set<std::string> contacts_frame, bool point_feet);
@@ -261,12 +269,14 @@ private:
     bool point_feet_{};
     /// Number of leg end-effectors
     int num_leg_ee_{};
-    /// Flag to indicate if the state is valid
+    /// Flag to indicate if the state has converged and is valid
     bool is_valid_{};
     /// Leg contact frames
     std::set<std::string> contacts_frame_;
     /// Robot mass (kg)
     double mass_{};
+    /// Flag to indicate if the state is filled with valid data
+    bool is_initialized_{};
 
     /// Individual states
     JointState joint_state_;

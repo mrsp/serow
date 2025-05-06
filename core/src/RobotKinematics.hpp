@@ -478,6 +478,15 @@ public:
     }
 
     /**
+     * @brief Retrieves the names of all joints in the robot model.
+     * @return std::vector<std::string> containing the names of all joints.
+     * @note This function returns the stored joint names in the member variable jnames_.
+     */
+    std::vector<std::string> getJointNames() const {
+        return jnames_;
+    }
+
+    /**
      * @brief Prints the names and limits of all joints in the robot model to standard output.
      * @note This function checks if the sizes of jnames_, qmin_, qmax_, and dqmax_ match.
      *       It then prints the joint names, minimum angular limits (qmin_), maximum angular limits

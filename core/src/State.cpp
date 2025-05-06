@@ -19,6 +19,7 @@ State::State(std::set<std::string> contacts_frame, bool point_feet) {
     num_leg_ee_ = contacts_frame_.size();
     point_feet_ = point_feet;
     is_valid_ = false;
+    is_initialized_ = false;
 
     std::map<std::string, Eigen::Quaterniond> contacts_orientation;
     std::map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
@@ -311,6 +312,22 @@ void State::setCentroidalState(const CentroidalState& centroidal_state) {
 
 void State::setJointState(const JointState& joint_state) {
     joint_state_ = joint_state;
+}
+
+bool State::isValid() const {
+    return is_valid_;
+}
+
+bool State::isInitialized() const {
+    return is_initialized_;
+}
+
+void State::setValid(bool valid) {
+    is_valid_ = valid;
+}
+
+void State::setInitialized(bool initialized) {
+    is_initialized_ = initialized;
 }
 
 }  // namespace serow

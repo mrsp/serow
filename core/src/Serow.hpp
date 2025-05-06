@@ -308,11 +308,78 @@ private:
     /// @brief Frame transformations
     std::map<std::string, Eigen::Isometry3d> frame_tfs_;
 
-    /**
-     * @brief Computes the frame transformations for all frames in the robot model
-     * @param base_pose The base pose of the robot
-     */
-    void computeFrameTFs(const Eigen::Isometry3d& base_pose);
+    /// @brief Logs the measurements
+    /// @param imu IMU measurement
+    /// @param joints joint measurements
+    /// @param ft force/torque measurements
+    /// @param base_pose_ground_truth ground truth base pose
+    void logMeasurements(ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
+                        std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
+                        std::optional<BasePoseGroundTruth> base_pose_ground_truth = std::nullopt);
+    
+    /// @brief Runs all the joint estimators to estimate the joint positions and velocities
+    /// @param state the state of the robot
+    /// @param joints joint measurements
+    void runJointsEstimator(State& state, const std::map<std::string, JointMeasurement>& joints);
+
+    /// @brief Runs the IMU estimator
+    /// @param imu IMU measurement
+    void runImuEstimator(ImuMeasurement& imu);
+
+    /// @brief Runs the forward kinematics
+    /// @param state the state of the robot
+    /// @return kinematic measurements
+    KinematicMeasurement runForwardKinematics(const State& state);
+
+    /// @brief Computes the leg odometry and updates the kinematic measurements accordingly
+    /// @param state the state of the robot
+    /// @param imu IMU measurement
+    /// @param kin kinematic measurements
+    void computeLegOdometry(const State& state, const ImuMeasurement& imu, KinematicMeasurement& kin);
+
+    /// @brief Runs the angular momentum estimator
+    /// @param state the state of the robot
+    void runAngularMomentumEstimator(State& state);
+
+    /// @brief Runs the contact estimator to estimate the leg end-effector contact state
+    /// @param state the state of the robot
+    /// @param ft force/torque measurements
+    /// @param kin kinematic measurements
+    /// @param contacts_probability contact probabilities
+    void runContactEstimator(State& state,
+                                std::map<std::string, ForceTorqueMeasurement>& ft,
+                                KinematicMeasurement& kin,
+                                std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
+
+    /// @brief Runs the base estimator
+    /// @param state the state of the robot
+    /// @param imu IMU measurement
+    /// @param kin kinematic measurements
+    /// @param odom exteroceptive odometry measurement
+    void runBaseEstimator(State& state, const ImuMeasurement& imu, const KinematicMeasurement& kin, std::optional<OdometryMeasurement> odom);
+
+    /// @brief Runs the CoM estimator
+    /// @param state the state of the robot
+    /// @param kin kinematic measurements
+    /// @param ft force/torque measurements
+    void runCoMEstimator(State& state, KinematicMeasurement& kin, 
+                         std::optional<std::map<std::string, ForceTorqueMeasurement>> ft);
+
+    /// @brief Computes the frame transformations for all frames in the robot model
+    /// @param state the state of the robot
+    void updateFrameTree(const State& state);
+
+    /// @brief Logs the proprioceptive measurements
+    /// @param state the state of the robot
+    /// @param imu IMU measurement
+    void logProprioception(const State& state, const ImuMeasurement& imu);
+
+    /// @brief Logs the exteroceptive measurements
+    /// @param state the state of the robot
+    void logExteroception(const State& state);
+
+    /// @brief Initializes all the data loggers and the corresponding thread pool jobs
+    void initializeLogging();
 
     /// @brief Stops SEROW's logging threads
     void stopLogging();

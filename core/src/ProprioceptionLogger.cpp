@@ -333,8 +333,8 @@ public:
                                         base_state.base_position.y(), base_state.base_position.z());
 
             auto base_orientation = foxglove::CreateQuaternion(
-                builder, base_state.base_orientation.w(), base_state.base_orientation.x(),
-                base_state.base_orientation.y(), base_state.base_orientation.z());
+                builder, base_state.base_orientation.x(), base_state.base_orientation.y(),
+                base_state.base_orientation.z(), base_state.base_orientation.w());
 
             auto base_linear_velocity = foxglove::CreateVector3(
                 builder, base_state.base_linear_velocity.x(), base_state.base_linear_velocity.y(),
@@ -433,8 +433,8 @@ public:
             if (base_state.contacts_orientation) {
                 for (const auto& [_, orientation] : *base_state.contacts_orientation) {
                     contacts_orientation_vec.push_back(
-                        foxglove::CreateQuaternion(builder, orientation.w(), orientation.x(),
-                                                   orientation.y(), orientation.z()));
+                        foxglove::CreateQuaternion(builder, orientation.x(), orientation.y(),
+                                                   orientation.z(), orientation.w()));
                 }
             }
             auto contacts_orientation = builder.CreateVector(contacts_orientation_vec);

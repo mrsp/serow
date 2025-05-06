@@ -88,6 +88,9 @@ struct KinematicMeasurement {
     std::map<std::string, Eigen::Vector3d>
         contacts_position;  ///< Map of contact positions relative to base frame (m)
     std::map<std::string, Eigen::Vector3d> base_to_foot_positions;
+    std::map<std::string, Eigen::Quaterniond> base_to_foot_orientations; ///< Map of foot orientations relative to base frame (quaternion)
+    std::map<std::string, Eigen::Vector3d> base_to_foot_linear_velocities; ///< Map of foot linear velocities relative to base frame (m/s)
+    std::map<std::string, Eigen::Vector3d> base_to_foot_angular_velocities; ///< Map of foot angular velocities relative to base frame (rad/s)
     std::map<std::string, Eigen::Matrix3d>
         contacts_position_noise;  ///< Map of contact position noise covariances relative to base
                                   ///< frame (m^2)

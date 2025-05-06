@@ -1098,19 +1098,20 @@ if __name__ == "__main__":
     base_states = read_base_states("/tmp/serow_proprioception.mcap")
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
 
-    # offset = len(imu_measurements) - len(base_states)
-    # imu_measurements = imu_measurements[offset:]
-    # joint_measurements = joint_measurements[offset:]
-    # force_torque_measurements = force_torque_measurements[offset:]
-    # base_pose_ground_truth = base_pose_ground_truth[offset:]
+    offset = len(imu_measurements) - len(base_states) 
+    print(f"sample offset: {offset}")
+    imu_measurements = imu_measurements[offset:]
+    joint_measurements = joint_measurements[offset:]
+    force_torque_measurements = force_torque_measurements[offset:]
+    base_pose_ground_truth = base_pose_ground_truth[offset:]
 
     # Initialize SEROW
     serow_framework = serow.Serow()
     serow_framework.initialize("go2_rl.json")
     state = serow_framework.get_state(allow_invalid=True)
-    # state.set_base_state(base_states[0])
-    # state.set_contact_state(contact_states[0])
-    # serow_framework.set_state(state)
+    state.set_base_state(base_states[0])
+    state.set_contact_state(contact_states[0])
+    serow_framework.set_state(state)
 
     # Run SEROW
     timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_reward = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=False)

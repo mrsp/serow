@@ -97,6 +97,7 @@ public:
 
     /**
      * @brief Constructor for the LegOdometry class.
+     * @param base_position Initial position of the base in world coordinates
      * @param feet_position Initial positions of the feet in world coordinates
      * @param feet_orientation Initial orientations of the feet in world coordinates
      * @param mass Mass of the robot
@@ -108,6 +109,7 @@ public:
      * @param force_torque_offset Force/Torque sensor offsets from the contact frames (optional)
      */
     LegOdometry(
+        const Eigen::Vector3d& base_position,
         std::map<std::string, Eigen::Vector3d> feet_position,
         std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass, double alpha1,
         double alpha3, double freq, double g, double eps,
