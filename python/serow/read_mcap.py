@@ -35,6 +35,7 @@ try:
     from foxglove.JointMeasurements import JointMeasurements as FbJointMeasurements
     from foxglove.ForceTorqueMeasurements import ForceTorqueMeasurements as FbForceTorqueMeasurements
     from foxglove.ContactState import ContactState as FbContactState
+    from foxglove.JointState import JointState  as FbJointState
 except ImportError as e:
     raise ImportError(f"Failed to import FlatBuffer schemas. Please ensure the project is built with Python code generation enabled. Error: {e}")
 
@@ -746,6 +747,71 @@ def decode_force_torque_measurement(data: bytes) -> dict[str, serow.ForceTorqueM
     
     return ft_measurements
 
+def decode_joint_state(data: bytes) -> serow.JointState:
+    """Decode a FlatBuffer message into a JointState object."""
+    fb_msg = FbJointState.GetRootAs(data, 0)
+    joint_state = serow.JointState()
+    
+    # Decode timestamp
+    timestamp = fb_msg.Timestamp()
+    if timestamp:
+        joint_state.timestamp = timestamp.Sec() + timestamp.Nsec() * 1e-9
+    
+    # Get the arrays from the FlatBuffer message
+    names = []
+    positions = []
+    velocities = []
+    
+    for i in range(fb_msg.NamesLength()):
+        name = fb_msg.Names(i)
+        if name:
+            names.append(name.decode())
+    
+    for i in range(fb_msg.PositionsLength()):
+        pos = fb_msg.Positions(i)
+        positions.append(pos)
+    
+    for i in range(fb_msg.VelocitiesLength()):
+        vel = fb_msg.Velocities(i)
+        velocities.append(vel)
+    
+    # Create new dictionaries
+    joints_position = {}
+    joints_velocity = {}
+    
+    # Fill the dictionaries
+    for i, name in enumerate(names):
+        if i < len(positions):
+            joints_position[name] = positions[i]
+        if i < len(velocities):
+            joints_velocity[name] = velocities[i]
+    
+    # Assign the dictionaries to the joint_state object
+    joint_state.joints_position = joints_position
+    joint_state.joints_velocity = joints_velocity
+    return joint_state
+
+def read_joint_states(file_path: str):
+    """Read and decode joint state messages from an MCAP file."""
+    try:
+        with open(file_path, "rb") as f:
+            reader = make_reader(f)
+            joint_states_list = []
+            
+            for schema, channel, message in reader.iter_messages():
+                if channel.topic == "/joint_state":
+                    joint_state = decode_joint_state(message.data)
+                    joint_states_list.append(joint_state)
+            
+            print(f"Found {len(joint_states_list)} joint states")
+            return joint_states_list
+    except FileNotFoundError:
+        print(f"Error: File not found: {file_path}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading MCAP file: {str(e)}")
+        sys.exit(1)
+
 def read_imu_measurements(file_path: str):
     """Read and decode messages from an MCAP file."""
     try:
@@ -762,10 +828,10 @@ def read_imu_measurements(file_path: str):
             return imu_measurements
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
-        raise
+        sys.exit(1)
     except Exception as e:
         print(f"Error reading MCAP file: {str(e)}")
-        raise
+        sys.exit(1)
 
 def read_kinematic_measurements(file_path: str):
     """Read and decode messages from an MCAP file."""
@@ -783,10 +849,10 @@ def read_kinematic_measurements(file_path: str):
             return kinematic_measurements
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
-        raise
+        sys.exit(1)
     except Exception as e:
         print(f"Error reading MCAP file: {str(e)}")
-        raise
+        sys.exit(1)
 
 def read_base_states(file_path: str):
     """Read and decode the base states from an MCAP file.
@@ -809,10 +875,10 @@ def read_base_states(file_path: str):
             return base_states
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
-        raise
+        sys.exit(1)
     except Exception as e:
         print(f"Error reading MCAP file: {str(e)}")
-        raise
+        sys.exit(1)
 
 def read_contact_states(file_path: str):
     """Read and decode the contact states from an MCAP file.
@@ -835,10 +901,10 @@ def read_contact_states(file_path: str):
             return contact_states   
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
-        raise
+        sys.exit(1)
     except Exception as e:
         print(f"Error reading MCAP file: {str(e)}")
-        raise
+        sys.exit(1)
 
 def read_base_pose_ground_truth(file_path: str):
     """Read and decode the base pose ground truth from an MCAP file.
@@ -862,10 +928,10 @@ def read_base_pose_ground_truth(file_path: str):
             return base_pose_ground_truth
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
-        raise
+        sys.exit(1)
     except Exception as e:
         print(f"Error reading MCAP file: {str(e)}")
-        raise
+        sys.exit(1)
 
 def read_joint_measurements(file_path: str):
     """Read and decode joint measurement messages from an MCAP file."""
@@ -883,10 +949,10 @@ def read_joint_measurements(file_path: str):
             return joint_measurements_list
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
-        raise
+        sys.exit(1)
     except Exception as e:
         print(f"Error reading MCAP file: {str(e)}")
-        raise
+        sys.exit(1)
 
 def read_force_torque_measurements(file_path: str):
     """Read and decode force-torque measurement messages from an MCAP file."""
@@ -904,10 +970,10 @@ def read_force_torque_measurements(file_path: str):
             return ft_measurements_list
     except FileNotFoundError:
         print(f"Error: File not found: {file_path}")
-        raise
+        sys.exit(1)
     except Exception as e:
         print(f"Error reading MCAP file: {str(e)}")
-        raise
+        sys.exit(1)
 
 def run_step(imu, joint, ft, gt, serow_framework, state, actions):
     # Set the actions
@@ -993,7 +1059,6 @@ def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_tim
         print("Not spatially aligning data")
 
     return common_timestamps, base_position_interp, base_orientation_interp, gt_position_interp, gt_orientation_interp
-
 def filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align = False):
     base_positions = []
     base_orientations = []
@@ -1089,29 +1154,89 @@ def plot_trajectories(timestamps, base_position, base_orientation, gt_position, 
         plt.tight_layout()
         plt.show()
 
+def plot_joint_states(joint_states):
+    """Plot joint positions and velocities over time."""
+    # Debug print to check joint states
+    print(f"Number of joint states: {len(joint_states)}")
+    if len(joint_states) == 0:
+        print("Error: No joint states available")
+        return
+        
+    # Get all unique joint names
+    joint_names = list(joint_states[0].joints_position.keys())
+    print(f"Joint names: {joint_names}")
+    n_joints = len(joint_names)
+    
+    if n_joints == 0:
+        print("Error: No joints found in the first joint state")
+        return
+        
+    print(f"Number of joints: {n_joints}")
+    
+    # Create figure with subplots for positions
+    fig_pos, axes_pos = plt.subplots(n_joints, 1, figsize=(12, 4*n_joints))
+    fig_pos.suptitle('Joint Positions Over Time')
+    
+    # Create figure with subplots for velocities
+    fig_vel, axes_vel = plt.subplots(n_joints, 1, figsize=(12, 4*n_joints))
+    fig_vel.suptitle('Joint Velocities Over Time')
+    
+    # Create time array
+    times = np.arange(len(joint_states))
+    
+    # Plot each joint's position and velocity
+    for i, joint_name in enumerate(joint_names):
+        # Extract position and velocity data for this joint
+        positions = [state.joints_position[joint_name] for state in joint_states]
+        velocities = [state.joints_velocity[joint_name] for state in joint_states]
+        
+        # Plot position
+        axes_pos[i].plot(times, positions)
+        axes_pos[i].set_ylabel('Position (rad)')
+        axes_pos[i].set_title(f'{joint_name} Position')
+        axes_pos[i].grid(True)
+        
+        # Plot velocity
+        axes_vel[i].plot(times, velocities)
+        axes_vel[i].set_ylabel('Velocity (rad/s)')
+        axes_vel[i].set_title(f'{joint_name} Velocity')
+        axes_vel[i].grid(True)
+    
+    # Add x-label to bottom subplot only
+    axes_pos[-1].set_xlabel('Time Steps')
+    axes_vel[-1].set_xlabel('Time Steps')
+    
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
     # Read the measurement mcap file
+    joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
     base_states = read_base_states("/tmp/serow_proprioception.mcap")
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
+   
+    # Plot joint states
+    # plot_joint_states(joint_states)
 
-    # offset = len(imu_measurements) - len(base_states) 
-    # print(f"sample offset: {offset}")
-    # imu_measurements = imu_measurements[offset:]
-    # joint_measurements = joint_measurements[offset:]
-    # force_torque_measurements = force_torque_measurements[offset:]
-    # base_pose_ground_truth = base_pose_ground_truth[offset:]
+    offset = len(imu_measurements) - len(base_states) 
+    print(f"sample offset: {offset}")
+    imu_measurements = imu_measurements[offset:]
+    joint_measurements = joint_measurements[offset:]
+    force_torque_measurements = force_torque_measurements[offset:]
+    base_pose_ground_truth = base_pose_ground_truth[offset:]
 
     # Initialize SEROW
     serow_framework = serow.Serow()
     serow_framework.initialize("go2_rl.json")
     state = serow_framework.get_state(allow_invalid=True)
-    # state.set_base_state(base_states[0])
-    # state.set_contact_state(contact_states[0])
-    # serow_framework.set_state(state)
+    state.set_joint_state(joint_states[0])
+    state.set_base_state(base_states[0])  
+    state.set_contact_state(contact_states[0])
+    serow_framework.set_state(state)
 
     # Run SEROW
     timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_reward = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=True)
@@ -1120,3 +1245,4 @@ if __name__ == "__main__":
     # Plot the trajectories
     plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, None)
    
+
