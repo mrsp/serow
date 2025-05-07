@@ -1,0 +1,13 @@
+include "Vector3.fbs";
+include "Time.fbs";
+
+namespace foxglove;
+
+table JointState {
+    timestamp:Time;
+    names:[string];
+    positions:[double];
+    velocities:[double];
+}
+
+root_type JointState; 

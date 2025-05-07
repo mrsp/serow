@@ -37,3 +37,7 @@ from foxglove.Contact import Contact\n$(cat ../build/generated/foxglove/ContactS
 
 # Add imports to Contact.py
 echo -e "from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/Contact.py)" > ../build/generated/foxglove/Contact.py
+
+# Add imports to JointState.py
+echo -e "from foxglove.Time import Time\n
+from foxglove.Vector3 import Vector3\n$(cat ../build/generated/foxglove/JointState.py)" > ../build/generated/foxglove/JointState.py 

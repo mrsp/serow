@@ -20,6 +20,7 @@
 #include "FrameTransform_generated.h"
 #include "FrameTransforms_generated.h"
 #include "ImuMeasurement_generated.h"
+#include "JointState_generated.h"
 #include "Time_generated.h"
 #include "Vector3_generated.h"
 
@@ -569,6 +570,72 @@ public:
         }
     }
 
+    void log(const JointState& joint_state) {
+        try {
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
+            if (!start_time_.has_value()) {
+                start_time_ = joint_state.timestamp;
+            }
+            const double timestamp = joint_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
+            // Convert timestamp to sec and nsec
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(timestamp, sec, nsec);   
+
+            auto time = foxglove::Time(sec, nsec);
+
+            // Create joint state vectors
+            std::vector<flatbuffers::Offset<flatbuffers::String>> joint_names_vec;
+            std::vector<double> joint_positions_vec;
+            std::vector<double> joint_velocities_vec;
+
+            // Pre-allocate vectors for better performance
+            joint_names_vec.reserve(joint_state.joints_position.size());
+            joint_positions_vec.reserve(joint_state.joints_position.size());
+            joint_velocities_vec.reserve(joint_state.joints_position.size());
+
+            // Build the vectors
+            for (const auto& [name, position] : joint_state.joints_position) {
+                joint_names_vec.push_back(builder.CreateString(name));
+                joint_positions_vec.push_back(position);
+                joint_velocities_vec.push_back(joint_state.joints_velocity.at(name));
+            }
+          
+            // Create the vectors in the builder
+            auto names_offset = builder.CreateVector(joint_names_vec);
+            auto positions_offset = builder.CreateVector(joint_positions_vec);
+            auto velocities_offset = builder.CreateVector(joint_velocities_vec);
+
+            // Create the root message
+            foxglove::JointStateBuilder joint_states_builder(builder);
+            joint_states_builder.add_timestamp(&time);
+            joint_states_builder.add_names(names_offset);
+            joint_states_builder.add_positions(positions_offset);
+            joint_states_builder.add_velocities(velocities_offset);
+            auto joint_states_array = joint_states_builder.Finish();
+
+            // Finish the buffer
+            builder.Finish(joint_states_array);
+
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
+            // Write the message
+            writeMessage(6, joint_states_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging joint state: " << e.what() << std::endl;
+        }
+    }
+            
     bool isInitialized() const {
         return start_time_.has_value();
     }
@@ -616,6 +683,7 @@ private:
         schemas.push_back(createSchema("CentroidalState"));
         schemas.push_back(createSchema("BaseState"));
         schemas.push_back(createSchema("FrameTransforms"));
+        schemas.push_back(createSchema("JointState"));
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -630,6 +698,7 @@ private:
         channels.push_back(createChannel(3, "/centroidal_state"));
         channels.push_back(createChannel(4, "/base_state"));
         channels.push_back(createChannel(5, "/tf"));
+        channels.push_back(createChannel(6, "/joint_state"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
@@ -654,6 +723,7 @@ private:
     uint64_t contact_sequence_ = 0;
     uint64_t imu_sequence_ = 0;
     uint64_t tfs_sequence_ = 0;
+    uint64_t joint_states_sequence_ = 0;
     std::optional<double> start_time_;
 
     // MCAP writing components
@@ -687,6 +757,10 @@ void ProprioceptionLogger::log(const ContactState& contact_state) {
 void ProprioceptionLogger::log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs,
                                double timestamp) {
     pimpl_->log(frame_tfs, timestamp);
+}
+
+void ProprioceptionLogger::log(const JointState& joint_state) {
+    pimpl_->log(joint_state);
 }
 
 void ProprioceptionLogger::setStartTime(double timestamp) {

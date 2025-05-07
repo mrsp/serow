@@ -953,7 +953,7 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
 void Serow::logProprioception(const State& state, const ImuMeasurement& imu) {
     if (!proprioception_logger_job_->isRunning()) {
         proprioception_logger_job_->addJob(
-            [this, base_state = state.base_state_, centroidal_state = state.centroidal_state_,
+            [this, joints_state = state.joint_state_, base_state = state.base_state_, centroidal_state = state.centroidal_state_,
              contact_state = state.contact_state_, imu = imu, frame_tfs = frame_tfs_]() {
                 try {
                     if (!proprioception_logger_->isInitialized()) {
@@ -962,6 +962,7 @@ void Serow::logProprioception(const State& state, const ImuMeasurement& imu) {
                     }
                     // Log all state data to MCAP file
                     proprioception_logger_->log(imu);
+                    proprioception_logger_->log(joints_state);
                     proprioception_logger_->log(contact_state);
                     proprioception_logger_->log(centroidal_state);
                     proprioception_logger_->log(base_state);

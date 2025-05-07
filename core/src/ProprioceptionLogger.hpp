@@ -65,6 +65,7 @@ public:
     void log(const ContactState& contact_state);
     void log(const ImuMeasurement& imu_measurement);
     void log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double timestamp);
+    void log(const JointState& joint_state);
     void setStartTime(double timestamp);
     bool isInitialized() const;
 
