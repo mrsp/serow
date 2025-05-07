@@ -314,8 +314,8 @@ private:
     /// @param ft force/torque measurements
     /// @param base_pose_ground_truth ground truth base pose
     void logMeasurements(ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
-                        std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
-                        std::optional<BasePoseGroundTruth> base_pose_ground_truth = std::nullopt);
+                         std::map<std::string, ForceTorqueMeasurement> ft,
+                         std::optional<BasePoseGroundTruth> base_pose_ground_truth = std::nullopt);
     
     /// @brief Runs all the joint estimators to estimate the joint positions and velocities
     /// @param state the state of the robot
@@ -323,19 +323,19 @@ private:
     void runJointsEstimator(State& state, const std::map<std::string, JointMeasurement>& joints);
 
     /// @brief Runs the IMU estimator
+    /// @param state the state of the robot
     /// @param imu IMU measurement
-    void runImuEstimator(ImuMeasurement& imu);
+    void runImuEstimator(State& state, ImuMeasurement& imu);
 
     /// @brief Runs the forward kinematics
     /// @param state the state of the robot
     /// @return kinematic measurements
-    KinematicMeasurement runForwardKinematics(const State& state);
+    KinematicMeasurement runForwardKinematics(State& state);
 
     /// @brief Computes the leg odometry and updates the kinematic measurements accordingly
     /// @param state the state of the robot
-    /// @param imu IMU measurement
     /// @param kin kinematic measurements
-    void computeLegOdometry(const State& state, const ImuMeasurement& imu, KinematicMeasurement& kin);
+    void computeLegOdometry(const State& state, KinematicMeasurement& kin);
 
     /// @brief Runs the angular momentum estimator
     /// @param state the state of the robot
@@ -347,9 +347,9 @@ private:
     /// @param kin kinematic measurements
     /// @param contacts_probability contact probabilities
     void runContactEstimator(State& state,
-                                std::map<std::string, ForceTorqueMeasurement>& ft,
-                                KinematicMeasurement& kin,
-                                std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
+                             std::map<std::string, ForceTorqueMeasurement>& ft,
+                             KinematicMeasurement& kin,
+                             std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
 
     /// @brief Runs the base estimator
     /// @param state the state of the robot
@@ -363,7 +363,7 @@ private:
     /// @param kin kinematic measurements
     /// @param ft force/torque measurements
     void runCoMEstimator(State& state, KinematicMeasurement& kin, 
-                         std::optional<std::map<std::string, ForceTorqueMeasurement>> ft);
+                         std::map<std::string, ForceTorqueMeasurement> ft);
 
     /// @brief Computes the frame transformations for all frames in the robot model
     /// @param state the state of the robot
