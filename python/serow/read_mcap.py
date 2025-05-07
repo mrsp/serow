@@ -620,6 +620,43 @@ def decode_base_state(data: bytes) -> serow.BaseState:
     msg.contacts_position_cov = contacts_position_cov
     msg.contacts_orientation_cov = contacts_orientation_cov
 
+    # Decode feet positions
+    feet_position = {}
+    for i in range(fb_msg.FeetPositionLength()):
+        pos = fb_msg.FeetPosition(i)
+        feet_position[fb_msg.ContactNames(i).decode()] = np.array([
+            pos.X(), pos.Y(), pos.Z()
+        ])
+    
+    # Decode feet orientations
+    feet_orientation = {}
+    for i in range(fb_msg.FeetOrientationLength()):
+        quat = fb_msg.FeetOrientation(i)
+        feet_orientation[fb_msg.ContactNames(i).decode()] = np.array([
+            quat.W(), quat.X(), quat.Y(), quat.Z()
+        ])
+    
+    # Decode feet linear velocities
+    feet_linear_velocity = {}
+    for i in range(fb_msg.FeetLinearVelocityLength()):
+        vel = fb_msg.FeetLinearVelocity(i)
+        feet_linear_velocity[fb_msg.ContactNames(i).decode()] = np.array([
+            vel.X(), vel.Y(), vel.Z()
+        ])
+    
+    # Decode feet angular velocities
+    feet_angular_velocity = {}
+    for i in range(fb_msg.FeetAngularVelocityLength()):
+        vel = fb_msg.FeetAngularVelocity(i)
+        feet_angular_velocity[fb_msg.ContactNames(i).decode()] = np.array([
+            vel.X(), vel.Y(), vel.Z()
+        ])
+    
+    msg.feet_position = feet_position
+    msg.feet_orientation = feet_orientation
+    msg.feet_linear_velocity = feet_linear_velocity
+    msg.feet_angular_velocity = feet_angular_velocity
+
     return msg
 
 def decode_contact_state(data: bytes) -> serow.ContactState:
@@ -1209,18 +1246,154 @@ def plot_joint_states(joint_states):
     plt.tight_layout()
     plt.show()
 
+def plot_contact_states(contact_states):
+    """Plot contact states over time.
+    
+    Args:
+        contact_states: List of ContactState objects containing contact information
+    """
+    if not contact_states:
+        print("No contact states to plot")
+        return
+        
+    # Get all unique contact names from the first state
+    contact_names = list(contact_states[0].contacts_status.keys())
+    n_contacts = len(contact_names)
+    
+    if n_contacts == 0:
+        print("No contacts found in the contact states")
+        return
+        
+    # Create figure with subplots for status and probability
+    fig, axes = plt.subplots(n_contacts, 2, figsize=(15, 4*n_contacts))
+    fig.suptitle('Contact States Over Time')
+    
+    # Create time array
+    times = np.arange(len(contact_states))
+    
+    # Plot each contact's status and probability
+    for i, contact_name in enumerate(contact_names):
+        # Extract status and probability data for this contact
+        statuses = [state.contacts_status[contact_name] for state in contact_states]
+        probabilities = [state.contacts_probability[contact_name] for state in contact_states]
+        
+        # Plot status
+        ax_status = axes[i, 0] if n_contacts > 1 else axes[0]
+        ax_status.plot(times, statuses, 'b-', label='Status')
+        ax_status.set_ylabel('Contact Status')
+        ax_status.set_title(f'{contact_name} Status')
+        ax_status.set_ylim(-0.1, 1.1)  # Binary values
+        ax_status.grid(True)
+        
+        # Plot probability
+        ax_prob = axes[i, 1] if n_contacts > 1 else axes[1]
+        ax_prob.plot(times, probabilities, 'r-', label='Probability')
+        ax_prob.set_ylabel('Contact Probability')
+        ax_prob.set_title(f'{contact_name} Probability')
+        ax_prob.set_ylim(-0.1, 1.1)  # Probability range
+        ax_prob.grid(True)
+    
+    # Add x-label to bottom subplots only
+    if n_contacts > 1:
+        axes[-1, 0].set_xlabel('Time Steps')
+        axes[-1, 1].set_xlabel('Time Steps')
+    else:
+        axes[0].set_xlabel('Time Steps')
+        axes[1].set_xlabel('Time Steps')
+    
+    plt.tight_layout()
+    plt.show()
+
+def plot_contact_forces_and_torques(contact_states):
+    """Plot contact forces and torques over time.
+    
+    Args:
+        contact_states: List of ContactState objects containing contact information
+    """
+    if not contact_states:
+        print("No contact states to plot")
+        return
+        
+    # Get all unique contact names from the first state
+    contact_names = list(contact_states[0].contacts_force.keys())
+    n_contacts = len(contact_names)
+    
+    if n_contacts == 0:
+        print("No contacts found in the contact states")
+        return
+        
+    # Create figure with subplots for forces and torques
+    fig, axes = plt.subplots(n_contacts, 2, figsize=(15, 4*n_contacts))
+    fig.suptitle('Contact Forces and Torques Over Time')
+    
+    # Create time array
+    times = np.arange(len(contact_states))
+    
+    # Plot each contact's forces and torques
+    for i, contact_name in enumerate(contact_names):
+        # Extract force and torque data for this contact
+        forces_x = [state.contacts_force[contact_name][0] for state in contact_states]
+        forces_y = [state.contacts_force[contact_name][1] for state in contact_states]
+        forces_z = [state.contacts_force[contact_name][2] for state in contact_states]
+        
+        # Plot forces
+        ax_force = axes[i, 0] if n_contacts > 1 else axes[0]
+        ax_force.plot(times, forces_x, 'r-', label='Fx')
+        ax_force.plot(times, forces_y, 'g-', label='Fy')
+        ax_force.plot(times, forces_z, 'b-', label='Fz')
+        ax_force.set_ylabel('Force (N)')
+        ax_force.set_title(f'{contact_name} Forces')
+        ax_force.grid(True)
+        ax_force.legend()
+        
+        # Plot torques if available
+        ax_torque = axes[i, 1] if n_contacts > 1 else axes[1]
+        if hasattr(contact_states[0], 'contacts_torque') and contact_states[0].contacts_torque:
+            torques_x = [state.contacts_torque[contact_name][0] for state in contact_states]
+            torques_y = [state.contacts_torque[contact_name][1] for state in contact_states]
+            torques_z = [state.contacts_torque[contact_name][2] for state in contact_states]
+            
+            ax_torque.plot(times, torques_x, 'r-', label='Tx')
+            ax_torque.plot(times, torques_y, 'g-', label='Ty')
+            ax_torque.plot(times, torques_z, 'b-', label='Tz')
+            ax_torque.set_ylabel('Torque (Nm)')
+            ax_torque.set_title(f'{contact_name} Torques')
+            ax_torque.grid(True)
+            ax_torque.legend()
+        else:
+            ax_torque.text(0.5, 0.5, 'No torque data available', 
+                          horizontalalignment='center',
+                          verticalalignment='center',
+                          transform=ax_torque.transAxes)
+            ax_torque.set_title(f'{contact_name} Torques')
+    
+    # Add x-label to bottom subplots only
+    if n_contacts > 1:
+        axes[-1, 0].set_xlabel('Time Steps')
+        axes[-1, 1].set_xlabel('Time Steps')
+    else:
+        axes[0].set_xlabel('Time Steps')
+        axes[1].set_xlabel('Time Steps')
+    
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
     # Read the measurement mcap file
-    joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
     base_states = read_base_states("/tmp/serow_proprioception.mcap")
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
+    joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
    
     # Plot joint states
     # plot_joint_states(joint_states)
+
+    # Plot contact states
+    # plot_contact_states(contact_states)
+    # plot_contact_forces_and_torques(contact_states)
 
     offset = len(imu_measurements) - len(base_states) 
     print(f"sample offset: {offset}")

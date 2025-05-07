@@ -86,7 +86,27 @@ PYBIND11_MODULE(serow, m) {
         .def_readwrite("imu_angular_velocity_bias_cov", &serow::BaseState::imu_angular_velocity_bias_cov, "IMU angular velocity bias covariance (3x3 matrix)")
         .def_readwrite("imu_linear_acceleration_bias_cov", &serow::BaseState::imu_linear_acceleration_bias_cov, "IMU linear acceleration bias covariance (3x3 matrix)")
         .def_readwrite("contacts_position_cov", &serow::BaseState::contacts_position_cov, "Map of contact position covariances (string to 3x3 matrix)")
-        .def_readwrite("contacts_orientation_cov", &serow::BaseState::contacts_orientation_cov, "Map of contact orientation covariances (string to 3x3 matrix)");
+        .def_readwrite("contacts_orientation_cov", &serow::BaseState::contacts_orientation_cov, "Map of contact orientation covariances (string to 3x3 matrix)")
+        .def_readwrite("feet_position", &serow::BaseState::feet_position, "Map of feet positions (string to 3D vector)")
+        .def_property(
+            "feet_orientation",
+            [](const serow::BaseState& self) {
+                std::map<std::string, py::array_t<double>> result;
+                for (const auto& [name, quat] : self.feet_orientation) {
+                    result[name] = quaternion_to_numpy(quat);
+                }
+                return result;
+            },
+            [](serow::BaseState& self, const std::map<std::string, py::array_t<double>>& orientations) {
+                std::map<std::string, Eigen::Quaterniond> eigen_orientations;
+                for (const auto& [name, arr] : orientations) {
+                    eigen_orientations[name] = numpy_to_quaternion(arr);
+                }
+                self.feet_orientation = eigen_orientations;
+            },
+            "Map of feet orientations (string to quaternion)")
+        .def_readwrite("feet_linear_velocity", &serow::BaseState::feet_linear_velocity, "Map of feet linear velocities (string to 3D vector)")
+        .def_readwrite("feet_angular_velocity", &serow::BaseState::feet_angular_velocity, "Map of feet angular velocities (string to 3D vector)");
 
     // Binding for ContactState
     py::class_<serow::ContactState>(m, "ContactState", "Represents the contact state of a humanoid robot")

@@ -460,6 +460,39 @@ public:
             }
             auto contacts_orientation_cov = builder.CreateVector(contacts_orientation_cov_vec);
 
+            // Create feet position vectors
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> feet_position_vec;
+            for (const auto& [_, position] : base_state.feet_position) {
+                feet_position_vec.push_back(
+                    foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
+            }
+            auto feet_position = builder.CreateVector(feet_position_vec);
+
+            // Create feet orientation vectors
+            std::vector<flatbuffers::Offset<foxglove::Quaternion>> feet_orientation_vec;
+            for (const auto& [_, orientation] : base_state.feet_orientation) {
+                feet_orientation_vec.push_back(
+                    foxglove::CreateQuaternion(builder, orientation.x(), orientation.y(),
+                                               orientation.z(), orientation.w()));
+            }
+            auto feet_orientation = builder.CreateVector(feet_orientation_vec);
+
+            // Create feet linear velocity vectors
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> feet_linear_velocity_vec;
+            for (const auto& [_, velocity] : base_state.feet_linear_velocity) {
+                feet_linear_velocity_vec.push_back(
+                    foxglove::CreateVector3(builder, velocity.x(), velocity.y(), velocity.z()));
+            }
+            auto feet_linear_velocity = builder.CreateVector(feet_linear_velocity_vec);
+
+            // Create feet angular velocity vectors
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> feet_angular_velocity_vec;
+            for (const auto& [_, velocity] : base_state.feet_angular_velocity) {
+                feet_angular_velocity_vec.push_back(
+                    foxglove::CreateVector3(builder, velocity.x(), velocity.y(), velocity.z()));
+            }
+            auto feet_angular_velocity = builder.CreateVector(feet_angular_velocity_vec);
+
             // Create the BaseState message with fields in the correct order according to IDs
             auto base_state_fb =
                 foxglove::CreateBaseState(builder,
@@ -482,7 +515,11 @@ public:
                                           contacts_position,                 // id: 16
                                           contacts_orientation,              // id: 17
                                           contacts_position_cov,             // id: 18
-                                          contacts_orientation_cov           // id: 19
+                                          contacts_orientation_cov,          // id: 19
+                                          feet_position,                     // id: 20
+                                          feet_orientation,                  // id: 21
+                                          feet_linear_velocity,              // id: 22
+                                          feet_angular_velocity              // id: 23
                 );
 
             builder.Finish(base_state_fb);

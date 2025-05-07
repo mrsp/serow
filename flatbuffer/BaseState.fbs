@@ -65,6 +65,18 @@ table BaseState {
 
   // Contact orientation covariances in world frame coordinates (rad^2)
   contacts_orientation_cov: [Matrix3] (id: 19);
+
+  // Feet positions in world frame coordinates (m)
+  feet_position: [Vector3] (id: 20);
+
+  // Feet orientations in world frame coordinates
+  feet_orientation: [Quaternion] (id: 21);
+
+  // Feet linear velocities in world frame coordinates (m/s)
+  feet_linear_velocity: [Vector3] (id: 22);
+
+  // Feet angular velocities in world frame coordinates (rad/s)
+  feet_angular_velocity: [Vector3] (id: 23);
 }
 
 root_type BaseState;
