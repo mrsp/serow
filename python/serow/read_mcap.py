@@ -1402,6 +1402,16 @@ if __name__ == "__main__":
     force_torque_measurements = force_torque_measurements[offset:]
     base_pose_ground_truth = base_pose_ground_truth[offset:]
 
+    # initialize at a different time
+    new_offset = 5000
+    base_states = base_states[new_offset:]
+    contact_states = contact_states[new_offset:]
+    joint_states = joint_states[new_offset:]
+    imu_measurements = imu_measurements[new_offset:]
+    joint_measurements = joint_measurements[new_offset:]
+    force_torque_measurements = force_torque_measurements[new_offset:]
+    base_pose_ground_truth = base_pose_ground_truth[new_offset:]
+
     # Initialize SEROW
     serow_framework = serow.Serow()
     serow_framework.initialize("go2_rl.json")
@@ -1412,7 +1422,7 @@ if __name__ == "__main__":
     serow_framework.set_state(state)
 
     # Run SEROW
-    timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_reward = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=True)
+    timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_reward = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=False)
     print(f"Baseline cumulative reward: {cumulative_reward}")
 
     # Plot the trajectories

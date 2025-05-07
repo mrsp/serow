@@ -12,6 +12,7 @@ from read_mcap import(
     read_contact_states, 
     read_force_torque_measurements, 
     read_joint_measurements, 
+    read_joint_states,
     read_imu_measurements, 
     read_base_pose_ground_truth,
     run_step,
@@ -61,6 +62,8 @@ class Actor(nn.Module):
             log_prob = torch.tensor(0.0)
         else:
             std = log_std.exp()
+            # Add small epsilon to std for numerical stability
+            std = std + 1e-6
             normal = torch.distributions.Normal(mean, std)
             z = normal.rsample()
             
@@ -107,6 +110,7 @@ def train_policy(datasets, contacts_frame, agents):
         # Reset to initial state
         initial_base_state = dataset['base_states'][0]
         initial_contact_state = dataset['contact_states'][0]
+        initial_joint_state = dataset['joint_states'][0]
 
         max_episode = 1
         update_steps = 64  # Train after collecting this many timesteps
@@ -119,7 +123,7 @@ def train_policy(datasets, contacts_frame, agents):
             # Initialize the state
             state.set_base_state(initial_base_state)
             state.set_contact_state(initial_contact_state)
-
+            state.set_joint_state(initial_joint_state)
             episode_reward = {}
             for cf in contacts_frame:
                 episode_reward[cf] = 0.0
@@ -216,6 +220,7 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         # Reset to initial state
         initial_base_state = dataset['base_states'][0]
         initial_contact_state = dataset['contact_states'][0]
+        initial_joint_state = dataset['joint_states'][0]
 
         # Initialize SEROW
         serow_framework = serow.Serow()
@@ -223,6 +228,7 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         state = serow_framework.get_state(allow_invalid=True)
         state.set_base_state(initial_base_state)
         state.set_contact_state(initial_contact_state)
+        state.set_joint_state(initial_joint_state)
         
         # Run SEROW
         timestamps = []
@@ -301,7 +307,8 @@ if __name__ == "__main__":
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
     base_states = read_base_states("/tmp/serow_proprioception.mcap")
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
-    
+    joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
+
     offset = len(imu_measurements) - len(base_states)
 
     imu_measurements = imu_measurements[offset:]
@@ -334,6 +341,7 @@ if __name__ == "__main__":
             'ft': force_torque_measurements[start_idx:end_idx],
             'base_states': base_states[start_idx:end_idx],
             'contact_states': contact_states[start_idx:end_idx],
+            'joint_states': joint_states[start_idx:end_idx],
             'base_pose_ground_truth': base_pose_ground_truth[start_idx:end_idx]
         }
         train_datasets.append(dataset)
@@ -362,7 +370,7 @@ if __name__ == "__main__":
         'entropy_coef': 0.5,
         'gamma': 0.99,
         'gae_lambda': 0.95,
-        'ppo_epochs': 10,
+        'ppo_epochs': 5,
         'batch_size': 64,
         'max_grad_norm': 0.5,
         'actor_lr': 1e-4,
