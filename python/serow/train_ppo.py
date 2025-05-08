@@ -91,16 +91,18 @@ class Critic(nn.Module):
         return x
 
 def train_policy(datasets, contacts_frame, agents):
-    best_reward = {}
     episode_rewards = {}
     collected_steps = {}
 
     for cf in contacts_frame:
-        best_reward[cf] = float('-inf')
         episode_rewards[cf] = []
         collected_steps[cf] = 0
 
     for i, dataset in enumerate(datasets):
+        best_reward = {}
+        for cf in contacts_frame:
+            best_reward[cf] = float('-inf')
+
         # Get the measurements and the ground truth
         imu_measurements = dataset['imu']
         joint_measurements = dataset['joints']
@@ -112,7 +114,7 @@ def train_policy(datasets, contacts_frame, agents):
         initial_contact_state = dataset['contact_states'][0]
         initial_joint_state = dataset['joint_states'][0]
 
-        max_episode = 1
+        max_episode = 100
         update_steps = 64  # Train after collecting this many timesteps
 
         for episode in range(max_episode):
@@ -125,7 +127,7 @@ def train_policy(datasets, contacts_frame, agents):
             state.set_contact_state(initial_contact_state)
             state.set_joint_state(initial_joint_state)
             serow_framework.set_state(state)
-            
+
             episode_reward = {}
             for cf in contacts_frame:
                 episode_reward[cf] = 0.0
@@ -143,7 +145,6 @@ def train_policy(datasets, contacts_frame, agents):
 
                 x = np.concatenate([
                     state.get_base_position(),
-                    state.get_base_linear_velocity(),
                     state.get_base_orientation()
                 ])
 
@@ -157,7 +158,6 @@ def train_policy(datasets, contacts_frame, agents):
                  # Compute the next state
                 next_x = np.concatenate([
                     state.get_base_position(),
-                    state.get_base_linear_velocity(),
                     state.get_base_orientation()
                 ])
 
@@ -182,10 +182,12 @@ def train_policy(datasets, contacts_frame, agents):
                 if episode_reward[cf] > best_reward[cf]:
                     best_reward[cf] = episode_reward[cf]
 
-    # Convert episode_rewards to numpy arrays
+    # Convert episode_rewards to numpy arrays and compute a smoothed reward curve using a low pass filter
+    smoothed_episode_rewards = {}
     for cf in contacts_frame:
         episode_rewards[cf] = np.array(episode_rewards[cf])
-        print(f"Debug - Final rewards array for {cf}: {episode_rewards[cf]}")
+        smoothed_episode_rewards[cf] = np.convolve(episode_rewards[cf], np.ones(10)/10, mode='valid')
+
 
     # Create a single figure with subplots for each contact frame
     n_cf = len(contacts_frame)
@@ -195,7 +197,7 @@ def train_policy(datasets, contacts_frame, agents):
     
     for ax, cf in zip(axes, contacts_frame):
         ax.plot(episode_rewards[cf], label='Episode Rewards')
-        ax.plot(np.convolve(episode_rewards[cf], np.ones(10)/10, mode='valid'), label='Smoothed Rewards')
+        ax.plot(smoothed_episode_rewards[cf], label='Smoothed Rewards')
         ax.fill_between(range(len(episode_rewards[cf])), 
                        episode_rewards[cf] - np.std(episode_rewards[cf]), 
                        episode_rewards[cf] + np.std(episode_rewards[cf]), 
@@ -251,14 +253,12 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
                                        base_pose_ground_truth):
             x = np.concatenate([
                 state.get_base_position(),
-                state.get_base_linear_velocity(),
                 state.get_base_orientation()
             ])
 
             actions = {}
             for cf in contacts_frame:
-                # actions[cf], _ = agents[cf].actor.get_action(x, deterministic=True)
-                actions[cf] = np.ones(2)
+                actions[cf], _ = agents[cf].actor.get_action(x, deterministic=True)
 
             timestamp, state, reward = run_step(imu, joints, ft, gt, serow_framework, state, actions)
             
@@ -328,41 +328,46 @@ if __name__ == "__main__":
     total_size = len(contact_states)
     print(f"Total size: {total_size}")
 
-    N = 10  # Number of datasets
-    M = 5 # Dataset to test
-    dataset_size = total_size // N  # Size of each dataset
+    # N = 10  # Number of datasets
+    # dataset_size = total_size // N  # Size of each dataset
 
-    # Create N contiguous datasets
-    train_datasets = []
-    for i in range(N):
-        start_idx = i * dataset_size
-        end_idx = start_idx + dataset_size
+    # # Create N contiguous datasets
+    # train_datasets = []
+    # for i in range(N):
+    #     start_idx = i * dataset_size
+    #     end_idx = start_idx + dataset_size
         
-        # Create a dataset with measurements and states from start_idx to end_idx
-        dataset = {
-            'imu': imu_measurements[start_idx:end_idx],
-            'joints': joint_measurements[start_idx:end_idx],
-            'ft': force_torque_measurements[start_idx:end_idx],
-            'base_states': base_states[start_idx:end_idx],
-            'contact_states': contact_states[start_idx:end_idx],
-            'joint_states': joint_states[start_idx:end_idx],
-            'base_pose_ground_truth': base_pose_ground_truth[start_idx:end_idx]
-        }
-        train_datasets.append(dataset)
-
-    # Pick a random dataset for testing
-    test_dataset = train_datasets[M]
-    train_datasets.remove(test_dataset)
+    #     # Create a dataset with measurements and states from start_idx to end_idx
+    #     dataset = {
+    #         'imu': imu_measurements[start_idx:end_idx],
+    #         'joints': joint_measurements[start_idx:end_idx],
+    #         'ft': force_torque_measurements[start_idx:end_idx],
+    #         'base_states': base_states[start_idx:end_idx],
+    #         'contact_states': contact_states[start_idx:end_idx],
+    #         'joint_states': joint_states[start_idx:end_idx],
+    #         'base_pose_ground_truth': base_pose_ground_truth[start_idx:end_idx]
+    #     }
+    #     train_datasets.append(dataset)
+    test_dataset = {
+        'imu': imu_measurements,
+        'joints': joint_measurements,
+        'ft': force_torque_measurements,
+        'base_states': base_states,
+        'contact_states': contact_states,
+        'joint_states': joint_states,
+        'base_pose_ground_truth': base_pose_ground_truth
+    }
+    train_datasets = [test_dataset]
 
     # Get the contacts frame
     contacts_frame = set(contact_states[0].contacts_status.keys())
     print(f"Contacts frame: {contacts_frame}")
 
     # Define the dimensions of your state and action spaces
-    state_dim = 10  # 3 position, 3 velocity, 4 orientation
+    state_dim = 7  # 3 position, 4 orientation
     action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 1.0 
-    min_action = 0.1  
+    max_action = 100.0 
+    min_action = 0.01  
 
     params = {
         'state_dim': state_dim,
