@@ -83,6 +83,31 @@ public:
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
 
+    /**
+     * @brief Set the action for the EKF.
+     * @param contact_frame Name of the contact frame.
+     * @param action Action to set.
+     */
+    void setAction(const std::string& contact_frame, const Eigen::VectorXd& action);
+
+    /**
+     * @brief Get the contact innovation and covariance for a given contact frame.
+     * @param contact_frame Name of the contact frame.
+     * @param innovation Innovation of the contact position.
+     * @param covariance Covariance of the contact position.
+     * @return True if the contact innovation and covariance are available, false otherwise.
+     */
+    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+                                      Eigen::Matrix3d& covariance) const;
+    bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+                                         Eigen::Matrix3d& covariance) const;
+
+    /**
+     * @brief Sets the state of the EKF.
+     * @param state The state to set.
+     */
+    void setState(const BaseState& state);
+
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
@@ -120,6 +145,14 @@ private:
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
+
+    std::map<std::string, double> position_action_cov_gain_;
+    std::map<std::string, double> orientation_action_cov_gain_;
+    std::map<std::string, double> contact_position_action_cov_gain_;
+    std::map<std::string, double> contact_orientation_action_cov_gain_;
+    
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_orientation_innovation_;
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.

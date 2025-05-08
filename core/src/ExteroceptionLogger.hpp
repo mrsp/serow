@@ -49,6 +49,8 @@ public:
 
     void log(const LocalMapState& local_map_state);
     double getLastTimestamp() const;
+    bool isInitialized() const;
+    void setStartTime(double timestamp);
 
 private:
     class Impl;  // Forward declaration of the implementation class

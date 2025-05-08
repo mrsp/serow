@@ -1,0 +1,16 @@
+namespace foxglove;
+
+/// A 3x3 Matrix of doubles 
+table Matrix3 {
+    m00: double;
+    m01: double;
+    m02: double;
+    m10: double;
+    m11: double;
+    m12: double;
+    m20: double;
+    m21: double;
+    m22: double;
+}
+
+root_type Matrix3;

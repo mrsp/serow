@@ -69,9 +69,21 @@ public:
         }
     }
 
+    void setStartTime(double timestamp) {
+        start_time_ = timestamp;
+    }
+
     void log(const LocalMapState& local_map_state) {
         try {
-            const double timestamp = local_map_state.timestamp;
+            if (!start_time_.has_value()) {
+                start_time_ = local_map_state.timestamp;
+            }
+            const double timestamp = local_map_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
 
             if (timestamp <= last_timestamp_) {
                 return;
@@ -93,7 +105,7 @@ public:
             }
 
             // Create the timestamp
-            auto ts = foxglove::Time(
+            auto time = foxglove::Time(
                 static_cast<int64_t>(timestamp),
                 static_cast<int32_t>((timestamp - static_cast<int64_t>(timestamp)) * 1e9));
 
@@ -123,7 +135,7 @@ public:
 
             // Create the PointCloud
             foxglove::PointCloudBuilder pc_builder(builder);
-            pc_builder.add_timestamp(&ts);
+            pc_builder.add_timestamp(&time);
             pc_builder.add_frame_id(frame_id);
             pc_builder.add_pose(pose);
             pc_builder.add_point_stride(12);  // 3 floats * 4 bytes
@@ -147,6 +159,10 @@ public:
 
     double getLastTimestamp() const {
         return last_timestamp_;
+    }
+
+    bool isInitialized() const {
+        return start_time_.has_value();
     }
 
 private:
@@ -209,7 +225,7 @@ private:
     // Sequence counters
     uint64_t local_map_sequence_{};
     double last_timestamp_{-1.0};
-
+    std::optional<double> start_time_;
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
     std::unique_ptr<mcap::McapWriter> writer_;
@@ -227,6 +243,14 @@ void ExteroceptionLogger::log(const LocalMapState& local_map_state) {
 
 double ExteroceptionLogger::getLastTimestamp() const {
     return pimpl_->getLastTimestamp();
+}
+
+void ExteroceptionLogger::setStartTime(double timestamp) {
+    pimpl_->setStartTime(timestamp);
+}
+
+bool ExteroceptionLogger::isInitialized() const {
+    return pimpl_->isInitialized();
 }
 
 }  // namespace serow

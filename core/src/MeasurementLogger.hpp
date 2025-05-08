@@ -11,17 +11,13 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 /**
- * @file ProprioceptionLogger.hpp
- * @brief Defines the ProprioceptionLogger class for logging robot state data in MCAP format.
+ * @file MeasurementLogger.hpp
+ * @brief Defines the MeasurementLogger class for logging robot measurement data in MCAP format.
  *
- * The ProprioceptionLogger provides functionality to log various robot states and measurements
+ * The MeasurementLogger provides functionality to log various robot measurements
  * in a binary MCAP format, including:
- * - Base state (position, orientation, velocities, etc.)
- * - Joint measurements
- * - Contact states
- * - Force-torque measurements
  * - IMU measurements
- * - Centroidal state
+ * - Kinematic measurements
  *
  * The logger uses the PIMPL pattern to hide implementation details and minimize
  * compilation dependencies.
@@ -41,31 +37,29 @@
 
 #include "Measurement.hpp"
 #include "Schemas.hpp"
-#include "State.hpp"
 
 namespace serow {
 
-class ProprioceptionLogger {
+class MeasurementLogger {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    ProprioceptionLogger(const std::string& log_file_path = "/tmp/serow_proprioception.mcap");
-    ~ProprioceptionLogger();
+    MeasurementLogger(const std::string& log_file_path = "/tmp/serow_measurements.mcap");
+    ~MeasurementLogger();
 
     // Delete copy operations
-    ProprioceptionLogger(const ProprioceptionLogger&) = delete;
-    ProprioceptionLogger& operator=(const ProprioceptionLogger&) = delete;
+    MeasurementLogger(const MeasurementLogger&) = delete;
+    MeasurementLogger& operator=(const MeasurementLogger&) = delete;
 
     // Allow move operations
-    ProprioceptionLogger(ProprioceptionLogger&&) noexcept = default;
-    ProprioceptionLogger& operator=(ProprioceptionLogger&&) noexcept = default;
+    MeasurementLogger(MeasurementLogger&&) noexcept = default;
+    MeasurementLogger& operator=(MeasurementLogger&&) noexcept = default;
 
-    void log(const BaseState& base_state);
-    void log(const CentroidalState& centroidal_state);
-    void log(const ContactState& contact_state);
     void log(const ImuMeasurement& imu_measurement);
-    void log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double timestamp);
-    void log(const JointState& joint_state);
+    // void log(const KinematicMeasurement& kinematic_measurement);
+    void log(const BasePoseGroundTruth& base_pose_ground_truth);
+    void log(const std::map<std::string, JointMeasurement>& joints);
+    void log(const std::map<std::string, ForceTorqueMeasurement>& ft);
     void setStartTime(double timestamp);
     bool isInitialized() const;
 

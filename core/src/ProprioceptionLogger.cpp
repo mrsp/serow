@@ -19,7 +19,8 @@
 #include "ContactState_generated.h"
 #include "FrameTransform_generated.h"
 #include "FrameTransforms_generated.h"
-#include "ImuState_generated.h"
+#include "ImuMeasurement_generated.h"
+#include "JointState_generated.h"
 #include "Time_generated.h"
 #include "Vector3_generated.h"
 
@@ -76,6 +77,10 @@ public:
         }
     }
 
+    void setStartTime(double timestamp) {
+        start_time_ = timestamp;
+    }
+
     // Split timestamp into seconds and nanoseconds
     inline void splitTimestamp(double timestamp, int64_t& sec, int32_t& nsec) const noexcept {
         sec = static_cast<int64_t>(timestamp);
@@ -86,10 +91,20 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = imu_measurement.timestamp;
+            }
+            const double timestamp = imu_measurement.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(imu_measurement.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
             // Create Time
             auto time = foxglove::Time(sec, nsec);
@@ -109,15 +124,15 @@ public:
                 builder, imu_measurement.orientation.x(), imu_measurement.orientation.y(),
                 imu_measurement.orientation.z(), imu_measurement.orientation.w());
 
-            // Create the root ImuState
-            auto imu_state = foxglove::CreateImuState(builder,
+            // Create the root ImuMeasurement
+            auto imu = foxglove::CreateImuMeasurement(builder,
                                                       &time,                // timestamp
                                                       linear_acceleration,  // linear_acceleration
                                                       angular_velocity,     // angular_velocity
                                                       orientation);         // orientation
 
             // Finish the buffer
-            builder.Finish(imu_state);
+            builder.Finish(imu);
 
             // Get the buffer pointer and size before any potential modifications
             const uint8_t* buffer = builder.GetBufferPointer();
@@ -128,10 +143,10 @@ public:
             }
 
             // Write the message
-            writeMessage(1, imu_sequence_++, imu_measurement.timestamp,
+            writeMessage(1, imu_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging IMU state: " << e.what() << std::endl;
+            std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
         }
     }
 
@@ -139,10 +154,20 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = contact_state.timestamp;
+            }
+            const double timestamp = contact_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(contact_state.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
             // Create Time
             auto time = foxglove::Time(sec, nsec);
@@ -206,7 +231,7 @@ public:
             size_t size = builder.GetSize();
 
             // Write the message
-            writeMessage(2, contact_sequence_++, contact_state.timestamp,
+            writeMessage(2, contact_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Contact State: " << e.what() << std::endl;
@@ -217,12 +242,22 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = centroidal_state.timestamp;
+            }
+            const double timestamp = centroidal_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(centroidal_state.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
-            auto timestamp = foxglove::Time(sec, nsec);
+            auto time = foxglove::Time(sec, nsec);
             auto com_position = foxglove::CreateVector3(builder, centroidal_state.com_position.x(),
                                                         centroidal_state.com_position.y(),
                                                         centroidal_state.com_position.z());
@@ -248,7 +283,7 @@ public:
                                         centroidal_state.angular_momentum_derivative.z());
 
             auto centroidal_state_fb = foxglove::CreateCentroidalState(
-                builder, &timestamp, com_position, com_linear_velocity, external_forces,
+                builder, &time, com_position, com_linear_velocity, external_forces,
                 cop_position, com_linear_acceleration, angular_momentum,
                 angular_momentum_derivative);
 
@@ -258,7 +293,7 @@ public:
             const uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
 
-            writeMessage(3, centroidal_sequence_++, centroidal_state.timestamp,
+            writeMessage(3, centroidal_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Centroidal State: " << e.what() << std::endl;
@@ -269,20 +304,38 @@ public:
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
 
+            if (!start_time_.has_value()) {
+                start_time_ = base_state.timestamp;
+            }
+            const double timestamp = base_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(base_state.timestamp, sec, nsec);
+            splitTimestamp(timestamp, sec, nsec);
 
-            auto timestamp = foxglove::Time(sec, nsec);
+            auto time = foxglove::Time(sec, nsec);
 
+            // Create contact names vector
+            std::vector<flatbuffers::Offset<flatbuffers::String>> contact_names_vec;
+            for (const auto& [frame_name, _] : base_state.contacts_position) {
+                contact_names_vec.push_back(builder.CreateString(frame_name));
+            }
+            auto contact_names = builder.CreateVector(contact_names_vec);
+
+            // Create all vector fields
             auto base_position =
                 foxglove::CreateVector3(builder, base_state.base_position.x(),
                                         base_state.base_position.y(), base_state.base_position.z());
 
             auto base_orientation = foxglove::CreateQuaternion(
-                builder, base_state.base_orientation.w(), base_state.base_orientation.x(),
-                base_state.base_orientation.y(), base_state.base_orientation.z());
+                builder, base_state.base_orientation.x(), base_state.base_orientation.y(),
+                base_state.base_orientation.z(), base_state.base_orientation.w());
 
             auto base_linear_velocity = foxglove::CreateVector3(
                 builder, base_state.base_linear_velocity.x(), base_state.base_linear_velocity.y(),
@@ -300,19 +353,174 @@ public:
                 builder, base_state.base_angular_acceleration.x(),
                 base_state.base_angular_acceleration.y(), base_state.base_angular_acceleration.z());
 
-            auto imu_angular_velocity_bias = foxglove::CreateVector3(
-                builder, base_state.imu_angular_velocity_bias.x(),
-                base_state.imu_angular_velocity_bias.y(), base_state.imu_angular_velocity_bias.z());
-
             auto imu_linear_acceleration_bias =
                 foxglove::CreateVector3(builder, base_state.imu_linear_acceleration_bias.x(),
                                         base_state.imu_linear_acceleration_bias.y(),
                                         base_state.imu_linear_acceleration_bias.z());
 
-            auto base_state_fb = foxglove::CreateBaseState(
-                builder, &timestamp, base_position, base_orientation, base_linear_velocity,
-                base_angular_velocity, base_linear_acceleration, base_angular_acceleration,
-                imu_angular_velocity_bias, imu_linear_acceleration_bias);
+            auto imu_angular_velocity_bias = foxglove::CreateVector3(
+                builder, base_state.imu_angular_velocity_bias.x(),
+                base_state.imu_angular_velocity_bias.y(), base_state.imu_angular_velocity_bias.z());
+
+            // Create all matrix fields
+            auto base_position_cov = foxglove::CreateMatrix3(
+                builder, base_state.base_position_cov(0, 0), base_state.base_position_cov(0, 1),
+                base_state.base_position_cov(0, 2), base_state.base_position_cov(1, 0),
+                base_state.base_position_cov(1, 1), base_state.base_position_cov(1, 2),
+                base_state.base_position_cov(2, 0), base_state.base_position_cov(2, 1),
+                base_state.base_position_cov(2, 2));
+
+            auto base_orientation_cov = foxglove::CreateMatrix3(
+                builder, base_state.base_orientation_cov(0, 0),
+                base_state.base_orientation_cov(0, 1), base_state.base_orientation_cov(0, 2),
+                base_state.base_orientation_cov(1, 0), base_state.base_orientation_cov(1, 1),
+                base_state.base_orientation_cov(1, 2), base_state.base_orientation_cov(2, 0),
+                base_state.base_orientation_cov(2, 1), base_state.base_orientation_cov(2, 2));
+
+            auto base_linear_velocity_cov =
+                foxglove::CreateMatrix3(builder, base_state.base_linear_velocity_cov(0, 0),
+                                        base_state.base_linear_velocity_cov(0, 1),
+                                        base_state.base_linear_velocity_cov(0, 2),
+                                        base_state.base_linear_velocity_cov(1, 0),
+                                        base_state.base_linear_velocity_cov(1, 1),
+                                        base_state.base_linear_velocity_cov(1, 2),
+                                        base_state.base_linear_velocity_cov(2, 0),
+                                        base_state.base_linear_velocity_cov(2, 1),
+                                        base_state.base_linear_velocity_cov(2, 2));
+
+            auto base_angular_velocity_cov =
+                foxglove::CreateMatrix3(builder, base_state.base_angular_velocity_cov(0, 0),
+                                        base_state.base_angular_velocity_cov(0, 1),
+                                        base_state.base_angular_velocity_cov(0, 2),
+                                        base_state.base_angular_velocity_cov(1, 0),
+                                        base_state.base_angular_velocity_cov(1, 1),
+                                        base_state.base_angular_velocity_cov(1, 2),
+                                        base_state.base_angular_velocity_cov(2, 0),
+                                        base_state.base_angular_velocity_cov(2, 1),
+                                        base_state.base_angular_velocity_cov(2, 2));
+
+            auto imu_linear_acceleration_bias_cov =
+                foxglove::CreateMatrix3(builder, base_state.imu_linear_acceleration_bias_cov(0, 0),
+                                        base_state.imu_linear_acceleration_bias_cov(0, 1),
+                                        base_state.imu_linear_acceleration_bias_cov(0, 2),
+                                        base_state.imu_linear_acceleration_bias_cov(1, 0),
+                                        base_state.imu_linear_acceleration_bias_cov(1, 1),
+                                        base_state.imu_linear_acceleration_bias_cov(1, 2),
+                                        base_state.imu_linear_acceleration_bias_cov(2, 0),
+                                        base_state.imu_linear_acceleration_bias_cov(2, 1),
+                                        base_state.imu_linear_acceleration_bias_cov(2, 2));
+
+            auto imu_angular_velocity_bias_cov =
+                foxglove::CreateMatrix3(builder, base_state.imu_angular_velocity_bias_cov(0, 0),
+                                        base_state.imu_angular_velocity_bias_cov(0, 1),
+                                        base_state.imu_angular_velocity_bias_cov(0, 2),
+                                        base_state.imu_angular_velocity_bias_cov(1, 0),
+                                        base_state.imu_angular_velocity_bias_cov(1, 1),
+                                        base_state.imu_angular_velocity_bias_cov(1, 2),
+                                        base_state.imu_angular_velocity_bias_cov(2, 0),
+                                        base_state.imu_angular_velocity_bias_cov(2, 1),
+                                        base_state.imu_angular_velocity_bias_cov(2, 2));
+
+            // Create contact position vectors
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> contacts_position_vec;
+            for (const auto& [_, position] : base_state.contacts_position) {
+                contacts_position_vec.push_back(
+                    foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
+            }
+            auto contacts_position = builder.CreateVector(contacts_position_vec);
+
+            // Create contact orientation vectors
+            std::vector<flatbuffers::Offset<foxglove::Quaternion>> contacts_orientation_vec;
+            if (base_state.contacts_orientation) {
+                for (const auto& [_, orientation] : *base_state.contacts_orientation) {
+                    contacts_orientation_vec.push_back(
+                        foxglove::CreateQuaternion(builder, orientation.x(), orientation.y(),
+                                                   orientation.z(), orientation.w()));
+                }
+            }
+            auto contacts_orientation = builder.CreateVector(contacts_orientation_vec);
+
+            // Create contact position covariance vectors
+            std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_position_cov_vec;
+            for (const auto& [_, cov] : base_state.contacts_position_cov) {
+                contacts_position_cov_vec.push_back(
+                    foxglove::CreateMatrix3(builder, cov(0, 0), cov(0, 1), cov(0, 2), cov(1, 0),
+                                            cov(1, 1), cov(1, 2), cov(2, 0), cov(2, 1), cov(2, 2)));
+            }
+            auto contacts_position_cov = builder.CreateVector(contacts_position_cov_vec);
+
+            // Create contact orientation covariance vectors
+            std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_orientation_cov_vec;
+            if (base_state.contacts_orientation_cov) {
+                for (const auto& [_, cov] : *base_state.contacts_orientation_cov) {
+                    contacts_orientation_cov_vec.push_back(foxglove::CreateMatrix3(
+                        builder, cov(0, 0), cov(0, 1), cov(0, 2), cov(1, 0), cov(1, 1), cov(1, 2),
+                        cov(2, 0), cov(2, 1), cov(2, 2)));
+                }
+            }
+            auto contacts_orientation_cov = builder.CreateVector(contacts_orientation_cov_vec);
+
+            // Create feet position vectors
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> feet_position_vec;
+            for (const auto& [_, position] : base_state.feet_position) {
+                feet_position_vec.push_back(
+                    foxglove::CreateVector3(builder, position.x(), position.y(), position.z()));
+            }
+            auto feet_position = builder.CreateVector(feet_position_vec);
+
+            // Create feet orientation vectors
+            std::vector<flatbuffers::Offset<foxglove::Quaternion>> feet_orientation_vec;
+            for (const auto& [_, orientation] : base_state.feet_orientation) {
+                feet_orientation_vec.push_back(
+                    foxglove::CreateQuaternion(builder, orientation.x(), orientation.y(),
+                                               orientation.z(), orientation.w()));
+            }
+            auto feet_orientation = builder.CreateVector(feet_orientation_vec);
+
+            // Create feet linear velocity vectors
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> feet_linear_velocity_vec;
+            for (const auto& [_, velocity] : base_state.feet_linear_velocity) {
+                feet_linear_velocity_vec.push_back(
+                    foxglove::CreateVector3(builder, velocity.x(), velocity.y(), velocity.z()));
+            }
+            auto feet_linear_velocity = builder.CreateVector(feet_linear_velocity_vec);
+
+            // Create feet angular velocity vectors
+            std::vector<flatbuffers::Offset<foxglove::Vector3>> feet_angular_velocity_vec;
+            for (const auto& [_, velocity] : base_state.feet_angular_velocity) {
+                feet_angular_velocity_vec.push_back(
+                    foxglove::CreateVector3(builder, velocity.x(), velocity.y(), velocity.z()));
+            }
+            auto feet_angular_velocity = builder.CreateVector(feet_angular_velocity_vec);
+
+            // Create the BaseState message with fields in the correct order according to IDs
+            auto base_state_fb =
+                foxglove::CreateBaseState(builder,
+                                          &time,                             // id: 0
+                                          contact_names,                     // id: 1
+                                          base_position,                     // id: 2
+                                          base_orientation,                  // id: 3
+                                          base_linear_velocity,              // id: 4
+                                          base_angular_velocity,             // id: 5
+                                          base_linear_acceleration,          // id: 6
+                                          base_angular_acceleration,         // id: 7
+                                          imu_linear_acceleration_bias,      // id: 8
+                                          imu_angular_velocity_bias,         // id: 9
+                                          base_position_cov,                 // id: 10
+                                          base_orientation_cov,              // id: 11
+                                          base_linear_velocity_cov,          // id: 12
+                                          base_angular_velocity_cov,         // id: 13
+                                          imu_linear_acceleration_bias_cov,  // id: 14
+                                          imu_angular_velocity_bias_cov,     // id: 15
+                                          contacts_position,                 // id: 16
+                                          contacts_orientation,              // id: 17
+                                          contacts_position_cov,             // id: 18
+                                          contacts_orientation_cov,          // id: 19
+                                          feet_position,                     // id: 20
+                                          feet_orientation,                  // id: 21
+                                          feet_linear_velocity,              // id: 22
+                                          feet_angular_velocity              // id: 23
+                );
 
             builder.Finish(base_state_fb);
 
@@ -320,17 +528,26 @@ public:
             const uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
 
-            writeMessage(4, base_sequence_++, base_state.timestamp,
+            writeMessage(4, base_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
-            last_timestamp_ = base_state.timestamp;
         } catch (const std::exception& e) {
             std::cerr << "Error logging Base State: " << e.what() << std::endl;
         }
     }
 
-    void log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double timestamp) {
+    void log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double ts) {
         try {
             flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
+            if (!start_time_.has_value()) {
+                start_time_ = ts;
+            }
+            const double timestamp = ts - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
 
             // Convert timestamp to sec and nsec
             int64_t sec;
@@ -338,7 +555,7 @@ public:
             splitTimestamp(timestamp, sec, nsec);
 
             // Create timestamp
-            auto timestamp_fb = foxglove::Time(sec, nsec);
+            auto time = foxglove::Time(sec, nsec);
 
             // Create transforms vector - preallocate capacity
             std::vector<flatbuffers::Offset<foxglove::FrameTransform>> transforms_vector;
@@ -352,8 +569,8 @@ public:
                 auto child_frame = builder.CreateString(frame_id);
 
                 // Create translation
-                auto translation =
-                    foxglove::CreateVector3(builder, tf.translation().x(), tf.translation().y(), tf.translation().z());
+                auto translation = foxglove::CreateVector3(
+                    builder, tf.translation().x(), tf.translation().y(), tf.translation().z());
 
                 // Create rotation
                 const auto& quaternion = Eigen::Quaterniond(tf.linear());
@@ -362,7 +579,7 @@ public:
 
                 // Create transform
                 auto transform = foxglove::CreateFrameTransform(
-                    builder, &timestamp_fb, parent_frame, child_frame, translation, rotation);
+                    builder, &time, parent_frame, child_frame, translation, rotation);
 
                 transforms_vector.push_back(transform);
             }
@@ -383,10 +600,81 @@ public:
             size_t size = builder.GetSize();
 
             // Get the serialized data
-            writeMessage(5, tfs_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(5, tfs_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
+                         size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging feet transforms: " << e.what() << std::endl;
         }
+    }
+
+    void log(const JointState& joint_state) {
+        try {
+            flatbuffers::FlatBufferBuilder builder(INITIAL_BUILDER_SIZE);
+
+            if (!start_time_.has_value()) {
+                start_time_ = joint_state.timestamp;
+            }
+            const double timestamp = joint_state.timestamp - start_time_.value();
+
+            if (timestamp < 0) {
+                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                return;
+            }
+
+            // Convert timestamp to sec and nsec
+            int64_t sec;
+            int32_t nsec;
+            splitTimestamp(timestamp, sec, nsec);   
+
+            auto time = foxglove::Time(sec, nsec);
+
+            // Create joint state vectors
+            std::vector<flatbuffers::Offset<flatbuffers::String>> joint_names_vec;
+            std::vector<double> joint_positions_vec;
+            std::vector<double> joint_velocities_vec;
+
+            // Pre-allocate vectors for better performance
+            joint_names_vec.reserve(joint_state.joints_position.size());
+            joint_positions_vec.reserve(joint_state.joints_position.size());
+            joint_velocities_vec.reserve(joint_state.joints_position.size());
+
+            // Build the vectors
+            for (const auto& [name, position] : joint_state.joints_position) {
+                joint_names_vec.push_back(builder.CreateString(name));
+                joint_positions_vec.push_back(position);
+                joint_velocities_vec.push_back(joint_state.joints_velocity.at(name));
+            }
+          
+            // Create the vectors in the builder
+            auto names_offset = builder.CreateVector(joint_names_vec);
+            auto positions_offset = builder.CreateVector(joint_positions_vec);
+            auto velocities_offset = builder.CreateVector(joint_velocities_vec);
+
+            // Create the root message
+            foxglove::JointStateBuilder joint_states_builder(builder);
+            joint_states_builder.add_timestamp(&time);
+            joint_states_builder.add_names(names_offset);
+            joint_states_builder.add_positions(positions_offset);
+            joint_states_builder.add_velocities(velocities_offset);
+            auto joint_states_array = joint_states_builder.Finish();
+
+            // Finish the buffer
+            builder.Finish(joint_states_array);
+
+            // Get the buffer pointer and size before any potential modifications
+            const uint8_t* buffer = builder.GetBufferPointer();
+            size_t size = builder.GetSize();
+
+            // Write the message
+            writeMessage(6, joint_states_sequence_++, timestamp,
+                         reinterpret_cast<const std::byte*>(buffer), size);
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging joint state: " << e.what() << std::endl;
+        }
+    }
+            
+    bool isInitialized() const {
+        return start_time_.has_value();
     }
 
 private:
@@ -427,11 +715,12 @@ private:
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
         schemas.reserve(5);
-        schemas.push_back(createSchema("ImuState"));
+        schemas.push_back(createSchema("ImuMeasurement"));
         schemas.push_back(createSchema("ContactState"));
         schemas.push_back(createSchema("CentroidalState"));
         schemas.push_back(createSchema("BaseState"));
         schemas.push_back(createSchema("FrameTransforms"));
+        schemas.push_back(createSchema("JointState"));
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -441,11 +730,12 @@ private:
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
         channels.reserve(5);
-        channels.push_back(createChannel(1, "/imu_state"));
+        channels.push_back(createChannel(1, "/imu"));
         channels.push_back(createChannel(2, "/contact_state"));
         channels.push_back(createChannel(3, "/centroidal_state"));
         channels.push_back(createChannel(4, "/base_state"));
-        channels.push_back(createChannel(5, "/tfs"));
+        channels.push_back(createChannel(5, "/tf"));
+        channels.push_back(createChannel(6, "/joint_state"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
@@ -470,7 +760,8 @@ private:
     uint64_t contact_sequence_ = 0;
     uint64_t imu_sequence_ = 0;
     uint64_t tfs_sequence_ = 0;
-    double last_timestamp_{-1.0};
+    uint64_t joint_states_sequence_ = 0;
+    std::optional<double> start_time_;
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
@@ -500,8 +791,21 @@ void ProprioceptionLogger::log(const ContactState& contact_state) {
     pimpl_->log(contact_state);
 }
 
-void ProprioceptionLogger::log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs, double timestamp) {
+void ProprioceptionLogger::log(const std::map<std::string, Eigen::Isometry3d>& frame_tfs,
+                               double timestamp) {
     pimpl_->log(frame_tfs, timestamp);
+}
+
+void ProprioceptionLogger::log(const JointState& joint_state) {
+    pimpl_->log(joint_state);
+}
+
+void ProprioceptionLogger::setStartTime(double timestamp) {
+    pimpl_->setStartTime(timestamp);
+}
+
+bool ProprioceptionLogger::isInitialized() const {
+    return pimpl_->isInitialized();
 }
 
 }  // namespace serow

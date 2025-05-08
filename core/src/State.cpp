@@ -19,12 +19,15 @@ State::State(std::set<std::string> contacts_frame, bool point_feet) {
     num_leg_ee_ = contacts_frame_.size();
     point_feet_ = point_feet;
     is_valid_ = false;
+    is_initialized_ = false;
 
     std::map<std::string, Eigen::Quaterniond> contacts_orientation;
     std::map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
+    std::map<std::string, Eigen::Vector3d> contacts_torque;
     for (const auto& cf : contacts_frame_) {
         contact_state_.contacts_status[cf] = false;
         contact_state_.contacts_probability[cf] = 0.0;
+        contact_state_.contacts_force[cf] = Eigen::Vector3d::Zero();
         base_state_.contacts_position[cf] = Eigen::Vector3d::Zero();
         base_state_.contacts_position_cov[cf] = Eigen::Matrix3d::Identity();
         base_state_.feet_position[cf] = Eigen::Vector3d::Zero();
@@ -33,6 +36,7 @@ State::State(std::set<std::string> contacts_frame, bool point_feet) {
         base_state_.feet_angular_velocity[cf] = Eigen::Vector3d::Zero();
 
         if (!isPointFeet()) {
+            contacts_torque[cf] = Eigen::Vector3d::Zero();
             contacts_orientation[cf] = Eigen::Quaterniond::Identity();
             contacts_orientation_cov[cf] = Eigen::Matrix3d::Identity();
         }
@@ -40,6 +44,7 @@ State::State(std::set<std::string> contacts_frame, bool point_feet) {
     if (!isPointFeet()) {
         base_state_.contacts_orientation = std::move(contacts_orientation);
         base_state_.contacts_orientation_cov = std::move(contacts_orientation_cov);
+        contact_state_.contacts_torque = std::move(contacts_torque);
     }
 }
 
@@ -291,6 +296,38 @@ double State::getMass() const {
 
 int State::getNumLegEE() const {
     return num_leg_ee_;
+}
+
+void State::setBaseState(const BaseState& base_state) {
+    base_state_ = base_state;
+}
+
+void State::setContactState(const ContactState& contact_state) {
+    contact_state_ = contact_state;
+}
+
+void State::setCentroidalState(const CentroidalState& centroidal_state) {
+    centroidal_state_ = centroidal_state;
+}
+
+void State::setJointState(const JointState& joint_state) {
+    joint_state_ = joint_state;
+}
+
+bool State::isValid() const {
+    return is_valid_;
+}
+
+bool State::isInitialized() const {
+    return is_initialized_;
+}
+
+void State::setValid(bool valid) {
+    is_valid_ = valid;
+}
+
+void State::setInitialized(bool initialized) {
+    is_initialized_ = initialized;
 }
 
 }  // namespace serow

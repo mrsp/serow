@@ -14,5 +14,5 @@ serow_layout.json:Zone.Identifier
 /python/serow/__pycache__/
 /python/build/
 /python/serow.egg-info/
-/python/serow/contact_ekf.cpython-310-x86_64-linux-gnu.so
-/python/serow/state.cpython-310-x86_64-linux-gnu.so
+/python/serow/serow.*.so
+/python/serow/policy/*

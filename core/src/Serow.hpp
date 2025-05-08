@@ -26,6 +26,7 @@
 #include "LocalTerrainMapper.hpp"
 #include "Mahony.hpp"
 #include "Measurement.hpp"
+#include "MeasurementLogger.hpp"
 #include "NaiveLocalTerrainMapper.hpp"
 #include "ProprioceptionLogger.hpp"
 #include "RobotKinematics.hpp"
@@ -49,7 +50,7 @@ public:
     /// @brief Destructor
     ~Serow();
 
-    /// @brief initializes SEROW's configuration and internal state
+    /// @brief initializes SEROW's configuration 
     /// @param config configuration to initialize SEROW with
     /// @return true if SEROW was initialized successfully
     bool initialize(const std::string& config);
@@ -62,11 +63,13 @@ public:
     /// @param odom an optional exteroceptive base odometry measurement
     /// @param contact_probabilities optional leg end-effector contact probabilities if not provided
     /// they will be estimated from the corresponding F/T measurement
+    /// @param base_pose_ground_truth optional ground truth base pose measurement for logging
     void filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
                 std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::optional<std::map<std::string, ContactMeasurement>> contact_probabilities =
-                    std::nullopt);
+                    std::nullopt,
+                std::optional<BasePoseGroundTruth> base_pose_ground_truth = std::nullopt);
 
     /// @brief fetches SEROW's internal state
     /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
@@ -74,8 +77,36 @@ public:
     /// @return SEROW's internal state if available
     std::optional<State> getState(bool allow_invalid = false);
 
+    /// @brief fetches SEROW's contact state
+    /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
+    /// @return SEROW's contact state if available
+    std::optional<ContactState> getContactState(bool allow_invalid = false);
+
+    /// @brief fetches SEROW's base state   
+    /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
+    /// valid estimate
+    /// @return SEROW's base state if available
+    std::optional<BaseState> getBaseState(bool allow_invalid = false);
+
+    /// @brief Sets the action for a given contact frame
+    /// @param cf the contact frame name
+    /// @param action the action to set
+    /// @return true if the action was set successfully
+    bool setAction(const std::string& cf, const Eigen::VectorXd& action);
+
     /// @brief Returns the terrain_estimator_ object
     const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
+
+    /// @brief Returns true if SEROW is initialized
+    /// @return true if SEROW is initialized
+    bool isInitialized() const;
+
+    /// @brief Resets SEROW's state and estimators
+    void reset();
+
+    /// @brief Sets the state of SEROW's internal state also resets the estimators
+    /// @param state the state to set
+    void setState(const State& state);
 
 private:
     struct Params {
@@ -216,6 +247,19 @@ private:
         Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
         std::string terrain_estimator_type{};
+        bool log_measurements{true};
+        /// @brief directory where log files will be stored
+        std::string log_dir{"/tmp"};
+        /// @brief offset between the base frame and the ground truth base frame
+        Eigen::Isometry3d T_base_to_ground_truth{Eigen::Isometry3d::Identity()};
+        /// @brief proportional gain for the base attitude estimator
+        double Kp{0.0};
+        /// @brief integral gain for the base attitude estimator
+        double Ki{0.0};
+        /// @brief set of contact frames
+        std::set<std::string> contacts_frame{};
+        /// @brief whether or not the robot has point feet
+        bool point_feet{false};
     };
 
     /// @brief SEROW's configuration
@@ -252,20 +296,93 @@ private:
     /// @brief Terrain elevation mapper
     std::shared_ptr<TerrainElevation> terrain_estimator_;
     /// @brief Data loggers
-    ProprioceptionLogger proprioception_logger_;
-    ExteroceptionLogger exteroception_logger_;
+    std::unique_ptr<ProprioceptionLogger> proprioception_logger_;
+    std::unique_ptr<ExteroceptionLogger> exteroception_logger_;
+    std::unique_ptr<MeasurementLogger> measurement_logger_;
     /// @brief Threadpool job for proprioceptive logging
     std::unique_ptr<ThreadPool> proprioception_logger_job_;
     /// @brief Threadpool job for exteroceptive logging
     std::unique_ptr<ThreadPool> exteroception_logger_job_;
+    /// @brief Threadpool job for measurement logging
+    std::unique_ptr<ThreadPool> measurement_logger_job_;
     /// @brief Frame transformations
     std::map<std::string, Eigen::Isometry3d> frame_tfs_;
 
-    /**
-     * @brief Computes the frame transformations for all frames in the robot model
-     * @param base_pose The base pose of the robot
-     */
-    void computeFrameTFs(const Eigen::Isometry3d& base_pose);
+    /// @brief Logs the measurements
+    /// @param imu IMU measurement
+    /// @param joints joint measurements
+    /// @param ft force/torque measurements
+    /// @param base_pose_ground_truth ground truth base pose
+    void logMeasurements(ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
+                         std::map<std::string, ForceTorqueMeasurement> ft,
+                         std::optional<BasePoseGroundTruth> base_pose_ground_truth = std::nullopt);
+    
+    /// @brief Runs all the joint estimators to estimate the joint positions and velocities
+    /// @param state the state of the robot
+    /// @param joints joint measurements
+    void runJointsEstimator(State& state, const std::map<std::string, JointMeasurement>& joints);
+
+    /// @brief Runs the IMU estimator
+    /// @param state the state of the robot
+    /// @param imu IMU measurement
+    void runImuEstimator(State& state, ImuMeasurement& imu);
+
+    /// @brief Runs the forward kinematics
+    /// @param state the state of the robot
+    /// @return kinematic measurements
+    KinematicMeasurement runForwardKinematics(State& state);
+
+    /// @brief Computes the leg odometry and updates the kinematic measurements accordingly
+    /// @param state the state of the robot
+    /// @param kin kinematic measurements
+    void computeLegOdometry(const State& state, KinematicMeasurement& kin);
+
+    /// @brief Runs the angular momentum estimator
+    /// @param state the state of the robot
+    void runAngularMomentumEstimator(State& state);
+
+    /// @brief Runs the contact estimator to estimate the leg end-effector contact state
+    /// @param state the state of the robot
+    /// @param ft force/torque measurements
+    /// @param kin kinematic measurements
+    /// @param contacts_probability contact probabilities
+    void runContactEstimator(State& state,
+                             std::map<std::string, ForceTorqueMeasurement>& ft,
+                             KinematicMeasurement& kin,
+                             std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
+
+    /// @brief Runs the base estimator
+    /// @param state the state of the robot
+    /// @param imu IMU measurement
+    /// @param kin kinematic measurements
+    /// @param odom exteroceptive odometry measurement
+    void runBaseEstimator(State& state, const ImuMeasurement& imu, const KinematicMeasurement& kin, std::optional<OdometryMeasurement> odom);
+
+    /// @brief Runs the CoM estimator
+    /// @param state the state of the robot
+    /// @param kin kinematic measurements
+    /// @param ft force/torque measurements
+    void runCoMEstimator(State& state, KinematicMeasurement& kin, 
+                         std::map<std::string, ForceTorqueMeasurement> ft);
+
+    /// @brief Computes the frame transformations for all frames in the robot model
+    /// @param state the state of the robot
+    void updateFrameTree(const State& state);
+
+    /// @brief Logs the proprioceptive measurements
+    /// @param state the state of the robot
+    /// @param imu IMU measurement
+    void logProprioception(const State& state, const ImuMeasurement& imu);
+
+    /// @brief Logs the exteroceptive measurements
+    /// @param state the state of the robot
+    void logExteroception(const State& state);
+
+    /// @brief Initializes all the data loggers and the corresponding thread pool jobs
+    void initializeLogging();
+
+    /// @brief Stops SEROW's logging threads
+    void stopLogging();
 };
 
 }  // namespace serow

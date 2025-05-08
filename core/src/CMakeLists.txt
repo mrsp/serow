@@ -17,6 +17,9 @@ FetchContent_MakeAvailable(mcap_builder)
 find_package(FlatBuffers REQUIRED)
 include_directories(${FLATBUFFERS_INCLUDE_DIRS})
 
+# Option for Python code generation
+option(GENERATE_PYTHON_SCHEMAS "Generate Python code from FlatBuffers schemas" OFF)
+
 # Create the generated directory if it doesn't exist
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/generated)
 message(STATUS "Source dir: ${CMAKE_SOURCE_DIR}")
@@ -25,21 +28,31 @@ message(STATUS "Source dir: ${CMAKE_SOURCE_DIR}")
 file(GLOB FLATBUFFER_SCHEMAS ${CMAKE_SOURCE_DIR}/flatbuffer/*.fbs)
 
 # Generate C++ code from Flatbuffers schema
-execute_process(
+set(FLATC_COMMANDS
     COMMAND flatc --cpp -o ${CMAKE_BINARY_DIR}/generated -I ${CMAKE_SOURCE_DIR}/flatbuffer ${FLATBUFFER_SCHEMAS}
     COMMAND flatc --schema -b -o ${CMAKE_BINARY_DIR}/generated -I ${CMAKE_SOURCE_DIR}/flatbuffer ${FLATBUFFER_SCHEMAS}
+)
 
-    
+# Add Python code generation if enabled
+if(GENERATE_PYTHON_SCHEMAS)
+    list(APPEND FLATC_COMMANDS
+        COMMAND flatc --python --gen-object-api --gen-all -o ${CMAKE_BINARY_DIR}/generated -I ${CMAKE_SOURCE_DIR}/flatbuffer ${FLATBUFFER_SCHEMAS}
+    )
+    message(STATUS "Python code generation enabled")
+endif()
+
+execute_process(
+    ${FLATC_COMMANDS}
     RESULT_VARIABLE FLATC_RESULT
     OUTPUT_VARIABLE FLATC_OUTPUT
     ERROR_VARIABLE FLATC_ERROR
 )
 
 if(NOT FLATC_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to generate C++ code from Flatbuffers schema: ${FLATC_ERROR}")
+    message(FATAL_ERROR "Failed to generate code from Flatbuffers schema: ${FLATC_ERROR}")
 endif()
 
-message(STATUS "Generated C++ code from Flatbuffers schema: ${FLATC_OUTPUT}")
+message(STATUS "Generated code from Flatbuffers schema: ${FLATC_OUTPUT}")
 
 # Pass the source directory as a preprocessor definition
 add_definitions(-DSCHEMAS_DIR="${CMAKE_BINARY_DIR}/generated/")
@@ -59,7 +72,8 @@ set(serow_src ${serow_src}
     NaiveLocalTerrainMapper.cpp
     ProprioceptionLogger.cpp
     ExteroceptionLogger.cpp
-    ThreadPool.cpp)
+    ThreadPool.cpp
+    MeasurementLogger.cpp)
 
 set(serow_headers ${serow_headers} 
     common.hpp
@@ -84,8 +98,8 @@ set(serow_headers ${serow_headers}
     ProprioceptionLogger.hpp
     ExteroceptionLogger.hpp
     ThreadPool.hpp
-    Schemas.hpp)
-
+    Schemas.hpp
+    MeasurementLogger.hpp)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_include_directories(serow PRIVATE ${CMAKE_BINARY_DIR}/generated)
