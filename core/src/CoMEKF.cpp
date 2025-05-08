@@ -31,6 +31,7 @@ void CoMEKF::init(const CentroidalState& state, double mass, double g, double ra
     nominal_dt_ = 1.0 / rate;
     g_ = g;
     std::cout << "Nonlinear CoM Estimator Initialized Successfully" << std::endl;
+    last_grf_timestamp_.reset();
 }
 
 void CoMEKF::setState(const CentroidalState& state) {
