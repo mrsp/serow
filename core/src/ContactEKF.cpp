@@ -69,8 +69,38 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
         }
     }
 
-    // Set the initialstate
-    setState(state);
+    // Set the initial state
+    P_ = I_;
+    P_(v_idx_, v_idx_) = state.base_linear_velocity_cov;
+    P_(r_idx_, r_idx_) = state.base_orientation_cov;
+    P_(p_idx_, p_idx_) = state.base_position_cov;
+    P_(bg_idx_, bg_idx_) = state.imu_angular_velocity_bias_cov;
+    P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
+
+    for (const auto& contact_frame : contacts_frame_) {
+        P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) = state.contacts_position_cov.at(contact_frame);
+        if (!point_feet_) {
+            P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) = state.contacts_orientation_cov.value().at(contact_frame);
+        }
+    }
+
+    for (const auto& contact_frame : contacts_frame_) {
+        position_action_cov_gain_[contact_frame] = 1.0;
+        contact_position_action_cov_gain_[contact_frame] = 1.0;
+        if (!point_feet_) {
+            orientation_action_cov_gain_[contact_frame] = 1.0;
+            contact_orientation_action_cov_gain_[contact_frame] = 1.0;
+        }
+        if (state.contacts_position_cov.count(contact_frame)) {
+            P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) =
+                state.contacts_position_cov.at(contact_frame);
+        }
+        if (!point_feet_ && state.contacts_orientation_cov.has_value() &&
+            state.contacts_orientation_cov.value().count(contact_frame)) {
+            P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) =
+                state.contacts_orientation_cov.value().at(contact_frame);
+        }
+    }
 
     // Compute some parts of the Input-Noise Jacobian once since they are constants
     // gyro (0), acc (3), gyro_bias (6), acc_bias (9), leg end effectors (12 - 12 + contact_dim * N)
@@ -88,6 +118,7 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
         }
     }
 
+    last_imu_timestamp_.reset();
     std::cout << "Contact EKF Initialized Successfully" << std::endl;
 }
 
@@ -556,7 +587,7 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
                 T_world_to_base.translation() = state.base_position;
                 T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
                 const Eigen::Vector3d con_pos_world =
-                    T_world_to_base * kin.base_to_foot_positions.at(cf);
+                    T_world_to_base * kin.contacts_position.at(cf);
                 const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_world.x()),
                                                          static_cast<float>(con_pos_world.y())};
                 const float con_pos_z = static_cast<float>(con_pos_world.z());

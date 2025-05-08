@@ -503,7 +503,11 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
     // Estimate the base frame attitude
     if (!attitude_estimator_) {
         attitude_estimator_ = std::make_unique<Mahony>(params_.imu_rate, params_.Kp, params_.Ki);
-        attitude_estimator_->setState(state.base_state_.base_orientation);
+        if (state.isInitialized()) {
+            attitude_estimator_->setState(state.base_state_.base_orientation);
+        } else {
+            attitude_estimator_->setState(Eigen::Quaterniond::Identity());
+        }
     }
 
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
@@ -529,7 +533,6 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
                     // Update _ with calibrated biases
                     state.base_state_.imu_angular_velocity_bias = params_.bias_gyro;
                     state.base_state_.imu_linear_acceleration_bias = params_.bias_acc;
-                    state.base_state_.base_orientation = imu.orientation;
 
                     std::cout << "Calibration finished at " << imu_calibration_cycles_ << std::endl;
                     std::cout << "Gyrometer biases " << params_.bias_gyro.transpose() << std::endl;
@@ -567,14 +570,10 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
             kinematic_estimator_->linearVelocity(contact_frame);
     }
 
-    // Cache frequently used values
-    const Eigen::Quaterniond& attitude_q = attitude_estimator_->getQ();
-    const Eigen::Matrix3d& attitude_R = attitude_estimator_->getR();
-
     // Prepare kinematic measurement
     KinematicMeasurement kin;
     kin.timestamp = state.joint_state_.timestamp;
-    kin.base_orientation = attitude_q;
+    kin.base_orientation = attitude_estimator_->getQ();
     kin.base_orientation_cov = params_.base_orientation_cov.asDiagonal();
     kin.base_to_foot_positions = std::move(base_to_foot_positions);
     kin.base_to_foot_orientations = std::move(base_to_foot_orientations);
@@ -582,16 +581,13 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
     kin.base_to_foot_angular_velocities = std::move(base_to_foot_angular_velocities);
     if (!state.isInitialized()) {
         // Initialize the state        
-        Eigen::Isometry3d base_pose = Eigen::Isometry3d::Identity();
-        base_pose.linear() = attitude_R;
-        // Get the CoM w.r.t the base frame as computed with rigid-body kinematics  
-        const Eigen::Vector3d& base_to_com_position = kinematic_estimator_->comPosition();
-        state.base_state_.base_orientation = attitude_q;
-        state.centroidal_state_.com_position = base_pose * base_to_com_position;
+        state.base_state_.base_position = Eigen::Vector3d::Zero();
+        state.base_state_.base_orientation = Eigen::Quaterniond::Identity();
+        state.centroidal_state_.com_position = kinematic_estimator_->comPosition();
         for (const auto& frame : state.getContactsFrame()) {
-            state.base_state_.contacts_position[frame] = base_pose * kin.base_to_foot_positions.at(frame);
+            state.base_state_.contacts_position[frame] = kin.base_to_foot_positions.at(frame);
             state.base_state_.feet_position[frame] = state.base_state_.contacts_position.at(frame);
-            state.base_state_.feet_orientation[frame] = Eigen::Quaterniond(base_pose.linear() * kin.base_to_foot_orientations.at(frame).toRotationMatrix());
+            state.base_state_.feet_orientation[frame] = kin.base_to_foot_orientations.at(frame);
         }
         if (!state.isPointFeet()) {
             state.base_state_.contacts_orientation = state.base_state_.feet_orientation;
