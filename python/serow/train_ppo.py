@@ -124,6 +124,8 @@ def train_policy(datasets, contacts_frame, agents):
             state.set_base_state(initial_base_state)
             state.set_contact_state(initial_contact_state)
             state.set_joint_state(initial_joint_state)
+            serow_framework.set_state(state)
+            
             episode_reward = {}
             for cf in contacts_frame:
                 episode_reward[cf] = 0.0
@@ -229,7 +231,8 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         state.set_base_state(initial_base_state)
         state.set_contact_state(initial_contact_state)
         state.set_joint_state(initial_joint_state)
-        
+        serow_framework.set_state(state)
+
         # Run SEROW
         timestamps = []
         base_positions = []
@@ -254,7 +257,8 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
 
             actions = {}
             for cf in contacts_frame:
-                actions[cf], _ = agents[cf].actor.get_action(x, deterministic=True)
+                # actions[cf], _ = agents[cf].actor.get_action(x, deterministic=True)
+                actions[cf] = np.ones(2)
 
             timestamp, state, reward = run_step(imu, joints, ft, gt, serow_framework, state, actions)
             

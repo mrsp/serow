@@ -1403,7 +1403,7 @@ if __name__ == "__main__":
     base_pose_ground_truth = base_pose_ground_truth[offset:]
 
     # initialize at a different time
-    new_offset = 5000
+    new_offset = 11000
     base_states = base_states[new_offset:]
     contact_states = contact_states[new_offset:]
     joint_states = joint_states[new_offset:]
