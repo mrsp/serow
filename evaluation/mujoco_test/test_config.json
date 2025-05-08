@@ -1,6 +1,6 @@
 {
   "Experiment": {
-    "type": "random_walk_flat"
+    "type": "flat_gamma"
   },
   "Paths": {
     "base_path": "/evaluation/mujoco_test/mujoco_data",

@@ -325,7 +325,8 @@ private:
     /// @brief Runs the IMU estimator
     /// @param state the state of the robot
     /// @param imu IMU measurement
-    void runImuEstimator(State& state, ImuMeasurement& imu);
+    /// @return true if the IMU estimation is calibrated and initialized
+    bool runImuEstimator(State& state, ImuMeasurement& imu);
 
     /// @brief Runs the forward kinematics
     /// @param state the state of the robot
