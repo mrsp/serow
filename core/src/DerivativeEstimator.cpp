@@ -33,6 +33,11 @@ DerivativeEstimator::DerivativeEstimator(const std::string& name, double f_sampl
     std::cout << name_ << " estimator initialized successfully" << std::endl;
 }
 
+void DerivativeEstimator::setState(const Eigen::VectorXd& x, const Eigen::VectorXd& x_dot) {
+    x_ = x;
+    x_dot_ = x_dot;
+}
+
 void DerivativeEstimator::reset(bool verbose) {
     for (size_t i = 0; i < dim_; i++) {
         bw_[i].reset(verbose);

@@ -36,13 +36,8 @@ void BaseEKF::init(const BaseState& state, double g, double imu_rate, bool outli
     nbg_idx_ = na_idx_ + 3;
     nba_idx_ = nbg_idx_ + 3;
 
-    // Initialize the error state covariance
-    P_ = I_;
-    P_(v_idx_, v_idx_) = state.base_linear_velocity_cov;
-    P_(r_idx_, r_idx_) = state.base_orientation_cov;
-    P_(p_idx_, p_idx_) = state.base_position_cov;
-    P_(bg_idx_, bg_idx_) = state.imu_angular_velocity_bias_cov;
-    P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
+    // Set the initial state
+    setState(state);
 
     // Compute some parts of the Input-Noise Jacobian once since they are constants
     // gyro (0), acc (3), gyro_bias (6), acc_bias (9)
@@ -53,6 +48,17 @@ void BaseEKF::init(const BaseState& state, double g, double imu_rate, bool outli
     Lc_(ba_idx_, nba_idx_) = Eigen::Matrix3d::Identity();
 
     std::cout << "Base EKF Initialized Successfully" << std::endl;
+}
+
+void BaseEKF::setState(const BaseState& state) {
+    // Initialize the error state covariance
+    P_ = I_;
+    P_(v_idx_, v_idx_) = state.base_linear_velocity_cov;
+    P_(r_idx_, r_idx_) = state.base_orientation_cov;
+    P_(p_idx_, p_idx_) = state.base_position_cov;
+    P_(bg_idx_, bg_idx_) = state.imu_angular_velocity_bias_cov;
+    P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
+    last_imu_timestamp_ = state.timestamp;
 }
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> BaseEKF::computePredictionJacobians(

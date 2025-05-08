@@ -1,10 +1,11 @@
-from .contact_ekf import ContactEKF
-from .state import BaseState, ImuMeasurement, KinematicMeasurement, OdometryMeasurement
+from .serow import BaseState, ImuMeasurement, KinematicMeasurement, OdometryMeasurement, Serow
 
 __all__ = [
-    'ContactEKF',
+    'Serow',
     'BaseState',
     'ImuMeasurement',
     'KinematicMeasurement',
+    'ForceTorqueMeasurement',
+    'JointMeasurement',
     'OdometryMeasurement'
 ] 

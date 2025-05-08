@@ -316,5 +316,10 @@
     "terrain_estimator": "fast",
     // double: minimum terrain measurement uncertainty (m^2)
     // Only applies if enable_terrain_estimation = true
-    "minimum_terrain_height_variance": 1e-3
+    "minimum_terrain_height_variance": 1e-3,
+    // array: rigid body transformation from base frame to ground truth frame. Can be null if no 
+    // ground truth is provided
+    "T_base_to_ground_truth": null,
+    // string: directory to save the log files
+    "log_dir": "/tmp/"
 }

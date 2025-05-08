@@ -173,6 +173,12 @@ public:
         gyro_ = R_ * gyro;
     }
 
+    /// Set the state of the Mahony filter
+    void setState(const Eigen::Quaterniond& q) {
+        q_ = q;
+        R_ = q_.toRotationMatrix();
+    }
+
 private:
     /// IMU orientation w.r.t the world frame as a quaternion
     Eigen::Quaterniond q_ = Eigen::Quaterniond::Identity();

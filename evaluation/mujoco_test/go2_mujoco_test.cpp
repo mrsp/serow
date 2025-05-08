@@ -163,6 +163,10 @@ int main() {
         auto feet_force_RL = readHDF5(INPUT_FILE, "feet_force/RL");
         auto feet_force_RR = readHDF5(INPUT_FILE, "feet_force/RR");
 
+        // Read Base Pose Ground Truth
+        auto base_gt_positions = readHDF5(INPUT_FILE, "base_ground_truth/position");
+        auto base_gt_orientations = readHDF5(INPUT_FILE, "base_ground_truth/orientation");
+
         // Read Timestamps
         auto timestamps = readHDF5(INPUT_FILE, "timestamps");
 
@@ -252,7 +256,16 @@ int main() {
                            serow::JointMeasurement{.timestamp = timestamp,
                                                    .position = joint_positions[i][11]}});
 
-            SEROW.filter(imu, joints, force_torque);
+            // If the ground truth for the base pose is available, pass it to the filter for 
+            // synchronized logging
+            if (base_gt_positions.size() > 0 && base_gt_orientations.size() > 0) {
+                SEROW.filter(imu, joints, force_torque, std::nullopt, std::nullopt,
+                    BasePoseGroundTruth{.timestamp = timestamp, 
+                                        .position = Eigen::Vector3d(base_gt_positions[i][0], base_gt_positions[i][1], base_gt_positions[i][2]), 
+                                        .orientation = Eigen::Quaterniond(base_gt_orientations[i][0], base_gt_orientations[i][1], base_gt_orientations[i][2], base_gt_orientations[i][3])});
+            } else {
+                SEROW.filter(imu, joints, force_torque);
+            }
 
             auto state = SEROW.getState();
             if (!state.has_value()) {

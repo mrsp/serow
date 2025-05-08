@@ -1,0 +1,13 @@
+include "Vector3.fbs";
+include "Time.fbs";
+
+namespace foxglove;
+
+table ForceTorqueMeasurements {
+    timestamp:Time;
+    frame_names:[string];
+    forces:[Vector3];
+    torques:[Vector3];
+}
+
+root_type ForceTorqueMeasurements;

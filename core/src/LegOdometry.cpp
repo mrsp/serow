@@ -19,6 +19,7 @@
 namespace serow {
 
 LegOdometry::LegOdometry(
+    const Eigen::Vector3d& base_position,
     std::map<std::string, Eigen::Vector3d> feet_position,
     std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass, double alpha1,
     double alpha3, double freq, double g, double eps,
@@ -41,6 +42,8 @@ LegOdometry::LegOdometry(
     if (force_torque_offset.has_value()) {
         force_torque_offset_ = std::move(force_torque_offset);
     }
+    base_position_ = base_position;
+    base_position_prev_ = base_position;
 }
 
 const Eigen::Vector3d& LegOdometry::getBasePosition() const {
@@ -118,11 +121,9 @@ void LegOdometry::estimate(
     for (const auto& [key, value] : base_to_foot_orientations) {
         const Eigen::Vector3d foot_angular_velocity =
             base_angular_velocity + Rwb * base_to_foot_angular_velocities.at(key);
-
         const Eigen::Vector3d foot_linear_velocity = base_linear_velocity_ +
             lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) +
             Rwb * base_to_foot_linear_velocities.at(key);
-
         if (contact_torques.has_value()) {
             computeIMP(key, Rwb * value.toRotationMatrix(), foot_angular_velocity,
                        foot_linear_velocity, contact_forces.at(key),
