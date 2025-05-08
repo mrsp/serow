@@ -495,7 +495,7 @@ void Serow::runJointsEstimator(State& state, const std::map<std::string, JointMe
     state.joint_state_.joints_velocity = std::move(joints_velocity);
 }
 
-void Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
+bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
      // Transform IMU measurements to base frame
     imu.angular_velocity = params_.R_base_to_gyro * imu.angular_velocity;
     imu.linear_acceleration = params_.R_base_to_acc * imu.linear_acceleration;
@@ -511,27 +511,30 @@ void Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
     imu.orientation = attitude_estimator_->getQ();
 
     // IMU bias calibration
-    if (params_.calibrate_initial_imu_bias && !state.isInitialized()) {
-        if (imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
-            params_.bias_gyro += imu.angular_velocity;
-            params_.bias_acc.noalias() += imu.linear_acceleration +
-                R_world_to_base.transpose() * Eigen::Vector3d(0.0, 0.0, -params_.g);
-            imu_calibration_cycles_++;
-            return;
-        } else {
-            // Only divide if we've actually accumulated samples
-            if (imu_calibration_cycles_ > 0) {
-                params_.bias_acc /= imu_calibration_cycles_;
-                params_.bias_gyro /= imu_calibration_cycles_;
-                params_.calibrate_initial_imu_bias = false;
+    if (!state.isInitialized()) {
+        if (params_.calibrate_initial_imu_bias) {
+            if (imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
+                params_.bias_gyro += imu.angular_velocity;
+                params_.bias_acc.noalias() += imu.linear_acceleration +
+                    R_world_to_base.transpose() * Eigen::Vector3d(0.0, 0.0, -params_.g);
+                imu_calibration_cycles_++;
+                return false;
+            } else {
+                // Only divide if we've actually accumulated samples
+                if (imu_calibration_cycles_ > 0) {
+                    params_.bias_acc /= imu_calibration_cycles_;
+                    params_.bias_gyro /= imu_calibration_cycles_;
+                    params_.calibrate_initial_imu_bias = false;
 
-                // Update _ with calibrated biases
-                state.base_state_.imu_angular_velocity_bias = params_.bias_gyro;
-                state.base_state_.imu_linear_acceleration_bias = params_.bias_acc;
+                    // Update _ with calibrated biases
+                    state.base_state_.imu_angular_velocity_bias = params_.bias_gyro;
+                    state.base_state_.imu_linear_acceleration_bias = params_.bias_acc;
+                    state.base_state_.base_orientation = imu.orientation;
 
-                std::cout << "Calibration finished at " << imu_calibration_cycles_ << std::endl;
-                std::cout << "Gyrometer biases " << params_.bias_gyro.transpose() << std::endl;
-                std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
+                    std::cout << "Calibration finished at " << imu_calibration_cycles_ << std::endl;
+                    std::cout << "Gyrometer biases " << params_.bias_gyro.transpose() << std::endl;
+                    std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
+                }
             }
         }
     }
@@ -541,6 +544,7 @@ void Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
     imu.angular_velocity_bias_cov = params_.angular_velocity_bias_cov.asDiagonal();
     imu.linear_acceleration_cov = params_.linear_acceleration_cov.asDiagonal();
     imu.linear_acceleration_bias_cov = params_.linear_acceleration_bias_cov.asDiagonal();
+    return true;
 }
 
 KinematicMeasurement Serow::runForwardKinematics(State& state) {
@@ -1039,7 +1043,10 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     runJointsEstimator(state_, joints);
 
     // Estimate the base frame attitude and initial IMU biases
-    runImuEstimator(state_, imu);
+    bool calibrated = runImuEstimator(state_, imu);
+    if (!calibrated) {
+        return;
+    }
 
     // Update the kinematic structure
     KinematicMeasurement kin = runForwardKinematics(state_);
