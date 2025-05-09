@@ -1037,8 +1037,8 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
                    quaternion_to_rotation_matrix(state.get_base_orientation())))
                         
         # Calculate rewards with improvement focus
-        position_reward = -5.0 * position_error 
-        orientation_reward = -10.0 * orientation_error 
+        position_reward = -10.0 * position_error 
+        orientation_reward = -1.0 * orientation_error 
         reward = position_reward + orientation_reward 
 
     for cf in state.get_contacts_frame():
@@ -1047,7 +1047,7 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
         covariance = np.zeros((3, 3))
         success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
         if success:
-            contact_reward = -100.0 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
+            contact_reward = -1000.0 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
             rewards[cf] = contact_reward + reward if reward is not None else contact_reward
 
     return imu.timestamp, state, rewards
@@ -1412,12 +1412,12 @@ if __name__ == "__main__":
     # plot_contact_states(contact_states)
     # plot_contact_forces_and_torques(contact_states)
 
-    offset = len(imu_measurements) - len(base_states) 
-    print(f"sample offset: {offset}")
-    imu_measurements = imu_measurements[offset:]
-    joint_measurements = joint_measurements[offset:]
-    force_torque_measurements = force_torque_measurements[offset:]
-    base_pose_ground_truth = base_pose_ground_truth[offset:]
+    # offset = len(imu_measurements) - len(base_states) 
+    # print(f"sample offset: {offset}")
+    # imu_measurements = imu_measurements[offset:]
+    # joint_measurements = joint_measurements[offset:]
+    # force_torque_measurements = force_torque_measurements[offset:]
+    # base_pose_ground_truth = base_pose_ground_truth[offset:]
 
     # initialize at a different time
     # new_offset = 11000
