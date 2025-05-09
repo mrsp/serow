@@ -24,41 +24,47 @@ from read_mcap import(
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action, min_action):
         super(Actor, self).__init__()
-        # Initialize layers with smaller weights
-        self.layer1 = nn.Linear(state_dim, 128)
-        self.layer2 = nn.Linear(128, 64)
-        self.mean_layer = nn.Linear(64, action_dim)
-        self.log_std_layer = nn.Linear(64, action_dim)
-        
-        # Initialize weights with smaller values
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.orthogonal_(m.weight, gain=0.01)
-                nn.init.constant_(m.bias, 0.0)
+        self.layer1 = nn.Linear(state_dim, 64)
+        self.layer2 = nn.Linear(64, 32)
+        self.layer3 = nn.Linear(32, 16)
+        self.mean_layer = nn.Linear(16, action_dim)
+        self.log_std_layer = nn.Linear(16, action_dim)
         
         self.max_action = max_action
         self.min_action = min_action
+        
+        # Calculate log scale for better numerical stability
+        self.action_scale = (max_action - min_action) / 2.0
+        self.action_bias = (max_action + min_action) / 2.0
+
+        # Initialize the layers with proper scaling
+        for layer in [self.layer1, self.layer2, self.layer3]:
+            nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
+            nn.init.constant_(layer.bias, 0.0)
+        
+        # Initialize the output layers with smaller weights
+        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)
+        nn.init.constant_(self.mean_layer.bias, 0.0)
+        nn.init.orthogonal_(self.log_std_layer.weight, gain=0.01)
+        nn.init.constant_(self.log_std_layer.bias, 0.0)
 
     def forward(self, state):
-        # Use tanh for more stable gradients
-        x = torch.tanh(self.layer1(state))
-        x = torch.tanh(self.layer2(x))
+        x = F.relu(self.layer1(state))
+        x = F.relu(self.layer2(x))
+        x = F.relu(self.layer3(x))
         mean = self.mean_layer(x)
         log_std = self.log_std_layer(x)
-        # Constrain log_std to a smaller range
-        log_std = torch.clamp(log_std, min=-3, max=0.5)
+        # Constrain log_std to a reasonable range
+        log_std = torch.clamp(log_std, min=-20, max=2)
         return mean, log_std
 
     def get_action(self, state, deterministic=False):
         state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
         mean, log_std = self.forward(state)
         
-        # Calculate the range once
-        action_range = self.max_action - self.min_action
-
         if deterministic:
-            # Scale to [min_action, max_action]
-            action = torch.sigmoid(mean) * action_range + self.min_action
+            # Scale the mean to the action range using tanh
+            action = torch.tanh(mean) * self.action_scale + self.action_bias
             log_prob = torch.tensor(0.0)
         else:
             std = log_std.exp()
@@ -67,12 +73,11 @@ class Actor(nn.Module):
             normal = torch.distributions.Normal(mean, std)
             z = normal.rsample()
             
-            # Transform to bounded range with tanh for more stable gradients
-            tanh_z = torch.tanh(z)
-            action = (tanh_z + 1.0) * 0.5 * action_range + self.min_action
+            # Transform to bounded range with tanh
+            action = torch.tanh(z) * self.action_scale + self.action_bias
             
             # Correct log prob adjustment for tanh
-            log_prob = normal.log_prob(z) - torch.log(torch.clamp(1 - tanh_z.pow(2), min=1e-8))
+            log_prob = normal.log_prob(z) - torch.log(torch.clamp(1 - torch.tanh(z).pow(2), min=1e-8))
             log_prob = log_prob.sum(dim=-1, keepdim=True)
 
         return action.detach().cpu().numpy()[0], log_prob.detach().cpu().item()
@@ -80,29 +85,32 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, state_dim):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(state_dim, 128)
-        self.layer2 = nn.Linear(128, 64)
-        self.layer3 = nn.Linear(64, 1)
+        self.layer1 = nn.Linear(state_dim, 64)
+        self.layer2 = nn.Linear(64, 32)
+        self.layer3 = nn.Linear(32, 16)
+        self.layer4 = nn.Linear(16, 1)
 
     def forward(self, state):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
-        x = self.layer3(x)
-        return x
+        x = F.relu(self.layer3(x))
+        return self.layer4(x)
 
 def train_policy(datasets, contacts_frame, agents):
     episode_rewards = {}
     collected_steps = {}
+    best_rewards = {}
+    no_improvement_count = {}
+    patience = 10  # Number of episodes to wait for improvement
+    min_delta = 1.0  # Minimum improvement in reward to be considered progress
 
     for cf in contacts_frame:
         episode_rewards[cf] = []
         collected_steps[cf] = 0
+        best_rewards[cf] = float('-inf')
+        no_improvement_count[cf] = 0
 
     for i, dataset in enumerate(datasets):
-        best_reward = {}
-        for cf in contacts_frame:
-            best_reward[cf] = float('-inf')
-
         # Get the measurements and the ground truth
         imu_measurements = dataset['imu']
         joint_measurements = dataset['joints']
@@ -114,8 +122,8 @@ def train_policy(datasets, contacts_frame, agents):
         initial_contact_state = dataset['contact_states'][0]
         initial_joint_state = dataset['joint_states'][0]
 
-        max_episode = 100
-        update_steps = 64  # Train after collecting this many timesteps
+        max_episode = 10
+        update_steps = 32  # Train after collecting this many timesteps
 
         for episode in range(max_episode):
             serow_framework = serow.Serow()
@@ -167,27 +175,42 @@ def train_policy(datasets, contacts_frame, agents):
                         episode_reward[cf] += rewards[cf]
                         agents[cf].add_to_buffer(x, actions[cf], rewards[cf], next_x, 0.0, values[cf], log_probs[cf])
 
-                        # Train policy if we've collected enough steps
-                        if collected_steps[cf] >= update_steps:
-                            agents[cf].train()
-                            collected_steps[cf] = 0
+                # Train policy if we've collected enough steps
+                if collected_steps[cf] >= update_steps:
+                    agents[cf].train()
+                    collected_steps[cf] = 0
                 
-                if step % 5000 == 0:  # Print progress every 100 steps
+                if step % 5000 == 0:  # Print progress every 5000 steps
                     for cf in contacts_frame:
-                        print(f"Episode {episode}, Step {step}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
+                        print(f"Episode {episode}, Step {step}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_rewards[cf]:.2f}")
             
+            # Early stopping check for each contact frame
+            all_converged = True
             for cf in contacts_frame:   
-                print(f"Dataset {i}, Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
+                print(f"Dataset {i}, Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_rewards[cf]:.2f}")
                 episode_rewards[cf].append(episode_reward[cf])
-                if episode_reward[cf] > best_reward[cf]:
-                    best_reward[cf] = episode_reward[cf]
+                
+                # Check if reward improved
+                if episode_reward[cf] > best_rewards[cf] + min_delta:
+                    best_rewards[cf] = episode_reward[cf]
+                    no_improvement_count[cf] = 0
+                else:
+                    no_improvement_count[cf] += 1
+                
+                # Check if this contact frame has converged
+                if no_improvement_count[cf] < patience:
+                    all_converged = False
+            
+            # If all contact frames have converged, stop training
+            if all_converged:
+                print(f"Training converged at episode {episode} for all contact frames")
+                break
 
     # Convert episode_rewards to numpy arrays and compute a smoothed reward curve using a low pass filter
     smoothed_episode_rewards = {}
     for cf in contacts_frame:
         episode_rewards[cf] = np.array(episode_rewards[cf])
         smoothed_episode_rewards[cf] = np.convolve(episode_rewards[cf], np.ones(10)/10, mode='valid')
-
 
     # Create a single figure with subplots for each contact frame
     n_cf = len(contacts_frame)
@@ -257,8 +280,10 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
             ])
 
             actions = {}
+            print("-------------------------------------------------")
             for cf in contacts_frame:
                 actions[cf], _ = agents[cf].actor.get_action(x, deterministic=True)
+                print(f"Action for {cf}: {actions[cf]}")
 
             timestamp, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
             
@@ -295,6 +320,10 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
             print("-------------------------------------------------")
         # Save the trained policy for each contact frame
         if save_policy:
+            import os
+            # Create policy directory if it doesn't exist
+            os.makedirs('policy', exist_ok=True)
+            
             for cf in contacts_frame:
                 torch.save({
                     'actor_state_dict': agents[cf].actor.state_dict(),
@@ -365,9 +394,9 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     state_dim = 7  # 3 position, 4 orientation
-    action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 100.0 
-    min_action = 0.01  
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    max_action = 1e6
+    min_action = 1e-6
 
     params = {
         'state_dim': state_dim,
@@ -376,14 +405,14 @@ if __name__ == "__main__":
         'min_action': min_action,
         'clip_param': 0.2,
         'value_loss_coef': 0.5,
-        'entropy_coef': 0.5,
+        'entropy_coef': 0.01,  # Reduced to encourage more exploration
         'gamma': 0.99,
         'gae_lambda': 0.95,
-        'ppo_epochs': 5,
-        'batch_size': 64,
+        'ppo_epochs': 10,  # Increased number of epochs
+        'batch_size': 64,  # Increased batch size
         'max_grad_norm': 0.5,
-        'actor_lr': 1e-4,
-        'critic_lr': 1e-4,
+        'actor_lr': 3e-4,  # Adjusted learning rate
+        'critic_lr': 1e-3,  # Adjusted learning rate
     }
 
     # Initialize the actor and critic
