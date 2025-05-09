@@ -37,17 +37,6 @@ class Actor(nn.Module):
         self.action_scale = (max_action - min_action) / 2.0
         self.action_bias = (max_action + min_action) / 2.0
 
-        # Initialize the layers with proper scaling
-        for layer in [self.layer1, self.layer2, self.layer3]:
-            nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
-            nn.init.constant_(layer.bias, 0.0)
-        
-        # Initialize the output layers with smaller weights
-        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)
-        nn.init.constant_(self.mean_layer.bias, 0.0)
-        nn.init.orthogonal_(self.log_std_layer.weight, gain=0.01)
-        nn.init.constant_(self.log_std_layer.bias, 0.0)
-
     def forward(self, state):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
@@ -395,8 +384,8 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     state_dim = 7  # 3 position, 4 orientation
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 1e6
-    min_action = 1e-6
+    max_action = 100
+    min_action = 0.01
 
     params = {
         'state_dim': state_dim,
@@ -405,7 +394,7 @@ if __name__ == "__main__":
         'min_action': min_action,
         'clip_param': 0.2,
         'value_loss_coef': 0.5,
-        'entropy_coef': 0.01,  # Reduced to encourage more exploration
+        'entropy_coef': 0.5, 
         'gamma': 0.99,
         'gae_lambda': 0.95,
         'ppo_epochs': 10,  # Increased number of epochs
