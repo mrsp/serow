@@ -108,6 +108,18 @@ public:
     /// @param state the state to set
     void setState(const State& state);
 
+    /// @brief Returns the contact position innovation
+    /// @param contact_frame the contact frame name
+    /// @param innovation the contact position innovation
+    /// @param covariance the contact position covariance
+    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const;
+    
+    /// @brief Returns the contact orientation innovation
+    /// @param contact_frame the contact frame name
+    /// @param innovation the contact orientation innovation
+    /// @param covariance the contact orientation covariance
+    bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const;
+
 private:
     struct Params {
         /// @brief base frame name

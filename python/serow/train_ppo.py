@@ -153,7 +153,7 @@ def train_policy(datasets, contacts_frame, agents):
                         actions[cf], log_probs[cf] = agents[cf].actor.get_action(x, deterministic=False)
                         values[cf] = agents[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agents[cf].critic.parameters()).device)).item()
 
-                _, state, reward = run_step(imu, joints, ft, gt, serow_framework, state, actions)
+                _, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
 
                  # Compute the next state
                 next_x = np.concatenate([
@@ -163,9 +163,9 @@ def train_policy(datasets, contacts_frame, agents):
 
                 # Add to buffer
                 for cf in contacts_frame:
-                    if contact_status[cf]:
-                        episode_reward[cf] += reward
-                        agents[cf].add_to_buffer(x, actions[cf], reward, next_x, 0.0, values[cf], log_probs[cf])
+                    if contact_status[cf] and rewards[cf] is not None:
+                        episode_reward[cf] += rewards[cf]
+                        agents[cf].add_to_buffer(x, actions[cf], rewards[cf], next_x, 0.0, values[cf], log_probs[cf])
 
                         # Train policy if we've collected enough steps
                         if collected_steps[cf] >= update_steps:
@@ -260,7 +260,7 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
             for cf in contacts_frame:
                 actions[cf], _ = agents[cf].actor.get_action(x, deterministic=True)
 
-            timestamp, state, reward = run_step(imu, joints, ft, gt, serow_framework, state, actions)
+            timestamp, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
             
             timestamps.append(timestamp)
             base_positions.append(state.get_base_position())
@@ -269,7 +269,8 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
             gt_orientations.append(gt.orientation)
             gt_timestamps.append(gt.timestamp)
             for cf in contacts_frame:
-                cumulative_rewards[cf].append(reward)
+                if rewards[cf] is not None:
+                    cumulative_rewards[cf].append(rewards[cf])
 
         # Convert to numpy arrays
         timestamps = np.array(timestamps)

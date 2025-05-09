@@ -1237,4 +1237,20 @@ void Serow::reset() {
     stopLogging();
 }
 
+bool Serow::getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const {
+    if (params_.is_contact_ekf) {
+        return base_estimator_con_.getContactPositionInnovation(contact_frame, innovation, covariance);
+    } else {
+        return false;
+    }
+}
+
+bool Serow::getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const {
+    if (params_.is_contact_ekf) {
+        return base_estimator_con_.getContactOrientationInnovation(contact_frame, innovation, covariance);
+    } else {
+        return false;
+    }
+}
+
 }  // namespace serow

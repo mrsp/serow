@@ -344,7 +344,25 @@ PYBIND11_MODULE(serow, m) {
              "Returns true if SEROW is initialized")
         .def("set_state", &serow::Serow::setState,
              py::arg("state"),
-             "Sets the state of the robot");
+             "Sets the state of the robot")
+        .def("get_contact_position_innovation", 
+             [](serow::Serow& self, const std::string& contact_frame) {
+                 Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
+                 Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+                 bool success = self.getContactPositionInnovation(contact_frame, innovation, covariance);
+                 return std::make_tuple(success, innovation, covariance);
+             },
+             py::arg("contact_frame"),
+             "Returns the contact position innovation and covariance for a given contact frame")
+        .def("get_contact_orientation_innovation", 
+             [](serow::Serow& self, const std::string& contact_frame) {
+                 Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
+                 Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+                 bool success = self.getContactOrientationInnovation(contact_frame, innovation, covariance);
+                 return std::make_tuple(success, innovation, covariance);
+             },
+             py::arg("contact_frame"),
+             "Returns the contact orientation innovation and covariance for a given contact frame");
 
     // Binding for CentroidalState
     py::class_<serow::CentroidalState>(m, "CentroidalState", "Represents the centroidal state of the robot")

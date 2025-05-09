@@ -1024,6 +1024,11 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
     state = serow_framework.get_state(allow_invalid=True)
         
     # Compute the reward
+    rewards = {}
+    reward = None
+    for cf in state.get_contacts_frame():
+        rewards[cf] = reward
+
     if USE_GROUND_TRUTH:
         # Calculate errors
         position_error = np.linalg.norm(state.get_base_position() - gt.position)
@@ -1032,23 +1037,20 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
                    quaternion_to_rotation_matrix(state.get_base_orientation())))
                         
         # Calculate rewards with improvement focus
-        position_reward = -1.0 * position_error 
-        orientation_reward = -0.5 * orientation_error 
+        position_reward = -5.0 * position_error 
+        orientation_reward = -10.0 * orientation_error 
         reward = position_reward + orientation_reward 
-    else:
-        r = []
-        for cf in state.get_contacts_frame():
-            success = False
-            innovation = np.zeros(3)
-            covariance = np.zeros((3, 3))
-            success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-            if success:
-                r.append(innovation.dot(np.linalg.inv(covariance).dot(innovation)))
 
-        if not len(r) == 0:
-            reward = -np.mean(r)
+    for cf in state.get_contacts_frame():
+        success = False
+        innovation = np.zeros(3)
+        covariance = np.zeros((3, 3))
+        success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+        if success:
+            contact_reward = -100.0 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
+            rewards[cf] = contact_reward + reward if reward is not None else contact_reward
 
-    return imu.timestamp, state, reward
+    return imu.timestamp, state, rewards
 
 def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, gt_position, gt_orientation, align = False):
     # Find the common time range
@@ -1100,24 +1102,36 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
     base_positions = []
     base_orientations = []
     base_timestamps = []
-    cumulative_reward = 0.0
+    cumulative_rewards = {}
+    for cf in state.get_contacts_frame():
+        cumulative_rewards[cf] = []
 
     for imu, joint, ft, gt in zip(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth):
         action = {}
         for cf in state.get_contacts_frame():
             action[cf] = np.ones(2)
 
-        timestamp, state, reward = run_step(imu, joint, ft, gt, serow_framework, state, action)
+        timestamp, state, rewards = run_step(imu, joint, ft, gt, serow_framework, state, action)
         base_timestamps.append(timestamp)
         base_positions.append(state.get_base_position())
         base_orientations.append(state.get_base_orientation()) 
-        cumulative_reward += reward
+        for cf in rewards:
+            if rewards[cf] is not None:
+                cumulative_rewards[cf].append(rewards[cf])
 
     # Convert to numpy arrays
     base_position = np.array(base_positions)
     base_orientation = np.array(base_orientations)
     base_timestamps = np.array(base_timestamps)
-
+    cumulative_rewards = {cf: np.array(cumulative_rewards[cf]) for cf in state.get_contacts_frame()}
+    # Print evaluation metrics
+    print("\nPolicy Evaluation Metrics:")
+    for cf in state.get_contacts_frame():
+        print(f"Average Cumulative Reward for {cf}: {np.mean(cumulative_rewards[cf]):.4f}")
+        print(f"Max Cumulative Reward for {cf}: {np.max(cumulative_rewards[cf]):.4f}")
+        print(f"Min Cumulative Reward for {cf}: {np.min(cumulative_rewards[cf]):.4f}")
+        print("-------------------------------------------------")
+    
     # Extract ground truth data with timestamps
     gt_timestamps = np.array([gt.timestamp for gt in base_pose_ground_truth])
     base_ground_truth_position = np.array([gt.position for gt in base_pose_ground_truth])
@@ -1125,7 +1139,10 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
 
     timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned = sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, base_ground_truth_position, base_ground_truth_orientation, align)
 
-    return timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, cumulative_reward
+
+
+
+    return timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, cumulative_rewards
 
 def plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_rewards = None):
      # Plot the synchronized and aligned data
@@ -1403,14 +1420,14 @@ if __name__ == "__main__":
     base_pose_ground_truth = base_pose_ground_truth[offset:]
 
     # initialize at a different time
-    new_offset = 11000
-    base_states = base_states[new_offset:]
-    contact_states = contact_states[new_offset:]
-    joint_states = joint_states[new_offset:]
-    imu_measurements = imu_measurements[new_offset:]
-    joint_measurements = joint_measurements[new_offset:]
-    force_torque_measurements = force_torque_measurements[new_offset:]
-    base_pose_ground_truth = base_pose_ground_truth[new_offset:]
+    # new_offset = 11000
+    # base_states = base_states[new_offset:]
+    # contact_states = contact_states[new_offset:]
+    # joint_states = joint_states[new_offset:]
+    # imu_measurements = imu_measurements[new_offset:]
+    # joint_measurements = joint_measurements[new_offset:]
+    # force_torque_measurements = force_torque_measurements[new_offset:]
+    # base_pose_ground_truth = base_pose_ground_truth[new_offset:]
 
     # Initialize SEROW
     serow_framework = serow.Serow()
@@ -1422,10 +1439,9 @@ if __name__ == "__main__":
     serow_framework.set_state(state)
 
     # Run SEROW
-    timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_reward = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=False)
-    print(f"Baseline cumulative reward: {cumulative_reward}")
-
+    timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_rewards = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=False)
+    
     # Plot the trajectories
-    plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, None)
+    plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_rewards)
    
 
