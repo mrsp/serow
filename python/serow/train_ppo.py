@@ -123,10 +123,10 @@ def train_policy(datasets, contacts_frame, agents):
             state = serow_framework.get_state(allow_invalid=True)
 
             # Initialize the state
-            state.set_base_state(initial_base_state)
-            state.set_contact_state(initial_contact_state)
-            state.set_joint_state(initial_joint_state)
-            serow_framework.set_state(state)
+            # state.set_base_state(initial_base_state)
+            # state.set_contact_state(initial_contact_state)
+            # state.set_joint_state(initial_joint_state)
+            # serow_framework.set_state(state)
 
             episode_reward = {}
             for cf in contacts_frame:
@@ -172,7 +172,7 @@ def train_policy(datasets, contacts_frame, agents):
                             agents[cf].train()
                             collected_steps[cf] = 0
                 
-                if step % 100 == 0:  # Print progress every 100 steps
+                if step % 5000 == 0:  # Print progress every 100 steps
                     for cf in contacts_frame:
                         print(f"Episode {episode}, Step {step}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
             
@@ -230,10 +230,10 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         serow_framework = serow.Serow()
         serow_framework.initialize("go2_rl.json")
         state = serow_framework.get_state(allow_invalid=True)
-        state.set_base_state(initial_base_state)
-        state.set_contact_state(initial_contact_state)
-        state.set_joint_state(initial_joint_state)
-        serow_framework.set_state(state)
+        # state.set_base_state(initial_base_state)
+        # state.set_contact_state(initial_contact_state)
+        # state.set_joint_state(initial_joint_state)
+        # serow_framework.set_state(state)
 
         # Run SEROW
         timestamps = []
@@ -315,7 +315,6 @@ if __name__ == "__main__":
     joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
 
     offset = len(imu_measurements) - len(base_states)
-
     imu_measurements = imu_measurements[offset:]
     joint_measurements = joint_measurements[offset:]
     force_torque_measurements = force_torque_measurements[offset:]
