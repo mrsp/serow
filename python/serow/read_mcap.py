@@ -6,7 +6,7 @@ import sys
 import os
 import matplotlib.pyplot as plt
 
-USE_GROUND_TRUTH = True
+USE_GROUND_TRUTH = False
 
 # Add the build directory to Python path to find generated schemas
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # This points to serow directory
@@ -1037,8 +1037,8 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
                    quaternion_to_rotation_matrix(state.get_base_orientation())))
                         
         # Calculate rewards with improvement focus
-        position_reward = -10.0 * position_error 
-        orientation_reward = -1.0 * orientation_error 
+        position_reward = -1.0 * position_error 
+        orientation_reward = -0.5 * orientation_error 
         reward = position_reward + orientation_reward 
 
     for cf in state.get_contacts_frame():
@@ -1047,7 +1047,8 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
         covariance = np.zeros((3, 3))
         success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
         if success:
-            contact_reward = -1000.0 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
+            # contact_reward = -10.0 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
+            contact_reward = -np.linalg.norm(innovation)
             rewards[cf] = contact_reward + reward if reward is not None else contact_reward
 
     return imu.timestamp, state, rewards
