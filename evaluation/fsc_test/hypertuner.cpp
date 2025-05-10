@@ -27,7 +27,7 @@ std::string getSerowPath() {
 /// Parameters
 std::string original_config = getSerowPath() + "/config/anymal_b.json";
 std::string temp_config = getSerowPath() + "/config/anymal_b_temp.json";
-std::string best_config_file = getSerowPath() + "/config/best_config.json";
+std::string best_config_file = getSerowPath() + "/config/anymal_best_config.json";
 std::string ground_truth_data = getSerowPath() + "/evaluation/fsc_test/anymal_fsc/fsc.h5";
 std::string serow_predictions = getSerowPath() + "/evaluation/fsc_test/anymal_fsc/serow_predictions.h5";
 
@@ -153,7 +153,7 @@ public:
       std::cout << "Ground truth data loaded." << std::endl;
       
     }
-    // Add the logMap function (already provided in your code)
+
     Eigen::Vector3d logMap(const Eigen::Matrix3d& R) {
       double R11 = R(0, 0);
       double R12 = R(0, 1);
@@ -436,7 +436,7 @@ int main()
     }
 
     if (lower_bounds.size() == param_names.size() && upper_bounds.size() == param_names.size()){
-      std::cout << "@MM Bounds set" << std::endl;
+      std::cout << "Bounds set successfully" << std::endl;
     }
 
     optimizer.setBoundingBox(
@@ -448,7 +448,7 @@ int main()
   optimizer.optimize(result);
 
 
-  std::cout << "@MM Finished Optimization" << std::endl;
+  std::cout << "Finished Optimization" << std::endl;
   
   // SAVE BEST CONFIG
   json best_config = loadDefaultJson(original_config);
