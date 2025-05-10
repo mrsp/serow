@@ -22,7 +22,7 @@ from read_mcap import(
 
 # Actor network per leg end-effector
 class OUNoise:
-    def __init__(self, size, mu=0.0, theta=0.15, sigma=0.3):
+    def __init__(self, size, mu=0.0, theta=0.15, sigma=1.0):
         self.mu = mu * np.ones(size)
         self.theta = theta
         self.sigma = sigma
@@ -46,13 +46,14 @@ class Actor(nn.Module):
         self.output_layer = nn.Linear(16, params['action_dim'])
         
         # Initialize the output layer with a much wider range
-        nn.init.xavier_uniform_(self.output_layer.weight, gain=1.0)
-        nn.init.constant_(self.output_layer.bias, 0.0)
+        nn.init.xavier_uniform_(self.output_layer.weight, gain=1.4141) # sqrt(2)
+        nn.init.uniform_(self.output_layer.bias, -0.1, 0.1)  # Non-zero bias
         
         self.max_action = params['max_action']
         self.min_action = params['min_action']
+        self.action_dim = params['action_dim']
 
-        self.noise = OUNoise(params['action_dim'], sigma=0.3)
+        self.noise = OUNoise(params['action_dim'], sigma=1.0)
         self.noise_scale = params['noise_scale']
         self.noise_decay = params['noise_decay']
 
@@ -64,17 +65,31 @@ class Actor(nn.Module):
         # Use tanh instead of sigmoid to get a wider range of outputs
         return torch.tanh(x) * (self.max_action - self.min_action) / 2.0 + (self.max_action + self.min_action) / 2.0
 
+    # def get_action(self, state, deterministic=False):
+    #     with torch.no_grad():
+    #         state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
+    #         action = self.forward(state).cpu().numpy()[0]
+
+    #         if not deterministic:
+    #             noise = self.noise.sample() * self.noise_scale
+    #             action = action + noise
+    #             self.noise_scale *= self.noise_decay
+    #             action = np.clip(action, self.min_action, self.max_action)
+            
+    #         return action
+    
+    # epsilon-greedy
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
             state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
             action = self.forward(state).cpu().numpy()[0]
-
-            if not deterministic:
+            if not deterministic and np.random.rand() < 0.1:  # 10% chance of random action
+                action = np.random.uniform(self.min_action, self.max_action, self.action_dim)
+            elif not deterministic:
                 noise = self.noise.sample() * self.noise_scale
                 action = action + noise
                 self.noise_scale *= self.noise_decay
                 action = np.clip(action, self.min_action, self.max_action)
-            
             return action
 
 class Critic(nn.Module):
@@ -117,8 +132,8 @@ def train_policy(datasets, contacts_frame, agents):
         initial_contact_state = dataset['contact_states'][0]
         initial_joint_state = dataset['joint_states'][0]
 
-        max_episode = 10
-        update_steps = 64  # Train after collecting this many timesteps
+        max_episode = 1000
+        update_steps = 32  # Train after collecting this many timesteps
 
         for episode in range(max_episode):
             serow_framework = serow.Serow()
@@ -140,18 +155,13 @@ def train_policy(datasets, contacts_frame, agents):
                                                              force_torque_measurements, 
                                                              base_pose_ground_truth)):
                 actions = {}
-                contact_status = {}
-                for cf in contacts_frame:
-                    contact_status[cf] = state.get_contact_status(cf)
-
                 x = np.concatenate([
                     state.get_base_position(),
                     state.get_base_orientation()
                 ])
 
                 for cf in state.get_contacts_frame():
-                    if contact_status[cf]:
-                        actions[cf] = agents[cf].actor.get_action(x, deterministic=False)
+                    actions[cf] = agents[cf].actor.get_action(x, deterministic=False)
 
                 _, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
 
@@ -163,9 +173,10 @@ def train_policy(datasets, contacts_frame, agents):
 
                 # Add to buffer
                 for cf in contacts_frame:
-                    if contact_status[cf] and rewards[cf] is not None:
+                    if rewards[cf] is not None:
                         episode_reward[cf] += rewards[cf]
                         agents[cf].add_to_buffer(x, actions[cf], rewards[cf], next_x, 0.0)
+                        collected_steps[cf] += 1
 
                 # Train policy if we've collected enough steps
                 if collected_steps[cf] >= update_steps:
@@ -387,8 +398,8 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     state_dim = 7  # 3 position, 4 orientation
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 100
-    min_action = 0.01
+    max_action = 1000
+    min_action = 0.001
 
     params = {
         'state_dim': state_dim,
@@ -396,12 +407,12 @@ if __name__ == "__main__":
         'max_action': max_action,
         'min_action': min_action,
         'gamma': 0.99,
-        'tau': 0.01,
+        'tau': 0.05,
         'batch_size': 64,  
-        'actor_lr': 3e-4, 
-        'critic_lr': 1e-3,
-        'noise_scale': 100.0,
-        'noise_decay': 0.999,
+        'actor_lr': 5e-4, 
+        'critic_lr': 1e-4,
+        'noise_scale': 5.0,
+        'noise_decay': 0.995,
         'buffer_size': 1000000,
     }
 

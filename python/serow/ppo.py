@@ -7,7 +7,8 @@ from collections import deque
 
 class PPO:
     def __init__(self, actor, critic, params, device='cpu'):
-        self.buffer = deque(maxlen=1000000)
+        self.buffer_size = params['buffer_size']
+        self.buffer = deque(maxlen=self.buffer_size)
         self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
         self.actor = actor.to(self.device)
         self.critic = critic.to(self.device)
@@ -28,6 +29,10 @@ class PPO:
         self.max_action = params['max_action']
     
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
+        # Check if the buffer is full
+        if len(self.buffer) == self.buffer_size:
+            print(f"Buffer is full. Removing oldest sample.")
+            self.buffer.popleft()
         self.buffer.append((state, action, reward, next_state, done, value, log_prob))
     
     def get_action(self, state, deterministic=False):
