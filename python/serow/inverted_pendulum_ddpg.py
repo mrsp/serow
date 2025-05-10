@@ -8,7 +8,7 @@ import unittest
 from ddpg import DDPG
 
 class OUNoise:
-    def __init__(self, size, mu=0.0, theta=0.15, sigma=1.0):
+    def __init__(self, size, mu=0.0, theta=0.15, sigma=0.3):
         self.mu = mu * np.ones(size)
         self.theta = theta
         self.sigma = sigma
@@ -26,18 +26,21 @@ class OUNoise:
 class Actor(nn.Module):
     def __init__(self, params):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 128)
-        self.layer2 = nn.Linear(128, 64)
-        self.layer3 = nn.Linear(64, params['action_dim'])
-        # Initialize the output layer with a much wider range
-        nn.init.xavier_uniform_(self.layer3.weight, gain=1.4141) # sqrt(2)
-        nn.init.uniform_(self.layer3.bias, -0.1, 0.1)  # Non-zero bias
+        self.layer1 = nn.Linear(params['state_dim'], 256)
+        self.layer2 = nn.Linear(256, 128)
+        self.layer3 = nn.Linear(128, params['action_dim'])
+
+        # Initialize with better weights for improved exploration
+        nn.init.xavier_uniform_(self.layer1.weight, gain=1.0)
+        nn.init.xavier_uniform_(self.layer2.weight, gain=1.0)
+        nn.init.uniform_(self.layer3.weight, -3e-3, 3e-3)
+        nn.init.uniform_(self.layer3.bias, -3e-3, 3e-3)
 
         self.max_action = params['max_action']
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
 
-        self.noise = OUNoise(params['action_dim'], sigma=1.0)
+        self.noise = OUNoise(params['action_dim'], sigma=0.2)
         self.noise_scale = params['noise_scale']
         self.noise_decay = params['noise_decay']
 
@@ -62,15 +65,27 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, params):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'] + params['action_dim'], 128)
-        self.layer2 = nn.Linear(128, 64)
-        self.layer3 = nn.Linear(64, 1)
+        self.state_layer = nn.Linear(params['state_dim'], 256)
+        self.action_layer = nn.Linear(params['action_dim'], 256)
+        self.fc1 = nn.Linear(512, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, 1)
+        
+        # Better initialization for critic
+        nn.init.xavier_uniform_(self.state_layer.weight, gain=1.0)
+        nn.init.xavier_uniform_(self.action_layer.weight, gain=1.0)
+        nn.init.xavier_uniform_(self.fc1.weight, gain=1.0)
+        nn.init.xavier_uniform_(self.fc2.weight, gain=1.0)
+        nn.init.uniform_(self.fc3.weight, -3e-3, 3e-3)
+        nn.init.uniform_(self.fc3.bias, -3e-3, 3e-3)
 
     def forward(self, state, action):
-        x = torch.cat([state, action], 1)
-        x = F.relu(self.layer1(x))
-        x = F.relu(self.layer2(x))
-        x = self.layer3(x)
+        s = F.relu(self.state_layer(state))
+        a = F.relu(self.action_layer(action))
+        x = torch.cat([s, a], dim=1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
         return x
 
 # Inverted Pendulum Environment
@@ -139,11 +154,11 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             'max_action': self.max_action,
             'min_action': self.min_action,
             'gamma': 0.99,
-            'tau': 0.01,
+            'tau': 0.001,
             'batch_size': 64,  
-            'actor_lr': 5e-4, 
-            'critic_lr': 1e-4,
-            'noise_scale': 2.0,
+            'actor_lr': 5e-5, 
+            'critic_lr': 1e-5,
+            'noise_scale': 0.5,
             'noise_decay': 0.995,
             'buffer_size': 1000000,
         }
@@ -201,27 +216,78 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         state = self.env.reset()
         total_steps = 0
         max_steps = 200 
-        episode_reward = 0.0  # Initialize as float
+        episode_rewards = []
         best_reward = float('-inf')
-        
-        for episode in range(100):
+        max_episodes = 1000
+        no_improvement_count = 0
+        reward_history = []
+        window_size = 10
+        reward_threshold = 0.01
+        patience = 10
+        min_delta = 1.0
+
+        for episode in range(max_episodes):
+            state = self.env.reset()
+            episode_reward = 0.0  
+
+            # Exploration phases - more exploration early on
+            noise_scale = max(0.1, 0.3 * (0.99 ** episode))  # Decay noise over episodes
+            self.agent.actor.noise_scale = noise_scale
+            
             for step in range(max_steps):
                 total_steps += 1
                 action = self.agent.actor.get_action(state, deterministic=False)
                 next_state, reward, done = self.env.step(action)
                 self.agent.add_to_buffer(state, action, reward, next_state, done)
                 self.agent.train()
-            
+
                 episode_reward += float(reward)  # Ensure reward is float
                 state = next_state
                 
                 if done or step == max_steps - 1:
                     if episode_reward > best_reward:
                         best_reward = episode_reward
-                    print(f"Step {step}, Episode Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
-                    state = self.env.reset()
-                    episode_reward = 0.0  # Reset as float
+                    print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps}, Episode Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
+                    break
+            
+
+            episode_rewards.append(episode_reward)
+            # Update reward history
+            reward_history.append(episode_reward)
+            if len(reward_history) > window_size:
+                reward_history.pop(0)
+                
+            # Check reward convergence
+            if len(reward_history) >= window_size:
+                recent_rewards = np.array(reward_history)
+                reward_std = np.std(recent_rewards)
+                reward_mean = np.mean(recent_rewards)
+                reward_cv = reward_std / (abs(reward_mean) + 1e-6)  # Coefficient of variation
+                
+                # Check if reward has converged
+                if reward_cv < reward_threshold:
+                    print(f"Reward has converged!")
+                    break
         
+        # Convert episode_rewards to numpy arrays and compute a smoothed reward curve using a low pass filter
+        episode_rewards = np.array(episode_rewards)
+        smoothed_episode_rewards = []
+        smoothed_episode_reward = episode_rewards[0]
+        alpha = 0.8
+        for i in range(len(episode_rewards)):
+            smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[i]
+            smoothed_episode_rewards.append(smoothed_episode_reward)
+
+        # Plot results
+        plt.figure(figsize=(15, 5))
+        plt.plot(episode_rewards, label='Episode Rewards')
+        plt.plot(smoothed_episode_rewards, label='Smoothed Rewards')
+        plt.xlabel('Episode')
+        plt.ylabel('Reward')
+        plt.title('Reward Over Time')
+        plt.legend()
+        plt.show()
+
         # Evaluate the policy and collect data for plotting
         state = self.env.reset()
         total_reward = 0.0  # Initialize as float
