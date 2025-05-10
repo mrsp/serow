@@ -311,7 +311,7 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         if save_policy:
             import os
             # Create policy directory if it doesn't exist
-            os.makedirs('policy', exist_ok=True)
+            os.makedirs('policy/ppo', exist_ok=True)
             
             for cf in contacts_frame:
                 torch.save({
@@ -319,8 +319,8 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
                     'critic_state_dict': agents[cf].critic.state_dict(),
                     'actor_optimizer_state_dict': agents[cf].actor_optimizer.state_dict(),
                     'critic_optimizer_state_dict': agents[cf].critic_optimizer.state_dict(),
-                }, f'policy/trained_policy_{cf}.pth')
-                print(f"Saved policy for {cf} to 'policy/trained_policy_{cf}.pth'")
+                }, f'policy/ppo/trained_policy_{cf}.pth')
+                print(f"Saved policy for {cf} to 'policy/ppo/trained_policy_{cf}.pth'")
 
 if __name__ == "__main__":
     # Read the data
@@ -418,10 +418,10 @@ if __name__ == "__main__":
     # Try to load a trained policy for this contact frame if it exists
     try:
         for cf in contacts_frame:
-            checkpoint = torch.load(f'policy/trained_policy_{cf}.pth')
+            checkpoint = torch.load(f'policy/ppo/trained_policy_{cf}.pth')
             agents[cf].actor.load_state_dict(checkpoint['actor_state_dict'])
             agents[cf].critic.load_state_dict(checkpoint['critic_state_dict'])
-            print(f"Loaded trained policy for {cf} from 'policy/trained_policy_{cf}.pth'")
+            print(f"Loaded trained policy for {cf} from 'policy/ppo/trained_policy_{cf}.pth'")
             loaded = True
     except FileNotFoundError:
         print(f"No trained policy found for {cf}. Training new policy...")

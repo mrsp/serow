@@ -7,63 +7,32 @@ from collections import deque
 import random
 import copy
 
-class OUNoise:
-    def __init__(self, size, mu=0.0, theta=0.15, sigma=0.3):
-        self.mu = mu * np.ones(size)
-        self.theta = theta
-        self.sigma = sigma
-        self.state = np.copy(self.mu)
-
-    def reset(self):
-        self.state = np.copy(self.mu)
-
-    def sample(self):
-        x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
-        self.state = x + dx
-        return self.state
-
 class DDPG:
-    def __init__(self, actor, critic, state_dim, action_dim, max_action, min_action, device='cpu'):
+    def __init__(self, actor, critic, params, device='cpu'):
         self.device = torch.device(device)
         self.actor = actor.to(self.device)
         self.actor_target = copy.deepcopy(actor)
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-3)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=params['actor_lr'])
 
         self.critic = critic.to(self.device)
         self.critic_target = copy.deepcopy(critic)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-3)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=params['critic_lr'])
 
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.critic_target.load_state_dict(self.critic.state_dict())
 
-        self.buffer = deque(maxlen=1000000)
-        self.batch_size = 256
-        self.gamma = 0.99
-        self.tau = 0.01
-        self.min_action = min_action
-        self.max_action = max_action
+        self.buffer = deque(maxlen=params['buffer_size'])
+        self.batch_size = params['batch_size']
+        self.gamma = params['gamma']
+        self.tau = params['tau']
+        self.min_action = params['min_action']
+        self.max_action = params['max_action']
 
-        self.noise = OUNoise(action_dim, sigma=0.3)
-        self.noise_scale = 2.0
-        self.noise_decay = 0.999
-
-        self.state_dim = state_dim
-        self.action_dim = action_dim
+        self.state_dim = params['state_dim']
+        self.action_dim = params['action_dim']
 
     def add_to_buffer(self, state, action, reward, next_state, done):
         self.buffer.append((state, action, reward, next_state, done))
-
-    def get_action(self, state, add_noise=True):
-        state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
-        with torch.no_grad():
-            action = self.actor(state).cpu().numpy()[0]
-        if add_noise:
-            noise = self.noise.sample() * self.noise_scale
-            action = action + noise
-            self.noise_scale *= self.noise_decay
-        action = np.clip(action, self.min_action, self.max_action)
-        return action
 
     def train(self):
         if len(self.buffer) < self.batch_size:
