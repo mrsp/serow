@@ -17,7 +17,8 @@ from read_mcap import(
     read_base_pose_ground_truth,
     run_step,
     plot_trajectories,
-    sync_and_align_data
+    sync_and_align_data,
+    quaternion_to_rotation_matrix
 )
 
 # Actor network per leg end-effector
@@ -40,10 +41,10 @@ class OUNoise:
 class Actor(nn.Module):
     def __init__(self, params):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 64)
-        self.layer2 = nn.Linear(64, 32)
-        self.layer3 = nn.Linear(32, 16)
-        self.output_layer = nn.Linear(16, params['action_dim'])
+        self.layer1 = nn.Linear(params['state_dim'], 32)
+        self.layer2 = nn.Linear(32, 16)
+        self.layer3 = nn.Linear(16, 8)
+        self.output_layer = nn.Linear(8, params['action_dim'])
         
         # Initialize the output layer with a much wider range
         nn.init.xavier_uniform_(self.output_layer.weight, gain=1.4141) # sqrt(2)
@@ -65,20 +66,7 @@ class Actor(nn.Module):
         # Use tanh instead of sigmoid to get a wider range of outputs
         return torch.tanh(x) * (self.max_action - self.min_action) / 2.0 + (self.max_action + self.min_action) / 2.0
 
-    # def get_action(self, state, deterministic=False):
-    #     with torch.no_grad():
-    #         state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
-    #         action = self.forward(state).cpu().numpy()[0]
-
-    #         if not deterministic:
-    #             noise = self.noise.sample() * self.noise_scale
-    #             action = action + noise
-    #             self.noise_scale *= self.noise_decay
-    #             action = np.clip(action, self.min_action, self.max_action)
-            
-    #         return action
-    
-    # epsilon-greedy
+    # epsilon-greedy policy
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
             state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
@@ -95,30 +83,33 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, params):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'] + params['action_dim'], 128)
-        self.layer2 = nn.Linear(128, 64)
-        self.layer3 = nn.Linear(64, 1)
+        self.layer1 = nn.Linear(params['state_dim'] + params['action_dim'], 64)
+        self.layer2 = nn.Linear(64, 32)
+        self.layer3 = nn.Linear(32, 16)
+        self.layer4 = nn.Linear(16, 1)
 
     def forward(self, state, action):
         x = torch.cat([state, action], 1)
         x = F.relu(self.layer1(x))
         x = F.relu(self.layer2(x))
-        x = self.layer3(x)
-        return x
+        x = F.relu(self.layer3(x))
+        return self.layer4(x)
     
 def train_policy(datasets, contacts_frame, agents):
     episode_rewards = {}
-    collected_steps = {}
     best_rewards = {}
     no_improvement_count = {}
+    reward_history = {}  # Track recent rewards for convergence check
+    window_size = 10  # Size of window for moving averages
+    reward_threshold = 0.1  # Minimum change in reward to be considered improvement
     patience = 10  # Number of episodes to wait for improvement
     min_delta = 1.0  # Minimum improvement in reward to be considered progress
 
     for cf in contacts_frame:
         episode_rewards[cf] = []
-        collected_steps[cf] = 0
         best_rewards[cf] = float('-inf')
         no_improvement_count[cf] = 0
+        reward_history[cf] = []  
 
     for i, dataset in enumerate(datasets):
         # Get the measurements and the ground truth
@@ -132,8 +123,7 @@ def train_policy(datasets, contacts_frame, agents):
         initial_contact_state = dataset['contact_states'][0]
         initial_joint_state = dataset['joint_states'][0]
 
-        max_episode = 1000
-        update_steps = 32  # Train after collecting this many timesteps
+        max_episode = 100
 
         for episode in range(max_episode):
             serow_framework = serow.Serow()
@@ -155,39 +145,40 @@ def train_policy(datasets, contacts_frame, agents):
                                                              force_torque_measurements, 
                                                              base_pose_ground_truth)):
                 actions = {}
-                x = np.concatenate([
-                    state.get_base_position(),
-                    state.get_base_orientation()
-                ])
-
+                contact_status = {}
+                R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
                 for cf in state.get_contacts_frame():
-                    actions[cf] = agents[cf].actor.get_action(x, deterministic=False)
+                    contact_status[cf] = state.get_contact_status(cf)
+                    if contact_status[cf]:
+                        x = R_base.transpose() @ (state.get_base_position() - state.get_contact_position(cf))
+                        actions[cf] = agents[cf].actor.get_action(x, deterministic=False)
 
                 _, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
 
-                 # Compute the next state
-                next_x = np.concatenate([
-                    state.get_base_position(),
-                    state.get_base_orientation()
-                ])
-
                 # Add to buffer
+                R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
                 for cf in contacts_frame:
-                    if rewards[cf] is not None:
+                    if contact_status[cf] and rewards[cf] is not None:
                         episode_reward[cf] += rewards[cf]
+                        next_x = R_base.transpose() @ (state.get_base_position() - state.get_contact_position(cf))
                         agents[cf].add_to_buffer(x, actions[cf], rewards[cf], next_x, 0.0)
-                        collected_steps[cf] += 1
 
-                # Train policy if we've collected enough steps
-                if collected_steps[cf] >= update_steps:
-                    agents[cf].train()
-                    collected_steps[cf] = 0
-                
                 if step % 5000 == 0:  # Print progress every 5000 steps
                     for cf in contacts_frame:
                         print(f"Episode {episode}, Step {step}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_rewards[cf]:.2f}")
             
-            # Early stopping check for each contact frame
+            # Train policy
+            for cf in contacts_frame:
+                agents[cf].train()
+
+            # Update reward histories
+            for cf in contacts_frame:
+                # Add reward to history
+                reward_history[cf].append(episode_reward[cf])
+                if len(reward_history[cf]) > window_size:
+                    reward_history[cf].pop(0)
+
+            # Check for convergence
             all_converged = True
             for cf in contacts_frame:   
                 print(f"Dataset {i}, Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_rewards[cf]:.2f}")
@@ -199,10 +190,20 @@ def train_policy(datasets, contacts_frame, agents):
                     no_improvement_count[cf] = 0
                 else:
                     no_improvement_count[cf] += 1
+
+                # Check reward convergence
+                if len(reward_history[cf]) >= window_size:
+                    recent_rewards = np.array(reward_history[cf])
+                    reward_std = np.std(recent_rewards)
+                    reward_mean = np.mean(recent_rewards)
+                    reward_cv = reward_std / (abs(reward_mean) + 1e-6)  # Coefficient of variation
+                    
+                    # Check if reward has converged
+                    if reward_cv < reward_threshold and no_improvement_count[cf] >= patience:
+                        print(f"{cf} has converged!")
+                        continue
                 
-                # Check if this contact frame has converged
-                if no_improvement_count[cf] < patience:
-                    all_converged = False
+                all_converged = False
             
             # If all contact frames have converged, stop training
             if all_converged:
@@ -213,7 +214,12 @@ def train_policy(datasets, contacts_frame, agents):
     smoothed_episode_rewards = {}
     for cf in contacts_frame:
         episode_rewards[cf] = np.array(episode_rewards[cf])
-        smoothed_episode_rewards[cf] = np.convolve(episode_rewards[cf], np.ones(10)/10, mode='valid')
+        smoothed_episode_rewards[cf] = []
+        smoothed_episode_reward = episode_rewards[cf][0]
+        alpha = 0.8
+        for i in range(len(episode_rewards[cf])):
+            smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[cf][i]
+            smoothed_episode_rewards[cf].append(smoothed_episode_reward)
 
     # Create a single figure with subplots for each contact frame
     n_cf = len(contacts_frame)
@@ -277,16 +283,16 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
                                        joint_measurements, 
                                        force_torque_measurements, 
                                        base_pose_ground_truth):
-            x = np.concatenate([
-                state.get_base_position(),
-                state.get_base_orientation()
-            ])
-
             actions = {}
+            contact_status = {}
             print("-------------------------------------------------")
+            R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
             for cf in contacts_frame:
-                actions[cf] = agents[cf].actor.get_action(x, deterministic=True)
-                print(f"Action for {cf}: {actions[cf]}")
+                contact_status[cf] = state.get_contact_status(cf)
+                if contact_status[cf]:
+                    x = R_base.transpose() @ (state.get_base_position() - state.get_contact_position(cf))
+                    actions[cf] = agents[cf].actor.get_action(x, deterministic=True)
+                    print(f"Action for {cf}: {actions[cf]}")
 
             timestamp, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
             
@@ -297,7 +303,7 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
             gt_orientations.append(gt.orientation)
             gt_timestamps.append(gt.timestamp)
             for cf in contacts_frame:
-                if rewards[cf] is not None:
+                if contact_status[cf] and rewards[cf] is not None:
                     cumulative_rewards[cf].append(rewards[cf])
 
         # Convert to numpy arrays
@@ -396,8 +402,8 @@ if __name__ == "__main__":
     print(f"Contacts frame: {contacts_frame}")
 
     # Define the dimensions of your state and action spaces
-    state_dim = 7  # 3 position, 4 orientation
-    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    state_dim = 3  
+    action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
     max_action = 1000
     min_action = 0.001
 
@@ -407,11 +413,11 @@ if __name__ == "__main__":
         'max_action': max_action,
         'min_action': min_action,
         'gamma': 0.99,
-        'tau': 0.05,
+        'tau': 0.01,
         'batch_size': 64,  
         'actor_lr': 5e-4, 
         'critic_lr': 1e-4,
-        'noise_scale': 5.0,
+        'noise_scale': 2.0,
         'noise_decay': 0.995,
         'buffer_size': 1000000,
     }

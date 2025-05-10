@@ -1031,15 +1031,21 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
 
     if USE_GROUND_TRUTH:
         # Calculate errors
-        position_error = np.linalg.norm(state.get_base_position() - gt.position)
-        orientation_error = np.linalg.norm(
-            logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-                   quaternion_to_rotation_matrix(state.get_base_orientation())))
+        R_gt = quaternion_to_rotation_matrix(gt.orientation)
+        R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
+        p_base = R_base.transpose() @ state.get_base_position()
+        p_gt = R_gt.transpose() @ gt.position
+        reward = -np.linalg.norm(p_base - p_gt)
+
+        # position_error = np.linalg.norm(state.get_base_position() - gt.position)
+        # orientation_error = np.linalg.norm(
+        #     logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
+        #            quaternion_to_rotation_matrix(state.get_base_orientation())))
                         
         # Calculate rewards with improvement focus
-        position_reward = -15.0 * position_error 
-        orientation_reward = -5.0 * orientation_error 
-        reward = position_reward + orientation_reward 
+        # position_reward = -1.0 * position_error 
+        # orientation_reward = -1e4 * orientation_error 
+        # reward = position_reward + orientation_reward 
 
     for cf in state.get_contacts_frame():
         success = False
@@ -1047,8 +1053,7 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
         covariance = np.zeros((3, 3))
         success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
         if success:
-            contact_reward = -10.0 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
-            #contact_reward = -np.linalg.norm(innovation)
+            contact_reward = -1e3 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
             rewards[cf] = contact_reward + reward if reward is not None else contact_reward
 
     return imu.timestamp, state, rewards
@@ -1139,9 +1144,6 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
     base_ground_truth_orientation = np.array([gt.orientation for gt in base_pose_ground_truth])
 
     timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned = sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, base_ground_truth_position, base_ground_truth_orientation, align)
-
-
-
 
     return timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, cumulative_rewards
 
