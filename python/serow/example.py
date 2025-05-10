@@ -110,7 +110,8 @@ def main():
         odom.timestamp += dt
         
         # Set action
-        ekf.set_action(np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]))
+        for cf in contacts_frame:
+            ekf.set_action(cf, np.array([1.0, 1.0]))
 
         # Predict step
         ekf.predict(state, imu, kin)

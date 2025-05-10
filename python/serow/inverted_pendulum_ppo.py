@@ -142,6 +142,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
             'max_grad_norm': 0.5,
             'actor_lr': 3e-4,
             'critic_lr': 3e-4,
+            'buffer_size': 100000,
         }
 
         self.agent = PPO(self.actor, self.critic, params, device=self.device)

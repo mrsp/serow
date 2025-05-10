@@ -7,13 +7,39 @@ import unittest
 
 from ddpg import DDPG
 
+class OUNoise:
+    def __init__(self, size, mu=0.0, theta=0.15, sigma=1.0):
+        self.mu = mu * np.ones(size)
+        self.theta = theta
+        self.sigma = sigma
+        self.state = np.copy(self.mu)
+
+    def reset(self):
+        self.state = np.copy(self.mu)
+
+    def sample(self):
+        x = self.state
+        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
+        self.state = x + dx
+        return self.state
+
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action):
+    def __init__(self, params):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(state_dim, 128)
+        self.layer1 = nn.Linear(params['state_dim'], 128)
         self.layer2 = nn.Linear(128, 64)
-        self.layer3 = nn.Linear(64, action_dim)
-        self.max_action = max_action
+        self.layer3 = nn.Linear(64, params['action_dim'])
+        # Initialize the output layer with a much wider range
+        nn.init.xavier_uniform_(self.layer3.weight, gain=1.4141) # sqrt(2)
+        nn.init.uniform_(self.layer3.bias, -0.1, 0.1)  # Non-zero bias
+
+        self.max_action = params['max_action']
+        self.min_action = params['min_action']
+        self.action_dim = params['action_dim']
+
+        self.noise = OUNoise(params['action_dim'], sigma=1.0)
+        self.noise_scale = params['noise_scale']
+        self.noise_decay = params['noise_decay']
 
     def forward(self, state):
         x = F.relu(self.layer1(state))
@@ -21,10 +47,22 @@ class Actor(nn.Module):
         x = torch.tanh(self.layer3(x)) * self.max_action
         return x
 
+    # epsilon-greedy policy
+    def get_action(self, state, deterministic=False):
+        with torch.no_grad():
+            state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
+            action = self.forward(state).cpu().numpy()[0]
+            if not deterministic:
+                noise = self.noise.sample() * self.noise_scale
+                action = action + noise
+                self.noise_scale *= self.noise_decay
+                action = np.clip(action, self.min_action, self.max_action)
+            return action
+
 class Critic(nn.Module):
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, params):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(state_dim + action_dim, 128)
+        self.layer1 = nn.Linear(params['state_dim'] + params['action_dim'], 128)
         self.layer2 = nn.Linear(128, 64)
         self.layer3 = nn.Linear(64, 1)
 
@@ -90,9 +128,28 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         self.action_dim = 1  # torque
         self.max_action = 2.0
         self.min_action = -2.0
-        self.actor = Actor(self.state_dim, self.action_dim, self.max_action)
-        self.critic = Critic(self.state_dim, self.action_dim)
-        self.agent = DDPG(self.actor, self.critic, self.state_dim, self.action_dim, self.max_action, self.min_action)
+
+        # Create device
+        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = 'cpu'
+
+        params = {
+            'state_dim': self.state_dim,
+            'action_dim': self.action_dim,
+            'max_action': self.max_action,
+            'min_action': self.min_action,
+            'gamma': 0.99,
+            'tau': 0.01,
+            'batch_size': 64,  
+            'actor_lr': 5e-4, 
+            'critic_lr': 1e-4,
+            'noise_scale': 2.0,
+            'noise_decay': 0.995,
+            'buffer_size': 1000000,
+        }
+        self.actor = Actor(params)
+        self.critic = Critic(params)
+        self.agent = DDPG(self.actor, self.critic, params, device=self.device)
         self.env = InvertedPendulum()
 
     def test_initialization(self):
@@ -107,13 +164,13 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
 
     def test_get_action(self):
         state = self.env.reset()
-        action = self.agent.get_action(state, add_noise=True)
+        action = self.agent.actor.get_action(state, deterministic=False)
         self.assertEqual(action.shape, (self.action_dim,))
         self.assertTrue(np.all(action >= self.min_action) and np.all(action <= self.max_action))
 
     def test_add_to_buffer(self):
         state = self.env.reset()
-        action = self.agent.get_action(state)
+        action = self.agent.actor.get_action(state, deterministic=False)
         next_state, reward, done = self.env.step(action)
         self.agent.add_to_buffer(state, action, reward, next_state, done)
         self.assertEqual(len(self.agent.buffer), 1)
@@ -128,7 +185,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         # Fill buffer with some transitions
         state = self.env.reset()
         for _ in range(100):
-            action = self.agent.get_action(state)
+            action = self.agent.actor.get_action(state, deterministic=False)
             next_state, reward, done = self.env.step(action)
             self.agent.add_to_buffer(state, action, reward, next_state, done)
             state = next_state if not done else self.env.reset()
@@ -150,7 +207,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         for episode in range(100):
             for step in range(max_steps):
                 total_steps += 1
-                action = self.agent.get_action(state)
+                action = self.agent.actor.get_action(state, deterministic=False)
                 next_state, reward, done = self.env.step(action)
                 self.agent.add_to_buffer(state, action, reward, next_state, done)
                 self.agent.train()
@@ -172,7 +229,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         actions = []
         rewards = []
         for step in range(max_steps):
-            action = self.agent.get_action(state, add_noise=False)
+            action = self.agent.actor.get_action(state, deterministic=True)
             next_state, reward, done = self.env.step(action)
             state_flat = np.array(state).reshape(-1)
             states.append(np.array([np.arctan2(state_flat[1], state_flat[0]),  state_flat[2]]))
