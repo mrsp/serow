@@ -136,9 +136,6 @@ def train_policy(datasets, contacts_frame, agents):
                 actions = {}
                 log_probs = {}
                 values = {}
-                contact_status = {}
-                for cf in contacts_frame:
-                    contact_status[cf] = state.get_contact_status(cf)
 
                 x = np.concatenate([
                     state.get_base_position(),
@@ -146,9 +143,8 @@ def train_policy(datasets, contacts_frame, agents):
                 ])
 
                 for cf in state.get_contacts_frame():
-                    if contact_status[cf]:
-                        actions[cf], log_probs[cf] = agents[cf].actor.get_action(x, deterministic=False)
-                        values[cf] = agents[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agents[cf].critic.parameters()).device)).item()
+                    actions[cf], log_probs[cf] = agents[cf].actor.get_action(x, deterministic=False)
+                    values[cf] = agents[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agents[cf].critic.parameters()).device)).item()
 
                 _, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
 
@@ -160,10 +156,11 @@ def train_policy(datasets, contacts_frame, agents):
 
                 # Add to buffer
                 for cf in contacts_frame:
-                    if contact_status[cf] and rewards[cf] is not None:
+                    if rewards[cf] is not None:
                         episode_reward[cf] += rewards[cf]
                         agents[cf].add_to_buffer(x, actions[cf], rewards[cf], next_x, 0.0, values[cf], log_probs[cf])
-
+                        collected_steps[cf] += 1
+                        
                 # Train policy if we've collected enough steps
                 if collected_steps[cf] >= update_steps:
                     agents[cf].train()
@@ -384,8 +381,8 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     state_dim = 7  # 3 position, 4 orientation
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 100
-    min_action = 0.01
+    max_action = 1000
+    min_action = 0.001
 
     params = {
         'state_dim': state_dim,
@@ -397,11 +394,12 @@ if __name__ == "__main__":
         'entropy_coef': 0.5, 
         'gamma': 0.99,
         'gae_lambda': 0.95,
-        'ppo_epochs': 10,  # Increased number of epochs
-        'batch_size': 64,  # Increased batch size
+        'ppo_epochs': 10,  
+        'batch_size': 64,  
         'max_grad_norm': 0.5,
-        'actor_lr': 3e-4,  # Adjusted learning rate
-        'critic_lr': 1e-3,  # Adjusted learning rate
+        'actor_lr': 5e-4, 
+        'critic_lr': 1e-4,  
+        'buffer_size': 1000000
     }
 
     # Initialize the actor and critic

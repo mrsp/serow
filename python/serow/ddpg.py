@@ -22,6 +22,7 @@ class DDPG:
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         self.buffer = deque(maxlen=params['buffer_size'])
+        self.buffer_size = params['buffer_size']
         self.batch_size = params['batch_size']
         self.gamma = params['gamma']
         self.tau = params['tau']
@@ -32,11 +33,16 @@ class DDPG:
         self.action_dim = params['action_dim']
 
     def add_to_buffer(self, state, action, reward, next_state, done):
+        # Check if the buffer is full
+        if len(self.buffer) == self.buffer_size:
+            print(f"Buffer is full. Removing oldest sample.")
+            self.buffer.popleft()
         self.buffer.append((state, action, reward, next_state, done))
 
     def train(self):
         if len(self.buffer) < self.batch_size:
             return
+        
         batch = random.sample(self.buffer, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
         
