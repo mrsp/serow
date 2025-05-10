@@ -128,11 +128,21 @@ void saveElevationMap(std::array<ElevationCell, map_size> data, double timestamp
     file.flush();
 }
 
-int main() {
+int main(int argc, char** argv) {
     try {
+        std::string config_path = "go2.json";  // Default path
+        
+        // If user provides a custom config path
+        if (argc > 1) {
+            config_path = argv[1];
+            std::cout << "Using config from argument: " << config_path << std::endl;
+        } else {
+            std::cout << "No config argument provided. Using default: " << config_path << std::endl;
+        }
+
         // Initialize Serow
         serow::Serow SEROW;
-        if (!SEROW.initialize("go2.json")) {
+        if (!SEROW.initialize(config_path)) {
             throw std::runtime_error("Failed to initialize Serow");
         }
 
