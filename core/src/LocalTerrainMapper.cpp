@@ -29,7 +29,7 @@ void LocalTerrainMapper::updateLocalMapOriginAndBound(const std::array<float, 2>
     // the float map bound only consider the closed cell center
     local_map_bound_min_d_ = globalIndexToLocation(local_map_bound_min_i_);
     local_map_bound_max_d_ = globalIndexToLocation(local_map_bound_max_i_);
-};
+}
 
 void LocalTerrainMapper::clearOutOfMapCells(const std::vector<int>& clear_id, const int i) {
     std::array<int, 2> ids{i, (i + 1) % 2};

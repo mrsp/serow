@@ -13,13 +13,16 @@ find_package(nlohmann_json REQUIRED)
 find_library(BAYESOPT_LIB bayesopt PATHS /usr/local/lib /usr/lib REQUIRED)
 find_library(NLOPT_LIB nlopt PATHS /usr/local/lib /usr/lib REQUIRED)
 
+# Add include paths
+include_directories(/usr/local/include)
+
 # Find and link HDF5
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 include_directories(${HDF5_INCLUDE_DIRS})
 
 # Add the executable for HDF5 and Serow processing
-add_executable(go2_mujoco_test ../go2_mujoco_test.cpp)
-target_link_libraries(go2_mujoco_test PRIVATE serow pinocchio::pinocchio ${HDF5_LIBRARIES} nlohmann_json::nlohmann_json)
+add_executable(fsc_test ../fsc_test.cpp)
+target_link_libraries(fsc_test PRIVATE serow pinocchio::pinocchio ${HDF5_LIBRARIES} nlohmann_json::nlohmann_json)
 
 # Add the executable for automated hyperparameter tuning
 add_executable(hypertuner ../hypertuner.cpp)
