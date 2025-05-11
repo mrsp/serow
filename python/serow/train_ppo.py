@@ -146,11 +146,10 @@ def train_policy(datasets, contacts_frame, agents, save_policy=True):
                 values = {}
                 contact_status = {}
                 x = {}
-                R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
                 for cf in state.get_contacts_frame():
                     contact_status[cf] = state.get_contact_status(cf)
                     if contact_status[cf]:
-                        x[cf] = R_base.transpose() @ (state.get_base_position() - state.get_contact_position(cf))
+                        x[cf] = np.concatenate((state.get_base_position() - state.get_contact_position(cf), state.get_base_orientation()))
                         actions[cf], log_probs[cf] = agents[cf].actor.get_action(x[cf], deterministic=False)
                         values[cf] = agents[cf].critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agents[cf].critic.parameters()).device)).item()
                     else:
@@ -162,12 +161,11 @@ def train_policy(datasets, contacts_frame, agents, save_policy=True):
                 _, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
 
                 # Add to buffer
-                R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
                 for cf in contacts_frame:
                     if state.get_contact_status(cf) and rewards[cf] is not None and x[cf] is not None:
                         episode_reward[cf] += rewards[cf]
                         # Compute the next state
-                        next_x = R_base.transpose() @ (state.get_base_position() - state.get_contact_position(cf))
+                        next_x = np.concatenate((state.get_base_position() - state.get_contact_position(cf), state.get_base_orientation()))
                         agents[cf].add_to_buffer(x[cf], actions[cf], rewards[cf], next_x, 0.0, values[cf], log_probs[cf])
                         collected_steps[cf] += 1
                         
@@ -306,11 +304,10 @@ def evaluate_policy(dataset, contacts_frame, agents):
             actions = {}
             contact_status = {}
             print("-------------------------------------------------")
-            R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
             for cf in contacts_frame:
                 contact_status[cf] = state.get_contact_status(cf)
                 if contact_status[cf]:
-                    x = R_base.transpose() @ (state.get_base_position() - state.get_contact_position(cf))
+                    x = np.concatenate((state.get_base_position() - state.get_contact_position(cf), state.get_base_orientation()))
                     actions[cf], _ = agents[cf].actor.get_action(x, deterministic=True)
                     print(f"Action for {cf}: {actions[cf]}")
                 else:
@@ -410,10 +407,10 @@ if __name__ == "__main__":
     print(f"Contacts frame: {contacts_frame}")
 
     # Define the dimensions of your state and action spaces
-    state_dim = 3   
+    state_dim = 7 # 3 for position, 4 for orientation
     action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 1000
-    min_action = 0.001
+    max_action = 10000
+    min_action = 0.0001
 
     params = {
         'state_dim': state_dim,
