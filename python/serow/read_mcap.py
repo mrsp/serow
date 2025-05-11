@@ -1015,7 +1015,8 @@ def read_force_torque_measurements(file_path: str):
 def run_step(imu, joint, ft, gt, serow_framework, state, actions):
     # Set the actions
     for cf, action in actions.items():
-        serow_framework.set_action(cf, action)
+        if (action is not None):
+            serow_framework.set_action(cf, action)
 
     # Run the filter
     serow_framework.filter(imu, joint, ft, None, None)
@@ -1029,32 +1030,32 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
     for cf in state.get_contacts_frame():
         rewards[cf] = reward
 
-    if USE_GROUND_TRUTH:
-        # Calculate errors
-        R_gt = quaternion_to_rotation_matrix(gt.orientation)
-        R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
-        p_base = R_base.transpose() @ state.get_base_position()
-        p_gt = R_gt.transpose() @ gt.position
-        reward = -np.linalg.norm(p_base - p_gt)
+        if USE_GROUND_TRUTH:
+            # Calculate errors
+            R_gt = quaternion_to_rotation_matrix(gt.orientation)
+            R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
+            p_base = R_base.transpose() @ state.get_base_position()
+            p_gt = R_gt.transpose() @ gt.position
+            reward = -np.linalg.norm(p_base - p_gt)
 
-        # position_error = np.linalg.norm(state.get_base_position() - gt.position)
-        # orientation_error = np.linalg.norm(
-        #     logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-        #            quaternion_to_rotation_matrix(state.get_base_orientation())))
-                        
-        # Calculate rewards with improvement focus
-        # position_reward = -1.0 * position_error 
-        # orientation_reward = -1e4 * orientation_error 
-        # reward = position_reward + orientation_reward 
+            # position_error = np.linalg.norm(state.get_base_position() - gt.position)
+            # orientation_error = np.linalg.norm(
+            #     logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
+            #            quaternion_to_rotation_matrix(state.get_base_orientation())))
+                            
+            # Calculate rewards with improvement focus
+            # position_reward = -1.0 * position_error 
+            # orientation_reward = -1e4 * orientation_error 
+            # reward = position_reward + orientation_reward 
 
-    for cf in state.get_contacts_frame():
-        success = False
-        innovation = np.zeros(3)
-        covariance = np.zeros((3, 3))
-        success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-        if success:
-            contact_reward = -1e3 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
-            rewards[cf] = contact_reward + reward if reward is not None else contact_reward
+        for cf in state.get_contacts_frame():
+            success = False
+            innovation = np.zeros(3)
+            covariance = np.zeros((3, 3))
+            success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+            if success:
+                contact_reward = -1e3 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
+                rewards[cf] = contact_reward + reward if reward is not None else contact_reward
 
     return imu.timestamp, state, rewards
 

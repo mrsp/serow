@@ -159,9 +159,8 @@ class PPO:
                 # Single optimization step
                 self.actor_optimizer.step()
                 self.critic_optimizer.step()
-
         self.buffer.clear()
-    
+
     def save_models(self, path):
         torch.save(self.actor.state_dict(), f"{path}_actor.pth")
         torch.save(self.critic.state_dict(), f"{path}_critic.pth")
