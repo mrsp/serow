@@ -128,10 +128,10 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         self.critic = Critic(self.state_dim).to(self.device)
 
         params = {
-            'state_dim': 3,
-            'action_dim': 1,
-            'max_action': 2.0,
-            'min_action': -2.0,
+            'state_dim': self.state_dim,
+            'action_dim': self.action_dim,
+            'max_action': self.max_action,
+            'min_action': self.min_action,
             'clip_param': 0.2,
             'value_loss_coef': 1.0,
             'entropy_coef': 0.5,

@@ -45,8 +45,8 @@ class Actor(nn.Module):
         self.noise_decay = params['noise_decay']
 
     def forward(self, state):
-        x = F.relu(self.layer1(state))
-        x = F.relu(self.layer2(x))
+        x = F.tanh(self.layer1(state))
+        x = F.tanh(self.layer2(x))
         x = torch.tanh(self.layer3(x)) * self.max_action
         return x
 
@@ -129,11 +129,10 @@ class InvertedPendulum:
         
         # Improved reward function using cos(theta) and sin(theta)
         # The upright position is when cos(theta) = 1, sin(theta) = 0
-        angle_cost = theta**2
         angledot_cost = 0.1 * theta_dot**2
         torque_cost = 0.001 * action**2
-        reward = - float(angle_cost) - float(angledot_cost) - float(torque_cost)
-        
+        reward = float(np.cos(theta)) - float(angledot_cost) - float(torque_cost)
+        done = 1.0 if (abs(theta_dot) > self.max_angular_vel) else 0.0
         return self.state, reward, done
 
 # Unit tests for DDPG with Inverted Pendulum
@@ -156,8 +155,8 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             'gamma': 0.99,
             'tau': 0.001,
             'batch_size': 64,  
-            'actor_lr': 5e-5, 
-            'critic_lr': 1e-5,
+            'actor_lr': 3e-4, 
+            'critic_lr': 3e-4,
             'noise_scale': 0.5,
             'noise_decay': 0.995,
             'buffer_size': 1000000,
@@ -212,19 +211,19 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             self.fail(f"Training failed with error: {e}")
 
     def test_policy_evaluation(self):
-        # Train the agent for longer
-        state = self.env.reset()
-        total_steps = 0
-        max_steps = 200 
+        max_steps_per_episode = 2048
         episode_rewards = []
         best_reward = float('-inf')
         max_episodes = 1000
-        no_improvement_count = 0
         reward_history = []
         window_size = 10
         reward_threshold = 0.01
-        patience = 10
-        min_delta = 1.0
+
+        update_steps = 64  # Train after collecting this many timesteps
+
+        episode_rewards = []
+        best_reward = float('-inf')
+        collected_steps = 0
 
         for episode in range(max_episodes):
             state = self.env.reset()
@@ -234,22 +233,30 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             noise_scale = max(0.1, 0.3 * (0.99 ** episode))  # Decay noise over episodes
             self.agent.actor.noise_scale = noise_scale
             
-            for step in range(max_steps):
-                total_steps += 1
+            for step in range(max_steps_per_episode):
                 action = self.agent.actor.get_action(state, deterministic=False)
                 next_state, reward, done = self.env.step(action)
                 self.agent.add_to_buffer(state, action, reward, next_state, done)
-                self.agent.train()
-
-                episode_reward += float(reward)  # Ensure reward is float
-                state = next_state
                 
-                if done or step == max_steps - 1:
-                    if episode_reward > best_reward:
-                        best_reward = episode_reward
-                    print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps}, Episode Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
+                episode_reward += reward
+                collected_steps += 1
+
+                if done > 0.0:
+                    state = self.env.reset()
+                else:
+                    state = next_state
+                
+                if collected_steps >= update_steps:
+                    self.agent.train()
+                    collected_steps = 0
+
+                if done or step == max_steps_per_episode - 1:
                     break
-            
+
+            episode_rewards.append(episode_reward)
+            if episode_reward > best_reward:
+                best_reward = episode_reward
+            print(f"Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
 
             episode_rewards.append(episode_reward)
             # Update reward history
@@ -294,7 +301,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         states = []
         actions = []
         rewards = []
-        for step in range(max_steps):
+        for step in range(max_steps_per_episode):
             action = self.agent.actor.get_action(state, deterministic=True)
             next_state, reward, done = self.env.step(action)
             state_flat = np.array(state).reshape(-1)
