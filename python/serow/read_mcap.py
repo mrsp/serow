@@ -1026,36 +1026,32 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
         
     # Compute the reward
     rewards = {}
-    reward = None
+    reward = 0.0
     for cf in state.get_contacts_frame():
-        rewards[cf] = reward
+        rewards[cf] = None
+        if (state.get_contact_status(cf)):
+            if USE_GROUND_TRUTH:
+                position_error = np.linalg.norm(state.get_base_position() - gt.position)
+                orientation_error = np.linalg.norm(
+                    logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
+                    quaternion_to_rotation_matrix(state.get_base_orientation())))
+                orientation_reward = -1e3 * orientation_error 
+                # orientation_error = np.linalg.norm(state.get_base_orientation() - gt.orientation)
+                # orientation_reward = -10.0 * orientation_error 
 
-        if USE_GROUND_TRUTH:
-            # Calculate errors
-            R_gt = quaternion_to_rotation_matrix(gt.orientation)
-            R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
-            p_base = R_base.transpose() @ state.get_base_position()
-            p_gt = R_gt.transpose() @ gt.position
-            reward = -np.linalg.norm(p_base - p_gt)
+                # Calculate rewards with improvement focus
+                position_reward = -1.0 * position_error 
+                # print(f"position_reward: {position_reward}, orientation_reward: {orientation_reward}")
+                reward = position_reward + orientation_reward 
 
-            # position_error = np.linalg.norm(state.get_base_position() - gt.position)
-            # orientation_error = np.linalg.norm(
-            #     logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-            #            quaternion_to_rotation_matrix(state.get_base_orientation())))
-                            
-            # Calculate rewards with improvement focus
-            # position_reward = -1.0 * position_error 
-            # orientation_reward = -1e4 * orientation_error 
-            # reward = position_reward + orientation_reward 
-
-        for cf in state.get_contacts_frame():
             success = False
             innovation = np.zeros(3)
             covariance = np.zeros((3, 3))
             success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
             if success:
-                contact_reward = -1e3 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                rewards[cf] = contact_reward + reward if reward is not None else contact_reward
+                contact_reward = -1e4 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
+                # print(f"contact_reward: {contact_reward}")
+                rewards[cf] = contact_reward + reward 
 
     return imu.timestamp, state, rewards
 
