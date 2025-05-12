@@ -142,7 +142,9 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 for cf in state.get_contacts_frame():
                     contact_status[cf] = state.get_contact_status(cf)
                     if contact_status[cf]:
-                        x[cf] = np.concatenate((np.abs(state.get_base_position() - state.get_contact_position(cf)), state.get_base_orientation()))
+                        R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
+                        local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
+                        x[cf] = np.abs(local_pos)  
                         actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=False)
                         values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
                     else:
@@ -157,18 +159,20 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 for cf in contacts_frame:
                     if state.get_contact_status(cf) and rewards[cf] is not None and x[cf] is not None:
                         if done:
-                            rewards[cf] -= -1e5  # Less extreme penalty
+                            rewards[cf] -= 1e4
                         else:
-                            rewards[cf] += 1.0 # step reward
+                            rewards[cf] += 0.5 # step reward
                         
                         # Check if we've made it to the end of the episode without diverging the filter
                         if (step == max_steps - 1):
-                            rewards[cf] += 1e3
+                            rewards[cf] += 1e2
                             print(f"Episode {episode} completed without diverging the filter")
                         
                         episode_reward[cf] += rewards[cf] 
                         # Compute the next state
-                        next_x = np.concatenate((np.abs(state.get_base_position() - state.get_contact_position(cf)), state.get_base_orientation()))
+                        R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
+                        local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
+                        next_x = np.abs(local_pos)  
                         agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x, done, values[cf], log_probs[cf])
                         collected_steps += 1
                         
@@ -240,7 +244,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         episode_rewards[cf] = np.array(episode_rewards[cf])
         smoothed_episode_rewards[cf] = []
         smoothed_episode_reward = episode_rewards[cf][0]
-        alpha = 0.7
+        alpha = 0.55
         for i in range(len(episode_rewards[cf])):
             smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[cf][i]
             smoothed_episode_rewards[cf].append(smoothed_episode_reward)
@@ -313,7 +317,9 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
             for cf in contacts_frame:
                 contact_status[cf] = state.get_contact_status(cf)
                 if contact_status[cf]:
-                    x = np.concatenate((np.abs(state.get_base_position() - state.get_contact_position(cf)), state.get_base_orientation()))
+                    R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
+                    local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
+                    x = np.abs(local_pos) 
                     actions[cf], _ = agent.actor.get_action(x, deterministic=True)
                     print(f"Action for {cf}: {actions[cf]}")
                 else:
@@ -413,7 +419,7 @@ if __name__ == "__main__":
     print(f"Contacts frame: {contacts_frame}")
 
     # Define the dimensions of your state and action spaces
-    state_dim = 7 # 3 for position, 4 for orientation
+    state_dim = 3 # 3 for local positions
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
     min_action = 0.0001
 
@@ -422,16 +428,16 @@ if __name__ == "__main__":
         'action_dim': action_dim,
         'max_action': None,
         'min_action': min_action,
-        'clip_param': 0.1,  # More conservative clipping
-        'value_loss_coef': 0.5,  # Reduce value loss coefficient
-        'entropy_coef': 0.01,  # Reduce entropy coefficient
+        'clip_param': 0.2,  
+        'value_loss_coef': 0.5,  
+        'entropy_coef': 0.01,  
         'gamma': 0.99,
         'gae_lambda': 0.95,
-        'ppo_epochs': 5,  # Reduce number of epochs
-        'batch_size': 32,  # Smaller batch size
-        'max_grad_norm': 0.1,  # More conservative gradient clipping
-        'actor_lr': 1e-4,  # Lower learning rate
-        'critic_lr': 1e-4,  # Lower learning rate
+        'ppo_epochs': 10,  
+        'batch_size': 32,  
+        'max_grad_norm': 0.5,  
+        'actor_lr': 5e-3, 
+        'critic_lr': 1e-3,
         'buffer_size': 100000
     }
 
