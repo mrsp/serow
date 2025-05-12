@@ -1043,15 +1043,14 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
             if nis > 1.0 or nis <= 0.0: 
                 # filter diverged
                 done = 1.0
-                print(f"filter diverged")
                 break
             contact_reward = -5e2 * nis
             rewards[cf] = contact_reward
             if USE_GROUND_TRUTH:
-                position_reward = -1.0 * np.linalg.norm(base_position - gt.position)
-                orientation_reward = -2.5 *np.linalg.norm(base_orientation - gt.orientation)
-                # orientation_reward = -1e4 * np.linalg.norm(
-                #     logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(base_orientation)))
+                position_reward = -1e3 * np.linalg.norm(base_position - gt.position)
+                # orientation_reward = -50.0 *np.linalg.norm(base_orientation - gt.orientation)
+                orientation_reward = -1e5 * np.linalg.norm(
+                    logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(base_orientation)))
                 rewards[cf] += position_reward + orientation_reward 
     return imu.timestamp, state, rewards, done
 

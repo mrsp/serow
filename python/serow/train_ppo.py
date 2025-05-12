@@ -93,7 +93,6 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     reward_history = {}  # Track recent rewards for convergence check
     window_size = 10  # Size of window for moving averages
     reward_threshold = 0.01  # Minimum change in reward to be considered improvement
-    reward_scale = 0.001  # Scale rewards to prevent extreme values
 
     for cf in contacts_frame:
         episode_rewards[cf] = []
@@ -158,13 +157,19 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 for cf in contacts_frame:
                     if state.get_contact_status(cf) and rewards[cf] is not None and x[cf] is not None:
                         if done:
-                            rewards[cf] = -1e3  # Less extreme penalty
-                        episode_reward[cf] += rewards[cf]
-                        # Scale rewards before adding to buffer
-                        scaled_reward = rewards[cf] * reward_scale
+                            rewards[cf] -= -1e5  # Less extreme penalty
+                        else:
+                            rewards[cf] += 1.0 # step reward
+                        
+                        # Check if we've made it to the end of the episode without diverging the filter
+                        if (step == max_steps - 1):
+                            rewards[cf] += 1e3
+                            print(f"Episode {episode} completed without diverging the filter")
+                        
+                        episode_reward[cf] += rewards[cf] 
                         # Compute the next state
                         next_x = np.concatenate((np.abs(state.get_base_position() - state.get_contact_position(cf)), state.get_base_orientation()))
-                        agent.add_to_buffer(x[cf], actions[cf], scaled_reward, next_x, done, values[cf], log_probs[cf])
+                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x, done, values[cf], log_probs[cf])
                         collected_steps += 1
                         
                     # Train policy if we've collected enough steps
