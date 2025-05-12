@@ -296,7 +296,11 @@ void ContactEKF::updateWithContacts(
     std::shared_ptr<TerrainElevation> terrain_estimator) {
     contact_position_innovation_.clear();
     contact_orientation_innovation_.clear();
-
+    base_position_per_contact_position_update_.clear();
+    base_orientation_per_contact_position_update_.clear();
+    base_position_per_contact_orientation_update_.clear();
+    base_orientation_per_contact_orientation_update_.clear();
+    
     // Compute the relative contacts position/orientation measurement noise
     for (const auto& [cf, cp] : contacts_status) {
         const int cs = cp ? 1 : 0;
@@ -391,6 +395,8 @@ void ContactEKF::updateWithContacts(
         }
         if (contacts_status.at(cf)) {
             contact_position_innovation_[cf] = {z, s + 1e-6 * Eigen::Matrix3d::Identity()};
+            base_position_per_contact_position_update_[cf] = state.base_position;
+            base_orientation_per_contact_position_update_[cf] = state.base_orientation;
         }
     }
 
@@ -427,7 +433,9 @@ void ContactEKF::updateWithContacts(
             }
             P_ = (I_ - K * H) * P_;
             if (contacts_status.at(cf)) {
-                contact_orientation_innovation_[cf] = {z, s + 1e-6 * Eigen::Matrix3d::Identity()};
+                contact_orientation_innovation_[cf] = {z, s + 1e-6 * Eigen::Matrix3d::Identity()}; 
+                base_position_per_contact_orientation_update_[cf] = state.base_position;
+                base_orientation_per_contact_orientation_update_[cf] = state.base_orientation;
             }
         }
     }
@@ -652,17 +660,23 @@ void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action)
 }
 
 bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame,
+                                              Eigen::Vector3d& base_position,
+                                              Eigen::Quaterniond& base_orientation,
                                               Eigen::Vector3d& innovation,
                                               Eigen::Matrix3d& covariance) const {
     if (contact_position_innovation_.find(contact_frame) != contact_position_innovation_.end()) {
         innovation = contact_position_innovation_.at(contact_frame).first;
         covariance = contact_position_innovation_.at(contact_frame).second;
+        base_position = base_position_per_contact_position_update_.at(contact_frame);
+        base_orientation = base_orientation_per_contact_position_update_.at(contact_frame);
         return true;
     }
     return false;
 }
 
 bool ContactEKF::getContactOrientationInnovation(const std::string& contact_frame,
+                                                 Eigen::Vector3d& base_position,
+                                                 Eigen::Quaterniond& base_orientation,
                                                  Eigen::Vector3d& innovation,
                                                  Eigen::Matrix3d& covariance) const {
     if (point_feet_) {
@@ -673,6 +687,8 @@ bool ContactEKF::getContactOrientationInnovation(const std::string& contact_fram
         contact_orientation_innovation_.end()) {
         innovation = contact_orientation_innovation_.at(contact_frame).first;
         covariance = contact_orientation_innovation_.at(contact_frame).second;
+        base_position = base_position_per_contact_orientation_update_.at(contact_frame);
+        base_orientation = base_orientation_per_contact_orientation_update_.at(contact_frame);
         return true;
     }
     return false;

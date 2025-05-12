@@ -110,15 +110,21 @@ public:
 
     /// @brief Returns the contact position innovation
     /// @param contact_frame the contact frame name
+    /// @param base_position the base position
+    /// @param base_orientation the base orientation
     /// @param innovation the contact position innovation
     /// @param covariance the contact position covariance
-    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const;
+    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& base_position, Eigen::Quaterniond& base_orientation,
+                                      Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const;
     
     /// @brief Returns the contact orientation innovation
     /// @param contact_frame the contact frame name
+    /// @param base_position the base position
+    /// @param base_orientation the base orientation
     /// @param innovation the contact orientation innovation
     /// @param covariance the contact orientation covariance
-    bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const;
+    bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& base_position, Eigen::Quaterniond& base_orientation,
+                                         Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const;
 
 private:
     struct Params {

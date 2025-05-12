@@ -1026,32 +1026,22 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
         
     # Compute the reward
     rewards = {}
-    reward = 0.0
     for cf in state.get_contacts_frame():
         rewards[cf] = None
-        if (state.get_contact_status(cf)):
+        success = False
+        innovation = np.zeros(3)
+        base_position = np.zeros(3)
+        base_orientation = np.zeros(4)
+        covariance = np.zeros((3, 3))
+        success, base_position, base_orientation, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+        if success:
+            contact_reward = -1e4 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
+            rewards[cf] = contact_reward
             if USE_GROUND_TRUTH:
-                position_error = np.linalg.norm(state.get_base_position() - gt.position)
-                orientation_error = np.linalg.norm(
-                    logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-                    quaternion_to_rotation_matrix(state.get_base_orientation())))
-                orientation_reward = -1e3 * orientation_error 
-                # orientation_error = np.linalg.norm(state.get_base_orientation() - gt.orientation)
-                # orientation_reward = -10.0 * orientation_error 
-
-                # Calculate rewards with improvement focus
-                position_reward = -1.0 * position_error 
-                # print(f"position_reward: {position_reward}, orientation_reward: {orientation_reward}")
-                reward = position_reward + orientation_reward 
-
-            success = False
-            innovation = np.zeros(3)
-            covariance = np.zeros((3, 3))
-            success, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-            if success:
-                contact_reward = -1e4 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                # print(f"contact_reward: {contact_reward}")
-                rewards[cf] = contact_reward + reward 
+                position_reward = -1.0 * np.linalg.norm(base_position - gt.position)
+                orientation_reward = -1e3 * np.linalg.norm(
+                    logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(base_orientation)))
+                rewards[cf] += position_reward + orientation_reward 
 
     return imu.timestamp, state, rewards
 
