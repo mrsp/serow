@@ -93,13 +93,31 @@ public:
     /**
      * @brief Get the contact innovation and covariance for a given contact frame.
      * @param contact_frame Name of the contact frame.
+     * @param base_position Position of the robot's base.
+     * @param base_orientation Orientation of the robot's base.
      * @param innovation Innovation of the contact position.
      * @param covariance Covariance of the contact position.
      * @return True if the contact innovation and covariance are available, false otherwise.
      */
-    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+    bool getContactPositionInnovation(const std::string& contact_frame, 
+                                      Eigen::Vector3d& base_position,
+                                      Eigen::Quaterniond& base_orientation,
+                                      Eigen::Vector3d& innovation,
                                       Eigen::Matrix3d& covariance) const;
-    bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+
+    /**
+     * @brief Get the contact innovation and covariance for a given contact frame.
+     * @param contact_frame Name of the contact frame.
+     * @param base_position Position of the robot's base.
+     * @param base_orientation Orientation of the robot's base.
+     * @param innovation Innovation of the contact orientation.
+     * @param covariance Covariance of the contact orientation.
+     * @return True if the contact innovation and covariance are available, false otherwise.
+     */
+    bool getContactOrientationInnovation(const std::string& contact_frame, 
+                                         Eigen::Vector3d& base_position,
+                                         Eigen::Quaterniond& base_orientation,
+                                         Eigen::Vector3d& innovation,
                                          Eigen::Matrix3d& covariance) const;
 
     /**
@@ -153,6 +171,10 @@ private:
     
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_orientation_innovation_;
+    std::map<std::string, Eigen::Vector3d> base_position_per_contact_position_update_;
+    std::map<std::string, Eigen::Quaterniond> base_orientation_per_contact_position_update_;
+    std::map<std::string, Eigen::Vector3d> base_position_per_contact_orientation_update_;
+    std::map<std::string, Eigen::Quaterniond> base_orientation_per_contact_orientation_update_;
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.

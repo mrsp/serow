@@ -269,19 +269,23 @@ PYBIND11_MODULE(serow, m) {
              "Sets the action for the EKF for a given contact frame")
         .def("get_contact_position_innovation", 
              [](serow::ContactEKF& self, const std::string& contact_frame) {
+                 Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
+                 Eigen::Quaterniond base_orientation = Eigen::Quaterniond::Identity();
                  Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
                  Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
-                 bool success = self.getContactPositionInnovation(contact_frame, innovation, covariance);
-                 return std::make_tuple(success, innovation, covariance);
+                 bool success = self.getContactPositionInnovation(contact_frame, base_position, base_orientation, innovation, covariance);
+                 return std::make_tuple(success, base_position, quaternion_to_numpy(base_orientation), innovation, covariance);
              },
              py::arg("contact_frame"),
              "Gets the contact position innovation and covariance for a given contact frame")
         .def("get_contact_orientation_innovation", 
              [](serow::ContactEKF& self, const std::string& contact_frame) {
+                 Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
+                 Eigen::Quaterniond base_orientation = Eigen::Quaterniond::Identity();
                  Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
                  Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
-                 bool success = self.getContactOrientationInnovation(contact_frame, innovation, covariance);
-                 return std::make_tuple(success, innovation, covariance);
+                 bool success = self.getContactOrientationInnovation(contact_frame, base_position, base_orientation, innovation, covariance);
+                 return std::make_tuple(success, base_position, quaternion_to_numpy(base_orientation), innovation, covariance);
              },
              py::arg("contact_frame"),
              "Gets the contact orientation innovation and covariance for a given contact frame");
@@ -347,19 +351,23 @@ PYBIND11_MODULE(serow, m) {
              "Sets the state of the robot")
         .def("get_contact_position_innovation", 
              [](serow::Serow& self, const std::string& contact_frame) {
+                 Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
+                 Eigen::Quaterniond base_orientation = Eigen::Quaterniond::Identity();
                  Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
                  Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
-                 bool success = self.getContactPositionInnovation(contact_frame, innovation, covariance);
-                 return std::make_tuple(success, innovation, covariance);
+                 bool success = self.getContactPositionInnovation(contact_frame, base_position, base_orientation, innovation, covariance);
+                 return std::make_tuple(success, base_position, quaternion_to_numpy(base_orientation), innovation, covariance);
              },
              py::arg("contact_frame"),
              "Returns the contact position innovation and covariance for a given contact frame")
         .def("get_contact_orientation_innovation", 
              [](serow::Serow& self, const std::string& contact_frame) {
+                 Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
+                 Eigen::Quaterniond base_orientation = Eigen::Quaterniond::Identity();
                  Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
                  Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
-                 bool success = self.getContactOrientationInnovation(contact_frame, innovation, covariance);
-                 return std::make_tuple(success, innovation, covariance);
+                 bool success = self.getContactOrientationInnovation(contact_frame, base_position, base_orientation, innovation, covariance);
+                 return std::make_tuple(success, base_position, quaternion_to_numpy(base_orientation), innovation, covariance);
              },
              py::arg("contact_frame"),
              "Returns the contact orientation innovation and covariance for a given contact frame");
