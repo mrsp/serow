@@ -1026,8 +1026,11 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
         
     # Compute the reward
     rewards = {}
+    done = 0.0
     for cf in state.get_contacts_frame():
         rewards[cf] = None
+        
+    for cf in state.get_contacts_frame():
         success = False
         innovation = np.zeros(3)
         base_position = np.zeros(3)
@@ -1035,15 +1038,22 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
         covariance = np.zeros((3, 3))
         success, base_position, base_orientation, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
         if success:
-            contact_reward = -1e4 * innovation.dot(np.linalg.inv(covariance).dot(innovation))
+            # Check if innovation is too large or if covariance is not positive definite
+            nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
+            if nis > 1.0 or nis <= 0.0: 
+                # filter diverged
+                done = 1.0
+                print(f"filter diverged")
+                break
+            contact_reward = -5e2 * nis
             rewards[cf] = contact_reward
             if USE_GROUND_TRUTH:
                 position_reward = -1.0 * np.linalg.norm(base_position - gt.position)
-                orientation_reward = -1e3 * np.linalg.norm(
-                    logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(base_orientation)))
+                orientation_reward = -2.5 *np.linalg.norm(base_orientation - gt.orientation)
+                # orientation_reward = -1e4 * np.linalg.norm(
+                #     logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(base_orientation)))
                 rewards[cf] += position_reward + orientation_reward 
-
-    return imu.timestamp, state, rewards
+    return imu.timestamp, state, rewards, done
 
 def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, gt_position, gt_orientation, align = False):
     # Find the common time range
@@ -1104,7 +1114,7 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
         for cf in state.get_contacts_frame():
             action[cf] = np.ones(2)
 
-        timestamp, state, rewards = run_step(imu, joint, ft, gt, serow_framework, state, action)
+        timestamp, state, rewards, _ = run_step(imu, joint, ft, gt, serow_framework, state, action)
         base_timestamps.append(timestamp)
         base_positions.append(state.get_base_position())
         base_orientations.append(state.get_base_orientation()) 

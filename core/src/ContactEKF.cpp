@@ -318,15 +318,15 @@ void ContactEKF::updateWithContacts(
             contacts_position_noise.at(cf) = R.transpose() * contacts_position_noise.at(cf) * R;
         }
 
-        contacts_position_noise.at(cf) = cs * contacts_position_noise.at(cf) +
-            (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
-            position_cov * contact_position_action_cov_gain_.at(cf);
+        contacts_position_noise.at(cf) = cs * (contacts_position_noise.at(cf) 
+            + position_cov * contact_position_action_cov_gain_.at(cf)) +
+            (1 - cs) * Eigen::Matrix3d::Identity() * 1e4;
 
         if (!point_feet_ && contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
-                cs * contacts_orientation_noise.value().at(cf) +
-                (1 - cs) * Eigen::Matrix3d::Identity() * 1e4 +
-                orientation_cov.value() * contact_orientation_action_cov_gain_.at(cf);
+                cs * (contacts_orientation_noise.value().at(cf) 
+                + orientation_cov.value() * contact_orientation_action_cov_gain_.at(cf)) +
+                (1 - cs) * Eigen::Matrix3d::Identity() * 1e4;
         }
     }
 
@@ -645,17 +645,15 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
 }
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    const size_t num_actions = 2 + 2 * !point_feet_;
+    const size_t num_actions = 1 + 1 * !point_feet_;
     if (action.size() != static_cast<Eigen::Index>(num_actions)) {
-        throw std::invalid_argument("Action size must be 2 + 2 * !point_feet_");
+        throw std::invalid_argument("Action size must be 1 + 1 * !point_feet_");
     }
 
     contact_position_action_cov_gain_.at(cf) = action(0);
-    position_action_cov_gain_.at(cf) = action(1);
     if (!point_feet_ && orientation_action_cov_gain_.count(cf) > 0 &&
         contact_orientation_action_cov_gain_.count(cf) > 0) {
-        contact_orientation_action_cov_gain_.at(cf) = action(2);
-        orientation_action_cov_gain_.at(cf) = action(3);
+        contact_orientation_action_cov_gain_.at(cf) = action(1);
     }
 }
 
