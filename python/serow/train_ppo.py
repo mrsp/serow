@@ -107,7 +107,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         # initial_contact_state = dataset['contact_states'][0]
         # initial_joint_state = dataset['joint_states'][0]
 
-        max_episodes = 300
+        max_episodes = 5000
         update_steps = 64  # Train after collecting this many timesteps
         max_steps = len(imu_measurements)
 
@@ -168,14 +168,14 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                     print(f"Episode {episode} diverged the filter at step {step}")
                     for cf in contacts_frame:
                         if rewards[cf] is not None:
-                            rewards[cf] -= 1e5
+                            rewards[cf] -= 5000 # Punish the agent for diverging the filter
                             episode_reward += rewards[cf] 
                 elif step >= max_steps - 1:
                     is_at_end = True
                     print(f"Episode {episode} completed without diverging the filter")
                     for cf in contacts_frame:
                         if rewards[cf] is not None:
-                            rewards[cf] += 1e4
+                            rewards[cf] += 500 # Reward the agent for completing the episode
                             episode_reward += rewards[cf] 
 
                 # Add to replay buffer and train policy
@@ -274,9 +274,9 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
         base_pose_ground_truth = dataset['base_pose_ground_truth']
 
         # Reset to initial state
-        initial_base_state = dataset['base_states'][0]
-        initial_contact_state = dataset['contact_states'][0]
-        initial_joint_state = dataset['joint_states'][0]
+        # initial_base_state = dataset['base_states'][0]
+        # initial_contact_state = dataset['contact_states'][0]
+        # initial_joint_state = dataset['joint_states'][0]
 
         # Initialize SEROW
         serow_framework = serow.Serow()
@@ -423,11 +423,11 @@ if __name__ == "__main__":
         'min_action': min_action,
         'clip_param': 0.2,  
         'value_loss_coef': 0.5,  
-        'entropy_coef': 0.01,  
+        'entropy_coef': 0.1,  
         'gamma': 0.99,
         'gae_lambda': 0.95,
         'ppo_epochs': 10,  
-        'batch_size': 32,  
+        'batch_size': 64,  
         'max_grad_norm': 0.5,  
         'actor_lr': 5e-3, 
         'critic_lr': 1e-3,
