@@ -86,19 +86,14 @@ class Critic(nn.Module):
         return self.layer3(x)
 
 def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
-    episode_rewards = {}
+    episode_rewards = []
     collected_steps = 0
-    converged = {}
-    best_rewards = {}
-    reward_history = {}  # Track recent rewards for convergence check
+    converged = False
+    best_rewards = float('-inf')
+    reward_history = []  # Track recent rewards for convergence check
     window_size = 10  # Size of window for moving averages
     reward_threshold = 0.01  # Minimum change in reward to be considered improvement
 
-    for cf in contacts_frame:
-        episode_rewards[cf] = []
-        best_rewards[cf] = float('-inf')
-        reward_history[cf] = []  
-        converged[cf] = False
     for i, dataset in enumerate(datasets):
         # Get the measurements and the ground truth
         imu_measurements = dataset['imu']
@@ -108,11 +103,11 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         contact_states = dataset['contact_states']
 
         # Reset to initial state
-        initial_base_state = dataset['base_states'][0]
-        initial_contact_state = dataset['contact_states'][0]
-        initial_joint_state = dataset['joint_states'][0]
+        # initial_base_state = dataset['base_states'][0]
+        # initial_contact_state = dataset['contact_states'][0]
+        # initial_joint_state = dataset['joint_states'][0]
 
-        max_episodes = 250
+        max_episodes = 300
         update_steps = 64  # Train after collecting this many timesteps
         max_steps = len(imu_measurements)
 
@@ -127,10 +122,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             # state.set_joint_state(initial_joint_state)
             # serow_framework.set_state(state)
 
-            episode_reward = {}
-            for cf in contacts_frame:
-                episode_reward[cf] = 0.0
-            
+            episode_reward = 0.0
             for step, (imu, joints, ft, cs, next_cs, gt) in enumerate(zip(imu_measurements, 
                                                              joint_measurements, 
                                                              force_torque_measurements, 
@@ -156,119 +148,118 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
 
                 _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, actions)
 
-                # Add to buffer
+                # Get the rewards and next states
+                next_x = {}
+                is_at_end = False
+                for cf in contacts_frame:
+                    next_x[cf] = None
+
                 for cf in contacts_frame:
                     if next_cs.contacts_status[cf] and cs.contacts_status[cf] and state.get_contact_position(cf) is not None and actions[cf] is not None and rewards[cf] is not None:
-                        if done:
-                            rewards[cf] -= 1e4
-                        else:
-                            rewards[cf] += 0.5 # step reward
-                        
-                        # Check if we've made it to the end of the episode without diverging the filter
-                        if (step == max_steps - 1):
-                            rewards[cf] += 1e2
-                            print(f"Episode {episode} completed without diverging the filter")
-                        
-                        episode_reward[cf] += rewards[cf] 
+                        rewards[cf] += 1.0 # step reward
+                        episode_reward += rewards[cf]
                         # Compute the next state
                         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
                         local_pos = np.abs(R_base @ (state.get_base_position() - state.get_contact_position(cf)))
-                        next_x = np.concatenate((local_pos, np.array([next_cs.contacts_probability[cf]])), axis=0)
-                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x, done, values[cf], log_probs[cf])
+                        next_x[cf] = np.concatenate((local_pos, np.array([next_cs.contacts_probability[cf]])), axis=0)
+
+                # Check if we reached a terminal state
+                if done:
+                    print(f"Episode {episode} diverged the filter at step {step}")
+                    for cf in contacts_frame:
+                        if rewards[cf] is not None:
+                            rewards[cf] -= 1e5
+                            episode_reward += rewards[cf] 
+                elif step >= max_steps - 1:
+                    is_at_end = True
+                    print(f"Episode {episode} completed without diverging the filter")
+                    for cf in contacts_frame:
+                        if rewards[cf] is not None:
+                            rewards[cf] += 1e4
+                            episode_reward += rewards[cf] 
+
+                # Add to replay buffer and train policy
+                for cf in contacts_frame:
+                    if next_x[cf] is not None:
+                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done, values[cf], log_probs[cf])
                         collected_steps += 1
-                        
+
                     # Train policy if we've collected enough steps
-                    if not converged[cf] and collected_steps >= update_steps:
+                    if collected_steps >= update_steps:
                         agent.train()
                         collected_steps = 0
-                
-                if done:
-                    break
-                
-                if step % 5000 == 0 or step % (max_steps - 1) == 0:  # Print progress 
+
+                if step % 5000 == 0 or is_at_end:  # Print progress 
                     for cf in contacts_frame:
-                        print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps - 1}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_rewards[cf]:.2f}")
+                        print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps - 1}, {cf} has Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
+
+                if done or is_at_end:
+                    break
             
-            episode_rewards[cf].append(episode_reward[cf])
+            # Update reward histories and check for convergence
+            episode_rewards.append(episode_reward)
+            reward_history.append(episode_reward)
+            if len(reward_history) > window_size:
+                reward_history.pop(0)
 
-            # Update reward histories
-            for cf in contacts_frame:
-                # Add reward to history
-                reward_history[cf].append(episode_reward[cf])
-                if len(reward_history[cf]) > window_size:
-                    reward_history[cf].pop(0)
-
-            # Check for convergence
-            all_converged = False
-            for cf in contacts_frame:   
-                if (episode_reward[cf] > best_rewards[cf]):
-                    best_rewards[cf] = episode_reward[cf]
-                    # Save the trained policy for each contact frame
-                    if save_policy:
-                        # Create policy directory if it doesn't exist
-                        os.makedirs('policy/ppo', exist_ok=True)
+            if (episode_reward > best_rewards):
+                best_rewards = episode_reward
+                # Save the trained policy for each contact frame
+                if save_policy:
+                    # Create policy directory if it doesn't exist
+                    os.makedirs('policy/ppo', exist_ok=True)
                         
-                        torch.save({
-                            'actor_state_dict': agent.actor.state_dict(),
-                            'critic_state_dict': agent.critic.state_dict(),
-                            'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
-                            'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
-                        }, f'policy/ppo/trained_policy_{robot}.pth')
-                        print(f"Saved policy for {robot} to 'policy/ppo/trained_policy_{robot}.pth'")
+                    torch.save({
+                        'actor_state_dict': agent.actor.state_dict(),
+                        'critic_state_dict': agent.critic.state_dict(),
+                        'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
+                        'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
+                    }, f'policy/ppo/trained_policy_{robot}.pth')
+                    print(f"Saved policy for {robot} to 'policy/ppo/trained_policy_{robot}.pth'")
 
-                print(f"Dataset {i}, Episode {episode}/{max_episodes}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_rewards[cf]:.2f}")
-                episode_rewards[cf].append(episode_reward[cf])
+            print(f"Dataset {i}, Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
 
-                # Check reward convergence
-                if len(reward_history[cf]) >= window_size:
-                    recent_rewards = np.array(reward_history[cf])
-                    reward_std = np.std(recent_rewards)
-                    reward_mean = np.mean(recent_rewards)
-                    reward_cv = reward_std / (abs(reward_mean) + 1e-6)  # Coefficient of variation
-                    
-                    # Check if reward has converged
-                    if reward_cv < reward_threshold:
-                        print(f"{cf} has converged!")
-                        converged[cf] = True
-                        all_converged = True
-                    else:
-                        all_converged = False
+            # Check reward convergence
+            if len(reward_history) >= window_size:
+                recent_rewards = np.array(reward_history)
+                reward_std = np.std(recent_rewards)
+                reward_mean = np.mean(recent_rewards)
+                reward_cv = reward_std / (abs(reward_mean) + 1e-6)  # Coefficient of variation
+                
+                # Check if reward has converged
+                if reward_cv < reward_threshold:
+                    print(f"Reward has converged!")
+                    converged = True
             
-            # If all contact frames have converged, stop training
-            if all_converged:
-                print(f"Training converged at episode {episode} for all contact frames")
+            # If agent has converged, stop training
+            if converged:
+                print(f"Training converged at episode {episode}")
                 break
 
     # Convert episode_rewards to numpy arrays and compute a smoothed reward curve using a low pass filter
-    smoothed_episode_rewards = {}
-    for cf in contacts_frame:
-        episode_rewards[cf] = np.array(episode_rewards[cf])
-        smoothed_episode_rewards[cf] = []
-        smoothed_episode_reward = episode_rewards[cf][0]
-        alpha = 0.55
-        for i in range(len(episode_rewards[cf])):
-            smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[cf][i]
-            smoothed_episode_rewards[cf].append(smoothed_episode_reward)
+    smoothed_episode_rewards = []
+    episode_rewards = np.array(episode_rewards)
+    smoothed_episode_reward = episode_rewards[0]
+    alpha = 0.55
+    for i in range(len(episode_rewards)):
+        smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[i]
+        smoothed_episode_rewards.append(smoothed_episode_reward)
 
-    # Create a single figure with subplots for each contact frame
-    n_cf = len(contacts_frame)
-    fig, axes = plt.subplots(n_cf, 1, figsize=(10, 5*n_cf))
-    if n_cf == 1:
-        axes = [axes]  # Make axes iterable for single subplot case
+    # Create a single figure for all rewards
+    plt.figure(figsize=(10, 6))
     
-    for ax, cf in zip(axes, contacts_frame):
-        ax.plot(episode_rewards[cf], label='Episode Rewards')
-        ax.plot(smoothed_episode_rewards[cf], label='Smoothed Rewards')
-        ax.fill_between(range(len(episode_rewards[cf])), 
-                       episode_rewards[cf] - np.std(episode_rewards[cf]), 
-                       episode_rewards[cf] + np.std(episode_rewards[cf]), 
-                       alpha=0.2)
-        ax.set_xlabel('Episode')
-        ax.set_ylabel('Reward')
-        ax.set_title(f'Episode Rewards for {cf}')
-        ax.grid(True)
-        ax.legend()
-    
+    # Plot the cummulative rewards
+    plt.plot(episode_rewards, label='Episode Rewards', alpha=0.5)
+    plt.plot(smoothed_episode_rewards, label='Smoothed Rewards', linewidth=2)
+    plt.fill_between(range(len(episode_rewards)), 
+                    episode_rewards - np.std(episode_rewards), 
+                    episode_rewards + np.std(episode_rewards), 
+                    alpha=0.1)
+    plt.xlabel('Episode')
+    plt.ylabel('Reward')
+    plt.title('Episode Rewards for All Contact Frames')
+    plt.grid(True)
+    plt.legend()
     plt.tight_layout()
     plt.show()
 

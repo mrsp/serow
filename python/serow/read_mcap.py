@@ -1048,9 +1048,9 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
             # print(f"Contact reward: {contact_reward}")
             rewards[cf] = contact_reward
             if USE_GROUND_TRUTH:
-                position_reward = -1.0 * np.linalg.norm(base_position - gt.position)
+                position_reward = -100.0 * np.linalg.norm(base_position - gt.position)
                 # orientation_reward = -50.0 *np.linalg.norm(base_orientation - gt.orientation)
-                orientation_reward = -5e3 * np.linalg.norm(
+                orientation_reward = -5e4 * np.linalg.norm(
                     logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(base_orientation)))
                 # print(f"Orientation reward: {orientation_reward}")
                 # print(f"Position reward: {position_reward}")
