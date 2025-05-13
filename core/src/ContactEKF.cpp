@@ -319,13 +319,13 @@ void ContactEKF::updateWithContacts(
         }
 
         contacts_position_noise.at(cf) = cs * (contacts_position_noise.at(cf) 
-            + position_cov * contact_position_action_cov_gain_.at(cf)) +
+            + position_cov) * contact_position_action_cov_gain_.at(cf) +
             (1 - cs) * Eigen::Matrix3d::Identity() * 1e4;
 
         if (!point_feet_ && contacts_orientation_noise.has_value() && orientation_cov.has_value()) {
             contacts_orientation_noise.value().at(cf) =
                 cs * (contacts_orientation_noise.value().at(cf) 
-                + orientation_cov.value() * contact_orientation_action_cov_gain_.at(cf)) +
+                + orientation_cov.value()) * contact_orientation_action_cov_gain_.at(cf) +
                 (1 - cs) * Eigen::Matrix3d::Identity() * 1e4;
         }
     }
