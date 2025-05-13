@@ -36,14 +36,18 @@ class Actor(nn.Module):
         # Initialize weights with smaller values to prevent large outputs
         nn.init.xavier_uniform_(self.layer1.weight, gain=0.1)
         nn.init.xavier_uniform_(self.layer2.weight, gain=0.1)
-        nn.init.xavier_uniform_(self.mean_layer.weight, gain=0.01)
-        nn.init.xavier_uniform_(self.log_std_layer.weight, gain=0.01)
+        
+        # Initialize mean layer to output 1.0 for each action dimension
+        nn.init.zeros_(self.mean_layer.weight)
+        nn.init.constant_(self.mean_layer.bias, 1.0)  # This will make softplus(1.0) ≈ 1.0
+        
+        # Initialize log_std layer with small negative values
+        nn.init.zeros_(self.log_std_layer.weight)
+        nn.init.constant_(self.log_std_layer.bias, -1.0)  # Start with small std
         
         # Initialize biases to small positive values
         nn.init.constant_(self.layer1.bias, 0.1)
         nn.init.constant_(self.layer2.bias, 0.1)
-        nn.init.constant_(self.mean_layer.bias, 0.1)
-        nn.init.constant_(self.log_std_layer.bias, -1.0)  # Start with small std
 
     def forward(self, state):
         x = F.relu(self.layer1(state))
@@ -68,7 +72,7 @@ class Actor(nn.Module):
             action = z
             log_prob = normal.log_prob(z)
             log_prob = log_prob.sum(dim=-1, keepdim=True)
-        action = torch.where(action < 0.0, torch.tensor(self.min_action, device=action.device), action)
+        action = torch.where(action < self.min_action, torch.tensor(self.min_action, device=action.device), action)
         action = action.detach().cpu().numpy()[0]
         log_prob = log_prob.detach().cpu().item()
         return action, log_prob
@@ -136,7 +140,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 for cf in state.get_contacts_frame():
                     if next_cs.contacts_status[cf] and cs.contacts_status[cf] and state.get_contact_position(cf) is not None:
                         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-                        local_pos = np.abs(R_base @ (state.get_base_position() - state.get_contact_position(cf)))
+                        local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
                         x[cf] = np.concatenate((local_pos, np.array([cs.contacts_probability[cf]])), axis=0)
                         actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=False)
                         values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
@@ -159,7 +163,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                         episode_reward += rewards[cf]
                         # Compute the next state
                         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-                        local_pos = np.abs(R_base @ (state.get_base_position() - state.get_contact_position(cf)))
+                        local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
                         next_x[cf] = np.concatenate((local_pos, np.array([next_cs.contacts_probability[cf]])), axis=0)
 
                 # Check if we reached a terminal state
@@ -308,7 +312,7 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
                 contact_status[cf] = cs.contacts_status[cf]
                 if contact_status[cf] and state.get_contact_position(cf) is not None:
                     R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-                    local_pos = np.abs(R_base @ (state.get_base_position() - state.get_contact_position(cf)))
+                    local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
                     x = np.concatenate((local_pos, np.array([cs.contacts_probability[cf]])), axis=0)
                     actions[cf], _ = agent.actor.get_action(x, deterministic=True)
                     print(f"Action for {cf}: {actions[cf]}")
@@ -410,7 +414,7 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     state_dim = 4 # 3 for local positions + 1 for contact probability
-    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
     min_action = 1e-6
 
     params = {
