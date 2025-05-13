@@ -105,13 +105,14 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         joint_measurements = dataset['joints']
         force_torque_measurements = dataset['ft']
         base_pose_ground_truth = dataset['base_pose_ground_truth']
-        
+        contact_states = dataset['contact_states']
+
         # Reset to initial state
         initial_base_state = dataset['base_states'][0]
         initial_contact_state = dataset['contact_states'][0]
         initial_joint_state = dataset['joint_states'][0]
 
-        max_episodes = 500
+        max_episodes = 250
         update_steps = 64  # Train after collecting this many timesteps
         max_steps = len(imu_measurements)
 
@@ -130,21 +131,21 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             for cf in contacts_frame:
                 episode_reward[cf] = 0.0
             
-            for step, (imu, joints, ft, gt) in enumerate(zip(imu_measurements, 
+            for step, (imu, joints, ft, cs, next_cs, gt) in enumerate(zip(imu_measurements, 
                                                              joint_measurements, 
                                                              force_torque_measurements, 
+                                                             contact_states,
+                                                             contact_states[1:] + [contact_states[-1]], 
                                                              base_pose_ground_truth)):
                 actions = {}
                 log_probs = {}
                 values = {}
-                contact_status = {}
                 x = {}
                 for cf in state.get_contacts_frame():
-                    contact_status[cf] = state.get_contact_status(cf)
-                    if contact_status[cf]:
+                    if next_cs.contacts_status[cf] and cs.contacts_status[cf] and state.get_contact_position(cf) is not None:
                         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-                        local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
-                        x[cf] = np.abs(local_pos)  
+                        local_pos = np.abs(R_base @ (state.get_base_position() - state.get_contact_position(cf)))
+                        x[cf] = np.concatenate((local_pos, np.array([cs.contacts_probability[cf]])), axis=0)
                         actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=False)
                         values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
                     else:
@@ -157,7 +158,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
 
                 # Add to buffer
                 for cf in contacts_frame:
-                    if state.get_contact_status(cf) and rewards[cf] is not None and x[cf] is not None:
+                    if next_cs.contacts_status[cf] and cs.contacts_status[cf] and state.get_contact_position(cf) is not None and actions[cf] is not None and rewards[cf] is not None:
                         if done:
                             rewards[cf] -= 1e4
                         else:
@@ -171,8 +172,8 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                         episode_reward[cf] += rewards[cf] 
                         # Compute the next state
                         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-                        local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
-                        next_x = np.abs(local_pos)  
+                        local_pos = np.abs(R_base @ (state.get_base_position() - state.get_contact_position(cf)))
+                        next_x = np.concatenate((local_pos, np.array([next_cs.contacts_probability[cf]])), axis=0)
                         agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x, done, values[cf], log_probs[cf])
                         collected_steps += 1
                         
@@ -307,19 +308,20 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
         gt_orientations = []
         gt_timestamps = []
 
-        for imu, joints, ft, gt in zip(imu_measurements, 
+        for imu, joints, ft, cs, gt in zip(imu_measurements, 
                                        joint_measurements, 
                                        force_torque_measurements, 
+                                       contact_states,
                                        base_pose_ground_truth):
             actions = {}
             contact_status = {}
             print("-------------------------------------------------")
             for cf in contacts_frame:
-                contact_status[cf] = state.get_contact_status(cf)
-                if contact_status[cf]:
+                contact_status[cf] = cs.contacts_status[cf]
+                if contact_status[cf] and state.get_contact_position(cf) is not None:
                     R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-                    local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
-                    x = np.abs(local_pos) 
+                    local_pos = np.abs(R_base @ (state.get_base_position() - state.get_contact_position(cf)))
+                    x = np.concatenate((local_pos, np.array([cs.contacts_probability[cf]])), axis=0)
                     actions[cf], _ = agent.actor.get_action(x, deterministic=True)
                     print(f"Action for {cf}: {actions[cf]}")
                 else:
@@ -419,7 +421,7 @@ if __name__ == "__main__":
     print(f"Contacts frame: {contacts_frame}")
 
     # Define the dimensions of your state and action spaces
-    state_dim = 3 # 3 for local positions
+    state_dim = 4 # 3 for local positions + 1 for contact probability
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
     min_action = 0.0001
 
