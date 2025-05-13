@@ -1026,10 +1026,11 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
         
     # Compute the reward
     rewards = {}
-    done = 0.0
+    done = {}
     for cf in state.get_contacts_frame():
         rewards[cf] = None
-        
+        done[cf] = 0.0
+
     for cf in state.get_contacts_frame():
         success = False
         innovation = np.zeros(3)
@@ -1042,13 +1043,13 @@ def run_step(imu, joint, ft, gt, serow_framework, state, actions):
             nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
             if nis > 1.0 or nis <= 0.0: 
                 # filter diverged
-                done = 1.0
+                done[cf] = 1.0
                 break
-            contact_reward = -10.0 * nis
+            contact_reward = -nis
             # print(f"Contact reward: {contact_reward}")
             rewards[cf] = contact_reward
             if USE_GROUND_TRUTH:
-                position_reward = -np.linalg.norm(base_position - gt.position)
+                position_reward = -10.0 * np.linalg.norm(base_position - gt.position)
                 # orientation_reward = -50.0 *np.linalg.norm(base_orientation - gt.orientation)
                 orientation_reward = -np.linalg.norm(
                     logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(base_orientation)))

@@ -150,7 +150,6 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
 
                 # Get the rewards and next states
                 next_x = {}
-                is_at_end = False
                 for cf in contacts_frame:
                     next_x[cf] = None
 
@@ -164,24 +163,19 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                         next_x[cf] = np.concatenate((local_pos, np.array([next_cs.contacts_probability[cf]])), axis=0)
 
                 # Check if we reached a terminal state
-                if done:
-                    print(f"Episode {episode} diverged the filter at step {step}")
-                    for cf in contacts_frame:
-                        if rewards[cf] is not None:
-                            rewards[cf] -= 5000 # Punish the agent for diverging the filter
-                            episode_reward += rewards[cf] 
-                elif step >= max_steps - 1:
-                    is_at_end = True
-                    print(f"Episode {episode} completed without diverging the filter")
-                    for cf in contacts_frame:
-                        if rewards[cf] is not None:
-                            rewards[cf] += 500 # Reward the agent for completing the episode
-                            episode_reward += rewards[cf] 
+                diverged = False
+                for cf in contacts_frame:
+                    if done[cf] > 0.5 and rewards[cf] is not None:
+                        rewards[cf] += -500000 # Punish the agent for diverging the filter
+                        episode_reward += rewards[cf] 
+                        diverged = True
+                if diverged:
+                    print(f"Episode {episode} diverged the filter at step {step} with reward {episode_reward}")
 
                 # Add to replay buffer and train policy
                 for cf in contacts_frame:
                     if next_x[cf] is not None:
-                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done, values[cf], log_probs[cf])
+                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
                         collected_steps += 1
 
                     # Train policy if we've collected enough steps
@@ -189,12 +183,15 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                         agent.train()
                         collected_steps = 0
 
-                if step % 5000 == 0 or is_at_end:  # Print progress 
-                    for cf in contacts_frame:
-                        print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps - 1}, {cf} has Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
+                if step == max_steps - 1:
+                    print(f"Episode {episode} completed without diverging the filter with reward {episode_reward}")
 
-                if done or is_at_end:
-                    break
+                if step % 5000 == 0 or step == max_steps - 1:  # Print progress 
+                    print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps - 1}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
+
+                for cf in contacts_frame:
+                    if done[cf] > 0.5:
+                        break
             
             # Update reward histories and check for convergence
             episode_rewards.append(episode_reward)
@@ -414,7 +411,7 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     state_dim = 4 # 3 for local positions + 1 for contact probability
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = 0.0001
+    min_action = 1e-6
 
     params = {
         'state_dim': state_dim,
@@ -422,13 +419,13 @@ if __name__ == "__main__":
         'max_action': None,
         'min_action': min_action,
         'clip_param': 0.2,  
-        'value_loss_coef': 0.5,  
-        'entropy_coef': 0.1,  
+        'value_loss_coef': 1.0,  
+        'entropy_coef': 0.5,  
         'gamma': 0.99,
         'gae_lambda': 0.95,
         'ppo_epochs': 10,  
         'batch_size': 64,  
-        'max_grad_norm': 0.5,  
+        'max_grad_norm': 10.0,  
         'actor_lr': 5e-3, 
         'critic_lr': 1e-3,
         'buffer_size': 100000
