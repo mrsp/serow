@@ -216,11 +216,11 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
     for (const auto& [cf, cs] : kin.contacts_status) {
         const int contact_status = static_cast<int>(cs);
         Qc(npl_idx_.at(cf), npl_idx_.at(cf)).noalias() =
-            kin.position_slip_cov * position_action_cov_gain_.at(cf) +
+            contact_status * kin.position_slip_cov * position_action_cov_gain_.at(cf) +
             (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         if (!point_feet_) {
             Qc(nrl_idx_.at(cf), nrl_idx_.at(cf)).noalias() =
-                kin.orientation_slip_cov * orientation_action_cov_gain_.at(cf) +
+                contact_status * kin.orientation_slip_cov * orientation_action_cov_gain_.at(cf) +
                 (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         }
     }
@@ -645,15 +645,17 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
 }
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    const size_t num_actions = 1 + 1 * !point_feet_;
+    const size_t num_actions = 2 + 2 * !point_feet_;
     if (action.size() != static_cast<Eigen::Index>(num_actions)) {
-        throw std::invalid_argument("Action size must be 1 + 1 * !point_feet_");
+        throw std::invalid_argument("Action size must be 2 + 2 * !point_feet_");
     }
 
     contact_position_action_cov_gain_.at(cf) = action(0);
+    position_action_cov_gain_.at(cf) = action(1);
     if (!point_feet_ && orientation_action_cov_gain_.count(cf) > 0 &&
         contact_orientation_action_cov_gain_.count(cf) > 0) {
-        contact_orientation_action_cov_gain_.at(cf) = action(1);
+        contact_orientation_action_cov_gain_.at(cf) = action(2);
+        orientation_action_cov_gain_.at(cf) = action(3);
     }
 }
 
