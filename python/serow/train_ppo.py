@@ -19,8 +19,7 @@ from read_mcap import(
     read_base_pose_ground_truth,
     run_step,
     plot_trajectories,
-    sync_and_align_data,
-    quaternion_to_rotation_matrix
+    sync_and_align_data
 )
 
 # Actor network per leg end-effector
@@ -104,7 +103,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         joint_measurements = dataset['joints']
         force_torque_measurements = dataset['ft']
         base_pose_ground_truth = dataset['base_pose_ground_truth']
-        contact_states = dataset['contact_states']
+        # contact_states = dataset['contact_states']
 
         # Reset to initial state
         # initial_base_state = dataset['base_states'][0]
@@ -127,11 +126,9 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             # serow_framework.set_state(state)
 
             episode_reward = 0.0
-            for step, (imu, joints, ft, cs, next_cs, gt) in enumerate(zip(imu_measurements, 
+            for step, (imu, joints, ft, gt) in enumerate(zip(imu_measurements, 
                                                              joint_measurements, 
                                                              force_torque_measurements, 
-                                                             contact_states,
-                                                             contact_states[1:] + [contact_states[-1]], 
                                                              base_pose_ground_truth)):
                 _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent)
 
@@ -225,7 +222,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
 
 def evaluate_policy(dataset, contacts_frame, agent, robot):
         # After training, evaluate the policy
-        print(f"\nEvaluating trained policy for {robot}...")
+        print(f"\nEvaluating trained PPO policy for {robot}...")
         
         # Get the measurements and the ground truth
         imu_measurements = dataset['imu']
@@ -264,7 +261,7 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
                                                          force_torque_measurements, 
                                                          base_pose_ground_truth)):
             print("-------------------------------------------------")
-            print(f"Evaluating policy for {robot} at step {step}")
+            print(f"Evaluating PPO policy for {robot} at step {step}")
             timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, agent, deterministic=True)
             
             timestamps.append(timestamp)
@@ -292,7 +289,7 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
         plot_trajectories(timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards)
 
         # Print evaluation metrics
-        print(f"\nPolicy Evaluation Metrics for {robot}:")
+        print(f"\n PPO Policy Evaluation Metrics for {robot}:")
         for cf in contacts_frame:
             print(f"Average Cumulative Reward for {cf}: {np.mean(cumulative_rewards[cf]):.4f}")
             print(f"Max Cumulative Reward for {cf}: {np.max(cumulative_rewards[cf]):.4f}")
@@ -391,7 +388,7 @@ if __name__ == "__main__":
     critic = Critic(state_dim).to(device)
     agent = PPO(actor, critic, params, device=device)
 
-    # Try to load a trained policy for this contact frame if it exists
+    # Try to load a trained policy for this robot if it exists
     try:
         checkpoint = torch.load(f'policy/ppo/trained_policy_{robot}.pth')
         agent.actor.load_state_dict(checkpoint['actor_state_dict'])

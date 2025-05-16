@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import serow
+import os
+
 from ddpg import DDPG
 from read_mcap import(
     read_base_states, 
@@ -17,8 +19,7 @@ from read_mcap import(
     read_base_pose_ground_truth,
     run_step,
     plot_trajectories,
-    sync_and_align_data,
-    quaternion_to_rotation_matrix
+    sync_and_align_data
 )
 
 # Actor network per leg end-effector
@@ -41,16 +42,23 @@ class OUNoise:
 class Actor(nn.Module):
     def __init__(self, params):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 32)
-        self.layer2 = nn.Linear(32, 16)
-        self.layer3 = nn.Linear(16, 8)
-        self.output_layer = nn.Linear(8, params['action_dim'])
+        self.layer1 = nn.Linear(params['state_dim'], 64)
+        self.layer2 = nn.Linear(64, 32)
+        self.mean_layer = nn.Linear(32, params['action_dim'])
         
-        # Initialize the output layer with a much wider range
-        nn.init.xavier_uniform_(self.output_layer.weight, gain=1.4141) # sqrt(2)
-        nn.init.uniform_(self.output_layer.bias, -0.1, 0.1)  # Non-zero bias
+        # Initialize weights with smaller values to prevent large outputs
+        nn.init.xavier_uniform_(self.layer1.weight, gain=0.1)
+        nn.init.xavier_uniform_(self.layer2.weight, gain=0.1)
         
-        self.max_action = params['max_action']
+        # Initialize mean layer to output 1.0 for each action dimension
+        nn.init.zeros_(self.mean_layer.weight)
+        nn.init.constant_(self.mean_layer.bias, 1.0)  # This will make softplus(1.0) ≈ 1.0
+        
+        
+        # Initialize biases to small positive values
+        nn.init.constant_(self.layer1.bias, 0.1)
+        nn.init.constant_(self.layer2.bias, 0.1)
+        
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
 
@@ -61,32 +69,27 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
-        x = F.relu(self.layer3(x))
-        x = self.output_layer(x)
-        # Use tanh instead of sigmoid to get a wider range of outputs
-        return torch.tanh(x) * (self.max_action - self.min_action) / 2.0 + (self.max_action + self.min_action) / 2.0
+        return F.softplus(self.mean_layer(x)) 
 
-    # epsilon-greedy policy
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
             state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
             action = self.forward(state).cpu().numpy()[0]
-            if not deterministic and np.random.rand() < 0.1:  # 10% chance of random action
-                action = np.random.uniform(self.min_action, self.max_action, self.action_dim)
-            elif not deterministic:
-                noise = self.noise.sample() * self.noise_scale
-                action = action + noise
+
+            if not deterministic:
+                action = action + self.noise.sample() * self.noise_scale
                 self.noise_scale *= self.noise_decay
-                action = np.clip(action, self.min_action, self.max_action)
+
+            action = np.where(action < self.min_action, self.min_action, action)
             return action
 
 class Critic(nn.Module):
     def __init__(self, params):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'] + params['action_dim'], 64)
-        self.layer2 = nn.Linear(64, 32)
-        self.layer3 = nn.Linear(32, 16)
-        self.layer4 = nn.Linear(16, 1)
+        self.layer1 = nn.Linear(params['state_dim'] + params['action_dim'], 128)
+        self.layer2 = nn.Linear(128, 64)
+        self.layer3 = nn.Linear(64, 32)
+        self.layer4 = nn.Linear(32, 1)
 
     def forward(self, state, action):
         x = torch.cat([state, action], 1)
@@ -95,21 +98,14 @@ class Critic(nn.Module):
         x = F.relu(self.layer3(x))
         return self.layer4(x)
     
-def train_policy(datasets, contacts_frame, agents):
-    episode_rewards = {}
-    best_rewards = {}
-    no_improvement_count = {}
-    reward_history = {}  # Track recent rewards for convergence check
+def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
+    episode_rewards = []
+    collected_steps = 0
+    converged = False
+    best_rewards = float('-inf')
+    reward_history = []  # Track recent rewards for convergence check
     window_size = 10  # Size of window for moving averages
-    reward_threshold = 0.1  # Minimum change in reward to be considered improvement
-    patience = 10  # Number of episodes to wait for improvement
-    min_delta = 1.0  # Minimum improvement in reward to be considered progress
-
-    for cf in contacts_frame:
-        episode_rewards[cf] = []
-        best_rewards[cf] = float('-inf')
-        no_improvement_count[cf] = 0
-        reward_history[cf] = []  
+    reward_threshold = 0.01  # Minimum change in reward to be considered improvement
 
     for i, dataset in enumerate(datasets):
         # Get the measurements and the ground truth
@@ -117,17 +113,20 @@ def train_policy(datasets, contacts_frame, agents):
         joint_measurements = dataset['joints']
         force_torque_measurements = dataset['ft']
         base_pose_ground_truth = dataset['base_pose_ground_truth']
-        
+        # contact_states = dataset['contact_states']
+
         # Reset to initial state
-        initial_base_state = dataset['base_states'][0]
-        initial_contact_state = dataset['contact_states'][0]
-        initial_joint_state = dataset['joint_states'][0]
+        # initial_base_state = dataset['base_states'][0]
+        # initial_contact_state = dataset['contact_states'][0]
+        # initial_joint_state = dataset['joint_states'][0]
 
-        max_episode = 100
+        max_episodes = 250
+        update_steps = 64  # Train after collecting this many timesteps
+        max_steps = len(imu_measurements)
 
-        for episode in range(max_episode):
+        for episode in range(max_episodes):
             serow_framework = serow.Serow()
-            serow_framework.initialize("go2_rl.json")
+            serow_framework.initialize(f"{robot}_rl.json")
             state = serow_framework.get_state(allow_invalid=True)
 
             # Initialize the state
@@ -136,116 +135,104 @@ def train_policy(datasets, contacts_frame, agents):
             # state.set_joint_state(initial_joint_state)
             # serow_framework.set_state(state)
 
-            episode_reward = {}
-            for cf in contacts_frame:
-                episode_reward[cf] = 0.0
-            
+            episode_reward = 0.0
             for step, (imu, joints, ft, gt) in enumerate(zip(imu_measurements, 
                                                              joint_measurements, 
                                                              force_torque_measurements, 
                                                              base_pose_ground_truth)):
-                actions = {}
-                contact_status = {}
-                R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
-                for cf in state.get_contacts_frame():
-                    contact_status[cf] = state.get_contact_status(cf)
-                    if contact_status[cf]:
-                        x = R_base.transpose() @ (state.get_base_position() - state.get_contact_position(cf))
-                        actions[cf] = agents[cf].actor.get_action(x, deterministic=False)
+                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent)
 
-                _, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
+                # Accumulate the rewards
+                for reward in rewards.values():
+                    if reward is not None:
+                        episode_reward += reward
+                        collected_steps += 1
 
-                # Add to buffer
-                R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
+                # Train policy if we've collected enough steps
+                if collected_steps >= update_steps:
+                    agent.train()
+                    collected_steps = 0
+
                 for cf in contacts_frame:
-                    if contact_status[cf] and rewards[cf] is not None:
-                        episode_reward[cf] += rewards[cf]
-                        next_x = R_base.transpose() @ (state.get_base_position() - state.get_contact_position(cf))
-                        agents[cf].add_to_buffer(x, actions[cf], rewards[cf], next_x, 0.0)
+                    if done[cf] > 0.5:
+                        break
 
-                if step % 5000 == 0:  # Print progress every 5000 steps
-                    for cf in contacts_frame:
-                        print(f"Episode {episode}, Step {step}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_rewards[cf]:.2f}")
+                if step == max_steps - 1:
+                    print(f"Episode {episode} completed without diverging the filter with reward {episode_reward}")
+
+                if step % 5000 == 0 or step == max_steps - 1:  # Print progress 
+                    print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps - 1}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
             
-            # Train policy
-            for cf in contacts_frame:
-                agents[cf].train()
+            # Update reward histories and check for convergence
+            episode_rewards.append(episode_reward)
+            reward_history.append(episode_reward)
+            if len(reward_history) > window_size:
+                reward_history.pop(0)
 
-            # Update reward histories
-            for cf in contacts_frame:
-                # Add reward to history
-                reward_history[cf].append(episode_reward[cf])
-                if len(reward_history[cf]) > window_size:
-                    reward_history[cf].pop(0)
+            if (episode_reward > best_rewards):
+                best_rewards = episode_reward
+                # Save the trained policy for each contact frame
+                if save_policy:
+                    # Create policy directory if it doesn't exist
+                    os.makedirs('policy/ddpg', exist_ok=True)
+                        
+                    torch.save({
+                        'actor_state_dict': agent.actor.state_dict(),
+                        'critic_state_dict': agent.critic.state_dict(),
+                        'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
+                        'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
+                    }, f'policy/ddpg/trained_policy_{robot}.pth')
+                    print(f"Saved policy for {robot} to 'policy/ddpg/trained_policy_{robot}.pth'")
 
-            # Check for convergence
-            all_converged = True
-            for cf in contacts_frame:   
-                print(f"Dataset {i}, Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_rewards[cf]:.2f}")
-                episode_rewards[cf].append(episode_reward[cf])
+            print(f"Dataset {i}, Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
+
+            # Check reward convergence
+            if len(reward_history) >= window_size:
+                recent_rewards = np.array(reward_history)
+                reward_std = np.std(recent_rewards)
+                reward_mean = np.mean(recent_rewards)
+                reward_cv = reward_std / (abs(reward_mean) + 1e-6)  # Coefficient of variation
                 
-                # Check if reward improved
-                if episode_reward[cf] > best_rewards[cf] + min_delta:
-                    best_rewards[cf] = episode_reward[cf]
-                    no_improvement_count[cf] = 0
-                else:
-                    no_improvement_count[cf] += 1
-
-                # Check reward convergence
-                if len(reward_history[cf]) >= window_size:
-                    recent_rewards = np.array(reward_history[cf])
-                    reward_std = np.std(recent_rewards)
-                    reward_mean = np.mean(recent_rewards)
-                    reward_cv = reward_std / (abs(reward_mean) + 1e-6)  # Coefficient of variation
-                    
-                    # Check if reward has converged
-                    if reward_cv < reward_threshold and no_improvement_count[cf] >= patience:
-                        print(f"{cf} has converged!")
-                        continue
-                
-                all_converged = False
+                # Check if reward has converged
+                if reward_cv < reward_threshold:
+                    print(f"Reward has converged!")
+                    converged = True
             
-            # If all contact frames have converged, stop training
-            if all_converged:
-                print(f"Training converged at episode {episode} for all contact frames")
+            # If agent has converged, stop training
+            if converged:
+                print(f"Training converged at episode {episode}")
                 break
 
     # Convert episode_rewards to numpy arrays and compute a smoothed reward curve using a low pass filter
-    smoothed_episode_rewards = {}
-    for cf in contacts_frame:
-        episode_rewards[cf] = np.array(episode_rewards[cf])
-        smoothed_episode_rewards[cf] = []
-        smoothed_episode_reward = episode_rewards[cf][0]
-        alpha = 0.8
-        for i in range(len(episode_rewards[cf])):
-            smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[cf][i]
-            smoothed_episode_rewards[cf].append(smoothed_episode_reward)
+    smoothed_episode_rewards = []
+    episode_rewards = np.array(episode_rewards)
+    smoothed_episode_reward = episode_rewards[0]
+    alpha = 0.55
+    for i in range(len(episode_rewards)):
+        smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[i]
+        smoothed_episode_rewards.append(smoothed_episode_reward)
 
-    # Create a single figure with subplots for each contact frame
-    n_cf = len(contacts_frame)
-    fig, axes = plt.subplots(n_cf, 1, figsize=(10, 5*n_cf))
-    if n_cf == 1:
-        axes = [axes]  # Make axes iterable for single subplot case
+    # Create a single figure for all rewards
+    plt.figure(figsize=(10, 6))
     
-    for ax, cf in zip(axes, contacts_frame):
-        ax.plot(episode_rewards[cf], label='Episode Rewards')
-        ax.plot(smoothed_episode_rewards[cf], label='Smoothed Rewards')
-        ax.fill_between(range(len(episode_rewards[cf])), 
-                       episode_rewards[cf] - np.std(episode_rewards[cf]), 
-                       episode_rewards[cf] + np.std(episode_rewards[cf]), 
-                       alpha=0.2)
-        ax.set_xlabel('Episode')
-        ax.set_ylabel('Reward')
-        ax.set_title(f'Episode Rewards for {cf}')
-        ax.grid(True)
-        ax.legend()
-    
+    # Plot the cummulative rewards
+    plt.plot(episode_rewards, label='Episode Rewards', alpha=0.5)
+    plt.plot(smoothed_episode_rewards, label='Smoothed Rewards', linewidth=2)
+    plt.fill_between(range(len(episode_rewards)), 
+                    episode_rewards - np.std(episode_rewards), 
+                    episode_rewards + np.std(episode_rewards), 
+                    alpha=0.1)
+    plt.xlabel('Episode')
+    plt.ylabel('Reward')
+    plt.title('Episode Rewards for All Contact Frames')
+    plt.grid(True)
+    plt.legend()
     plt.tight_layout()
     plt.show()
 
-def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
+def evaluate_policy(dataset, contacts_frame, agents, robot):
         # After training, evaluate the policy
-        print("\nEvaluating trained policy...")
+        print(f"\nEvaluating trained DDPG policy for {robot}...")
         
         # Get the measurements and the ground truth
         imu_measurements = dataset['imu']
@@ -254,13 +241,13 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         base_pose_ground_truth = dataset['base_pose_ground_truth']
 
         # Reset to initial state
-        initial_base_state = dataset['base_states'][0]
-        initial_contact_state = dataset['contact_states'][0]
-        initial_joint_state = dataset['joint_states'][0]
+        # initial_base_state = dataset['base_states'][0]
+        # initial_contact_state = dataset['contact_states'][0]
+        # initial_joint_state = dataset['joint_states'][0]
 
         # Initialize SEROW
         serow_framework = serow.Serow()
-        serow_framework.initialize("go2_rl.json")
+        serow_framework.initialize(f"{robot}_rl.json")
         state = serow_framework.get_state(allow_invalid=True)
         # state.set_base_state(initial_base_state)
         # state.set_contact_state(initial_contact_state)
@@ -279,22 +266,13 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         gt_orientations = []
         gt_timestamps = []
 
-        for imu, joints, ft, gt in zip(imu_measurements, 
-                                       joint_measurements, 
-                                       force_torque_measurements, 
-                                       base_pose_ground_truth):
-            actions = {}
-            contact_status = {}
+        for step, (imu, joints, ft, gt) in enumerate(zip(imu_measurements, 
+                                                         joint_measurements, 
+                                                         force_torque_measurements, 
+                                                         base_pose_ground_truth)):
             print("-------------------------------------------------")
-            R_base = quaternion_to_rotation_matrix(state.get_base_orientation())
-            for cf in contacts_frame:
-                contact_status[cf] = state.get_contact_status(cf)
-                if contact_status[cf]:
-                    x = R_base.transpose() @ (state.get_base_position() - state.get_contact_position(cf))
-                    actions[cf] = agents[cf].actor.get_action(x, deterministic=True)
-                    print(f"Action for {cf}: {actions[cf]}")
-
-            timestamp, state, rewards = run_step(imu, joints, ft, gt, serow_framework, state, actions)
+            print(f"Evaluating DDPGpolicy for {robot} at step {step}")
+            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, agent, deterministic=True)
             
             timestamps.append(timestamp)
             base_positions.append(state.get_base_position())
@@ -303,7 +281,7 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
             gt_orientations.append(gt.orientation)
             gt_timestamps.append(gt.timestamp)
             for cf in contacts_frame:
-                if contact_status[cf] and rewards[cf] is not None:
+                if rewards[cf] is not None:
                     cumulative_rewards[cf].append(rewards[cf])
 
         # Convert to numpy arrays
@@ -321,26 +299,12 @@ def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
         plot_trajectories(timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards)
 
         # Print evaluation metrics
-        print("\nPolicy Evaluation Metrics:")
+        print("\n DDPG Policy Evaluation Metrics:")
         for cf in contacts_frame:
             print(f"Average Cumulative Reward for {cf}: {np.mean(cumulative_rewards[cf]):.4f}")
             print(f"Max Cumulative Reward for {cf}: {np.max(cumulative_rewards[cf]):.4f}")
             print(f"Min Cumulative Reward for {cf}: {np.min(cumulative_rewards[cf]):.4f}")
             print("-------------------------------------------------")
-        # Save the trained policy for each contact frame
-        if save_policy:
-            import os
-            # Create policy directory if it doesn't exist
-            os.makedirs('policy/ddpg', exist_ok=True)
-            
-            for cf in contacts_frame:
-                torch.save({
-                    'actor_state_dict': agents[cf].actor.state_dict(),
-                    'critic_state_dict': agents[cf].critic.state_dict(),
-                    'actor_optimizer_state_dict': agents[cf].actor_optimizer.state_dict(),
-                    'critic_optimizer_state_dict': agents[cf].critic_optimizer.state_dict(),
-                }, f'policy/ddpg/trained_policy_{cf}.pth')
-                print(f"Saved policy for {cf} to 'policy/ddpg/trained_policy_{cf}.pth'")
 
 if __name__ == "__main__":
     # Read the data
@@ -402,21 +366,20 @@ if __name__ == "__main__":
     print(f"Contacts frame: {contacts_frame}")
 
     # Define the dimensions of your state and action spaces
-    state_dim = 3  
-    action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 1000
-    min_action = 0.001
+    state_dim = 4  
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    min_action = 1e-6
 
     params = {
         'state_dim': state_dim,
         'action_dim': action_dim,
-        'max_action': max_action,
+        'max_action': None,
         'min_action': min_action,
         'gamma': 0.99,
         'tau': 0.01,
         'batch_size': 64,  
-        'actor_lr': 5e-4, 
-        'critic_lr': 1e-4,
+        'actor_lr': 5e-3, 
+        'critic_lr': 1e-3,
         'noise_scale': 2.0,
         'noise_decay': 0.995,
         'buffer_size': 1000000,
@@ -427,33 +390,33 @@ if __name__ == "__main__":
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = 'cpu'
     loaded = False
-    for cf in contacts_frame:
-        print(f"Initializing agent for {cf}")
-        actor = Actor(params).to(device)
-        critic = Critic(params).to(device)
-        agents[cf] = DDPG(actor, critic, params, device=device)
+    robot = "go2"
+    print(f"Initializing agent for {robot}")
+    actor = Actor(params).to(device)
+    critic = Critic(params).to(device)
+    agent = DDPG(actor, critic, params, device=device)
 
-    # Try to load a trained policy for this contact frame if it exists
+    # Try to load a trained policy for this robot if it exists
     try:
-        for cf in contacts_frame:
-            checkpoint = torch.load(f'policy/ddpg/trained_policy_{cf}.pth', weights_only=True)
-            try:
-                agents[cf].actor.load_state_dict(checkpoint['actor_state_dict'])
-                agents[cf].critic.load_state_dict(checkpoint['critic_state_dict'])
-                print(f"Loaded trained policy for {cf} from 'policy/ddpg/trained_policy_{cf}.pth'")
-                loaded = True
-            except RuntimeError as e:
-                print(f"Could not load existing model for {cf} due to architecture mismatch. Starting with new model.")
-                print(f"Error details: {str(e)}")
-                loaded = False
+        checkpoint = torch.load(f'policy/ddpg/trained_policy_{robot}.pth', weights_only=True)
+        agent.actor.load_state_dict(checkpoint['actor_state_dict'])
+        agent.critic.load_state_dict(checkpoint['critic_state_dict'])
+        print(f"Loaded trained policy for {robot} from 'policy/ddpg/trained_policy_{robot}.pth'")
     except FileNotFoundError:
-        print(f"No trained policy found. Training new policy...")
-        loaded = False
+        print(f"No trained policy found for {robot}. Training new policy...")
 
     if not loaded:
         # Train the policy
-        train_policy(train_datasets, contacts_frame, agents)
-        evaluate_policy(test_dataset, contacts_frame, agents, save_policy=True)
+        train_policy(train_datasets, contacts_frame, agent, robot, save_policy=True)
+        # Load the best policy
+        checkpoint = torch.load(f'policy/ddpg/trained_policy_{robot}.pth')
+        actor = Actor(params).to(device)
+        critic = Critic(params).to(device)
+        best_policy = DDPG(actor, critic, params, device=device)
+        best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
+        best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])
+        print(f"Loaded optimal trained policy for {robot} from 'policy/ddpg/trained_policy_{robot}.pth'")
+        evaluate_policy(test_dataset, contacts_frame, best_policy, robot)
     else:
         # Just evaluate the loaded policy
-        evaluate_policy(test_dataset, contacts_frame, agents, save_policy=False)
+        evaluate_policy(test_dataset, contacts_frame, agents, robot)
