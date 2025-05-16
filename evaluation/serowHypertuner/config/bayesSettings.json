@@ -1,0 +1,17 @@
+{
+  "optimizer": {
+    "n_init_samples": 30,
+    "n_iterations": 100,
+    "kernel": {
+      "name": "kMaternARD5"
+    },
+    "surrogate": "sGaussianProcess",
+    "verbose_level": 2,
+    "criterion": "cEI",
+    "n_iter_relearn": 10,
+    "noise": 0.01,
+    "force_jump": 0.1,
+    "epsilon": 0.01,
+    "random_seed": 42
+  }
+}

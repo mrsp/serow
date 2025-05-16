@@ -1,0 +1,12 @@
+{
+  "Experiment": {
+    "robot_name": "go2",
+    "experiment_name": "mujoco_test",
+    "experiment_type": "mujoco_data/flat_gamma"
+  },
+  "Paths": {
+    "base_path": "evaluation/{experiment_name}",
+    "data_file": "{base_path}/{experiment_type}/{robot_name}_data.h5",
+    "elevation_map_file": "{base_path}/{experiment_type}/est_elevation_map.bin"
+  }
+}
