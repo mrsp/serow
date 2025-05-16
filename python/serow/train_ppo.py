@@ -111,7 +111,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         # initial_contact_state = dataset['contact_states'][0]
         # initial_joint_state = dataset['joint_states'][0]
 
-        max_episodes = 5000
+        max_episodes = 250
         update_steps = 64  # Train after collecting this many timesteps
         max_steps = len(imu_measurements)
 
@@ -133,69 +133,28 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                                                              contact_states,
                                                              contact_states[1:] + [contact_states[-1]], 
                                                              base_pose_ground_truth)):
-                actions = {}
-                log_probs = {}
-                values = {}
-                x = {}
-                for cf in state.get_contacts_frame():
-                    if next_cs.contacts_status[cf] and cs.contacts_status[cf] and state.get_contact_position(cf) is not None:
-                        R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-                        local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
-                        x[cf] = np.concatenate((local_pos, np.array([cs.contacts_probability[cf]])), axis=0)
-                        actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=False)
-                        values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
-                    else:
-                        x[cf] = None
-                        actions[cf] = None
-                        log_probs[cf] = None
-                        values[cf] = None
+                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent)
 
-                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, actions)
-
-                # Get the rewards and next states
-                next_x = {}
-                for cf in contacts_frame:
-                    next_x[cf] = None
-
-                for cf in contacts_frame:
-                    if next_cs.contacts_status[cf] and cs.contacts_status[cf] and state.get_contact_position(cf) is not None and actions[cf] is not None and rewards[cf] is not None:
-                        rewards[cf] += 1.0 # step reward
-                        episode_reward += rewards[cf]
-                        # Compute the next state
-                        R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-                        local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
-                        next_x[cf] = np.concatenate((local_pos, np.array([next_cs.contacts_probability[cf]])), axis=0)
-
-                # Check if we reached a terminal state
-                diverged = False
-                for cf in contacts_frame:
-                    if done[cf] > 0.5 and rewards[cf] is not None:
-                        rewards[cf] += -500000 # Punish the agent for diverging the filter
-                        episode_reward += rewards[cf] 
-                        diverged = True
-                if diverged:
-                    print(f"Episode {episode} diverged the filter at step {step} with reward {episode_reward}")
-
-                # Add to replay buffer and train policy
-                for cf in contacts_frame:
-                    if next_x[cf] is not None:
-                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
+                # Accumulate the rewards
+                for reward in rewards.values():
+                    if reward is not None:
+                        episode_reward += reward
                         collected_steps += 1
 
-                    # Train policy if we've collected enough steps
-                    if collected_steps >= update_steps:
-                        agent.train()
-                        collected_steps = 0
+                # Train policy if we've collected enough steps
+                if collected_steps >= update_steps:
+                    agent.train()
+                    collected_steps = 0
+
+                for cf in contacts_frame:
+                    if done[cf] > 0.5:
+                        break
 
                 if step == max_steps - 1:
                     print(f"Episode {episode} completed without diverging the filter with reward {episode_reward}")
 
                 if step % 5000 == 0 or step == max_steps - 1:  # Print progress 
                     print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps - 1}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
-
-                for cf in contacts_frame:
-                    if done[cf] > 0.5:
-                        break
             
             # Update reward histories and check for convergence
             episode_rewards.append(episode_reward)
@@ -300,26 +259,13 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
         gt_orientations = []
         gt_timestamps = []
 
-        for imu, joints, ft, cs, gt in zip(imu_measurements, 
-                                       joint_measurements, 
-                                       force_torque_measurements, 
-                                       contact_states,
-                                       base_pose_ground_truth):
-            actions = {}
-            contact_status = {}
+        for step, (imu, joints, ft, gt) in enumerate(zip(imu_measurements, 
+                                                         joint_measurements, 
+                                                         force_torque_measurements, 
+                                                         base_pose_ground_truth)):
             print("-------------------------------------------------")
-            for cf in contacts_frame:
-                contact_status[cf] = cs.contacts_status[cf]
-                if contact_status[cf] and state.get_contact_position(cf) is not None:
-                    R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-                    local_pos = R_base @ (state.get_base_position() - state.get_contact_position(cf))
-                    x = np.concatenate((local_pos, np.array([cs.contacts_probability[cf]])), axis=0)
-                    actions[cf], _ = agent.actor.get_action(x, deterministic=True)
-                    print(f"Action for {cf}: {actions[cf]}")
-                else:
-                    actions[cf] = None
-                    
-            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, actions)
+            print(f"Evaluating policy for {robot} at step {step}")
+            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, agent, deterministic=True)
             
             timestamps.append(timestamp)
             base_positions.append(state.get_base_position())
@@ -328,7 +274,7 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
             gt_orientations.append(gt.orientation)
             gt_timestamps.append(gt.timestamp)
             for cf in contacts_frame:
-                if contact_status[cf] and rewards[cf] is not None:
+                if rewards[cf] is not None:
                     cumulative_rewards[cf].append(rewards[cf])
 
         # Convert to numpy arrays
@@ -414,7 +360,7 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     state_dim = 4 # 3 for local positions + 1 for contact probability
-    action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
     min_action = 1e-6
 
     params = {
