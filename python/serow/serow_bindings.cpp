@@ -370,7 +370,43 @@ PYBIND11_MODULE(serow, m) {
                  return std::make_tuple(success, base_position, quaternion_to_numpy(base_orientation), innovation, covariance);
              },
              py::arg("contact_frame"),
-             "Returns the contact orientation innovation and covariance for a given contact frame");
+             "Returns the contact orientation innovation and covariance for a given contact frame")
+        .def("process_measurements",
+             [](serow::Serow& self, const serow::ImuMeasurement& imu,
+                const std::map<std::string, serow::JointMeasurement>& joints,
+                py::object force_torque, py::object contacts_probability) {
+                 std::optional<std::map<std::string, serow::ForceTorqueMeasurement>> ft_opt;
+                 if (!force_torque.is_none()) {
+                     ft_opt = force_torque.cast<std::map<std::string, serow::ForceTorqueMeasurement>>();
+                 }
+
+                 std::optional<std::map<std::string, serow::ContactMeasurement>> contact_prob_opt;
+                 if (!contacts_probability.is_none()) {
+                     contact_prob_opt = contacts_probability.cast<std::map<std::string, serow::ContactMeasurement>>();
+                 }
+
+                 return self.processMeasurements(imu, joints, ft_opt, contact_prob_opt);
+             },
+             py::arg("imu"),
+             py::arg("joints"),
+             py::arg("force_torque") = py::none(),
+             py::arg("contacts_probability") = py::none(),
+             "Processes the measurements and returns a tuple of IMU, kinematic, and force-torque measurements")
+        .def("base_estimator_predict_step",
+             &serow::Serow::baseEstimatorPredictStep,
+             py::arg("imu"),
+             py::arg("kin"),
+             "Runs the base estimator's predict step")
+        .def("base_estimator_update_with_contact_position",
+             &serow::Serow::baseEstimatorUpdateWithContactPosition,
+             py::arg("contact_frame"),
+             py::arg("kin"),
+             "Runs the base estimator's update step with contact position")
+        .def("base_estimator_finish_update",
+             &serow::Serow::baseEstimatorFinishUpdate,
+             py::arg("imu"),
+             py::arg("kin"),
+             "Concludes the base estimator's update step with the IMU measurement");
 
     // Binding for CentroidalState
     py::class_<serow::CentroidalState>(m, "CentroidalState", "Represents the centroidal state of the robot")

@@ -126,6 +126,21 @@ public:
      */
     void setState(const BaseState& state);
 
+    /**
+     * @brief Updates the robot's state based on contact position measurements.
+     * @param state Current state of the robot.
+     * @param cf Contact frame name.
+     * @param cs Leg contact status.
+     * @param cp Leg contact position.
+     * @param cp_noise Covariance of leg contact position measurement.
+     * @param position_cov Covariance of position measurements.
+     * @param terrain_estimator Terrain elevation estimator.
+     */ 
+    void updateWithContactPosition(BaseState& state, const std::string& cf,  const bool cs, 
+                                   const Eigen::Vector3d& cp, Eigen::Matrix3d cp_noise, 
+                                   const Eigen::Matrix3d& position_cov, 
+                                   std::shared_ptr<TerrainElevation> terrain_estimator);
+
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
@@ -223,6 +238,19 @@ private:
         std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov,
         std::shared_ptr<TerrainElevation> terrain_estimator);
+
+    /** 
+     * @brief Updates the robot's state based on contact orientation measurements.
+     * @param state Current state of the robot.
+     * @param cf Contact frame name.
+     * @param cs Leg contact status.
+     * @param co Leg contact orientation.
+     * @param co_noise Covariance of leg contact orientation measurement.
+     * @param orientation_cov Covariance of orientation measurements.
+     */
+    void updateWithContactOrientation(BaseState& state, const std::string& cf, const bool cs, 
+                                     const Eigen::Quaterniond& co, Eigen::Matrix3d co_noise, 
+                                     const Eigen::Matrix3d& orientation_cov);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.

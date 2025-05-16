@@ -126,6 +126,32 @@ public:
     bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& base_position, Eigen::Quaterniond& base_orientation,
                                          Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const;
 
+    /// @brief Processes the measurements
+    /// @param imu IMU measurement
+    /// @param joints joint measurements
+    /// @param force_torque force/torque measurements
+    /// @param contacts_probability contact probabilities
+    /// @return a tuple of the measurements
+    std::optional<std::tuple<ImuMeasurement, KinematicMeasurement, std::map<std::string, ForceTorqueMeasurement>>> 
+    processMeasurements(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+                        std::optional<std::map<std::string, ForceTorqueMeasurement>> force_torque,
+                        std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
+
+    /// @brief Runs the base estimator's predict step
+    /// @param imu IMU measurement
+    /// @param kin kinematic measurements
+    void baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicMeasurement& kin);
+
+    /// @brief Runs the base estimator's update step with contact position
+    /// @param cf contact frame name
+    /// @param kin kinematic measurements
+    void baseEstimatorUpdateWithContactPosition(const std::string& cf, const KinematicMeasurement& kin);
+
+    /// @brief Concludes the base estimator's update step with the IMU measurement
+    /// @param imu IMU measurement
+    /// @param kin kinematic measurements
+    void baseEstimatorFinishUpdate(const ImuMeasurement& imu, const KinematicMeasurement& kin);
+    
 private:
     struct Params {
         /// @brief base frame name
