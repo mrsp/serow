@@ -50,7 +50,6 @@ class Actor(nn.Module):
         x = torch.tanh(self.layer3(x)) * self.max_action
         return x
 
-    # epsilon-greedy policy
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
             state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)

@@ -13,6 +13,7 @@ class DDPG:
         self.actor = actor.to(self.device)
         self.actor_target = copy.deepcopy(actor)
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=params['actor_lr'])
+        self.name = "DDPG"
 
         self.critic = critic.to(self.device)
         self.critic_target = copy.deepcopy(critic)
@@ -38,6 +39,10 @@ class DDPG:
             print(f"Buffer is full. Removing oldest sample.")
             self.buffer.popleft()
         self.buffer.append((state, action, reward, next_state, done))
+
+    def get_action(self, state, deterministic=False):
+        with torch.no_grad():
+            return self.actor.get_action(state, deterministic)
 
     def train(self):
         if len(self.buffer) < self.batch_size:

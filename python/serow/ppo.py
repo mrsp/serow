@@ -14,7 +14,8 @@ class PPO:
         self.critic = critic.to(self.device)
         self.state_dim = params['state_dim']
         self.action_dim = params['action_dim']
-
+        self.name = "PPO"
+        
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=params['actor_lr'])
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=params['critic_lr'])
         self.batch_size = params['batch_size']

@@ -1047,8 +1047,12 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = 
             local_pos = R_base @ (prior_state.get_base_position() - prior_state.get_contact_position(cf))
             x[cf] = np.concatenate((local_pos, np.array([kin.contacts_probability[cf]])), axis=0)
             if agent is not None:
-                actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=deterministic)
-                values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
+                if agent.name == "PPO":
+                    actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=deterministic)
+                    values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
+                else:
+                    actions[cf] = agent.get_action(x[cf], deterministic=deterministic)
+
                 if (deterministic):
                     print(f"Action for {cf}: {actions[cf]}")
             else:
@@ -1095,7 +1099,10 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = 
                     rewards[cf] += 1.0 
                 
                 if agent is not None:
-                    agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
+                    if agent.name == "PPO":
+                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
+                    else:
+                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf])
     
     serow_framework.base_estimator_finish_update(imu, kin)
     state = serow_framework.get_state(allow_invalid=True)
