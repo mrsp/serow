@@ -149,7 +149,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                         collected_steps += 1
 
                 # Train policy if we've collected enough steps
-                if collected_steps >= update_steps:
+                if collected_steps > 0:
                     agent.train()
                     collected_steps = 0
 
