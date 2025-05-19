@@ -74,15 +74,17 @@ class DDPG:
         critic_loss = F.mse_loss(current_Q, target_Q)
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
+        # torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
         self.critic_optimizer.step()
         
         # Actor update
         actor_loss = -self.critic(states, self.actor(states)).mean()
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1.0)
+        #torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
         self.actor_optimizer.step()
+        
+
         
         # Soft update target networks
         for target_param, param in zip(self.actor_target.parameters(), self.actor.parameters()):
