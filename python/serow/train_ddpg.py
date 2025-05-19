@@ -100,7 +100,6 @@ class Critic(nn.Module):
     
 def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     episode_rewards = []
-    collected_steps = 0
     converged = False
     best_rewards = float('-inf')
     reward_history = []  # Track recent rewards for convergence check
@@ -121,8 +120,8 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         # initial_joint_state = dataset['joint_states'][0]
 
         max_episodes = 250
-        update_steps = 64  # Train after collecting this many timesteps
         max_steps = len(imu_measurements)
+        collected_steps = 0
 
         for episode in range(max_episodes):
             serow_framework = serow.Serow()
@@ -184,6 +183,40 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                     }, f'policy/ddpg/trained_policy_{robot}.pth')
                     print(f"Saved policy for {robot} to 'policy/ddpg/trained_policy_{robot}.pth'")
 
+                    # Export actor model to ONNX
+                    dummy_input = torch.randn(1, params['state_dim']).to(device)
+                    torch.onnx.export(
+                        agent.actor,
+                        dummy_input,
+                        f'policy/ddpg/trained_policy_{robot}_actor.onnx',
+                        export_params=True,
+                        opset_version=11,
+                        do_constant_folding=True,
+                        input_names=['input'],
+                        output_names=['output'],
+                        dynamic_axes={'input': {0: 'batch_size'},
+                                    'output': {0: 'batch_size'}}
+                    )
+                    print(f"Saved actor model for {robot} to 'policy/ddpg/trained_policy_{robot}_actor.onnx'")
+
+                    # Export critic model to ONNX
+                    dummy_state = torch.randn(1, params['state_dim']).to(device)
+                    dummy_action = torch.randn(1, params['action_dim']).to(device)
+                    torch.onnx.export(
+                        agent.critic,
+                        (dummy_state, dummy_action),
+                        f'policy/ddpg/trained_policy_{robot}_critic.onnx',
+                        export_params=True,
+                        opset_version=11,
+                        do_constant_folding=True,
+                        input_names=['state', 'action'],
+                        output_names=['output'],
+                        dynamic_axes={'state': {0: 'batch_size'},
+                                    'action': {0: 'batch_size'},
+                                    'output': {0: 'batch_size'}}
+                    )
+                    print(f"Saved critic model for {robot} to 'policy/ddpg/trained_policy_{robot}_critic.onnx'")
+
             print(f"Dataset {i}, Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
 
             # Check reward convergence
@@ -207,7 +240,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     smoothed_episode_rewards = []
     episode_rewards = np.array(episode_rewards)
     smoothed_episode_reward = episode_rewards[0]
-    alpha = 0.55
+    alpha = 0.75
     for i in range(len(episode_rewards)):
         smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[i]
         smoothed_episode_rewards.append(smoothed_episode_reward)
@@ -230,7 +263,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     plt.tight_layout()
     plt.show()
 
-def evaluate_policy(dataset, contacts_frame, agents, robot):
+def evaluate_policy(dataset, contacts_frame, agent, robot):
         # After training, evaluate the policy
         print(f"\nEvaluating trained DDPG policy for {robot}...")
         
@@ -385,8 +418,6 @@ if __name__ == "__main__":
         'buffer_size': 1000000,
     }
 
-    # Initialize the actor and critic
-    agents = {}
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = 'cpu'
     loaded = False
@@ -402,6 +433,7 @@ if __name__ == "__main__":
         agent.actor.load_state_dict(checkpoint['actor_state_dict'])
         agent.critic.load_state_dict(checkpoint['critic_state_dict'])
         print(f"Loaded trained policy for {robot} from 'policy/ddpg/trained_policy_{robot}.pth'")
+        loaded = True
     except FileNotFoundError:
         print(f"No trained policy found for {robot}. Training new policy...")
 
@@ -419,4 +451,4 @@ if __name__ == "__main__":
         evaluate_policy(test_dataset, contacts_frame, best_policy, robot)
     else:
         # Just evaluate the loaded policy
-        evaluate_policy(test_dataset, contacts_frame, agents, robot)
+        evaluate_policy(test_dataset, contacts_frame, agent, robot)
