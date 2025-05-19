@@ -237,6 +237,8 @@ PYBIND11_MODULE(serow, m) {
         .def("init", &serow::ContactEKF::init, 
              py::arg("state"), py::arg("contacts_frame"), py::arg("point_feet"), 
              py::arg("g"), py::arg("imu_rate"), py::arg("outlier_detection") = false,
+             py::arg("use_onnx") = false, py::arg("robot_name") = "",
+             py::arg("model_path") = "policy/ddpg",
              "Initializes the EKF with the initial robot state and parameters")
         .def("predict", &serow::ContactEKF::predict, 
              py::arg("state"), py::arg("imu"), py::arg("kin"),
