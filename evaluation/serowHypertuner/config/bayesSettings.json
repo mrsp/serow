@@ -2,9 +2,7 @@
   "optimizer": {
     "n_init_samples": 30,
     "n_iterations": 100,
-    "kernel": {
-      "name": "kMaternARD5"
-    },
+    "kernel": "kMaternARD5",
     "surrogate": "sGaussianProcess",
     "verbose_level": 2,
     "criterion": "cEI",

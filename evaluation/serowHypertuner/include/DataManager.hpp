@@ -56,7 +56,12 @@ private:
     ///@brief Joint states (encoder positions)
     std::vector<std::vector<double>> jointStates_; // Magnetic Field
     
-
+    ///@brief Logged timestamps 
+    std::vector<double> timestamps_;
+    
+    /// @brief Foot frame names
+    std::vector<std::string> foot_frames_;
+    
     /// @brief Force data
     ForceData forceData_;
 
@@ -65,6 +70,12 @@ private:
     /// @param path 
     /// @return the path 
     std::string resolvePath(const json& config, const std::string& path);
+
+
+    std::string basePath;
+    std::string experimentType;
+    std::string robotName;
+    std::string experimentName;
 public:
     /// @brief Constructor
     DataManager();
@@ -96,4 +107,10 @@ public:
     /// @brief Finds the path of SEROW from the environment variable SEROW_PATH
     /// @return the path of SEROW
     std::string getSerowPath() const;
+    
+    /// @brief Get the robot name from the configuration
+    /// @return the robot name
+    std::string getRobotName() const;
+
+    std::vector<double> getTimestamps() const;
 };

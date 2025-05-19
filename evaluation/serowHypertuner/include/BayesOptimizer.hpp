@@ -3,43 +3,86 @@
 
 #include <DataManager.hpp>
 #include <iostream>
-
+#include "serow/Serow.hpp"
 #include <bayesopt/bayesopt.hpp>
 #include <bayesopt/parameters.hpp>
-
-
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
+#include <pinocchio/multibody/model.hpp>
 
 using vectord = bayesopt::vectord;
 using json = nlohmann::ordered_json;
-
 
 class BayesOptimizer : public bayesopt::ContinuousModel
 {
 public:
   /// @brief Constructor
   /// @param dataManager_ The data manager object 
-  BayesOptimizer(DataManager& dataManager, size_t dim, const bayesopt::Parameters& params);
+  BayesOptimizer(DataManager& dataManager, size_t dim, const bayesopt::Parameters& params, const std::vector<std::string> &param_names);
+
+  /// @brief Evaluates the sample Overrides virtual optimization function from bayesopt
+  /// @param x a vectord object containing the parameters to evaluate
+  /// @return Defined metric for evaluation of sample
+  double evaluateSample(const vectord &x) override;
 
 
-  /// @brief Perform the optimization
-  void optimize();
 
-    double evaluateSample(const vectord &x) override
-    {
-      return 0.0; 
-    }
 private:
   /// @brief Data manager object reference
   DataManager& data_;
 
-  /// @brief Load the default configuration file
-  void loadBayesConfigJson();
+  /// @brief Serow object reference
+  serow::Serow SEROW;
 
-  /// @brief Path to the settings for bayesOpt configuration file
-  const std::string bayesParamsFilePath_ = data_.getSerowPath() + "evaluation/serowHypertuner/config/bayesSettings.json";
-  
+  std::unique_ptr<pinocchio::Model> pmodel_;
+
   /// @brief Bayesopt parameters
   bayesopt::Parameters params_;
 
+  /// @brief Hyperparameteres to optimize
+  std::vector<std::string> params2optimize_;
+
+  /// @brief Computes the logMap of a rotation matrix
+  Eigen::Vector3d logMap(const Eigen::Matrix3d& R);
+
+  /// @brief Writes the JSON "j" configuration to a file at "path"
+  /// @param j The json object to write
+  /// @param path the path to the file
+  void writeJSONConfig(const json& j, const std::string& path);
+
+  /// @brief Loads the default JSON configuration from a file
+  /// @param path the path to the file
+  /// @return the json object
+  json loadDefaultJson(const std::string& path);
+
+  /// @brief Counter for the number of iterations
+  size_t n_iterations_ = 0;
+
+  /// @brief Serow estimated positions
+  std::vector<std::vector<double>> est_positions_;
+
+  /// @brief Serow estimated orientations
+  std::vector<std::vector<double>> est_orientations_;
+
+  /// @brief Ground truth positions
+  std::vector<std::vector<double>> gt_position_;
+
+  /// @brief Ground truth orientations
+  std::vector<std::vector<double>> gt_orientation_;
+
+  /// @brief Data timestamps
+  std::vector<double> timestamps_;
+
+  /// @brief Original config file path
+  std::string original_config;
+
+  /// @brief Temporary config file path
+  std::string temp_config;
+
+  /// @brief Temporary json object
+  json temp_json;
+
+  /// @brief Optimization dataset percentage. e.g dataset_size * datset_percentage = total data to be used for optimization 
+  int dataset_percentage = 80; // %
 
 };

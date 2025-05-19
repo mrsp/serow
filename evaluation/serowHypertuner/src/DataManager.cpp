@@ -25,6 +25,15 @@ void DataManager::loadData() {
     forceData_.FL = readHDF5(DATA_FILE_, "feet_force/FL");
     forceData_.RL = readHDF5(DATA_FILE_, "feet_force/RL");
     forceData_.RR = readHDF5(DATA_FILE_, "feet_force/RR");
+
+    std::vector<std::vector<double>> dummy_timestamps = readHDF5(DATA_FILE_, "timestamps");
+  timestamps_.reserve(dummy_timestamps.size());  // Optional but efficient
+
+  for (const auto& row : dummy_timestamps) {
+    if (!row.empty()) {
+      timestamps_.push_back(row[0]);
+    }
+  }
 }
 
 void DataManager::loadConfig() {
@@ -44,10 +53,10 @@ std::string DataManager::resolvePath(const json& config, const std::string& path
     std::string serowPathEnv = std::getenv("SEROW_PATH");
     std::string resolvedPath = serowPathEnv + path;
     // Extract all placeholders from the config
-    std::string basePath = config["Paths"]["base_path"];
-    std::string experimentType = config["Experiment"]["experiment_type"];
-    std::string robotName = config["Experiment"]["robot_name"];
-    std::string experimentName = config["Experiment"]["experiment_name"];
+    basePath = config["Paths"]["base_path"];
+    experimentType = config["Experiment"]["experiment_type"];
+    robotName = config["Experiment"]["robot_name"];
+    experimentName = config["Experiment"]["experiment_name"];
 
     // Replace placeholders
     resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{base_path\\}"), basePath);
@@ -118,4 +127,12 @@ std::vector<std::vector<double>> DataManager::getJointStatesData() const {
 
 DataManager::ForceData DataManager::getForceData() const {
   return forceData_;
+}
+
+std::string DataManager::getRobotName() const {
+    return robotName;
+}
+
+std::vector<double> DataManager::getTimestamps() const{
+  return timestamps_;
 }
