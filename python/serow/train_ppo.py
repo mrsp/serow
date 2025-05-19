@@ -174,6 +174,39 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                     }, f'policy/ppo/trained_policy_{robot}.pth')
                     print(f"Saved policy for {robot} to 'policy/ppo/trained_policy_{robot}.pth'")
 
+                    # Export actor model to ONNX
+                    dummy_input = torch.randn(1, state_dim).to(device)
+                    torch.onnx.export(
+                        agent.actor,
+                        dummy_input,
+                        f'policy/ppo/trained_policy_{robot}_actor.onnx',
+                        export_params=True,
+                        opset_version=11,
+                        do_constant_folding=True,
+                        input_names=['input'],
+                        output_names=['mean', 'log_std'],
+                        dynamic_axes={'input': {0: 'batch_size'},
+                                    'mean': {0: 'batch_size'},
+                                    'log_std': {0: 'batch_size'}}
+                    )
+                    print(f"Saved actor model for {robot} to 'policy/ppo/trained_policy_{robot}_actor.onnx'")
+
+                    # Export critic model to ONNX
+                    dummy_state = torch.randn(1, state_dim).to(device)
+                    torch.onnx.export(
+                        agent.critic,
+                        dummy_state,
+                        f'policy/ppo/trained_policy_{robot}_critic.onnx',
+                        export_params=True,
+                        opset_version=11,
+                        do_constant_folding=True,
+                        input_names=['input'],
+                        output_names=['output'],
+                        dynamic_axes={'input': {0: 'batch_size'},
+                                    'output': {0: 'batch_size'}}
+                    )
+                    print(f"Saved critic model for {robot} to 'policy/ppo/trained_policy_{robot}_critic.onnx'")
+
             print(f"Dataset {i}, Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
 
             # Check reward convergence
@@ -197,7 +230,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     smoothed_episode_rewards = []
     episode_rewards = np.array(episode_rewards)
     smoothed_episode_reward = episode_rewards[0]
-    alpha = 0.55
+    alpha = 0.75
     for i in range(len(episode_rewards)):
         smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[i]
         smoothed_episode_rewards.append(smoothed_episode_reward)

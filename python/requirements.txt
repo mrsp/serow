@@ -4,3 +4,5 @@ matplotlib>=3.4.0  # For visualization
 pybind11>=2.11.1  # Required for serow 
 mcap>=1.2.2
 flatbuffers>=25.2.10
+onnxruntime>=1.15.0
+onnx>=1.18.0  # Required for model export
