@@ -39,6 +39,10 @@
 #include "State.hpp"  // Includes definitions of robot state variables
 #include "common.hpp"
 
+#ifdef USE_ONNX
+#include "ONNXInference.hpp"
+#endif
+
 namespace serow {
 
 /**
@@ -59,9 +63,14 @@ public:
      * @param g Acceleration due to gravity.
      * @param imu_rate IMU update rate.
      * @param outlier_detection Flag indicating if outlier detection mechanisms should be enabled.
+     * @param use_onnx Flag indicating if ONNX inference should be used for action selection.
+     * @param robot_name Name of the robot for ONNX model loading.
+     * @param model_path Path to the ONNX models directory.
      */
     void init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-              double g, double imu_rate, bool outlier_detection = false);
+              double g, double imu_rate, bool outlier_detection = false,
+              bool use_onnx = false, const std::string& robot_name = "",
+              const std::string& model_path = "policy/ddpg");
 
     /**
      * @brief Predicts the robot's state forward based on IMU and kinematic measurements.
@@ -190,6 +199,20 @@ private:
     std::map<std::string, Eigen::Quaterniond> base_orientation_per_contact_position_update_;
     std::map<std::string, Eigen::Vector3d> base_position_per_contact_orientation_update_;
     std::map<std::string, Eigen::Quaterniond> base_orientation_per_contact_orientation_update_;
+
+    // ONNX inference
+    bool use_onnx_{false};
+    #ifdef USE_ONNX
+    std::unique_ptr<ONNXInference> onnx_inference_;
+    #endif
+    int state_dim_{};  ///< Dimension of the state vector for ONNX inference
+
+    /**
+     * @brief Gets the action from ONNX model or default values
+     * @param state Current state vector
+     * @return Action vector
+     */
+    Eigen::VectorXd getAction(const Eigen::VectorXd& state);
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.

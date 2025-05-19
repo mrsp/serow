@@ -17,7 +17,9 @@
 namespace serow {
 
 void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-                      double g, double imu_rate, bool outlier_detection) {
+                      double g, double imu_rate, bool outlier_detection,
+                      bool use_onnx, const std::string& robot_name,
+                      const std::string& model_path) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
@@ -122,6 +124,23 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
 
     last_imu_timestamp_.reset();
     std::cout << "Contact EKF Initialized Successfully" << std::endl;
+
+    // Initialize ONNX inference if enabled
+    use_onnx_ = use_onnx;
+    #ifdef USE_ONNX
+    if (use_onnx_) {
+        if (robot_name.empty()) {
+            throw std::runtime_error("Robot name must be provided when using ONNX inference");
+        }
+        onnx_inference_ = std::make_unique<ONNXInference>();
+        onnx_inference_->init(robot_name, model_path);
+        state_dim_ = onnx_inference_->getStateDim();
+    }
+    #else
+    if (use_onnx_) {
+        throw std::runtime_error("ONNX support is not enabled in this build. Please rebuild with -DUSE_ONNX=ON");
+    }
+    #endif
 }
 
 void ContactEKF::setState(const BaseState& state) {
@@ -647,15 +666,30 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
 }
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    const size_t num_actions = 1 + 1 * !point_feet_;
-    if (action.size() != static_cast<Eigen::Index>(num_actions)) {
-        throw std::invalid_argument("Action size must be 1 + 1 * !point_feet_");
+    #ifdef USE_ONNX
+    if (use_onnx_ && onnx_inference_) {
+        // Get the current state vector
+        Eigen::VectorXd state = Eigen::VectorXd::Zero(state_dim_);
+        // TODO: Fill state vector with current state values
+        
+        // Get action from ONNX model
+        Eigen::VectorXd onnx_action = onnx_inference_->getAction(state);
+        
+        // Update action covariance gains
+        position_action_cov_gain_[cf] = onnx_action(0);
+        orientation_action_cov_gain_[cf] = onnx_action(1);
+        contact_position_action_cov_gain_[cf] = onnx_action(2);
+        contact_orientation_action_cov_gain_[cf] = onnx_action(3);
+    } else {
+    #endif
+        // Use provided action values
+        position_action_cov_gain_[cf] = action(0);
+        orientation_action_cov_gain_[cf] = action(1);
+        contact_position_action_cov_gain_[cf] = action(2);
+        contact_orientation_action_cov_gain_[cf] = action(3);
+    #ifdef USE_ONNX
     }
-
-    contact_position_action_cov_gain_.at(cf) = action(0);
-    if (!point_feet_ && contact_orientation_action_cov_gain_.count(cf) > 0) {
-        contact_orientation_action_cov_gain_.at(cf) = action(1);
-    }
+    #endif
 }
 
 bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame,
@@ -691,6 +725,17 @@ bool ContactEKF::getContactOrientationInnovation(const std::string& contact_fram
         return true;
     }
     return false;
+}
+
+Eigen::VectorXd ContactEKF::getAction(const Eigen::VectorXd& state) {
+    #ifdef USE_ONNX
+    if (use_onnx_ && onnx_inference_) {
+        return onnx_inference_->getAction(state);
+    }
+    #endif
+    
+    // Default action if ONNX is not enabled or not initialized
+    return Eigen::VectorXd::Zero(state.size());
 }
 
 }  // namespace serow
