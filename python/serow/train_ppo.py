@@ -230,9 +230,9 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     smoothed_episode_rewards = []
     episode_rewards = np.array(episode_rewards)
     smoothed_episode_reward = episode_rewards[0]
-    alpha = 0.75
+    alpha = 0.85
     for i in range(len(episode_rewards)):
-        smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[i]
+        smoothed_episode_reward = (1.0 - alpha) * smoothed_episode_reward + alpha * episode_rewards[i]
         smoothed_episode_rewards.append(smoothed_episode_reward)
 
     # Create a single figure for all rewards

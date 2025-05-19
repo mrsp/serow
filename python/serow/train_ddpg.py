@@ -22,49 +22,25 @@ from read_mcap import(
     sync_and_align_data
 )
 
-# Actor network per leg end-effector
-class OUNoise:
-    def __init__(self, size, mu=0.0, theta=0.15, sigma=1.0):
-        self.mu = mu * np.ones(size)
-        self.theta = theta
-        self.sigma = sigma
-        self.state = np.copy(self.mu)
-
-    def reset(self):
-        self.state = np.copy(self.mu)
-
-    def sample(self):
-        x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
-        self.state = x + dx
-        return self.state
-
 class Actor(nn.Module):
     def __init__(self, params):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 64)
-        self.layer2 = nn.Linear(64, 32)
-        self.mean_layer = nn.Linear(32, params['action_dim'])
+        self.layer1 = nn.Linear(params['state_dim'], 32)
+        self.layer2 = nn.Linear(32, 16)
+        self.mean_layer = nn.Linear(16, params['action_dim'])
         
-        # Initialize weights with smaller values to prevent large outputs
-        nn.init.xavier_uniform_(self.layer1.weight, gain=0.1)
-        nn.init.xavier_uniform_(self.layer2.weight, gain=0.1)
+        # Initialize weights with small values
+        nn.init.xavier_uniform_(self.layer1.weight, gain=0.1)  
+        nn.init.xavier_uniform_(self.layer2.weight, gain=0.1)  
         
-        # Initialize mean layer to output 1.0 for each action dimension
+        # Initialize output layer to output 1.0 for each action dimension
         nn.init.zeros_(self.mean_layer.weight)
         nn.init.constant_(self.mean_layer.bias, 1.0)  # This will make softplus(1.0) ≈ 1.0
         
-        
-        # Initialize biases to small positive values
-        nn.init.constant_(self.layer1.bias, 0.1)
-        nn.init.constant_(self.layer2.bias, 0.1)
-        
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
-
-        self.noise = OUNoise(params['action_dim'], sigma=1.0)
-        self.noise_scale = params['noise_scale']
-        self.noise_decay = params['noise_decay']
+        self.log_noise_sigma = params['log_noise_sigma']
+        self.min_log_noise_sigma = params['min_log_noise_sigma']
 
     def forward(self, state):
         x = F.relu(self.layer1(state))
@@ -75,11 +51,18 @@ class Actor(nn.Module):
         with torch.no_grad():
             state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
             action = self.forward(state).cpu().numpy()[0]
-
             if not deterministic:
-                action = action + self.noise.sample() * self.noise_scale
-                self.noise_scale *= self.noise_decay
+                # 75% to apply noise
+                if np.random.rand() < 0.75:
+                    # Apply logarithmic space noise with the adjusted sigma
+                    log_action = np.log(action)
+                    log_noise = np.random.normal(0, self.log_noise_sigma, size=action.shape)
+                    noisy_log_action = log_action + log_noise
+                    
+                    # Convert back to linear space
+                    action = np.exp(noisy_log_action)
 
+            # Ensure minimum action value and positivity
             action = np.where(action < self.min_action, self.min_action, action)
             return action
 
@@ -97,7 +80,7 @@ class Critic(nn.Module):
         x = F.relu(self.layer2(x))
         x = F.relu(self.layer3(x))
         return self.layer4(x)
-    
+
 def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     episode_rewards = []
     converged = False
@@ -159,9 +142,13 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 if step == max_steps - 1:
                     print(f"Episode {episode} completed without diverging the filter with reward {episode_reward}")
 
-                if step % 5000 == 0 or step == max_steps - 1:  # Print progress 
+                if step % 5000 == 0 or step == max_steps - 1:  # Print progress every 5000 steps or at the end of the episode
                     print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps - 1}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
-            
+                    # Decay exploration noise scale
+                    if (step > 0):
+                        # Base decay (linear)
+                        agent.actor.log_noise_sigma = max(agent.actor.min_log_noise_sigma, agent.actor.log_noise_sigma * (1 - episode / (max_episodes * 0.5)))
+
             # Update reward histories and check for convergence
             episode_rewards.append(episode_reward)
             reward_history.append(episode_reward)
@@ -240,9 +227,9 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     smoothed_episode_rewards = []
     episode_rewards = np.array(episode_rewards)
     smoothed_episode_reward = episode_rewards[0]
-    alpha = 0.75
+    alpha = 0.85
     for i in range(len(episode_rewards)):
-        smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[i]
+        smoothed_episode_reward = (1.0 - alpha) * smoothed_episode_reward + alpha * episode_rewards[i]
         smoothed_episode_rewards.append(smoothed_episode_reward)
 
     # Create a single figure for all rewards
@@ -401,7 +388,7 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     state_dim = 4  
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = 1e-6
+    min_action = 1e-10
 
     params = {
         'state_dim': state_dim,
@@ -411,10 +398,10 @@ if __name__ == "__main__":
         'gamma': 0.99,
         'tau': 0.01,
         'batch_size': 64,  
-        'actor_lr': 5e-3, 
-        'critic_lr': 1e-3,
-        'noise_scale': 2.0,
-        'noise_decay': 0.995,
+        'actor_lr': 5e-4, 
+        'critic_lr': 1e-4,
+        'log_noise_sigma': 2.0,
+        'min_log_noise_sigma': 0.02,
         'buffer_size': 1000000,
     }
 
