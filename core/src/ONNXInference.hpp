@@ -8,6 +8,8 @@
 #include <onnxruntime_cxx_api.h>
 #include <string>
 #include <memory>
+#include <vector>
+#include "common.hpp"
 
 namespace serow {
 
@@ -24,9 +26,8 @@ public:
     /**
      * @brief Initializes the ONNX inference with actor and critic models
      * @param robot_name Name of the robot (e.g., "go2")
-     * @param model_path Path to the ONNX models directory
      */
-    void init(const std::string& robot_name, const std::string& model_path = "policy/ddpg");
+    void init(const std::string& robot_name);
 
     /**
      * @brief Gets the action from the actor model
@@ -49,13 +50,20 @@ public:
      */
     int getStateDim() const { return state_dim_; }
 
+    /**
+     * @brief Gets the action dimension from the actor model
+     * @return Action dimension
+     */
+    int getActionDim() const { return action_dim_; }
+
 private:
     Ort::Env env_;
     std::unique_ptr<Ort::Session> actor_session_;
     std::unique_ptr<Ort::Session> critic_session_;
     
-    // Input/output names
+    // Input/output names - store as strings to ensure lifetime
     std::string actor_input_name_;
+    std::string actor_output_name_;
     std::vector<std::string> critic_input_names_;
     
     // Input/output dimensions
@@ -64,8 +72,13 @@ private:
     
     // Memory allocator
     Ort::MemoryInfo memory_info_;
-    
-    // Helper function to convert Eigen vector to ONNX tensor
+
+    /**
+     * @brief Converts an Eigen vector to an ONNX Runtime tensor
+     * @param eigen_vec Input Eigen vector
+     * @param shape Desired tensor shape
+     * @return ONNX Runtime tensor
+     */
     Ort::Value eigenToOrtTensor(const Eigen::VectorXd& eigen_vec, const std::vector<int64_t>& shape);
 };
 

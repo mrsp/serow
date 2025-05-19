@@ -25,22 +25,6 @@ static constexpr const char* WHITE_COLOR = "\033[0m";
 
 namespace serow {
 
-std::string findFilepath(const std::string& filename) {
-    const char* serow_path_env = std::getenv("SEROW_PATH");
-    if (serow_path_env == nullptr) {
-        throw std::runtime_error("Environmental variable SEROW_PATH is not set.");
-    }
-
-    std::filesystem::path serow_path(serow_path_env);
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(serow_path)) {
-        if (std::filesystem::is_regular_file(entry) && entry.path().filename() == filename) {
-            return entry.path().string();
-        }
-    }
-
-    throw std::runtime_error("File '" + filename + "' not found.");
-}
-
 Serow::Serow() {
 
 }
@@ -103,6 +87,11 @@ bool Serow::initialize(const std::string& config_file) {
 
         return true;
     };
+
+    // Initialize robot name
+    if (!checkConfigParam("robot_name", params_.robot_name)) {
+        return false;
+    }
 
     // Initialize base frame
     if (!checkConfigParam("base_frame", params_.base_frame)) {
@@ -1378,8 +1367,12 @@ void Serow::reset() {
     
     // Initialize the base and CoM estimators
     if (params_.is_contact_ekf) {
+        bool use_onnx = false;
+        #ifdef USE_ONNX
+        use_onnx = true;
+        #endif
         base_estimator_con_.init(state_.base_state_, state_.getContactsFrame(), state_.isPointFeet(), params_.g, 
-                                params_.imu_rate, params_.outlier_detection);
+                                 params_.imu_rate, params_.outlier_detection, use_onnx, params_.robot_name);
     } else {
         base_estimator_.init(state_.base_state_, params_.g, params_.imu_rate, params_.outlier_detection);
     }
