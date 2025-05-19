@@ -37,7 +37,6 @@
 #include "Measurement.hpp"  // Includes various sensor measurements
 #include "OutlierDetector.hpp"
 #include "State.hpp"  // Includes definitions of robot state variables
-#include "common.hpp"
 
 #ifdef USE_ONNX
 #include "ONNXInference.hpp"
@@ -201,11 +200,12 @@ private:
     std::map<std::string, Eigen::Quaterniond> base_orientation_per_contact_orientation_update_;
 
     // ONNX inference
-    bool use_onnx_{false};
+    bool use_onnx_{};
     #ifdef USE_ONNX
     std::unique_ptr<ONNXInference> onnx_inference_;
     #endif
-    int state_dim_{};  ///< Dimension of the state vector for ONNX inference
+    int onnx_state_dim_{};  ///< Dimension of the state vector for ONNX inference
+    int onnx_action_dim_{};  ///< Dimension of the action vector from ONNX inference
 
     /**
      * @brief Gets the action from ONNX model or default values

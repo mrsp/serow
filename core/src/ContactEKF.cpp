@@ -123,7 +123,6 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     }
 
     last_imu_timestamp_.reset();
-    std::cout << "Contact EKF Initialized Successfully" << std::endl;
 
     // Initialize ONNX inference if enabled
     use_onnx_ = use_onnx;
@@ -132,15 +131,26 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
         if (robot_name.empty()) {
             throw std::runtime_error("Robot name must be provided when using ONNX inference");
         }
-        onnx_inference_ = std::make_unique<ONNXInference>();
-        onnx_inference_->init(robot_name, model_path);
-        state_dim_ = onnx_inference_->getStateDim();
+        
+        try {
+            onnx_inference_ = std::make_unique<ONNXInference>();
+            onnx_inference_->init(robot_name);
+            onnx_state_dim_ = onnx_inference_->getStateDim();
+            onnx_action_dim_ = onnx_inference_->getActionDim();
+
+            if (onnx_state_dim_ <= 0) {
+                throw std::runtime_error("Invalid state dimension from ONNX model: " + std::to_string(onnx_state_dim_));
+            }
+        } catch (const std::exception& e) {
+            throw std::runtime_error("Failed to initialize ONNX inference: " + std::string(e.what()));
+        }
     }
     #else
     if (use_onnx_) {
         throw std::runtime_error("ONNX support is not enabled in this build. Please rebuild with -DUSE_ONNX=ON");
     }
     #endif
+    std::cout << "Contact EKF Initialized Successfully" << std::endl;
 }
 
 void ContactEKF::setState(const BaseState& state) {
@@ -317,6 +327,21 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
     const Eigen::Vector3d& cp, Eigen::Matrix3d cp_noise, const Eigen::Matrix3d& position_cov, 
     std::shared_ptr<TerrainElevation> terrain_estimator) {
         const double csd = cs ? 1.0 : 0.0;
+        
+        if (use_onnx_) {
+            Eigen::VectorXd onnx_state = Eigen::VectorXd::Zero(onnx_state_dim_);
+            Eigen::VectorXd onnx_action = Eigen::VectorXd::Ones(onnx_action_dim_);
+            if (point_feet_ && state.contacts_position.count(cf)) {
+                onnx_state.head(3) = state.base_position - state.contacts_position.at(cf);
+                onnx_state(3) = 1.0;
+                onnx_action = getAction(onnx_state);
+            } 
+            setAction(cf, onnx_action);
+        }
+
+        cp_noise = csd * (cp_noise + position_cov) * contact_position_action_cov_gain_.at(cf) 
+            + (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
+
         // If the terrain estimator is in the loop reduce the effect that kinematics has in the
         // contact height update
         if (terrain_estimator) {
@@ -330,8 +355,6 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
             cp_noise = R.transpose() * cp_noise * R;
         }
 
-        cp_noise = csd * (cp_noise + position_cov) * contact_position_action_cov_gain_.at(cf) 
-            + (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
         const int num_iter = 5;
         Eigen::MatrixXd H(3, num_states_);
         Eigen::MatrixXd K(num_states_, 3);
@@ -666,30 +689,16 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
 }
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    #ifdef USE_ONNX
-    if (use_onnx_ && onnx_inference_) {
-        // Get the current state vector
-        Eigen::VectorXd state = Eigen::VectorXd::Zero(state_dim_);
-        // TODO: Fill state vector with current state values
-        
-        // Get action from ONNX model
-        Eigen::VectorXd onnx_action = onnx_inference_->getAction(state);
-        
-        // Update action covariance gains
-        position_action_cov_gain_[cf] = onnx_action(0);
-        orientation_action_cov_gain_[cf] = onnx_action(1);
-        contact_position_action_cov_gain_[cf] = onnx_action(2);
-        contact_orientation_action_cov_gain_[cf] = onnx_action(3);
-    } else {
-    #endif
-        // Use provided action values
-        position_action_cov_gain_[cf] = action(0);
-        orientation_action_cov_gain_[cf] = action(1);
-        contact_position_action_cov_gain_[cf] = action(2);
-        contact_orientation_action_cov_gain_[cf] = action(3);
-    #ifdef USE_ONNX
+    const size_t num_actions = 1 + 1 * !point_feet_;
+     if (action.size() != static_cast<Eigen::Index>(num_actions)) {
+        throw std::invalid_argument("Action size must be 1 + 1 if point_feet is false");
     }
-    #endif
+
+    contact_position_action_cov_gain_.at(cf) = action(0);
+    if (!point_feet_ && orientation_action_cov_gain_.count(cf) > 0 &&
+        contact_orientation_action_cov_gain_.count(cf) > 0) {
+        contact_orientation_action_cov_gain_.at(cf) = action(1);
+    }   
 }
 
 bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame,
@@ -730,12 +739,17 @@ bool ContactEKF::getContactOrientationInnovation(const std::string& contact_fram
 Eigen::VectorXd ContactEKF::getAction(const Eigen::VectorXd& state) {
     #ifdef USE_ONNX
     if (use_onnx_ && onnx_inference_) {
+        if (state.size() != onnx_state_dim_) {
+            throw std::runtime_error("State vector dimension mismatch. Expected " + 
+                                   std::to_string(onnx_state_dim_) + ", got " + 
+                                   std::to_string(state.size()));
+        }
         return onnx_inference_->getAction(state);
     }
     #endif
     
     // Default action if ONNX is not enabled or not initialized
-    return Eigen::VectorXd::Zero(state.size());
+    return Eigen::VectorXd::Ones(state.size());
 }
 
 }  // namespace serow

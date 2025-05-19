@@ -3,6 +3,8 @@
 // Users are encouraged to replicate a configuration file similarly to "nao.json" for their robot 
 // and use this file as a reference only.
 {
+    // string: name of the robot
+    "robot_name": "name",
     // string: base frame of the robot to be estimated
     "base_frame": "base_link",
     // boolean: does the robot have point feet or flat feet?

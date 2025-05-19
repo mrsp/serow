@@ -12,7 +12,6 @@
  **/
 #pragma once
 
-#include <filesystem>
 #include <map>
 #include <string>
 
@@ -154,6 +153,8 @@ public:
     
 private:
     struct Params {
+        /// @brief name of the robot
+        std::string robot_name{};
         /// @brief base frame name
         std::string base_frame{};
         /// @brief gravity constant (m/s^2)

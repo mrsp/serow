@@ -1,4 +1,5 @@
 {
+    "robot_name": "nao",
     "base_frame": "base_link",
     "point_feet": false,
     "foot_frames": {
