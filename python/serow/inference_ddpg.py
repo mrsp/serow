@@ -59,10 +59,6 @@ class ONNXInference:
         
         # Get action from actor output
         action = actor_output[0]
-        
-        # Ensure action is within bounds
-        action = np.clip(action, 1e-6, None)
-        
         return action
 
     def get_value(self, state, action):

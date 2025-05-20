@@ -48,6 +48,14 @@ class DDPG:
             next_state = next_state.copy()
             state = normalize_vector(state, self.min_state_value, self.max_state_value)
             next_state = normalize_vector(next_state, self.min_state_value, self.max_state_value)
+        
+        # Convert to tensors and store in buffer
+        state = torch.FloatTensor(state.flatten()).to(self.device)
+        action = torch.FloatTensor(action.flatten()).to(self.device)
+        reward = torch.FloatTensor([reward]).to(self.device)
+        next_state = torch.FloatTensor(next_state.flatten()).to(self.device)
+        done = torch.FloatTensor([done]).to(self.device)
+        
         self.buffer.append((state, action, reward, next_state, done))
 
     def get_action(self, state, deterministic=False):
@@ -63,30 +71,27 @@ class DDPG:
         if len(self.buffer) < self.batch_size:
             return
         
+        # Sample from buffer - data is already in tensor format
         batch = random.sample(self.buffer, self.batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
         
-        # Convert states and next_states to numpy arrays with consistent shapes
-        states = np.array([np.array(s).flatten() for s in states])
-        next_states = np.array([np.array(s).flatten() for s in next_states])
-        actions = np.array([np.array(a).flatten() for a in actions])
-
-        # Convert to tensors
-        states = torch.FloatTensor(states).to(self.device)
-        actions = torch.FloatTensor(actions).to(self.device)
-        rewards = torch.FloatTensor(np.array(rewards)).unsqueeze(1).to(self.device)
-        next_states = torch.FloatTensor(next_states).to(self.device)
-        
-        # Ensure dones are scalar values
-        dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
+        # Stack tensors along batch dimension
+        states = torch.stack(states)
+        next_states = torch.stack(next_states)
+        actions = torch.stack(actions)
+        rewards = torch.stack(rewards)
+        dones = torch.stack(dones)
         
         # Critic update
         with torch.no_grad():
             next_actions = self.actor_target(next_states)
             target_Q = self.critic_target(next_states, next_actions)
             target_Q = rewards + (1.0 - dones) * self.gamma * target_Q
+            
         current_Q = self.critic(states, actions)
         critic_loss = F.mse_loss(current_Q, target_Q)
+        
+        # Optimize critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
@@ -94,13 +99,16 @@ class DDPG:
         
         # Actor update
         actor_loss = -self.critic(states, self.actor(states)).mean()
+        
+        # Optimize actor
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
         self.actor_optimizer.step()
         
-        # Soft update target networks
-        for target_param, param in zip(self.actor_target.parameters(), self.actor.parameters()):
-            target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
-        for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
-            target_param.data.copy_(self.tau * param.data + (1.0 - self.tau) * target_param.data)
+        # Soft update target networks - using in-place operations
+        with torch.no_grad():
+            for target_param, param in zip(self.actor_target.parameters(), self.actor.parameters()):
+                target_param.data.mul_(1.0 - self.tau).add_(self.tau * param.data)
+            for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
+                target_param.data.mul_(1.0 - self.tau).add_(self.tau * param.data)
