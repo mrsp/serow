@@ -1046,6 +1046,7 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = 
             R_base = quaternion_to_rotation_matrix(prior_state.get_base_orientation()).transpose()
             local_pos = R_base @ (prior_state.get_base_position() - prior_state.get_contact_position(cf))
             x[cf] = np.concatenate((local_pos, np.array([kin.contacts_probability[cf]])), axis=0)
+
             if agent is not None:
                 if agent.name == "PPO":
                     actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=deterministic)
@@ -1061,7 +1062,7 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = 
 
         # Set the action
         serow_framework.set_action(cf, actions[cf])
-        
+
         # Run the update step with the contact position
         serow_framework.base_estimator_update_with_contact_position(cf, kin)
 
