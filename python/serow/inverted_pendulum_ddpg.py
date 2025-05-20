@@ -159,6 +159,8 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             'noise_scale': 0.5,
             'noise_decay': 0.995,
             'buffer_size': 1000000,
+            'max_state_value': 1e8,
+            'min_state_value': -1e8,
         }
         self.actor = Actor(params)
         self.critic = Critic(params)
@@ -188,11 +190,14 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         self.agent.add_to_buffer(state, action, reward, next_state, done)
         self.assertEqual(len(self.agent.buffer), 1)
         stored = self.agent.buffer[0]
-        self.assertTrue(np.array_equal(stored[0], state))
-        self.assertTrue(np.array_equal(stored[1], action))
-        self.assertEqual(stored[2], reward)
-        self.assertTrue(np.array_equal(stored[3], next_state))
-        self.assertEqual(stored[4], done)
+        
+        # Use np.allclose for floating-point comparisons with a small tolerance
+        state_flat = state.flatten()
+        self.assertTrue(np.allclose(stored[0].cpu().numpy(), state_flat, rtol=1e-5, atol=1e-5))
+        self.assertTrue(np.allclose(stored[1].cpu().numpy(), action.flatten(), rtol=1e-5, atol=1e-5))
+        self.assertTrue(np.allclose(stored[2].item(), reward, rtol=1e-5, atol=1e-5))
+        self.assertTrue(np.allclose(stored[3].cpu().numpy(), next_state.flatten(), rtol=1e-5, atol=1e-5))
+        self.assertEqual(stored[4].item(), done)
 
     def test_train(self):
         # Fill buffer with some transitions
