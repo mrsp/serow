@@ -353,8 +353,13 @@ if __name__ == "__main__":
                 R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
                 local_pos = R_base @ (base_state.base_position - base_state.contacts_position[cf])
                 feet_positions.append(local_pos)
-    max_state_value = np.array([np.max(feet_positions, axis=0), 1.0])
-    min_state_value = np.array([np.min(feet_positions, axis=0), 0.0])
+    
+    # Convert feet_positions to numpy array for easier manipulation
+    feet_positions = np.array(feet_positions)
+    # Create max and min state values with correct dimensions
+    # First 3 dimensions are for position, last dimension is for contact probability
+    max_state_value = np.concatenate([np.max(feet_positions, axis=0), [1.0]])
+    min_state_value = np.concatenate([np.min(feet_positions, axis=0), [0.0]])
 
     print(f"Max state value: {max_state_value}")
     print(f"Min state value: {min_state_value}")
