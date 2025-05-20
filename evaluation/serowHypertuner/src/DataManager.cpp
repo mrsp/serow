@@ -11,29 +11,22 @@ DataManager::DataManager()
 }
 
 void DataManager::loadData() {
-    std::cout << "Loading data from "<< DATA_FILE_ << std::endl;
-    // Load data from HDF5 files
-    robotPos_ = readHDF5(DATA_FILE_, "base_ground_truth/position");
-    robotRot_ = readHDF5(DATA_FILE_, "base_ground_truth/orientation");
+  std::cout << "Loading data from "<< DATA_FILE_ << std::endl;
+  // Load data from HDF5 files
+  robotPos_ = readHDF5(DATA_FILE_, "base_ground_truth/position");
+  robotRot_ = readHDF5(DATA_FILE_, "base_ground_truth/orientation");
 
-    linAcc_   = readHDF5(DATA_FILE_, "imu/linear_acceleration");
-    angVel_   = readHDF5(DATA_FILE_, "imu/angular_velocity");
-    jointStates_ = readHDF5(DATA_FILE_, "joint_states/positions");
+  linAcc_   = readHDF5(DATA_FILE_, "imu/linear_acceleration");
+  angVel_   = readHDF5(DATA_FILE_, "imu/angular_velocity");
+  jointStates_ = readHDF5(DATA_FILE_, "joint_states/positions");
 
-    // Load force data
-    forceData_.FR = readHDF5(DATA_FILE_, "feet_force/FR");
-    forceData_.FL = readHDF5(DATA_FILE_, "feet_force/FL");
-    forceData_.RL = readHDF5(DATA_FILE_, "feet_force/RL");
-    forceData_.RR = readHDF5(DATA_FILE_, "feet_force/RR");
+  // Load force data
+  forceData_.FR = readHDF5(DATA_FILE_, "feet_force/FR");
+  forceData_.FL = readHDF5(DATA_FILE_, "feet_force/FL");
+  forceData_.RL = readHDF5(DATA_FILE_, "feet_force/RL");
+  forceData_.RR = readHDF5(DATA_FILE_, "feet_force/RR");
 
-    std::vector<std::vector<double>> dummy_timestamps = readHDF5(DATA_FILE_, "timestamps");
-  timestamps_.reserve(dummy_timestamps.size());  // Optional but efficient
-
-  for (const auto& row : dummy_timestamps) {
-    if (!row.empty()) {
-      timestamps_.push_back(row[0]);
-    }
-  }
+  std::vector<double> timestamps_ = readHDF5_1D(DATA_FILE_, "timestamps");
 }
 
 void DataManager::loadConfig() {
@@ -75,6 +68,31 @@ std::string DataManager::getSerowPath() const {
       throw std::runtime_error("SEROW_PATH environment variable not set");
   }
   return std::string(serowPath);
+}
+
+std::vector<double> DataManager::readHDF5_1D(const std::string& filename, const std::string& datasetName) {
+  H5::H5File file(filename, H5F_ACC_RDONLY);
+
+  if (datasetName.empty()) {
+      throw std::invalid_argument("Dataset name must be non-empty.");
+  }
+
+  H5::DataSet dataset = file.openDataSet(datasetName);
+  H5::DataSpace dataspace = dataset.getSpace();
+
+  // Get number of dimensions and check
+  int ndims = dataspace.getSimpleExtentNdims();
+  if (ndims != 1) {
+      throw std::runtime_error("Dataset " + datasetName + " is not 1D.");
+  }
+
+  hsize_t dim;
+  dataspace.getSimpleExtentDims(&dim);
+
+  std::vector<double> data(dim);
+  dataset.read(data.data(), H5::PredType::NATIVE_DOUBLE);
+
+  return data;
 }
 
 std::vector<std::vector<double>> DataManager::readHDF5(const std::string& filename,

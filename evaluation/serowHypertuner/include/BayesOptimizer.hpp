@@ -8,7 +8,6 @@
 #include <bayesopt/parameters.hpp>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
-#include <pinocchio/multibody/model.hpp>
 
 using vectord = bayesopt::vectord;
 using json = nlohmann::ordered_json;
@@ -55,8 +54,17 @@ private:
   /// @return the json object
   json loadDefaultJson(const std::string& path);
 
+  /// @brief Sets the robot's joint names, frame names, and foot names
+  void setRobotJointsAndFootFrames(const std::string & robot_path);
+
   /// @brief Counter for the number of iterations
   size_t n_iterations_ = 0;
+  
+  /// @brief Joint names vector
+  std::vector<std::string> joint_names_;
+
+  /// @brief Foot frames
+  std::vector<std::string> foot_names_;
 
   /// @brief Serow estimated positions
   std::vector<std::vector<double>> est_positions_;
@@ -79,10 +87,16 @@ private:
   /// @brief Temporary config file path
   std::string temp_config;
 
+  /// @brief Robot joint & foot frames definition
+  std::string robot_frame_config;
+
+  /// @brief URDF file path
+  std::string urdf_file_path;
+  
   /// @brief Temporary json object
   json temp_json;
 
   /// @brief Optimization dataset percentage. e.g dataset_size * datset_percentage = total data to be used for optimization 
-  int dataset_percentage = 80; // %
+  int dataset_percentage = 0.8; // %
 
 };

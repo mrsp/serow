@@ -40,6 +40,12 @@ private:
     std::vector<std::vector<double>> readHDF5(const std::string& filename,
                                               const std::string& datasetName);
 
+                                              
+    /// @brief Reads a 1D dataset from an HDF5 file and returns it as a vector of doubles.
+    /// @param filename The path to the HDF5 file to read from.
+    /// @param datasetName The dataset inside the HDF5 file (e.g., "imu/linear_acceleration").
+    /// @return A vector containing the dataset values.
+    std::vector<double> readHDF5_1D(const std::string& filename, const std::string& datasetName);
 
     ///@brief Ground truth robot position                                               
     std::vector<std::vector<double>> robotPos_;
