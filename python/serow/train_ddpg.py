@@ -19,7 +19,8 @@ from read_mcap import(
     read_base_pose_ground_truth,
     run_step,
     plot_trajectories,
-    sync_and_align_data
+    sync_and_align_data,
+    quaternion_to_rotation_matrix
 )
 
 class Actor(nn.Module):
@@ -30,12 +31,16 @@ class Actor(nn.Module):
         self.mean_layer = nn.Linear(16, params['action_dim'])
         
         # Initialize weights with small values
-        nn.init.xavier_uniform_(self.layer1.weight, gain=0.1)  
-        nn.init.xavier_uniform_(self.layer2.weight, gain=0.1)  
+        nn.init.xavier_uniform_(self.layer1.weight, gain=0.01)  
+        nn.init.xavier_uniform_(self.layer2.weight, gain=0.01)  
         
-        # Initialize output layer to output 1.0 for each action dimension
+        # Initialize output layer to output small values
         nn.init.zeros_(self.mean_layer.weight)
-        nn.init.constant_(self.mean_layer.bias, 1.0)  # This will make softplus(1.0) ≈ 1.0
+        nn.init.constant_(self.mean_layer.bias, 0.1)  # Start with small positive bias
+        
+        # Initialize biases to small values
+        nn.init.constant_(self.layer1.bias, 0.01)
+        nn.init.constant_(self.layer2.bias, 0.01)
         
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
@@ -45,7 +50,7 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
-        return F.softplus(self.mean_layer(x)) 
+        return F.softplus(self.mean_layer(x))
 
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
@@ -291,7 +296,7 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
                                                          force_torque_measurements, 
                                                          base_pose_ground_truth)):
             print("-------------------------------------------------")
-            print(f"Evaluating DDPGpolicy for {robot} at step {step}")
+            print(f"Evaluating DDPG policy for {robot} at step {step}")
             timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, agent, deterministic=True)
             
             timestamps.append(timestamp)
@@ -335,6 +340,24 @@ if __name__ == "__main__":
     base_states = read_base_states("/tmp/serow_proprioception.mcap")
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
     joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
+
+    # Get the contacts frame
+    contacts_frame = set(contact_states[0].contacts_status.keys())
+    print(f"Contacts frame: {contacts_frame}")
+
+    # Compute max and min state values
+    feet_positions = []
+    for base_state in base_states:
+        for cf in contacts_frame:
+            if base_state.contacts_position[cf] is not None:
+                R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
+                local_pos = R_base @ (base_state.base_position - base_state.contacts_position[cf])
+                feet_positions.append(local_pos)
+    max_state_value = np.array([np.max(feet_positions, axis=0), 1.0])
+    min_state_value = np.array([np.min(feet_positions, axis=0), 0.0])
+
+    print(f"Max state value: {max_state_value}")
+    print(f"Min state value: {min_state_value}")
 
     offset = len(imu_measurements) - len(base_states)
     imu_measurements = imu_measurements[offset:]
@@ -381,10 +404,6 @@ if __name__ == "__main__":
     }
     train_datasets = [test_dataset]
 
-    # Get the contacts frame
-    contacts_frame = set(contact_states[0].contacts_status.keys())
-    print(f"Contacts frame: {contacts_frame}")
-
     # Define the dimensions of your state and action spaces
     state_dim = 4  
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
@@ -397,12 +416,14 @@ if __name__ == "__main__":
         'min_action': min_action,
         'gamma': 0.99,
         'tau': 0.01,
-        'batch_size': 64,  
+        'batch_size': 128,  
         'actor_lr': 5e-4, 
         'critic_lr': 1e-4,
         'log_noise_sigma': 2.0,
         'min_log_noise_sigma': 0.02,
         'buffer_size': 1000000,
+        'max_state_value': max_state_value,
+        'min_state_value': min_state_value
     }
 
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -412,7 +433,7 @@ if __name__ == "__main__":
     print(f"Initializing agent for {robot}")
     actor = Actor(params).to(device)
     critic = Critic(params).to(device)
-    agent = DDPG(actor, critic, params, device=device)
+    agent = DDPG(actor, critic, params, device=device, normalize_state=True)
 
     # Try to load a trained policy for this robot if it exists
     try:

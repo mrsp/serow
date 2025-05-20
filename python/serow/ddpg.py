@@ -1,14 +1,15 @@
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from collections import deque
 import random
 import copy
 
+from collections import deque
+from utils import normalize_vector
+
 class DDPG:
-    def __init__(self, actor, critic, params, device='cpu'):
+    def __init__(self, actor, critic, params, device='cpu', normalize_state=False):
         self.device = torch.device(device)
         self.actor = actor.to(self.device)
         self.actor_target = copy.deepcopy(actor)
@@ -32,18 +33,32 @@ class DDPG:
 
         self.state_dim = params['state_dim']
         self.action_dim = params['action_dim']
+        self.normalize_state = normalize_state
+        self.max_state_value = params['max_state_value']
+        self.min_state_value = params['min_state_value']
 
     def add_to_buffer(self, state, action, reward, next_state, done):
         # Check if the buffer is full
         if len(self.buffer) == self.buffer_size:
             print(f"Buffer is full. Removing oldest sample.")
             self.buffer.popleft()
+        
+        if self.normalize_state:
+            state = state.copy()
+            next_state = next_state.copy()
+            state = normalize_vector(state, self.min_state_value, self.max_state_value)
+            next_state = normalize_vector(next_state, self.min_state_value, self.max_state_value)
         self.buffer.append((state, action, reward, next_state, done))
 
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
-            return self.actor.get_action(state, deterministic)
-
+            if self.normalize_state:
+                state = state.copy()
+                state = normalize_vector(state, self.min_state_value, self.max_state_value)
+            
+            action = self.actor.get_action(state, deterministic) 
+            return action
+            
     def train(self):
         if len(self.buffer) < self.batch_size:
             return
@@ -74,17 +89,15 @@ class DDPG:
         critic_loss = F.mse_loss(current_Q, target_Q)
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        # torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
         self.critic_optimizer.step()
         
         # Actor update
         actor_loss = -self.critic(states, self.actor(states)).mean()
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        #torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
         self.actor_optimizer.step()
-        
-
         
         # Soft update target networks
         for target_param, param in zip(self.actor_target.parameters(), self.actor.parameters()):
