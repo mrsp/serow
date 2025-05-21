@@ -1080,31 +1080,37 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = 
             if success:
                 # Check if innovation is too large or if covariance is not positive definite
                 nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
+                # print(f"[Reward Debug] cf={cf} NIS={nis:.4f}")
+                
+                # Scale factors for reward components
+                INNOVATION_SCALE = 10.0  # Increase impact of innovation significantly
+                POSITION_SCALE = 1.0      # Keep position error as is
+                ORIENTATION_SCALE = 1000.0  # Increase impact of orientation significantly
+                
                 if nis > 5.0 or nis <= 0.0: 
                     # Filter diverged
                     done[cf] = 1.0
                     rewards[cf] = -1.0  # Divergence penalty
+                    # print(f"[Reward Debug] cf={cf} Diverged: reward={rewards[cf]}")
                 else:                
                     # Main reward based on innovation quality (higher is better)
-                    # Transform NIS to 0-1 range where 1 is best (small innovation)
-                    innovation_reward = np.exp(-0.1 * nis)  # Decay factor controls sensitivity
+                    innovation_reward = -INNOVATION_SCALE * nis
+                    # print(f"[Reward Debug] cf={cf} innovation_reward={innovation_reward}")
                     rewards[cf] = innovation_reward
                     
                     if USE_GROUND_TRUTH:
                         position_error = np.linalg.norm(post_state.get_base_position() - gt.position)
-                         # Convert position error to 0-1 reward (higher is better)
-                        position_reward = np.exp(-position_error)
-                        rewards[cf] = 0.7 * rewards[cf] + 0.3 * position_reward  
+                        position_reward = -POSITION_SCALE * position_error
+                        # print(f"[Reward Debug] cf={cf} position_error={position_error} position_reward={position_reward}")
+                        rewards[cf] += position_reward  
                         
                         orientation_error = np.linalg.norm(
                             logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
                                  quaternion_to_rotation_matrix(post_state.get_base_orientation())))
-                        # Convert orientation error to 0-1 reward (higher is better)
-                        orientation_reward = np.exp(-orientation_error) 
-                        rewards[cf] = 0.8 * rewards[cf] + 0.2 * orientation_reward  
-
-                    # Scale to reasonable range (-0.5 to + 0.5)
-                    rewards[cf] = rewards[cf] - 0.5
+                        orientation_reward = -ORIENTATION_SCALE * orientation_error 
+                        # print(f"[Reward Debug] cf={cf} orientation_error={orientation_error} orientation_reward={orientation_reward}")
+                        rewards[cf] += orientation_reward  
+                    # print(f"[Reward Debug] cf={cf} final_reward={rewards[cf]}")
 
                 if agent is not None:
                     if agent.name == "PPO":
