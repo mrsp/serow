@@ -19,14 +19,14 @@ void DataManager::loadData() {
   linAcc_   = readHDF5(DATA_FILE_, "imu/linear_acceleration");
   angVel_   = readHDF5(DATA_FILE_, "imu/angular_velocity");
   jointStates_ = readHDF5(DATA_FILE_, "joint_states/positions");
-
+  jointVelocities_ = readHDF5(DATA_FILE_, "joint_states/velocities");
   // Load force data
   forceData_.FR = readHDF5(DATA_FILE_, "feet_force/FR");
   forceData_.FL = readHDF5(DATA_FILE_, "feet_force/FL");
   forceData_.RL = readHDF5(DATA_FILE_, "feet_force/RL");
   forceData_.RR = readHDF5(DATA_FILE_, "feet_force/RR");
 
-  std::vector<double> timestamps_ = readHDF5_1D(DATA_FILE_, "timestamps");
+  timestamps_ = readHDF5(DATA_FILE_, "timestamps");
 }
 
 void DataManager::loadConfig() {
@@ -143,6 +143,10 @@ std::vector<std::vector<double>> DataManager::getJointStatesData() const {
   return jointStates_;
 }
 
+std::vector<std::vector<double>> DataManager::getJointVelocitiesData() const {
+  return jointVelocities_;
+}
+
 DataManager::ForceData DataManager::getForceData() const {
   return forceData_;
 }
@@ -151,6 +155,6 @@ std::string DataManager::getRobotName() const {
     return robotName;
 }
 
-std::vector<double> DataManager::getTimestamps() const{
+std::vector<std::vector<double>> DataManager::getTimestamps() const{
   return timestamps_;
 }

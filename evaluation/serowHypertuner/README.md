@@ -44,6 +44,16 @@ Go to fsc_test/ and build.
 * When you run the ./hypertuner it creates a anymal_b_temp.json in config/ which changes all the time. After the hypertuning is finished, it stores the best results in the config/best_config.json
 * then you run ./fsc_test best_config.json and then python3 serow_viz.py to watch the results
 
+### New robot config
+Create a .json file for your robot with name = **<robot_name>.json** udner the serowHypertuner/config/robots/ and fill in the foot frames and joint names with the following order:
+
+-->  Front Left
+ 
+-->  Front Right
+ 
+-->  Rear Left
+ 
+-->  Rear Right
 
 ### Debug
 

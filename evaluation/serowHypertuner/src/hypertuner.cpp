@@ -135,41 +135,7 @@ int main(int argc, char** argv)
 
   std::cout << "Finished Optimization" << std::endl;
 
-
-  // bayesOptimizer.optimize(result);
-  
-  
-  // auto forceData = dataManager.getForceData();
-  // auto posData = dataManager.getPosData();
-  // auto rotData = dataManager.getRotData();
-  // auto linAccData = dataManager.getLinAccData();
-  // auto angVelData = dataManager.getAngVelData();
-  // auto jointStatesData = dataManager.getJointStatesData();
-
-  // for (const auto& pos : posData) {
-  //   for (const auto& value : pos) {
-  //     std::cout << value << " ";
-  //   }
-  //   std::cout << std::endl;
-  // }
-  // for (const auto& rot : rotData) {
-  //   for (const auto& value : rot) {
-  //     std::cout << value << " ";
-  //   }
-  //   std::cout << std::endl;
-  // }
-  // for (const auto& linAcc : linAccData) {
-  //   for (const auto& value : linAcc) {
-  //     std::cout << value << " ";
-  //   }
-  //   std::cout << std::endl;
-  // }
-  // for (const auto& angVel : angVelData) {
-  //   for (const auto& value : angVel) {
-  //     std::cout << value << " ";
-  //   }
-  //   std::cout << std::endl;
-  // }
+  bayesOptimizer.saveBestConfig(result);
 
   return 0;
 }

@@ -13,7 +13,9 @@ using json = nlohmann::ordered_json;
 
 /// @brief DataManager class to manage data loading and configuration
 class DataManager{
-private: 
+
+public:
+
     ///@brief Force data object definition 3D (x y z) for each leg
     struct ForceData {
         std::vector<std::vector<double>> FR;
@@ -22,6 +24,50 @@ private:
         std::vector<std::vector<double>> RR;
     };
 
+    /// @brief Constructor
+    DataManager();
+    
+    /// @brief Gets the ground truth robot position data
+    /// @return 2D vector of doubles with the robot position data
+    std::vector<std::vector<double>> getPosData() const; 
+    
+    /// @brief Get the robot orientation data
+    /// @return 2D vector of doubles with the robot orientation data
+    std::vector<std::vector<double>> getRotData() const;
+    
+    /// @brief Get the linear acceleration data
+    /// @return 2D vector of doubles with the linear acceleration data
+    std::vector<std::vector<double>> getLinAccData() const;
+    
+    /// @brief Get the angular velocity data
+    /// @return 2D vector of doubles with the angular velocity data
+    std::vector<std::vector<double>> getAngVelData() const;
+    
+    /// @brief Get the joint states data
+    /// @return 2D vector of doubles with the joint states data
+    std::vector<std::vector<double>> getJointStatesData() const;
+
+    /// @brief Get the joint velocities data
+    /// @return 2D vector of doubles with the joint velocities data
+    std::vector<std::vector<double>> getJointVelocitiesData() const;
+
+    
+    /// @brief Get the force data
+    /// @return ForceData struct containing the force data
+    ForceData getForceData() const;
+
+    /// @brief Finds the path of SEROW from the environment variable SEROW_PATH
+    /// @return the path of SEROW
+    std::string getSerowPath() const;
+    
+    /// @brief Get the robot name from the configuration
+    /// @return the robot name
+    std::string getRobotName() const;
+
+    std::vector<std::vector<double>> getTimestamps() const;
+
+private: 
+  
     /// @brief Loads the configuration file (experimentConfig.json) from the config directory
     void loadConfig();
 
@@ -62,8 +108,10 @@ private:
     ///@brief Joint states (encoder positions)
     std::vector<std::vector<double>> jointStates_; // Magnetic Field
     
+    ///@brief Joint states (encoder velocities)
+    std::vector<std::vector<double>> jointVelocities_;
     ///@brief Logged timestamps 
-    std::vector<double> timestamps_;
+    std::vector<std::vector<double>> timestamps_;
     
     /// @brief Foot frame names
     std::vector<std::string> foot_frames_;
@@ -82,41 +130,5 @@ private:
     std::string experimentType;
     std::string robotName;
     std::string experimentName;
-public:
-    /// @brief Constructor
-    DataManager();
-    
-    /// @brief Gets the ground truth robot position data
-    /// @return 2D vector of doubles with the robot position data
-    std::vector<std::vector<double>> getPosData() const; 
-    
-    /// @brief Get the robot orientation data
-    /// @return 2D vector of doubles with the robot orientation data
-    std::vector<std::vector<double>> getRotData() const;
-    
-    /// @brief Get the linear acceleration data
-    /// @return 2D vector of doubles with the linear acceleration data
-    std::vector<std::vector<double>> getLinAccData() const;
-    
-    /// @brief Get the angular velocity data
-    /// @return 2D vector of doubles with the angular velocity data
-    std::vector<std::vector<double>> getAngVelData() const;
-    
-    /// @brief Get the joint states data
-    /// @return 2D vector of doubles with the joint states data
-    std::vector<std::vector<double>> getJointStatesData() const;
-    
-    /// @brief Get the force data
-    /// @return ForceData struct containing the force data
-    ForceData getForceData() const;
 
-    /// @brief Finds the path of SEROW from the environment variable SEROW_PATH
-    /// @return the path of SEROW
-    std::string getSerowPath() const;
-    
-    /// @brief Get the robot name from the configuration
-    /// @return the robot name
-    std::string getRobotName() const;
-
-    std::vector<double> getTimestamps() const;
 };

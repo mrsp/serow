@@ -1,8 +1,8 @@
 {
   "Experiment": {
-    "robot_name": "anymal_b",
-    "experiment_name": "fsc_test",
-    "experiment_type": "anymal_fsc"
+    "robot_name": "go2",
+    "experiment_name": "mujoco_test/mujoco_data",
+    "experiment_type": "flat_gamma"
   },
   "Paths": {
     "base_path": "evaluation/{experiment_name}",

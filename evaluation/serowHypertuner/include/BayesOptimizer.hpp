@@ -25,7 +25,9 @@ public:
   double evaluateSample(const vectord &x) override;
 
 
-
+  /// @brief Saves the best configuration to a file
+  void saveBestConfig(vectord result);
+  
 private:
   /// @brief Data manager object reference
   DataManager& data_;
@@ -49,6 +51,7 @@ private:
   /// @param path the path to the file
   void writeJSONConfig(const json& j, const std::string& path);
 
+
   /// @brief Loads the default JSON configuration from a file
   /// @param path the path to the file
   /// @return the json object
@@ -56,6 +59,12 @@ private:
 
   /// @brief Sets the robot's joint names, frame names, and foot names
   void setRobotJointsAndFootFrames(const std::string & robot_path);
+
+  /// @brief Prints the robot's information including joint names and foot frames
+  void printRobotInfo();
+
+  /// @brief Computes the Absolute Trajectory Error (ATE) between estimated and ground truth positions
+  double computeATE();
 
   /// @brief Counter for the number of iterations
   size_t n_iterations_ = 0;
@@ -79,8 +88,23 @@ private:
   std::vector<std::vector<double>> gt_orientation_;
 
   /// @brief Data timestamps
-  std::vector<double> timestamps_;
+  std::vector<std::vector<double>> timestamps_;
 
+  /// @brief Feet force data
+  DataManager::ForceData force_measurements_;
+
+  /// @brief Joint positions
+  std::vector<std::vector<double>> joint_positions_;
+
+  /// @brief Joint velocities
+  std::vector<std::vector<double>> joint_velocities_;
+
+  ///@brief IMU data (linear acceleration)
+  std::vector<std::vector<double>> linear_acceleration_;
+
+  ///@brief IMU data (angular velocity)
+  std::vector<std::vector<double>> angular_velocity_;
+      
   /// @brief Original config file path
   std::string original_config;
 
@@ -97,6 +121,6 @@ private:
   json temp_json;
 
   /// @brief Optimization dataset percentage. e.g dataset_size * datset_percentage = total data to be used for optimization 
-  int dataset_percentage = 0.8; // %
+  int dataset_percentage = 0.6; // %
 
 };
