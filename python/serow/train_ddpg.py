@@ -26,21 +26,16 @@ from read_mcap import(
 class Actor(nn.Module):
     def __init__(self, params):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 32)
-        self.layer2 = nn.Linear(32, 16)
-        self.mean_layer = nn.Linear(16, params['action_dim'])
+        self.layer1 = nn.Linear(params['state_dim'], 64)
+        self.layer2 = nn.Linear(64, 64)
+        self.mean_layer = nn.Linear(64, params['action_dim'])
         
-        # Initialize weights with small values
-        nn.init.xavier_uniform_(self.layer1.weight, gain=0.01)  
-        nn.init.xavier_uniform_(self.layer2.weight, gain=0.01)  
-        
-        # Initialize output layer to output small values
-        nn.init.zeros_(self.mean_layer.weight)
-        nn.init.constant_(self.mean_layer.bias, 0.1)  # Start with small positive bias
-        
-        # Initialize biases to small values
-        nn.init.constant_(self.layer1.bias, 0.01)
-        nn.init.constant_(self.layer2.bias, 0.01)
+        # Proper initialization for approximating identity function initially
+        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
+
+        # Initialize bias to produce an output close to 1.0
+        nn.init.constant_(self.mean_layer.bias, 1.0) 
         
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
@@ -48,17 +43,17 @@ class Actor(nn.Module):
         self.min_log_noise_sigma = params['min_log_noise_sigma']
 
     def forward(self, state):
-        x = F.relu(self.layer1(state))
-        x = F.relu(self.layer2(x))
-        return F.softplus(self.mean_layer(x))
+        x = F.leaky_relu(self.layer1(state))
+        x = F.leaky_relu(self.layer2(x))
+        return F.softplus(self.mean_layer(x)) + self.min_action
 
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
             state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
             action = self.forward(state).cpu().numpy()[0]
             if not deterministic:
-                # 75% to apply noise
-                if np.random.rand() < 0.75:
+                # 70% to apply noise
+                if np.random.rand() < 0.7:
                     # Apply logarithmic space noise with the adjusted sigma
                     log_action = np.log(action)
                     log_noise = np.random.normal(0, self.log_noise_sigma, size=action.shape)
@@ -68,191 +63,361 @@ class Actor(nn.Module):
                     action = np.exp(noisy_log_action)
 
             # Ensure minimum action value and positivity
-            action = np.where(action < self.min_action, self.min_action, action)
+            action = np.maximum(action, self.min_action)
             return action
 
 class Critic(nn.Module):
     def __init__(self, params):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'] + params['action_dim'], 128)
-        self.layer2 = nn.Linear(128, 64)
-        self.layer3 = nn.Linear(64, 32)
-        self.layer4 = nn.Linear(32, 1)
-
+        # Process state first through separate network
+        self.state_layer1 = nn.Linear(params['state_dim'], 64)
+        self.state_layer2 = nn.Linear(64, 64)
+        
+        # Process action separately
+        self.action_layer = nn.Linear(params['action_dim'], 64)
+        
+        # Combine state and action processing
+        self.combined_layer1 = nn.Linear(128, 64)
+        self.combined_layer2 = nn.Linear(64, 1)
+        
+        # Orthogonal initialization for better gradient flow
+        nn.init.orthogonal_(self.state_layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.state_layer2.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.action_layer.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.combined_layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.combined_layer2.weight, gain=1.0)
+        
+        # Initialize final layer with small weights
+        nn.init.constant_(self.combined_layer2.bias, 0.0)
+    
     def forward(self, state, action):
-        x = torch.cat([state, action], 1)
-        x = F.relu(self.layer1(x))
-        x = F.relu(self.layer2(x))
-        x = F.relu(self.layer3(x))
-        return self.layer4(x)
+        # Process state separately
+        s = F.leaky_relu(self.state_layer1(state))
+        s = F.leaky_relu(self.state_layer2(s))
+        
+        # Process action separately
+        a = F.leaky_relu(self.action_layer(action))
+        
+        # Combine state and action processing
+        x = torch.cat([s, a], dim=1)
+        x = F.leaky_relu(self.combined_layer1(x))
+        return self.combined_layer2(x)
 
 def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     episode_rewards = []
     converged = False
-    best_rewards = float('-inf')
-    reward_history = []  # Track recent rewards for convergence check
-    window_size = 10  # Size of window for moving averages
-    reward_threshold = 0.01  # Minimum change in reward to be considered improvement
+    best_reward = float('-inf')
+    reward_history = []
+    convergence_threshold = 0.1  # How close to best reward we need to be (as a fraction)
+    window_size = 10  # Window size for convergence check
 
+    # Learning rate schedulers for adaptive learning
+    actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        agent.actor_optimizer, 
+        mode='max', 
+        factor=0.5, 
+        patience=5,
+        verbose=True
+    )
+    critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        agent.critic_optimizer, 
+        mode='max', 
+        factor=0.5, 
+        patience=5, 
+        verbose=True
+    )
+
+    # Initialize noise decay
+    initial_noise = agent.actor.log_noise_sigma
+    min_noise = agent.actor.min_log_noise_sigma
+    noise_decay = 0.98  # Slower decay
+
+    # Save best model callback
+    def save_best_model(episode_reward):
+        nonlocal best_reward
+        
+        if episode_reward > best_reward:
+            best_reward = episode_reward
+            
+            if save_policy:
+                os.makedirs('policy/ddpg', exist_ok=True)
+                torch.save({
+                    'actor_state_dict': agent.actor.state_dict(),
+                    'critic_state_dict': agent.critic.state_dict(),
+                    'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
+                    'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
+                }, f'policy/ddpg/trained_policy_{robot}.pth')
+                print(f"Saved better policy with reward {episode_reward:.4f}")
+                
+                # Export to ONNX
+                export_models_to_onnx(agent, robot, params)
+            return True
+        return False
+
+    # Training statistics tracking
+    stats = {
+        'critic_losses': [],
+        'actor_losses': [],
+        'rewards': [],
+        'episode_lengths': []
+    }
+    
+    # Training loop with evaluation phases
     for i, dataset in enumerate(datasets):
-        # Get the measurements and the ground truth
+        print(f"Training on dataset {i+1}/{len(datasets)}")
+        
+        # Get dataset measurements
         imu_measurements = dataset['imu']
         joint_measurements = dataset['joints']
         force_torque_measurements = dataset['ft']
         base_pose_ground_truth = dataset['base_pose_ground_truth']
-        # contact_states = dataset['contact_states']
 
-        # Reset to initial state
-        # initial_base_state = dataset['base_states'][0]
-        # initial_contact_state = dataset['contact_states'][0]
-        # initial_joint_state = dataset['joint_states'][0]
-
-        max_episodes = 250
-        max_steps = len(imu_measurements)
-        collected_steps = 0
-
+        # Set proper limits on number of episodes
+        max_episodes = 100  # Reduced episode count with better early stopping
+        max_steps = min(len(imu_measurements), 10000)  # Cap steps per episode
+        
         for episode in range(max_episodes):
+            # Initialize framework for this episode
             serow_framework = serow.Serow()
             serow_framework.initialize(f"{robot}_rl.json")
             state = serow_framework.get_state(allow_invalid=True)
 
-            # Initialize the state
-            # state.set_base_state(initial_base_state)
-            # state.set_contact_state(initial_contact_state)
-            # state.set_joint_state(initial_joint_state)
-            # serow_framework.set_state(state)
-
+            # Episode tracking variables
             episode_reward = 0.0
-            for step, (imu, joints, ft, gt) in enumerate(zip(imu_measurements, 
-                                                             joint_measurements, 
-                                                             force_torque_measurements, 
-                                                             base_pose_ground_truth)):
+            collected_steps = 0
+            train_freq = 50  # Train after every N steps
+            episode_critic_losses = []
+            episode_actor_losses = []
+            update_step_counter = 0
+            
+            # Run episode
+            for step, (imu, joints, ft, gt) in enumerate(zip(
+                imu_measurements[:max_steps], 
+                joint_measurements[:max_steps], 
+                force_torque_measurements[:max_steps], 
+                base_pose_ground_truth[:max_steps]
+            )):
+                # Run step with current policy
                 _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent)
 
-                # Accumulate the rewards
-                for reward in rewards.values():
+                # Accumulate rewards
+                step_reward = 0
+                for cf, reward in rewards.items():
                     if reward is not None:
-                        episode_reward += reward
+                        step_reward += reward
                         collected_steps += 1
-
-                # Train policy if we've collected enough steps
-                if collected_steps > 0:
-                    agent.train()
-                    collected_steps = 0
-
+                
+                episode_reward += step_reward
+                
+                # Check for early termination due to filter divergence
+                should_terminate = False
                 for cf in contacts_frame:
                     if done[cf] > 0.5:
+                        should_terminate = True
                         break
-
-                if step == max_steps - 1:
-                    print(f"Episode {episode} completed without diverging the filter with reward {episode_reward}")
-
-                if step % 5000 == 0 or step == max_steps - 1:  # Print progress every 5000 steps or at the end of the episode
-                    print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps - 1}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
-                    # Decay exploration noise scale
-                    if (step > 0):
-                        # Base decay (linear)
-                        agent.actor.log_noise_sigma = max(agent.actor.min_log_noise_sigma, agent.actor.log_noise_sigma * (1 - episode / (max_episodes * 0.5)))
-
-            # Update reward histories and check for convergence
+                
+                if should_terminate:
+                    print(f"Episode {episode} terminated early at step {step}/{max_steps} due to filter divergence")
+                    break
+                
+                # Train policy periodically, not every step
+                if collected_steps >= train_freq:
+                    critic_loss, actor_loss = agent.train()
+                    if critic_loss is not None and actor_loss is not None:
+                        episode_critic_losses.append(critic_loss)
+                        episode_actor_losses.append(actor_loss)
+                    collected_steps = 0
+                    update_step_counter += 1
+                
+                # Progress logging
+                if step % 500 == 0 or step == max_steps - 1:
+                    print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps}, " 
+                          f"Reward: {episode_reward:.2f}, Best: {best_reward:.2f}, "
+                          f"Noise: {agent.actor.log_noise_sigma:.4f}")
+            
+            # End of episode processing
             episode_rewards.append(episode_reward)
             reward_history.append(episode_reward)
             if len(reward_history) > window_size:
                 reward_history.pop(0)
-
-            if (episode_reward > best_rewards):
-                best_rewards = episode_reward
-                # Save the trained policy for each contact frame
-                if save_policy:
-                    # Create policy directory if it doesn't exist
-                    os.makedirs('policy/ddpg', exist_ok=True)
-                        
-                    torch.save({
-                        'actor_state_dict': agent.actor.state_dict(),
-                        'critic_state_dict': agent.critic.state_dict(),
-                        'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
-                        'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
-                    }, f'policy/ddpg/trained_policy_{robot}.pth')
-                    print(f"Saved policy for {robot} to 'policy/ddpg/trained_policy_{robot}.pth'")
-
-                    # Export actor model to ONNX
-                    dummy_input = torch.randn(1, params['state_dim']).to(device)
-                    torch.onnx.export(
-                        agent.actor,
-                        dummy_input,
-                        f'policy/ddpg/trained_policy_{robot}_actor.onnx',
-                        export_params=True,
-                        opset_version=11,
-                        do_constant_folding=True,
-                        input_names=['input'],
-                        output_names=['output'],
-                        dynamic_axes={'input': {0: 'batch_size'},
-                                    'output': {0: 'batch_size'}}
-                    )
-                    print(f"Saved actor model for {robot} to 'policy/ddpg/trained_policy_{robot}_actor.onnx'")
-
-                    # Export critic model to ONNX
-                    dummy_state = torch.randn(1, params['state_dim']).to(device)
-                    dummy_action = torch.randn(1, params['action_dim']).to(device)
-                    torch.onnx.export(
-                        agent.critic,
-                        (dummy_state, dummy_action),
-                        f'policy/ddpg/trained_policy_{robot}_critic.onnx',
-                        export_params=True,
-                        opset_version=11,
-                        do_constant_folding=True,
-                        input_names=['state', 'action'],
-                        output_names=['output'],
-                        dynamic_axes={'state': {0: 'batch_size'},
-                                    'action': {0: 'batch_size'},
-                                    'output': {0: 'batch_size'}}
-                    )
-                    print(f"Saved critic model for {robot} to 'policy/ddpg/trained_policy_{robot}_critic.onnx'")
-
-            print(f"Dataset {i}, Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: {best_rewards:.2f}")
-
-            # Check reward convergence
+            
+            # Update learning rates based on episode performance
+            actor_scheduler.step(episode_reward)
+            critic_scheduler.step(episode_reward)
+            
+            # Save best model if improved
+            save_best_model(episode_reward)
+            
+            # Check convergence by comparing recent rewards to best reward
             if len(reward_history) >= window_size:
                 recent_rewards = np.array(reward_history)
-                reward_std = np.std(recent_rewards)
-                reward_mean = np.mean(recent_rewards)
-                reward_cv = reward_std / (abs(reward_mean) + 1e-6)  # Coefficient of variation
-                
-                # Check if reward has converged
-                if reward_cv < reward_threshold:
-                    print(f"Reward has converged!")
+                # Calculate how close recent rewards are to best reward
+                reward_ratios = recent_rewards / (abs(best_reward) + 1e-6)  # Avoid division by zero
+                # Check if all recent rewards are within threshold of best reward
+                if np.all(reward_ratios >= (1.0 - convergence_threshold)):
+                    print(f"Training converged! Recent rewards are within {convergence_threshold*100}% of best reward {best_reward:.2f}")
                     converged = True
+                    break  # Break out of episode loop
             
-            # If agent has converged, stop training
-            if converged:
-                print(f"Training converged at episode {episode}")
-                break
-
-    # Convert episode_rewards to numpy arrays and compute a smoothed reward curve using a low pass filter
-    smoothed_episode_rewards = []
-    episode_rewards = np.array(episode_rewards)
-    smoothed_episode_reward = episode_rewards[0]
-    alpha = 0.85
-    for i in range(len(episode_rewards)):
-        smoothed_episode_reward = (1.0 - alpha) * smoothed_episode_reward + alpha * episode_rewards[i]
-        smoothed_episode_rewards.append(smoothed_episode_reward)
-
-    # Create a single figure for all rewards
-    plt.figure(figsize=(10, 6))
+            # Decay noise
+            agent.actor.log_noise_sigma = max(
+                min_noise,
+                agent.actor.log_noise_sigma * noise_decay
+            )
+            
+            # Store episode statistics
+            if episode_critic_losses:
+                stats['critic_losses'].append(np.mean(episode_critic_losses))
+            if episode_actor_losses:
+                stats['actor_losses'].append(np.mean(episode_actor_losses))
+            stats['rewards'].append(episode_reward)
+            stats['episode_lengths'].append(step)
+            
+            # Print episode summary
+            print(f"Episode {episode} completed with reward {episode_reward:.2f}")
+            if episode_critic_losses:
+                print(f"Average critic loss: {np.mean(episode_critic_losses):.4f}")
+            if episode_actor_losses:
+                print(f"Average actor loss: {np.mean(episode_actor_losses):.4f}")
+        
+        if converged:
+            break  # Break out of dataset loop
     
-    # Plot the cummulative rewards
-    plt.plot(episode_rewards, label='Episode Rewards', alpha=0.5)
-    plt.plot(smoothed_episode_rewards, label='Smoothed Rewards', linewidth=2)
-    plt.fill_between(range(len(episode_rewards)), 
-                    episode_rewards - np.std(episode_rewards), 
-                    episode_rewards + np.std(episode_rewards), 
-                    alpha=0.1)
+    # Plot training curves
+    plot_training_curves(stats, episode_rewards)
+    
+    return agent, stats
+
+def export_models_to_onnx(agent, robot, params):
+    """Export the trained models to ONNX format"""
+    os.makedirs('policy/ddpg', exist_ok=True)
+    
+    # Export actor model
+    dummy_input = torch.randn(1, params['state_dim']).to(agent.device)
+    torch.onnx.export(
+        agent.actor,
+        dummy_input,
+        f'policy/ddpg/trained_policy_{robot}_actor.onnx',
+        export_params=True,
+        opset_version=11,
+        do_constant_folding=True,
+        input_names=['input'],
+        output_names=['output'],
+        dynamic_axes={'input': {0: 'batch_size'},
+                    'output': {0: 'batch_size'}}
+    )
+    
+    # Export critic model
+    dummy_state = torch.randn(1, params['state_dim']).to(agent.device)
+    dummy_action = torch.randn(1, params['action_dim']).to(agent.device)
+    torch.onnx.export(
+        agent.critic,
+        (dummy_state, dummy_action),
+        f'policy/ddpg/trained_policy_{robot}_critic.onnx',
+        export_params=True,
+        opset_version=11,
+        do_constant_folding=True,
+        input_names=['state', 'action'],
+        output_names=['output'],
+        dynamic_axes={'state': {0: 'batch_size'},
+                    'action': {0: 'batch_size'},
+                    'output': {0: 'batch_size'}}
+    )
+
+def evaluate_policy_brief(dataset, contacts_frame, agent, robot, num_steps=1000):
+    """Perform a quick evaluation of the policy"""
+    # Get the measurements and ground truth data
+    imu_measurements = dataset['imu'][:num_steps]
+    joint_measurements = dataset['joints'][:num_steps]
+    force_torque_measurements = dataset['ft'][:num_steps]
+    base_pose_ground_truth = dataset['base_pose_ground_truth'][:num_steps]
+
+    # Initialize SEROW
+    serow_framework = serow.Serow()
+    serow_framework.initialize(f"{robot}_rl.json")
+    state = serow_framework.get_state(allow_invalid=True)
+
+    # Run evaluation
+    rewards = []
+    diverged = False
+    
+    for step, (imu, joints, ft, gt) in enumerate(zip(
+        imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth
+    )):
+        _, state, step_rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent, deterministic=True)
+        
+        # Check for divergence
+        for cf in contacts_frame:
+            if done[cf] > 0.5:
+                diverged = True
+                break
+        
+        if diverged:
+            break
+            
+        # Collect rewards
+        step_reward = 0
+        for reward in step_rewards.values():
+            if reward is not None:
+                step_reward += reward
+        rewards.append(step_reward)
+    
+    # Print brief evaluation results
+    avg_reward = np.mean(rewards) if rewards else float('-inf')
+    print(f"Evaluation: Steps completed: {len(rewards)}/{num_steps}, " 
+          f"Avg reward: {avg_reward:.4f}, Diverged: {diverged}")
+    return avg_reward, diverged
+
+def plot_training_curves(stats, episode_rewards):
+    """Plot training curves to visualize progress"""
+    plt.figure(figsize=(15, 10))
+    
+    # Plot rewards
+    plt.subplot(2, 2, 1)
+    plt.plot(episode_rewards, label='Episode Rewards', alpha=0.7)
+    
+    # Apply smoothing
+    window_size = min(len(episode_rewards) // 5, 10)
+    if window_size > 1:
+        smoothed = np.convolve(episode_rewards, np.ones(window_size)/window_size, mode='valid')
+        plt.plot(np.arange(window_size-1, len(episode_rewards)), smoothed, 'r-', linewidth=2, label='Smoothed')
+    
     plt.xlabel('Episode')
-    plt.ylabel('Reward')
-    plt.title('Episode Rewards for All Contact Frames')
+    plt.ylabel('Total Reward')
+    plt.title('Training Progress')
     plt.grid(True)
     plt.legend()
+    
+    # Plot losses if available
+    if stats['critic_losses']:
+        plt.subplot(2, 2, 2)
+        plt.plot(stats['critic_losses'], label='Critic Loss')
+        plt.xlabel('Training Updates')
+        plt.ylabel('Loss')
+        plt.title('Critic Loss')
+        plt.grid(True)
+        plt.legend()
+    
+    if stats['actor_losses']:
+        plt.subplot(2, 2, 3)
+        plt.plot(stats['actor_losses'], label='Actor Loss')
+        plt.xlabel('Training Updates')
+        plt.ylabel('Loss')
+        plt.title('Actor Loss')
+        plt.grid(True)
+        plt.legend()
+    
+    if stats['episode_lengths']:
+        plt.subplot(2, 2, 4)
+        plt.plot(stats['episode_lengths'], label='Episode Length')
+        plt.xlabel('Episode')
+        plt.ylabel('Steps')
+        plt.title('Episode Length')
+        plt.grid(True)
+        plt.legend()
+    
     plt.tight_layout()
+    plt.savefig(f'policy/ddpg/training_curves.png')
     plt.show()
 
 def evaluate_policy(dataset, contacts_frame, agent, robot):
@@ -420,13 +585,13 @@ if __name__ == "__main__":
         'max_action': None,
         'min_action': min_action,
         'gamma': 0.99,
-        'tau': 0.01,
-        'batch_size': 128,  
-        'actor_lr': 5e-4, 
-        'critic_lr': 1e-4,
-        'log_noise_sigma': 2.0,
-        'min_log_noise_sigma': 0.02,
-        'buffer_size': 1000000,
+        'tau': 0.005,
+        'batch_size': 512,  # Increased for more stable gradients
+        'actor_lr': 1e-4, 
+        'critic_lr': 2e-4,  # Reduced to be closer to actor learning rate
+        'log_noise_sigma': 0.5,  # Reduced initial exploration noise
+        'min_log_noise_sigma': 0.01,  # Reduced minimum noise
+        'buffer_size': 200000,  # Reduced buffer size
         'max_state_value': max_state_value,
         'min_state_value': min_state_value
     }

@@ -1081,30 +1081,41 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = 
                 # Check if innovation is too large or if covariance is not positive definite
                 nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
                 if nis > 5.0 or nis <= 0.0: 
-                    # filter diverged
+                    # Filter diverged
                     done[cf] = 1.0
-                    rewards[cf] = -500000 # Punish the agent for diverging the filter
+                    rewards[cf] = -1.0  # Divergence penalty
                 else:                
-                    contact_reward = -nis
-                    # print(f"Contact reward: {contact_reward}")
-                    rewards[cf] = contact_reward
+                    # Main reward based on innovation quality (higher is better)
+                    # Transform NIS to 0-1 range where 1 is best (small innovation)
+                    innovation_reward = np.exp(-0.1 * nis)  # Decay factor controls sensitivity
+                    rewards[cf] = innovation_reward
+                    
                     if USE_GROUND_TRUTH:
-                        position_reward = -10.0 * np.linalg.norm(post_state.get_base_position() - gt.position)
-                        # orientation_reward = -50.0 *np.linalg.norm(post_state.get_base_orientation() - gt.orientation)
-                        orientation_reward = -np.linalg.norm(
-                            logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * quaternion_to_rotation_matrix(post_state.get_base_orientation())))
-                        # print(f"Orientation reward: {orientation_reward}")
-                        # print(f"Position reward: {position_reward}")
-                        rewards[cf] += position_reward + orientation_reward 
-                    # Add a step reward for not diverging the filter
-                    rewards[cf] += 1.0 
-                
+                        position_error = np.linalg.norm(post_state.get_base_position() - gt.position)
+                         # Convert position error to 0-1 reward (higher is better)
+                        position_reward = np.exp(-position_error)
+                        rewards[cf] = 0.7 * rewards[cf] + 0.3 * position_reward  
+                        
+                        orientation_error = np.linalg.norm(
+                            logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
+                                 quaternion_to_rotation_matrix(post_state.get_base_orientation())))
+                        # Convert orientation error to 0-1 reward (higher is better)
+                        orientation_reward = np.exp(-orientation_error) 
+                        rewards[cf] = 0.8 * rewards[cf] + 0.2 * orientation_reward  
+
+                    # Scale to reasonable range (-0.5 to + 0.5)
+                    rewards[cf] = rewards[cf] - 0.5
+
                 if agent is not None:
                     if agent.name == "PPO":
                         agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
                     else:
                         agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf])
-    
+        
+        if done[cf] == 1.0:
+            print(f"Diverged for {cf}")
+            break
+
     serow_framework.base_estimator_finish_update(imu, kin)
     state = serow_framework.get_state(allow_invalid=True)
     return imu.timestamp, state, rewards, done

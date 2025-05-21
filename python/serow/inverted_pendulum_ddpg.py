@@ -132,6 +132,8 @@ class InvertedPendulum:
         torque_cost = 0.001 * action**2
         reward = float(np.cos(theta)) - float(angledot_cost) - float(torque_cost)
         done = 1.0 if (abs(theta_dot) > self.max_angular_vel) else 0.0
+        if done:
+            reward -= 20  # Stronger penalty for falling
         return self.state, reward, done
 
 # Unit tests for DDPG with Inverted Pendulum
@@ -152,12 +154,12 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             'max_action': self.max_action,
             'min_action': self.min_action,
             'gamma': 0.99,
-            'tau': 0.001,
-            'batch_size': 64,  
-            'actor_lr': 3e-4, 
-            'critic_lr': 3e-4,
+            'tau': 0.01,
+            'batch_size': 128,
+            'actor_lr': 1e-4, 
+            'critic_lr': 1e-4,
             'noise_scale': 0.5,
-            'noise_decay': 0.995,
+            'noise_decay': 0.9995,
             'buffer_size': 1000000,
             'max_state_value': 1e8,
             'min_state_value': -1e8,
@@ -193,11 +195,11 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         
         # Use np.allclose for floating-point comparisons with a small tolerance
         state_flat = state.flatten()
-        self.assertTrue(np.allclose(stored[0].cpu().numpy(), state_flat, rtol=1e-5, atol=1e-5))
-        self.assertTrue(np.allclose(stored[1].cpu().numpy(), action.flatten(), rtol=1e-5, atol=1e-5))
-        self.assertTrue(np.allclose(stored[2].item(), reward, rtol=1e-5, atol=1e-5))
-        self.assertTrue(np.allclose(stored[3].cpu().numpy(), next_state.flatten(), rtol=1e-5, atol=1e-5))
-        self.assertEqual(stored[4].item(), done)
+        self.assertTrue(np.allclose(stored[0], state_flat.flatten(), rtol=1e-5, atol=1e-5))
+        self.assertTrue(np.allclose(stored[1], action, rtol=1e-5, atol=1e-5))
+        self.assertTrue(np.allclose(stored[2], reward, rtol=1e-5, atol=1e-5))
+        self.assertTrue(np.allclose(stored[3], next_state.flatten(), rtol=1e-5, atol=1e-5))
+        self.assertEqual(stored[4], done)
 
     def test_train(self):
         # Fill buffer with some transitions
@@ -221,9 +223,9 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         max_episodes = 1000
         reward_history = []
         window_size = 10
-        reward_threshold = 0.01
+        convergence_threshold = 0.1  # How close to best reward we need to be (as a fraction)
 
-        update_steps = 64  # Train after collecting this many timesteps
+        update_steps = 1  # Train after collecting this many timesteps
 
         episode_rewards = []
         best_reward = float('-inf')
@@ -262,23 +264,24 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
                 best_reward = episode_reward
             print(f"Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
 
-            episode_rewards.append(episode_reward)
             # Update reward history
             reward_history.append(episode_reward)
             if len(reward_history) > window_size:
                 reward_history.pop(0)
                 
-            # Check reward convergence
+            # Check convergence by comparing recent rewards to best reward
             if len(reward_history) >= window_size:
                 recent_rewards = np.array(reward_history)
-                reward_std = np.std(recent_rewards)
-                reward_mean = np.mean(recent_rewards)
-                reward_cv = reward_std / (abs(reward_mean) + 1e-6)  # Coefficient of variation
-                
-                # Check if reward has converged
-                if reward_cv < reward_threshold:
-                    print(f"Reward has converged!")
+                # Calculate how close recent rewards are to best reward
+                reward_ratios = recent_rewards / (abs(best_reward) + 1e-6)  # Avoid division by zero
+                # Check if all recent rewards are within threshold of best reward
+                if np.all(reward_ratios >= (1.0 - convergence_threshold)):
+                    print(f"Training converged! Recent rewards are within {convergence_threshold*100}% of best reward {best_reward:.2f}")
                     break
+
+            if episode % 10 == 0:
+                avg_reward = np.mean(episode_rewards[-10:])
+                print(f"Episode {episode}, Avg Reward (last 10): {avg_reward:.2f}")
         
         # Convert episode_rewards to numpy arrays and compute a smoothed reward curve using a low pass filter
         episode_rewards = np.array(episode_rewards)
@@ -293,6 +296,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         plt.figure(figsize=(15, 5))
         plt.plot(episode_rewards, label='Episode Rewards')
         plt.plot(smoothed_episode_rewards, label='Smoothed Rewards')
+        plt.axhline(y=best_reward, color='r', linestyle='--', label='Best Reward')
         plt.xlabel('Episode')
         plt.ylabel('Reward')
         plt.title('Reward Over Time')
