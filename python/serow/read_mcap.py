@@ -1078,19 +1078,17 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = 
             covariance = np.zeros((3, 3))
             success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
             if success:
-                # Check if innovation is too large or if covariance is not positive definite
-                nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                # print(f"[Reward Debug] cf={cf} NIS={nis:.4f}")
-                
                 # Scale factors for reward components
-                INNOVATION_SCALE = 10.0  # Increase impact of innovation significantly
-                POSITION_SCALE = 1.0      # Keep position error as is
-                ORIENTATION_SCALE = 1000.0  # Increase impact of orientation significantly
-                
+                INNOVATION_SCALE = 10.0  
+                POSITION_SCALE = 5.0      
+                ORIENTATION_SCALE = 5000.0  
+
+               # Check if innovation is too large or if covariance is not positive definite
+                nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
                 if nis > 5.0 or nis <= 0.0: 
                     # Filter diverged
                     done[cf] = 1.0
-                    rewards[cf] = -1.0  # Divergence penalty
+                    rewards[cf] = -50000.0  # Divergence penalty
                     # print(f"[Reward Debug] cf={cf} Diverged: reward={rewards[cf]}")
                 else:                
                     # Main reward based on innovation quality (higher is better)
