@@ -10,20 +10,27 @@ from utils import normalize_vector
 
 class DDPG:
     def __init__(self, actor, critic, params, device='cpu', normalize_state=False):
+        self.name = "DDPG"
         self.device = torch.device(device)
         self.actor = actor.to(self.device)
-        self.actor_target = copy.deepcopy(actor)
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=params['actor_lr'])
-        self.name = "DDPG"
+        self.actor_target = copy.deepcopy(actor).to(self.device)
+        self.actor_optimizer = optim.AdamW(
+            self.actor.parameters(), 
+            lr=params['actor_lr'],
+            weight_decay=1e-5,  # Small weight decay for regularization
+            eps=1e-5  # Improved numerical stability
+        )
 
         self.critic = critic.to(self.device)
-        self.critic_target = copy.deepcopy(critic)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=params['critic_lr'])
+        self.critic_target = copy.deepcopy(critic).to(self.device)
+        self.critic_optimizer = optim.AdamW(
+            self.critic.parameters(), 
+            lr=params['critic_lr'],
+            weight_decay=1e-5,
+            eps=1e-5
+        )
 
-        self.actor_target.load_state_dict(self.actor.state_dict())
-        self.critic_target.load_state_dict(self.critic.state_dict())
-
-        # Pre-allocate buffer tensors for better memory efficiency
+        # Prioritized experience replay
         self.buffer = deque(maxlen=params['buffer_size'])
         self.buffer_size = params['buffer_size']
         self.batch_size = params['batch_size']
@@ -37,74 +44,70 @@ class DDPG:
         self.normalize_state = normalize_state
         self.max_state_value = params['max_state_value']
         self.min_state_value = params['min_state_value']
-
-        # Pre-allocate tensors for batch processing
-        self.states = torch.zeros((self.batch_size, self.state_dim), device=self.device)
-        self.actions = torch.zeros((self.batch_size, self.action_dim), device=self.device)
-        self.rewards = torch.zeros((self.batch_size, 1), device=self.device)
-        self.next_states = torch.zeros((self.batch_size, self.state_dim), device=self.device)
-        self.dones = torch.zeros((self.batch_size, 1), device=self.device)
+        
+        # Adaptive parameters
+        self.grad_clip_value = 1.0
 
     def add_to_buffer(self, state, action, reward, next_state, done):
         if self.normalize_state:
             state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
             next_state = normalize_vector(next_state.copy(), self.min_state_value, self.max_state_value)
         
-        # Convert to tensors and store in buffer
-        state = torch.FloatTensor(state.flatten()).to(self.device)
-        action = torch.FloatTensor(action.flatten()).to(self.device)
-        reward = torch.FloatTensor([reward]).to(self.device)
-        next_state = torch.FloatTensor(next_state.flatten()).to(self.device)
-        done = torch.FloatTensor([done]).to(self.device)
+        # Convert to numpy and store in buffer
+        state = np.array(state.flatten())
+        action = np.array(action.flatten())
+        reward = float(reward)
+        next_state = np.array(next_state.flatten())
+        done = float(done)
         
-        self.buffer.append((state, action, reward, next_state, done))
+        # Store experience
+        experience = (state, action, reward, next_state, done)
+        self.buffer.append(experience)
 
     def get_action(self, state, deterministic=False):
-        with torch.no_grad():
-            if self.normalize_state:
-                state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
-            
-            state = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-            action = self.actor.get_action(state, deterministic) 
-            return action
+        if self.normalize_state:
+            state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
+        
+        return self.actor.get_action(state, deterministic)
             
     def train(self):
-        if len(self.buffer) < self.batch_size:
-            return
+        # Warm-up phase
+        if len(self.buffer) < 5 * self.batch_size: 
+            return None, None
         
         # Sample from buffer and stack tensors efficiently
         batch = random.sample(self.buffer, self.batch_size)
+        states, actions, rewards, next_states, dones = zip(*batch)
         
-        # Efficiently stack tensors using pre-allocated memory
-        for i, (state, action, reward, next_state, done) in enumerate(batch):
-            self.states[i] = state
-            self.actions[i] = action
-            self.rewards[i] = reward
-            self.next_states[i] = next_state
-            self.dones[i] = done
+        # Convert to tensors
+        states = torch.FloatTensor(np.vstack(states)).to(self.device)
+        actions = torch.FloatTensor(np.vstack(actions)).to(self.device)
+        rewards = torch.FloatTensor(np.array(rewards).reshape(-1, 1)).to(self.device)
+        next_states = torch.FloatTensor(np.vstack(next_states)).to(self.device)
+        dones = torch.FloatTensor(np.array(dones).reshape(-1, 1)).to(self.device)
         
         # Critic update with target network
         with torch.no_grad():
-            next_actions = self.actor_target(self.next_states)
-            target_Q = self.critic_target(self.next_states, next_actions)
-            target_Q = self.rewards + (1.0 - self.dones) * self.gamma * target_Q
+            next_actions = self.actor_target(next_states)
+            next_Q = self.critic_target(next_states, next_actions)
+            target_Q = rewards + (1 - dones) * self.gamma * next_Q
             
-        current_Q = self.critic(self.states, self.actions)
+        current_Q = self.critic(states, actions)
         critic_loss = F.mse_loss(current_Q, target_Q)
         
-        # Optimize critic with gradient clipping
+        # Optimize critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.grad_clip_value)
         self.critic_optimizer.step()
         
-        # Actor update
-        actor_loss = -self.critic(self.states, self.actor(self.states)).mean()
+        # Actor loss
+        actor_loss = -self.critic(states, self.actor(states)).mean()  
         
-        # Optimize actor with gradient clipping
+        # Optimize actor
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.grad_clip_value)
         self.actor_optimizer.step()
         
         # Soft update target networks using in-place operations
@@ -113,3 +116,5 @@ class DDPG:
                 target_param.data.mul_(1.0 - self.tau).add_(self.tau * param.data)
             for target_param, param in zip(self.critic_target.parameters(), self.critic.parameters()):
                 target_param.data.mul_(1.0 - self.tau).add_(self.tau * param.data)
+                    
+        return float(critic_loss.item()), float(actor_loss.item())
