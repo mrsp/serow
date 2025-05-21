@@ -64,7 +64,7 @@ public:
     /// @return the robot name
     std::string getRobotName() const;
 
-    std::vector<std::vector<double>> getTimestamps() const;
+    std::vector<double> getTimestamps() const;
 
 private: 
   
@@ -111,7 +111,7 @@ private:
     ///@brief Joint states (encoder velocities)
     std::vector<std::vector<double>> jointVelocities_;
     ///@brief Logged timestamps 
-    std::vector<std::vector<double>> timestamps_;
+    std::vector<double> timestamps_;
     
     /// @brief Foot frame names
     std::vector<std::string> foot_frames_;

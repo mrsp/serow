@@ -336,8 +336,8 @@ double BayesOptimizer::evaluateSample(const vectord &x) {
         throw std::runtime_error("Failed to initialize Serow with config: " + temp_config);
     }
 
-    for (int i = 0; i < timestamps_.size() - 1 ; ++i) {
-        double timestamp = timestamps_[i][0];
+    for (int i = 0; i < timestamps_.size() * dataset_percentage - 1 ; ++i) {
+        double timestamp = timestamps_[i];
         std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
         force_torque.insert(
             { foot_names_[0],

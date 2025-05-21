@@ -1,8 +1,8 @@
 {
   "Experiment": {
     "robot_name": "go2",
-    "experiment_name": "mujoco_test/mujoco_data",
-    "experiment_type": "flat_gamma"
+    "experiment_name": "mujoco_test",
+    "experiment_type": "mujoco_data/flat_gamma"
   },
   "Paths": {
     "base_path": "evaluation/{experiment_name}",

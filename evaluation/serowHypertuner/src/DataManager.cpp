@@ -26,7 +26,7 @@ void DataManager::loadData() {
   forceData_.RL = readHDF5(DATA_FILE_, "feet_force/RL");
   forceData_.RR = readHDF5(DATA_FILE_, "feet_force/RR");
 
-  timestamps_ = readHDF5(DATA_FILE_, "timestamps");
+  timestamps_ = readHDF5_1D(DATA_FILE_, "timestamps");
 }
 
 void DataManager::loadConfig() {
@@ -71,28 +71,29 @@ std::string DataManager::getSerowPath() const {
 }
 
 std::vector<double> DataManager::readHDF5_1D(const std::string& filename, const std::string& datasetName) {
-  H5::H5File file(filename, H5F_ACC_RDONLY);
+    H5::H5File file(filename, H5F_ACC_RDONLY);
+    H5::DataSet dataset = file.openDataSet(datasetName);
+    H5::DataSpace dataspace = dataset.getSpace();
 
-  if (datasetName.empty()) {
-      throw std::invalid_argument("Dataset name must be non-empty.");
-  }
+    int ndims = dataspace.getSimpleExtentNdims();
+    hsize_t dims[2] = {0, 0}; // Safe for both 1D and 2D
+    dataspace.getSimpleExtentDims(dims);
 
-  H5::DataSet dataset = file.openDataSet(datasetName);
-  H5::DataSpace dataspace = dataset.getSpace();
+    timestamps_.clear();
 
-  // Get number of dimensions and check
-  int ndims = dataspace.getSimpleExtentNdims();
-  if (ndims != 1) {
-      throw std::runtime_error("Dataset " + datasetName + " is not 1D.");
-  }
-
-  hsize_t dim;
-  dataspace.getSimpleExtentDims(&dim);
-
-  std::vector<double> data(dim);
-  dataset.read(data.data(), H5::PredType::NATIVE_DOUBLE);
-
-  return data;
+    if (ndims == 1) {
+        // 1D vector
+        timestamps_.resize(dims[0]);
+        dataset.read(timestamps_.data(), H5::PredType::NATIVE_DOUBLE);
+    } else if (ndims == 2 && dims[1] == 1) {
+        // 2D column vector
+        std::vector<double> buffer(dims[0]); // dims[1] == 1, so flat
+        dataset.read(buffer.data(), H5::PredType::NATIVE_DOUBLE);
+        timestamps_ = std::move(buffer);
+    } else {
+        throw std::runtime_error("Unsupported timestamp shape for " + datasetName);
+    }
+    return timestamps_;
 }
 
 std::vector<std::vector<double>> DataManager::readHDF5(const std::string& filename,
@@ -155,6 +156,6 @@ std::string DataManager::getRobotName() const {
     return robotName;
 }
 
-std::vector<std::vector<double>> DataManager::getTimestamps() const{
+std::vector<double> DataManager::getTimestamps() const{
   return timestamps_;
 }

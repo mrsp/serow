@@ -27,7 +27,7 @@ public:
 
   /// @brief Saves the best configuration to a file
   void saveBestConfig(vectord result);
-  
+
 private:
   /// @brief Data manager object reference
   DataManager& data_;
@@ -88,7 +88,7 @@ private:
   std::vector<std::vector<double>> gt_orientation_;
 
   /// @brief Data timestamps
-  std::vector<std::vector<double>> timestamps_;
+  std::vector<double> timestamps_;
 
   /// @brief Feet force data
   DataManager::ForceData force_measurements_;
@@ -121,6 +121,6 @@ private:
   json temp_json;
 
   /// @brief Optimization dataset percentage. e.g dataset_size * datset_percentage = total data to be used for optimization 
-  int dataset_percentage = 0.6; // %
+  double dataset_percentage = 1.0; // %
 
 };

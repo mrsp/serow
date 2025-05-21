@@ -9,16 +9,16 @@
   },
   "model_path": "anymal_b.urdf",
   "g": 9.81,
-  "joint_rate": 500.0,
+  "joint_rate": 400.0,
   "estimate_joint_velocity": true,
-  "joint_cutoff_frequency": 15.0,
+  "joint_cutoff_frequency": 100.0,
   "joint_position_variance": 0.001,
-  "angular_momentum_cutoff_frequency": 5.0,
+  "angular_momentum_cutoff_frequency": 20.0,
   "tau_0": 0.1,
-  "tau_1": 0.0,
-  "imu_rate": 500.0,
+  "tau_1": 0.001,
+  "imu_rate": 400.0,
   "R_base_to_gyro": [
-    1.0,
+    -1.0,
     0.0,
     0.0,
     0.0,
@@ -26,10 +26,10 @@
     0.0,
     0.0,
     0.0,
-    1.0
+    -1.0
   ],
   "R_base_to_acc": [
-    1.0,
+    -1.0,
     0.0,
     0.0,
     0.0,
@@ -37,22 +37,22 @@
     0.0,
     0.0,
     0.0,
-    1.0
+    -1.0
   ],
-  "calibrate_initial_imu_bias": true,
-  "max_imu_calibration_cycles": 1000,
+  "calibrate_initial_imu_bias": false,
+  "max_imu_calibration_cycles": 500,
   "bias_gyro": [
-    0.0,
-    0.0,
-    0.0
+    -0.000881133,
+    0.000869229,
+    -3.39748e-06
   ],
   "bias_acc": [
-    0.0,
-    0.0,
-    0.0
+    -0.0700485,
+    0.0338264,
+    -0.00167457
   ],
-  "gyro_cutoff_frequency": 5.0,
-  "force_torque_rate": 500.0,
+  "gyro_cutoff_frequency": 69.0,
+  "force_torque_rate": 400.0,
   "R_foot_to_force": {
     "0": [
       1.0,
@@ -100,11 +100,11 @@
     ]
   },
   "R_foot_to_torque": null,
-  "attitude_estimator_proportional_gain": 0.1,
-  "attitude_estimator_integral_gain": 0.0,
+  "attitude_estimator_proportional_gain": 0.000244948,
+  "attitude_estimator_integral_gain": 0.000290386,
   "estimate_contact_status": true,
-  "high_threshold": 4.0,
-  "low_threshold": 2.0,
+  "high_threshold": 71.38,
+  "low_threshold": 0.00319203,
   "median_window": 13,
   "outlier_detection": true,
   "convergence_cycles": 100,
@@ -223,9 +223,8 @@
     1.0
   ],
   "T_base_to_odom": null,
-  "enable_terrain_estimation": true,
-  "terrain_estimator": "naive",
+  "enable_terrain_estimation": false,
+  "terrain_estimator": "fast",
   "minimum_terrain_height_variance": 1e-3,
-  "T_base_to_ground_truth": null,
   "log_dir": "/tmp/"
 }
