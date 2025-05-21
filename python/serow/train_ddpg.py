@@ -116,15 +116,13 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         agent.actor_optimizer, 
         mode='max', 
         factor=0.5, 
-        patience=5,
-        verbose=True
+        patience=5
     )
     critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         agent.critic_optimizer, 
         mode='max', 
         factor=0.5, 
-        patience=5, 
-        verbose=True
+        patience=5
     )
 
     # Initialize noise decay
@@ -619,7 +617,7 @@ if __name__ == "__main__":
         # Train the policy
         train_policy(train_datasets, contacts_frame, agent, robot, save_policy=True)
         # Load the best policy
-        checkpoint = torch.load(f'policy/ddpg/trained_policy_{robot}.pth')
+        checkpoint = torch.load(f'policy/ddpg/trained_policy_{robot}.pth', weights_only=True)
         actor = Actor(params).to(device)
         critic = Critic(params).to(device)
         best_policy = DDPG(actor, critic, params, device=device)
