@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from serow import ContactEKF, BaseState
-from serow import ImuMeasurement, KinematicMeasurement, OdometryMeasurement
+from serow import(
+    ContactEKF,
+    BaseState,
+    ImuMeasurement,
+    KinematicMeasurement,
+    OdometryMeasurement
+)
 
 def main():
     # Initialize the EKF
@@ -111,7 +116,7 @@ def main():
         
         # Set action
         for cf in contacts_frame:
-            ekf.set_action(cf, np.array([1.0, 1.0]))
+            ekf.set_action(cf, np.array([1.0]))
 
         # Predict step
         ekf.predict(state, imu, kin)
@@ -122,7 +127,7 @@ def main():
         for cf in contacts_frame:
             innovation = np.zeros(3)
             covariance = np.zeros((3, 3))
-            success, innovation, covariance = ekf.get_contact_position_innovation(cf)
+            success, innovation, covariance, _, _ = ekf.get_contact_position_innovation(cf)
             if success:
                 print(f"Contact frame: {cf}")
                 print(f"Innovation: {innovation}")
