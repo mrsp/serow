@@ -1013,7 +1013,7 @@ def read_force_torque_measurements(file_path: str):
         print(f"Error reading MCAP file: {str(e)}")
         sys.exit(1)
 
-def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = False):
+def run_step(imu, joint, ft, gt, serow_framework, state, agent = None, contact_state = None, next_contact_state = None, deterministic = False, baseline = False):
     contact_frames = state.get_contacts_frame()
     
     # Run the filter
@@ -1030,6 +1030,7 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = 
     values = {}
     x = {}
     next_x = {}
+
     for cf in contact_frames:
         actions[cf] = np.ones(1)
         log_probs[cf] = None
@@ -1040,85 +1041,90 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent, deterministic = 
         done[cf] = 0.0
 
     for cf in contact_frames:
-        # Compute the action
-        prior_state = serow_framework.get_state(allow_invalid=True)
-        if kin.contacts_status[cf] and prior_state.get_contact_position(cf) is not None:
-            R_base = quaternion_to_rotation_matrix(prior_state.get_base_orientation()).transpose()
-            local_pos = R_base @ (prior_state.get_base_position() - prior_state.get_contact_position(cf))
-            x[cf] = np.concatenate((local_pos, np.array([kin.contacts_probability[cf]])), axis=0)
-
-            if agent is not None:
-                if agent.name == "PPO":
-                    actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=deterministic)
-                    values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
-                else:
-                    actions[cf] = agent.get_action(x[cf], deterministic=deterministic)
-
-                if (deterministic):
-                    print(f"Action for {cf}: {actions[cf]}")
-            else:
-                log_probs[cf] = None
-                values[cf] = None
-
-        # Set the action
-        serow_framework.set_action(cf, actions[cf])
-
-        # Run the update step with the contact position
-        serow_framework.base_estimator_update_with_contact_position(cf, kin)
-
-        # Compute the reward
-        post_state = serow_framework.get_state(allow_invalid=True)
-        if (x[cf] is not None and post_state.get_contact_position(cf) is not None):
-            R_base = quaternion_to_rotation_matrix(post_state.get_base_orientation()).transpose()
-            local_pos = R_base @ (post_state.get_base_position() - post_state.get_contact_position(cf))
-            next_x[cf] = np.concatenate((local_pos, np.array([kin.contacts_probability[cf]])), axis=0)
-
-            success = False
-            innovation = np.zeros(3)
-            covariance = np.zeros((3, 3))
-            success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-            if success:
-                # Scale factors for reward components
-                INNOVATION_SCALE = 10.0  
-                POSITION_SCALE = 5.0      
-                ORIENTATION_SCALE = 5000.0  
-
-               # Check if innovation is too large or if covariance is not positive definite
-                nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                if nis > 5.0 or nis <= 0.0: 
-                    # Filter diverged
-                    done[cf] = 1.0
-                    rewards[cf] = -50000.0  # Divergence penalty
-                    # print(f"[Reward Debug] cf={cf} Diverged: reward={rewards[cf]}")
-                else:                
-                    # Main reward based on innovation quality (higher is better)
-                    innovation_reward = -INNOVATION_SCALE * nis
-                    # print(f"[Reward Debug] cf={cf} innovation_reward={innovation_reward}")
-                    rewards[cf] = innovation_reward
-                    
-                    if USE_GROUND_TRUTH:
-                        position_error = np.linalg.norm(post_state.get_base_position() - gt.position)
-                        position_reward = -POSITION_SCALE * position_error
-                        # print(f"[Reward Debug] cf={cf} position_error={position_error} position_reward={position_reward}")
-                        rewards[cf] += position_reward  
-                        
-                        orientation_error = np.linalg.norm(
-                            logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-                                 quaternion_to_rotation_matrix(post_state.get_base_orientation())))
-                        orientation_reward = -ORIENTATION_SCALE * orientation_error 
-                        # print(f"[Reward Debug] cf={cf} orientation_error={orientation_error} orientation_reward={orientation_reward}")
-                        rewards[cf] += orientation_reward  
-                    # print(f"[Reward Debug] cf={cf} final_reward={rewards[cf]}")
+        if agent is not None:
+            # Compute the action
+            prior_state = serow_framework.get_state(allow_invalid=True)
+            if contact_state.contacts_status[cf] and prior_state.get_contact_position(cf) is not None:
+                R_base = quaternion_to_rotation_matrix(prior_state.get_base_orientation()).transpose()
+                local_pos = R_base @ (prior_state.get_base_position() - prior_state.get_contact_position(cf))
+                x[cf] = np.concatenate((local_pos, np.array([contact_state.contacts_probability[cf]])), axis=0)
 
                 if agent is not None:
                     if agent.name == "PPO":
-                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
+                        actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=deterministic)
+                        values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
                     else:
-                        agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf])
-        
-        if done[cf] == 1.0:
-            print(f"Diverged for {cf}")
-            break
+                        actions[cf] = agent.get_action(x[cf], deterministic=deterministic)
+
+                    if (deterministic):
+                        print(f"Action for {cf}: {actions[cf]}")
+                else:
+                    log_probs[cf] = None
+                    values[cf] = None
+
+            # Set the action
+            if not baseline:
+                serow_framework.set_action(cf, actions[cf])
+            else:
+                actions[cf] = np.ones(agent.action_dim)
+    
+        # Run the update step with the contact position
+        serow_framework.base_estimator_update_with_contact_position(cf, kin)
+
+        if agent is not None:
+            # Compute the reward
+            post_state = serow_framework.get_state(allow_invalid=True)
+            if (x[cf] is not None and post_state.get_contact_position(cf) is not None):
+                R_base = quaternion_to_rotation_matrix(post_state.get_base_orientation()).transpose()
+                local_pos = R_base @ (post_state.get_base_position() - post_state.get_contact_position(cf))
+                next_x[cf] = np.concatenate((local_pos, np.array([next_contact_state.contacts_probability[cf]])), axis=0)
+
+                success = False
+                innovation = np.zeros(3)
+                covariance = np.zeros((3, 3))
+                success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+                if success:
+                    # Scale factors for reward components
+                    INNOVATION_SCALE = 10.0  
+                    POSITION_SCALE = 5.0      
+                    ORIENTATION_SCALE = 5000.0  
+
+                # Check if innovation is too large or if covariance is not positive definite
+                    nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
+                    if nis > 5.0 or nis <= 0.0: 
+                        # Filter diverged
+                        done[cf] = 1.0
+                        rewards[cf] = -50000.0  # Divergence penalty
+                        # print(f"[Reward Debug] cf={cf} Diverged: reward={rewards[cf]}")
+                    else:                
+                        # Main reward based on innovation quality (higher is better)
+                        innovation_reward = -INNOVATION_SCALE * nis
+                        # print(f"[Reward Debug] cf={cf} innovation_reward={innovation_reward}")
+                        rewards[cf] = innovation_reward
+                        
+                        if USE_GROUND_TRUTH:
+                            position_error = np.linalg.norm(post_state.get_base_position() - gt.position)
+                            position_reward = -POSITION_SCALE * position_error
+                            # print(f"[Reward Debug] cf={cf} position_error={position_error} position_reward={position_reward}")
+                            rewards[cf] += position_reward  
+                            
+                            orientation_error = np.linalg.norm(
+                                logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
+                                    quaternion_to_rotation_matrix(post_state.get_base_orientation())))
+                            orientation_reward = -ORIENTATION_SCALE * orientation_error 
+                            # print(f"[Reward Debug] cf={cf} orientation_error={orientation_error} orientation_reward={orientation_reward}")
+                            rewards[cf] += orientation_reward  
+                        # print(f"[Reward Debug] cf={cf} final_reward={rewards[cf]}")
+
+                    if agent is not None:
+                        if agent.name == "PPO":
+                            agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
+                        else:
+                            agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf])
+            
+            if done[cf] == 1.0:
+                print(f"Diverged for {cf}")
+                break
 
     serow_framework.base_estimator_finish_update(imu, kin)
     state = serow_framework.get_state(allow_invalid=True)
@@ -1129,8 +1135,9 @@ def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_tim
     start_time = max(base_timestamps[0], gt_timestamps[0])
     end_time = min(base_timestamps[-1], gt_timestamps[-1])
 
-    # Create a high-resolution common time grid
-    common_timestamps = np.linspace(start_time, end_time, 1000)
+    # Create a common time grid with actual data length
+    num_points = min(len(base_timestamps), len(gt_timestamps))
+    common_timestamps = np.linspace(start_time, end_time, num_points)
     
     # Interpolate base position
     base_position_interp = np.zeros((len(common_timestamps), 3))
@@ -1148,6 +1155,12 @@ def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_tim
     for i in range(4):  # w, x, y, z
         base_orientation_interp[:, i] = np.interp(common_timestamps, base_timestamps, base_orientation[:, i])
         gt_orientation_interp[:, i] = np.interp(common_timestamps, gt_timestamps, gt_orientation[:, i])
+
+    # Exclude entries that are before the first common timestamp
+    base_position_interp = base_position_interp[common_timestamps >= start_time]
+    base_orientation_interp = base_orientation_interp[common_timestamps >= start_time]
+    gt_position_interp = gt_position_interp[common_timestamps >= start_time]
+    gt_orientation_interp = gt_orientation_interp[common_timestamps >= start_time]
 
     if align:
         # Compute the initial rigid body transformation from the first timestamp
@@ -1170,10 +1183,12 @@ def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_tim
         print("Not spatially aligning data")
 
     return common_timestamps, base_position_interp, base_orientation_interp, gt_position_interp, gt_orientation_interp
+
 def filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align = False):
     base_positions = []
     base_orientations = []
     base_timestamps = []
+    contact_states = []
     cumulative_rewards = {}
     for cf in state.get_contacts_frame():
         cumulative_rewards[cf] = []
@@ -1182,10 +1197,13 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
         timestamp, state, rewards, _ = run_step(imu, joint, ft, gt, serow_framework, state, None, deterministic=True)
         base_timestamps.append(timestamp)
         base_positions.append(state.get_base_position())
+        contact_states.append(state.get_contact_state())
         base_orientations.append(state.get_base_orientation()) 
         for cf in rewards:
             if rewards[cf] is not None:
                 cumulative_rewards[cf].append(rewards[cf])
+            else:
+                cumulative_rewards[cf].append(0.0)
 
     # Convert to numpy arrays
     base_position = np.array(base_positions)
@@ -1206,8 +1224,8 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
     base_ground_truth_orientation = np.array([gt.orientation for gt in base_pose_ground_truth])
 
     timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned = sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, base_ground_truth_position, base_ground_truth_orientation, align)
-
-    return timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, cumulative_rewards
+    
+    return timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, cumulative_rewards, contact_states
 
 def plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_rewards = None):
      # Plot the synchronized and aligned data
@@ -1504,7 +1522,7 @@ if __name__ == "__main__":
     serow_framework.set_state(state)
 
     # Run SEROW
-    timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_rewards = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=False)
+    timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_rewards, _ = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=True)
     
     # Plot the trajectories
     plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, cumulative_rewards)

@@ -34,6 +34,7 @@ class DDPG:
         self.buffer = deque(maxlen=params['buffer_size'])
         self.buffer_size = params['buffer_size']
         self.batch_size = params['batch_size']
+        self.train_for_batches = params['train_for_batches']
         self.gamma = params['gamma']
         self.tau = params['tau']
         self.min_action = params['min_action']
@@ -75,16 +76,28 @@ class DDPG:
         if len(self.buffer) < 5 * self.batch_size: 
             return None, None
         
-        # Sample from buffer and stack tensors efficiently
-        batch = random.sample(self.buffer, self.batch_size)
-        states, actions, rewards, next_states, dones = zip(*batch)
+        # Sample multiple batches and stack them
+        all_states = []
+        all_actions = []
+        all_rewards = []
+        all_next_states = []
+        all_dones = []
         
-        # Convert to tensors
-        states = torch.FloatTensor(np.vstack(states)).to(self.device)
-        actions = torch.FloatTensor(np.vstack(actions)).to(self.device)
-        rewards = torch.FloatTensor(np.array(rewards).reshape(-1, 1)).to(self.device)
-        next_states = torch.FloatTensor(np.vstack(next_states)).to(self.device)
-        dones = torch.FloatTensor(np.array(dones).reshape(-1, 1)).to(self.device)
+        for _ in range(self.train_for_batches):
+            batch = random.sample(self.buffer, self.batch_size)
+            states, actions, rewards, next_states, dones = zip(*batch)
+            all_states.append(np.vstack(states))
+            all_actions.append(np.vstack(actions))
+            all_rewards.append(np.array(rewards).reshape(-1, 1))
+            all_next_states.append(np.vstack(next_states))
+            all_dones.append(np.array(dones).reshape(-1, 1))
+        
+        # Stack all batches
+        states = torch.FloatTensor(np.vstack(all_states)).to(self.device)
+        actions = torch.FloatTensor(np.vstack(all_actions)).to(self.device)
+        rewards = torch.FloatTensor(np.vstack(all_rewards)).to(self.device)
+        next_states = torch.FloatTensor(np.vstack(all_next_states)).to(self.device)
+        dones = torch.FloatTensor(np.vstack(all_dones)).to(self.device)
         
         # Critic update with target network
         with torch.no_grad():

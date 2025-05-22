@@ -486,6 +486,10 @@ PYBIND11_MODULE(serow, m) {
         .def("set_base_state", &serow::State::setBaseState, py::arg("base_state"), "Sets the base state of the robot")
         .def("set_contact_state", &serow::State::setContactState, py::arg("contact_state"), "Sets the contact state of the robot")
         .def("set_centroidal_state", &serow::State::setCentroidalState, py::arg("centroidal_state"), "Sets the centroidal state of the robot")
-        .def("set_joint_state", &serow::State::setJointState, py::arg("joint_state"), "Sets the joint state of the robot");
+        .def("set_joint_state", &serow::State::setJointState, py::arg("joint_state"), "Sets the joint state of the robot")
+        .def("get_base_state", &serow::State::getBaseState, "Returns the base state of the robot")
+        .def("get_contact_state", &serow::State::getContactState, "Returns the contact state of the robot")
+        .def("get_centroidal_state", &serow::State::getCentroidalState, "Returns the centroidal state of the robot")
+        .def("get_joint_state", &serow::State::getJointState, "Returns the joint state of the robot");
 }
 
