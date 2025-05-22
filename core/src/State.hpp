@@ -260,9 +260,16 @@ public:
     State(std::set<std::string> contacts_frame, bool point_feet);
 
     void setBaseState(const BaseState& base_state);
+    BaseState getBaseState() const;
+
     void setContactState(const ContactState& contact_state);
+    ContactState getContactState() const;
+    
     void setCentroidalState(const CentroidalState& centroidal_state);
+    CentroidalState getCentroidalState() const;
+    
     void setJointState(const JointState& joint_state);
+    JointState getJointState() const;
     
 private:
     /// Flag to indicate if the robot has point feet. False indicates flat feet contacts

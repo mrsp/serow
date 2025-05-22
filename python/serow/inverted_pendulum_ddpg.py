@@ -163,6 +163,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             'buffer_size': 1000000,
             'max_state_value': 1e8,
             'min_state_value': -1e8,
+            'train_for_batches': 5,
         }
         self.actor = Actor(params)
         self.critic = Critic(params)

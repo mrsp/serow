@@ -14,20 +14,87 @@ from read_mcap import(
     read_contact_states, 
     read_force_torque_measurements, 
     read_joint_measurements, 
-    read_joint_states,
     read_imu_measurements, 
     read_base_pose_ground_truth,
+    read_joint_states,
     run_step,
     plot_trajectories,
     sync_and_align_data,
-    quaternion_to_rotation_matrix
+    quaternion_to_rotation_matrix,
+    filter
 )
 
 class Actor(nn.Module):
+    class OUNoise:
+        """
+        Ornstein-Uhlenbeck Process noise generator for exploration in continuous action spaces.
+        This noise process generates temporally correlated noise that helps with exploration
+        in continuous action spaces.
+        """
+        def __init__(self, action_dim, mu=0.0, theta=0.15, sigma=0.2, dt=1e-2, decay=0.995, min_sigma=0.01):
+            """
+            Initialize OU Noise generator.
+            
+            Args:
+                action_dim (int): Dimension of the action space
+                mu (float): Mean of the noise
+                theta (float): Rate of mean reversion
+                sigma (float): Initial scale of the noise
+                dt (float): Time step size (must be positive)
+                decay (float): Decay rate for noise (between 0 and 1)
+                min_sigma (float): Minimum noise scale
+            """
+            self.action_dim = action_dim
+            self.mu = mu * np.ones(action_dim)
+            self.theta = theta
+            self.initial_sigma = sigma
+            self.sigma = sigma
+            self.dt = dt
+            self.decay = decay
+            self.min_sigma = min_sigma
+            self.reset()
+        
+        def reset(self):
+            """Reset the noise process to its initial state."""
+            self.state = np.copy(self.mu)
+        
+        def update_noise(self, episode):
+            """
+            Update the noise scale based on the episode number.
+            
+            Args:
+                episode (int): Current episode number
+            """
+            self.sigma = max(self.initial_sigma * (self.decay ** episode), self.min_sigma)
+        
+        def sample(self):
+            """
+            Generate a noise sample using the Ornstein-Uhlenbeck process.
+            
+            Returns:
+                numpy.ndarray: Noise sample of shape (action_dim,)
+            """
+            dx = self.theta * (self.mu - self.state) * self.dt + \
+                self.sigma * np.sqrt(self.dt) * np.random.randn(self.action_dim)
+            self.state += dx
+            return self.state
+
     def __init__(self, params):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 64)
-        self.layer2 = nn.Linear(64, 64)
+        self.noise = self.OUNoise(
+            params['action_dim'], 
+            sigma=params['noise_sigma'], 
+            theta=params['theta'], 
+            dt=params['dt'],
+            decay=params['noise_decay'],
+            min_sigma=params['min_noise_sigma']
+        )
+        self.layer1 = nn.Linear(params['state_dim'], 128)
+        self.dropout1 = nn.Dropout(0.1)
+        self.layer2 = nn.Linear(128, 128)
+        self.dropout2 = nn.Dropout(0.1)
+        self.layer3 = nn.Linear(128, 64)
+        self.dropout3 = nn.Dropout(0.1)
         self.mean_layer = nn.Linear(64, params['action_dim'])
         
         # Proper initialization for approximating identity function initially
@@ -39,28 +106,23 @@ class Actor(nn.Module):
         
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
-        self.log_noise_sigma = params['log_noise_sigma']
-        self.min_log_noise_sigma = params['min_log_noise_sigma']
 
     def forward(self, state):
         x = F.leaky_relu(self.layer1(state))
+        x = self.dropout1(x)
         x = F.leaky_relu(self.layer2(x))
-        return F.softplus(self.mean_layer(x)) + self.min_action
+        x = self.dropout2(x)
+        x = F.leaky_relu(self.layer3(x))
+        x = self.dropout3(x)
+        return F.softplus(self.mean_layer(x)) 
 
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
             state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
             action = self.forward(state).cpu().numpy()[0]
             if not deterministic:
-                # 70% to apply noise
-                if np.random.rand() < 0.7:
-                    # Apply logarithmic space noise with the adjusted sigma
-                    log_action = np.log(action)
-                    log_noise = np.random.normal(0, self.log_noise_sigma, size=action.shape)
-                    noisy_log_action = log_action + log_noise
-                    
-                    # Convert back to linear space
-                    action = np.exp(noisy_log_action)
+                # Convert back to linear space
+                action = action + np.abs(self.noise.sample())
 
             # Ensure minimum action value and positivity
             action = np.maximum(action, self.min_action)
@@ -71,13 +133,17 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
         # Process state first through separate network
         self.state_layer1 = nn.Linear(params['state_dim'], 64)
+        self.dropout1 = nn.Dropout(0.2)
         self.state_layer2 = nn.Linear(64, 64)
+        self.dropout2 = nn.Dropout(0.2)
         
         # Process action separately
         self.action_layer = nn.Linear(params['action_dim'], 64)
+        self.dropout3 = nn.Dropout(0.2)
         
         # Combine state and action processing
         self.combined_layer1 = nn.Linear(128, 64)
+        self.dropout4 = nn.Dropout(0.2)
         self.combined_layer2 = nn.Linear(64, 1)
         
         # Orthogonal initialization for better gradient flow
@@ -93,14 +159,18 @@ class Critic(nn.Module):
     def forward(self, state, action):
         # Process state separately
         s = F.leaky_relu(self.state_layer1(state))
+        s = self.dropout1(s)
         s = F.leaky_relu(self.state_layer2(s))
+        s = self.dropout2(s)
         
         # Process action separately
         a = F.leaky_relu(self.action_layer(action))
+        a = self.dropout3(a)
         
         # Combine state and action processing
         x = torch.cat([s, a], dim=1)
         x = F.leaky_relu(self.combined_layer1(x))
+        x = self.dropout4(x)
         return self.combined_layer2(x)
 
 def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
@@ -110,12 +180,13 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     reward_history = []
     convergence_threshold = 0.1  # How close to best reward we need to be (as a fraction)
     window_size = 10  # Window size for convergence check
+    train_freq = 20  # Train more frequently (was 50)
 
-    # Learning rate schedulers for adaptive learning
+    # Learning rate schedulers
     actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         agent.actor_optimizer, 
         mode='max', 
-        factor=0.5, 
+        factor=0.5,  
         patience=5
     )
     critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -124,11 +195,6 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         factor=0.5, 
         patience=5
     )
-
-    # Initialize noise decay
-    initial_noise = agent.actor.log_noise_sigma
-    min_noise = agent.actor.min_log_noise_sigma
-    noise_decay = 0.98  # Slower decay
 
     # Save best model callback
     def save_best_model(episode_reward):
@@ -157,7 +223,8 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         'critic_losses': [],
         'actor_losses': [],
         'rewards': [],
-        'episode_lengths': []
+        'episode_lengths': [],
+        'noise_scales': []  # Track noise scale over time
     }
     
     # Training loop with evaluation phases
@@ -169,12 +236,17 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         joint_measurements = dataset['joints']
         force_torque_measurements = dataset['ft']
         base_pose_ground_truth = dataset['base_pose_ground_truth']
+        contact_states = dataset['contact_states']
 
         # Set proper limits on number of episodes
-        max_episodes = 100  # Reduced episode count with better early stopping
-        max_steps = min(len(imu_measurements), 10000)  # Cap steps per episode
+        max_episodes = 200  # Reduced episode count with better early stopping
+        max_steps = min(len(imu_measurements), 10000) - 1 # Cap steps per episode
         
         for episode in range(max_episodes):
+            # Update noise scale for this episode
+            agent.actor.noise.update_noise(episode)
+            stats['noise_scales'].append(agent.actor.noise.sigma)
+            
             # Initialize framework for this episode
             serow_framework = serow.Serow()
             serow_framework.initialize(f"{robot}_rl.json")
@@ -183,20 +255,23 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             # Episode tracking variables
             episode_reward = 0.0
             collected_steps = 0
-            train_freq = 50  # Train after every N steps
             episode_critic_losses = []
             episode_actor_losses = []
-            update_step_counter = 0
+            baseline = True if episode == 0 else False
+            if baseline:
+                print(f"Episode {episode}, Evaluating baseline policy")
             
             # Run episode
-            for step, (imu, joints, ft, gt) in enumerate(zip(
+            for step, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(
                 imu_measurements[:max_steps], 
                 joint_measurements[:max_steps], 
                 force_torque_measurements[:max_steps], 
-                base_pose_ground_truth[:max_steps]
+                base_pose_ground_truth[:max_steps],
+                contact_states[:max_steps],
+                contact_states[1:max_steps + 1]
             )):
                 # Run step with current policy
-                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent)
+                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent, contact_state=cs, next_contact_state=next_cs, deterministic=False, baseline=baseline)
 
                 # Accumulate rewards
                 step_reward = 0
@@ -225,13 +300,12 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                         episode_critic_losses.append(critic_loss)
                         episode_actor_losses.append(actor_loss)
                     collected_steps = 0
-                    update_step_counter += 1
                 
                 # Progress logging
                 if step % 500 == 0 or step == max_steps - 1:
                     print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps}, " 
                           f"Reward: {episode_reward:.2f}, Best: {best_reward:.2f}, "
-                          f"Noise: {agent.actor.log_noise_sigma:.4f}")
+                          f"Noise: {agent.actor.noise.sigma:.4f}")
             
             # End of episode processing
             episode_rewards.append(episode_reward)
@@ -256,12 +330,6 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                     print(f"Training converged! Recent rewards are within {convergence_threshold*100}% of best reward {best_reward:.2f}")
                     converged = True
                     break  # Break out of episode loop
-            
-            # Decay noise
-            agent.actor.log_noise_sigma = max(
-                min_noise,
-                agent.actor.log_noise_sigma * noise_decay
-            )
             
             # Store episode statistics
             if episode_critic_losses:
@@ -329,7 +397,8 @@ def evaluate_policy_brief(dataset, contacts_frame, agent, robot, num_steps=1000)
     joint_measurements = dataset['joints'][:num_steps]
     force_torque_measurements = dataset['ft'][:num_steps]
     base_pose_ground_truth = dataset['base_pose_ground_truth'][:num_steps]
-
+    contact_states = dataset['contact_states'][:num_steps]
+    next_contact_states = dataset['contact_states'][1:num_steps + 1]
     # Initialize SEROW
     serow_framework = serow.Serow()
     serow_framework.initialize(f"{robot}_rl.json")
@@ -339,10 +408,10 @@ def evaluate_policy_brief(dataset, contacts_frame, agent, robot, num_steps=1000)
     rewards = []
     diverged = False
     
-    for step, (imu, joints, ft, gt) in enumerate(zip(
-        imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth
+    for _, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(
+        imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, contact_states, next_contact_states    
     )):
-        _, state, step_rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent, deterministic=True)
+        _, state, step_rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent, contact_state=cs, next_contact_state=next_cs, deterministic=True)
         
         # Check for divergence
         for cf in contacts_frame:
@@ -421,17 +490,19 @@ def plot_training_curves(stats, episode_rewards):
 def evaluate_policy(dataset, contacts_frame, agent, robot):
         # After training, evaluate the policy
         print(f"\nEvaluating trained DDPG policy for {robot}...")
+        max_steps = min(len(dataset['imu']), 10000) - 1
         
         # Get the measurements and the ground truth
-        imu_measurements = dataset['imu']
-        joint_measurements = dataset['joints']
-        force_torque_measurements = dataset['ft']
-        base_pose_ground_truth = dataset['base_pose_ground_truth']
+        imu_measurements = dataset['imu'][:max_steps]
+        joint_measurements = dataset['joints'][:max_steps]
+        force_torque_measurements = dataset['ft'][:max_steps]
+        base_pose_ground_truth = dataset['base_pose_ground_truth'][:max_steps]
+        contact_states = dataset['contact_states'][:max_steps]
+        next_contact_states = dataset['contact_states'][1:max_steps + 1]
 
         # Reset to initial state
         # initial_base_state = dataset['base_states'][0]
         # initial_contact_state = dataset['contact_states'][0]
-        # initial_joint_state = dataset['joint_states'][0]
 
         # Initialize SEROW
         serow_framework = serow.Serow()
@@ -454,13 +525,15 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
         gt_orientations = []
         gt_timestamps = []
 
-        for step, (imu, joints, ft, gt) in enumerate(zip(imu_measurements, 
-                                                         joint_measurements, 
-                                                         force_torque_measurements, 
-                                                         base_pose_ground_truth)):
+        for step, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(imu_measurements, 
+                                                                      joint_measurements, 
+                                                                      force_torque_measurements, 
+                                                                      base_pose_ground_truth,
+                                                                      contact_states,
+                                                                      next_contact_states)):
             print("-------------------------------------------------")
             print(f"Evaluating DDPG policy for {robot} at step {step}")
-            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, agent, deterministic=True)
+            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, agent, contact_state=cs, next_contact_state=next_cs, deterministic=True)
             
             timestamps.append(timestamp)
             base_positions.append(state.get_base_position())
@@ -495,7 +568,7 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
             print("-------------------------------------------------")
 
 if __name__ == "__main__":
-    # Read the data
+    # Load and preprocess the data
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
@@ -503,6 +576,31 @@ if __name__ == "__main__":
     base_states = read_base_states("/tmp/serow_proprioception.mcap")
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
     joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
+
+    SYNC_AND_ALIGN = True
+    if (SYNC_AND_ALIGN):
+        # Initialize SEROW
+        serow_framework = serow.Serow()
+        serow_framework.initialize("go2_rl.json")
+        state = serow_framework.get_state(allow_invalid=True)
+        state.set_joint_state(joint_states[0])
+        state.set_base_state(base_states[0])  
+        state.set_contact_state(contact_states[0])
+        serow_framework.set_state(state)
+        
+        contact_states = []
+        timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, cumulative_rewards, contact_states = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=True)
+        # Reform the ground truth data
+        base_pose_ground_truth = []
+        for i in range(len(timestamps)):
+            gt = serow.BasePoseGroundTruth()
+            gt.timestamp = timestamps[i]
+            gt.position = gt_position_aligned[i]
+            gt.orientation = gt_orientation_aligned[i]
+            base_pose_ground_truth.append(gt)
+
+    # Plot the baseline trajectory vs the ground truth
+    plot_trajectories(timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, None)
 
     # Get the contacts frame
     contacts_frame = set(contact_states[0].contacts_status.keys())
@@ -519,27 +617,26 @@ if __name__ == "__main__":
     
     # Convert feet_positions to numpy array for easier manipulation
     feet_positions = np.array(feet_positions)
+    contact_probabilities = []
+    for contact_state in contact_states:
+        for cf in contacts_frame:
+            contact_probabilities.append(contact_state.contacts_probability[cf])
+    contact_probabilities = np.array(contact_probabilities)
+
+    # compute the dt
+    dt = []
+    for i in range(len(imu_measurements) - 1):
+        dt.append(imu_measurements[i+1].timestamp - imu_measurements[i].timestamp)
+    dt = np.median(np.array(dt))
+    print(f"dt: {dt}")
+
     # Create max and min state values with correct dimensions
     # First 3 dimensions are for position, last dimension is for contact probability
-    max_state_value = np.concatenate([np.max(feet_positions, axis=0), [1.0]])
-    min_state_value = np.concatenate([np.min(feet_positions, axis=0), [0.0]])
+    max_state_value = np.concatenate([np.max(feet_positions, axis=0), [np.max(contact_probabilities)]])
+    min_state_value = np.concatenate([np.min(feet_positions, axis=0), [np.min(contact_probabilities)]])
 
-    print(f"Max state value: {max_state_value}")
-    print(f"Min state value: {min_state_value}")
-
-    offset = len(imu_measurements) - len(base_states)
-    imu_measurements = imu_measurements[offset:]
-    joint_measurements = joint_measurements[offset:]
-    force_torque_measurements = force_torque_measurements[offset:]
-    base_pose_ground_truth = base_pose_ground_truth[offset:]
-
-    # Dataset length
-    dataset_length = len(imu_measurements)
-    print(f"Dataset length: {dataset_length}")
-
-    # Calculate the size of each dataset
-    total_size = len(contact_states)
-    print(f"Total size: {total_size}")
+    print(f"RL state max values: {max_state_value}")
+    print(f"RL state min values: {min_state_value}")
 
     # N = 10  # Number of datasets
     # dataset_size = total_size // N  # Size of each dataset
@@ -557,17 +654,16 @@ if __name__ == "__main__":
     #         'ft': force_torque_measurements[start_idx:end_idx],
     #         'base_states': base_states[start_idx:end_idx],
     #         'contact_states': contact_states[start_idx:end_idx],
-    #         'joint_states': joint_states[start_idx:end_idx],
     #         'base_pose_ground_truth': base_pose_ground_truth[start_idx:end_idx]
     #     }
     #     train_datasets.append(dataset)
+    
     test_dataset = {
         'imu': imu_measurements,
         'joints': joint_measurements,
         'ft': force_torque_measurements,
         'base_states': base_states,
         'contact_states': contact_states,
-        'joint_states': joint_states,
         'base_pose_ground_truth': base_pose_ground_truth
     }
     train_datasets = [test_dataset]
@@ -583,15 +679,19 @@ if __name__ == "__main__":
         'max_action': None,
         'min_action': min_action,
         'gamma': 0.99,
-        'tau': 0.005,
-        'batch_size': 512,  # Increased for more stable gradients
-        'actor_lr': 1e-4, 
-        'critic_lr': 2e-4,  # Reduced to be closer to actor learning rate
-        'log_noise_sigma': 0.5,  # Reduced initial exploration noise
-        'min_log_noise_sigma': 0.01,  # Reduced minimum noise
-        'buffer_size': 200000,  # Reduced buffer size
+        'tau': 0.01,
+        'batch_size': 512,  
+        'actor_lr': 5e-4, 
+        'critic_lr': 1e-3,  
+        'buffer_size': 5000000,  
         'max_state_value': max_state_value,
-        'min_state_value': min_state_value
+        'min_state_value': min_state_value,
+        'train_for_batches': 5,
+        'noise_sigma': 1.5,
+        'theta': 0.15,
+        'dt': dt,
+        'noise_decay': 0.99, 
+        'min_noise_sigma': 0.01  
     }
 
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

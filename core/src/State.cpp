@@ -330,4 +330,20 @@ void State::setInitialized(bool initialized) {
     is_initialized_ = initialized;
 }
 
+BaseState State::getBaseState() const {
+    return base_state_;
+}
+
+ContactState State::getContactState() const {
+    return contact_state_;
+}
+
+CentroidalState State::getCentroidalState() const {
+    return centroidal_state_;
+}
+
+JointState State::getJointState() const {
+    return joint_state_;
+}
+
 }  // namespace serow
