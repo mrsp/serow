@@ -16,7 +16,10 @@ from read_mcap import(
     read_joint_measurements, 
     read_joint_states,
     read_imu_measurements, 
-    read_base_pose_ground_truth,
+    read_base_pose_ground_truth
+)
+
+from utils import(
     run_step,
     plot_trajectories,
     sync_and_align_data

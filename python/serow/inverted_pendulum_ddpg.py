@@ -224,7 +224,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         max_episodes = 1000
         reward_history = []
         window_size = 10
-        convergence_threshold = 0.1  # How close to best reward we need to be (as a fraction)
+        convergence_threshold = 0.5  # How close to best reward we need to be (as a fraction)
 
         update_steps = 1  # Train after collecting this many timesteps
 

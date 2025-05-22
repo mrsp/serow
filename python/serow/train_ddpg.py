@@ -16,12 +16,14 @@ from read_mcap import(
     read_joint_measurements, 
     read_imu_measurements, 
     read_base_pose_ground_truth,
-    read_joint_states,
+    read_joint_states
+)
+from utils import(
     run_step,
     plot_trajectories,
     sync_and_align_data,
+    filter,
     quaternion_to_rotation_matrix,
-    filter
 )
 
 class Actor(nn.Module):
@@ -100,6 +102,7 @@ class Actor(nn.Module):
         # Proper initialization for approximating identity function initially
         nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
 
         # Initialize bias to produce an output close to 1.0
         nn.init.constant_(self.mean_layer.bias, 1.0) 
@@ -121,7 +124,6 @@ class Actor(nn.Module):
             state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
             action = self.forward(state).cpu().numpy()[0]
             if not deterministic:
-                # Convert back to linear space
                 action = action + np.abs(self.noise.sample())
 
             # Ensure minimum action value and positivity
@@ -133,17 +135,17 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
         # Process state first through separate network
         self.state_layer1 = nn.Linear(params['state_dim'], 64)
-        self.dropout1 = nn.Dropout(0.2)
+        self.dropout1 = nn.Dropout(0.1)
         self.state_layer2 = nn.Linear(64, 64)
-        self.dropout2 = nn.Dropout(0.2)
+        self.dropout2 = nn.Dropout(0.1)
         
         # Process action separately
         self.action_layer = nn.Linear(params['action_dim'], 64)
-        self.dropout3 = nn.Dropout(0.2)
+        self.dropout3 = nn.Dropout(0.1)
         
         # Combine state and action processing
         self.combined_layer1 = nn.Linear(128, 64)
-        self.dropout4 = nn.Dropout(0.2)
+        self.dropout4 = nn.Dropout(0.1)
         self.combined_layer2 = nn.Linear(64, 1)
         
         # Orthogonal initialization for better gradient flow
@@ -178,9 +180,9 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     converged = False
     best_reward = float('-inf')
     reward_history = []
-    convergence_threshold = 0.1  # How close to best reward we need to be (as a fraction)
+    convergence_threshold = 0.1  # How close to best reward we need to be (as a fraction) to mark convergence
     window_size = 10  # Window size for convergence check
-    train_freq = 20  # Train more frequently (was 50)
+    train_freq = 100  # Call train() every train_freq steps
 
     # Learning rate schedulers
     actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -224,7 +226,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         'actor_losses': [],
         'rewards': [],
         'episode_lengths': [],
-        'noise_scales': []  # Track noise scale over time
+        'noise_scales': [] 
     }
     
     # Training loop with evaluation phases
@@ -237,27 +239,33 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         force_torque_measurements = dataset['ft']
         base_pose_ground_truth = dataset['base_pose_ground_truth']
         contact_states = dataset['contact_states']
+        joint_states = dataset['joint_states']
+        base_states = dataset['base_states']
 
         # Set proper limits on number of episodes
-        max_episodes = 200  # Reduced episode count with better early stopping
-        max_steps = min(len(imu_measurements), 10000) - 1 # Cap steps per episode
+        max_episodes = 200 
+        max_steps = len(imu_measurements) - 1 
         
         for episode in range(max_episodes):
             # Update noise scale for this episode
             agent.actor.noise.update_noise(episode)
             stats['noise_scales'].append(agent.actor.noise.sigma)
             
-            # Initialize framework for this episode
+            # Initialize SEROW
             serow_framework = serow.Serow()
             serow_framework.initialize(f"{robot}_rl.json")
             state = serow_framework.get_state(allow_invalid=True)
+            state.set_joint_state(joint_states[0])
+            state.set_base_state(base_states[0])  
+            state.set_contact_state(contact_states[0])
+            serow_framework.set_state(state)
 
             # Episode tracking variables
             episode_reward = 0.0
             collected_steps = 0
             episode_critic_losses = []
             episode_actor_losses = []
-            baseline = True if episode == 0 else False
+            baseline = True if episode == 0 or episode % 10 == 0 else False
             if baseline:
                 print(f"Episode {episode}, Evaluating baseline policy")
             
@@ -271,7 +279,10 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 contact_states[1:max_steps + 1]
             )):
                 # Run step with current policy
-                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent, contact_state=cs, next_contact_state=next_cs, deterministic=False, baseline=baseline)
+                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, 
+                                                   agent, contact_state=cs, 
+                                                   next_contact_state=next_cs, deterministic=False, 
+                                                   baseline=baseline)
 
                 # Accumulate rewards
                 step_reward = 0
@@ -293,7 +304,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                     print(f"Episode {episode} terminated early at step {step}/{max_steps} due to filter divergence")
                     break
                 
-                # Train policy periodically, not every step
+                # Train policy periodically
                 if collected_steps >= train_freq:
                     critic_loss, actor_loss = agent.train()
                     if critic_loss is not None and actor_loss is not None:
@@ -390,51 +401,6 @@ def export_models_to_onnx(agent, robot, params):
                     'output': {0: 'batch_size'}}
     )
 
-def evaluate_policy_brief(dataset, contacts_frame, agent, robot, num_steps=1000):
-    """Perform a quick evaluation of the policy"""
-    # Get the measurements and ground truth data
-    imu_measurements = dataset['imu'][:num_steps]
-    joint_measurements = dataset['joints'][:num_steps]
-    force_torque_measurements = dataset['ft'][:num_steps]
-    base_pose_ground_truth = dataset['base_pose_ground_truth'][:num_steps]
-    contact_states = dataset['contact_states'][:num_steps]
-    next_contact_states = dataset['contact_states'][1:num_steps + 1]
-    # Initialize SEROW
-    serow_framework = serow.Serow()
-    serow_framework.initialize(f"{robot}_rl.json")
-    state = serow_framework.get_state(allow_invalid=True)
-
-    # Run evaluation
-    rewards = []
-    diverged = False
-    
-    for _, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(
-        imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, contact_states, next_contact_states    
-    )):
-        _, state, step_rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent, contact_state=cs, next_contact_state=next_cs, deterministic=True)
-        
-        # Check for divergence
-        for cf in contacts_frame:
-            if done[cf] > 0.5:
-                diverged = True
-                break
-        
-        if diverged:
-            break
-            
-        # Collect rewards
-        step_reward = 0
-        for reward in step_rewards.values():
-            if reward is not None:
-                step_reward += reward
-        rewards.append(step_reward)
-    
-    # Print brief evaluation results
-    avg_reward = np.mean(rewards) if rewards else float('-inf')
-    print(f"Evaluation: Steps completed: {len(rewards)}/{num_steps}, " 
-          f"Avg reward: {avg_reward:.4f}, Diverged: {diverged}")
-    return avg_reward, diverged
-
 def plot_training_curves(stats, episode_rewards):
     """Plot training curves to visualize progress"""
     plt.figure(figsize=(15, 10))
@@ -483,6 +449,15 @@ def plot_training_curves(stats, episode_rewards):
         plt.grid(True)
         plt.legend()
     
+    if stats['noise_scales']:
+        plt.subplot(2, 2, 5)
+        plt.plot(stats['noise_scales'], label='Noise Scale')
+        plt.xlabel('Episode')
+        plt.ylabel('Noise Scale')
+        plt.title('Noise Scale')
+        plt.grid(True)
+        plt.legend()
+
     plt.tight_layout()
     plt.savefig(f'policy/ddpg/training_curves.png')
     plt.show()
@@ -490,7 +465,7 @@ def plot_training_curves(stats, episode_rewards):
 def evaluate_policy(dataset, contacts_frame, agent, robot):
         # After training, evaluate the policy
         print(f"\nEvaluating trained DDPG policy for {robot}...")
-        max_steps = min(len(dataset['imu']), 10000) - 1
+        max_steps = len(dataset['imu']) - 1
         
         # Get the measurements and the ground truth
         imu_measurements = dataset['imu'][:max_steps]
@@ -498,20 +473,18 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
         force_torque_measurements = dataset['ft'][:max_steps]
         base_pose_ground_truth = dataset['base_pose_ground_truth'][:max_steps]
         contact_states = dataset['contact_states'][:max_steps]
+        joint_states = dataset['joint_states'][:max_steps]
+        base_states = dataset['base_states'][:max_steps]
         next_contact_states = dataset['contact_states'][1:max_steps + 1]
-
-        # Reset to initial state
-        # initial_base_state = dataset['base_states'][0]
-        # initial_contact_state = dataset['contact_states'][0]
 
         # Initialize SEROW
         serow_framework = serow.Serow()
         serow_framework.initialize(f"{robot}_rl.json")
         state = serow_framework.get_state(allow_invalid=True)
-        # state.set_base_state(initial_base_state)
-        # state.set_contact_state(initial_contact_state)
-        # state.set_joint_state(initial_joint_state)
-        # serow_framework.set_state(state)
+        state.set_joint_state(joint_states[0])
+        state.set_base_state(base_states[0])  
+        state.set_contact_state(contact_states[0])
+        serow_framework.set_state(state)
 
         # Run SEROW
         timestamps = []
@@ -533,7 +506,9 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
                                                                       next_contact_states)):
             print("-------------------------------------------------")
             print(f"Evaluating DDPG policy for {robot} at step {step}")
-            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, agent, contact_state=cs, next_contact_state=next_cs, deterministic=True)
+            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, 
+                                                    agent, contact_state=cs, 
+                                                    next_contact_state=next_cs, deterministic=True)
             
             timestamps.append(timestamp)
             base_positions.append(state.get_base_position())
@@ -554,10 +529,13 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
         cumulative_rewards = {cf: np.array(cumulative_rewards[cf]) for cf in contacts_frame}
 
         # Sync and align the data
-        timestamps, base_positions, base_orientations, gt_positions, gt_orientations = sync_and_align_data(timestamps, base_positions, base_orientations, gt_timestamps, gt_positions, gt_orientations, align = False)
+        timestamps, base_positions, base_orientations, gt_positions, gt_orientations = \
+            sync_and_align_data(timestamps, base_positions, base_orientations, gt_timestamps, 
+                                gt_positions, gt_orientations, align = True)
 
         # Plot the trajectories
-        plot_trajectories(timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards)
+        plot_trajectories(timestamps, base_positions, base_orientations, gt_positions, 
+                          gt_orientations, cumulative_rewards)
 
         # Print evaluation metrics
         print("\n DDPG Policy Evaluation Metrics:")
@@ -589,7 +567,11 @@ if __name__ == "__main__":
         serow_framework.set_state(state)
         
         contact_states = []
-        timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, cumulative_rewards, contact_states = filter(imu_measurements, joint_measurements, force_torque_measurements, base_pose_ground_truth, serow_framework, state, align=True)
+        timestamps, base_position_aligned, base_orientation_aligned, \
+            gt_position_aligned, gt_orientation_aligned, cumulative_rewards, \
+            contact_states = filter( imu_measurements, joint_measurements, force_torque_measurements,
+                                    base_pose_ground_truth, serow_framework, state, align=True)
+
         # Reform the ground truth data
         base_pose_ground_truth = []
         for i in range(len(timestamps)):
@@ -600,7 +582,8 @@ if __name__ == "__main__":
             base_pose_ground_truth.append(gt)
 
     # Plot the baseline trajectory vs the ground truth
-    plot_trajectories(timestamps, base_position_aligned, base_orientation_aligned, gt_position_aligned, gt_orientation_aligned, None)
+    plot_trajectories(timestamps, base_position_aligned, base_orientation_aligned, 
+                      gt_position_aligned, gt_orientation_aligned, None)
 
     # Get the contacts frame
     contacts_frame = set(contact_states[0].contacts_status.keys())
@@ -623,7 +606,7 @@ if __name__ == "__main__":
             contact_probabilities.append(contact_state.contacts_probability[cf])
     contact_probabilities = np.array(contact_probabilities)
 
-    # compute the dt
+    # Compute the dt
     dt = []
     for i in range(len(imu_measurements) - 1):
         dt.append(imu_measurements[i+1].timestamp - imu_measurements[i].timestamp)
@@ -632,8 +615,10 @@ if __name__ == "__main__":
 
     # Create max and min state values with correct dimensions
     # First 3 dimensions are for position, last dimension is for contact probability
-    max_state_value = np.concatenate([np.max(feet_positions, axis=0), [np.max(contact_probabilities)]])
-    min_state_value = np.concatenate([np.min(feet_positions, axis=0), [np.min(contact_probabilities)]])
+    max_state_value = np.concatenate([np.max(feet_positions, axis=0), 
+                                      [np.max(contact_probabilities)]])
+    min_state_value = np.concatenate([np.min(feet_positions, axis=0), 
+                                      [np.min(contact_probabilities)]])
 
     print(f"RL state max values: {max_state_value}")
     print(f"RL state min values: {min_state_value}")
@@ -664,6 +649,7 @@ if __name__ == "__main__":
         'ft': force_torque_measurements,
         'base_states': base_states,
         'contact_states': contact_states,
+        'joint_states': joint_states,
         'base_pose_ground_truth': base_pose_ground_truth
     }
     train_datasets = [test_dataset]

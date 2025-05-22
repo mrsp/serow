@@ -2,7 +2,6 @@
 
 import numpy as np
 import onnxruntime as ort
-import serow
 
 from read_mcap import(
     read_imu_measurements, 
@@ -10,9 +9,6 @@ from read_mcap import(
     read_force_torque_measurements, 
     read_base_pose_ground_truth,    
     read_contact_states,
-    run_step,
-    plot_trajectories,
-    sync_and_align_data,
     read_base_states,
     read_joint_states
 )
@@ -87,20 +83,6 @@ if __name__ == "__main__":
     base_states = read_base_states("/tmp/serow_proprioception.mcap")
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
     joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
-
-    offset = len(imu_measurements) - len(base_states)
-    imu_measurements = imu_measurements[offset:]
-    joint_measurements = joint_measurements[offset:]
-    force_torque_measurements = force_torque_measurements[offset:]
-    base_pose_ground_truth = base_pose_ground_truth[offset:]
-
-    # Dataset length
-    dataset_length = len(imu_measurements)
-    print(f"Dataset length: {dataset_length}")
-
-    # Calculate the size of each dataset
-    total_size = len(contact_states)
-    print(f"Total size: {total_size}")
 
     # Create test dataset
     test_dataset = {
