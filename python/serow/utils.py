@@ -287,9 +287,9 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent = None, contact_s
                 
                 if success:
                     # Improved scale factors 
-                    INNOVATION_SCALE = 0.5     
-                    POSITION_SCALE = 4.0         
-                    ORIENTATION_SCALE = 1.0     
+                    INNOVATION_SCALE = 5.0     
+                    POSITION_SCALE = 10.0         
+                    ORIENTATION_SCALE = 5.0     
                     STEP_REWARD = 0.5
                     DIVERGENCE_PENALTY = -5.0  
 

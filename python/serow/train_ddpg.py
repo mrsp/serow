@@ -133,46 +133,36 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, params):
         super(Critic, self).__init__()
-        # Process state first through separate network
-        self.state_layer1 = nn.Linear(params['state_dim'], 64)
+        self.state_layer = nn.Linear(params['state_dim'], 64)
+        self.state_ln = nn.LayerNorm(64)
         self.dropout1 = nn.Dropout(0.1)
-        self.state_layer2 = nn.Linear(64, 64)
+        
+        self.action_layer = nn.Linear(params['action_dim'], 64)
+        self.action_ln = nn.LayerNorm(64)
         self.dropout2 = nn.Dropout(0.1)
         
-        # Process action separately
-        self.action_layer = nn.Linear(params['action_dim'], 64)
-        self.dropout3 = nn.Dropout(0.1)
-        
-        # Combine state and action processing
         self.combined_layer1 = nn.Linear(128, 64)
-        self.dropout4 = nn.Dropout(0.1)
+        self.combined_ln1 = nn.LayerNorm(64)
+        self.dropout3 = nn.Dropout(0.1)
         self.combined_layer2 = nn.Linear(64, 1)
         
         # Orthogonal initialization for better gradient flow
-        nn.init.orthogonal_(self.state_layer1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.state_layer2.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.state_layer.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.action_layer.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.combined_layer1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.combined_layer2.weight, gain=1.0)
+        nn.init.orthogonal_(self.combined_layer2.weight, gain=0.01)
         
         # Initialize final layer with small weights
         nn.init.constant_(self.combined_layer2.bias, 0.0)
     
     def forward(self, state, action):
-        # Process state separately
-        s = F.leaky_relu(self.state_layer1(state))
+        s = F.leaky_relu(self.state_ln(self.state_layer(state)))
         s = self.dropout1(s)
-        s = F.leaky_relu(self.state_layer2(s))
-        s = self.dropout2(s)
-        
-        # Process action separately
-        a = F.leaky_relu(self.action_layer(action))
-        a = self.dropout3(a)
-        
-        # Combine state and action processing
+        a = F.leaky_relu(self.action_ln(self.action_layer(action)))
+        a = self.dropout2(a)
         x = torch.cat([s, a], dim=1)
-        x = F.leaky_relu(self.combined_layer1(x))
-        x = self.dropout4(x)
+        x = F.leaky_relu(self.combined_ln1(self.combined_layer1(x)))
+        x = self.dropout3(x)
         return self.combined_layer2(x)
 
 def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
@@ -665,18 +655,18 @@ if __name__ == "__main__":
         'max_action': None,
         'min_action': min_action,
         'gamma': 0.99,
-        'tau': 0.001,
-        'batch_size': 512,  
-        'actor_lr': 1e-4, 
-        'critic_lr': 5e-5,  
+        'tau': 0.0005,
+        'batch_size': 64,  
+        'actor_lr': 5e-5, 
+        'critic_lr': 1e-6,  
         'buffer_size': 5000000,  
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
         'train_for_batches': 5,
-        'noise_sigma': 1.5,
+        'noise_sigma': 1.0,
         'theta': 0.15,
         'dt': dt,
-        'noise_decay': 0.99, 
+        'noise_decay': 0.985, 
         'min_noise_sigma': 0.01  
     }
 

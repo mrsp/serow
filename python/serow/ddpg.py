@@ -17,8 +17,8 @@ class DDPG:
         self.actor_optimizer = optim.AdamW(
             self.actor.parameters(), 
             lr=params['actor_lr'],
-            weight_decay=1e-5,  # Small weight decay for regularization
-            eps=1e-5  # Improved numerical stability
+            weight_decay=0.0,  
+            eps=1e-5  
         )
 
         self.critic = critic.to(self.device)
@@ -26,7 +26,7 @@ class DDPG:
         self.critic_optimizer = optim.AdamW(
             self.critic.parameters(), 
             lr=params['critic_lr'],
-            weight_decay=1e-5,
+            weight_decay=1e-3,
             eps=1e-5
         )
 
@@ -47,7 +47,7 @@ class DDPG:
         self.min_state_value = params['min_state_value']
         
         # Adaptive parameters
-        self.grad_clip_value = 1.0
+        self.grad_clip_value = 0.5
 
     def add_to_buffer(self, state, action, reward, next_state, done):
         if self.normalize_state:
