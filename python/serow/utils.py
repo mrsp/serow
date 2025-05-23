@@ -284,45 +284,55 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent = None, contact_s
                 innovation = np.zeros(3)
                 covariance = np.zeros((3, 3))
                 success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+                
                 if success:
-                    # Scale factors for reward components
-                    INNOVATION_SCALE = 10.0  
-                    POSITION_SCALE = 5.0      
-                    ORIENTATION_SCALE = 5000.0  
+                    # Improved scale factors for better DDPG learning
+                    INNOVATION_SCALE = 0.5      # Much smaller scale
+                    POSITION_SCALE = 2.0        # Reduced scale  
+                    ORIENTATION_SCALE = 1.0     # Moderate scale
+                    STEP_REWARD = 0.5
+                    DIVERGENCE_PENALTY = -5.0  
 
-                # Check if innovation is too large or if covariance is not positive definite
-                    nis = innovation.dot(np.linalg.inv(covariance).dot(innovation))
-                    if nis > 5.0 or nis <= 0.0: 
-                        # Filter diverged
-                        done[cf] = 1.0
-                        rewards[cf] = -50000.0  # Divergence penalty
-                        # print(f"[Reward Debug] cf={cf} Diverged: reward={rewards[cf]}")
+                    # Check if innovation is too large or if covariance is not positive definite
+                    try:
+                        # Add regularization to prevent numerical issues
+                        reg_covariance = covariance + np.eye(3) * 1e-6
+                        nis = innovation.dot(np.linalg.inv(reg_covariance).dot(innovation))
+                    except np.linalg.LinAlgError:
+                        nis = float('inf')
+                    
+                    # Handle divergence cases 
+                    if nis > 15.0 or nis <= 0.0: 
+                        rewards[cf] = DIVERGENCE_PENALTY 
+                        done[cf] = 1.0  
                     else:                
-                        # Main reward based on innovation quality (higher is better)
-                        innovation_reward = -INNOVATION_SCALE * nis
-                        # print(f"[Reward Debug] cf={cf} innovation_reward={innovation_reward}")
-                        rewards[cf] = innovation_reward
+                        # Main reward: Use bounded function to prevent extreme values
+                        # Map NIS to range [0, 1] using sigmoid-like function
+                        nis_normalized = 1.0 / (1.0 + INNOVATION_SCALE * nis)
+                        innovation_reward = nis_normalized  # Range: [0, 1]
+                        rewards[cf] = innovation_reward + STEP_REWARD
                         
                         if USE_GROUND_TRUTH:
+                            # Position error component with bounded reward
                             position_error = np.linalg.norm(post_state.get_base_position() - gt.position)
-                            position_reward = -POSITION_SCALE * position_error
-                            # print(f"[Reward Debug] cf={cf} position_error={position_error} position_reward={position_reward}")
-                            rewards[cf] += position_reward  
+                            position_reward = 1.0 / (1.0 + POSITION_SCALE * position_error)  # Range: [0, 1]
                             
+                            # Orientation error component with bounded reward
                             orientation_error = np.linalg.norm(
                                 logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
                                     quaternion_to_rotation_matrix(post_state.get_base_orientation())))
-                            orientation_reward = -ORIENTATION_SCALE * orientation_error 
-                            # print(f"[Reward Debug] cf={cf} orientation_error={orientation_error} orientation_reward={orientation_reward}")
-                            rewards[cf] += orientation_reward  
-                        # print(f"[Reward Debug] cf={cf} final_reward={rewards[cf]}")
-
+                            orientation_reward = 1.0 / (1.0 + ORIENTATION_SCALE * orientation_error)  # Range: [0, 1]
+                            rewards[cf] += position_reward + orientation_reward
+                        
+                        # Final reward is in reasonable range
+                        # print(f"[Reward Debug] cf={cf} Good estimate: reward={rewards[cf]:.4f}, NIS={nis:.4f}")
+                        rewards[cf] /= abs(DIVERGENCE_PENALTY)
                     if agent is not None:
                         if agent.name == "PPO":
                             agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
                         else:
                             agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf])
-            
+
             if done[cf] == 1.0:
                 print(f"Diverged for {cf}")
                 break

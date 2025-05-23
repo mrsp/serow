@@ -107,7 +107,7 @@ class DDPG:
             
         current_Q = self.critic(states, actions)
         critic_loss = F.mse_loss(current_Q, target_Q)
-        
+
         # Optimize critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()

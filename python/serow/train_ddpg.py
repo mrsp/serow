@@ -243,7 +243,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         base_states = dataset['base_states']
 
         # Set proper limits on number of episodes
-        max_episodes = 200 
+        max_episodes = 700 
         max_steps = len(imu_measurements) - 1 
         
         for episode in range(max_episodes):
@@ -665,10 +665,10 @@ if __name__ == "__main__":
         'max_action': None,
         'min_action': min_action,
         'gamma': 0.99,
-        'tau': 0.01,
+        'tau': 0.001,
         'batch_size': 512,  
         'actor_lr': 5e-4, 
-        'critic_lr': 1e-3,  
+        'critic_lr': 1e-4,  
         'buffer_size': 5000000,  
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
