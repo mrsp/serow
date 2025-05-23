@@ -288,7 +288,7 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent = None, contact_s
                 if success:
                     # Improved scale factors for better DDPG learning
                     INNOVATION_SCALE = 0.5      # Much smaller scale
-                    POSITION_SCALE = 2.0        # Reduced scale  
+                    POSITION_SCALE = 4.0        # Reduced scale  
                     ORIENTATION_SCALE = 1.0     # Moderate scale
                     STEP_REWARD = 0.5
                     DIVERGENCE_PENALTY = -5.0  
