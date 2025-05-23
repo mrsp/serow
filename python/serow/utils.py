@@ -286,10 +286,10 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent = None, contact_s
                 success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
                 
                 if success:
-                    # Improved scale factors for better DDPG learning
-                    INNOVATION_SCALE = 0.5      # Much smaller scale
-                    POSITION_SCALE = 4.0        # Reduced scale  
-                    ORIENTATION_SCALE = 1.0     # Moderate scale
+                    # Improved scale factors 
+                    INNOVATION_SCALE = 0.5     
+                    POSITION_SCALE = 4.0         
+                    ORIENTATION_SCALE = 1.0     
                     STEP_REWARD = 0.5
                     DIVERGENCE_PENALTY = -5.0  
 

@@ -265,7 +265,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             collected_steps = 0
             episode_critic_losses = []
             episode_actor_losses = []
-            baseline = True if episode == 0 or episode % 10 == 0 else False
+            baseline = True if episode == 0 or episode % 50 == 0 else False
             if baseline:
                 print(f"Episode {episode}, Evaluating baseline policy")
             
@@ -667,8 +667,8 @@ if __name__ == "__main__":
         'gamma': 0.99,
         'tau': 0.001,
         'batch_size': 512,  
-        'actor_lr': 5e-4, 
-        'critic_lr': 1e-4,  
+        'actor_lr': 1e-4, 
+        'critic_lr': 5e-5,  
         'buffer_size': 5000000,  
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
