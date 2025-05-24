@@ -99,10 +99,10 @@ class Actor(nn.Module):
         self.dropout3 = nn.Dropout(0.1)
         self.mean_layer = nn.Linear(64, params['action_dim'])
         
-        # Proper initialization for approximating identity function initially
-        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
+        # Xavier initialization for better gradient flow
+        nn.init.xavier_uniform_(self.layer1.weight, gain=np.sqrt(2))
+        nn.init.xavier_uniform_(self.layer2.weight, gain=np.sqrt(2))
+        nn.init.xavier_uniform_(self.layer3.weight, gain=np.sqrt(2))
 
         # Initialize bias to produce an output close to 1.0
         nn.init.constant_(self.mean_layer.bias, 1.0) 
@@ -111,13 +111,13 @@ class Actor(nn.Module):
         self.action_dim = params['action_dim']
 
     def forward(self, state):
-        x = F.leaky_relu(self.layer1(state))
+        x = F.gelu(self.layer1(state))
         x = self.dropout1(x)
-        x = F.leaky_relu(self.layer2(x))
+        x = F.gelu(self.layer2(x))
         x = self.dropout2(x)
-        x = F.leaky_relu(self.layer3(x))
+        x = F.gelu(self.layer3(x))
         x = self.dropout3(x)
-        return F.softplus(self.mean_layer(x)) 
+        return F.gelu(self.mean_layer(x)) 
 
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
@@ -146,22 +146,22 @@ class Critic(nn.Module):
         self.dropout3 = nn.Dropout(0.1)
         self.combined_layer2 = nn.Linear(64, 1)
         
-        # Orthogonal initialization for better gradient flow
-        nn.init.orthogonal_(self.state_layer.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.action_layer.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.combined_layer1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.combined_layer2.weight, gain=0.01)
+        # Xavier initialization for better gradient flow
+        nn.init.xavier_uniform_(self.state_layer.weight, gain=np.sqrt(2))
+        nn.init.xavier_uniform_(self.action_layer.weight, gain=np.sqrt(2))
+        nn.init.xavier_uniform_(self.combined_layer1.weight, gain=np.sqrt(2))
+        nn.init.xavier_uniform_(self.combined_layer2.weight, gain=np.sqrt(2))
         
         # Initialize final layer with small weights
         nn.init.constant_(self.combined_layer2.bias, 0.0)
     
     def forward(self, state, action):
-        s = F.leaky_relu(self.state_ln(self.state_layer(state)))
+        s = F.gelu(self.state_ln(self.state_layer(state)))
         s = self.dropout1(s)
-        a = F.leaky_relu(self.action_ln(self.action_layer(action)))
+        a = F.gelu(self.action_ln(self.action_layer(action)))
         a = self.dropout2(a)
         x = torch.cat([s, a], dim=1)
-        x = F.leaky_relu(self.combined_ln1(self.combined_layer1(x)))
+        x = F.gelu(self.combined_ln1(self.combined_layer1(x)))
         x = self.dropout3(x)
         return self.combined_layer2(x)
 
@@ -169,8 +169,9 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     episode_rewards = []
     converged = False
     best_reward = float('-inf')
+    best_reward_episode = 0
     reward_history = []
-    convergence_threshold = 0.1  # How close to best reward we need to be (as a fraction) to mark convergence
+    convergence_threshold = 0.05  # How close to best reward we need to be (as a fraction) to mark convergence
     window_size = 10  # Window size for convergence check
     train_freq = 100  # Call train() every train_freq steps
 
@@ -189,12 +190,14 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     )
 
     # Save best model callback
-    def save_best_model(episode_reward):
+    def save_best_model(episode, episode_reward):
         nonlocal best_reward
-        
+        nonlocal best_reward_episode
+
         if episode_reward > best_reward:
             best_reward = episode_reward
-            
+            best_reward_episode = episode
+
             if save_policy:
                 os.makedirs('policy/ddpg', exist_ok=True)
                 torch.save({
@@ -255,10 +258,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             collected_steps = 0
             episode_critic_losses = []
             episode_actor_losses = []
-            baseline = True if episode == 0 or episode % 50 == 0 else False
-            if baseline:
-                print(f"Episode {episode}, Evaluating baseline policy")
-            
+
             # Run episode
             for step, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(
                 imu_measurements[:max_steps], 
@@ -269,10 +269,10 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 contact_states[1:max_steps + 1]
             )):
                 # Run step with current policy
-                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, 
+                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, step,
                                                    agent, contact_state=cs, 
                                                    next_contact_state=next_cs, deterministic=False, 
-                                                   baseline=baseline)
+                                                   baseline=False)
 
                 # Accumulate rewards
                 step_reward = 0
@@ -286,7 +286,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 # Check for early termination due to filter divergence
                 should_terminate = False
                 for cf in contacts_frame:
-                    if done[cf] > 0.5:
+                    if done[cf] is not None and done[cf] == 1.0:
                         should_terminate = True
                         break
                 
@@ -305,7 +305,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 # Progress logging
                 if step % 500 == 0 or step == max_steps - 1:
                     print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps}, " 
-                          f"Reward: {episode_reward:.2f}, Best: {best_reward:.2f}, "
+                          f"Episode reward: {episode_reward:.2f}, Best: {best_reward:.2f}, in episode {best_reward_episode}, "
                           f"Noise: {agent.actor.noise.sigma:.4f}")
             
             # End of episode processing
@@ -319,7 +319,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             critic_scheduler.step(episode_reward)
             
             # Save best model if improved
-            save_best_model(episode_reward)
+            save_best_model(episode, episode_reward)
             
             # Check convergence by comparing recent rewards to best reward
             if len(reward_history) >= window_size:
@@ -328,7 +328,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 reward_ratios = recent_rewards / (abs(best_reward) + 1e-6)  # Avoid division by zero
                 # Check if all recent rewards are within threshold of best reward
                 if np.all(reward_ratios >= (1.0 - convergence_threshold)):
-                    print(f"Training converged! Recent rewards are within {convergence_threshold*100}% of best reward {best_reward:.2f}")
+                    print(f"Training converged! Recent rewards are within {convergence_threshold*100}% of best episode reward {best_reward:.2f} in episode {best_reward_episode}")
                     converged = True
                     break  # Break out of episode loop
             
@@ -341,7 +341,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             stats['episode_lengths'].append(step)
             
             # Print episode summary
-            print(f"Episode {episode} completed with reward {episode_reward:.2f}")
+            print(f"Episode {episode} completed with episode reward {episode_reward:.2f}")
             if episode_critic_losses:
                 print(f"Average critic loss: {np.mean(episode_critic_losses):.4f}")
             if episode_actor_losses:
@@ -481,8 +481,10 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
         base_positions = []
         base_orientations = []
         cumulative_rewards = {}
+        instantaneous_rewards = {}
         for cf in contacts_frame:
             cumulative_rewards[cf] = []
+            instantaneous_rewards[cf] = []
 
         gt_positions = []
         gt_orientations = []
@@ -496,7 +498,7 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
                                                                       next_contact_states)):
             print("-------------------------------------------------")
             print(f"Evaluating DDPG policy for {robot} at step {step}")
-            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, 
+            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, step,
                                                     agent, contact_state=cs, 
                                                     next_contact_state=next_cs, deterministic=True)
             
@@ -508,7 +510,11 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
             gt_timestamps.append(gt.timestamp)
             for cf in contacts_frame:
                 if rewards[cf] is not None:
-                    cumulative_rewards[cf].append(rewards[cf])
+                    instantaneous_rewards[cf].append(rewards[cf])
+                    if len(cumulative_rewards[cf]) == 0:
+                        cumulative_rewards[cf].append(rewards[cf])
+                    else:
+                        cumulative_rewards[cf].append(cumulative_rewards[cf][-1] + rewards[cf])
 
         # Convert to numpy arrays
         timestamps = np.array(timestamps)
@@ -530,9 +536,9 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
         # Print evaluation metrics
         print("\n DDPG Policy Evaluation Metrics:")
         for cf in contacts_frame:
-            print(f"Average Cumulative Reward for {cf}: {np.mean(cumulative_rewards[cf]):.4f}")
-            print(f"Max Cumulative Reward for {cf}: {np.max(cumulative_rewards[cf]):.4f}")
-            print(f"Min Cumulative Reward for {cf}: {np.min(cumulative_rewards[cf]):.4f}")
+            print(f"Average Reward for {cf}: {np.mean(instantaneous_rewards[cf]):.4f}")
+            print(f"Max Reward for {cf}: {np.max(instantaneous_rewards[cf]):.4f} at step {np.argmax(instantaneous_rewards[cf])}")
+            print(f"Min Reward for {cf}: {np.min(instantaneous_rewards[cf]):.4f} at step {np.argmin(instantaneous_rewards[cf])}")
             print("-------------------------------------------------")
 
 if __name__ == "__main__":
@@ -559,7 +565,7 @@ if __name__ == "__main__":
         contact_states = []
         timestamps, base_position_aligned, base_orientation_aligned, \
             gt_position_aligned, gt_orientation_aligned, cumulative_rewards, \
-            contact_states = filter( imu_measurements, joint_measurements, force_torque_measurements,
+            contact_states = filter(imu_measurements, joint_measurements, force_torque_measurements,
                                     base_pose_ground_truth, serow_framework, state, align=True)
 
         # Reform the ground truth data
@@ -573,7 +579,7 @@ if __name__ == "__main__":
 
     # Plot the baseline trajectory vs the ground truth
     plot_trajectories(timestamps, base_position_aligned, base_orientation_aligned, 
-                      gt_position_aligned, gt_orientation_aligned, None)
+                      gt_position_aligned, gt_orientation_aligned, cumulative_rewards)
 
     # Get the contacts frame
     contacts_frame = set(contact_states[0].contacts_status.keys())
@@ -586,7 +592,7 @@ if __name__ == "__main__":
             if base_state.contacts_position[cf] is not None:
                 R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
                 local_pos = R_base @ (base_state.base_position - base_state.contacts_position[cf])
-                feet_positions.append(local_pos)
+                feet_positions.append(np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]]))
     
     # Convert feet_positions to numpy array for easier manipulation
     feet_positions = np.array(feet_positions)
@@ -657,17 +663,17 @@ if __name__ == "__main__":
         'gamma': 0.99,
         'tau': 0.0005,
         'batch_size': 64,  
-        'actor_lr': 5e-5, 
-        'critic_lr': 1e-6,  
-        'buffer_size': 5000000,  
+        'actor_lr': 1e-5, 
+        'critic_lr': 1e-5,  
+        'buffer_size': 1000000,  
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
-        'train_for_batches': 5,
+        'train_for_batches': 10,
         'noise_sigma': 1.0,
         'theta': 0.15,
         'dt': dt,
         'noise_decay': 0.985, 
-        'min_noise_sigma': 0.01  
+        'min_noise_sigma': 1e-4  
     }
 
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

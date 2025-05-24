@@ -133,7 +133,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                                                              joint_measurements, 
                                                              force_torque_measurements, 
                                                              base_pose_ground_truth)):
-                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, agent)
+                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, step, agent)
 
                 # Accumulate the rewards
                 for reward in rewards.values():
@@ -298,7 +298,7 @@ def evaluate_policy(dataset, contacts_frame, agent, robot):
                                                          base_pose_ground_truth)):
             print("-------------------------------------------------")
             print(f"Evaluating PPO policy for {robot} at step {step}")
-            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, agent, deterministic=True)
+            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, step, agent, deterministic=True)
             
             timestamps.append(timestamp)
             base_positions.append(state.get_base_position())

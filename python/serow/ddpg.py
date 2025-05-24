@@ -14,21 +14,23 @@ class DDPG:
         self.device = torch.device(device)
         self.actor = actor.to(self.device)
         self.actor_target = copy.deepcopy(actor).to(self.device)
-        self.actor_optimizer = optim.AdamW(
-            self.actor.parameters(), 
-            lr=params['actor_lr'],
-            weight_decay=0.0,  
-            eps=1e-5  
-        )
+        # self.actor_optimizer = optim.AdamW(
+        #     self.actor.parameters(), 
+        #     lr=params['actor_lr'],
+        #     weight_decay=0.0,  
+        #     eps=1e-5  
+        # )
 
         self.critic = critic.to(self.device)
         self.critic_target = copy.deepcopy(critic).to(self.device)
-        self.critic_optimizer = optim.AdamW(
-            self.critic.parameters(), 
-            lr=params['critic_lr'],
-            weight_decay=1e-3,
-            eps=1e-5
-        )
+        # self.critic_optimizer = optim.AdamW(
+        #     self.critic.parameters(), 
+        #     lr=params['critic_lr'],
+        #     weight_decay=1e-3,
+        #     eps=1e-5
+        # )
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=params['actor_lr'])
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=params['critic_lr'])
 
         # Prioritized experience replay
         self.buffer = deque(maxlen=params['buffer_size'])
