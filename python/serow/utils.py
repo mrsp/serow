@@ -214,7 +214,67 @@ def normalize_vector(vector, min_value, max_value, target_range=(0, 1)):
     # Scale to target range
     return normalized * (target_range[1] - target_range[0]) + target_range[0]
 
-def run_step(imu, joint, ft, gt, serow_framework, state, agent = None, contact_state = None, next_contact_state = None, deterministic = False, baseline = False):
+def compute_reward(cf, serow_framework, state, gt, step):
+    success = False
+    innovation = np.zeros(3)
+    covariance = np.zeros((3, 3))
+    success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+    reward = None
+    done = None
+
+    if success:
+        done = 0.0
+        INNOVATION_SCALE = 10.0     
+        POSITION_SCALE = 1000.0         
+        ORIENTATION_SCALE = 5000.0     
+        STEP_REWARD = 0.01
+        DIVERGENCE_PENALTY = -5.0  
+        TIME_SCALE = 0.01  # Controls how quickly the time penalty increases
+
+        # Check if innovation is too large or if covariance is not positive definite
+        try:
+            # Add regularization to prevent numerical issues
+            reg_covariance = covariance + np.eye(3) * 1e-6
+            nis = innovation.dot(np.linalg.inv(reg_covariance).dot(innovation))
+        except np.linalg.LinAlgError:
+            nis = float('inf')
+        
+        # Handle divergence cases 
+        if nis > 15.0 or nis <= 0.0: 
+            reward = DIVERGENCE_PENALTY 
+            done = 1.0  
+        else:                
+            # Main reward: Use bounded function to prevent extreme values
+            # Map NIS to range [0, 1] using sigmoid-like function
+            nis_normalized = 1.0 / (1.0 + INNOVATION_SCALE * nis)
+            innovation_reward = nis_normalized  # Range: [0, 1]
+            reward = innovation_reward + STEP_REWARD
+            
+            if USE_GROUND_TRUTH:
+                # Calculate time-dependent scaling factor
+                time_factor = 1.0 + TIME_SCALE * step;
+                # print(f"Time factor: {time_factor}")
+                
+                # Position error component with bounded reward and time scaling
+                position_error = np.linalg.norm(state.get_base_position() - gt.position)
+                position_reward = 1.0 / (1.0 + POSITION_SCALE * position_error * time_factor)  # Range: [0, 1]
+                # print(f"Position reward: {position_reward}")
+
+                #  Orientation error component with bounded reward and time scaling
+                # orientation_error = np.linalg.norm(
+                #   logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() @ 
+                    # quaternion_to_rotation_matrix(state.get_base_orientation())))
+                orientation_error = np.linalg.norm(state.get_base_orientation() - gt.orientation)
+                orientation_reward = 1.0 / (1.0 + ORIENTATION_SCALE * orientation_error * time_factor)  # Range: [0, 1]
+                # print(f"Orientation reward: {orientation_reward}")
+                reward += position_reward + orientation_reward
+            
+            # Final reward is in reasonable range
+            # print(f"[Reward Debug] cf={cf} Good estimate: reward={reward:.4f}, NIS={nis:.4f}")
+            reward /= abs(DIVERGENCE_PENALTY)
+    return reward, done
+
+def run_step(imu, joint, ft, gt, serow_framework, state, step, agent = None, contact_state = None, next_contact_state = None, deterministic = False, baseline = False):
     contact_frames = state.get_contacts_frame()
     
     # Run the filter
@@ -233,7 +293,7 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent = None, contact_s
     next_x = {}
 
     for cf in contact_frames:
-        actions[cf] = np.ones(1)
+        actions[cf] = np.ones(agent.actor.action_dim) if agent is not None else np.ones(1)
         log_probs[cf] = None
         values[cf] = None
         x[cf] = None
@@ -242,100 +302,50 @@ def run_step(imu, joint, ft, gt, serow_framework, state, agent = None, contact_s
         done[cf] = 0.0
 
     for cf in contact_frames:
-        if agent is not None:
+        if agent is not None and not baseline:
             # Compute the action
             prior_state = serow_framework.get_state(allow_invalid=True)
             if contact_state.contacts_status[cf] and prior_state.get_contact_position(cf) is not None:
                 R_base = quaternion_to_rotation_matrix(prior_state.get_base_orientation()).transpose()
                 local_pos = R_base @ (prior_state.get_base_position() - prior_state.get_contact_position(cf))
+                local_pos = np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]])
                 x[cf] = np.concatenate((local_pos, np.array([contact_state.contacts_probability[cf]])), axis=0)
 
-                if agent is not None:
-                    if agent.name == "PPO":
-                        actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=deterministic)
-                        values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
-                    else:
-                        actions[cf] = agent.get_action(x[cf], deterministic=deterministic)
-
-                    if (deterministic):
-                        print(f"Action for {cf}: {actions[cf]}")
+                if agent.name == "PPO":
+                    actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=deterministic)
+                    values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
                 else:
-                    log_probs[cf] = None
-                    values[cf] = None
+                    actions[cf] = agent.get_action(x[cf], deterministic=deterministic)
 
-            # Set the action
-            if not baseline:
-                serow_framework.set_action(cf, actions[cf])
-            else:
-                actions[cf] = np.ones(agent.action_dim)
+                if (deterministic):
+                    print(f"Action for {cf}: {actions[cf]}")
+
+        # Set the action
+        serow_framework.set_action(cf, actions[cf])
     
         # Run the update step with the contact position
         serow_framework.base_estimator_update_with_contact_position(cf, kin)
+        
+        # Get the post state
+        post_state = serow_framework.get_state(allow_invalid=True)
+
+        # Compute the reward
+        rewards[cf], done[cf] = compute_reward(cf, serow_framework, post_state, gt, step)
 
         if agent is not None:
-            # Compute the reward
-            post_state = serow_framework.get_state(allow_invalid=True)
             if (x[cf] is not None and post_state.get_contact_position(cf) is not None):
                 R_base = quaternion_to_rotation_matrix(post_state.get_base_orientation()).transpose()
                 local_pos = R_base @ (post_state.get_base_position() - post_state.get_contact_position(cf))
+                local_pos = np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]])
                 next_x[cf] = np.concatenate((local_pos, np.array([next_contact_state.contacts_probability[cf]])), axis=0)
+                if agent.name == "PPO":
+                    agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
+                else:
+                    agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf])
 
-                success = False
-                innovation = np.zeros(3)
-                covariance = np.zeros((3, 3))
-                success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-                
-                if success:
-                    # Improved scale factors 
-                    INNOVATION_SCALE = 5.0     
-                    POSITION_SCALE = 10.0         
-                    ORIENTATION_SCALE = 5.0     
-                    STEP_REWARD = 0.5
-                    DIVERGENCE_PENALTY = -5.0  
-
-                    # Check if innovation is too large or if covariance is not positive definite
-                    try:
-                        # Add regularization to prevent numerical issues
-                        reg_covariance = covariance + np.eye(3) * 1e-6
-                        nis = innovation.dot(np.linalg.inv(reg_covariance).dot(innovation))
-                    except np.linalg.LinAlgError:
-                        nis = float('inf')
-                    
-                    # Handle divergence cases 
-                    if nis > 15.0 or nis <= 0.0: 
-                        rewards[cf] = DIVERGENCE_PENALTY 
-                        done[cf] = 1.0  
-                    else:                
-                        # Main reward: Use bounded function to prevent extreme values
-                        # Map NIS to range [0, 1] using sigmoid-like function
-                        nis_normalized = 1.0 / (1.0 + INNOVATION_SCALE * nis)
-                        innovation_reward = nis_normalized  # Range: [0, 1]
-                        rewards[cf] = innovation_reward + STEP_REWARD
-                        
-                        if USE_GROUND_TRUTH:
-                            # Position error component with bounded reward
-                            position_error = np.linalg.norm(post_state.get_base_position() - gt.position)
-                            position_reward = 1.0 / (1.0 + POSITION_SCALE * position_error)  # Range: [0, 1]
-                            
-                            # Orientation error component with bounded reward
-                            orientation_error = np.linalg.norm(
-                                logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() * 
-                                    quaternion_to_rotation_matrix(post_state.get_base_orientation())))
-                            orientation_reward = 1.0 / (1.0 + ORIENTATION_SCALE * orientation_error)  # Range: [0, 1]
-                            rewards[cf] += position_reward + orientation_reward
-                        
-                        # Final reward is in reasonable range
-                        # print(f"[Reward Debug] cf={cf} Good estimate: reward={rewards[cf]:.4f}, NIS={nis:.4f}")
-                        rewards[cf] /= abs(DIVERGENCE_PENALTY)
-                    if agent is not None:
-                        if agent.name == "PPO":
-                            agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
-                        else:
-                            agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf])
-
-            if done[cf] == 1.0:
-                print(f"Diverged for {cf}")
-                break
+        if done[cf] is not None and done[cf] == 1.0:
+            print(f"Diverged for {cf}")
+            break
 
     serow_framework.base_estimator_finish_update(imu, kin)
     state = serow_framework.get_state(allow_invalid=True)
@@ -410,19 +420,25 @@ def filter(imu_measurements, joint_measurements, force_torque_measurements, base
     for cf in state.get_contacts_frame():
         cumulative_rewards[cf] = []
 
-    for imu, joint, ft, gt in zip(imu_measurements, joint_measurements, force_torque_measurements, 
-                                  base_pose_ground_truth):
-        timestamp, state, rewards, _ = run_step(imu, joint, ft, gt, serow_framework, state, None, 
-                                                deterministic=True)
+    for step, (imu, joint, ft, gt) in enumerate(zip(imu_measurements, joint_measurements, force_torque_measurements, 
+                                  base_pose_ground_truth)):
+        timestamp, state, rewards, _ = run_step(imu, joint, ft, gt, serow_framework, state, step,
+                                                 deterministic=True)
         base_timestamps.append(timestamp)
         base_positions.append(state.get_base_position())
         contact_states.append(state.get_contact_state())
         base_orientations.append(state.get_base_orientation()) 
         for cf in rewards:
             if rewards[cf] is not None:
-                cumulative_rewards[cf].append(rewards[cf])
+                if len(cumulative_rewards[cf]) == 0:
+                    cumulative_rewards[cf].append(rewards[cf])
+                else:
+                    cumulative_rewards[cf].append(cumulative_rewards[cf][-1] + rewards[cf])
             else:
-                cumulative_rewards[cf].append(0.0)
+                if len(cumulative_rewards[cf]) == 0:
+                    cumulative_rewards[cf].append(0.0)
+                else:
+                    cumulative_rewards[cf].append(cumulative_rewards[cf][-1])
 
     # Convert to numpy arrays
     base_position = np.array(base_positions)
