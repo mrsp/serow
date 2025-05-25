@@ -568,7 +568,7 @@ if __name__ == "__main__":
     joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
 
     # Define the dimensions of your state and action spaces
-    state_dim = 4  
+    state_dim = 7  
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
     min_action = 1e-10
 
@@ -608,14 +608,17 @@ if __name__ == "__main__":
 
     # Compute max and min state values
     feet_positions = []
+    base_linear_velocities = []
     for base_state in base_states:
+        R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
+        base_linear_velocities.append(R_base @ base_state.base_linear_velocity)
         for cf in contacts_frame:
             if base_state.contacts_position[cf] is not None:
-                R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
                 local_pos = R_base @ (base_state.base_position - base_state.contacts_position[cf])
                 feet_positions.append(np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]]))
     
-    # Convert feet_positions to numpy array for easier manipulation
+    # Convert base_linear_velocities and feet_positions to numpy array for easier manipulation
+    base_linear_velocities = np.array(base_linear_velocities)
     feet_positions = np.array(feet_positions)
     contact_probabilities = []
     for contact_state in contact_states:
@@ -633,9 +636,11 @@ if __name__ == "__main__":
     # Create max and min state values with correct dimensions
     # First 3 dimensions are for position, last dimension is for contact probability
     max_state_value = np.concatenate([np.max(feet_positions, axis=0), 
+                                      np.max(base_linear_velocities, axis=0),
                                       [np.max(contact_probabilities)]])
     # max_state_value = np.outer(max_state_value, max_state_value).reshape(state_dim, 1)
     min_state_value = np.concatenate([np.min(feet_positions, axis=0), 
+                                      np.min(base_linear_velocities, axis=0),
                                       [np.min(contact_probabilities)]])
     # min_state_value = np.outer(min_state_value, min_state_value).reshape(state_dim, 1)
 
