@@ -109,6 +109,7 @@ class Actor(nn.Module):
         
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
+        self.state_dim = params['state_dim']
 
     def forward(self, state):
         x = F.gelu(self.layer1(state))
@@ -172,22 +173,23 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     best_reward_episode = 0
     reward_history = []
     convergence_threshold = 0.05  # How close to best reward we need to be (as a fraction) to mark convergence
+    critic_convergence_threshold = 0.05  # How much the critic loss can vary before considering it converged
     window_size = 10  # Window size for convergence check
     train_freq = 100  # Call train() every train_freq steps
 
     # Learning rate schedulers
-    actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        agent.actor_optimizer, 
-        mode='max', 
-        factor=0.5,  
-        patience=5
-    )
-    critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        agent.critic_optimizer, 
-        mode='max', 
-        factor=0.5, 
-        patience=5
-    )
+    # actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #     agent.actor_optimizer, 
+    #     mode='max', 
+    #     factor=0.5,  
+    #     patience=5
+    # )
+    # critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #     agent.critic_optimizer, 
+    #     mode='max', 
+    #     factor=0.5, 
+    #     patience=5
+    # )
 
     # Save best model callback
     def save_best_model(episode, episode_reward):
@@ -315,20 +317,34 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 reward_history.pop(0)
             
             # Update learning rates based on episode performance
-            actor_scheduler.step(episode_reward)
-            critic_scheduler.step(episode_reward)
+            # actor_scheduler.step(episode_reward)
+            # critic_scheduler.step(episode_reward)
             
             # Save best model if improved
             save_best_model(episode, episode_reward)
             
-            # Check convergence by comparing recent rewards to best reward
+            # Check convergence by comparing recent rewards to best reward and critic loss
             if len(reward_history) >= window_size:
                 recent_rewards = np.array(reward_history)
                 # Calculate how close recent rewards are to best reward
                 reward_ratios = recent_rewards / (abs(best_reward) + 1e-6)  # Avoid division by zero
-                # Check if all recent rewards are within threshold of best reward
-                if np.all(reward_ratios >= (1.0 - convergence_threshold)):
-                    print(f"Training converged! Recent rewards are within {convergence_threshold*100}% of best episode reward {best_reward:.2f} in episode {best_reward_episode}")
+                
+                # Check if rewards have converged
+                rewards_converged = np.all(reward_ratios >= (1.0 - convergence_threshold))
+                
+                # Check if critic loss has converged
+                critic_loss_converged = False
+                if len(stats['critic_losses']) >= window_size:
+                    recent_critic_losses = np.array(stats['critic_losses'][-window_size:])
+                    critic_loss_std = np.std(recent_critic_losses)
+                    critic_loss_mean = np.mean(recent_critic_losses)
+                    critic_loss_converged = critic_loss_std <= (critic_loss_mean * critic_convergence_threshold)
+                
+                # Both rewards and critic loss must be converged
+                if rewards_converged and critic_loss_converged:
+                    print(f"Training converged!")
+                    print(f"Recent rewards are within {convergence_threshold*100}% of best episode reward {best_reward:.2f} in episode {best_reward_episode}")
+                    print(f"Critic loss has stabilized with std/mean ratio: {critic_loss_std/critic_loss_mean:.4f}")
                     converged = True
                     break  # Break out of episode loop
             
@@ -551,6 +567,11 @@ if __name__ == "__main__":
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
     joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
 
+    # Define the dimensions of your state and action spaces
+    state_dim = 4  
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    min_action = 1e-10
+
     SYNC_AND_ALIGN = True
     if (SYNC_AND_ALIGN):
         # Initialize SEROW
@@ -613,8 +634,10 @@ if __name__ == "__main__":
     # First 3 dimensions are for position, last dimension is for contact probability
     max_state_value = np.concatenate([np.max(feet_positions, axis=0), 
                                       [np.max(contact_probabilities)]])
+    # max_state_value = np.outer(max_state_value, max_state_value).reshape(state_dim, 1)
     min_state_value = np.concatenate([np.min(feet_positions, axis=0), 
                                       [np.min(contact_probabilities)]])
+    # min_state_value = np.outer(min_state_value, min_state_value).reshape(state_dim, 1)
 
     print(f"RL state max values: {max_state_value}")
     print(f"RL state min values: {min_state_value}")
@@ -649,11 +672,6 @@ if __name__ == "__main__":
         'base_pose_ground_truth': base_pose_ground_truth
     }
     train_datasets = [test_dataset]
-
-    # Define the dimensions of your state and action spaces
-    state_dim = 4  
-    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = 1e-10
 
     params = {
         'state_dim': state_dim,
