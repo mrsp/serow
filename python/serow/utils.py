@@ -309,7 +309,8 @@ def run_step(imu, joint, ft, gt, serow_framework, state, step, agent = None, con
                 R_base = quaternion_to_rotation_matrix(prior_state.get_base_orientation()).transpose()
                 local_pos = R_base @ (prior_state.get_base_position() - prior_state.get_contact_position(cf))
                 local_pos = np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]])
-                x[cf] = np.concatenate((local_pos, np.array([contact_state.contacts_probability[cf]])), axis=0)
+                local_vel = R_base @ prior_state.get_base_linear_velocity()
+                x[cf] = np.concatenate((local_pos, local_vel, np.array([contact_state.contacts_probability[cf]])), axis=0)
                 # x[cf] = np.outer(x[cf], x[cf]).reshape(agent.actor.state_dim, 1)
 
                 if agent.name == "PPO":
@@ -338,7 +339,8 @@ def run_step(imu, joint, ft, gt, serow_framework, state, step, agent = None, con
                 R_base = quaternion_to_rotation_matrix(post_state.get_base_orientation()).transpose()
                 local_pos = R_base @ (post_state.get_base_position() - post_state.get_contact_position(cf))
                 local_pos = np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]])
-                next_x[cf] = np.concatenate((local_pos, np.array([next_contact_state.contacts_probability[cf]])), axis=0)
+                local_vel = R_base @ post_state.get_base_linear_velocity()  
+                next_x[cf] = np.concatenate((local_pos, local_vel, np.array([next_contact_state.contacts_probability[cf]])), axis=0)
                 # next_x[cf] = np.outer(next_x[cf], next_x[cf]).reshape(agent.actor.state_dim, 1)
                 
                 if agent.name == "PPO":
