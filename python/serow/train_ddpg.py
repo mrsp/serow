@@ -238,7 +238,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         base_states = dataset['base_states']
 
         # Set proper limits on number of episodes
-        max_episodes = 700 
+        max_episodes = 1000
         max_steps = len(imu_measurements) - 1 
         
         for episode in range(max_episodes):
@@ -364,6 +364,17 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 print(f"Average actor loss: {np.mean(episode_actor_losses):.4f}")
         
         if converged:
+            if save_policy:
+                os.makedirs('policy/ddpg/final', exist_ok=True)
+                torch.save({
+                    'actor_state_dict': agent.actor.state_dict(),
+                    'critic_state_dict': agent.critic.state_dict(),
+                    'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
+                    'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
+                }, f'policy/ddpg/final/trained_policy_{robot}.pth')
+            print(f"Saved final policy with reward {episode_reward:.4f}")
+            # Export to ONNX
+            export_models_to_onnx(agent, robot, params)
             break  # Break out of dataset loop
     
     # Plot training curves

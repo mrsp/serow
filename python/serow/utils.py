@@ -214,65 +214,78 @@ def normalize_vector(vector, min_value, max_value, target_range=(0, 1)):
     # Scale to target range
     return normalized * (target_range[1] - target_range[0]) + target_range[0]
 
-def compute_reward(cf, serow_framework, state, gt, step):
-    success = False
-    innovation = np.zeros(3)
-    covariance = np.zeros((3, 3))
-    success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-    reward = None
-    done = None
+class RewardShaper:
+    def __init__(self, buffer_size=1000):
+        self.buffer_size = buffer_size
+        self.recent_nis = []
+        self.recent_position_errors = []
+        self.recent_orientation_errors = []
 
-    if success:
-        done = 0.0
-        INNOVATION_SCALE = 10.0     
-        POSITION_SCALE = 1000.0         
-        ORIENTATION_SCALE = 5000.0     
+    def _update_buffer(self, buffer, value):
+        buffer.append(value)
+        if len(buffer) > self.buffer_size:
+            buffer.pop(0)
+
+    def _get_alpha(self, buffer, time_factor=1.0):
+        if len(buffer) > 10:
+            typical = np.percentile(buffer, 95)
+            if typical * time_factor > 0:
+                return -np.log(0.5) / (typical * time_factor + 1e-8)
+        return 1.0
+
+    def compute_reward(self, cf, serow_framework, state, gt, step, use_ground_truth=True):
+        success = False
+        innovation = np.zeros(3)
+        covariance = np.zeros((3, 3))
+        success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
+        reward = None
+        done = None
+
         STEP_REWARD = 0.01
         DIVERGENCE_PENALTY = -5.0  
-        TIME_SCALE = 0.01  # Controls how quickly the time penalty increases
+        TIME_SCALE = 0.01
 
-        # Check if innovation is too large or if covariance is not positive definite
-        try:
-            # Add regularization to prevent numerical issues
-            reg_covariance = covariance + np.eye(3) * 1e-6
-            nis = innovation.dot(np.linalg.inv(reg_covariance).dot(innovation))
-        except np.linalg.LinAlgError:
-            nis = float('inf')
-        
-        # Handle divergence cases 
-        if nis > 15.0 or nis <= 0.0: 
-            reward = DIVERGENCE_PENALTY 
-            done = 1.0  
-        else:                
-            # Main reward: Use bounded function to prevent extreme values
-            # Map NIS to range [0, 1] using sigmoid-like function
-            nis_normalized = 1.0 / (1.0 + INNOVATION_SCALE * nis)
-            innovation_reward = nis_normalized  # Range: [0, 1]
-            reward = innovation_reward + STEP_REWARD
-            
-            if USE_GROUND_TRUTH:
-                # Calculate time-dependent scaling factor
-                time_factor = 1.0 + TIME_SCALE * step;
-                # print(f"Time factor: {time_factor}")
-                
-                # Position error component with bounded reward and time scaling
-                position_error = np.linalg.norm(state.get_base_position() - gt.position)
-                position_reward = 1.0 / (1.0 + POSITION_SCALE * position_error * time_factor)  # Range: [0, 1]
-                # print(f"Position reward: {position_reward}")
+        if success:
+            done = 0.0
+            # Innovation (NIS)
+            try:
+                reg_covariance = covariance + np.eye(3) * 1e-6
+                nis = innovation.dot(np.linalg.inv(reg_covariance).dot(innovation))
+            except np.linalg.LinAlgError:
+                nis = float('inf')
 
-                #  Orientation error component with bounded reward and time scaling
-                # orientation_error = np.linalg.norm(
-                #   logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() @ 
-                    # quaternion_to_rotation_matrix(state.get_base_orientation())))
-                orientation_error = np.linalg.norm(state.get_base_orientation() - gt.orientation)
-                orientation_reward = 1.0 / (1.0 + ORIENTATION_SCALE * orientation_error * time_factor)  # Range: [0, 1]
-                # print(f"Orientation reward: {orientation_reward}")
-                reward += position_reward + orientation_reward
-            
-            # Final reward is in reasonable range
-            # print(f"[Reward Debug] cf={cf} Good estimate: reward={reward:.4f}, NIS={nis:.4f}")
-            reward /= abs(DIVERGENCE_PENALTY)
-    return reward, done
+            self._update_buffer(self.recent_nis, nis)
+            if nis > 15.0 or nis <= 0.0: 
+                reward = DIVERGENCE_PENALTY 
+                done = 1.0  
+            else:
+                alpha_nis = self._get_alpha(self.recent_nis)
+                innovation_reward = np.exp(-alpha_nis * nis)
+                reward = innovation_reward + STEP_REWARD
+
+                if use_ground_truth:
+                    time_factor = 1.0 + TIME_SCALE * step
+
+                    # Position error
+                    position_error = np.linalg.norm(state.get_base_position() - gt.position)
+                    self._update_buffer(self.recent_position_errors, position_error)
+                    alpha_pos = self._get_alpha(self.recent_position_errors, time_factor)
+                    position_reward = np.exp(-alpha_pos * position_error * time_factor)
+
+                    # Orientation error
+                    orientation_error = np.linalg.norm(state.get_base_orientation() - gt.orientation)
+                    self._update_buffer(self.recent_orientation_errors, orientation_error)
+                    alpha_ori = self._get_alpha(self.recent_orientation_errors, time_factor)
+                    orientation_reward = np.exp(-alpha_ori * orientation_error * time_factor)
+                    reward += position_reward + orientation_reward
+
+                reward /= abs(DIVERGENCE_PENALTY)
+        return reward, done
+
+# Wrapper for backward compatibility
+reward_shaper_instance = RewardShaper()
+def compute_reward(cf, serow_framework, state, gt, step):
+    return reward_shaper_instance.compute_reward(cf, serow_framework, state, gt, step, use_ground_truth=True)
 
 def run_step(imu, joint, ft, gt, serow_framework, state, step, agent = None, contact_state = None, next_contact_state = None, deterministic = False, baseline = False):
     contact_frames = state.get_contacts_frame()
