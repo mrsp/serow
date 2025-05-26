@@ -174,20 +174,6 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     window_size = 10  # Window size for convergence check
     train_freq = 100  # Call train() every train_freq steps
 
-    # Learning rate schedulers
-    # actor_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    #     agent.actor_optimizer, 
-    #     mode='max', 
-    #     factor=0.5,  
-    #     patience=5
-    # )
-    # critic_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    #     agent.critic_optimizer, 
-    #     mode='max', 
-    #     factor=0.5, 
-    #     patience=5
-    # )
-
     # Save best model callback
     def save_best_model(episode, episode_reward):
         nonlocal best_reward
@@ -198,13 +184,13 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             best_reward_episode = episode
 
             if save_policy:
-                os.makedirs('policy/ddpg', exist_ok=True)
+                os.makedirs('policy/ddpg/best', exist_ok=True)
                 torch.save({
                     'actor_state_dict': agent.actor.state_dict(),
                     'critic_state_dict': agent.critic.state_dict(),
                     'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
                     'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
-                }, f'policy/ddpg/trained_policy_{robot}.pth')
+                }, f'policy/ddpg/best/trained_policy_{robot}.pth')
                 print(f"Saved better policy with reward {episode_reward:.4f}")
                 
                 # Export to ONNX
@@ -265,7 +251,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
                 force_torque_measurements[:max_steps], 
                 base_pose_ground_truth[:max_steps],
                 contact_states[:max_steps],
-                contact_states[1:max_steps + 1]
+                contact_states[1:max_steps+1]
             )):
                 # Run step with current policy
                 _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, step,
@@ -313,10 +299,6 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             if len(reward_history) > window_size:
                 reward_history.pop(0)
             
-            # Update learning rates based on episode performance
-            # actor_scheduler.step(episode_reward)
-            # critic_scheduler.step(episode_reward)
-            
             # Save best model if improved
             save_best_model(episode, episode_reward)
             
@@ -362,16 +344,18 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
         
         if converged:
             if save_policy:
-                os.makedirs('policy/ddpg/final', exist_ok=True)
+                # Save the final policy
+                path = 'policy/ddpg/final'
+                os.makedirs(path, exist_ok=True)
                 torch.save({
                     'actor_state_dict': agent.actor.state_dict(),
                     'critic_state_dict': agent.critic.state_dict(),
                     'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
                     'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
-                }, f'policy/ddpg/final/trained_policy_{robot}.pth')
+                }, f'{path}/trained_policy_{robot}.pth')
             print(f"Saved final policy with reward {episode_reward:.4f}")
             # Export to ONNX
-            export_models_to_onnx(agent, robot, params)
+            export_models_to_onnx(agent, robot, params, path)
             break  # Break out of dataset loop
     
     # Plot training curves
@@ -379,16 +363,16 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
     
     return agent, stats
 
-def export_models_to_onnx(agent, robot, params):
+def export_models_to_onnx(agent, robot, params, path):
     """Export the trained models to ONNX format"""
-    os.makedirs('policy/ddpg', exist_ok=True)
+    os.makedirs(path, exist_ok=True)
     
     # Export actor model
     dummy_input = torch.randn(1, params['state_dim']).to(agent.device)
     torch.onnx.export(
         agent.actor,
         dummy_input,
-        f'policy/ddpg/trained_policy_{robot}_actor.onnx',
+        f'{path}/trained_policy_{robot}_actor.onnx',
         export_params=True,
         opset_version=11,
         do_constant_folding=True,
@@ -404,7 +388,7 @@ def export_models_to_onnx(agent, robot, params):
     torch.onnx.export(
         agent.critic,
         (dummy_state, dummy_action),
-        f'policy/ddpg/trained_policy_{robot}_critic.onnx',
+        f'{path}/trained_policy_{robot}_critic.onnx',
         export_params=True,
         opset_version=11,
         do_constant_folding=True,
@@ -655,26 +639,6 @@ if __name__ == "__main__":
 
     print(f"RL state max values: {max_state_value}")
     print(f"RL state min values: {min_state_value}")
-
-    # N = 10  # Number of datasets
-    # dataset_size = total_size // N  # Size of each dataset
-
-    # # Create N contiguous datasets
-    # train_datasets = []
-    # for i in range(N):
-    #     start_idx = i * dataset_size
-    #     end_idx = start_idx + dataset_size
-        
-    #     # Create a dataset with measurements and states from start_idx to end_idx
-    #     dataset = {
-    #         'imu': imu_measurements[start_idx:end_idx],
-    #         'joints': joint_measurements[start_idx:end_idx],
-    #         'ft': force_torque_measurements[start_idx:end_idx],
-    #         'base_states': base_states[start_idx:end_idx],
-    #         'contact_states': contact_states[start_idx:end_idx],
-    #         'base_pose_ground_truth': base_pose_ground_truth[start_idx:end_idx]
-    #     }
-    #     train_datasets.append(dataset)
     
     test_dataset = {
         'imu': imu_measurements,
@@ -717,12 +681,13 @@ if __name__ == "__main__":
     critic = Critic(params).to(device)
     agent = DDPG(actor, critic, params, device=device, normalize_state=True)
 
+    policy_path = 'policy/ddpg/final'
     # Try to load a trained policy for this robot if it exists
     try:
-        checkpoint = torch.load(f'policy/ddpg/trained_policy_{robot}.pth', weights_only=True)
+        checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth', weights_only=True)
         agent.actor.load_state_dict(checkpoint['actor_state_dict'])
         agent.critic.load_state_dict(checkpoint['critic_state_dict'])
-        print(f"Loaded trained policy for {robot} from 'policy/ddpg/trained_policy_{robot}.pth'")
+        print(f"Loaded trained policy for {robot} from '{policy_path}/trained_policy_{robot}.pth'")
         loaded = True
     except FileNotFoundError:
         print(f"No trained policy found for {robot}. Training new policy...")
@@ -731,13 +696,13 @@ if __name__ == "__main__":
         # Train the policy
         train_policy(train_datasets, contacts_frame, agent, robot, save_policy=True)
         # Load the best policy
-        checkpoint = torch.load(f'policy/ddpg/trained_policy_{robot}.pth', weights_only=True)
+        checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth', weights_only=True)
         actor = Actor(params).to(device)
         critic = Critic(params).to(device)
         best_policy = DDPG(actor, critic, params, device=device)
         best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
         best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])
-        print(f"Loaded optimal trained policy for {robot} from 'policy/ddpg/trained_policy_{robot}.pth'")
+        print(f"Loaded optimal trained policy for {robot} from '{policy_path}/trained_policy_{robot}.pth'")
         evaluate_policy(test_dataset, contacts_frame, best_policy, robot)
     else:
         # Just evaluate the loaded policy
