@@ -273,7 +273,8 @@ class RewardShaper:
                     position_reward = np.exp(-alpha_pos * position_error * time_factor)
 
                     # Orientation error
-                    orientation_error = np.linalg.norm(state.get_base_orientation() - gt.orientation)
+                    # orientation_error = np.linalg.norm(state.get_base_orientation() - gt.orientation)
+                    orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() @ quaternion_to_rotation_matrix(state.get_base_orientation())))
                     self._update_buffer(self.recent_orientation_errors, orientation_error)
                     alpha_ori = self._get_alpha(self.recent_orientation_errors, time_factor)
                     orientation_reward = np.exp(-alpha_ori * orientation_error * time_factor)
