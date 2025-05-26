@@ -226,9 +226,9 @@ class RewardShaper:
         if len(buffer) > self.buffer_size:
             buffer.pop(0)
 
-    def _get_alpha(self, buffer, time_factor=1.0):
+    def _get_alpha(self, buffer, time_factor=1.0, percentile=95):
         if len(buffer) > 10:
-            typical = np.percentile(buffer, 95)
+            typical = np.percentile(buffer, percentile)
             if typical * time_factor > 0:
                 return -np.log(0.5) / (typical * time_factor + 1e-8)
         return 1.0
@@ -243,7 +243,7 @@ class RewardShaper:
 
         STEP_REWARD = 0.01
         DIVERGENCE_PENALTY = -5.0  
-        TIME_SCALE = 0.01
+        TIME_SCALE = 0.05
 
         if success:
             done = 0.0
@@ -255,11 +255,11 @@ class RewardShaper:
                 nis = float('inf')
 
             self._update_buffer(self.recent_nis, nis)
-            if nis > 15.0 or nis <= 0.0: 
+            if nis > 25.0 or nis <= 0.0: 
                 reward = DIVERGENCE_PENALTY 
                 done = 1.0  
             else:
-                alpha_nis = self._get_alpha(self.recent_nis)
+                alpha_nis = self._get_alpha(self.recent_nis, percentile=90)
                 innovation_reward = np.exp(-alpha_nis * nis)
                 reward = innovation_reward + STEP_REWARD
 
@@ -269,14 +269,14 @@ class RewardShaper:
                     # Position error
                     position_error = np.linalg.norm(state.get_base_position() - gt.position)
                     self._update_buffer(self.recent_position_errors, position_error)
-                    alpha_pos = self._get_alpha(self.recent_position_errors, time_factor)
+                    alpha_pos = self._get_alpha(self.recent_position_errors, time_factor, percentile=85)
                     position_reward = np.exp(-alpha_pos * position_error * time_factor)
 
                     # Orientation error
                     # orientation_error = np.linalg.norm(state.get_base_orientation() - gt.orientation)
                     orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() @ quaternion_to_rotation_matrix(state.get_base_orientation())))
                     self._update_buffer(self.recent_orientation_errors, orientation_error)
-                    alpha_ori = self._get_alpha(self.recent_orientation_errors, time_factor)
+                    alpha_ori = self._get_alpha(self.recent_orientation_errors, time_factor, percentile=70)
                     orientation_reward = np.exp(-alpha_ori * orientation_error * time_factor)
                     reward += position_reward + orientation_reward
 

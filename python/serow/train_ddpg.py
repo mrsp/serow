@@ -112,20 +112,20 @@ class Actor(nn.Module):
         self.state_dim = params['state_dim']
 
     def forward(self, state):
-        x = F.gelu(self.layer1(state))
+        x = F.relu(self.layer1(state))
         x = self.dropout1(x)
-        x = F.gelu(self.layer2(x))
+        x = F.relu(self.layer2(x))
         x = self.dropout2(x)
-        x = F.gelu(self.layer3(x))
+        x = F.relu(self.layer3(x))
         x = self.dropout3(x)
-        return F.gelu(self.mean_layer(x)) 
+        return F.relu(self.mean_layer(x)) 
 
     def get_action(self, state, deterministic=False):
         with torch.no_grad():
             state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
             action = self.forward(state).cpu().numpy()[0]
             if not deterministic:
-                action = action + np.abs(self.noise.sample())
+                action = action + self.noise.sample()
 
             # Ensure minimum action value and positivity
             action = np.maximum(action, self.min_action)
@@ -135,15 +135,12 @@ class Critic(nn.Module):
     def __init__(self, params):
         super(Critic, self).__init__()
         self.state_layer = nn.Linear(params['state_dim'], 64)
-        self.state_ln = nn.LayerNorm(64)
         self.dropout1 = nn.Dropout(0.1)
         
         self.action_layer = nn.Linear(params['action_dim'], 64)
-        self.action_ln = nn.LayerNorm(64)
         self.dropout2 = nn.Dropout(0.1)
         
         self.combined_layer1 = nn.Linear(128, 64)
-        self.combined_ln1 = nn.LayerNorm(64)
         self.dropout3 = nn.Dropout(0.1)
         self.combined_layer2 = nn.Linear(64, 1)
         
@@ -157,12 +154,12 @@ class Critic(nn.Module):
         nn.init.constant_(self.combined_layer2.bias, 0.0)
     
     def forward(self, state, action):
-        s = F.gelu(self.state_ln(self.state_layer(state)))
+        s = F.relu(self.state_layer(state))
         s = self.dropout1(s)
-        a = F.gelu(self.action_ln(self.action_layer(action)))
+        a = F.relu(self.action_layer(action))
         a = self.dropout2(a)
         x = torch.cat([s, a], dim=1)
-        x = F.gelu(self.combined_ln1(self.combined_layer1(x)))
+        x = F.relu(self.combined_layer1(x))
         x = self.dropout3(x)
         return self.combined_layer2(x)
 
@@ -634,7 +631,8 @@ if __name__ == "__main__":
     contact_probabilities = []
     for contact_state in contact_states:
         for cf in contacts_frame:
-            contact_probabilities.append(contact_state.contacts_probability[cf])
+            if contact_state.contacts_status[cf]:
+                contact_probabilities.append(contact_state.contacts_probability[cf])
     contact_probabilities = np.array(contact_probabilities)
 
     # Compute the dt
