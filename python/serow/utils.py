@@ -14,8 +14,6 @@ from read_mcap import(
     read_joint_states
 )
 
-USE_GROUND_TRUTH = True
-
 def rotation_matrix_to_quaternion(R):
     """
     Convert a rotation matrix to a quaternion.
@@ -91,6 +89,17 @@ def quaternion_to_rotation_matrix(q):
     return R
 
 def logMap(R):
+    """
+    Compute the logarithm map of a rotation matrix.
+    
+    Parameters:
+    R : numpy array with shape (3, 3)
+        The rotation matrix in SO(3) Lie group.
+    
+    Returns:
+    numpy array with shape (3,)
+        The corresponding so(3) Lie algebra element.
+    """
     R11 = R[0, 0];
     R12 = R[0, 1];
     R13 = R[0, 2];
@@ -166,7 +175,7 @@ def normalize_quaternion(quaternion):
     """
     Normalize a quaternion to ensure it represents a valid rotation.
     
-    Args:
+    Parameters:
         quaternion (list or numpy array): A quaternion [x, y, z, w]
 
     Returns:
@@ -187,7 +196,7 @@ def normalize_vector(vector, min_value, max_value, target_range=(0, 1)):
     """
     Normalize a vector to ensure it is within the specified target range.
     
-    Args:
+    Parameters:
         vector (numpy array or list): The vector to normalize
         min_value (numpy array or list): The minimum value of the input range. 
         max_value (numpy array or list): The maximum value of the input range. 
@@ -196,6 +205,7 @@ def normalize_vector(vector, min_value, max_value, target_range=(0, 1)):
     Returns:
         numpy array: The normalized vector
     """
+
     # Convert to numpy array if input is a list
     if isinstance(vector, list):
         vector = np.array(vector)
@@ -215,6 +225,9 @@ def normalize_vector(vector, min_value, max_value, target_range=(0, 1)):
     return normalized * (target_range[1] - target_range[0]) + target_range[0]
 
 class RewardShaper:
+    """
+    Reward shaper for the DDPG policy.
+    """
     def __init__(self, buffer_size=1000):
         self.buffer_size = buffer_size
         self.recent_nis = []
@@ -247,7 +260,6 @@ class RewardShaper:
 
         if success:
             done = 0.0
-            # Innovation (NIS)
             try:
                 reg_covariance = covariance + np.eye(3) * 1e-6
                 nis = innovation.dot(np.linalg.inv(reg_covariance).dot(innovation))
@@ -273,11 +285,11 @@ class RewardShaper:
                     position_reward = np.exp(-alpha_pos * position_error * time_factor)
 
                     # Orientation error
-                    # orientation_error = np.linalg.norm(state.get_base_orientation() - gt.orientation)
                     orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() @ quaternion_to_rotation_matrix(state.get_base_orientation())))
                     self._update_buffer(self.recent_orientation_errors, orientation_error)
                     alpha_ori = self._get_alpha(self.recent_orientation_errors, time_factor, percentile=70)
                     orientation_reward = np.exp(-alpha_ori * orientation_error * time_factor)
+                    
                     reward += position_reward + orientation_reward
 
                 reward /= abs(DIVERGENCE_PENALTY)
@@ -286,9 +298,11 @@ class RewardShaper:
 # Wrapper for backward compatibility
 reward_shaper_instance = RewardShaper()
 def compute_reward(cf, serow_framework, state, gt, step):
-    return reward_shaper_instance.compute_reward(cf, serow_framework, state, gt, step, use_ground_truth=True)
+    return reward_shaper_instance.compute_reward(cf, serow_framework, state, gt, step, 
+                                                 use_ground_truth=True)
 
-def run_step(imu, joint, ft, gt, serow_framework, state, step, agent = None, contact_state = None, next_contact_state = None, deterministic = False, baseline = False):
+def run_step(imu, joint, ft, gt, serow_framework, state, step, agent = None, contact_state = None, 
+             next_contact_state = None, deterministic = False, baseline = False):
     contact_frames = state.get_contacts_frame()
     
     # Run the filter
@@ -324,8 +338,8 @@ def run_step(imu, joint, ft, gt, serow_framework, state, step, agent = None, con
                 local_pos = R_base @ (prior_state.get_base_position() - prior_state.get_contact_position(cf))
                 local_pos = np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]])
                 local_vel = R_base @ prior_state.get_base_linear_velocity()
-                x[cf] = np.concatenate((local_pos, local_vel, np.array([contact_state.contacts_probability[cf]])), axis=0)
-                # x[cf] = np.outer(x[cf], x[cf]).reshape(agent.actor.state_dim, 1)
+                x[cf] = np.concatenate((local_pos, local_vel, 
+                                        np.array([contact_state.contacts_probability[cf]])), axis=0)
 
                 if agent.name == "PPO":
                     actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=deterministic)
@@ -354,8 +368,8 @@ def run_step(imu, joint, ft, gt, serow_framework, state, step, agent = None, con
                 local_pos = R_base @ (post_state.get_base_position() - post_state.get_contact_position(cf))
                 local_pos = np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]])
                 local_vel = R_base @ post_state.get_base_linear_velocity()  
-                next_x[cf] = np.concatenate((local_pos, local_vel, np.array([next_contact_state.contacts_probability[cf]])), axis=0)
-                # next_x[cf] = np.outer(next_x[cf], next_x[cf]).reshape(agent.actor.state_dim, 1)
+                next_x[cf] = np.concatenate((local_pos, local_vel, 
+                                             np.array([next_contact_state.contacts_probability[cf]])), axis=0)
                 
                 if agent.name == "PPO":
                     agent.add_to_buffer(x[cf], actions[cf], rewards[cf], next_x[cf], done[cf], values[cf], log_probs[cf])
