@@ -3,6 +3,7 @@
 import numpy as np
 import serow
 import matplotlib.pyplot as plt
+import torch
 
 from read_mcap import(
     read_base_states, 
@@ -343,7 +344,8 @@ def run_step(imu, joint, ft, gt, serow_framework, state, step, agent = None, con
 
                 if agent.name == "PPO":
                     actions[cf], log_probs[cf] = agent.actor.get_action(x[cf], deterministic=deterministic)
-                    values[cf] = agent.critic(torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)).item()
+                    state_tensor = torch.FloatTensor(x[cf]).reshape(1, -1).to(next(agent.critic.parameters()).device)
+                    values[cf] = agent.critic(state_tensor).item()
                 else:
                     actions[cf] = agent.get_action(x[cf], deterministic=deterministic)
 
