@@ -2,10 +2,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+
 from collections import deque
+from utils import normalize_vector
 
 class PPO:
-    def __init__(self, actor, critic, params, device='cpu'):
+    def __init__(self, actor, critic, params, device='cpu', normalize_state=False):
         self.buffer_size = params['buffer_size']
         self.buffer = deque(maxlen=self.buffer_size)
         self.device = torch.device(device if torch.cuda.is_available() else 'cpu')
@@ -27,28 +29,43 @@ class PPO:
         self.ppo_epochs = params['ppo_epochs']
         self.min_action = params['min_action']
         self.max_action = params['max_action']
-    
+
+        self.normalize_state = normalize_state
+        self.max_state_value = params['max_state_value']
+        self.min_state_value = params['min_state_value']
+
+
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
-        # Check if the buffer is full
-        if len(self.buffer) == self.buffer_size:
-            print(f"Buffer is full. Removing oldest sample.")
-            self.buffer.popleft()
-        self.buffer.append((state, action, reward, next_state, done, value, log_prob))
+        if self.normalize_state:
+            state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
+            next_state = normalize_vector(next_state.copy(), self.min_state_value, self.max_state_value)
+
+        # Convert to numpy and store in buffer
+        state = np.array(state.flatten())
+        action = np.array(action.flatten())
+        reward = float(reward)
+        next_state = np.array(next_state.flatten())
+        done = float(done)
+        value = float(value)
+        log_prob = float(log_prob)
+
+        # Store experience
+        experience = (state, action, reward, next_state, done, value, log_prob)
+        self.buffer.append(experience)
     
     def get_action(self, state, deterministic=False):
+        if self.normalize_state:
+            state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
+
         with torch.no_grad():
             action, log_prob = self.actor.get_action(state, deterministic)
             value = self.critic(state)
-        return (
-            action.squeeze(0).detach().cpu().numpy(),  # Flatten single-batch action
-            value.item(),                              # Extract scalar value
-            log_prob.item()                            # Extract scalar log_prob
-        )
-
+        return action, value, log_prob
+    
     def calculate_log_probs(self, action, mean, std):
         # Calculate log probability of action under the Gaussian policy
         normal = torch.distributions.Normal(mean, std)
-        log_probs = normal.log_prob(action).sum(dim=-1, keepdim=True)
+        log_probs = normal.log_prob(action)
         return log_probs
     
     def compute_gae(self, rewards, values, next_values, dones):
@@ -75,28 +92,32 @@ class PPO:
             return
 
         # Convert buffer to tensors
-        states, actions, rewards, next_states, dones, values, old_log_probs = zip(*self.buffer)
+        states, actions, rewards, next_states, dones, values, log_probs = zip(*self.buffer)
         
         # Convert states and next_states to numpy arrays with consistent shapes
         states = np.array([np.array(s).flatten() for s in states])
         next_states = np.array([np.array(s).flatten() for s in next_states])
         actions = np.array([np.array(a).flatten() for a in actions])
-        rewards = np.array(rewards)
-        
+        rewards = np.array(rewards).reshape(-1, 1)
+        dones = np.array(dones).reshape(-1, 1)
+        values = np.array(values).reshape(-1, 1)
+        log_probs = np.array(log_probs).reshape(-1, 1)
+
+
         states = torch.FloatTensor(states).to(self.device)
         actions = torch.FloatTensor(actions).to(self.device)
-        rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
+        rewards = torch.FloatTensor(rewards).to(self.device)
         next_states = torch.FloatTensor(next_states).to(self.device)
-        dones = torch.FloatTensor(np.array(dones)).unsqueeze(1).to(self.device)
-        old_values = torch.FloatTensor(np.array(values)).unsqueeze(1).to(self.device)
-        old_log_probs = torch.FloatTensor(np.array(old_log_probs)).unsqueeze(1).to(self.device)
-        
+        dones = torch.FloatTensor(dones).to(self.device)
+        values = torch.FloatTensor(values).to(self.device)
+        log_probs = torch.FloatTensor(log_probs).to(self.device)
+
         # Compute next state values
         with torch.no_grad():
             next_values = self.critic(next_states)
         
         # Compute GAE and returns
-        advantages, returns = self.compute_gae(rewards, old_values, next_values, dones)
+        advantages, returns = self.compute_gae(rewards, values, next_values, dones)
 
         # Standardize advantages
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
@@ -113,7 +134,7 @@ class PPO:
                 batch_actions = actions[batch_indices]
                 batch_advantages = advantages[batch_indices]
                 batch_returns = returns[batch_indices]
-                batch_old_log_probs = old_log_probs[batch_indices]
+                batch_log_probs = log_probs[batch_indices]
                 
                 # Get current policy outputs
                 action_means, action_log_stds = self.actor(batch_states)
@@ -127,18 +148,19 @@ class PPO:
                     entropy = 0 
 
                 # Calculate policy loss with clipping
-                ratio = torch.exp(current_log_probs - batch_old_log_probs)
+                ratio = torch.exp(current_log_probs - batch_log_probs)
                 surr1 = ratio * batch_advantages
                 surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
                 policy_loss = -torch.min(surr1, surr2).mean()
                 
                 # Calculate value loss with clipping
                 current_values = self.critic(batch_states)
-                value_pred_clipped = old_values[batch_indices] + torch.clamp(
-                    current_values - old_values[batch_indices],
+                value_pred_clipped = values[batch_indices] + torch.clamp(
+                    current_values - values[batch_indices],
                     -self.clip_param,
                     self.clip_param
                 )
+
                 value_loss = torch.max(
                     F.mse_loss(current_values, batch_returns),
                     F.mse_loss(value_pred_clipped, batch_returns)
@@ -159,7 +181,9 @@ class PPO:
                 # Single optimization step
                 self.actor_optimizer.step()
                 self.critic_optimizer.step()
+        
         self.buffer.clear()
+        return float(policy_loss.item()), float(value_loss.item())
 
     def save_models(self, path):
         torch.save(self.actor.state_dict(), f"{path}_actor.pth")

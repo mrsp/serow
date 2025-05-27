@@ -184,17 +184,18 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             best_reward_episode = episode
 
             if save_policy:
-                os.makedirs('policy/ddpg/best', exist_ok=True)
+                path = 'policy/ddpg/best'
+                os.makedirs(path, exist_ok=True)
                 torch.save({
                     'actor_state_dict': agent.actor.state_dict(),
                     'critic_state_dict': agent.critic.state_dict(),
                     'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
                     'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
-                }, f'policy/ddpg/best/trained_policy_{robot}.pth')
+                }, f'{path}/trained_policy_{robot}.pth')
                 print(f"Saved better policy with reward {episode_reward:.4f}")
                 
                 # Export to ONNX
-                export_models_to_onnx(agent, robot, params)
+                export_models_to_onnx(agent, robot, params, path)
             return True
         return False
 
@@ -342,7 +343,7 @@ def train_policy(datasets, contacts_frame, agent, robot, save_policy=True):
             if episode_actor_losses:
                 print(f"Average actor loss: {np.mean(episode_actor_losses):.4f}")
         
-        if converged:
+        if converged or episode == max_episodes - 1:
             if save_policy:
                 # Save the final policy
                 path = 'policy/ddpg/final'
@@ -563,12 +564,13 @@ if __name__ == "__main__":
     state_dim = 7  
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
     min_action = 1e-10
+    robot = "go2"
 
     SYNC_AND_ALIGN = True
     if (SYNC_AND_ALIGN):
         # Initialize SEROW
         serow_framework = serow.Serow()
-        serow_framework.initialize("go2_rl.json")
+        serow_framework.initialize(f"{robot}_rl.json")
         state = serow_framework.get_state(allow_invalid=True)
         state.set_joint_state(joint_states[0])
         state.set_base_state(base_states[0])  
@@ -675,7 +677,6 @@ if __name__ == "__main__":
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = 'cpu'
     loaded = False
-    robot = "go2"
     print(f"Initializing agent for {robot}")
     actor = Actor(params).to(device)
     critic = Critic(params).to(device)
