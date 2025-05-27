@@ -1157,10 +1157,11 @@ void Serow::baseEstimatorUpdateWithContactPosition(const std::string& cf, const 
     state_.base_state_.timestamp = kin.timestamp;
     if (params_.is_contact_ekf) {
         const bool cs = kin.contacts_status.at(cf);
+        const double cp_prob = kin.contacts_probability.at(cf);
         const Eigen::Vector3d cp = kin.contacts_position.at(cf);
         const Eigen::Matrix3d cp_noise = kin.contacts_position_noise.at(cf);
         const Eigen::Matrix3d position_cov = state_.base_state_.contacts_position_cov.at(cf);
-        base_estimator_con_.updateWithContactPosition(state_.base_state_, cf, cs, cp, cp_noise, position_cov, terrain_estimator_);
+        base_estimator_con_.updateWithContactPosition(state_.base_state_, cf, cs, cp_prob, cp, cp_noise, position_cov, terrain_estimator_);
     } 
 }
 

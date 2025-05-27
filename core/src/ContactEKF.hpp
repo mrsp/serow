@@ -139,14 +139,15 @@ public:
      * @param state Current state of the robot.
      * @param cf Contact frame name.
      * @param cs Leg contact status.
+     * @param cp_prob Probability of contact.
      * @param cp Leg contact position.
      * @param cp_noise Covariance of leg contact position measurement.
      * @param position_cov Covariance of position measurements.
      * @param terrain_estimator Terrain elevation estimator.
      */ 
-    void updateWithContactPosition(BaseState& state, const std::string& cf,  const bool cs, 
-                                   const Eigen::Vector3d& cp, Eigen::Matrix3d cp_noise, 
-                                   const Eigen::Matrix3d& position_cov, 
+    void updateWithContactPosition(BaseState& state, const std::string& cf, const bool cs, 
+                                   const double cp_prob, const Eigen::Vector3d& cp, 
+                                   Eigen::Matrix3d cp_noise, const Eigen::Matrix3d& position_cov, 
                                    std::shared_ptr<TerrainElevation> terrain_estimator);
 
 private:
@@ -247,6 +248,7 @@ private:
      * @param contacts_position Positions of leg contacts.
      * @param contacts_position_noise Noise in position measurements.
      * @param contacts_status Status of leg contacts.
+     * @param contacts_probability Probability of contacts.
      * @param position_cov Covariance of position measurements.
      * @param contacts_orientation Orientations of leg contacts (optional).
      * @param contacts_orientation_noise Noise in orientation measurements (optional).
@@ -256,7 +258,8 @@ private:
     void updateWithContacts(
         BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
         std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
-        const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
+        const std::map<std::string, bool>& contacts_status, 
+        const std::map<std::string, double>& contacts_probability, const Eigen::Matrix3d& position_cov,
         std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov,
