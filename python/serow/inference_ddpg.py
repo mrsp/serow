@@ -16,18 +16,18 @@ from read_mcap import(
 from train_ddpg import evaluate_policy
 
 class ONNXInference:
-    def __init__(self, robot, device='cpu'):
+    def __init__(self, robot, path, device='cpu'):
         self.device = device
         self.robot = robot
         self.name = "DDPG"  # Explicitly set the name to "DDPG"
         
         # Initialize ONNX Runtime sessions
         self.actor_session = ort.InferenceSession(
-            f'policy/ddpg/trained_policy_{robot}_actor.onnx',
+            f'{path}/trained_policy_{robot}_actor.onnx',
             providers=['CPUExecutionProvider']
         )
         self.critic_session = ort.InferenceSession(
-            f'policy/ddpg/trained_policy_{robot}_critic.onnx',
+            f'{path}/trained_policy_{robot}_critic.onnx',
             providers=['CPUExecutionProvider']
         )
         
@@ -38,6 +38,12 @@ class ONNXInference:
         # Get input shapes
         self.state_dim = self.actor_session.get_inputs()[0].shape[1]
         self.action_dim = self.actor_session.get_outputs()[0].shape[1]
+        
+        # Add actor attribute to match DDPG interface
+        class Actor:
+            def __init__(self, action_dim):
+                self.action_dim = action_dim
+        self.actor = Actor(self.action_dim)
         
         print(f"Initialized ONNX inference for {robot}")
         print(f"State dimension: {self.state_dim}")
@@ -98,7 +104,7 @@ if __name__ == "__main__":
     # Initialize ONNX inference
     robot = "go2"
     device = 'cpu'
-    agent = ONNXInference(robot, device)
+    agent = ONNXInference(robot,  path='policy/ddpg/best', device=device)
 
     # Get contacts frame from the first measurement
     contacts_frame = set(contact_states[0].contacts_status.keys())

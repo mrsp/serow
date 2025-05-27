@@ -324,16 +324,19 @@ void ContactEKF::computeDiscreteDynamics(
 }
 
 void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& cf,  const bool cs, 
-    const Eigen::Vector3d& cp, Eigen::Matrix3d cp_noise, const Eigen::Matrix3d& position_cov, 
-    std::shared_ptr<TerrainElevation> terrain_estimator) {
+    const double cp_prob, const Eigen::Vector3d& cp, Eigen::Matrix3d cp_noise, 
+    const Eigen::Matrix3d& position_cov, std::shared_ptr<TerrainElevation> terrain_estimator) {
         const double csd = cs ? 1.0 : 0.0;
         
         if (use_onnx_) {
             Eigen::VectorXd onnx_state = Eigen::VectorXd::Zero(onnx_state_dim_);
             Eigen::VectorXd onnx_action = Eigen::VectorXd::Ones(onnx_action_dim_);
             if (point_feet_ && state.contacts_position.count(cf)) {
-                onnx_state.head(3) = state.base_position - state.contacts_position.at(cf);
-                onnx_state(3) = 1.0;
+                const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix().transpose();
+                const Eigen::Vector3d rel_pos = R * (state.base_position - state.contacts_position.at(cf));
+                onnx_state.head(3) = Eigen::Vector3d(std::abs(rel_pos(0)), std::abs(rel_pos(1)), rel_pos(2));
+                onnx_state.segment(3, 3) = R * state.base_linear_velocity;
+                onnx_state(6) = cp_prob;
                 onnx_action = getAction(onnx_state);
             } 
             setAction(cf, onnx_action);
@@ -470,13 +473,14 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
 void ContactEKF::updateWithContacts(
     BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
     std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
-    const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
+    const std::map<std::string, bool>& contacts_status, 
+    const std::map<std::string, double>& contacts_probability, const Eigen::Matrix3d& position_cov,
     std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
     std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
     std::optional<Eigen::Matrix3d> orientation_cov,
     std::shared_ptr<TerrainElevation> terrain_estimator) {
     for (const auto& [cf, cs]: contacts_status) {
-        updateWithContactPosition(state, cf, cs, contacts_position.at(cf), 
+        updateWithContactPosition(state, cf, cs, contacts_probability.at(cf), contacts_position.at(cf), 
             contacts_position_noise.at(cf), position_cov, terrain_estimator);
         if (!point_feet_ && contacts_orientation.has_value() && orientation_cov.has_value()) {
             updateWithContactOrientation(state, cf, cs, contacts_orientation.value().at(cf), 
@@ -665,8 +669,9 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
 
     // Update the state with the relative to base contacts
     updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
-                       kin.contacts_status, kin.position_cov, kin.contacts_orientation,
-                       kin.contacts_orientation_noise, kin.orientation_cov, terrain_estimator);
+                       kin.contacts_status, kin.contacts_probability, kin.position_cov, 
+                       kin.contacts_orientation, kin.contacts_orientation_noise, 
+                       kin.orientation_cov, terrain_estimator);
 
     if (odom.has_value()) {
         updateWithOdometry(state, odom->base_position, odom->base_orientation,
