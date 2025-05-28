@@ -4,6 +4,7 @@ import numpy as np
 import serow
 import matplotlib.pyplot as plt
 import torch
+import os
 
 from read_mcap import(
     read_base_states, 
@@ -14,6 +15,292 @@ from read_mcap import(
     read_base_pose_ground_truth,
     read_joint_states
 )
+
+def train_policy(datasets, contacts_frame, agent, robot, params, policy_path=None):
+    episode_rewards = []
+    converged = False
+    best_reward = float('-inf')
+    best_reward_episode = 0
+    reward_history = []
+
+    # Save best model callback
+    def save_best_model(episode, episode_reward):
+        nonlocal best_reward
+        nonlocal best_reward_episode
+
+        if episode_reward > best_reward:
+            best_reward = episode_reward
+            best_reward_episode = episode
+
+            if policy_path is not None:
+                path = f'{policy_path}/best'
+                os.makedirs(path, exist_ok=True)
+                torch.save({
+                    'actor_state_dict': agent.actor.state_dict(),
+                    'critic_state_dict': agent.critic.state_dict(),
+                    'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
+                    'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
+                }, f'{path}/trained_policy_{robot}.pth')
+                print(f"Saved better policy with reward {episode_reward:.4f}")
+                
+                # Export to ONNX
+                export_models_to_onnx(agent, robot, params, path)
+            return True
+        return False
+
+    # Training statistics tracking
+    stats = {
+        'critic_losses': [],
+        'actor_losses': [],
+        'rewards': [],
+        'episode_lengths': [],
+        'noise_scales': [] 
+    }
+
+    # Training loop with evaluation phases
+    for i, dataset in enumerate(datasets):
+        print(f"Training on dataset {i+1}/{len(datasets)}")
+
+        # Get dataset measurements
+        imu_measurements = dataset['imu']
+        joint_measurements = dataset['joints']
+        force_torque_measurements = dataset['ft']
+        base_pose_ground_truth = dataset['base_pose_ground_truth']
+        contact_states = dataset['contact_states']
+        joint_states = dataset['joint_states']
+        base_states = dataset['base_states']
+
+        # Set proper limits on number of episodes
+        max_episodes = params['max_episodes']
+        max_steps = len(imu_measurements) - 1 
+
+        for episode in range(max_episodes):
+            # Update noise scale for this episode
+            if (agent.name == "DDPG"):
+                agent.actor.noise.update_noise(episode)
+                stats['noise_scales'].append(agent.actor.noise.sigma)
+
+            # Initialize SEROW
+            serow_framework = serow.Serow()
+            serow_framework.initialize(f"{robot}_rl.json")
+            state = serow_framework.get_state(allow_invalid=True)
+            state.set_joint_state(joint_states[0])
+            state.set_base_state(base_states[0])  
+            state.set_contact_state(contact_states[0])
+            serow_framework.set_state(state)
+
+            # Episode tracking variables
+            episode_reward = 0.0
+            collected_steps = 0
+            episode_critic_losses = []
+            episode_actor_losses = []
+
+            # Run episode
+            for step, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(
+                imu_measurements[:max_steps], 
+                joint_measurements[:max_steps], 
+                force_torque_measurements[:max_steps], 
+                base_pose_ground_truth[:max_steps],
+                contact_states[:max_steps],
+                contact_states[1:max_steps+1]
+            )):
+                # Run step with current policy
+                _, state, rewards, done = run_step(imu, joints, ft, gt, serow_framework, state, step,
+                                                   agent, contact_state=cs, 
+                                                   next_contact_state=next_cs, deterministic=False, 
+                                                   baseline=False)
+                # Accumulate rewards
+                step_reward = 0
+                for cf, reward in rewards.items():
+                    if reward is not None:
+                        step_reward += reward
+                        collected_steps += 1
+                
+                episode_reward += step_reward
+                
+                # Check for early termination due to filter divergence
+                should_terminate = False
+                for cf in contacts_frame:
+                    if done[cf] is not None and done[cf] == 1.0:
+                        should_terminate = True
+                        break
+                
+                if should_terminate:
+                    print(f"Episode {episode} terminated early at step {step}/{max_steps} due to filter divergence")
+                    break
+                
+                # Train policy periodically
+                if collected_steps >= params['train_freq']:
+                    critic_loss, actor_loss = agent.train()
+                    if critic_loss is not None and actor_loss is not None:
+                        episode_critic_losses.append(critic_loss)
+                        episode_actor_losses.append(actor_loss)
+                    collected_steps = 0
+
+                # Progress logging
+                if step % 500 == 0 or step == max_steps - 1:
+                    print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps}, " 
+                          f"Episode reward: {episode_reward:.2f}, Best: {best_reward:.2f}, " 
+                          f"in episode {best_reward_episode}")
+
+            # End of episode processing
+            episode_rewards.append(episode_reward)
+            reward_history.append(episode_reward)
+            if len(reward_history) > params['window_size']:
+                reward_history.pop(0)
+            
+            # Save best model if improved
+            save_best_model(episode, episode_reward)
+
+            # Check convergence by comparing recent rewards to best reward and critic loss
+            if len(reward_history) >= params['window_size']:
+                recent_rewards = np.array(reward_history)
+                # Calculate how close recent rewards are to best reward
+                reward_ratios = recent_rewards / (abs(best_reward) + 1e-6)  # Avoid division by zero
+                
+                # Check if rewards have converged
+                rewards_converged = np.all(reward_ratios >= (1.0 - params['convergence_threshold']))
+                
+                # Check if critic loss has converged
+                critic_loss_converged = False
+                if len(stats['critic_losses']) >= params['window_size']:
+                    recent_critic_losses = np.array(stats['critic_losses'][-params['window_size']:])
+                    critic_loss_std = np.std(recent_critic_losses)
+                    critic_loss_mean = np.mean(recent_critic_losses)
+                    critic_loss_converged = critic_loss_std <= (critic_loss_mean * params['critic_convergence_threshold'])
+                
+                # Both rewards and critic loss must be converged
+                if rewards_converged and critic_loss_converged:
+                    print(f"Training converged!")
+                    print(f"Recent rewards are within {params['convergence_threshold']*100}% of best episode reward {best_reward:.2f} in episode {best_reward_episode}")
+                    print(f"Critic loss has stabilized with std/mean ratio: {critic_loss_std/critic_loss_mean:.4f}")
+                    converged = True
+                    break  # Break out of episode loop
+            
+            # Store episode statistics
+            if episode_critic_losses:
+                stats['critic_losses'].append(np.mean(episode_critic_losses))
+            if episode_actor_losses:
+                stats['actor_losses'].append(np.mean(episode_actor_losses))
+            stats['rewards'].append(episode_reward)
+            stats['episode_lengths'].append(step)
+            
+            # Print episode summary
+            print(f"Episode {episode} completed with episode reward {episode_reward:.2f}")
+            if episode_critic_losses:
+                print(f"Average critic loss: {np.mean(episode_critic_losses):.4f}")
+            if episode_actor_losses:
+                print(f"Average actor loss: {np.mean(episode_actor_losses):.4f}")
+        
+        if converged or episode == max_episodes - 1:
+            if policy_path is not None:
+                # Save the final policy
+                path = f'{policy_path}/final'
+                os.makedirs(path, exist_ok=True)
+                torch.save({
+                    'actor_state_dict': agent.actor.state_dict(),
+                    'critic_state_dict': agent.critic.state_dict(),
+                    'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
+                    'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
+                }, f'{path}/trained_policy_{robot}.pth')
+            print(f"Saved final policy with reward {episode_reward:.4f}")
+            # Export to ONNX
+            export_models_to_onnx(agent, robot, params, path)
+            break  # Break out of dataset loop
+    
+    # Plot training curves
+    plot_training_curves(stats, episode_rewards)
+    
+    return agent, stats
+
+def evaluate_policy(dataset, contacts_frame, agent, robot, policy_path):
+        # After training, evaluate the policy
+        print(f"\nEvaluating trained policy for {robot} from {policy_path}...")
+        max_steps = len(dataset['imu']) - 1
+        
+        # Get the measurements and the ground truth
+        imu_measurements = dataset['imu'][:max_steps]
+        joint_measurements = dataset['joints'][:max_steps]
+        force_torque_measurements = dataset['ft'][:max_steps]
+        base_pose_ground_truth = dataset['base_pose_ground_truth'][:max_steps]
+        contact_states = dataset['contact_states'][:max_steps]
+        joint_states = dataset['joint_states'][:max_steps]
+        base_states = dataset['base_states'][:max_steps]
+        next_contact_states = dataset['contact_states'][1:max_steps + 1]
+
+        # Initialize SEROW
+        serow_framework = serow.Serow()
+        serow_framework.initialize(f"{robot}_rl.json")
+        state = serow_framework.get_state(allow_invalid=True)
+        state.set_joint_state(joint_states[0])
+        state.set_base_state(base_states[0])  
+        state.set_contact_state(contact_states[0])
+        serow_framework.set_state(state)
+
+        # Run SEROW
+        timestamps = []
+        base_positions = []
+        base_orientations = []
+        cumulative_rewards = {}
+        instantaneous_rewards = {}
+        for cf in contacts_frame:
+            cumulative_rewards[cf] = []
+            instantaneous_rewards[cf] = []
+
+        gt_positions = []
+        gt_orientations = []
+        gt_timestamps = []
+
+        for step, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(imu_measurements, 
+                                                                      joint_measurements, 
+                                                                      force_torque_measurements, 
+                                                                      base_pose_ground_truth,
+                                                                      contact_states,
+                                                                      next_contact_states)):
+            print("-------------------------------------------------")
+            print(f"Evaluating policy for {robot} at step {step}")
+            timestamp, state, rewards, _ = run_step(imu, joints, ft, gt, serow_framework, state, step,
+                                                    agent, contact_state=cs, 
+                                                    next_contact_state=next_cs, deterministic=True)
+            
+            timestamps.append(timestamp)
+            base_positions.append(state.get_base_position())
+            base_orientations.append(state.get_base_orientation())
+            gt_positions.append(gt.position)
+            gt_orientations.append(gt.orientation)
+            gt_timestamps.append(gt.timestamp)
+            for cf in contacts_frame:
+                if rewards[cf] is not None:
+                    instantaneous_rewards[cf].append(rewards[cf])
+                    if len(cumulative_rewards[cf]) == 0:
+                        cumulative_rewards[cf].append(rewards[cf])
+                    else:
+                        cumulative_rewards[cf].append(cumulative_rewards[cf][-1] + rewards[cf])
+
+        # Convert to numpy arrays
+        timestamps = np.array(timestamps)
+        base_positions = np.array(base_positions)
+        base_orientations = np.array(base_orientations)
+        gt_positions = np.array(gt_positions)
+        gt_orientations = np.array(gt_orientations)
+        cumulative_rewards = {cf: np.array(cumulative_rewards[cf]) for cf in contacts_frame}
+
+        # Sync and align the data
+        timestamps, base_positions, base_orientations, gt_positions, gt_orientations = \
+            sync_and_align_data(timestamps, base_positions, base_orientations, gt_timestamps, 
+                                gt_positions, gt_orientations, align = True)
+
+        # Plot the trajectories
+        plot_trajectories(timestamps, base_positions, base_orientations, gt_positions, 
+                          gt_orientations, cumulative_rewards)
+
+        # Print evaluation metrics
+        print("\n Policy Evaluation Metrics:")
+        for cf in contacts_frame:
+            print(f"Average Reward for {cf}: {np.mean(instantaneous_rewards[cf]):.4f}")
+            print(f"Max Reward for {cf}: {np.max(instantaneous_rewards[cf]):.4f} at step {np.argmax(instantaneous_rewards[cf])}")
+            print(f"Min Reward for {cf}: {np.min(instantaneous_rewards[cf]):.4f} at step {np.argmin(instantaneous_rewards[cf])}")
+            print("-------------------------------------------------")
 
 def rotation_matrix_to_quaternion(R):
     """
@@ -754,6 +1041,103 @@ def plot_contact_forces_and_torques(contact_states):
     
     plt.tight_layout()
     plt.show()
+
+def plot_training_curves(stats, episode_rewards):
+    """Plot training curves to visualize progress"""
+    plt.figure(figsize=(15, 15))
+    
+    # Plot rewards
+    plt.subplot(3, 2, 1)
+    plt.plot(episode_rewards, label='Episode Rewards', alpha=0.7)
+    
+    # Apply smoothing
+    window_size = min(len(episode_rewards) // 5, 10)
+    if window_size > 1:
+        smoothed = np.convolve(episode_rewards, np.ones(window_size)/window_size, mode='valid')
+        plt.plot(np.arange(window_size-1, len(episode_rewards)), smoothed, 'r-', linewidth=2, label='Smoothed')
+    
+    plt.xlabel('Episode')
+    plt.ylabel('Total Reward')
+    plt.title('Training Progress')
+    plt.grid(True)
+    plt.legend()
+    
+    # Plot losses if available
+    if stats['critic_losses']:
+        plt.subplot(3, 2, 2)
+        plt.plot(stats['critic_losses'], label='Critic Loss')
+        plt.xlabel('Training Updates')
+        plt.ylabel('Loss')
+        plt.title('Critic Loss')
+        plt.grid(True)
+        plt.legend()
+    
+    if stats['actor_losses']:
+        plt.subplot(3, 2, 3)
+        plt.plot(stats['actor_losses'], label='Actor Loss')
+        plt.xlabel('Training Updates')
+        plt.ylabel('Loss')
+        plt.title('Actor Loss')
+        plt.grid(True)
+        plt.legend()
+    
+    if stats['episode_lengths']:
+        plt.subplot(3, 2, 4)
+        plt.plot(stats['episode_lengths'], label='Episode Length')
+        plt.xlabel('Episode')
+        plt.ylabel('Steps')
+        plt.title('Episode Length')
+        plt.grid(True)
+        plt.legend()
+    
+    if stats['noise_scales']:
+        plt.subplot(3, 2, 5)
+        plt.plot(stats['noise_scales'], label='Noise Scale')
+        plt.xlabel('Episode')
+        plt.ylabel('Noise Scale')
+        plt.title('Noise Scale')
+        plt.grid(True)
+        plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(f'policy/ppo/training_curves.png')
+    plt.show()
+
+def export_models_to_onnx(agent, robot, params, path):
+    """Export the trained models to ONNX format"""
+    os.makedirs(path, exist_ok=True)
+    
+    # Export actor model
+    dummy_input = torch.randn(1, params['state_dim']).to(agent.device)
+    torch.onnx.export(
+        agent.actor,
+        dummy_input,
+        f'{path}/trained_policy_{robot}_actor.onnx',
+        export_params=True,
+        opset_version=11,
+        do_constant_folding=True,
+        input_names=['input'],
+        output_names=['output'],
+        dynamic_axes={'input': {0: 'batch_size'},
+                    'output': {0: 'batch_size'}}
+    )
+    
+    # Export critic model
+    dummy_state = torch.randn(1, params['state_dim']).to(agent.device)
+    dummy_action = torch.randn(1, params['action_dim']).to(agent.device)
+    torch.onnx.export(
+        agent.critic,
+        (dummy_state, dummy_action) if agent.name == "DDPG" else dummy_state,
+        f'{path}/trained_policy_{robot}_critic.onnx',
+        export_params=True,
+        opset_version=11,
+        do_constant_folding=True,
+        input_names=['state', 'action'],
+        output_names=['output'],
+        dynamic_axes={'state': {0: 'batch_size'},
+                    'action': {0: 'batch_size'},
+                    'output': {0: 'batch_size'}}
+    )
 
 if __name__ == "__main__":
     robot = "go2"
