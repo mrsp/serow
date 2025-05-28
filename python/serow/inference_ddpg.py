@@ -13,7 +13,7 @@ from read_mcap import(
     read_joint_states
 )
 
-from train_ddpg import evaluate_policy
+from utils import evaluate_policy
 
 class ONNXInference:
     def __init__(self, robot, path, device='cpu'):
@@ -103,12 +103,13 @@ if __name__ == "__main__":
 
     # Initialize ONNX inference
     robot = "go2"
-    device = 'cpu'
-    agent = ONNXInference(robot,  path='policy/ddpg/best', device=device)
+    device = "cpu"
+    policy_path = "policy/ddpg/final"
+    agent = ONNXInference(robot, path=policy_path, device=device)
 
     # Get contacts frame from the first measurement
     contacts_frame = set(contact_states[0].contacts_status.keys())
     print(f"Contacts frame: {contacts_frame}")
 
     # Evaluate the policy
-    evaluate_policy(test_dataset, contacts_frame, agent, robot)
+    evaluate_policy(test_dataset, contacts_frame, agent, robot, policy_path)
