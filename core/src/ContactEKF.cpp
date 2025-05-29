@@ -754,7 +754,7 @@ Eigen::VectorXd ContactEKF::getAction(const Eigen::VectorXd& state) {
     #endif
     
     // Default action if ONNX is not enabled or not initialized
-    return Eigen::VectorXd::Ones(state.size());
+    return Eigen::VectorXd::Ones(1 + 1 * !point_feet_);
 }
 
 }  // namespace serow
