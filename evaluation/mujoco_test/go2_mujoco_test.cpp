@@ -15,12 +15,12 @@ using json = nlohmann::json;
 std::string resolvePath(const json& config, const std::string& path) {
     std::string serowPathEnv = std::getenv("SEROW_PATH");
     std::string resolvedPath = serowPathEnv + path;
-    std::string experimentType = config["Experiment"]["type"];
-    std::string basePath = config["Paths"]["base_path"];
+    std::string experiment_type_ = config["Experiment"]["type"];
+    std::string base_path_ = config["Paths"]["base_path"];
 
     // Replace placeholders
-    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{base_path\\}"), basePath);
-    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{type\\}"), experimentType);
+    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{base_path\\}"), base_path_);
+    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{type\\}"), experiment_type_);
 
     return resolvedPath;
 }
@@ -142,8 +142,8 @@ int main(int argc, char** argv) {
         }
 
         // Initialize Serow with the specified config
-        serow::Serow SEROW;
-        if (!SEROW.initialize(config_path)) {
+        serow::Serow estimator;
+        if (!estimator.initialize(config_path)) {
             throw std::runtime_error("Failed to initialize Serow with config: " + config_path);
         }
 
@@ -270,15 +270,15 @@ int main(int argc, char** argv) {
             // If the ground truth for the base pose is available, pass it to the filter for 
             // synchronized logging
             if (base_gt_positions.size() > 0 && base_gt_orientations.size() > 0) {
-                SEROW.filter(imu, joints, force_torque, std::nullopt, std::nullopt,
+                estimator.filter(imu, joints, force_torque, std::nullopt, std::nullopt,
                     BasePoseGroundTruth{.timestamp = timestamp, 
                                         .position = Eigen::Vector3d(base_gt_positions[i][0], base_gt_positions[i][1], base_gt_positions[i][2]), 
                                         .orientation = Eigen::Quaterniond(base_gt_orientations[i][0], base_gt_orientations[i][1], base_gt_orientations[i][2], base_gt_orientations[i][3])});
             } else {
-                SEROW.filter(imu, joints, force_torque);
+                estimator.filter(imu, joints, force_torque);
             }
 
-            auto state = SEROW.getState();
+            auto state = estimator.getState();
             if (!state.has_value()) {
                 continue;
             }
@@ -320,16 +320,6 @@ int main(int argc, char** argv) {
             } else {
                 RR_contact_position.push_back(Eigen::Vector3d::Zero());
             }
-
-            // auto terrainEstimator = SEROW.getTerrainEstimator();
-            // if (!terrainEstimator) {
-            //     continue;
-            // }
-
-            // if (timestamp - log_timestamp > 0.5) {
-            //     saveElevationMap(terrainEstimator->elevation_, timestamp, file);
-            //     log_timestamp = timestamp;
-            // }
 
             EstTimestamp.push_back(timestamp);
             base_pos_x.push_back(basePos.x());

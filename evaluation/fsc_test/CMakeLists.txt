@@ -23,7 +23,3 @@ include_directories(${HDF5_INCLUDE_DIRS})
 # Add the executable for HDF5 and Serow processing
 add_executable(fsc_test ../fsc_test.cpp)
 target_link_libraries(fsc_test PRIVATE serow pinocchio::pinocchio ${HDF5_LIBRARIES} nlohmann_json::nlohmann_json)
-
-# Add the executable for automated hyperparameter tuning
-add_executable(hypertuner ../hypertuner.cpp)
-target_link_libraries(hypertuner PRIVATE serow pinocchio::pinocchio ${HDF5_LIBRARIES} nlohmann_json::nlohmann_json ${BAYESOPT_LIB} ${NLOPT_LIB})

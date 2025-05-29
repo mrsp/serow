@@ -1,7 +1,7 @@
 {
   "optimizer": {
-    "n_init_samples": 30,
-    "n_iterations": 100,
+    "n_init_samples": 10,
+    "n_iterations": 20,
     "kernel": "kMaternARD5",
     "surrogate": "sGaussianProcess",
     "verbose_level": 2,

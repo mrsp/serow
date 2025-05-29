@@ -190,30 +190,6 @@ if __name__ == "__main__":
     axs2[3].set_xlabel('Timestamp')
     axs2[3].legend()
 
-
-
-    # Plotting Ground Truth and Estimated Orientation (x, y, z, w)
-    # fig6, axs6= plt.subplots(3, 1, figsize=(10, 10), sharex=True)
-    # fig6.suptitle("CoM Velocity")
-
-    # axs6[0].plot(timestamps, com_vel[:,0], label='Ground Truth', color='blue')
-    # axs6[0].plot(timestamps, com_vel_x, label='Estimated', color='orange', linestyle='--')
-
-    # axs6[0].set_ylabel('com_vel_x')
-    # axs6[0].legend()
-
-
-    # axs6[1].plot(timestamps, com_vel[:,1], label='Ground Truth', color='blue')
-    # axs6[1].plot(timestamps, com_vel_y, label='Estimated', color='orange', linestyle='--')    
-    # axs6[1].set_ylabel('com_vel_y')
-    # axs6[1].legend()
-
-    # axs6[2].plot(timestamps, com_vel[:,2], label='Ground Truth', color='blue')
-    # axs6[2].plot(timestamps, com_vel_z, label='Estimated', color='orange', linestyle='--')    
-
-    # axs6[2].set_ylabel('com_vel_z')
-    # axs6[2].legend()
-
     # Plotting Ground Truth and Estimated Position (x, y, z)
     fig4, axs4 = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
     fig4.suptitle("Feet forces (z-axis only)")
@@ -231,8 +207,7 @@ if __name__ == "__main__":
     axs4[3].set_ylabel('FORCE RR')
     axs4[3].set_xlabel('Timestamp')
     
-        
-        # Plotting Ground Truth and Estimated Position (x, y, z)
+    # Plotting Ground Truth and Estimated Position (x, y, z)
     fig5, axs5 = plt.subplots(6, 1, figsize=(10, 8), sharex=True)
     fig5.suptitle("IMU estimated biases")
 

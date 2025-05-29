@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1...4.0.0)
-project(serowHypertuner VERSION 1.0.0 LANGUAGES CXX)
+project(serow_hypertuner VERSION 1.0.0 LANGUAGES CXX)
 
 # Default to C++20
 if(NOT CMAKE_CXX_STANDARD)
@@ -16,14 +16,13 @@ find_library(NLOPT_LIB nlopt PATHS /usr/local/lib /usr/lib REQUIRED)
 
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 include_directories(${HDF5_INCLUDE_DIRS})
-include_directories(/usr/local/include)
 
 # Include local headers
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # Source files
 set(SOURCES
-  src/hypertuner.cpp
+  src/HyperTuner.cpp
   src/BayesOptimizer.cpp
   src/DataManager.cpp
 )

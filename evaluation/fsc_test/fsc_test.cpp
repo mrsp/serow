@@ -9,18 +9,20 @@
 #include <vector>
 #include "serow/Serow.hpp"
 
+const double dataset_percentage_ = 0.05; // Percentage of the dataset to use for testing
+
 using namespace serow;
 using json = nlohmann::json;
 
 std::string resolvePath(const json& config, const std::string& path) {
     std::string serowPathEnv = std::getenv("SEROW_PATH");
     std::string resolvedPath = serowPathEnv + path;
-    std::string experimentType = config["Experiment"]["type"];
-    std::string basePath = config["Paths"]["base_path"];
+    std::string experiment_type_ = config["Experiment"]["type"];
+    std::string base_path_ = config["Paths"]["base_path"];
 
     // Replace placeholders
-    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{base_path\\}"), basePath);
-    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{type\\}"), experimentType);
+    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{base_path\\}"), base_path_);
+    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{type\\}"), experiment_type_);
 
     return resolvedPath;
 }
@@ -199,7 +201,7 @@ int main(int argc, char** argv) {
         std::vector<Eigen::Vector3d> FR_contact_position, FL_contact_position, RL_contact_position,
             RR_contact_position;
 
-        for (size_t i = 0 ; i < timestamps.size()/14; ++i) {
+        for (size_t i = 0 ; i < timestamps.size()*dataset_percentage_; ++i) {
             double timestamp = timestamps[i];
             std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
             force_torque.insert(
@@ -317,11 +319,6 @@ int main(int argc, char** argv) {
             } else {
                 RR_contact_position.push_back(Eigen::Vector3d::Zero());
             }
-
-            // auto terrainEstimator = SEROW.getTerrainEstimator();
-            // if (!terrainEstimator) {
-            //     continue;
-            // }
 
            
             EstTimestamp.push_back(timestamp);
