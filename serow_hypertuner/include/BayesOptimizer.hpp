@@ -96,6 +96,9 @@ private:
   /// @brief Robot joint and foot frames definition
   std::string robot_frame_config_;
 
+  /// @brief Path to the Serow installation
+  std::string serow_path_;
+
   /// @brief Temporary json object
   json temp_json_;
 

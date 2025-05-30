@@ -4,11 +4,15 @@ BayesOptimizer::BayesOptimizer(DataManager& data_manager,
   size_t dim, 
   const bayesopt::Parameters& params,
   const std::vector<std::string>& params_to_optimize)
-: data_(data_manager), ContinuousModel(dim,params), params_to_optimize_(params_to_optimize)
-{    
-    original_config_ = data_.getSerowPath() + "config/" + data_.getrobot_name_() + ".json";
-    temp_config_ = data_.getSerowPath() + "config/" + data_.getrobot_name_() +"_temp.json";
-    robot_frame_config_ = data_.getSerowPath() + "serow_hypertuner/config/robots/" + data_.getrobot_name_() + ".json";
+: data_(data_manager), serow_path_(data_.getSerowPath()), ContinuousModel(dim,params), params_to_optimize_(params_to_optimize)
+{   
+    if (!serow_path_.empty() && serow_path_.back() != '/') {
+        serow_path_.push_back('/');
+    }
+
+    original_config_ = serow_path_ + "config/" + data_.getrobot_name_() + ".json";
+    temp_config_ = serow_path_ + "config/" + data_.getrobot_name_() +"_temp.json";
+    robot_frame_config_ = serow_path_ + "serow_hypertuner/config/robots/" + data_.getrobot_name_() + ".json";
     
     setRobotJointsAndFootFrames(robot_frame_config_);
     
@@ -59,7 +63,7 @@ json BayesOptimizer::loadDefaultJson(const std::string& path)
 }
 
 void BayesOptimizer::saveBestConfig(const vectord& result){
-    std::string best_config_file = data_.getSerowPath() + "config/" + data_.getrobot_name_() + "_best_config.json";
+    std::string best_config_file = serow_path_ + "config/" + data_.getrobot_name_() + "_best_config.json";
     std::cout << "Saving best config to: " << best_config_file << std::endl;
 
     // SAVE BEST CONFIG
