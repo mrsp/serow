@@ -45,7 +45,7 @@ void DataManager::loadConfig() {
 }
 
 std::string DataManager::resolvePath(const json& config, const std::string& path) {
-    std::string serowPathEnv = std::getenv("SEROW_PATH");
+    std::string serowPathEnv = getSerowPath();
     std::string resolvedPath = serowPathEnv + path;
 
     // Extract all placeholders from the config
@@ -79,11 +79,17 @@ std::vector<Eigen::Vector3d> DataManager::convertToEigenVec3(const std::vector<s
 }
 
 std::string DataManager::getSerowPath() const {
-  const char* serowPath = std::getenv("SEROW_PATH");
-  if (serowPath == nullptr) {
+  std::string serowPath = std::getenv("SEROW_PATH");
+
+  if (serowPath.empty()) {
       throw std::runtime_error("SEROW_PATH environment variable not set");
   }
-  return std::string(serowPath);
+
+  if (serowPath.back() != '/') {
+      serowPath.push_back('/');
+      return serowPath;
+  }
+  return serowPath;
 }
 
 std::vector<double> DataManager::readHDF5_1D(const std::string& filename, const std::string& datasetName) {

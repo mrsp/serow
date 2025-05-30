@@ -6,10 +6,7 @@ BayesOptimizer::BayesOptimizer(DataManager& data_manager,
   const std::vector<std::string>& params_to_optimize)
 : data_(data_manager), serow_path_(data_.getSerowPath()), ContinuousModel(dim,params), params_to_optimize_(params_to_optimize)
 {   
-    if (!serow_path_.empty() && serow_path_.back() != '/') {
-        serow_path_.push_back('/');
-    }
-
+    std::cout << serow_path_ << std::endl;
     original_config_ = serow_path_ + "config/" + data_.getrobot_name_() + ".json";
     temp_config_ = serow_path_ + "config/" + data_.getrobot_name_() +"_temp.json";
     robot_frame_config_ = serow_path_ + "serow_hypertuner/config/robots/" + data_.getrobot_name_() + ".json";
