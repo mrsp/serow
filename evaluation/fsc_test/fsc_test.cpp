@@ -9,20 +9,22 @@
 #include <vector>
 #include "serow/Serow.hpp"
 
+constexpr double dataset_percentage_ = 0.05; // Percentage of the dataset to use for testing
+
 using namespace serow;
 using json = nlohmann::json;
 
 std::string resolvePath(const json& config, const std::string& path) {
-    std::string serow_path_env = std::getenv("SEROW_PATH");
-    std::string resolved_path = serow_path_env + path;
-    std::string experiment_type = config["Experiment"]["type"];
-    std::string base_path = config["Paths"]["base_path"];
+    std::string serowPathEnv = std::getenv("SEROW_PATH");
+    std::string resolvedPath = serowPathEnv + path;
+    std::string experiment_type_ = config["Experiment"]["type"];
+    std::string base_path_ = config["Paths"]["base_path"];
 
     // Replace placeholders
-    resolved_path = std::regex_replace(resolved_path, std::regex("\\{base_path\\}"), base_path);
-    resolved_path = std::regex_replace(resolved_path, std::regex("\\{type\\}"), experiment_type);
+    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{base_path\\}"), base_path_);
+    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{type\\}"), experiment_type_);
 
-    return resolved_path;
+    return resolvedPath;
 }
 
 // Saves predictions to .h5 file
@@ -125,13 +127,12 @@ void saveElevationMap(std::array<ElevationCell, map_size> data, double timestamp
         }
     }
     // Flush to ensure data is written
-    file.flush();
+    file.flush(); 
 }
 
 int main(int argc, char** argv) {
     try {
-
-        std::string config_path = "go2.json";  // Default path
+        std::string config_path = "anymal_b.json";  // Default path
 
         // If user provides a custom config path
         if (argc > 1) {
@@ -142,8 +143,8 @@ int main(int argc, char** argv) {
         }
 
         // Initialize Serow with the specified config
-        serow::Serow estimator;
-        if (!estimator.initialize(config_path)) {
+        serow::Serow SEROW;
+        if (!SEROW.initialize(config_path)) {
             throw std::runtime_error("Failed to initialize Serow with config: " + config_path);
         }
 
@@ -167,6 +168,7 @@ int main(int argc, char** argv) {
 
         // Read Joint States
         auto joint_positions = readHDF5(INPUT_FILE, "joint_states/positions");
+        auto joint_velocities = readHDF5(INPUT_FILE, "joint_states/velocities");
 
         // Read Feet Forces
         auto feet_force_FR = readHDF5(INPUT_FILE, "feet_force/FR");
@@ -174,13 +176,20 @@ int main(int argc, char** argv) {
         auto feet_force_RL = readHDF5(INPUT_FILE, "feet_force/RL");
         auto feet_force_RR = readHDF5(INPUT_FILE, "feet_force/RR");
 
-        // Read Base Pose Ground Truth
-        auto base_gt_positions = readHDF5(INPUT_FILE, "base_ground_truth/position");
-        auto base_gt_orientations = readHDF5(INPUT_FILE, "base_ground_truth/orientation");
 
-        // Read Timestamps
-        auto timestamps = readHDF5(INPUT_FILE, "timestamps");
-
+        std::vector<double> timestamps(angular_velocity.size());
+        // Initialize timestamps
+        for (size_t i = 0; i < feet_force_FL.size() ; ++i) {
+            timestamps[i] = i * 0.0025; // Start at 0 and increment by 0.0025
+        }
+        std::cout <<"Timestamp size -> " << timestamps.size() << std::endl;
+        std::cout <<"joint_positions size -> " << joint_positions.size() << std::endl;
+        std::cout <<"angular_velocity size -> " << angular_velocity.size() << std::endl;
+        std::cout <<"linear_acceleration size -> " << linear_acceleration.size() << std::endl;
+        std::cout <<"feet_force_RR size -> " << feet_force_RR.size() << std::endl;
+        std::cout <<"feet_force_RL size -> " << feet_force_RL.size() << std::endl;
+        std::cout <<"feet_force_FL size -> " << feet_force_FL.size() << std::endl;
+        std::cout <<"feet_force_FR size -> " << feet_force_FR.size() << std::endl;
         // Store predictions
         std::vector<double> EstTimestamp;  // timestamp
         std::vector<double> base_pos_x, base_pos_y, base_pos_z, base_rot_x, base_rot_y, base_rot_z,
@@ -191,32 +200,30 @@ int main(int argc, char** argv) {
         std::vector<double> b_ax, b_ay, b_az, b_wx, b_wy, b_wz;  // IMU Biases
         std::vector<Eigen::Vector3d> FR_contact_position, FL_contact_position, RL_contact_position,
             RR_contact_position;
-        double log_timestamp = timestamps[0][0];
 
-        for (size_t i = 0; i < timestamps.size(); ++i) {
-            double timestamp = timestamps[i][0];
-
+        for (size_t i = 0 ; i < timestamps.size()*dataset_percentage_; ++i) {
+            double timestamp = timestamps[i];
             std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
             force_torque.insert(
-                {"FR_foot",
+                {"RF_FOOT",
                  serow::ForceTorqueMeasurement{
                      .timestamp = timestamp,
                      .force = Eigen::Vector3d(feet_force_FR[i][0], feet_force_FR[i][1],
                                               feet_force_FR[i][2])}});
             force_torque.insert(
-                {"FL_foot",
+                {"LF_FOOT",
                  serow::ForceTorqueMeasurement{
                      .timestamp = timestamp,
                      .force = Eigen::Vector3d(feet_force_FL[i][0], feet_force_FL[i][1],
                                               feet_force_FL[i][2])}});
             force_torque.insert(
-                {"RL_foot",
+                {"LH_FOOT",
                  serow::ForceTorqueMeasurement{
                      .timestamp = timestamp,
                      .force = Eigen::Vector3d(feet_force_RL[i][0], feet_force_RL[i][1],
                                               feet_force_RL[i][2])}});
             force_torque.insert(
-                {"RR_foot",
+                {"RH_FOOT",
                  serow::ForceTorqueMeasurement{
                      .timestamp = timestamp,
                      .force = Eigen::Vector3d(feet_force_RR[i][0], feet_force_RR[i][1],
@@ -230,55 +237,46 @@ int main(int argc, char** argv) {
                                                    angular_velocity[i][2]);
 
             std::map<std::string, serow::JointMeasurement> joints;
-            joints.insert({"FL_hip_joint",
+            joints.insert({"LF_HAA",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][0]}});
-            joints.insert({"FL_thigh_joint",
+                                                   .position = joint_positions[i][0], .velocity = joint_velocities[i][0]}});
+            joints.insert({"LF_HFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][1]}});
-            joints.insert({"FL_calf_joint",
+                                                   .position = joint_positions[i][1], .velocity = joint_velocities[i][1]}});
+            joints.insert({"LF_KFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][2]}});
-            joints.insert({"FR_hip_joint",
+                                                   .position = joint_positions[i][2], .velocity = joint_velocities[i][2]}});
+            joints.insert({"RF_HAA",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][3]}});
-            joints.insert({"FR_thigh_joint",
+                                                   .position = joint_positions[i][3], .velocity = joint_velocities[i][3]}});
+            joints.insert({"RF_HFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][4]}});
-            joints.insert({"FR_calf_joint",
+                                                   .position = joint_positions[i][4], .velocity = joint_velocities[i][4]}});
+            joints.insert({"RF_KFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][5]}});
-            joints.insert({"RL_hip_joint",
+                                                   .position = joint_positions[i][5], .velocity = joint_velocities[i][5]}});
+            joints.insert({"LH_HAA",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][6]}});
-            joints.insert({"RL_thigh_joint",
+                                                   .position = joint_positions[i][6], .velocity = joint_velocities[i][6]}});
+            joints.insert({"LH_HFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][7]}});
-            joints.insert({"RL_calf_joint",
+                                                   .position = joint_positions[i][7], .velocity = joint_velocities[i][7]}});
+            joints.insert({"LH_KFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][8]}});
-            joints.insert({"RR_hip_joint",
+                                                   .position = joint_positions[i][8], .velocity = joint_velocities[i][8]}});
+            joints.insert({"RH_HAA",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][9]}});
-            joints.insert({"RR_thigh_joint",
+                                                   .position = joint_positions[i][9], .velocity = joint_velocities[i][9]}});
+            joints.insert({"RH_HFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][10]}});
-            joints.insert({"RR_calf_joint",
+                                                   .position = joint_positions[i][10], .velocity = joint_velocities[i][10]}});
+            joints.insert({"RH_KFE",
                            serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][11]}});
+                                                   .position = joint_positions[i][11], .velocity = joint_velocities[i][11]}});
 
-            // If the ground truth for the base pose is available, pass it to the filter for 
-            // synchronized logging
-            if (base_gt_positions.size() > 0 && base_gt_orientations.size() > 0) {
-                estimator.filter(imu, joints, force_torque, std::nullopt, std::nullopt,
-                    BasePoseGroundTruth{.timestamp = timestamp, 
-                                        .position = Eigen::Vector3d(base_gt_positions[i][0], base_gt_positions[i][1], base_gt_positions[i][2]), 
-                                        .orientation = Eigen::Quaterniond(base_gt_orientations[i][0], base_gt_orientations[i][1], base_gt_orientations[i][2], base_gt_orientations[i][3])});
-            } else {
-                estimator.filter(imu, joints, force_torque);
-            }
+            SEROW.filter(imu, joints, force_torque);
 
-            auto state = estimator.getState();
+            auto state = SEROW.getState();
             if (!state.has_value()) {
                 continue;
             }
@@ -286,16 +284,17 @@ int main(int argc, char** argv) {
             // Store the Estimates
             auto basePos = state->getBasePosition();
             auto baseOrient = state->getBaseOrientation();
+            // auto baseOrient = SEROW.attitude_estimator_->getQ(); // MAHONY ORIENTATION
             auto ExternalForces = state->getCoMExternalForces();
             auto CoMPosition = state->getCoMPosition();
             auto CoMVelocity = state->getCoMLinearVelocity();
             auto linAccelBias = state->getImuLinearAccelerationBias();
             auto angVelBias = state->getImuAngularVelocityBias();
             // Get Contact positions
-            auto FR_contact_pos = state->getContactPosition("FR_foot");
-            auto FL_contact_pos = state->getContactPosition("FL_foot");
-            auto RL_contact_pos = state->getContactPosition("RL_foot");
-            auto RR_contact_pos = state->getContactPosition("RR_foot");
+            auto FR_contact_pos = state->getContactPosition("RF_FOOT");
+            auto FL_contact_pos = state->getContactPosition("LF_FOOT");
+            auto RL_contact_pos = state->getContactPosition("LH_FOOT");
+            auto RR_contact_pos = state->getContactPosition("RH_FOOT");
 
             if (FL_contact_pos.has_value()) {
                 FL_contact_position.push_back(FL_contact_pos.value());
@@ -321,6 +320,7 @@ int main(int argc, char** argv) {
                 RR_contact_position.push_back(Eigen::Vector3d::Zero());
             }
 
+           
             EstTimestamp.push_back(timestamp);
             base_pos_x.push_back(basePos.x());
             base_pos_y.push_back(basePos.y());
@@ -345,6 +345,16 @@ int main(int argc, char** argv) {
             b_wy.push_back(angVelBias.y());
             b_wz.push_back(angVelBias.z());
         }
+
+        std::cout << "SAVING ESTIMATIONS \n";
+        std::cout << "EstTimestamp size -> " << EstTimestamp.size() << std::endl;
+        std::cout << "base_pos_x size -> " << base_pos_x.size() << std::endl;
+        std::cout << "base_pos_y size -> " << base_pos_y.size() << std::endl;
+        std::cout << "base_pos_z size -> " << base_pos_z.size() << std::endl;
+        std::cout << "base_rot_x size -> " << base_rot_x.size() << std::endl;
+        std::cout << "base_rot_y size -> " << base_rot_y.size() << std::endl;
+        std::cout << "base_rot_z size -> " << base_rot_z.size() << std::endl;
+        std::cout << "base_rot_w size -> " << base_rot_w.size() << std::endl;
         // Write structured data to HDF5
         H5::H5File outputFile(OUTPUT_FILE, H5F_ACC_TRUNC);  // Create the output file
 
