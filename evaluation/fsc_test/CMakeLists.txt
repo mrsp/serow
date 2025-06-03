@@ -13,9 +13,6 @@ find_package(nlohmann_json REQUIRED)
 find_library(BAYESOPT_LIB bayesopt PATHS /usr/local/lib /usr/lib REQUIRED)
 find_library(NLOPT_LIB nlopt PATHS /usr/local/lib /usr/lib REQUIRED)
 
-# Add include paths
-include_directories(/usr/local/include)
-
 # Find and link HDF5
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 include_directories(${HDF5_INCLUDE_DIRS})
