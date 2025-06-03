@@ -13,16 +13,16 @@ using namespace serow;
 using json = nlohmann::json;
 
 std::string resolvePath(const json& config, const std::string& path) {
-    std::string serowPathEnv = std::getenv("SEROW_PATH");
-    std::string resolvedPath = serowPathEnv + path;
-    std::string experiment_type_ = config["Experiment"]["type"];
-    std::string base_path_ = config["Paths"]["base_path"];
+    std::string serow_path_env = std::getenv("SEROW_PATH");
+    std::string resolved_path = serow_path_env + path;
+    std::string experiment_type = config["Experiment"]["type"];
+    std::string base_path = config["Paths"]["base_path"];
 
     // Replace placeholders
-    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{base_path\\}"), base_path_);
-    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{type\\}"), experiment_type_);
+    resolved_path = std::regex_replace(resolved_path, std::regex("\\{base_path\\}"), base_path);
+    resolved_path = std::regex_replace(resolved_path, std::regex("\\{type\\}"), experiment_type);
 
-    return resolvedPath;
+    return resolved_path;
 }
 
 // Saves predictions to .h5 file

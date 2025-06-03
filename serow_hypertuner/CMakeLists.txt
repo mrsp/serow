@@ -17,9 +17,6 @@ find_library(NLOPT_LIB nlopt PATHS /usr/local/lib /usr/lib REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS CXX)
 include_directories(${HDF5_INCLUDE_DIRS})
 
-# Include local headers
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-
 # Source files
 set(SOURCES
   src/HyperTuner.cpp

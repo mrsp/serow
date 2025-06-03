@@ -22,7 +22,7 @@ public:
   /// @param dim The dimension of the optimization problem
   /// @param params The bayesopt parameters
   /// @param param_names The names of the parameters to optimize
-  BayesOptimizer(DataManager& data_manager, size_t dim, const bayesopt::Parameters& params, const std::vector<std::string> &param_names);
+  BayesOptimizer(DataManager& data_manager, size_t dim, const bayesopt::Parameters& params, const double ate_position_weight, const double ate_orientation_weight, const std::vector<std::string> &param_names);
 
   /// @brief Destructor, removes the temporary config file
   ~BayesOptimizer();
@@ -55,7 +55,7 @@ private:
   std::vector<std::string> joint_names_;
 
   /// @brief Foot frames
-  std::vector<std::string> foot_names_;
+  std::vector<std::string> foot_frames_;
 
   /// @brief Serow estimated positions
   std::vector<std::vector<double>> est_positions_;
@@ -105,6 +105,12 @@ private:
   /// @brief Optimization dataset percentage. e.g dataset_size * datset_percentage = total data to be used for optimization 
   double dataset_percentage_ = 1.0;
 
+  /// @brief Weight for the Absolute Trajectory Error (ATE) position component
+  double ate_position_weight_;
+
+  /// @brief Weight for the Absolute Trajectory Error (ATE) orientation component
+  double ate_orientation_weight_;
+
   /// @brief Writes the JSON "j" configuration to a file at "path"
   /// @param j The json object to write
   /// @param path the path to the file
@@ -114,9 +120,6 @@ private:
   /// @param path the path to the file
   /// @return the json object
   json loadDefaultJson(const std::string& path);
-
-  /// @brief Sets the robot's joint names, frame names, and foot names
-  void setRobotJointsAndFootFrames(const std::string& robot_path);
 
   /// @brief Prints the robot's information including joint names and foot frames
   void printRobotInfo();

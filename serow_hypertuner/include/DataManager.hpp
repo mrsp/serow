@@ -11,22 +11,16 @@
 using json = nlohmann::ordered_json;
 
 /// @brief DataManager class to manage data loading and configuration
-class DataManager{
+class DataManager {
 public:
     ///@brief Force data object definition 3D (x y z) for each leg
     struct ForceTorqueData {
         struct Force{
-            std::vector<Eigen::Vector3d> FR;
-            std::vector<Eigen::Vector3d> FL;
-            std::vector<Eigen::Vector3d> RL;
-            std::vector<Eigen::Vector3d> RR;
+            std::map<std::string, std::vector<Eigen::Vector3d>> data;
         };
 
-        struct Torque{
-            std::vector<Eigen::Vector3d> FR;
-            std::vector<Eigen::Vector3d> FL;
-            std::vector<Eigen::Vector3d> RL;
-            std::vector<Eigen::Vector3d> RR;
+        struct Torque {
+            std::map<std::string, std::vector<Eigen::Vector3d>> data;
         };
 
         Force force;    
@@ -70,11 +64,19 @@ public:
     
     /// @brief Get the robot name from the configuration
     /// @return the robot name
-    std::string getrobot_name_() const;
+    std::string getRobotName() const;
 
     /// @brief Get the timestamps of the logged data
     /// @return A vector of doubles containing the timestamps
     std::vector<double> getTimestamps() const;
+
+    /// @brief Get the foot frames from the configuration file
+    /// @return A vector of strings containing the foot frame names
+    std::vector<std::string> getFootFrames() const;
+
+    /// @brief Get the joint names from the configuration file
+    /// @return A vector of strings containing the joint names
+    std::vector<std::string> getJointNames() const;
 
 private: 
     /// @brief Loads the configuration file (experimentConfig.json) from the config directory
@@ -82,6 +84,9 @@ private:
 
     /// @brief Loads the data from the HDF5 file as defined in the experimentConfig.json file
     void loadData();
+    
+    /// @brief Initializes the force/torque measurements for each foot frame
+    void initializeFTMeasurements();
 
     /// @brief test configuration file
     nlohmann::json config_;
@@ -118,12 +123,30 @@ private:
     
     ///@brief Joint states (estimated velocities)
     std::vector<std::vector<double>> joint_velocities_;
+
     ///@brief Logged timestamps 
     std::vector<double> timestamps_;
     
     /// @brief Foot frame names
     std::vector<std::string> foot_frames_;
+
+    /// @brief Robot joint names
+    std::vector<std::string> joint_names_;
     
+    /// @brief Path to the hyper tuner robot configuration file
+    std::string robot_frame_config_;
+    
+    /// @brief Dataset names from experimentConfig.json
+    std::string imu_linear_acceleration_dataset_;
+    std::string imu_angular_velocity_dataset_;
+    std::string joint_position_dataset_;
+    std::string joint_velocity_dataset_;
+    std::string gt_base_position_dataset_;
+    std::string gt_base_orientation_dataset_;
+    std::string timestamps_dataset_;
+    std::vector<std::string> feet_force_dataset_;
+
+
     /// @brief Force data
     ForceTorqueData force_torque_;
 

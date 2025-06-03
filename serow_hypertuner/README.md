@@ -31,7 +31,7 @@ make
 sudo make install
 ```
 
-### Build the hyper tuner package
+### Build and run the hyper tuner package
 ```
 cd serow_hypertuner && mkdir build/ && cd build/
 ```
@@ -39,17 +39,6 @@ Compile the package:
 ```
 cmake .. && make
 ```
-### Run the hypertuner
-Compile the serow_hypertuner package by 
-
-```
-cd serow_hypertuner && mkdir build/ && cd build/
-```
-Compile:
-```
-cmake .. && make 
-```
-And run the executable:
 ```
 ./hypertuner
 ```
@@ -59,6 +48,7 @@ You can specify which robot, dataset, and hyperparams-to-optimize inside the ser
 ### New robot config
 Create a .json file for your robot with name = **<robot_name>.json** udner the serow_hypertuner/config/robots/ and fill in the foot frames and joint names with the following order:
 
+#### For quadruped robots
 -->  Front Left
  
 -->  Front Right
@@ -66,6 +56,12 @@ Create a .json file for your robot with name = **<robot_name>.json** udner the s
 -->  Rear Left
  
 -->  Rear Right
+
+#### For bipedal robots
+
+---> Left
+
+---> Right
 
 ### Debug
 

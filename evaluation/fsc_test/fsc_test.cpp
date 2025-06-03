@@ -9,7 +9,7 @@
 #include <vector>
 #include "serow/Serow.hpp"
 
-const double dataset_percentage_ = 0.05; // Percentage of the dataset to use for testing
+constexpr double dataset_percentage_ = 0.05; // Percentage of the dataset to use for testing
 
 using namespace serow;
 using json = nlohmann::json;

@@ -26,7 +26,6 @@ experiment_type =  config["Experiment"]["type"]
 measurement_file = serow_path +  config["Paths"]["data_file"].replace("{base_path}", base_path).replace("{type}", experiment_type)
 prediction_file = serow_path + config['Paths']['prediction_file'].replace("{base_path}", base_path).replace("{type}", experiment_type)
 
-
 # Load the data from the HDF5 file
 def load_gt_data(h5_file):
     with h5py.File(h5_file, "r") as f:
