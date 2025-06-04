@@ -3,6 +3,7 @@
 import numpy as np
 import serow
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import torch
 import os
 
@@ -1100,7 +1101,6 @@ def plot_training_curves(stats, episode_rewards):
         plt.legend()
 
     plt.tight_layout()
-    plt.savefig(f'policy/ppo/training_curves.png')
     plt.show()
 
 def export_models_to_onnx(agent, robot, params, path):
