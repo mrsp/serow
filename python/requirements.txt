@@ -1,6 +1,6 @@
 numpy>=1.21.0,<2.0.0
 torch>=1.9.0
-matplotlib==3.10.3  # For visualization
+matplotlib>=3.10.0
 pybind11>=2.11.1  # Required for serow 
 mcap>=1.2.2
 flatbuffers>=25.2.10
