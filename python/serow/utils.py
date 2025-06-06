@@ -18,36 +18,13 @@ from read_mcap import(
 )
 
 def train_policy(datasets, contacts_frame, agent, robot, params, policy_path=None):
+    # Set to train mode
+    agent.train()
+
     episode_rewards = []
     converged = False
     best_reward = float('-inf')
     best_reward_episode = 0
-    reward_history = []
-
-    # Save best model callback
-    def save_best_model(episode, episode_reward):
-        nonlocal best_reward
-        nonlocal best_reward_episode
-
-        if episode_reward > best_reward:
-            best_reward = episode_reward
-            best_reward_episode = episode
-
-            if policy_path is not None:
-                path = f'{policy_path}/best'
-                os.makedirs(path, exist_ok=True)
-                torch.save({
-                    'actor_state_dict': agent.actor.state_dict(),
-                    'critic_state_dict': agent.critic.state_dict(),
-                    'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
-                    'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
-                }, f'{path}/trained_policy_{robot}.pth')
-                print(f"Saved better policy with reward {episode_reward:.4f}")
-                
-                # Export to ONNX
-                export_models_to_onnx(agent, robot, params, path)
-            return True
-        return False
 
     # Training statistics tracking
     stats = {
@@ -118,7 +95,16 @@ def train_policy(datasets, contacts_frame, agent, robot, params, policy_path=Non
                         collected_steps += 1
                 
                 episode_reward += step_reward
-                
+
+                # Train policy periodically
+                if collected_steps >= params['n_steps']:
+                    actor_loss, critic_loss = agent.train()
+                    if actor_loss is not None and critic_loss is not None:
+                        print(f"Policy Loss: {actor_loss:.4f}, Value Loss: {critic_loss:.4f}")
+                        episode_actor_losses.append(actor_loss)
+                        episode_critic_losses.append(critic_loss)
+                    collected_steps = 0
+
                 # Check for early termination due to filter divergence
                 should_terminate = False
                 for cf in contacts_frame:
@@ -130,14 +116,6 @@ def train_policy(datasets, contacts_frame, agent, robot, params, policy_path=Non
                     print(f"Episode {episode} terminated early at step {step}/{max_steps} due to filter divergence")
                     break
                 
-                # Train policy periodically
-                if collected_steps >= params['train_freq']:
-                    critic_loss, actor_loss = agent.train()
-                    if critic_loss is not None and actor_loss is not None:
-                        episode_critic_losses.append(critic_loss)
-                        episode_actor_losses.append(actor_loss)
-                    collected_steps = 0
-
                 # Progress logging
                 if step % 500 == 0 or step == max_steps - 1:
                     print(f"Episode {episode}/{max_episodes}, Step {step}/{max_steps}, " 
@@ -146,38 +124,13 @@ def train_policy(datasets, contacts_frame, agent, robot, params, policy_path=Non
 
             # End of episode processing
             episode_rewards.append(episode_reward)
-            reward_history.append(episode_reward)
-            if len(reward_history) > params['window_size']:
-                reward_history.pop(0)
-            
-            # Save best model if improved
-            save_best_model(episode, episode_reward)
+            agent.save_checkpoint(episode_reward)
 
-            # Check convergence by comparing recent rewards to best reward and critic loss
-            if len(reward_history) >= params['window_size']:
-                recent_rewards = np.array(reward_history)
-                # Calculate how close recent rewards are to best reward
-                reward_ratios = recent_rewards / (abs(best_reward) + 1e-6)  # Avoid division by zero
-                
-                # Check if rewards have converged
-                rewards_converged = np.all(reward_ratios >= (1.0 - params['convergence_threshold']))
-                
-                # Check if critic loss has converged
-                critic_loss_converged = False
-                if len(stats['critic_losses']) >= params['window_size']:
-                    recent_critic_losses = np.array(stats['critic_losses'][-params['window_size']:])
-                    critic_loss_std = np.std(recent_critic_losses)
-                    critic_loss_mean = np.mean(recent_critic_losses)
-                    critic_loss_converged = critic_loss_std <= (critic_loss_mean * params['critic_convergence_threshold'])
-                
-                # Both rewards and critic loss must be converged
-                if rewards_converged and critic_loss_converged:
-                    print(f"Training converged!")
-                    print(f"Recent rewards are within {params['convergence_threshold']*100}% of best episode reward {best_reward:.2f} in episode {best_reward_episode}")
-                    print(f"Critic loss has stabilized with std/mean ratio: {critic_loss_std/critic_loss_mean:.4f}")
-                    converged = True
-                    break  # Break out of episode loop
-            
+            if episode_reward > best_reward:
+                best_reward = episode_reward
+                best_reward_episode = episode
+                export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
+
             # Store episode statistics
             if episode_critic_losses:
                 stats['critic_losses'].append(np.mean(episode_critic_losses))
@@ -185,36 +138,33 @@ def train_policy(datasets, contacts_frame, agent, robot, params, policy_path=Non
                 stats['actor_losses'].append(np.mean(episode_actor_losses))
             stats['rewards'].append(episode_reward)
             stats['episode_lengths'].append(step)
-            
+
             # Print episode summary
             print(f"Episode {episode} completed with episode reward {episode_reward:.2f}")
             if episode_critic_losses:
                 print(f"Average critic loss: {np.mean(episode_critic_losses):.4f}")
             if episode_actor_losses:
                 print(f"Average actor loss: {np.mean(episode_actor_losses):.4f}")
+
+            # Check for early stopping
+            converged = agent.check_early_stopping(episode_reward, np.mean(episode_critic_losses))
+            if converged:
+                break
         
         if converged or episode == max_episodes - 1:
-            if policy_path is not None:
-                # Save the final policy
-                path = f'{policy_path}/final'
-                os.makedirs(path, exist_ok=True)
-                torch.save({
-                    'actor_state_dict': agent.actor.state_dict(),
-                    'critic_state_dict': agent.critic.state_dict(),
-                    'actor_optimizer_state_dict': agent.actor_optimizer.state_dict(),
-                    'critic_optimizer_state_dict': agent.critic_optimizer.state_dict(),
-                }, f'{path}/trained_policy_{robot}.pth')
-            print(f"Saved final policy with reward {episode_reward:.4f}")
-            # Export to ONNX
-            export_models_to_onnx(agent, robot, params, path)
+            agent.load_checkpoint(os.path.join(agent.checkpoint_dir, f'trained_policy_{robot}.pth'))
+            export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
             break  # Break out of dataset loop
     
     # Plot training curves
     plot_training_curves(stats, episode_rewards)
-    
     return agent, stats
 
 def evaluate_policy(dataset, contacts_frame, agent, robot, policy_path):
+        # Set to evaluate mode if the agent supports it
+        if hasattr(agent, 'eval'):
+            agent.eval()
+
         # After training, evaluate the policy
         print(f"\nEvaluating trained policy for {robot} from {policy_path}...")
         max_steps = len(dataset['imu']) - 1
