@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import serow
+import torch.serialization
+from numpy.core.multiarray import scalar
 
 from ddpg import DDPG
 from read_mcap import(
@@ -24,6 +26,8 @@ from utils import(
     filter,
     quaternion_to_rotation_matrix
 )
+
+torch.serialization.add_safe_globals([scalar])
 
 class Actor(nn.Module):
     class OUNoise:
@@ -268,16 +272,16 @@ if __name__ == "__main__":
     convergence_threshold = 0.05  # How close to best reward we need to be (as a fraction) to mark convergence
     critic_convergence_threshold = 0.05  # How much the critic loss can vary before considering it converged
     window_size = 10  # Window size for convergence check
-    train_freq = 100  # Call train() every train_freq steps
 
     params = {
+        'robot': robot,
         'state_dim': state_dim,
         'action_dim': action_dim,
         'max_action': None,
         'min_action': min_action,
         'gamma': 0.99,
         'tau': 0.0005,
-        'batch_size': 64,  
+        'batch_size': 128,  
         'actor_lr': 1e-5, 
         'critic_lr': 1e-5,  
         'buffer_size': 1000000,  
@@ -292,8 +296,13 @@ if __name__ == "__main__":
         'convergence_threshold': convergence_threshold,
         'critic_convergence_threshold': critic_convergence_threshold,
         'window_size': window_size,
-        'train_freq': train_freq,
-        'max_episodes': 1000,
+        'n_steps': 2000,
+        'max_episodes': 2,
+        'update_lr': True,
+        'final_lr_ratio': 0.1,
+        'total_steps': 1000000,
+        'max_grad_norm': 0.5,
+        'checkpoint_dir': 'policy/ddpg',
     }
 
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -303,13 +312,11 @@ if __name__ == "__main__":
     actor = Actor(params).to(device)
     critic = Critic(params).to(device)
     agent = DDPG(actor, critic, params, device=device, normalize_state=True)
+    policy_path = params['checkpoint_dir']
 
-    policy_path = 'policy/ddpg'
     # Try to load a trained policy for this robot if it exists
     try:
-        checkpoint = torch.load(f'{policy_path}/final/trained_policy_{robot}.pth', weights_only=True)
-        agent.actor.load_state_dict(checkpoint['actor_state_dict'])
-        agent.critic.load_state_dict(checkpoint['critic_state_dict'])
+        agent.load_checkpoint(f'{policy_path}/trained_policy_{robot}.pth')
         print(f"Loaded trained policy for {robot} from '{policy_path}/trained_policy_{robot}.pth'")
         loaded = True
     except FileNotFoundError:
@@ -319,13 +326,13 @@ if __name__ == "__main__":
         # Train the policy
         train_policy(train_datasets, contacts_frame, agent, robot, params, policy_path=policy_path)
         # Load the best policy
-        checkpoint = torch.load(f'{policy_path}/final/trained_policy_{robot}.pth', weights_only=True)
+        checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')
         actor = Actor(params).to(device)
         critic = Critic(params).to(device)
         best_policy = DDPG(actor, critic, params, device=device)
         best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
         best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])
-        print(f"Loaded optimal trained policy for {robot} from '{policy_path}/final/trained_policy_{robot}.pth'")
+        print(f"Loaded optimal trained policy for {robot} from '{policy_path}/trained_policy_{robot}.pth'")
         evaluate_policy(test_dataset, contacts_frame, best_policy, robot, policy_path)
     else:
         # Just evaluate the loaded policy

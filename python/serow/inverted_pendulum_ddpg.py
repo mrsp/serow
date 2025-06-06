@@ -4,8 +4,37 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
 import unittest
+import os
 
 from ddpg import DDPG
+
+params = {
+    'robot': 'inverted_pendulum',
+    'state_dim': 3,
+    'action_dim': 1,
+    'max_action': 2.0,
+    'min_action': -2.0,
+    'gamma': 0.99,
+    'tau': 0.01,
+    'batch_size': 256,
+    'actor_lr': 1e-4, 
+    'critic_lr': 1e-4,
+    'noise_scale': 0.5,
+    'noise_decay': 0.9995,
+    'max_grad_norm': 0.3,
+    'buffer_size': 1000000,
+    'max_state_value': 1e8,
+    'n_steps': 2000,
+    'min_state_value': -1e8,
+    'train_for_batches': 5,
+    'update_lr': True,
+    'convergence_threshold': 0.1,
+    'critic_convergence_threshold': 1.0,
+    'window_size': 20,
+    'checkpoint_dir': 'policy/inverted_pendulum/ddpg',
+    'total_steps': 100000, 
+    'final_lr_ratio': 0.1,  # Learning rate will decay to 10% of initial value
+}
 
 class OUNoise:
     def __init__(self, size, mu=0.0, theta=0.15, sigma=0.3):
@@ -104,7 +133,7 @@ class InvertedPendulum:
 
     def reset(self):
         # Start with a small random angle near upright
-        theta = np.random.uniform(-np.pi, np.pi)
+        theta = np.random.uniform(-np.pi/4, np.pi/4)
         theta_dot = np.random.uniform(-1.0, 1.0)
         # Convert to [cos(theta), sin(theta), theta_dot] representation
         self.state = np.array([np.cos(theta), np.sin(theta), theta_dot])
@@ -113,6 +142,7 @@ class InvertedPendulum:
     def step(self, action):
         action = np.clip(action, -self.max_torque, self.max_torque)
         done = 0.0
+
         # Recover theta from cos(theta) and sin(theta)
         cos_theta, sin_theta, theta_dot = self.state
         theta = np.arctan2(sin_theta, cos_theta)
@@ -125,45 +155,38 @@ class InvertedPendulum:
         # Convert back to [cos(theta), sin(theta), theta_dot] representation
         self.state = np.array([np.cos(theta), np.sin(theta), theta_dot])
         
-        # Improved reward function using cos(theta) and sin(theta)
-        # The upright position is when cos(theta) = 1, sin(theta) = 0
-        angledot_cost = 0.1 * theta_dot**2
-        torque_cost = 0.001 * action**2
-        reward = float(np.cos(theta)) - float(angledot_cost) - float(torque_cost)
-        done = 1.0 if (abs(theta_dot) > self.max_angular_vel) else 0.0
-        if done:
-            reward -= 20  # Stronger penalty for falling
+        # Primary reward: exponential decay based on angle from upright
+        angle_from_upright = abs(theta)
+        angle_reward = np.exp(-2.0 * angle_from_upright)  # High reward when upright
+        
+        # Stability bonus: reward for low angular velocity when near upright
+        if angle_from_upright < 0.5:  # Only when reasonably upright
+            stability_bonus = 0.5 * np.exp(-abs(theta_dot))
+        else:
+            stability_bonus = 0.0
+        
+        # Control penalty
+        control_penalty = 0.001 * action**2
+        
+        reward = float(angle_reward) + float(stability_bonus) - float(control_penalty)
+        
+        # Termination condition - only terminate for extreme angular velocities
+        done = 1.0 if abs(theta_dot) > self.max_angular_vel else 0.0
+
         return self.state, reward, done
 
 # Unit tests for DDPG with Inverted Pendulum
 class TestDDPGInvertedPendulum(unittest.TestCase):
     def setUp(self):
-        self.state_dim = 3  # [cos(theta), sin(theta), theta_dot]
-        self.action_dim = 1  # torque
-        self.max_action = 2.0
-        self.min_action = -2.0
+        self.state_dim = params['state_dim']
+        self.action_dim = params['action_dim']
+        self.max_action = params['max_action']
+        self.min_action = params['min_action']
 
         # Create device
-        # self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.device = 'cpu'
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        params = {
-            'state_dim': self.state_dim,
-            'action_dim': self.action_dim,
-            'max_action': self.max_action,
-            'min_action': self.min_action,
-            'gamma': 0.99,
-            'tau': 0.01,
-            'batch_size': 128,
-            'actor_lr': 1e-4, 
-            'critic_lr': 1e-4,
-            'noise_scale': 0.5,
-            'noise_decay': 0.9995,
-            'buffer_size': 1000000,
-            'max_state_value': 1e8,
-            'min_state_value': -1e8,
-            'train_for_batches': 5,
-        }
+        # Create actor and critic networks
         self.actor = Actor(params)
         self.critic = Critic(params)
         self.agent = DDPG(self.actor, self.critic, params, device=self.device)
@@ -201,39 +224,29 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         self.assertTrue(np.allclose(stored[3], next_state.flatten(), rtol=1e-5, atol=1e-5))
         self.assertEqual(stored[4], done)
 
-    def test_train(self):
-        # Fill buffer with some transitions
-        state = self.env.reset()
-        for _ in range(100):
-            action = self.agent.actor.get_action(state, deterministic=False)
-            next_state, reward, done = self.env.step(action)
-            self.agent.add_to_buffer(state, action, reward, next_state, done)
-            state = next_state if not done else self.env.reset()
-        # Train and check if it runs without errors
-        try:
-            self.agent.train()
-            self.assertTrue(True)
-        except Exception as e:
-            self.fail(f"Training failed with error: {e}")
-
-    def test_policy_evaluation(self):
+    def test_train_and_evaluate(self):
         max_steps_per_episode = 2048
         episode_rewards = []
+        max_episodes = 250
         best_reward = float('-inf')
-        max_episodes = 1000
-        reward_history = []
-        window_size = 10
-        convergence_threshold = 0.5  # How close to best reward we need to be (as a fraction)
-
-        update_steps = 1  # Train after collecting this many timesteps
-
-        episode_rewards = []
-        best_reward = float('-inf')
+        max_episodes = 250
         collected_steps = 0
+
+        # Create checkpoint directory
+        checkpoint_dir = 'policy/inverted_pendulum/ddpg'
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        
+        # Update params with checkpoint and early stopping parameters
+        params.update({
+            'checkpoint_dir': checkpoint_dir,
+            'window_size': 20, 
+        })
 
         for episode in range(max_episodes):
             state = self.env.reset()
             episode_reward = 0.0  
+            episode_critic_losses = []
+            episode_policy_losses = []
 
             # Exploration phases - more exploration early on
             noise_scale = max(0.1, 0.3 * (0.99 ** episode))  # Decay noise over episodes
@@ -247,38 +260,33 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
                 episode_reward += reward
                 collected_steps += 1
 
-                if done > 0.0:
-                    state = self.env.reset()
-                else:
-                    state = next_state
-                
-                if collected_steps >= update_steps:
-                    self.agent.train()
+                if collected_steps >= params['n_steps']:
+                    actor_loss, critic_loss = self.agent.train()
+                    if actor_loss != 0.0 or critic_loss != 0.0:  # Only print if actual training occurred
+                        print(f"Policy Loss: {actor_loss:.4f}, Value Loss: {critic_loss:.4f}")
+                        episode_critic_losses.append(critic_loss)
+                        episode_policy_losses.append(actor_loss)
+
                     collected_steps = 0
 
-                if done or step == max_steps_per_episode - 1:
+                if done > 0.0 or step == max_steps_per_episode - 1:
+                    state = self.env.reset()
                     break
+                else:
+                    state = next_state
 
             episode_rewards.append(episode_reward)
-            if episode_reward > best_reward:
-                best_reward = episode_reward
-            print(f"Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: {best_reward:.2f}")
+            self.agent.save_checkpoint(episode_reward)
 
-            # Update reward history
-            reward_history.append(episode_reward)
-            if len(reward_history) > window_size:
-                reward_history.pop(0)
-                
-            # Check convergence by comparing recent rewards to best reward
-            if len(reward_history) >= window_size:
-                recent_rewards = np.array(reward_history)
-                # Calculate how close recent rewards are to best reward
-                reward_ratios = recent_rewards / (abs(best_reward) + 1e-6)  # Avoid division by zero
-                # Check if all recent rewards are within threshold of best reward
-                if np.all(reward_ratios >= (1.0 - convergence_threshold)):
-                    print(f"Training converged! Recent rewards are within {convergence_threshold*100}% of best reward {best_reward:.2f}")
-                    break
+            # Check for early stopping
+            if self.agent.check_early_stopping(episode_reward, np.mean(episode_critic_losses)):
+                print("Early stopping triggered. Loading best model...")
+                self.agent.load_checkpoint(os.path.join(checkpoint_dir, 'best_model.pth'))
+                break
 
+            print(f"Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: " 
+                  f"{self.agent.best_reward:.2f}")
+           
             if episode % 10 == 0:
                 avg_reward = np.mean(episode_rewards[-10:])
                 print(f"Episode {episode}, Avg Reward (last 10): {avg_reward:.2f}")
@@ -287,7 +295,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
         episode_rewards = np.array(episode_rewards)
         smoothed_episode_rewards = []
         smoothed_episode_reward = episode_rewards[0]
-        alpha = 0.8
+        alpha = 0.95
         for i in range(len(episode_rewards)):
             smoothed_episode_reward = alpha * smoothed_episode_reward + (1.0 - alpha) * episode_rewards[i]
             smoothed_episode_rewards.append(smoothed_episode_reward)
@@ -305,7 +313,7 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
 
         # Evaluate the policy and collect data for plotting
         state = self.env.reset()
-        total_reward = 0.0  # Initialize as float
+        total_reward = 0.0  
         states = []
         actions = []
         rewards = []
@@ -315,8 +323,8 @@ class TestDDPGInvertedPendulum(unittest.TestCase):
             state_flat = np.array(state).reshape(-1)
             states.append(np.array([np.arctan2(state_flat[1], state_flat[0]),  state_flat[2]]))
             actions.append(action)
-            rewards.append(float(reward))  # Ensure reward is float
-            total_reward += float(reward)  # Ensure reward is float
+            rewards.append(reward) 
+            total_reward += reward
             state = next_state
             if done:
                 break

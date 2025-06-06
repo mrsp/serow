@@ -9,6 +9,7 @@ import os
 from ppo import PPO
 
 params = {
+    'robot': 'inverted_pendulum',
     'state_dim': 3,
     'action_dim': 1,
     'max_action': 2.0,
@@ -31,8 +32,8 @@ params = {
     'convergence_threshold': 0.1,
     'critic_convergence_threshold': 1.0,
     'window_size': 20,
-    'checkpoint_dir': 'policy/inverted_pendulum',
-    'total_steps': 100000,  # Reduced from default 1,000,000 to 100,000 for faster decay
+    'checkpoint_dir': 'policy/inverted_pendulum/ppo',
+    'total_steps': 100000, 
     'final_lr_ratio': 0.1,  # Learning rate will decay to 10% of initial value
 }
 
@@ -270,13 +271,12 @@ class TestPPOInvertedPendulum(unittest.TestCase):
     def test_train_and_evaluate(self):   
         max_steps_per_episode = 2048
         episode_rewards = []
-
         best_reward = float('-inf')
         max_episodes = 250
         collected_steps = 0
         
         # Create checkpoint directory
-        checkpoint_dir = 'policy/inverted_pendulum'
+        checkpoint_dir = 'policy/inverted_pendulum/ppo'
         os.makedirs(checkpoint_dir, exist_ok=True)
         
         # Update params with checkpoint and early stopping parameters

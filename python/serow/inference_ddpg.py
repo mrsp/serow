@@ -104,7 +104,7 @@ if __name__ == "__main__":
     # Initialize ONNX inference
     robot = "go2"
     device = "cpu"
-    policy_path = "policy/ddpg/final"
+    policy_path = "policy/ddpg"
     agent = ONNXInference(robot, path=policy_path, device=device)
 
     # Get contacts frame from the first measurement

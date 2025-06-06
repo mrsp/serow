@@ -10,14 +10,13 @@ from utils import normalize_vector
 
 class PPO:
     def __init__(self, actor, critic, params, device='cpu', normalize_state=False):
-        self.buffer_size = params['buffer_size']
-        self.buffer = deque(maxlen=self.buffer_size)
-        self.device = device
+        self.name = "PPO"
+        self.robot = params['robot']
+        self.device = torch.device(device)
         self.actor = actor.to(self.device)
         self.critic = critic.to(self.device)
         self.state_dim = params['state_dim']
         self.action_dim = params['action_dim']
-        self.name = "PPO"
         
         # Learning rate parameters
         self.initial_actor_lr = params['actor_lr']
@@ -31,6 +30,9 @@ class PPO:
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.initial_critic_lr)
         self.batch_size = params['batch_size']
       
+        self.buffer_size = params['buffer_size']
+        self.buffer = deque(maxlen=self.buffer_size)
+        self.batch_size = params['batch_size']
         self.gamma = params['gamma']
         self.gae_lambda = params['gae_lambda']
         self.clip_param = params['clip_param']
@@ -40,15 +42,14 @@ class PPO:
         self.ppo_epochs = params['ppo_epochs']
         self.min_action = params['min_action']
         self.max_action = params['max_action']
+        self.num_updates = 0
 
         self.normalize_state = normalize_state
         self.max_state_value = params['max_state_value']
         self.min_state_value = params['min_state_value']
-
-        self.num_updates = 0
         
         # Early stopping parameters
-        self.window_size = params.get('window_size', 10)  # Number of epochs to wait before early stopping
+        self.window_size = params.get('window_size', 10) 
         self.best_reward = float('-inf')
         self.convergence_threshold = params.get('convergence_threshold', 0.1)
         self.critic_convergence_threshold = params.get('critic_convergence_threshold', 0.05)
@@ -59,6 +60,14 @@ class PPO:
         # Checkpoint parameters
         self.checkpoint_dir = params['checkpoint_dir']
         os.makedirs(self.checkpoint_dir, exist_ok=True)
+
+    def eval(self):
+        self.actor.eval()
+        self.critic.eval()
+
+    def train(self):
+        self.actor.train()
+        self.critic.train()
 
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
         if self.normalize_state:
@@ -127,23 +136,24 @@ class PPO:
 
     def save_checkpoint(self, episode_reward):
         # If this is the best model so far, save it separately
+        """Save a checkpoint of the current model state"""
+        checkpoint = {
+            'actor_state_dict': self.actor.state_dict(),
+            'critic_state_dict': self.critic.state_dict(),
+            'actor_optimizer': self.actor_optimizer.state_dict(),
+            'critic_optimizer': self.critic_optimizer.state_dict(),
+            'episode_reward': episode_reward,
+            'num_updates': self.num_updates
+        }
         if episode_reward > self.best_reward:
-            """Save a checkpoint of the current model state"""
-            checkpoint = {
-                'actor_state_dict': self.actor.state_dict(),
-                'critic_state_dict': self.critic.state_dict(),
-                'actor_optimizer': self.actor_optimizer.state_dict(),
-                'critic_optimizer': self.critic_optimizer.state_dict(),
-                'episode_reward': episode_reward,
-                'num_updates': self.num_updates
-            }
             self.best_reward = episode_reward
             self.best_model_state = checkpoint
-            best_model_path = os.path.join(self.checkpoint_dir, 'best_model.pth')
+            best_model_path = os.path.join(self.checkpoint_dir, f'trained_policy_{self.robot}.pth')
             torch.save(checkpoint, best_model_path)
             print(f"New best model saved with reward: {episode_reward:.2f}")
-            checkpoint_path = os.path.join(self.checkpoint_dir, f'checkpoint_{self.num_updates}.pth')
-            torch.save(checkpoint, checkpoint_path)
+        checkpoint_path = os.path.join(self.checkpoint_dir, f'policy_checkpoint_{self.robot}.pth')
+        torch.save(checkpoint, checkpoint_path)
+        print(f"Saved checkpoint with reward: {episode_reward:.2f}")
 
     def load_checkpoint(self, checkpoint_path):
         """Load a checkpoint"""
