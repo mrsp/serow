@@ -62,7 +62,8 @@ class RewardShaper:
                     position_reward = np.exp(-alpha_pos * position_error * time_factor)
 
                     # Orientation error
-                    orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() @ quaternion_to_rotation_matrix(state.get_base_orientation())))
+                    orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
+                                                              @ quaternion_to_rotation_matrix(state.get_base_orientation())))
                     self._update_buffer(self.recent_orientation_errors, orientation_error)
                     alpha_ori = self._get_alpha(self.recent_orientation_errors, time_factor, percentile=70)
                     orientation_reward = np.exp(-alpha_ori * orientation_error * time_factor)
@@ -180,9 +181,6 @@ class SerowEnv(gym.Env):
             kin, prior_state = self.predict_step(imu, joints, ft)
 
             for cf in contact_frames:
-                if not cs.contacts_status[cf]:
-                    continue
-                
                 if not baseline and prior_state.get_contact_position(cf) is not None:
                     # Compute the state
                     x = self.compute_state(cf, prior_state, cs)
@@ -191,7 +189,6 @@ class SerowEnv(gym.Env):
                     action = agent.get_action(x, deterministic=True)[0]
                 else:
                     action = np.ones(self.action_dim)
-
 
                 print(f"Action for {cf}: {action}")
                 # Run the update step
@@ -247,4 +244,4 @@ class SerowEnv(gym.Env):
             print(f"Min Reward for {cf}: {np.min(immediate_rewards[cf]):.4f} at step " 
                   f"{np.argmin(immediate_rewards[cf])}")
             print("-------------------------------------------------")
-        return timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards, contact_states
+        return timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards

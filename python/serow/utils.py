@@ -1,21 +1,10 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import serow
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import torch
 import os
-
-from read_mcap import(
-    read_base_states, 
-    read_contact_states, 
-    read_force_torque_measurements, 
-    read_joint_measurements, 
-    read_imu_measurements, 
-    read_base_pose_ground_truth,
-    read_joint_states
-)
 
 def rotation_matrix_to_quaternion(R):
     """
