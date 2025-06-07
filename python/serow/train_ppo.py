@@ -21,7 +21,6 @@ from read_mcap import(
 )
 
 from utils import(
-    train_policy,
     plot_trajectories,
     quaternion_to_rotation_matrix,
     export_models_to_onnx,
@@ -211,27 +210,32 @@ def train_ppo(datasets, agent, params):
                 kin, prior_state = serow_env.predict_step(imu, joints, ft)
 
                 for cf in contact_frames:
-                    if not (prior_state.get_contact_position(cf) is not None 
+                    if (prior_state.get_contact_position(cf) is not None 
                             and cs.contacts_status[cf] and next_cs.contacts_status[cf]):
-                        continue
                     
-                    # Compute the state
-                    x = serow_env.compute_state(cf, prior_state, cs)
+                        # Compute the state
+                        x = serow_env.compute_state(cf, prior_state, cs)
 
-                    # Compute the action
-                    action, value, log_prob = agent.get_action(x, deterministic=False)
+                        # Compute the action
+                        action, value, log_prob = agent.get_action(x, deterministic=False)
 
-                    # Run the update step
-                    post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step)
-                    rewards[cf] = reward
-                    dones[cf] = done
+                        # Run the update step
+                        post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step)
+                        rewards[cf] = reward
+                        dones[cf] = done
 
-                    # Compute the next state
-                    next_x = serow_env.compute_state(cf, post_state, next_cs)
+                        # Compute the next state
+                        next_x = serow_env.compute_state(cf, post_state, next_cs)
 
-                    # Add to buffer
-                    if reward is not None:
-                        agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
+                        # Add to buffer
+                        if reward is not None:
+                            agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
+
+
+                    else:
+                        action = np.ones(serow_env.action_dim)
+                        # Just run the update step
+                        post_state, _, _ = serow_env.update_step(cf, kin, action, gt, time_step)
 
                     # Update the prior state
                     prior_state = post_state
@@ -335,41 +339,6 @@ if __name__ == "__main__":
     min_action = 1e-10
     robot = "go2"
 
-    # Sync and align the data to the ground truth
-    base_positions = []
-    base_orientations = []
-    gt_positions = []
-    gt_orientations = []
-    gt_timestamps = []
-    timestamps = []
-
-    # Compute the offset between the base states and the base pose ground truth
-    data_offset = len(base_pose_ground_truth) - len(base_states) 
-    for base_state, gt in zip(base_states, base_pose_ground_truth):
-        base_positions.append(base_state.base_position)
-        base_orientations.append(base_state.base_orientation)
-        gt_positions.append(gt.position)
-        gt_orientations.append(gt.orientation)
-        gt_timestamps.append(gt.timestamp)
-        timestamps.append(base_state.timestamp + base_pose_ground_truth[data_offset].timestamp)
-
-    common_timestamps, base_positions_aligned, base_orientations_aligned, gt_positions_aligned, gt_orientations_aligned = \
-        sync_and_align_data(np.array(timestamps), np.array(base_positions), np.array(base_orientations), 
-                            np.array(gt_timestamps), np.array(gt_positions), np.array(gt_orientations), 
-                            align=True)
-
-    plot_trajectories(common_timestamps, base_positions_aligned, base_orientations_aligned, 
-                      gt_positions_aligned, gt_orientations_aligned, cumulative_rewards=None)
-
-    # Reform the ground truth data
-    base_pose_ground_truth = []
-    for i in range(len(common_timestamps)):
-        gt = serow.BasePoseGroundTruth()
-        gt.timestamp = common_timestamps[i]
-        gt.position = gt_positions_aligned[i]
-        gt.orientation = gt_orientations_aligned[i]
-        base_pose_ground_truth.append(gt)
-
     serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0])
     test_dataset = {
         'imu': imu_measurements,
@@ -380,7 +349,18 @@ if __name__ == "__main__":
         'joint_states': joint_states,
         'base_pose_ground_truth': base_pose_ground_truth
     }
-    serow_env.evaluate(test_dataset, agent=None)
+    
+    timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards = \
+        serow_env.evaluate(test_dataset, agent=None)
+
+    # Reform the ground truth data
+    base_pose_ground_truth = []
+    for i in range(len(timestamps)):
+        gt = serow.BasePoseGroundTruth()
+        gt.timestamp = timestamps[i]
+        gt.position = gt_positions[i]
+        gt.orientation = gt_orientations[i]
+        base_pose_ground_truth.append(gt)
 
     # Get the contacts frame
     contact_frames = serow_env.contact_frames
