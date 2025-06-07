@@ -88,7 +88,6 @@ class PPO:
 
         with torch.no_grad():
             action, log_prob = self.actor.get_action(state, deterministic)
-            # Fix: Pass state as tensor to critic
             state_tensor = torch.FloatTensor(state).reshape(1, -1).to(self.device)
             value = self.critic(state_tensor).item()
         return action, value, log_prob

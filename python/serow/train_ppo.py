@@ -21,68 +21,55 @@ from read_mcap import(
 )
 
 from utils import(
-    plot_trajectories,
     quaternion_to_rotation_matrix,
     export_models_to_onnx,
-    plot_training_curves,
-    sync_and_align_data
+    plot_training_curves
 )
 
+class SharedNetwork(nn.Module):
+    def __init__(self, params):
+        super(SharedNetwork, self).__init__()
+        self.layer1 = nn.Linear(params['state_dim'], 64)
+        self.layer2 = nn.Linear(64, 64)
+        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
+        torch.nn.init.constant_(self.layer1.bias, 0.0)
+        torch.nn.init.constant_(self.layer2.bias, 0.0)
+
+    def forward(self, state):
+        x = self.layer1(state)
+        x = F.relu(x)
+        x = self.layer2(x)
+        x = F.relu(x)
+        return x
+    
 # Actor network per leg end-effector
 class Actor(nn.Module):
-    def __init__(self, params):
+    def __init__(self, params, shared_network):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 128)
-        self.dropout1 = nn.Dropout(0.1)
-        self.layer2 = nn.Linear(128, 128)
-        self.dropout2 = nn.Dropout(0.1)
-        self.layer3 = nn.Linear(128, 64)
-        self.dropout3 = nn.Dropout(0.1)
+        self.shared_network = shared_network
+
         self.mean_layer = nn.Linear(64, params['action_dim'])
-        self.log_std_layer = nn.Linear(64, params['action_dim'])
+        self.log_std = nn.Parameter(torch.zeros(params['action_dim']))
+
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
 
-        # Xavier initialization for better gradient flow
-        nn.init.xavier_uniform_(self.layer1.weight, gain=np.sqrt(2))
-        nn.init.xavier_uniform_(self.layer2.weight, gain=np.sqrt(2))
-        nn.init.xavier_uniform_(self.layer3.weight, gain=np.sqrt(2))
-        
-        # Initialize bias to produce an output close to 1.0
-        nn.init.constant_(self.mean_layer.bias, 1.0) 
-        
-        # Initialize log_std layer with small negative values
-        nn.init.zeros_(self.log_std_layer.weight)
-        nn.init.constant_(self.log_std_layer.bias, -1.0)  # Start with small std
+        # Initialize weights
+        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)  
+        torch.nn.init.constant_(self.mean_layer.bias, 0.0)
 
     def forward(self, state):
-        x = F.relu(self.layer1(state))
-        x = self.dropout1(x)
-        x = F.relu(self.layer2(x))
-        x = self.dropout2(x)
-        x = F.relu(self.layer3(x))
-        x = self.dropout3(x)
-
+        x = self.shared_network(state)
+        x = F.relu(x)
         mean = self.mean_layer(x) 
-        log_std = self.log_std_layer(x)
         # Clamp log_std for numerical stability
-        log_std = torch.clamp(log_std, min=-20, max=2)  
+        log_std = self.log_std.clamp(-20, 2)
         return mean, log_std
 
     def get_action(self, state, deterministic=False):
         if not isinstance(state, torch.Tensor):
             state = torch.FloatTensor(state)
-
-        # Ensure state has shape (batch_size, state_dim)
-        if state.dim() == 1:
-            state = state.reshape(1, -1)  # Reshape to (1, state_dim)
-        elif state.dim() == 2:
-            if state.shape[0] == 1:
-                state = state.reshape(1, -1)  # Ensure shape is (1, state_dim)
-            else:
-                state = state.T  # Transpose if shape is (state_dim, 1)
-        
-        state = state.to(next(self.parameters()).device)
 
         mean, log_std = self.forward(state)
         std = log_std.exp()
@@ -104,7 +91,7 @@ class Actor(nn.Module):
         else:
             log_prob = torch.zeros(1)
         
-        return action_scaled.detach().cpu().numpy()[0], log_prob.detach().cpu().item()
+        return action_scaled.detach().cpu().numpy(), log_prob.detach().cpu().item()
 
     def evaluate_actions(self, states, actions):
         """Evaluate log probabilities and entropy for given state-action pairs"""
@@ -126,28 +113,17 @@ class Actor(nn.Module):
         return log_probs, entropy
 
 class Critic(nn.Module):
-    def __init__(self, params):
+    def __init__(self, params, shared_network):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 128)
-        self.dropout1 = nn.Dropout(0.1)
-        self.layer2 = nn.Linear(128, 64)
-        self.dropout2 = nn.Dropout(0.1)
-        self.layer3 = nn.Linear(64, 1)
-        
-        # Xavier initialization for better gradient flow
-        nn.init.xavier_uniform_(self.layer1.weight, gain=np.sqrt(2))
-        nn.init.xavier_uniform_(self.layer2.weight, gain=np.sqrt(2))
-        nn.init.xavier_uniform_(self.layer3.weight, gain=np.sqrt(2))
-        
-        # Initialize final layer with small weights
-        nn.init.constant_(self.layer3.bias, 0.0)
+        self.shared_network = shared_network
+        self.value_layer = nn.Linear(64, 1)
+        nn.init.orthogonal_(self.value_layer.weight, gain=1.0)
+        torch.nn.init.constant_(self.value_layer.bias, 0.0)
 
     def forward(self, state):
-        x = F.relu(self.layer1(state))
-        x = self.dropout1(x)
-        x = F.relu(self.layer2(x))
-        x = self.dropout2(x)
-        return self.layer3(x)
+        x = self.shared_network(state)
+        x = F.relu(x)
+        return self.value_layer(x)
 
 def train_ppo(datasets, agent, params):
     # Set to train mode
@@ -437,8 +413,9 @@ if __name__ == "__main__":
     device = 'cpu'
     loaded = False
     print(f"Initializing agent for {robot}")
-    actor = Actor(params).to(device)
-    critic = Critic(params).to(device)
+    shared_network = SharedNetwork(params)
+    actor = Actor(params, shared_network).to(device)
+    critic = Critic(params, shared_network).to(device)
     agent = PPO(actor, critic, params, device=device, normalize_state=True)
 
     policy_path = params['checkpoint_dir']
