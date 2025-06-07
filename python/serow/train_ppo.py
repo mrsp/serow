@@ -432,8 +432,8 @@ if __name__ == "__main__":
         train_ppo(train_datasets, agent, params)
         # Load the best policy
         checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')
-        actor = Actor(params).to(device)
-        critic = Critic(params).to(device)
+        actor = Actor(params, shared_network).to(device)
+        critic = Critic(params, shared_network).to(device)
         best_policy = PPO(actor, critic, params, device=device)
         best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
         best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])

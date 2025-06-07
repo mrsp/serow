@@ -39,11 +39,7 @@ class ONNXInference:
         # Get input shapes
         self.state_dim = self.actor_session.get_inputs()[0].shape[1]
         self.action_dim = self.actor_session.get_outputs()[0].shape[1]
-        
-        class Actor:
-            def __init__(self, action_dim):
-                self.action_dim = action_dim
-        self.actor = Actor(self.action_dim)
+        self.min_action = 1e-10  # This should match your PPO params
         
         print(f"Initialized ONNX inference for {robot}")
         print(f"State dimension: {self.state_dim}")
@@ -59,9 +55,11 @@ class ONNXInference:
             {self.actor_input_name: state}
         )[0]
         
-        # Get action from actor output
+        # Get action from actor output and apply softplus scaling
         action = actor_output[0]
-        return action
+        action_scaled = np.log1p(np.exp(action)) + self.min_action  # softplus scaling
+        
+        return action_scaled
 
     def get_value(self, state, action):
         # Prepare inputs
