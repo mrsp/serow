@@ -1,4 +1,3 @@
-import gym
 import serow
 import numpy as np
 
@@ -73,7 +72,7 @@ class RewardShaper:
                 reward /= abs(DIVERGENCE_PENALTY)
         return reward, done
 
-class SerowEnv(gym.Env):
+class SerowEnv:
     def __init__(self, robot, joint_state, base_state, contact_state):
         self.robot = robot
         self.serow_framework = serow.Serow()
@@ -173,8 +172,6 @@ class SerowEnv(gym.Env):
                                                              force_torque_measurements, 
                                                              base_pose_ground_truth,
                                                              contact_states)):
-            print("-------------------------------------------------")
-            print(f"Evaluating policy for {robot} at step {step}")
             rewards = {cf: None for cf in contact_frames}
 
             # Run the predict step
@@ -186,11 +183,10 @@ class SerowEnv(gym.Env):
                     x = self.compute_state(cf, prior_state, cs)
 
                     # Compute the action
-                    action = agent.get_action(x, deterministic=True)[0]
+                    action, _, _ = agent.get_action(x, deterministic=True)
                 else:
                     action = np.ones(self.action_dim)
 
-                print(f"Action for {cf}: {action}")
                 # Run the update step
                 post_state, reward, _ = self.update_step(cf, kin, action, gt, step)
                 rewards[cf] = reward
