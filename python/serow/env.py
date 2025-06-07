@@ -100,7 +100,8 @@ class SerowEnv:
                                np.array([contact_state.contacts_probability[cf]])), axis=0)
 
     def reset(self):
-        self.serow_framework.reset()
+        self.serow_framework = serow.Serow()
+        self.serow_framework.initialize(f"{self.robot}_rl.json")
         self.serow_framework.set_state(self.initial_state)
         return self.initial_state
 
@@ -134,6 +135,8 @@ class SerowEnv:
         self.serow_framework.base_estimator_finish_update(imu, kin)
 
     def evaluate(self, observations, agent = None):
+        self.reset()
+
         baseline = True
         policy_path = "baseline"
         if agent is not None:
@@ -183,7 +186,7 @@ class SerowEnv:
                     x = self.compute_state(cf, prior_state, cs)
 
                     # Compute the action
-                    action, _, _ = agent.get_action(x, deterministic=True)
+                    action = agent.get_action(x, deterministic=True)[0]
                 else:
                     action = np.ones(self.action_dim)
 
