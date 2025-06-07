@@ -16,7 +16,7 @@ from read_mcap import(
 from env import SerowEnv
 
 class ONNXInference:
-    def __init__(self, robot, path, device='cpu', name="DDPG"):
+    def __init__(self, robot, path, device='cpu', name="PPO"):
         self.checkpoint_dir = path
         self.device = device
         self.robot = robot
@@ -40,7 +40,6 @@ class ONNXInference:
         self.state_dim = self.actor_session.get_inputs()[0].shape[1]
         self.action_dim = self.actor_session.get_outputs()[0].shape[1]
         
-        # Add actor attribute to match DDPG interface
         class Actor:
             def __init__(self, action_dim):
                 self.action_dim = action_dim
@@ -76,10 +75,6 @@ class ONNXInference:
         )[0]
         
         return critic_output[0][0]
-
-    def add_to_buffer(self, state, action, reward, next_state, done):
-        # This is a no-op for inference since we don't need to store transitions
-        pass
 
 if __name__ == "__main__":
     # Read the data
