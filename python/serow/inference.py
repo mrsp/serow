@@ -13,13 +13,14 @@ from read_mcap import(
     read_joint_states
 )
 
-from utils import evaluate_policy
+from env import SerowEnv
 
 class ONNXInference:
-    def __init__(self, robot, path, device='cpu'):
+    def __init__(self, robot, path, device='cpu', name="DDPG"):
+        self.checkpoint_dir = path
         self.device = device
         self.robot = robot
-        self.name = "DDPG"  # Explicitly set the name to "DDPG"
+        self.name = name
         
         # Initialize ONNX Runtime sessions
         self.actor_session = ort.InferenceSession(
@@ -104,12 +105,13 @@ if __name__ == "__main__":
     # Initialize ONNX inference
     robot = "go2"
     device = "cpu"
-    policy_path = "policy/ddpg"
-    agent = ONNXInference(robot, path=policy_path, device=device)
+    policy_path = "policy/ppo"
+    agent = ONNXInference(robot, path=policy_path, device=device, name="PPO")
 
     # Get contacts frame from the first measurement
     contacts_frame = set(contact_states[0].contacts_status.keys())
     print(f"Contacts frame: {contacts_frame}")
 
     # Evaluate the policy
-    evaluate_policy(test_dataset, contacts_frame, agent, robot, policy_path)
+    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0])
+    serow_env.evaluate(test_dataset, agent)
