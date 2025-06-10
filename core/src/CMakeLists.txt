@@ -2,6 +2,34 @@ find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(pinocchio REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
+# Option for ONNX Runtime support
+option(USE_ONNX "Enable ONNX Runtime support" OFF)
+if(USE_ONNX)
+    # Find ONNX Runtime
+    find_path(ONNXRUNTIME_INCLUDE_DIR
+    NAMES onnxruntime_cxx_api.h
+    PATHS /usr/local/onnxruntime/include
+    NO_DEFAULT_PATH
+    )
+
+    find_library(ONNXRUNTIME_LIBRARY
+    NAMES onnxruntime
+    PATHS /usr/local/onnxruntime/lib
+    NO_DEFAULT_PATH
+    )
+
+    # Check if ONNX Runtime was found
+    if (NOT ONNXRUNTIME_INCLUDE_DIR OR NOT ONNXRUNTIME_LIBRARY)
+    message(FATAL_ERROR "ONNX Runtime not found. Please ensure it is installed.")
+    endif()
+    add_definitions(-DUSE_ONNX)
+
+    # Add ONNX Runtime library path to RPATH
+    set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH}:/usr/local/onnxruntime/lib")
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+    set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
   mcap_builder
@@ -75,6 +103,10 @@ set(serow_src ${serow_src}
     ThreadPool.cpp
     MeasurementLogger.cpp)
 
+if(USE_ONNX)
+    set(serow_src ${serow_src} ONNXInference.cpp)
+endif()
+
 set(serow_headers ${serow_headers} 
     common.hpp
     Serow.hpp 
@@ -101,11 +133,27 @@ set(serow_headers ${serow_headers}
     Schemas.hpp
     MeasurementLogger.hpp)
 
+if(USE_ONNX)
+    set(serow_headers ${serow_headers} ONNXInference.hpp)
+endif()
+
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_include_directories(serow PRIVATE ${CMAKE_BINARY_DIR}/generated)
+if (USE_ONNX)
+    target_include_directories(serow PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
+    target_link_libraries(serow PRIVATE ${ONNXRUNTIME_LIBRARY})
+    target_link_directories(serow PRIVATE /usr/local/onnxruntime/lib)
+endif()
+
 target_link_libraries(serow PUBLIC mcap 
                             PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
-set_target_properties(serow PROPERTIES LINKER_LANGUAGE CXX)
+
+set_target_properties(serow PROPERTIES 
+    LINKER_LANGUAGE CXX
+    INSTALL_RPATH "/usr/local/onnxruntime/lib"
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH TRUE
+)
 
 install(FILES ${serow_headers} DESTINATION include/serow)
 install(TARGETS serow DESTINATION lib/)

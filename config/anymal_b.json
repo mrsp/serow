@@ -1,4 +1,5 @@
 {
+  "robot_name": "anymal_b",
   "base_frame": "base",
   "point_feet": true,
   "foot_frames": {
