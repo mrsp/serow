@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
 import multiprocessing
-import time 
+import traceback
 
 from env import SerowEnv
 from ppo import PPO
@@ -26,7 +25,6 @@ from utils import(
     export_models_to_onnx,
     plot_training_curves
 )
-import traceback
 
 class SharedNetwork(nn.Module):
     def __init__(self, params):
@@ -82,7 +80,6 @@ class Actor(nn.Module):
         x = self.shared_network(state)
         x = F.relu(x)
         mean = self.mean_layer(x)
-        # Clamp log_std for numerical stability
         log_std = self.log_std.clamp(-20, 2)
         return mean, log_std
 
@@ -153,7 +150,6 @@ class Critic(nn.Module):
         return self.value_layer(x)
 
 
-# --- Helper function for worker processes ---
 def collect_experience_worker(
     worker_id, dataset, params, shared_actor_state_dict, shared_critic_state_dict,
     shared_buffer, training_event, update_event, device
@@ -201,8 +197,9 @@ def collect_experience_worker(
             contact_states[:max_steps],
             contact_states[1:max_steps+1]
         )):
-            # Wait for the main process to signal collection can start/resume
-            update_event.wait() # Wait until main process signals 'update complete'
+            # Workers ALWAYS wait for update_event to be set by main process before each step.
+            # This ensures they are paused during training phases.
+            update_event.wait() 
             
             kin, prior_state = serow_env.predict_step(imu, joints, ft)
 
@@ -226,24 +223,28 @@ def collect_experience_worker(
                     prior_state = post_state
                 serow_env.finish_update(imu, kin)
 
-                # Check if enough steps are collected for training
-                if len(shared_buffer) >= params['n_steps']:
-                    training_event.set() # Signal main process to start training
-                    update_event.clear() # Signal workers to pause collection
-                    training_event.wait() # Wait for training to complete
-                    
-                    # Convert DictProxy to regular dict before loading
-                    actor_state_dict = dict(shared_actor_state_dict)
-                    critic_state_dict = dict(shared_critic_state_dict)
-                    
-                    # Reload updated policy from shared state dicts after training
-                    actor_worker.load_state_dict(actor_state_dict)
-                    critic_worker.load_state_dict(critic_state_dict)
-                    update_event.set() # Signal main process that workers are ready to resume collection
+            # Check if enough steps are collected for training (outside contact_frames loop)
+            # This ensures the check and signal happens once per time_step, and only if needed.
+            if len(shared_buffer) >= params['n_steps']:
+                # First wait for update_event to be set before proceeding
+                update_event.wait()
+                # Then clear it to prevent other workers from proceeding
+                update_event.clear()
+                # Signal main process to start training
+                training_event.set()
+                # Wait for training to complete
+                training_event.wait()
+                # Load the updated policy
+                actor_worker.load_state_dict(dict(shared_actor_state_dict))
+                critic_worker.load_state_dict(dict(shared_critic_state_dict))
+                # Set update_event to allow other workers to proceed
+                update_event.set()
 
-                # Print the reward accumulated so far
-                if time_step % 100 == 0:
-                    print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{time_step}/{max_steps}] Current reward: {episode_reward:.2f} Best reward: {best_reward:.2f}")
+            # Print the reward accumulated so far
+            if time_step % 1000 == 0 or time_step == max_steps - 1:
+                print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{time_step}/{max_steps}] Current reward: {episode_reward:.2f} Best reward: {best_reward:.2f}")
+        
+        # At the end of an episode, check for new best reward
         if episode_reward > best_reward:
             best_reward = episode_reward
             print(f"[Worker {worker_id}] - [{episode}/{max_episodes}] New best reward: {best_reward:.2f}")
@@ -251,8 +252,6 @@ def collect_experience_worker(
 def train_ppo_parallel(datasets, agent, params):
     # Set to train mode
     agent.train()
-
-    episode_rewards = []
 
     # Training statistics tracking
     stats = {
@@ -273,7 +272,7 @@ def train_ppo_parallel(datasets, agent, params):
 
     # Events for synchronization
     training_event = manager.Event() # Set by workers when buffer is full, cleared by main after training
-    update_event = manager.Event()   # Set by main after model update, cleared by workers before training
+    update_event = manager.Event()   # Set by main after model update, cleared by main before training
 
     # Start workers for parallel data collection
     processes = []
@@ -292,13 +291,19 @@ def train_ppo_parallel(datasets, agent, params):
     # Initial signal to workers to start collecting
     update_event.set()
 
-    while True:
+    # Check if at least one worker is still running
+    while any(p.is_alive() for p in processes):
         # Main process waits until enough data is collected
-        training_event.wait() # Wait for a worker to signal that buffer is full
-        print(f"[Main process] Buffer full, initiating training. Buffer size: {len(shared_buffer)}")
+        training_event.wait(timeout=5.0) # Wait for a worker to signal that buffer is full
+        buffer_size = len(shared_buffer)
+        
+        if buffer_size < params['n_steps']:
+            training_event.clear()
+            update_event.set()
+            continue
 
-        # Clear the event to signal workers to pause
-        update_event.clear()
+        # Clear training_event to prevent other workers from proceeding
+        training_event.clear()
 
         collected_experiences = list(shared_buffer)
         shared_buffer[:] = [] # Clear the shared buffer
@@ -318,32 +323,13 @@ def train_ppo_parallel(datasets, agent, params):
         shared_actor_state_dict.update(agent.actor.state_dict())
         shared_critic_state_dict.update(agent.critic.state_dict())
 
-        # Signal workers to resume collection
-        training_event.clear()
-        update_event.set()
-        print("[Main process] Training complete, workers signaled to resume.")
+        # Signal workers to resume collection by setting training_event
+        training_event.set()
 
-        # In a real scenario, you would evaluate the agent periodically,
-        # update best_reward, and save checkpoints.
-        # For simplicity, this example focuses on the parallel collection and training loop.
-        # The original code's evaluation and checkpointing logic would go here.
-
-        # Placeholder for episode reward for plotting purposes
-        # In a parallel setup, aggregating a single "episode reward" is tricky.
-        # You might want to track average rewards per training iteration or
-        # run a dedicated evaluation episode periodically.
-        # For now, let's just append a dummy reward or average of collected rewards.
-        # This will need refinement for meaningful plotting.
         avg_reward_from_collected = np.mean([exp[2] for exp in collected_experiences if exp[2] is not None]) if collected_experiences else 0
         stats['rewards'].append(avg_reward_from_collected)
         stats['episode_lengths'].append(len(collected_experiences)) # Treat collected steps as episode length
-
         agent.save_checkpoint(avg_reward_from_collected) # Save based on some metric
-
-        # Check for convergence or total steps
-        if agent.check_early_stopping(avg_reward_from_collected, np.mean(stats['critic_losses'][-params['window_size']:] if len(stats['critic_losses']) >= params['window_size'] else [0])):
-            print("[Main process] Convergence criteria met. Terminating training.")
-            break
 
     # Terminate worker processes
     print("[Main process] Training finished. Terminating worker processes.")
@@ -357,13 +343,13 @@ def train_ppo_parallel(datasets, agent, params):
     export_models_to_onnx(agent, params['robot'], params, agent.checkpoint_dir)
 
     # Plot training curves
-    plot_training_curves(stats, episode_rewards) # episode_rewards will be empty, use stats['rewards'] instead
+    plot_training_curves(stats, stats['rewards'])
     return agent, stats
 
 
 if __name__ == "__main__":
     # Load and preprocess the data
-    imu_measurements    = read_imu_measurements("/tmp/serow_measurements.mcap")
+    imu_measurements      = read_imu_measurements("/tmp/serow_measurements.mcap")
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
@@ -395,9 +381,8 @@ if __name__ == "__main__":
         'base_pose_ground_truth': base_pose_ground_truth
     }
 
-    # You might want to run a quick initial evaluation before training, but it's optional
-    # timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards = \
-    # serow_env.evaluate(test_dataset, agent=None) # agent is None here, so it's a base evaluation
+    timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards = \
+    serow_env.evaluate(test_dataset, agent=None) # agent is None here, so it's a base evaluation
 
     # Compute max and min state values (assuming these are constant across datasets)
     feet_positions = []
@@ -405,7 +390,7 @@ if __name__ == "__main__":
     for base_state in base_states:
         R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
         base_linear_velocities.append(R_base @ base_state.base_linear_velocity)
-        for cf in serow_env.contact_frames: # Use serow_env.contact_frames
+        for cf in serow_env.contact_frames: 
             if base_state.contacts_position[cf] is not None:
                 local_pos = R_base @ (base_state.base_position - base_state.contacts_position[cf])
                 feet_positions.append(np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]]))
@@ -415,7 +400,7 @@ if __name__ == "__main__":
     feet_positions = np.array(feet_positions)
     contact_probabilities = []
     for contact_state in contact_states:
-        for cf in serow_env.contact_frames: # Use serow_env.contact_frames
+        for cf in serow_env.contact_frames: 
             if contact_state.contacts_status[cf]:
                 contact_probabilities.append(contact_state.contacts_probability[cf])
     contact_probabilities = np.array(contact_probabilities)
@@ -437,9 +422,7 @@ if __name__ == "__main__":
     print(f"[Main process] State dimension: {len(max_state_value)}")
 
     # Use your datasets as the train_datasets
-    train_datasets = [test_dataset, test_dataset, test_dataset, test_dataset, test_dataset]
-    # Make sure you have multiple *distinct* datasets if you want true diversity.
-    # Currently, you are using the same test_dataset repeatedly.
+    train_datasets = [test_dataset]
 
     params = {
         'robot': robot,
@@ -456,18 +439,18 @@ if __name__ == "__main__":
         'batch_size': 256,
         'max_grad_norm': 0.3,
         'buffer_size': 10000,
-        'max_episodes': 1000, # This might become less relevant with continuous data collection
+        'max_episodes': 1000, 
         'actor_lr': 1e-5,
         'critic_lr': 1e-5,
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
         'update_lr': True,
-        'n_steps': 1200, # Number of steps to collect before a PPO update
+        'n_steps': 1200, 
         'convergence_threshold': 0.1,
         'critic_convergence_threshold': 1.0,
         'window_size': 20,
         'checkpoint_dir': 'policy/ppo',
-        'total_steps': 100000, # Total steps to train for
+        'total_steps': 100000, 
         'final_lr_ratio': 0.1,  # Learning rate will decay to 10% of initial value
     }
 
@@ -490,8 +473,9 @@ if __name__ == "__main__":
 
     if not loaded:
         # Train the policy using the parallelized function
-        train_ppo_parallel(train_datasets, agent, params)
+        best_agent, stats = train_ppo_parallel(train_datasets, agent, params)
         # The best policy is already loaded and exported within train_ppo_parallel
+        serow_env.evaluate(test_dataset, best_agent)
     else:
         # Just evaluate the loaded policy
         serow_env.evaluate(test_dataset, agent)
