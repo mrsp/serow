@@ -17,3 +17,4 @@ serow_layout.json:Zone.Identifier
 /python/serow/serow.*.so
 /python/policy
 /python/policy/*
+/python/datasets/*
