@@ -356,9 +356,6 @@ if __name__ == "__main__":
     print(f"RL state min values: {min_state_value}")
 
     train_datasets = [test_dataset]
-    convergence_threshold = 0.05  # How close to best reward we need to be (as a fraction) to mark convergence
-    critic_convergence_threshold = 0.05  # How much the critic loss can vary before considering it converged
-    window_size = 10  # Window size for convergence check
 
     params = {
         'robot': robot,
