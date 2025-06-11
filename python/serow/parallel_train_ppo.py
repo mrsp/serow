@@ -22,8 +22,7 @@ from read_mcap import(
 
 from utils import(
     quaternion_to_rotation_matrix,
-    export_models_to_onnx,
-    plot_training_curves
+    export_models_to_onnx
 )
 
 class SharedNetwork(nn.Module):
@@ -213,9 +212,15 @@ def collect_experience_worker(
                     next_x = serow_env.compute_state(cf, post_state, next_cs)
 
                     if reward is not None:
-                        # Add experience to the shared buffer
-                        shared_buffer.append((x, action, reward, next_x, done, value, log_prob))
-                        episode_reward += reward
+                        try:
+                            # Add experience to the shared buffer
+                            shared_buffer.append((x, action, reward, next_x, done, value, log_prob))
+                            episode_reward += reward
+                        except Exception as e:
+                            print(f"[Worker {worker_id}] Error appending to shared buffer: {str(e)}")
+                            print(f"[Worker {worker_id}] Traceback: {traceback.format_exc()}")
+                            # Optionally, you might want to break or handle this error differently
+                            continue
                     else:
                         action = np.ones(serow_env.action_dim)
                         post_state, _, _ = serow_env.update_step(cf, kin, action, gt, time_step)
@@ -253,18 +258,10 @@ def train_ppo_parallel(datasets, agent, params):
     # Set to train mode
     agent.train()
 
-    # Training statistics tracking
-    stats = {
-        'critic_losses': [],
-        'actor_losses': [],
-        'rewards': [],
-        'episode_lengths': [],
-        'noise_scales': []
-    }
-
     # Create a manager for shared data structures
     manager = multiprocessing.Manager()
     shared_buffer = manager.list()  # Use a managed list for the replay buffer
+    shared_buffer._timeout = 5.0  # Add a 5-second timeout for operations
 
     # Use managed dictionaries for shared model state_dicts
     shared_actor_state_dict = manager.dict(agent.actor.state_dict())
@@ -293,43 +290,52 @@ def train_ppo_parallel(datasets, agent, params):
 
     # Check if at least one worker is still running
     while any(p.is_alive() for p in processes):
-        # Main process waits until enough data is collected
-        training_event.wait(timeout=5.0) # Wait for a worker to signal that buffer is full
-        buffer_size = len(shared_buffer)
-        
-        if buffer_size < params['n_steps']:
+        try:
+            # Main process waits until enough data is collected
+            training_event.wait(timeout=5.0) # Wait for a worker to signal that buffer is full
+            buffer_size = len(shared_buffer)
+            
+            if buffer_size < params['n_steps']:
+                training_event.clear()
+                update_event.set()
+                continue
+
+            # Clear training_event to prevent other workers from proceeding
             training_event.clear()
-            update_event.set()
+
+            # Safely get the collected experiences
+            try:
+                collected_experiences = list(shared_buffer)
+                shared_buffer[:] = [] # Clear the shared buffer
+            except Exception as e:
+                print(f"[Main process] Error accessing shared buffer: {str(e)}")
+                print(f"[Main process] Traceback: {traceback.format_exc()}")
+                training_event.set()  # Allow workers to continue
+                continue
+
+            # Add collected experiences to the agent's internal buffer
+            for exp in collected_experiences:
+                agent.add_to_buffer(*exp) # Unpack the tuple
+
+            actor_loss, critic_loss, _, converged = agent.train()
+
+            if actor_loss is not None and critic_loss is not None:
+                print(f"[Main process] Policy Loss: {actor_loss:.4f}, Value Loss: {critic_loss:.4f}")
+
+            # Update shared model parameters
+            shared_actor_state_dict.update(agent.actor.state_dict())
+            shared_critic_state_dict.update(agent.critic.state_dict())
+
+            if converged:
+                break
+
+            # Signal workers to resume collection by setting training_event
+            training_event.set()
+        except Exception as e:
+            print(f"[Main process] Error in training loop: {str(e)}")
+            print(f"[Main process] Traceback: {traceback.format_exc()}")
+            training_event.set()  # Allow workers to continue
             continue
-
-        # Clear training_event to prevent other workers from proceeding
-        training_event.clear()
-
-        collected_experiences = list(shared_buffer)
-        shared_buffer[:] = [] # Clear the shared buffer
-
-        # Add collected experiences to the agent's internal buffer
-        for exp in collected_experiences:
-            agent.add_to_buffer(*exp) # Unpack the tuple
-
-        actor_loss, critic_loss, _ = agent.train()
-
-        if actor_loss is not None and critic_loss is not None:
-            print(f"[Main process] Policy Loss: {actor_loss:.4f}, Value Loss: {critic_loss:.4f}")
-            stats['actor_losses'].append(actor_loss)
-            stats['critic_losses'].append(critic_loss)
-
-        # Update shared model parameters
-        shared_actor_state_dict.update(agent.actor.state_dict())
-        shared_critic_state_dict.update(agent.critic.state_dict())
-
-        # Signal workers to resume collection by setting training_event
-        training_event.set()
-
-        avg_reward_from_collected = np.mean([exp[2] for exp in collected_experiences if exp[2] is not None]) if collected_experiences else 0
-        stats['rewards'].append(avg_reward_from_collected)
-        stats['episode_lengths'].append(len(collected_experiences)) # Treat collected steps as episode length
-        agent.save_checkpoint(avg_reward_from_collected) # Save based on some metric
 
     # Terminate worker processes
     print("[Main process] Training finished. Terminating worker processes.")
@@ -343,8 +349,9 @@ def train_ppo_parallel(datasets, agent, params):
     export_models_to_onnx(agent, params['robot'], params, agent.checkpoint_dir)
 
     # Plot training curves
-    plot_training_curves(stats, stats['rewards'])
-    return agent, stats
+    agent.logger.plot_training_curves()
+    agent.logger.plot_sample_efficiency()
+    return agent
 
 
 if __name__ == "__main__":
@@ -430,25 +437,26 @@ if __name__ == "__main__":
         'action_dim': action_dim,
         'max_action': None,
         'min_action': min_action,
-        'clip_param': 0.2,
-        'value_loss_coef': 0.2,
-        'entropy_coef': 0.01,
+        'clip_param': 0.2,  
+        'value_loss_coef': 0.2,  
+        'entropy_coef': 0.01,  
         'gamma': 0.99,
         'gae_lambda': 0.95,
-        'ppo_epochs': 5,
-        'batch_size': 256,
-        'max_grad_norm': 0.3,
-        'buffer_size': 10000,
-        'max_episodes': 1000, 
-        'actor_lr': 1e-5,
-        'critic_lr': 1e-5,
+        'ppo_epochs': 5,  
+        'batch_size': 256,  
+        'max_grad_norm': 0.3,  
+        'buffer_size': 10000,  
+        'max_episodes': 1000,
+        'actor_lr': 1e-5, 
+        'critic_lr': 1e-5,  
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
         'update_lr': True,
-        'n_steps': 1200, 
+        'n_steps': 1200,
         'convergence_threshold': 0.1,
         'critic_convergence_threshold': 1.0,
-        'window_size': 20,
+        'reward_window_size': 10000,
+        'value_loss_window_size': 10,
         'checkpoint_dir': 'policy/ppo',
         'total_steps': 100000, 
         'final_lr_ratio': 0.1,  # Learning rate will decay to 10% of initial value
@@ -473,7 +481,7 @@ if __name__ == "__main__":
 
     if not loaded:
         # Train the policy using the parallelized function
-        best_agent, stats = train_ppo_parallel(train_datasets, agent, params)
+        best_agent = train_ppo_parallel(train_datasets, agent, params)
         # The best policy is already loaded and exported within train_ppo_parallel
         serow_env.evaluate(test_dataset, best_agent)
     else:
