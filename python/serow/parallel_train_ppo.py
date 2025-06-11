@@ -355,19 +355,43 @@ def train_ppo_parallel(datasets, agent, params):
 
 
 if __name__ == "__main__":
-    # Load and preprocess the data
-    imu_measurements = read_imu_measurements("/tmp/serow_measurements.mcap")
-    joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
-    force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
-    base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
-    base_states = read_base_states("/tmp/serow_proprioception.mcap")
-    contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
-    joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
+    
+    # Read datasets from dataset folder
+    datasets = []
+    # get the path of the current file
+    current_file = os.path.abspath(__file__)
+    parent_dir = os.path.dirname(os.path.dirname(current_file))
+    dataset_path = os.path.join(parent_dir, "datasets")
+    # For each folder in the dataset path, read the data
+    for folder in os.listdir(dataset_path):
+        folder_path = os.path.join(dataset_path, folder)
+        if os.path.isdir(folder_path):
+            imu_measurements = read_imu_measurements(os.path.join(folder_path, "serow_measurements.mcap"))
+            joint_measurements = read_joint_measurements(os.path.join(folder_path, "serow_measurements.mcap"))
+            force_torque_measurements = read_force_torque_measurements(os.path.join(folder_path, "serow_measurements.mcap"))
+            base_pose_ground_truth = read_base_pose_ground_truth(os.path.join(folder_path, "serow_measurements.mcap"))
+            base_states = read_base_states(os.path.join(folder_path, "serow_proprioception.mcap"))
+            contact_states = read_contact_states(os.path.join(folder_path, "serow_proprioception.mcap"))
+            joint_states = read_joint_states(os.path.join(folder_path, "serow_proprioception.mcap"))
+            dataset = {
+                'imu': imu_measurements,
+                'joints': joint_measurements,
+                'ft': force_torque_measurements,
+                'base_states': base_states,
+                'contact_states': contact_states,
+                'joint_states': joint_states,
+                'base_pose_ground_truth': base_pose_ground_truth
+            }
+            datasets.append(dataset)
+
+    print(f"Found {len(datasets)} datasets")
+    test_dataset = datasets[0]
+    train_datasets = datasets[1:]
 
     # Compute the dt
     dt = []
-    for i in range(len(imu_measurements) - 1):
-        dt.append(imu_measurements[i+1].timestamp - imu_measurements[i].timestamp)
+    for i in range(len(test_dataset['imu']) - 1):
+        dt.append(test_dataset['imu'][i+1].timestamp - test_dataset['imu'][i].timestamp)
     dt = np.median(np.array(dt))
     print(f"dt: {dt}")
 
@@ -377,21 +401,13 @@ if __name__ == "__main__":
     min_action = 1e-10
     robot = "go2"
 
-    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0])
-    test_dataset = {
-        'imu': imu_measurements,
-        'joints': joint_measurements,
-        'ft': force_torque_measurements,
-        'base_states': base_states,
-        'contact_states': contact_states,
-        'joint_states': joint_states,
-        'base_pose_ground_truth': base_pose_ground_truth
-    }
-
+    serow_env = SerowEnv(robot, test_dataset['joint_states'][0], test_dataset['base_states'][0], test_dataset['contact_states'][0])
     timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards = \
     serow_env.evaluate(test_dataset, agent=None) # agent is None here, so it's a base evaluation
 
     # Compute max and min state values (assuming these are constant across datasets)
+    base_states = test_dataset['base_states']
+    contact_states = test_dataset['contact_states']
     feet_positions = []
     base_linear_velocities = []
     for base_state in base_states:
@@ -428,9 +444,6 @@ if __name__ == "__main__":
     print(f"[Main process] RL state min values: {min_state_value}")
     print(f"[Main process] State dimension: {len(max_state_value)}")
 
-    # Use your datasets as the train_datasets
-    train_datasets = [test_dataset]
-
     params = {
         'robot': robot,
         'state_dim': state_dim,
@@ -455,8 +468,8 @@ if __name__ == "__main__":
         'n_steps': 1200,
         'convergence_threshold': 0.1,
         'critic_convergence_threshold': 1.0,
-        'reward_window_size': 10000,
-        'value_loss_window_size': 10,
+        'reward_window_size': 25000,
+        'value_loss_window_size': 25,
         'checkpoint_dir': 'policy/ppo',
         'total_steps': 100000, 
         'final_lr_ratio': 0.1,  # Learning rate will decay to 10% of initial value
