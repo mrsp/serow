@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import unittest
 import os
+import multiprocessing
+import traceback
 
 from ppo import PPO
 
@@ -20,15 +22,15 @@ params = {
     'gamma': 0.995,
     'gae_lambda': 0.98,
     'ppo_epochs': 20,         
-    'batch_size': 256,      
+    'batch_size': 256,     
+    'max_episodes': 150,
     'max_grad_norm': 0.3,
-    'max_episodes': 200,
     'actor_lr': 5e-4,       
     'critic_lr': 5e-4,       
     'buffer_size': 10000,
     'max_state_value': 1e4,
     'min_state_value': -1e4,
-    'n_steps': 1024,
+    'n_steps': 8192,
     'update_lr': True,
     'convergence_threshold': 0.1,
     'critic_convergence_threshold': 1.0,
@@ -217,6 +219,178 @@ class InvertedPendulum:
 
         return self.state, reward, done
 
+def collect_experience_worker(
+    worker_id, params, shared_actor_state_dict, shared_critic_state_dict,
+    shared_buffer, training_event, update_event, device
+):
+    """
+    Worker process to collect experience from an InvertedPendulum environment and add to a shared buffer.
+    """
+    try:
+        shared_network_worker = SharedNetwork(params['state_dim'])
+        actor_worker = Actor(params, shared_network_worker).to(device)
+        critic_worker = Critic(params, shared_network_worker).to(device)
+        agent_worker = PPO(actor_worker, critic_worker, params, device=device, normalize_state=False)
+        agent_worker.train()
+    except Exception as e:
+        print(f"[Worker {worker_id}] Traceback: {traceback.format_exc()}", flush=True)
+        raise
+
+    # Create environment
+    env = InvertedPendulum()
+    max_steps_per_episode = 2048
+    max_episodes = params['max_episodes']
+    print(f"[Worker {worker_id}] Starting experience collection.")
+    
+    best_reward = float('-inf')
+    for episode in range(max_episodes):
+        state = env.reset()
+        episode_reward = 0.0
+        
+        # Run episode
+        for step in range(max_steps_per_episode):
+            update_event.wait(timeout=10)
+            
+            action, log_prob = agent_worker.actor.get_action(state, deterministic=False)
+            value = agent_worker.critic(torch.FloatTensor(state).reshape(1, -1).to(device)).item()
+            next_state, reward, done = env.step(action)
+            
+            try:
+                # Add experience to the shared buffer
+                shared_buffer.append((state, action, reward, next_state, done, value, log_prob))
+                episode_reward += reward
+            except Exception as e:
+                print(f"[Worker {worker_id}] Error appending to shared buffer: {str(e)}")
+                print(f"[Worker {worker_id}] Traceback: {traceback.format_exc()}")
+                continue
+
+            # Check if enough steps are collected for training
+            if len(shared_buffer) >= params['n_steps']:
+                update_event.wait(timeout=10)
+                update_event.clear()
+                training_event.set()
+                training_event.wait(timeout=60)
+                # Load the updated policy
+                actor_worker.load_state_dict(dict(shared_actor_state_dict))
+                critic_worker.load_state_dict(dict(shared_critic_state_dict))
+                # Set update_event to allow other workers to proceed
+                update_event.set()
+
+            if done > 0.0 or step == max_steps_per_episode - 1:
+                state = env.reset()
+                break
+            else:
+                state = next_state
+
+            # Print progress
+            if step % 1000 == 0 or step == max_steps_per_episode - 1:
+                print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{step}/{max_steps_per_episode}] "
+                      f"Current reward: {episode_reward:.2f} Best reward: {best_reward:.2f}")
+        
+        # At the end of an episode, check for new best reward
+        if episode_reward > best_reward:
+            best_reward = episode_reward
+
+def train_ppo_parallel(agent, params, num_workers=4):
+    """
+    Parallel training function for PPO with InvertedPendulum environment.
+    """
+    # Set to train mode
+    agent.train()
+
+    # Create a manager for shared data structures
+    manager = multiprocessing.Manager()
+    shared_buffer = manager.list()  # Use a managed list for the replay buffer
+    shared_buffer._timeout = 5.0  # Add a 5-second timeout for operations
+
+    # Use managed dictionaries for shared model state_dicts
+    shared_actor_state_dict = manager.dict(agent.actor.state_dict())
+    shared_critic_state_dict = manager.dict(agent.critic.state_dict())
+
+    # Events for synchronization
+    training_event = manager.Event() # Set by workers when buffer is full, cleared by main after training
+    update_event = manager.Event()   # Set by main after model update, cleared by main before training
+
+    # Start workers for parallel data collection
+    processes = []
+    print(f"[Main process] Starting {num_workers} worker processes...")
+    for i in range(num_workers):
+        p = multiprocessing.Process(
+            target=collect_experience_worker,
+            args=(i, params, shared_actor_state_dict, shared_critic_state_dict,
+                  shared_buffer, training_event, update_event, agent.device)
+        )
+        processes.append(p)
+        p.start()
+    print(f"[Main process] All {num_workers} worker processes started")
+
+    # Initial signal to workers to start collecting
+    update_event.set()
+
+    # Check if at least one worker is still running
+    while any(p.is_alive() for p in processes):
+        try:
+            # Main process waits until enough data is collected
+            training_event.wait(timeout=5.0) # Wait for a worker to signal that buffer is full
+            buffer_size = len(shared_buffer)
+            
+            if buffer_size < params['n_steps']:
+                training_event.clear()
+                update_event.set()
+                continue
+
+            # Clear training_event to prevent other workers from proceeding
+            training_event.clear()
+
+            # Safely get the collected experiences
+            try:
+                collected_experiences = list(shared_buffer)
+                shared_buffer[:] = [] # Clear the shared buffer
+            except Exception as e:
+                print(f"[Main process] Error accessing shared buffer: {str(e)}")
+                print(f"[Main process] Traceback: {traceback.format_exc()}")
+                training_event.set()  # Allow workers to continue
+                continue
+
+            # Add collected experiences to the agent's internal buffer
+            for exp in collected_experiences:
+                agent.add_to_buffer(*exp) # Unpack the tuple
+
+            actor_loss, critic_loss, entropy, converged = agent.train()
+
+            if actor_loss is not None and critic_loss is not None:
+                print(f"[Main process] Policy Loss: {actor_loss:.4f}, Value Loss: {critic_loss:.4f}, "
+                      f"Entropy: {entropy:.4f}")
+
+            # Update shared model parameters
+            shared_actor_state_dict.update(agent.actor.state_dict())
+            shared_critic_state_dict.update(agent.critic.state_dict())
+
+            if converged:
+                break
+
+            # Signal workers to resume collection by setting training_event
+            training_event.set()
+        except Exception as e:
+            print(f"[Main process] Error in training loop: {str(e)}")
+            print(f"[Main process] Traceback: {traceback.format_exc()}")
+            training_event.set()  # Allow workers to continue
+            continue
+
+    # Terminate worker processes
+    for p in processes:
+        p.terminate()
+        p.join()
+
+    # Load the best policy
+    agent.load_checkpoint(os.path.join(agent.checkpoint_dir, f'trained_policy_{params["robot"]}.pth'))
+
+    # Plot training curves
+    agent.logger.plot_training_curves()
+    agent.logger.plot_sample_efficiency()
+
+    return agent
+
 # Unit tests for PPO with Inverted Pendulum
 class TestPPOInvertedPendulum(unittest.TestCase):
     def setUp(self):
@@ -226,7 +400,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         self.min_action = params['min_action']
         
         # Create device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = 'cpu'
         
         # Create shared network
         self.shared_network = SharedNetwork(self.state_dim)
@@ -271,12 +445,6 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         self.assertEqual(stored[6], log_prob)
 
     def test_train_and_evaluate(self):   
-        max_steps_per_episode = 2048
-        episode_rewards = []
-        best_reward = float('-inf')
-        max_episodes = params['max_episodes']
-        collected_steps = 0
-        
         # Create checkpoint directory
         checkpoint_dir = 'policy/inverted_pendulum/ppo'
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -285,61 +453,20 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         params.update({
             'checkpoint_dir': checkpoint_dir
         })
-        converged = False
-        for episode in range(max_episodes):
-            state = self.env.reset()
-            episode_reward = 0.0
-            for step in range(max_steps_per_episode):
-                action, log_prob = self.agent.actor.get_action(state, deterministic=False)
-                value = self.agent.critic(torch.FloatTensor(state).reshape(1, -1).to(self.device)).item()
-                next_state, reward, done = self.env.step(action)
-                self.agent.add_to_buffer(state, action, reward, next_state, done, value, log_prob)
-                
-                episode_reward += reward
-                collected_steps += 1
-                
-                if collected_steps >= params['n_steps']:
-                    policy_loss, critic_loss, entropy, converged = self.agent.train()
-                    collected_steps = 0
-                    if policy_loss != 0.0 or critic_loss != 0.0:  # Only print if actual training occurred
-                        print(f"Policy Loss: {policy_loss:.4f}, Value Loss: {critic_loss:.4f}, Entropy: {entropy:.4f}")
-
-                if done > 0.0 or step == max_steps_per_episode - 1:
-                    state = self.env.reset()
-                    break
-                else:
-                    state = next_state
-            
-            episode_rewards.append(episode_reward)
-            
-            if episode_reward > best_reward:
-                best_reward = episode_reward
-                self.agent.best_reward = best_reward  # Update agent's best_reward
-
-            # Check for early stopping
-            if converged:
-                print("Early stopping triggered. Loading best model...")
-                self.agent.load_checkpoint(os.path.join(checkpoint_dir, 'best_model.pth'))
-                break
-                
-            print(f"Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: " 
-                  f"{best_reward:.2f}")
-
-            if episode % 10 == 0:
-                avg_reward = np.mean(episode_rewards[-10:])
-                print(f"Episode {episode}, Avg Reward (last 10): {avg_reward:.2f}")
         
-        self.agent.logger.plot_training_curves()
-        self.agent.logger.plot_sample_efficiency()
-
-        # Evaluate the policy and collect data for plotting
+        # Train using parallel implementation
+        best_agent = train_ppo_parallel(self.agent, params, num_workers=6)
+        
+        # Evaluate the trained policy
         state = self.env.reset()
         total_reward = 0.0  
         states = []
         actions = []
         rewards = []
+        max_steps_per_episode = 2048
+        
         for step in range(max_steps_per_episode):
-            action, _ = self.agent.actor.get_action(state, deterministic=True)
+            action, _ = best_agent.actor.get_action(state, deterministic=True)
             next_state, reward, done = self.env.step(action)
             state_flat = np.array(state).reshape(-1)
             states.append(np.array([np.arctan2(state_flat[1], state_flat[0]),  state_flat[2]]))
@@ -390,4 +517,5 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         plt.show()
 
 if __name__ == '__main__':
+    multiprocessing.set_start_method('spawn', force=True)
     unittest.main()
