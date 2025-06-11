@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import torch
 
 class Logger:
     def __init__(self, smoothing_window=1000):  # Window in timesteps now
@@ -66,6 +67,10 @@ class Logger:
         if not data:
             return []
         
+        # Convert any CUDA tensors to CPU and then to numpy
+        if isinstance(data[0], torch.Tensor):
+            data = [d.cpu().numpy() if d.is_cuda else d.numpy() for d in data]
+        
         series = pd.Series(data)
         # Use .rolling().mean() with min_periods to start from the first data point
         rolling_avg = series.rolling(window=window_size, min_periods=1).mean()
@@ -106,7 +111,9 @@ class Logger:
 
         # 1. Cumulative Reward vs Timesteps
         ax1 = axes[0]
-        cumulative_rewards = np.cumsum(self.rewards) if self.rewards else []
+        # Convert any CUDA tensors to CPU before cumsum
+        rewards_cpu = [r.cpu().numpy() if isinstance(r, torch.Tensor) else r for r in self.rewards]
+        cumulative_rewards = np.cumsum(rewards_cpu) if rewards_cpu else []
         ax1.plot(self.timesteps, cumulative_rewards, color='blue', linewidth=2)
         ax1.set_xlabel('Timesteps')
         ax1.set_ylabel('Cumulative Reward')
@@ -116,7 +123,7 @@ class Logger:
         # 2. Rolling Average Reward Rate
         ax2 = axes[1]
         if self.rewards:
-            ax2.plot(self.timesteps, self.rewards, alpha=0.2, color='lightblue', label='Raw Rewards')
+            ax2.plot(self.timesteps, rewards_cpu, alpha=0.2, color='lightblue', label='Raw Rewards')
         if self.reward_rate_history:
             ax2.plot(self.timesteps[:len(self.reward_rate_history)], self.reward_rate_history, color='blue', linewidth=2, 
                      label=f'Rolling Avg ({self.smoothing_window} steps)')
@@ -129,7 +136,8 @@ class Logger:
         # 3. Value Function Estimates
         ax3 = axes[2]
         if self.values:
-            ax3.plot(self.timesteps[:len(self.values)], self.values, alpha=0.3, color='lightgreen', label='Raw Values')
+            values_cpu = [v.cpu().numpy() if isinstance(v, torch.Tensor) else v for v in self.values]
+            ax3.plot(self.timesteps[:len(self.values)], values_cpu, alpha=0.3, color='lightgreen', label='Raw Values')
         if self.value_estimate_history:
             ax3.plot(self.timesteps[:len(self.value_estimate_history)], self.value_estimate_history, color='green', linewidth=2, 
                                  label=f'Rolling Avg ({self.smoothing_window} steps)')
@@ -142,7 +150,8 @@ class Logger:
         # 4. Rolling Average Advantages
         ax4 = axes[3]
         if self.advantages:
-            ax4.plot(self.timesteps[:len(self.advantages)], self.advantages, alpha=0.2, color='lightcoral', label='Raw Advantages')
+            advantages_cpu = [a.cpu().numpy() if isinstance(a, torch.Tensor) else a for a in self.advantages]
+            ax4.plot(self.timesteps[:len(self.advantages)], advantages_cpu, alpha=0.2, color='lightcoral', label='Raw Advantages')
         if self.advantage_estimate_history:
             ax4.plot(self.timesteps[:len(self.advantage_estimate_history)], self.advantage_estimate_history, color='red', linewidth=2, 
                      label=f'Rolling Avg ({self.smoothing_window} steps)')
@@ -242,7 +251,8 @@ class Logger:
         ax1 = axes[0]
         if len(self.timesteps) > 1: # Ensure at least two timesteps for a meaningful rate
             # Calculate cumulative rewards
-            cumulative_rewards_filtered = np.cumsum(self.rewards)
+            rewards_cpu = [r.cpu().numpy() if isinstance(r, torch.Tensor) else r for r in self.rewards]
+            cumulative_rewards_filtered = np.cumsum(rewards_cpu)
             timesteps_filtered = np.array(self.timesteps)
             
             # Find the first non-zero timestep index (or index > 0)

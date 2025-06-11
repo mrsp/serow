@@ -459,7 +459,7 @@ if __name__ == "__main__":
         'batch_size': 256,  
         'max_grad_norm': 0.3,  
         'buffer_size': 10000,  
-        'max_episodes': 500,
+        'max_episodes': 150,
         'actor_lr': 1e-5, 
         'critic_lr': 1e-5,  
         'max_state_value': max_state_value,
