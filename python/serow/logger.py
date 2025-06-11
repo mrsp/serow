@@ -17,6 +17,7 @@ class Logger:
         self.policy_losses = []
         self.value_losses = []
         self.entropies = []
+        self.log_stds = []  # Store log_std means
         
         # Rolling statistics
         self.cumulative_reward = 0
@@ -26,6 +27,8 @@ class Logger:
         self.policy_loss_history = []
         self.value_loss_history = []
         self.entropy_history = []
+        if self.log_stds:
+            self.log_std_history = []
         
         # Optional episode data (if available)
         self.episodes = []
@@ -43,12 +46,14 @@ class Logger:
         if advantage is not None:
             self.advantages.append(advantage)
     
-    def log_training_step(self, timestep, policy_loss, value_loss, entropy):
+    def log_training_step(self, timestep, policy_loss, value_loss, entropy, log_std=None):
         """Log training losses at specific timesteps"""
         self.training_timesteps.append(timestep)
         self.policy_losses.append(policy_loss)
         self.value_losses.append(value_loss)
         self.entropies.append(entropy)
+        if log_std is not None:
+            self.log_stds.append(log_std)
     
     def log_episode(self, episode_num, timestep, episode_return, episode_length):
         """Optional: Log episode data if available"""
@@ -83,6 +88,10 @@ class Logger:
         self.policy_loss_history = self._compute_rolling_average(self.policy_losses, loss_smoothing_window)
         self.value_loss_history = self._compute_rolling_average(self.value_losses, loss_smoothing_window)
         self.entropy_history = self._compute_rolling_average(self.entropies, loss_smoothing_window)
+        if self.log_stds:
+            self.log_std_history = self._compute_rolling_average(self.log_stds, loss_smoothing_window)
+        else:
+            self.log_std_history = []
 
     def plot_training_curves(self, save_path=None):
         """Create comprehensive training plots for sample-based data"""
@@ -183,9 +192,23 @@ class Logger:
             ax7.legend()
             ax7.grid(True, alpha=0.3)
         
+        # 8. log_std
+        if hasattr(self, 'log_stds') and self.log_stds:
+            ax8 = axes[7] if len(axes) > 7 else None
+            if ax8:
+                ax8.plot(self.training_timesteps, self.log_stds, alpha=0.3, color='gray', label='Raw log_std')
+                if hasattr(self, 'log_std_history') and self.log_std_history:
+                    ax8.plot(self.training_timesteps[:len(self.log_std_history)], self.log_std_history, color='black', linewidth=2,
+                             label=f'Rolling Avg ({max(10, len(self.log_stds) // 10)} updates)')
+                ax8.set_xlabel('Timesteps')
+                ax8.set_ylabel('log_std')
+                ax8.set_title('Policy log_std vs Timesteps')
+                ax8.legend()
+                ax8.grid(True, alpha=0.3)
+
         # Fill remaining subplot with a placeholder or remove it if not needed
-        if len(axes) > 7:
-            for i in range(7, len(axes)):
+        if len(axes) > 8:
+            for i in range(8, len(axes)):
                 fig.delaxes(axes[i]) # Remove empty subplots
 
         # If episode data is available, add episode markers to cumulative reward plot
