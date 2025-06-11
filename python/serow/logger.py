@@ -307,4 +307,5 @@ def example_sample_based_training():
     logger.plot_training_curves()
     logger.plot_sample_efficiency()
 
-example_sample_based_training()
+if __name__ == "__main__":
+    example_sample_based_training()

@@ -22,8 +22,7 @@ from read_mcap import(
 
 from utils import(
     quaternion_to_rotation_matrix,
-    export_models_to_onnx,
-    plot_training_curves
+    export_models_to_onnx
 )
 
 class SharedNetwork(nn.Module):
@@ -129,7 +128,6 @@ def train_ppo(datasets, agent, params):
     # Set to train mode
     agent.train()
 
-    episode_rewards = []
     converged = False
     best_reward = float('-inf')
     best_reward_episode = 0
@@ -228,11 +226,9 @@ def train_ppo(datasets, agent, params):
                 
                 # Train policy periodically
                 if collected_steps >= params['n_steps']:
-                    actor_loss, critic_loss, _ = agent.train()
+                    actor_loss, critic_loss, _, converged = agent.train()
                     if actor_loss is not None and critic_loss is not None:
                         print(f"Policy Loss: {actor_loss:.4f}, Value Loss: {critic_loss:.4f}")
-                        episode_actor_losses.append(actor_loss)
-                        episode_critic_losses.append(critic_loss)
                     collected_steps = 0
 
                 # Check for early termination due to filter divergence
@@ -254,41 +250,27 @@ def train_ppo(datasets, agent, params):
                           f"in episode {best_reward_episode}")
             
             # End of episode processing
-            episode_rewards.append(episode_reward)
-            agent.save_checkpoint(episode_reward)
-
             if episode_reward > best_reward:
                 best_reward = episode_reward
                 best_reward_episode = episode
                 export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
 
-            # Store episode statistics
-            if episode_critic_losses:
-                stats['critic_losses'].append(np.mean(episode_critic_losses))
-            if episode_actor_losses:
-                stats['actor_losses'].append(np.mean(episode_actor_losses))
-            stats['rewards'].append(episode_reward)
-            stats['episode_lengths'].append(time_step)
-
             # Print episode summary
             print(f"Episode {episode} completed with episode reward {episode_reward:.2f}")
-            if episode_critic_losses:
-                print(f"Average critic loss: {np.mean(episode_critic_losses):.4f}")
-            if episode_actor_losses:
-                print(f"Average actor loss: {np.mean(episode_actor_losses):.4f}")
 
             # Check for early stopping
-            converged = agent.check_early_stopping(episode_reward, np.mean(episode_critic_losses))
             if converged:
                 break
-        
+
         if converged or episode == max_episodes - 1:
             agent.load_checkpoint(os.path.join(agent.checkpoint_dir, f'trained_policy_{robot}.pth'))
             export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
             break  # Break out of dataset loop
     
     # Plot training curves
-    plot_training_curves(stats, episode_rewards)
+    agent.logger.plot_training_curves()
+    agent.logger.plot_sample_efficiency()
+
     return agent, stats
 
 if __name__ == "__main__":
@@ -402,7 +384,8 @@ if __name__ == "__main__":
         'n_steps': 1200,
         'convergence_threshold': 0.1,
         'critic_convergence_threshold': 1.0,
-        'window_size': 20,
+        'reward_window_size': 10000,
+        'value_loss_window_size': 10,
         'checkpoint_dir': 'policy/ppo',
         'total_steps': 100000, 
         'final_lr_ratio': 0.1,  # Learning rate will decay to 10% of initial value

@@ -528,66 +528,6 @@ def plot_contact_forces_and_torques(contact_states):
     plt.tight_layout()
     plt.show()
 
-def plot_training_curves(stats, episode_rewards):
-    """Plot training curves to visualize progress"""
-    plt.figure(figsize=(15, 15))
-    
-    # Plot rewards
-    plt.subplot(3, 2, 1)
-    plt.plot(episode_rewards, label='Episode Rewards', alpha=0.7)
-    
-    # Apply smoothing
-    window_size = min(len(episode_rewards) // 5, 10)
-    if window_size > 1:
-        smoothed = np.convolve(episode_rewards, np.ones(window_size)/window_size, mode='valid')
-        plt.plot(np.arange(window_size-1, len(episode_rewards)), smoothed, 'r-', linewidth=2, label='Smoothed')
-    
-    plt.xlabel('Episode')
-    plt.ylabel('Total Reward')
-    plt.title('Training Progress')
-    plt.grid(True)
-    plt.legend()
-    
-    # Plot losses if available
-    if stats['critic_losses']:
-        plt.subplot(3, 2, 2)
-        plt.plot(stats['critic_losses'], label='Critic Loss')
-        plt.xlabel('Training Updates')
-        plt.ylabel('Loss')
-        plt.title('Critic Loss')
-        plt.grid(True)
-        plt.legend()
-    
-    if stats['actor_losses']:
-        plt.subplot(3, 2, 3)
-        plt.plot(stats['actor_losses'], label='Actor Loss')
-        plt.xlabel('Training Updates')
-        plt.ylabel('Loss')
-        plt.title('Actor Loss')
-        plt.grid(True)
-        plt.legend()
-    
-    if stats['episode_lengths']:
-        plt.subplot(3, 2, 4)
-        plt.plot(stats['episode_lengths'], label='Episode Length')
-        plt.xlabel('Episode')
-        plt.ylabel('Steps')
-        plt.title('Episode Length')
-        plt.grid(True)
-        plt.legend()
-    
-    if stats['noise_scales']:
-        plt.subplot(3, 2, 5)
-        plt.plot(stats['noise_scales'], label='Noise Scale')
-        plt.xlabel('Episode')
-        plt.ylabel('Noise Scale')
-        plt.title('Noise Scale')
-        plt.grid(True)
-        plt.legend()
-
-    plt.tight_layout()
-    plt.show()
-
 def export_models_to_onnx(agent, robot, params, path):
     """Export the trained models to ONNX format"""
     os.makedirs(path, exist_ok=True)
