@@ -349,7 +349,7 @@ def train_ppo_parallel(datasets, agent, params):
 
 if __name__ == "__main__":
     # Load and preprocess the data
-    imu_measurements      = read_imu_measurements("/tmp/serow_measurements.mcap")
+    imu_measurements = read_imu_measurements("/tmp/serow_measurements.mcap")
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
     base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
