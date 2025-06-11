@@ -207,7 +207,6 @@ def train_ppo(datasets, agent, params):
                         if reward is not None:
                             agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
 
-
                     else:
                         action = np.ones(serow_env.action_dim)
                         # Just run the update step
