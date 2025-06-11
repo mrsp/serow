@@ -309,7 +309,11 @@ class PPO:
         avg_policy_loss = total_policy_loss / num_updates
         avg_value_loss = total_value_loss / num_updates
         avg_entropy = total_entropy / num_updates
-        self.logger.log_training_step(self.timestep, avg_policy_loss, avg_value_loss, avg_entropy)
+        # Log log_std mean if available
+        log_std_mean = None
+        if hasattr(self.actor, 'log_std'):
+            log_std_mean = self.actor.log_std.data.mean().item()
+        self.logger.log_training_step(self.timestep, avg_policy_loss, avg_value_loss, avg_entropy, log_std=log_std_mean)
 
         converged = self.check_early_stopping()
 
