@@ -372,7 +372,7 @@ if __name__ == "__main__":
         'batch_size': 64,  
         'max_grad_norm': 0.3,  
         'buffer_size': 10000,  
-        'max_episodes': 500,
+        'max_episodes': 150,
         'actor_lr': 1e-5, 
         'critic_lr': 1e-5,  
         'max_state_value': max_state_value,
@@ -384,7 +384,7 @@ if __name__ == "__main__":
         'reward_window_size': 50000,
         'value_loss_window_size': 100,
         'checkpoint_dir': 'policy/ppo',
-        'total_steps': 100000, 
+        'total_steps': 10000, 
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
     }
 
