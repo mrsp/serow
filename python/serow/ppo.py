@@ -262,10 +262,10 @@ class PPO:
 
         # Compute next state values
         with torch.no_grad():
-            next_values = self.critic(next_states)
+            next_values = self.critic(next_states[-1].unsqueeze(0))
         
         # Compute GAE and returns
-        advantages, returns = self.compute_gae(rewards, torch.cat([values, next_values[-1].unsqueeze(0)]), dones)
+        advantages, returns = self.compute_gae(rewards, torch.cat([values, next_values]), dones)
 
         for i in range(len(rewards)):
             self.logger.log_step(self.timestep, rewards[i], values[i], advantages[i])
