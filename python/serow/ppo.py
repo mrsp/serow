@@ -95,23 +95,45 @@ class PPO:
             value = self.critic(state_tensor).item()
         return action, value, log_prob
     
-    def compute_gae(self, rewards, values, next_values, dones):
-        """Calculate Generalized Advantage Estimate"""
+    def compute_gae(self, rewards, values, dones):
+        """
+        Computes Generalized Advantage Estimation (GAE).
+        Args:
+            rewards: List of rewards collected in the trajectory.
+                    Shape: (T,)
+            values: List of value estimates for each state in the trajectory.
+                    The last value estimate should be for the next_state
+                    after the last reward. So, if rewards has length T,
+                    values should have length T+1.
+                    Shape: (T+1,)
+            dones: List of flags indicating if a state was terminal.
+                   (1.0 for done, 0.0 for not done).
+                   Shape: (T,)
+        Returns:
+            tuple:
+                - advantages: Computed GAE advantages for each state. Shape: (T,)
+                - returns: Computed discounted returns (targets for the critic). Shape: (T,)
+        """
         advantages = torch.zeros_like(rewards)
-        
-        gae = 0
+        last_advantage = 0
+
+        # Iterate backwards through the trajectory
         for t in reversed(range(len(rewards))):
-            if t == len(rewards) - 1:
-                next_value = 0  # Terminal state value should be 0
+            if dones[t]:
+                next_value = 0
             else:
                 next_value = values[t + 1]
-                
-            # Standard GAE formula
-            delta = rewards[t] + self.gamma * next_value * (1.0 - dones[t]) - values[t]
-            gae = delta + self.gamma * self.gae_lambda * (1.0 - dones[t]) * gae
-            advantages[t] = gae
-        
-        returns = advantages + values
+
+            # Calculate TD error
+            delta = rewards[t] + self.gamma * next_value - values[t]
+            
+            # Calculate GAE
+            advantages[t] = delta + self.gamma * self.gae_lambda * last_advantage
+            last_advantage = advantages[t]
+
+        # Calculate returns as sum of advantages and values
+        returns = advantages + values[:-1]
+
         return advantages, returns
     
     def update_learning_rates(self):
@@ -243,7 +265,7 @@ class PPO:
             next_values = self.critic(next_states)
         
         # Compute GAE and returns
-        advantages, returns = self.compute_gae(rewards, values, next_values, dones)
+        advantages, returns = self.compute_gae(rewards, torch.cat([values, next_values[-1].unsqueeze(0)]), dones)
 
         for i in range(len(rewards)):
             self.logger.log_step(self.timestep, rewards[i], values[i], advantages[i])
