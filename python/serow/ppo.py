@@ -115,17 +115,12 @@ class PPO:
         return advantages, returns
     
     def update_learning_rates(self):
-        """Update learning rates using cosine annealing."""
+        """Update learning rates using linear decay."""
         progress = min(1.0, self.current_step / self.total_steps)
         
-        # Cosine annealing
-        actor_lr = self.initial_actor_lr * self.final_lr_ratio + \
-                  0.5 * (self.initial_actor_lr - self.initial_actor_lr * self.final_lr_ratio) * \
-                  (1 + np.cos(np.pi * progress))
-        
-        critic_lr = self.initial_critic_lr * self.final_lr_ratio + \
-                   0.5 * (self.initial_critic_lr - self.initial_critic_lr * self.final_lr_ratio) * \
-                   (1 + np.cos(np.pi * progress))
+        # Linear decay from initial_lr to final_lr
+        actor_lr = self.initial_actor_lr - (self.initial_actor_lr - self.initial_actor_lr * self.final_lr_ratio) * progress
+        critic_lr = self.initial_critic_lr - (self.initial_critic_lr - self.initial_critic_lr * self.final_lr_ratio) * progress
         
         # Update optimizer learning rates
         for param_group in self.actor_optimizer.param_groups:
@@ -177,31 +172,39 @@ class PPO:
             len(self.logger.value_losses) < self.value_loss_window_size:
             return False
         
+        # Get recent rewards and calculate statistics
         recent_rewards = np.array(self.logger.rewards[-self.reward_window_size:])
         avg_reward = np.mean(recent_rewards)
+        
+        # Save checkpoint with current average reward
         self.save_checkpoint(avg_reward)
 
-        # Calculate how close recent rewards are to best reward
-        rewards_ratios = recent_rewards / (abs(self.best_reward) + 1e-6)  # Avoid division by zero
-        
-        # Check if rewards have converged
-        rewards_converged = np.all(rewards_ratios >= (1.0 - self.convergence_threshold))
-
-        # Check if critic loss has converged
+        # Check if value function has converged
         recent_value_losses = np.array(self.logger.value_losses[-self.value_loss_window_size:])
         value_loss_std = np.std(recent_value_losses)
         value_loss_mean = np.mean(recent_value_losses)
         value_loss_converged = value_loss_std <= \
             (value_loss_mean * self.critic_convergence_threshold)
+        
+        # Only consider early stopping if value function has converged
+        # and we've seen enough samples
+        if value_loss_converged and len(self.logger.rewards) >= self.reward_window_size:
+            # Calculate reward trend using linear regression
+            x = np.arange(len(recent_rewards))
+            slope, _ = np.polyfit(x, recent_rewards, 1)
+            
+            # Check if rewards have plateaued
+            # We use a more lenient threshold for the slope
+            rewards_plateaued = abs(float(slope)) < self.convergence_threshold * abs(avg_reward)
+            
+            if rewards_plateaued:
+                print(f"Training may have converged:")
+                print(f"  - Average reward: {avg_reward:.2f}")
+                print(f"  - Reward trend slope: {float(slope):.4f}")
+                print(f"  - Value loss std/mean ratio: {value_loss_std/value_loss_mean:.4f}")
+                print(f"  - Consider stopping if performance is satisfactory")
+                converged = True
                 
-        # Both rewards and critic loss must be converged
-        if rewards_converged and value_loss_converged:
-            print(f"Training converged!")
-            print(f"Recent rewards are within {self.convergence_threshold*100}% of best episode "  
-                  f"reward {self.best_reward:.2f}")
-            print(f"Value loss has stabilized with std/mean ratio: "
-                  f"{value_loss_std/value_loss_mean:.4f}")
-            converged = True
         return converged
     
     def train(self):
