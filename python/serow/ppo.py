@@ -96,21 +96,21 @@ class PPO:
         return action, value, log_prob
     
     def compute_gae(self, rewards, values, next_values, dones):
-        """Calculate Generalized Advantage Estimation"""
+        """Calculate Generalized Advantage Estimate"""
         advantages = torch.zeros_like(rewards)
-        returns = torch.zeros_like(rewards)
-
+        
         gae = 0
         for t in reversed(range(len(rewards))):
             if t == len(rewards) - 1:
-                next_value = next_values[t]
+                next_value = 0  # Terminal state value should be 0
             else:
                 next_value = values[t + 1]
                 
+            # Standard GAE formula
             delta = rewards[t] + self.gamma * next_value * (1.0 - dones[t]) - values[t]
             gae = delta + self.gamma * self.gae_lambda * (1.0 - dones[t]) * gae
             advantages[t] = gae
-
+        
         returns = advantages + values
         return advantages, returns
     

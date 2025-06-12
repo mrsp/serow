@@ -14,17 +14,17 @@ params = {
     'action_dim': 1,
     'max_action': 2.0,
     'min_action': -2.0,
-    'clip_param': 0.2,
+    'clip_param': 0.1,
     'value_loss_coef': 0.2,  
-    'entropy_coef': 0.001,    
-    'gamma': 0.995,
-    'gae_lambda': 0.98,
-    'ppo_epochs': 20,         
-    'batch_size': 256,      
+    'entropy_coef': 0.01,    
+    'gamma': 0.99,
+    'gae_lambda': 0.95,
+    'ppo_epochs': 4,         
+    'batch_size': 64,      
     'max_grad_norm': 0.3,
-    'max_episodes': 500,
-    'actor_lr': 1e-3,       
-    'critic_lr': 1e-3,       
+    'max_episodes': 100,
+    'actor_lr': 3e-4,       
+    'critic_lr': 3e-4,       
     'buffer_size': 10000,
     'max_state_value': 1e4,
     'min_state_value': -1e4,
@@ -36,7 +36,7 @@ params = {
     'value_loss_window_size': 20,
     'checkpoint_dir': 'policy/inverted_pendulum/ppo',
     'total_steps': 100000, 
-    'final_lr_ratio': 0.1,  # Learning rate will decay to 10% of initial value
+    'final_lr_ratio': 1.0,  # Learning rate will decay to 10% of initial value
 }
 
 class SharedNetwork(nn.Module):
@@ -198,23 +198,21 @@ class InvertedPendulum:
         self.state = np.array([np.cos(theta), np.sin(theta), theta_dot])
         
         # Primary reward: exponential decay based on angle from upright
-        angle_reward = np.cos(theta)
         angle_from_upright = abs(theta)
+        # Scale rewards to reasonable range
+        angle_reward = 10.0 * np.exp(-2.0 * angle_from_upright)  # 0-10 range
+        
         if angle_from_upright < 0.5:
-            stability_bonus = 0.5 * np.exp(-abs(theta_dot))
+            stability_bonus = 5.0 * np.exp(-abs(theta_dot))  # 0-5 range
         else:
             stability_bonus = 0.0
-        control_penalty = 0.0005 * action**2
-        velocity_penalty = 0.01 * theta_dot**2
-
-        reward = float(angle_reward) + float(stability_bonus) - float(control_penalty) - float(velocity_penalty)
         
+        control_penalty = 0.01 * action**2  # Small penalty
+        
+        reward = angle_reward + stability_bonus - control_penalty
+            
         # Termination condition - only terminate for extreme angular velocities
-        if abs(theta_dot) > self.max_angular_vel:
-            done = 1.0
-            reward -= 50.0
-        else:
-            done = 0.0
+        done = 1.0 if abs(theta_dot) > self.max_angular_vel else 0.0
 
         return self.state, reward, done
 
@@ -323,8 +321,8 @@ class TestPPOInvertedPendulum(unittest.TestCase):
                 self.agent.load_checkpoint(os.path.join(checkpoint_dir, 'best_model.pth'))
                 break
                 
-            print(f"Episode {episode}/{max_episodes}, Reward: {episode_reward:.2f}, Best Reward: " 
-                  f"{best_reward:.2f}")
+            print(f"Episode {episode}/{max_episodes}, Reward: {episode_reward}, Best Reward: " 
+                  f"{best_reward}")
 
             if episode % 10 == 0:
                 avg_reward = np.mean(episode_rewards[-10:])
