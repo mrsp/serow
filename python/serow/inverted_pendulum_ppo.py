@@ -36,7 +36,7 @@ params = {
     'value_loss_window_size': 20,
     'checkpoint_dir': 'policy/inverted_pendulum/ppo',
     'total_steps': 100000, 
-    'final_lr_ratio': 1.0,  # Learning rate will decay to 10% of initial value
+    'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
 }
 
 class SharedNetwork(nn.Module):

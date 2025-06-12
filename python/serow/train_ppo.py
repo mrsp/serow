@@ -369,23 +369,23 @@ if __name__ == "__main__":
         'gamma': 0.99,
         'gae_lambda': 0.95,
         'ppo_epochs': 5,  
-        'batch_size': 256,  
+        'batch_size': 64,  
         'max_grad_norm': 0.3,  
         'buffer_size': 10000,  
-        'max_episodes': 1000,
+        'max_episodes': 500,
         'actor_lr': 1e-5, 
         'critic_lr': 1e-5,  
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
         'update_lr': True,
-        'n_steps': 1200,
+        'n_steps': 512,
         'convergence_threshold': 0.1,
-        'critic_convergence_threshold': 1.0,
-        'reward_window_size': 10000,
-        'value_loss_window_size': 10,
+        'critic_convergence_threshold': 0.1,
+        'reward_window_size': 50000,
+        'value_loss_window_size': 100,
         'checkpoint_dir': 'policy/ppo',
         'total_steps': 100000, 
-        'final_lr_ratio': 0.1,  # Learning rate will decay to 10% of initial value
+        'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
     }
 
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
