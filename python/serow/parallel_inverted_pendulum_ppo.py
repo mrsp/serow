@@ -24,7 +24,7 @@ params = {
     'ppo_epochs': 4,         
     'batch_size': 64,      
     'max_grad_norm': 0.3,
-    'max_episodes': 100,
+    'max_episodes': 50,
     'actor_lr': 3e-4,       
     'critic_lr': 3e-4,       
     'buffer_size': 10000,
