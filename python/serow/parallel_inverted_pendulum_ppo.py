@@ -16,17 +16,17 @@ params = {
     'action_dim': 1,
     'max_action': 2.0,
     'min_action': -2.0,
-    'clip_param': 0.2,
+    'clip_param': 0.1,
     'value_loss_coef': 0.2,  
-    'entropy_coef': 0.001,    
-    'gamma': 0.995,
-    'gae_lambda': 0.98,
-    'ppo_epochs': 20,         
-    'batch_size': 256,      
+    'entropy_coef': 0.01,    
+    'gamma': 0.99,
+    'gae_lambda': 0.95,
+    'ppo_epochs': 4,         
+    'batch_size': 64,      
     'max_grad_norm': 0.3,
-    'max_episodes': 500,
-    'actor_lr': 1e-3,       
-    'critic_lr': 1e-3,       
+    'max_episodes': 100,
+    'actor_lr': 3e-4,       
+    'critic_lr': 3e-4,       
     'buffer_size': 10000,
     'max_state_value': 1e4,
     'min_state_value': -1e4,
@@ -38,7 +38,7 @@ params = {
     'value_loss_window_size': 20,
     'checkpoint_dir': 'policy/inverted_pendulum/ppo',
     'total_steps': 100000, 
-    'final_lr_ratio': 0.1,  # Learning rate will decay to 10% of initial value
+    'final_lr_ratio': 1.0,  # Learning rate will decay to 10% of initial value
 }
 
 class SharedNetwork(nn.Module):
@@ -201,19 +201,18 @@ class InvertedPendulum:
         
         # Primary reward: exponential decay based on angle from upright
         angle_from_upright = abs(theta)
-        angle_reward = np.exp(-2.0 * angle_from_upright)  # High reward when upright
+        # Scale rewards to reasonable range
+        angle_reward = 10.0 * np.exp(-2.0 * angle_from_upright)  # 0-10 range
         
-        # Stability bonus: reward for low angular velocity when near upright
-        if angle_from_upright < 0.5:  # Only when reasonably upright
-            stability_bonus = 0.5 * np.exp(-abs(theta_dot))
+        if angle_from_upright < 0.5:
+            stability_bonus = 5.0 * np.exp(-abs(theta_dot))  # 0-5 range
         else:
             stability_bonus = 0.0
         
-        # Control penalty
-        control_penalty = 0.001 * action**2
+        control_penalty = 0.01 * action**2  # Small penalty
         
-        reward = float(angle_reward) + float(stability_bonus) - float(control_penalty)
-        
+        reward = angle_reward + stability_bonus - control_penalty
+            
         # Termination condition - only terminate for extreme angular velocities
         done = 1.0 if abs(theta_dot) > self.max_angular_vel else 0.0
 
@@ -285,7 +284,7 @@ def collect_experience_worker(
             # Print progress
             if step % 1000 == 0 or step == max_steps_per_episode - 1:
                 print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{step}/{max_steps_per_episode}] "
-                      f"Current reward: {episode_reward:.2f} Best reward: {best_reward:.2f}")
+                      f"Current reward: {float(episode_reward):.2f} Best reward: {float(best_reward):.2f}")
         
         # At the end of an episode, check for new best reward
         if episode_reward > best_reward:
