@@ -182,6 +182,7 @@ def collect_experience_worker(
     print(f"[Worker {worker_id}] Starting experience collection.")
     
     best_reward = float('-inf')
+    best_reward_episode = 0
     for episode in range(max_episodes):
         serow_env = SerowEnv(params['robot'], joint_states[0], base_states[0], contact_states[0])
         contact_frames = serow_env.contact_frames
@@ -247,12 +248,13 @@ def collect_experience_worker(
 
             # Print the reward accumulated so far
             if time_step % 1000 == 0 or time_step == max_steps - 1:
-                print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{time_step}/{max_steps}] Current reward: {episode_reward:.2f} Best reward: {best_reward:.2f}")
+                print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{time_step}/{max_steps}] Current reward: {episode_reward:.2f} Best reward: {best_reward:.2f} at episode {best_reward_episode}")
         
         # At the end of an episode, check for new best reward
         if episode_reward > best_reward:
             best_reward = episode_reward
-            print(f"[Worker {worker_id}] - [{episode}/{max_episodes}] New best reward: {best_reward:.2f}")
+            best_reward_episode = episode
+            print(f"[Worker {worker_id}] - [{episode}/{max_episodes}] New best reward: {best_reward:.2f} at episode {best_reward_episode}")
 
 def train_ppo_parallel(datasets, agent, params):
     # Set to train mode
@@ -459,7 +461,7 @@ if __name__ == "__main__":
         'batch_size': 64,  
         'max_grad_norm': 0.3,  
         'buffer_size': 10000,  
-        'max_episodes': 150,
+        'max_episodes': 50,
         'actor_lr': 1e-5, 
         'critic_lr': 1e-5,  
         'max_state_value': max_state_value,
@@ -471,7 +473,7 @@ if __name__ == "__main__":
         'reward_window_size': 50000,
         'value_loss_window_size': 100,
         'checkpoint_dir': 'policy/ppo',
-        'total_steps': 100000, 
+        'total_steps': 10000, 
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
     }
 
