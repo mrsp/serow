@@ -54,8 +54,8 @@ class Actor(nn.Module):
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
 
-        # Initialize weights
-        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)  
+        # Initialize weights with larger gain for better initial exploration
+        nn.init.orthogonal_(self.mean_layer.weight, gain=np.sqrt(2))  
         torch.nn.init.constant_(self.mean_layer.bias, 0.0)
 
     def forward(self, state):
@@ -79,6 +79,7 @@ class Actor(nn.Module):
             normal = torch.distributions.Normal(mean, std)
             action = normal.sample()
         
+        # Use softplus with a small epsilon for numerical stability
         action_scaled = F.softplus(action) + self.min_action
         
         # Calculate log probability
@@ -129,17 +130,8 @@ def train_ppo(datasets, agent, params):
     agent.train()
 
     converged = False
-    best_reward = float('-inf')
-    best_reward_episode = 0
-
-    # Training statistics tracking
-    stats = {
-        'critic_losses': [],
-        'actor_losses': [],
-        'rewards': [],
-        'episode_lengths': [],
-        'noise_scales': [] 
-    }
+    best_return = float('-inf')
+    best_return_episode = 0
 
     # Training loop with evaluation phases
     for i, dataset in enumerate(datasets):
@@ -162,10 +154,8 @@ def train_ppo(datasets, agent, params):
             serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0])
             
             # Episode tracking variables
-            episode_reward = 0.0
+            episode_return = 0.0
             collected_steps = 0
-            episode_critic_losses = []
-            episode_actor_losses = []
 
             # Run episode
             for time_step, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(
@@ -222,7 +212,7 @@ def train_ppo(datasets, agent, params):
                     if reward is not None:
                         step_reward += reward
                         collected_steps += 1
-                episode_reward += step_reward
+                episode_return = params['gamma'] * episode_return + step_reward
                 
                 # Train policy periodically
                 if collected_steps >= params['n_steps']:
@@ -232,46 +222,44 @@ def train_ppo(datasets, agent, params):
                     collected_steps = 0
 
                 # Check for early termination due to filter divergence
-                should_terminate = False
+                terminated = False
                 for cf in contact_frames:
                     if dones[cf] is not None and dones[cf]:
-                        should_terminate = True
+                        terminated = True
                         break
                 
-                if should_terminate:
+                if terminated:
                     print(f"Episode {episode} terminated early at step {time_step}/{max_steps} due to " 
                           f"filter divergence")
                     break
                 
-                # Progress logging
-                if time_step % 500 == 0 or time_step == max_steps - 1:
-                    print(f"Episode {episode}/{max_episodes}, Step {time_step}/{max_steps}, " 
-                          f"Episode reward: {episode_reward:.2f}, Best: {best_reward:.2f}, " 
-                          f"in episode {best_reward_episode}")
-            
+            print(f"Episode {episode}/{max_episodes}, Step {time_step}/{max_steps}, " 
+                  f"Episode return: {episode_return}, Best: {best_return}, " 
+                  f"in episode {best_return_episode}")
+
             # End of episode processing
-            if episode_reward > best_reward:
-                best_reward = episode_reward
-                best_reward_episode = episode
+            if episode_return > best_return:
+                best_return = episode_return
+                best_return_episode = episode
                 export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
 
-            # Print episode summary
-            print(f"Episode {episode} completed with episode reward {episode_reward:.2f}")
+            agent.logger.log_episode(episode_return, time_step)
 
             # Check for early stopping
             if converged:
                 break
 
         if converged or episode == max_episodes - 1:
-            agent.load_checkpoint(os.path.join(agent.checkpoint_dir, f'trained_policy_{robot}.pth'))
+            try:
+                agent.load_checkpoint(os.path.join(agent.checkpoint_dir, f'trained_policy_{robot}.pth'))
+            except FileNotFoundError:
+                print(f"No trained policy found for {robot}. Training new policy...")
             export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
             break  # Break out of dataset loop
     
     # Plot training curves
     agent.logger.plot_training_curves()
-    agent.logger.plot_sample_efficiency()
-
-    return agent, stats
+    return agent
 
 if __name__ == "__main__":
     # Load and preprocess the data
@@ -364,6 +352,7 @@ if __name__ == "__main__":
         'max_action': None,
         'min_action': min_action,
         'clip_param': 0.2,  
+        'value_clip_param': 0.2,
         'value_loss_coef': 0.2,  
         'entropy_coef': 0.01,  
         'gamma': 0.99,
@@ -372,7 +361,7 @@ if __name__ == "__main__":
         'batch_size': 64,  
         'max_grad_norm': 0.3,  
         'buffer_size': 10000,  
-        'max_episodes': 150,
+        'max_episodes': 3,
         'actor_lr': 1e-5, 
         'critic_lr': 1e-5,  
         'max_state_value': max_state_value,
@@ -381,14 +370,13 @@ if __name__ == "__main__":
         'n_steps': 512,
         'convergence_threshold': 0.1,
         'critic_convergence_threshold': 0.1,
-        'reward_window_size': 50000,
-        'value_loss_window_size': 100,
+        'return_window_size': 15,
+        'value_loss_window_size': 15,
         'checkpoint_dir': 'policy/ppo',
         'total_steps': 10000, 
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
     }
 
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     device = 'cpu'
     loaded = False
     print(f"Initializing agent for {robot}")
