@@ -44,9 +44,14 @@ class SharedNetwork(nn.Module):
     
 # Actor network per leg end-effector
 class Actor(nn.Module):
-    def __init__(self, params, shared_network):
+    def __init__(self, params):
         super(Actor, self).__init__()
-        self.shared_network = shared_network
+        self.layer1 = nn.Linear(params['state_dim'], 64)
+        self.layer2 = nn.Linear(64, 64)
+        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
+        torch.nn.init.constant_(self.layer1.bias, 0.0)
+        torch.nn.init.constant_(self.layer2.bias, 0.0)
 
         self.mean_layer = nn.Linear(64, params['action_dim'])
         self.log_std = nn.Parameter(torch.zeros(params['action_dim']))
@@ -59,7 +64,9 @@ class Actor(nn.Module):
         torch.nn.init.constant_(self.mean_layer.bias, 0.0)
 
     def forward(self, state):
-        x = self.shared_network(state)
+        x = self.layer1(state)
+        x = F.relu(x)
+        x = self.layer2(x)
         x = F.relu(x)
         mean = self.mean_layer(x) 
         # Clamp log_std for numerical stability
@@ -113,15 +120,23 @@ class Actor(nn.Module):
         return log_probs, entropy
 
 class Critic(nn.Module):
-    def __init__(self, params, shared_network):
+    def __init__(self, params):
         super(Critic, self).__init__()
-        self.shared_network = shared_network
-        self.value_layer = nn.Linear(64, 1)
+        self.layer1 = nn.Linear(params['state_dim'], 128)
+        self.layer2 = nn.Linear(128, 128)
+        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
+        torch.nn.init.constant_(self.layer1.bias, 0.0)
+        torch.nn.init.constant_(self.layer2.bias, 0.0)
+
+        self.value_layer = nn.Linear(128, 1)
         nn.init.orthogonal_(self.value_layer.weight, gain=1.0)
         torch.nn.init.constant_(self.value_layer.bias, 0.0)
 
     def forward(self, state):
-        x = self.shared_network(state)
+        x = self.layer1(state)
+        x = F.relu(x)
+        x = self.layer2(x)
         x = F.relu(x)
         return self.value_layer(x)
 
@@ -229,11 +244,11 @@ def train_ppo(datasets, agent, params):
                         break
                 
                 if terminated:
-                    print(f"Episode {episode} terminated early at step {time_step}/{max_steps} due to " 
+                    print(f"Episode {episode + 1} terminated early at step {time_step + 1}/{max_steps} due to " 
                           f"filter divergence")
                     break
                 
-            print(f"Episode {episode}/{max_episodes}, Step {time_step}/{max_steps}, " 
+            print(f"Episode {episode + 1}/{max_episodes}, Step {time_step + 1}/{max_steps}, " 
                   f"Episode return: {episode_return}, Best: {best_return}, " 
                   f"in episode {best_return_episode}")
 
@@ -353,7 +368,7 @@ if __name__ == "__main__":
         'min_action': min_action,
         'clip_param': 0.2,  
         'value_clip_param': 0.2,
-        'value_loss_coef': 0.2,  
+        'value_loss_coef': 0.5,  
         'entropy_coef': 0.01,  
         'gamma': 0.99,
         'gae_lambda': 0.95,
@@ -361,9 +376,9 @@ if __name__ == "__main__":
         'batch_size': 64,  
         'max_grad_norm': 0.3,  
         'buffer_size': 10000,  
-        'max_episodes': 3,
-        'actor_lr': 1e-5, 
-        'critic_lr': 1e-5,  
+        'max_episodes': 30,
+        'actor_lr': 5e-5, 
+        'critic_lr': 1e-4,  
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
         'update_lr': True,
@@ -375,14 +390,14 @@ if __name__ == "__main__":
         'checkpoint_dir': 'policy/ppo',
         'total_steps': 10000, 
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
+        'check_value_loss': True,
     }
 
     device = 'cpu'
     loaded = False
     print(f"Initializing agent for {robot}")
-    shared_network = SharedNetwork(params)
-    actor = Actor(params, shared_network).to(device)
-    critic = Critic(params, shared_network).to(device)
+    actor = Actor(params).to(device)
+    critic = Critic(params).to(device)
     agent = PPO(actor, critic, params, device=device, normalize_state=True)
 
     policy_path = params['checkpoint_dir']
@@ -399,8 +414,8 @@ if __name__ == "__main__":
         train_ppo(train_datasets, agent, params)
         # Load the best policy
         checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')
-        actor = Actor(params, shared_network).to(device)
-        critic = Critic(params, shared_network).to(device)
+        actor = Actor(params).to(device)
+        critic = Critic(params).to(device)
         best_policy = PPO(actor, critic, params, device=device)
         best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
         best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])
