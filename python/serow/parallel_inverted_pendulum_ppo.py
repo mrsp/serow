@@ -25,7 +25,7 @@ params = {
     'ppo_epochs': 5,         
     'batch_size': 64,      
     'max_grad_norm': 0.5,
-    'max_episodes': 10,
+    'max_episodes': 100,
     'actor_lr': 3e-4,       
     'critic_lr': 1e-3,       
     'buffer_size': 10000,
@@ -253,7 +253,7 @@ class InvertedPendulum:
 
 def collect_experience_worker(
     worker_id, params, shared_actor_state_dict, shared_critic_state_dict,
-    shared_buffer, training_event, update_event, device
+    shared_buffer, training_event, update_event, device, episode_queue
 ):
     """
     Worker process to collect experience from an InvertedPendulum environment and add to a shared buffer.
@@ -317,12 +317,15 @@ def collect_experience_worker(
             # Print progress
             if step % 1000 == 0 or step == max_steps_per_episode - 1:
                 print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{step}/{max_steps_per_episode}] "
-                      f"Current return: {float(episode_return):.2f} Best return: {float(best_return):.2f}")
+                      f"Current return: {episode_return} Best return: {best_return}")
+        
+        # Send episode data to main process instead of logging directly
+        episode_queue.put((worker_id, episode_return, step))
         
         # At the end of an episode, check for new best return
-        agent_worker.logger.log_episode(episode_return, step)
         if episode_return > best_return:
             best_return = episode_return
+            print(f"[Worker {worker_id}] New best return: {best_return} at episode {episode}")
 
 def train_ppo_parallel(agent, params, num_workers=4):
     """
@@ -344,6 +347,9 @@ def train_ppo_parallel(agent, params, num_workers=4):
     training_event = manager.Event() # Set by workers when buffer is full, cleared by main after training
     update_event = manager.Event()   # Set by main after model update, cleared by main before training
 
+    # Create a queue for episode data
+    episode_queue = manager.Queue()
+
     # Start workers for parallel data collection
     processes = []
     print(f"[Main process] Starting {num_workers} worker processes...")
@@ -351,7 +357,7 @@ def train_ppo_parallel(agent, params, num_workers=4):
         p = multiprocessing.Process(
             target=collect_experience_worker,
             args=(i, params, shared_actor_state_dict, shared_critic_state_dict,
-                  shared_buffer, training_event, update_event, agent.device)
+                  shared_buffer, training_event, update_event, agent.device, episode_queue)
         )
         processes.append(p)
         p.start()
@@ -363,6 +369,15 @@ def train_ppo_parallel(agent, params, num_workers=4):
     # Check if at least one worker is still running
     while any(p.is_alive() for p in processes):
         try:
+            # Check for episode data from workers
+            try:
+                while not episode_queue.empty():
+                    worker_id, episode_return, time_step = episode_queue.get_nowait()
+                    agent.logger.log_episode(episode_return, time_step)
+            except Exception as e:
+                print(f"[Main process] Error processing episode data: {str(e)}")
+                print(f"[Main process] Traceback: {traceback.format_exc()}")
+
             # Main process waits until enough data is collected
             training_event.wait(timeout=5.0) # Wait for a worker to signal that buffer is full
             buffer_size = len(shared_buffer)
