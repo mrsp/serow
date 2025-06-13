@@ -25,7 +25,7 @@ class PPO:
         self.update_lr = params.get('update_lr', False)
         self.final_lr_ratio = params.get('final_lr_ratio', 0.1)
         self.total_steps = params.get('total_steps', 1000000)
-        self.current_step = 0
+        self.training_step = 0
         
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.initial_actor_lr)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.initial_critic_lr)
@@ -44,7 +44,7 @@ class PPO:
         self.max_action = params['max_action']
         self.num_updates = 0
         self.training_step = 0
-        self.timestep = 0
+        self.samples = 0
 
         self.normalize_state = normalize_state
         self.max_state_value = params['max_state_value']
@@ -52,8 +52,8 @@ class PPO:
         
         # Early stopping parameters
         self.value_loss_window_size = params.get('value_loss_window_size', 10) 
-        self.reward_window_size = params.get('reward_window_size', 10000) 
-        self.best_reward = float('-inf')
+        self.returns_window_size = params.get('returns_window_size', 20) 
+        self.best_return = float('-inf')
         self.convergence_threshold = params.get('convergence_threshold', 0.1)
         self.critic_convergence_threshold = params.get('critic_convergence_threshold', 0.05)
         self.best_model_state = None
@@ -63,6 +63,9 @@ class PPO:
         # Checkpoint parameters
         self.checkpoint_dir = params['checkpoint_dir']
         os.makedirs(self.checkpoint_dir, exist_ok=True)
+
+        # Define a separate clipping parameter for the value function
+        self.value_clip_param = params.get('value_clip_param', 0.2)  
 
     def eval(self):
         self.actor.eval()
@@ -138,7 +141,7 @@ class PPO:
     
     def update_learning_rates(self):
         """Update learning rates using linear decay."""
-        progress = min(1.0, self.current_step / self.total_steps)
+        progress = min(1.0, self.training_step / self.total_steps)
         
         # Linear decay from initial_lr to final_lr
         actor_lr = self.initial_actor_lr - (self.initial_actor_lr - self.initial_actor_lr * self.final_lr_ratio) * progress
@@ -149,10 +152,8 @@ class PPO:
             param_group['lr'] = actor_lr
         for param_group in self.critic_optimizer.param_groups:
             param_group['lr'] = critic_lr
-        self.current_step += 1
-        print(f"Actor LR: {actor_lr}, Critic LR: {critic_lr}")
 
-    def save_checkpoint(self, avg_reward):
+    def save_checkpoint(self, avg_return):
         # If this is the best model so far, save it separately
         """Save a checkpoint of the current model state"""
         checkpoint = {
@@ -161,19 +162,18 @@ class PPO:
             'actor_optimizer': self.actor_optimizer.state_dict(),
             'critic_optimizer': self.critic_optimizer.state_dict(),
             'num_updates': self.num_updates,
-            'best_reward': self.best_reward,
-            'timestep': self.timestep,
+            'best_return': self.best_return,
+            'samples': self.samples,
             'training_step': self.training_step
         }
-        if avg_reward > self.best_reward:
-            self.best_reward = avg_reward
+        if avg_return > self.best_return:
+            self.best_return = avg_return
             self.best_model_state = checkpoint
             best_model_path = os.path.join(self.checkpoint_dir, f'trained_policy_{self.robot}.pth')
             torch.save(checkpoint, best_model_path)
-            print(f"New best model saved with averag reward: {avg_reward:.2f}")
+            print(f"New best model saved with averag return: {avg_return}")
         checkpoint_path = os.path.join(self.checkpoint_dir, f'policy_checkpoint_{self.robot}.pth')
         torch.save(checkpoint, checkpoint_path)
-        print(f"Saved checkpoint with reward: {avg_reward:.2f}")
 
     def load_checkpoint(self, checkpoint_path):
         """Load a checkpoint"""
@@ -183,23 +183,27 @@ class PPO:
         self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer'])
         self.critic_optimizer.load_state_dict(checkpoint['critic_optimizer'])
         self.num_updates = checkpoint['num_updates']
-        self.best_reward = checkpoint['best_reward']
-        self.timestep = checkpoint['timestep']
+        self.best_return = checkpoint['best_return']
+        self.samples = checkpoint['samples']
         self.training_step = checkpoint['training_step']
-        print(f"Loaded checkpoint with reward: {self.best_reward:.2f}")
+        print(f"Loaded checkpoint with return: {self.best_return}")
 
     def check_early_stopping(self):
+        # Save checkpoint with current average return
+        if len(self.logger.returns) > 0: 
+            self.save_checkpoint(self.logger.returns[-1])
+
         converged = False
-        if len(self.logger.rewards) < self.reward_window_size or \
+        if len(self.logger.returns) < self.returns_window_size or \
             len(self.logger.value_losses) < self.value_loss_window_size:
-            return False
+            return converged
+
+        # Check if recent returns have converged to the best return gathered so far
+        recent_returns = np.array(self.logger.returns[-self.returns_window_size:])
         
-        # Get recent rewards and calculate statistics
-        recent_rewards = np.array(self.logger.rewards[-self.reward_window_size:])
-        avg_reward = np.mean(recent_rewards)
-        
-        # Save checkpoint with current average reward
-        self.save_checkpoint(avg_reward)
+        # Check if all recent returns are within convergence threshold of best_return
+        recent_return_converged = np.all(np.abs(recent_returns - self.best_return) <= 
+                                        (self.best_return * self.convergence_threshold))
 
         # Check if value function has converged
         recent_value_losses = np.array(self.logger.value_losses[-self.value_loss_window_size:])
@@ -208,24 +212,9 @@ class PPO:
         value_loss_converged = value_loss_std <= \
             (value_loss_mean * self.critic_convergence_threshold)
         
-        # Only consider early stopping if value function has converged
-        # and we've seen enough samples
-        if value_loss_converged and len(self.logger.rewards) >= self.reward_window_size:
-            # Calculate reward trend using linear regression
-            x = np.arange(len(recent_rewards))
-            slope, _ = np.polyfit(x, recent_rewards, 1)
-            
-            # Check if rewards have plateaued
-            # We use a more lenient threshold for the slope
-            rewards_plateaued = abs(float(slope)) < self.convergence_threshold * abs(avg_reward)
-            
-            if rewards_plateaued:
-                print(f"Training may have converged:")
-                print(f"  - Average reward: {avg_reward:.2f}")
-                print(f"  - Reward trend slope: {float(slope):.4f}")
-                print(f"  - Value loss std/mean ratio: {value_loss_std/value_loss_mean:.4f}")
-                print(f"  - Consider stopping if performance is satisfactory")
-                converged = True
+        # Only consider early stopping if value function has converged and returns have converged
+        if value_loss_converged and recent_return_converged:
+           converged = True
                 
         return converged
     
@@ -236,8 +225,6 @@ class PPO:
         # Update learning rates before training
         if self.update_lr:
             self.update_learning_rates()  
-
-        self.training_step += 1
 
         # Convert buffer to tensors
         states, actions, rewards, next_states, dones, values, log_probs = zip(*self.buffer)
@@ -266,13 +253,18 @@ class PPO:
         
         # Compute GAE and returns
         advantages, returns = self.compute_gae(rewards, torch.cat([values, next_values]), dones)
-
+        
+        # Log data
         for i in range(len(rewards)):
-            self.logger.log_step(self.timestep, rewards[i], values[i], advantages[i])
-            self.timestep += 1
+            self.logger.log_step(self.samples, rewards[i], values[i], advantages[i])
+            self.samples += 1
 
         # Normalize advantages
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
+        values_mean = values.mean()
+        values_std = values.std() 
+        values = (values - values_mean) / (values_std + 1e-8)
         
         # Training loop
         dataset_size = len(states)
@@ -294,7 +286,8 @@ class PPO:
                 batch_advantages = advantages[batch_indices]
                 batch_returns = returns[batch_indices]
                 batch_old_log_probs = old_log_probs[batch_indices]
-                
+                batch_values = values[batch_indices]
+
                 # Get current policy outputs using the new evaluate_actions method
                 current_log_probs, entropy = self.actor.evaluate_actions(batch_states, batch_actions)
                 
@@ -304,9 +297,20 @@ class PPO:
                 surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
                 policy_loss = -torch.min(surr1, surr2).mean()
                 
-                # Calculate value loss
+                # Calculate value loss with normalized returns and value clipping
                 current_values = self.critic(batch_states)
-                value_loss = F.mse_loss(current_values, batch_returns)
+                
+                # Normalize current values
+                current_values = (current_values - values_mean) / (values_std + 1e-8)
+
+                # Value clipping in normalized space
+                value_pred_clipped = batch_values + torch.clamp(
+                    current_values - batch_values,
+                    -self.value_clip_param, self.value_clip_param
+                )
+                value_loss_unclipped = F.mse_loss(current_values, batch_returns)
+                value_loss_clipped = F.mse_loss(value_pred_clipped, batch_returns)
+                value_loss = torch.max(value_loss_unclipped, value_loss_clipped)
                 
                 # Calculate total loss
                 total_loss = policy_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy.mean()
@@ -338,7 +342,8 @@ class PPO:
         log_std_mean = None
         if hasattr(self.actor, 'log_std'):
             log_std_mean = self.actor.log_std.data.mean().item()
-        self.logger.log_training_step(self.timestep, avg_policy_loss, avg_value_loss, avg_entropy, log_std=log_std_mean)
+        self.logger.log_training_step(self.training_step, avg_policy_loss, avg_value_loss, avg_entropy, log_std=log_std_mean)
+        self.training_step += 1
 
         converged = self.check_early_stopping()
 

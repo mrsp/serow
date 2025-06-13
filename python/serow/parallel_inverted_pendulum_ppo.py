@@ -16,25 +16,26 @@ params = {
     'action_dim': 1,
     'max_action': 2.0,
     'min_action': -2.0,
-    'clip_param': 0.1,
-    'value_loss_coef': 0.2,  
-    'entropy_coef': 0.01,    
+    'clip_param': 0.2,
+    'value_clip_param': 0.2,
+    'value_loss_coef': 0.5,  
+    'entropy_coef': 0.005,    
     'gamma': 0.99,
     'gae_lambda': 0.95,
-    'ppo_epochs': 4,         
+    'ppo_epochs': 5,         
     'batch_size': 64,      
-    'max_grad_norm': 0.3,
-    'max_episodes': 50,
+    'max_grad_norm': 0.5,
+    'max_episodes': 10,
     'actor_lr': 3e-4,       
-    'critic_lr': 3e-4,       
+    'critic_lr': 1e-3,       
     'buffer_size': 10000,
     'max_state_value': 1e4,
     'min_state_value': -1e4,
-    'n_steps': 1024,
+    'n_steps': 256,
     'update_lr': True,
-    'convergence_threshold': 0.1,
+    'convergence_threshold': 0.25,
     'critic_convergence_threshold': 0.1,
-    'reward_window_size': 50000,
+    'returns_window_size': 20,
     'value_loss_window_size': 20,
     'checkpoint_dir': 'policy/inverted_pendulum/ppo',
     'total_steps': 100000, 
@@ -170,6 +171,7 @@ class InvertedPendulum:
         self.max_torque = 2.0
         self.dt = 0.05
         self.state = None
+        self.upright_steps = 0  # Track consecutive upright steps
         self.reset()
 
     def angle_normalize(self, x):
@@ -177,10 +179,11 @@ class InvertedPendulum:
 
     def reset(self):
         # Start with a small random angle near upright
-        theta = np.random.uniform(-np.pi/4, np.pi/4)
-        theta_dot = np.random.uniform(-1.0, 1.0)
+        theta = np.random.uniform(-np.pi/6, np.pi/6)
+        theta_dot = np.random.uniform(-0.1, 0.1)
         # Convert to [cos(theta), sin(theta), theta_dot] representation
         self.state = np.array([np.cos(theta), np.sin(theta), theta_dot])
+        self.upright_steps = 0  # Reset counter on episode reset
         return self.state
 
     def step(self, action):
@@ -202,21 +205,51 @@ class InvertedPendulum:
         # Primary reward: exponential decay based on angle from upright
         angle_from_upright = abs(theta)
         # Scale rewards to reasonable range
-        angle_reward = 10.0 * np.exp(-2.0 * angle_from_upright)  # 0-10 range
+        angle_penalty = theta**2
         
-        if angle_from_upright < 0.5:
-            stability_bonus = 5.0 * np.exp(-abs(theta_dot))  # 0-5 range
+        if angle_from_upright < 0.25:
+            self.upright_steps += 1
+        else:
+            self.upright_steps = 0
+        
+        # Bonus for consecutive upright steps
+        consecutive_bonus = self.upright_steps * 1.0  
+        
+        control_penalty = 0.001 * action**2  
+        velocity_penalty = 0.1 * theta_dot**2  
+
+        reward = -angle_penalty - control_penalty - velocity_penalty  + consecutive_bonus
+            
+        # Termination condition - only terminate for extreme angular velocities
+        done = 0.0
+        if abs(theta_dot) > self.max_angular_vel:
+            done = 1.0
+
+        return self.state, reward, done
+
+    def compute_reward(self, theta, theta_dot, action):
+        """Improved reward function for better learning"""
+        # Primary reward: cosine of angle (1 when upright, -1 when inverted)
+        angle_reward = np.cos(theta)
+        
+        # Stability bonus when near upright (within 30 degrees)
+        if abs(theta) < np.pi/6:
+            stability_bonus = 2.0 * np.exp(-abs(theta_dot))
         else:
             stability_bonus = 0.0
         
-        control_penalty = 0.01 * action**2  # Small penalty
+        # Penalties
+        velocity_penalty = 0.01 * theta_dot**2
+        control_penalty = 0.001 * action**2
         
-        reward = angle_reward + stability_bonus - control_penalty
+        # Total reward
+        reward = angle_reward + stability_bonus - velocity_penalty - control_penalty
+        
+        # Bonus for staying upright
+        if abs(theta) < np.pi/12:  # Within 15 degrees
+            reward += 1.0
             
-        # Termination condition - only terminate for extreme angular velocities
-        done = 1.0 if abs(theta_dot) > self.max_angular_vel else 0.0
-
-        return self.state, reward, done
+        return reward
 
 def collect_experience_worker(
     worker_id, params, shared_actor_state_dict, shared_critic_state_dict,
@@ -241,10 +274,10 @@ def collect_experience_worker(
     max_episodes = params['max_episodes']
     print(f"[Worker {worker_id}] Starting experience collection.")
     
-    best_reward = float('-inf')
+    best_return = float('-inf')
     for episode in range(max_episodes):
         state = env.reset()
-        episode_reward = 0.0
+        episode_return = 0.0
         
         # Run episode
         for step in range(max_steps_per_episode):
@@ -257,7 +290,7 @@ def collect_experience_worker(
             try:
                 # Add experience to the shared buffer
                 shared_buffer.append((state, action, reward, next_state, done, value, log_prob))
-                episode_reward += reward
+                episode_return = episode_return * params['gamma'] + reward
             except Exception as e:
                 print(f"[Worker {worker_id}] Error appending to shared buffer: {str(e)}")
                 print(f"[Worker {worker_id}] Traceback: {traceback.format_exc()}")
@@ -284,11 +317,12 @@ def collect_experience_worker(
             # Print progress
             if step % 1000 == 0 or step == max_steps_per_episode - 1:
                 print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{step}/{max_steps_per_episode}] "
-                      f"Current reward: {float(episode_reward):.2f} Best reward: {float(best_reward):.2f}")
+                      f"Current return: {float(episode_return):.2f} Best return: {float(best_return):.2f}")
         
-        # At the end of an episode, check for new best reward
-        if episode_reward > best_reward:
-            best_reward = episode_reward
+        # At the end of an episode, check for new best return
+        agent_worker.logger.log_episode(episode_return, step)
+        if episode_return > best_return:
+            best_return = episode_return
 
 def train_ppo_parallel(agent, params, num_workers=4):
     """
@@ -381,13 +415,8 @@ def train_ppo_parallel(agent, params, num_workers=4):
         p.terminate()
         p.join()
 
-    # Load the best policy
-    agent.load_checkpoint(os.path.join(agent.checkpoint_dir, f'trained_policy_{params["robot"]}.pth'))
-
     # Plot training curves
     agent.logger.plot_training_curves()
-    agent.logger.plot_sample_efficiency()
-
     return agent
 
 # Unit tests for PPO with Inverted Pendulum
@@ -471,7 +500,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
             states.append(np.array([np.arctan2(state_flat[1], state_flat[0]),  state_flat[2]]))
             actions.append(action)
             rewards.append(reward) 
-            total_reward += reward
+            total_reward = params['gamma'] * total_reward + reward
             state = next_state
             if done:
                 break

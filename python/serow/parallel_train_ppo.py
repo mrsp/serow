@@ -151,7 +151,7 @@ class Critic(nn.Module):
 
 def collect_experience_worker(
     worker_id, dataset, params, shared_actor_state_dict, shared_critic_state_dict,
-    shared_buffer, training_event, update_event, device
+    shared_buffer, training_event, update_event, device, episode_queue, max_steps
 ):
     """
     Worker process to collect experience from an environment and add to a shared buffer.
@@ -177,17 +177,16 @@ def collect_experience_worker(
     contact_states = dataset['contact_states']
     joint_states = dataset['joint_states']
     base_states = dataset['base_states']
-    max_steps = len(imu_measurements) - 1
     max_episodes = params['max_episodes']
     print(f"[Worker {worker_id}] Starting experience collection.")
     
-    best_reward = float('-inf')
-    best_reward_episode = 0
+    best_return = float('-inf')
+    best_return_episode = 0
     for episode in range(max_episodes):
         serow_env = SerowEnv(params['robot'], joint_states[0], base_states[0], contact_states[0])
         contact_frames = serow_env.contact_frames
 
-        episode_reward = 0.0
+        episode_return = 0.0
         # Run episode
         for time_step, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(
             imu_measurements[:max_steps],
@@ -216,7 +215,7 @@ def collect_experience_worker(
                         try:
                             # Add experience to the shared buffer
                             shared_buffer.append((x, action, reward, next_x, done, value, log_prob))
-                            episode_reward += reward
+                            episode_return = params['gamma'] * episode_return + reward
                         except Exception as e:
                             print(f"[Worker {worker_id}] Error appending to shared buffer: {str(e)}")
                             print(f"[Worker {worker_id}] Traceback: {traceback.format_exc()}")
@@ -246,17 +245,19 @@ def collect_experience_worker(
                 # Set update_event to allow other workers to proceed
                 update_event.set()
 
-            # Print the reward accumulated so far
-            if time_step % 1000 == 0 or time_step == max_steps - 1:
-                print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{time_step}/{max_steps}] Current reward: {episode_reward:.2f} Best reward: {best_reward:.2f} at episode {best_reward_episode}")
+        # Print the reward accumulated so far
+        print(f"[Worker {worker_id}] -[{episode}/{max_episodes - 1}] - [{time_step}/{max_steps - 1}] Current return: {episode_return} Best return: {best_return} at episode {best_return_episode}")
+        
+        # Send episode data to main process instead of logging directly
+        episode_queue.put((worker_id, episode_return, time_step))
         
         # At the end of an episode, check for new best reward
-        if episode_reward > best_reward:
-            best_reward = episode_reward
-            best_reward_episode = episode
-            print(f"[Worker {worker_id}] - [{episode}/{max_episodes}] New best reward: {best_reward:.2f} at episode {best_reward_episode}")
+        if episode_return > best_return:
+            best_return = episode_return
+            best_return_episode = episode
+            print(f"[Worker {worker_id}] - [{episode}/{max_episodes}] New best return: {best_return} at episode {best_return_episode}")
 
-def train_ppo_parallel(datasets, agent, params):
+def train_ppo_parallel(datasets, agent, params, max_steps):
     # Set to train mode
     agent.train()
 
@@ -273,6 +274,9 @@ def train_ppo_parallel(datasets, agent, params):
     training_event = manager.Event() # Set by workers when buffer is full, cleared by main after training
     update_event = manager.Event()   # Set by main after model update, cleared by main before training
 
+    # Create a queue for episode data
+    episode_queue = manager.Queue()
+
     # Start workers for parallel data collection
     processes = []
     num_workers = len(datasets)
@@ -281,7 +285,7 @@ def train_ppo_parallel(datasets, agent, params):
         p = multiprocessing.Process(
             target=collect_experience_worker,
             args=(i, dataset, params, shared_actor_state_dict, shared_critic_state_dict,
-                  shared_buffer, training_event, update_event, agent.device)
+                  shared_buffer, training_event, update_event, agent.device, episode_queue, max_steps)
         )
         processes.append(p)
         p.start()
@@ -293,6 +297,15 @@ def train_ppo_parallel(datasets, agent, params):
     # Check if at least one worker is still running
     while any(p.is_alive() for p in processes):
         try:
+            # Check for episode data from workers
+            try:
+                while not episode_queue.empty():
+                    worker_id, episode_return, time_step = episode_queue.get_nowait()
+                    agent.logger.log_episode(episode_return, time_step)
+            except Exception as e:
+                print(f"[Main process] Error processing episode data: {str(e)}")
+                print(f"[Main process] Traceback: {traceback.format_exc()}")
+
             # Main process waits until enough data is collected
             training_event.wait(timeout=5.0) # Wait for a worker to signal that buffer is full
             buffer_size = len(shared_buffer)
@@ -321,8 +334,8 @@ def train_ppo_parallel(datasets, agent, params):
 
             actor_loss, critic_loss, _, converged = agent.train()
 
-            if actor_loss is not None and critic_loss is not None:
-                print(f"[Main process] Policy Loss: {actor_loss:.4f}, Value Loss: {critic_loss:.4f}")
+            # if actor_loss is not None and critic_loss is not None:
+            #     print(f"[Main process] Policy Loss: {actor_loss:.4f}, Value Loss: {critic_loss:.4f}")
 
             # Update shared model parameters
             shared_actor_state_dict.update(agent.actor.state_dict())
@@ -352,7 +365,6 @@ def train_ppo_parallel(datasets, agent, params):
 
     # Plot training curves
     agent.logger.plot_training_curves()
-    agent.logger.plot_sample_efficiency()
     return agent
 
 
@@ -365,6 +377,7 @@ if __name__ == "__main__":
     parent_dir = os.path.dirname(os.path.dirname(current_file))
     dataset_path = os.path.join(parent_dir, "datasets")
     # For each folder in the dataset path, read the data
+    max_steps = 1e6
     for folder in os.listdir(dataset_path):
         folder_path = os.path.join(dataset_path, folder)
         if os.path.isdir(folder_path):
@@ -385,8 +398,10 @@ if __name__ == "__main__":
                 'base_pose_ground_truth': base_pose_ground_truth
             }
             datasets.append(dataset)
+            max_steps = min(max_steps, len(imu_measurements) - 1)
 
     print(f"Found {len(datasets)} datasets")
+    print(f"Max steps: {max_steps}")
     test_dataset = datasets[0]
     train_datasets = datasets[1:]
 
@@ -453,6 +468,7 @@ if __name__ == "__main__":
         'max_action': None,
         'min_action': min_action,
         'clip_param': 0.2,  
+        'value_clip_param': 0.2,
         'value_loss_coef': 0.2,  
         'entropy_coef': 0.01,  
         'gamma': 0.99,
@@ -470,8 +486,8 @@ if __name__ == "__main__":
         'n_steps': 512,
         'convergence_threshold': 0.1,
         'critic_convergence_threshold': 0.1,
-        'reward_window_size': 50000,
-        'value_loss_window_size': 100,
+        'return_window_size': 15,
+        'value_loss_window_size': 15,
         'checkpoint_dir': 'policy/ppo',
         'total_steps': 10000, 
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
@@ -496,7 +512,7 @@ if __name__ == "__main__":
 
     if not loaded:
         # Train the policy using the parallelized function
-        best_agent = train_ppo_parallel(train_datasets, agent, params)
+        best_agent = train_ppo_parallel(train_datasets, agent, params, max_steps)
         # The best policy is already loaded and exported within train_ppo_parallel
         serow_env.evaluate(test_dataset, best_agent)
     else:
