@@ -72,7 +72,7 @@ class PPO:
         self.running_advantage_std = 1.0 # Initialize to 1.0 to avoid division by zero
         self.advantage_stats_count = 0
         self.advantage_stats_alpha = 0.001 # Small learning rate for updating running stats
-
+        self.check_value_loss = params.get('check_value_loss', False)
 
     def eval(self):
         self.actor.eval()
@@ -116,7 +116,7 @@ class PPO:
                 next_non_terminal = 1.0 - dones[step]
                 next_value = next_values[step]
             else:
-                next_non_terminal = 1.0 - dones[step]
+                next_non_terminal = 1.0 - dones[step + 1]
                 next_value = values[step + 1]
             
             delta = rewards[step] + self.gamma * next_value * next_non_terminal - values[step]
@@ -192,12 +192,16 @@ class PPO:
                                         (self.best_return * self.convergence_threshold))
 
         # Check if value function has converged
-        recent_value_losses = np.array(self.logger.value_losses[-self.value_loss_window_size:])
-        value_loss_std = np.std(recent_value_losses)
-        value_loss_mean = np.mean(recent_value_losses)
-        value_loss_converged = value_loss_std <= \
-            (value_loss_mean * self.critic_convergence_threshold)
-        
+        value_loss_converged = False
+        if self.check_value_loss:
+            recent_value_losses = np.array(self.logger.value_losses[-self.value_loss_window_size:])
+            value_loss_std = np.std(recent_value_losses)
+            value_loss_mean = np.mean(recent_value_losses)
+            value_loss_converged = value_loss_std <= \
+                (value_loss_mean * self.critic_convergence_threshold)
+        else:
+            value_loss_converged = True
+
         # Only consider early stopping if value function has converged and returns have converged
         if value_loss_converged and recent_return_converged:
            converged = True
@@ -243,7 +247,7 @@ class PPO:
         advantages_mean = advantages.mean()
         advantages_std = advantages.std()
 
-        # Simple online update (can also use Welford's algorithm for better numerical stability)
+        # Simple online update
         # Using a fixed alpha (EWMA-like) for simplicity
         if self.advantage_stats_count == 0:
             self.running_advantage_mean = advantages_mean
@@ -290,9 +294,9 @@ class PPO:
                 
                 # Calculate policy loss with clipping
                 ratio = torch.exp(current_log_probs - batch_old_log_probs)
-                surr1 = ratio * batch_advantages
-                surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
-                policy_loss = -torch.min(surr1, surr2).mean()
+                surr1 = -ratio * batch_advantages
+                surr2 = -torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
+                policy_loss = torch.max(surr1, surr2).mean()
                 
                 # Calculate value loss with normalized returns and value clipping
                 current_values = self.critic(batch_states)
@@ -302,9 +306,10 @@ class PPO:
                     current_values - batch_values,
                     -self.value_clip_param, self.value_clip_param
                 )
-                value_loss_unclipped = F.mse_loss(current_values, batch_returns)
-                value_loss_clipped = F.mse_loss(value_pred_clipped, batch_returns)
+                value_loss_unclipped = (current_values - batch_returns) ** 2
+                value_loss_clipped = (value_pred_clipped - batch_returns) ** 2
                 value_loss = torch.max(value_loss_unclipped, value_loss_clipped)
+                value_loss = 0.5 * value_loss.mean()
                 
                 # Calculate total loss
                 total_loss = policy_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy.mean()

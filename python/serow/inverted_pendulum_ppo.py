@@ -17,13 +17,13 @@ params = {
     'clip_param': 0.2,
     'value_clip_param': 0.2,
     'value_loss_coef': 0.5,  
-    'entropy_coef': 0.005,    
+    'entropy_coef': 0.01,    
     'gamma': 0.99,
     'gae_lambda': 0.95,
     'ppo_epochs': 5,         
     'batch_size': 128,      
     'max_grad_norm': 0.5,
-    'max_episodes': 2000,
+    'max_episodes': 100,
     'actor_lr': 3e-4,       
     'critic_lr': 5e-4,       
     'buffer_size': 10000,
@@ -32,47 +32,31 @@ params = {
     'n_steps': 512,
     'update_lr': True,
     'convergence_threshold': 0.25,
-    'critic_convergence_threshold': 0.1,
+    'critic_convergence_threshold': 0.15,
     'returns_window_size': 20,
     'value_loss_window_size': 20,
     'checkpoint_dir': 'policy/inverted_pendulum/ppo',
     'total_steps': 100000, 
     'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
+    'check_value_loss': False,
 }
 
-class SharedNetwork(nn.Module):
-    def __init__(self, state_dim):
-        super(SharedNetwork, self).__init__()
-        self.layer1 = nn.Linear(state_dim, 64)
-        self.layer2 = nn.Linear(64, 128)
-        self.layer3 = nn.Linear(128, 64)
+class Actor(nn.Module):
+    def __init__(self, params):
+        super(Actor, self).__init__()
+        self.layer1 = nn.Linear(params['state_dim'], 64)
+        self.layer2 = nn.Linear(64, 64)
         nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
         torch.nn.init.constant_(self.layer1.bias, 0.0)
         torch.nn.init.constant_(self.layer2.bias, 0.0)
-        torch.nn.init.constant_(self.layer3.bias, 0.0)
-
-    def forward(self, state):
-        x = self.layer1(state)
-        x = F.relu(x)
-        x = self.layer2(x)
-        x = F.relu(x)
-        x = self.layer3(x)
-        x = F.relu(x)
-        return x
-
-class Actor(nn.Module):
-    def __init__(self, params, shared_network):
-        super(Actor, self).__init__()
-        self.shared_network = shared_network
         
         # Policy network
         self.mean_layer = nn.Linear(64, params['action_dim'])
         self.log_std = nn.Parameter(torch.zeros(params['action_dim']))
         
         # Initialize weights
-        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)  # Smaller gain for policy
+        nn.init.orthogonal_(self.mean_layer.weight, gain=np.sqrt(2)) 
         torch.nn.init.constant_(self.mean_layer.bias, 0.0)
         
         self.max_action = params['max_action']
@@ -84,8 +68,10 @@ class Actor(nn.Module):
         self.action_bias = (self.max_action + self.min_action) / 2.0
 
     def forward(self, state):
-        x = self.shared_network(state)
-        x = F.relu(x)
+        x = self.layer1(state)
+        x = F.tanh(x)
+        x = self.layer2(x)
+        x = F.tanh(x)
         mean = self.mean_layer(x)
         # Clamp log_std for numerical stability
         log_std = self.log_std.clamp(-20, 2)
@@ -151,22 +137,24 @@ class Actor(nn.Module):
         return log_probs, entropy
     
 class Critic(nn.Module):
-    def __init__(self, params, shared_network):
+    def __init__(self, params):
         super(Critic, self).__init__()
-        self.shared_network = shared_network
-        self.value_layer1 = nn.Linear(64, 128)  # Added intermediate layer
-        self.value_layer2 = nn.Linear(128, 1)   # Final value layer
-        nn.init.orthogonal_(self.value_layer1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.value_layer2.weight, gain=1.0)
-        torch.nn.init.constant_(self.value_layer1.bias, 0.0)
-        torch.nn.init.constant_(self.value_layer2.bias, 0.0)
+        self.layer1 = nn.Linear(params['state_dim'], 128)
+        self.layer2 = nn.Linear(128, 128)
+        self.layer3 = nn.Linear(128, 1)
+        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
+        torch.nn.init.constant_(self.layer1.bias, 0.0)
+        torch.nn.init.constant_(self.layer2.bias, 0.0)
+        torch.nn.init.constant_(self.layer3.bias, 0.0)
 
     def forward(self, state):
-        x = self.shared_network(state)
+        x = self.layer1(state)
         x = F.relu(x)
-        x = self.value_layer1(x)
+        x = self.layer2(x)
         x = F.relu(x)
-        return self.value_layer2(x)
+        return self.layer3(x)
 
 # Inverted Pendulum Environment
 class InvertedPendulum:
@@ -210,20 +198,22 @@ class InvertedPendulum:
         # Convert back to [cos(theta), sin(theta), theta_dot] representation
         self.state = np.array([np.cos(theta), np.sin(theta), theta_dot])
         
-        # Primary reward: exponential decay based on angle from upright
-        angle_from_upright = abs(theta)
         # Scale rewards to reasonable range
         angle_penalty = theta**2
 
         # Bonus for stability - minimum angulravelocity
+        angle_from_upright = abs(theta)
+
         stability_bonus = 0.0
         if angle_from_upright < 0.15:
           stability_bonus =  10.0 * np.exp(-abs(theta_dot))
         
-        velocity_penalty = 0.01 * theta_dot**2  
+        velocity_penalty = 0.1 * theta_dot**2  
 
-        reward = -angle_penalty - velocity_penalty + stability_bonus
-        reward = reward * 0.25
+        control_penalty = 0.001 * action**2
+
+        reward = -angle_penalty - velocity_penalty + stability_bonus - control_penalty
+        reward = reward * 0.1
         # Termination condition - only terminate for extreme angular velocities
         done = 0.0
         if abs(theta_dot) > self.max_angular_vel:
@@ -242,12 +232,9 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         # Create device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Create shared network
-        self.shared_network = SharedNetwork(self.state_dim)
-        
-        # Create actor and critic with shared network
-        self.actor = Actor(params, self.shared_network)
-        self.critic = Critic(params, self.shared_network)
+        # Create actor and critic 
+        self.actor = Actor(params)
+        self.critic = Critic(params)
         self.agent = PPO(self.actor, self.critic, params, device=self.device, normalize_state=False)
         self.env = InvertedPendulum()
 
@@ -316,7 +303,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
                     policy_loss, critic_loss, entropy, converged = self.agent.train()
                     collected_steps = 0
                     if policy_loss != 0.0 or critic_loss != 0.0:  # Only print if actual training occurred
-                        print(f"Policy Loss: {policy_loss:.4f}, Value Loss: {critic_loss:.4f}, Entropy: {entropy:.4f}")
+                        print(f"Policy Loss: {policy_loss}, Value Loss: {critic_loss}, Entropy: {entropy}")
 
                 if done > 0.0 or step == max_steps_per_episode - 1:
                     state = self.env.reset()
@@ -336,12 +323,12 @@ class TestPPOInvertedPendulum(unittest.TestCase):
                 print("Early stopping triggered. Loading best model...")
                 break
                 
-            print(f"Episode {episode}/{max_episodes}, Return: {episode_return}, Best Return: " 
+            print(f"Episode {episode + 1}/{max_episodes}, Steps: {step + 1}/{max_steps_per_episode}, Return: {episode_return}, Best Return: " 
                   f"{best_return}")
 
             if episode % 10 == 0:
                 avg_return = np.mean(episode_returns[-10:])
-                print(f"Episode {episode}, Avg Return (last 10): {avg_return:.2f}")
+                print(f"Episode {episode + 1}, Avg Return (last 10): {avg_return}")
         
         self.agent.logger.plot_training_curves()
 

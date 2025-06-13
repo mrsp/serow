@@ -10,6 +10,7 @@ import traceback
 
 from ppo import PPO
 
+
 params = {
     'robot': 'inverted_pendulum',
     'state_dim': 3,
@@ -19,57 +20,46 @@ params = {
     'clip_param': 0.2,
     'value_clip_param': 0.2,
     'value_loss_coef': 0.5,  
-    'entropy_coef': 0.005,    
+    'entropy_coef': 0.01,    
     'gamma': 0.99,
     'gae_lambda': 0.95,
     'ppo_epochs': 5,         
-    'batch_size': 64,      
+    'batch_size': 128,      
     'max_grad_norm': 0.5,
-    'max_episodes': 100,
+    'max_episodes': 25,
     'actor_lr': 3e-4,       
-    'critic_lr': 1e-3,       
+    'critic_lr': 5e-4,       
     'buffer_size': 10000,
     'max_state_value': 1e4,
     'min_state_value': -1e4,
-    'n_steps': 256,
+    'n_steps': 512,
     'update_lr': True,
     'convergence_threshold': 0.25,
-    'critic_convergence_threshold': 0.1,
+    'critic_convergence_threshold': 0.15,
     'returns_window_size': 20,
     'value_loss_window_size': 20,
     'checkpoint_dir': 'policy/inverted_pendulum/ppo',
     'total_steps': 100000, 
     'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
+    'check_value_loss': True,
 }
 
-class SharedNetwork(nn.Module):
-    def __init__(self, state_dim):
-        super(SharedNetwork, self).__init__()
-        self.layer1 = nn.Linear(state_dim, 64)
+class Actor(nn.Module):
+    def __init__(self, params):
+        super(Actor, self).__init__()
+        self.layer1 = nn.Linear(params['state_dim'], 64)
         self.layer2 = nn.Linear(64, 64)
         nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
         torch.nn.init.constant_(self.layer1.bias, 0.0)
         torch.nn.init.constant_(self.layer2.bias, 0.0)
-
-    def forward(self, state):
-        x = self.layer1(state)
-        x = F.relu(x)
-        x = self.layer2(x)
-        x = F.relu(x)
-        return x
-
-class Actor(nn.Module):
-    def __init__(self, params, shared_network):
-        super(Actor, self).__init__()
-        self.shared_network = shared_network
         
         # Policy network
         self.mean_layer = nn.Linear(64, params['action_dim'])
         self.log_std = nn.Parameter(torch.zeros(params['action_dim']))
         
         # Initialize weights
-        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)  # Smaller gain for policy
+        nn.init.orthogonal_(self.mean_layer.weight, gain=np.sqrt(2)) 
         torch.nn.init.constant_(self.mean_layer.bias, 0.0)
         
         self.max_action = params['max_action']
@@ -81,8 +71,10 @@ class Actor(nn.Module):
         self.action_bias = (self.max_action + self.min_action) / 2.0
 
     def forward(self, state):
-        x = self.shared_network(state)
-        x = F.relu(x)
+        x = self.layer1(state)
+        x = F.tanh(x)
+        x = self.layer2(x)
+        x = F.tanh(x)
         mean = self.mean_layer(x)
         # Clamp log_std for numerical stability
         log_std = self.log_std.clamp(-20, 2)
@@ -148,17 +140,24 @@ class Actor(nn.Module):
         return log_probs, entropy
     
 class Critic(nn.Module):
-    def __init__(self, params, shared_network):
+    def __init__(self, params):
         super(Critic, self).__init__()
-        self.shared_network = shared_network
-        self.value_layer = nn.Linear(64, 1)
-        nn.init.orthogonal_(self.value_layer.weight, gain=1.0)
-        torch.nn.init.constant_(self.value_layer.bias, 0.0)
+        self.layer1 = nn.Linear(params['state_dim'], 128)
+        self.layer2 = nn.Linear(128, 128)
+        self.layer3 = nn.Linear(128, 1)
+        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
+        torch.nn.init.constant_(self.layer1.bias, 0.0)
+        torch.nn.init.constant_(self.layer2.bias, 0.0)
+        torch.nn.init.constant_(self.layer3.bias, 0.0)
 
     def forward(self, state):
-        x = self.shared_network(state)
+        x = self.layer1(state)
         x = F.relu(x)
-        return self.value_layer(x)
+        x = self.layer2(x)
+        x = F.relu(x)
+        return self.layer3(x)
 
 # Inverted Pendulum Environment
 class InvertedPendulum:
@@ -202,54 +201,28 @@ class InvertedPendulum:
         # Convert back to [cos(theta), sin(theta), theta_dot] representation
         self.state = np.array([np.cos(theta), np.sin(theta), theta_dot])
         
-        # Primary reward: exponential decay based on angle from upright
-        angle_from_upright = abs(theta)
         # Scale rewards to reasonable range
         angle_penalty = theta**2
+
+        # Bonus for stability - minimum angulravelocity
+        angle_from_upright = abs(theta)
+
+        stability_bonus = 0.0
+        if angle_from_upright < 0.15:
+          stability_bonus =  10.0 * np.exp(-abs(theta_dot))
         
-        if angle_from_upright < 0.25:
-            self.upright_steps += 1
-        else:
-            self.upright_steps = 0
-        
-        # Bonus for consecutive upright steps
-        consecutive_bonus = self.upright_steps * 1.0  
-        
-        control_penalty = 0.001 * action**2  
         velocity_penalty = 0.1 * theta_dot**2  
 
-        reward = -angle_penalty - control_penalty - velocity_penalty  + consecutive_bonus
-            
+        control_penalty = 0.001 * action**2
+
+        reward = -angle_penalty - velocity_penalty + stability_bonus - control_penalty
+        reward = reward * 0.1
         # Termination condition - only terminate for extreme angular velocities
         done = 0.0
         if abs(theta_dot) > self.max_angular_vel:
             done = 1.0
 
         return self.state, reward, done
-
-    def compute_reward(self, theta, theta_dot, action):
-        """Improved reward function for better learning"""
-        # Primary reward: cosine of angle (1 when upright, -1 when inverted)
-        angle_reward = np.cos(theta)
-        
-        # Stability bonus when near upright (within 30 degrees)
-        if abs(theta) < np.pi/6:
-            stability_bonus = 2.0 * np.exp(-abs(theta_dot))
-        else:
-            stability_bonus = 0.0
-        
-        # Penalties
-        velocity_penalty = 0.01 * theta_dot**2
-        control_penalty = 0.001 * action**2
-        
-        # Total reward
-        reward = angle_reward + stability_bonus - velocity_penalty - control_penalty
-        
-        # Bonus for staying upright
-        if abs(theta) < np.pi/12:  # Within 15 degrees
-            reward += 1.0
-            
-        return reward
 
 def collect_experience_worker(
     worker_id, params, shared_actor_state_dict, shared_critic_state_dict,
@@ -259,9 +232,8 @@ def collect_experience_worker(
     Worker process to collect experience from an InvertedPendulum environment and add to a shared buffer.
     """
     try:
-        shared_network_worker = SharedNetwork(params['state_dim'])
-        actor_worker = Actor(params, shared_network_worker).to(device)
-        critic_worker = Critic(params, shared_network_worker).to(device)
+        actor_worker = Actor(params).to(device)
+        critic_worker = Critic(params).to(device)
         agent_worker = PPO(actor_worker, critic_worker, params, device=device, normalize_state=False)
         agent_worker.train()
     except Exception as e:
@@ -270,7 +242,7 @@ def collect_experience_worker(
 
     # Create environment
     env = InvertedPendulum()
-    max_steps_per_episode = 2048
+    max_steps_per_episode = 2500
     max_episodes = params['max_episodes']
     print(f"[Worker {worker_id}] Starting experience collection.")
     
@@ -314,10 +286,9 @@ def collect_experience_worker(
             else:
                 state = next_state
 
-            # Print progress
-            if step % 1000 == 0 or step == max_steps_per_episode - 1:
-                print(f"[Worker {worker_id}] -[{episode}/{max_episodes}] - [{step}/{max_steps_per_episode}] "
-                      f"Current return: {episode_return} Best return: {best_return}")
+        # Print progress
+        print(f"[Worker {worker_id}] -[{episode + 1}/{max_episodes}] - [{step + 1}/{max_steps_per_episode}] "
+              f"Current return: {episode_return} Best return: {best_return}")
         
         # Send episode data to main process instead of logging directly
         episode_queue.put((worker_id, episode_return, step))
@@ -445,12 +416,9 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         # Create device
         self.device = 'cpu'
         
-        # Create shared network
-        self.shared_network = SharedNetwork(self.state_dim)
-        
-        # Create actor and critic with shared network
-        self.actor = Actor(params, self.shared_network)
-        self.critic = Critic(params, self.shared_network)
+        # Create actor and critic 
+        self.actor = Actor(params)
+        self.critic = Critic(params)
         self.agent = PPO(self.actor, self.critic, params, device=self.device, normalize_state=False)
         self.env = InvertedPendulum()
 
@@ -506,7 +474,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         states = []
         actions = []
         rewards = []
-        max_steps_per_episode = 2048
+        max_steps_per_episode = 2500
         
         for step in range(max_steps_per_episode):
             action, _ = best_agent.actor.get_action(state, deterministic=True)
