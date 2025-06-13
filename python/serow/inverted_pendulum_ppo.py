@@ -21,15 +21,15 @@ params = {
     'gamma': 0.99,
     'gae_lambda': 0.95,
     'ppo_epochs': 5,         
-    'batch_size': 64,      
+    'batch_size': 128,      
     'max_grad_norm': 0.5,
     'max_episodes': 2000,
     'actor_lr': 3e-4,       
-    'critic_lr': 1e-3,       
+    'critic_lr': 5e-4,       
     'buffer_size': 10000,
     'max_state_value': 1e4,
     'min_state_value': -1e4,
-    'n_steps': 256,
+    'n_steps': 512,
     'update_lr': True,
     'convergence_threshold': 0.25,
     'critic_convergence_threshold': 0.1,
@@ -154,14 +154,19 @@ class Critic(nn.Module):
     def __init__(self, params, shared_network):
         super(Critic, self).__init__()
         self.shared_network = shared_network
-        self.value_layer = nn.Linear(64, 1)
-        nn.init.orthogonal_(self.value_layer.weight, gain=1.0)
-        torch.nn.init.constant_(self.value_layer.bias, 0.0)
+        self.value_layer1 = nn.Linear(64, 128)  # Added intermediate layer
+        self.value_layer2 = nn.Linear(128, 1)   # Final value layer
+        nn.init.orthogonal_(self.value_layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.value_layer2.weight, gain=1.0)
+        torch.nn.init.constant_(self.value_layer1.bias, 0.0)
+        torch.nn.init.constant_(self.value_layer2.bias, 0.0)
 
     def forward(self, state):
         x = self.shared_network(state)
         x = F.relu(x)
-        return self.value_layer(x)
+        x = self.value_layer1(x)
+        x = F.relu(x)
+        return self.value_layer2(x)
 
 # Inverted Pendulum Environment
 class InvertedPendulum:
@@ -209,20 +214,16 @@ class InvertedPendulum:
         angle_from_upright = abs(theta)
         # Scale rewards to reasonable range
         angle_penalty = theta**2
-        
-        if angle_from_upright < 0.25:
-            self.upright_steps += 1
-        else:
-            self.upright_steps = 0
-        
-        # Bonus for consecutive upright steps
-        consecutive_bonus = self.upright_steps * 1.0  
-        
-        control_penalty = 0.001 * action**2  
-        velocity_penalty = 0.1 * theta_dot**2  
 
-        reward = -angle_penalty - control_penalty - velocity_penalty  + consecutive_bonus
-            
+        # Bonus for stability - minimum angulravelocity
+        stability_bonus = 0.0
+        if angle_from_upright < 0.15:
+          stability_bonus =  10.0 * np.exp(-abs(theta_dot))
+        
+        velocity_penalty = 0.01 * theta_dot**2  
+
+        reward = -angle_penalty - velocity_penalty + stability_bonus
+        reward = reward * 0.25
         # Termination condition - only terminate for extreme angular velocities
         done = 0.0
         if abs(theta_dot) > self.max_angular_vel:
@@ -284,7 +285,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         self.assertEqual(stored[6], log_prob)
 
     def test_train_and_evaluate(self):   
-        max_steps_per_episode = 1000
+        max_steps_per_episode = 2500
         episode_returns = []
         best_return = float('-inf')
         max_episodes = params['max_episodes']
