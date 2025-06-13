@@ -44,16 +44,21 @@ class SharedNetwork(nn.Module):
     def __init__(self, state_dim):
         super(SharedNetwork, self).__init__()
         self.layer1 = nn.Linear(state_dim, 64)
-        self.layer2 = nn.Linear(64, 64)
+        self.layer2 = nn.Linear(64, 128)
+        self.layer3 = nn.Linear(128, 64)
         nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
         torch.nn.init.constant_(self.layer1.bias, 0.0)
         torch.nn.init.constant_(self.layer2.bias, 0.0)
+        torch.nn.init.constant_(self.layer3.bias, 0.0)
 
     def forward(self, state):
         x = self.layer1(state)
         x = F.relu(x)
         x = self.layer2(x)
+        x = F.relu(x)
+        x = self.layer3(x)
         x = F.relu(x)
         return x
 
