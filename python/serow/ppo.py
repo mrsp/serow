@@ -66,6 +66,13 @@ class PPO:
 
         # Define a separate clipping parameter for the value function
         self.value_clip_param = params.get('value_clip_param', 0.2)  
+        
+        # Running statistics for advantage normalization
+        self.running_advantage_mean = 0.0
+        self.running_advantage_std = 1.0 # Initialize to 1.0 to avoid division by zero
+        self.advantage_stats_count = 0
+        self.advantage_stats_alpha = 0.001 # Small learning rate for updating running stats
+
 
     def eval(self):
         self.actor.eval()
@@ -98,47 +105,26 @@ class PPO:
             value = self.critic(state_tensor).item()
         return action, value, log_prob
     
-    def compute_gae(self, rewards, values, dones):
-        """
-        Computes Generalized Advantage Estimation (GAE).
-        Args:
-            rewards: List of rewards collected in the trajectory.
-                    Shape: (T,)
-            values: List of value estimates for each state in the trajectory.
-                    The last value estimate should be for the next_state
-                    after the last reward. So, if rewards has length T,
-                    values should have length T+1.
-                    Shape: (T+1,)
-            dones: List of flags indicating if a state was terminal.
-                   (1.0 for done, 0.0 for not done).
-                   Shape: (T,)
-        Returns:
-            tuple:
-                - advantages: Computed GAE advantages for each state. Shape: (T,)
-                - returns: Computed discounted returns (targets for the critic). Shape: (T,)
-        """
-        advantages = torch.zeros_like(rewards)
-        last_advantage = 0
 
-        # Iterate backwards through the trajectory
-        for t in reversed(range(len(rewards))):
-            if dones[t]:
-                next_value = 0
+    def compute_gae(self, rewards, values, dones, next_values):
+        # Use the last next_value as bootstrap for incomplete episodes
+        advantages = torch.zeros_like(rewards, dtype=torch.float32)
+        last_gae_lam = 0
+        
+        for step in reversed(range(len(rewards))):
+            if step == len(rewards) - 1:
+                next_non_terminal = 1.0 - dones[step]
+                next_value = next_values[step]
             else:
-                next_value = values[t + 1]
-
-            # Calculate TD error
-            delta = rewards[t] + self.gamma * next_value - values[t]
+                next_non_terminal = 1.0 - dones[step]
+                next_value = values[step + 1]
             
-            # Calculate GAE
-            advantages[t] = delta + self.gamma * self.gae_lambda * last_advantage
-            last_advantage = advantages[t]
-
-        # Calculate returns as sum of advantages and values
-        returns = advantages + values[:-1]
-
+            delta = rewards[step] + self.gamma * next_value * next_non_terminal - values[step]
+            advantages[step] = last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
+        
+        returns = advantages + values
         return advantages, returns
-    
+
     def update_learning_rates(self):
         """Update learning rates using linear decay."""
         progress = min(1.0, self.training_step / self.total_steps)
@@ -249,22 +235,33 @@ class PPO:
 
         # Compute next state values
         with torch.no_grad():
-            next_values = self.critic(next_states[-1].unsqueeze(0))
+            next_values = self.critic(next_states) * (1 - dones)
         
         # Compute GAE and returns
-        advantages, returns = self.compute_gae(rewards, torch.cat([values, next_values]), dones)
+        advantages, returns = self.compute_gae(rewards, values, dones, next_values)
         
+        advantages_mean = advantages.mean()
+        advantages_std = advantages.std()
+
+        # Simple online update (can also use Welford's algorithm for better numerical stability)
+        # Using a fixed alpha (EWMA-like) for simplicity
+        if self.advantage_stats_count == 0:
+            self.running_advantage_mean = advantages_mean
+            self.running_advantage_std = advantages_std
+        else:
+            self.running_advantage_mean = (1 - self.advantage_stats_alpha) * self.running_advantage_mean + self.advantage_stats_alpha * advantages_mean
+            self.running_advantage_std = (1 - self.advantage_stats_alpha) * self.running_advantage_std + self.advantage_stats_alpha * advantages_std
+        
+        self.advantage_stats_count += 1
+
         # Log data
         for i in range(len(rewards)):
             self.logger.log_step(self.samples, rewards[i], values[i], advantages[i])
             self.samples += 1
 
-        # Normalize advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
-        values_mean = values.mean()
-        values_std = values.std() 
-        values = (values - values_mean) / (values_std + 1e-8)
+        # Normalize advantages using running statistics
+        # Use a small epsilon for numerical stability
+        advantages = (advantages - self.running_advantage_mean) / (self.running_advantage_std + 1e-8)
         
         # Training loop
         dataset_size = len(states)
@@ -299,9 +296,6 @@ class PPO:
                 
                 # Calculate value loss with normalized returns and value clipping
                 current_values = self.critic(batch_states)
-                
-                # Normalize current values
-                current_values = (current_values - values_mean) / (values_std + 1e-8)
 
                 # Value clipping in normalized space
                 value_pred_clipped = batch_values + torch.clamp(
