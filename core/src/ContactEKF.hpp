@@ -188,9 +188,7 @@ private:
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
 
-    std::map<std::string, double> position_action_cov_gain_;
-    std::map<std::string, double> orientation_action_cov_gain_;
-    std::map<std::string, double> contact_position_action_cov_gain_;
+    std::map<std::string, Eigen::Matrix3d> contact_position_action_cov_gain_;
     std::map<std::string, double> contact_orientation_action_cov_gain_;
     
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
@@ -318,6 +316,11 @@ private:
      */
     BaseState updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
                               const Eigen::MatrixXd& P) const;
+
+    /**
+     * @brief Clears the action covariance gain matrix.
+     */
+    void clearAction();
 };
 
 }  // namespace serow

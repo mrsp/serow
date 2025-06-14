@@ -22,7 +22,7 @@ class RewardShaper:
                 return -np.log(0.5) / (typical * time_factor + 1e-8)
         return 1.0
 
-    def compute_reward(self, cf, serow_framework, state, gt, step, use_ground_truth=True):
+    def compute_reward(self, cf, serow_framework, state, gt, step):
         success = False
         innovation = np.zeros(3)
         covariance = np.zeros((3, 3))
@@ -30,7 +30,6 @@ class RewardShaper:
         reward = None
         done = None
 
-        STEP_REWARD = 0.01
         DIVERGENCE_PENALTY = -5.0  
         TIME_SCALE = 0.05
 
@@ -47,27 +46,31 @@ class RewardShaper:
                 reward = DIVERGENCE_PENALTY 
                 done = 1.0  
             else:
-                alpha_nis = self._get_alpha(self.recent_nis, percentile=90)
+                alpha_nis = self._get_alpha(self.recent_nis, percentile=85)
                 innovation_reward = np.exp(-alpha_nis * nis)
-                reward = innovation_reward + STEP_REWARD
+                reward = innovation_reward 
+                
+                time_factor = 1.0 + TIME_SCALE * step
 
-                if use_ground_truth:
-                    time_factor = 1.0 + TIME_SCALE * step
+                # Position error
+                position_error = state.get_base_position() - gt.position
+                position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-6
+                position_error = position_error.dot(np.linalg.inv(position_error_cov).dot(position_error))
 
-                    # Position error
-                    position_error = np.linalg.norm(state.get_base_position() - gt.position)
-                    self._update_buffer(self.recent_position_errors, position_error)
-                    alpha_pos = self._get_alpha(self.recent_position_errors, time_factor, percentile=85)
-                    position_reward = np.exp(-alpha_pos * position_error * time_factor)
+                self._update_buffer(self.recent_position_errors, position_error)
+                alpha_pos = self._get_alpha(self.recent_position_errors, time_factor, percentile=65)
+                position_reward = np.exp(-alpha_pos * position_error * time_factor)
 
-                    # Orientation error
-                    orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
-                                                              @ quaternion_to_rotation_matrix(state.get_base_orientation())))
-                    self._update_buffer(self.recent_orientation_errors, orientation_error)
-                    alpha_ori = self._get_alpha(self.recent_orientation_errors, time_factor, percentile=70)
-                    orientation_reward = np.exp(-alpha_ori * orientation_error * time_factor)
+                # Orientation error
+                orientation_error = logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
+                                           @ quaternion_to_rotation_matrix(state.get_base_orientation()))
+                orientation_error_cov = state.get_base_orientation_cov() + np.eye(3) * 1e-6
+                orientation_error = orientation_error.dot(np.linalg.inv(orientation_error_cov).dot(orientation_error))
+                self._update_buffer(self.recent_orientation_errors, orientation_error)
+                alpha_ori = self._get_alpha(self.recent_orientation_errors, time_factor, percentile=65)
+                orientation_reward = np.exp(-alpha_ori * orientation_error * time_factor)
                     
-                    reward += position_reward + orientation_reward
+                reward += position_reward + orientation_reward
 
                 reward /= abs(DIVERGENCE_PENALTY)
         return reward, done
@@ -83,13 +86,12 @@ class SerowEnv:
         self.initial_state.set_contact_state(contact_state)
         self.serow_framework.set_state(self.initial_state)
         self.contact_frames = self.initial_state.get_contacts_frame()
-        self.action_dim = 1
+        self.action_dim = 6
         self.state_dim = 7
         self.reward_shaper = RewardShaper()
 
-    def _compute_reward(self, cf, state, gt, step, use_ground_truth=True):
-        return self.reward_shaper.compute_reward(cf, self.serow_framework, state, gt, step, 
-                                                 use_ground_truth=use_ground_truth)
+    def _compute_reward(self, cf, state, gt, step):
+        return self.reward_shaper.compute_reward(cf, self.serow_framework, state, gt, step)
 
     def compute_state(self, cf, state, contact_state):
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
@@ -188,7 +190,7 @@ class SerowEnv:
                     # Compute the action
                     action = agent.get_action(x, deterministic=True)[0]
                 else:
-                    action = np.ones(self.action_dim)
+                    action = np.zeros(6)
 
                 # Run the update step
                 post_state, reward, _ = self.update_step(cf, kin, action, gt, step)

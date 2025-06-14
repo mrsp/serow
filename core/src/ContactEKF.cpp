@@ -89,12 +89,6 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     }
 
     for (const auto& contact_frame : contacts_frame_) {
-        position_action_cov_gain_[contact_frame] = 1.0;
-        contact_position_action_cov_gain_[contact_frame] = 1.0;
-        if (!point_feet_) {
-            orientation_action_cov_gain_[contact_frame] = 1.0;
-            contact_orientation_action_cov_gain_[contact_frame] = 1.0;
-        }
         if (state.contacts_position_cov.count(contact_frame)) {
             P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) =
                 state.contacts_position_cov.at(contact_frame);
@@ -105,6 +99,9 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
                 state.contacts_orientation_cov.value().at(contact_frame);
         }
     }
+
+    // Clear the action covariance gain matrix
+    clearAction();
 
     // Compute some parts of the Input-Noise Jacobian once since they are constants
     // gyro (0), acc (3), gyro_bias (6), acc_bias (9), leg end effectors (12 - 12 + contact_dim * N)
@@ -172,12 +169,6 @@ void ContactEKF::setState(const BaseState& state) {
     }
 
     for (const auto& contact_frame : contacts_frame_) {
-        position_action_cov_gain_[contact_frame] = 1.0;
-        contact_position_action_cov_gain_[contact_frame] = 1.0;
-        if (!point_feet_) {
-            orientation_action_cov_gain_[contact_frame] = 1.0;
-            contact_orientation_action_cov_gain_[contact_frame] = 1.0;
-        }
         if (state.contacts_position_cov.count(contact_frame)) {
             P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) =
                 state.contacts_position_cov.at(contact_frame);
@@ -188,6 +179,10 @@ void ContactEKF::setState(const BaseState& state) {
                 state.contacts_orientation_cov.value().at(contact_frame);
         }
     }
+    
+    // Clear the action covariance gain matrix
+    clearAction();
+
     last_imu_timestamp_ = state.timestamp;
 }
 
@@ -245,12 +240,10 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
     for (const auto& [cf, cs] : kin.contacts_status) {
         const int contact_status = static_cast<int>(cs);
         Qc(npl_idx_.at(cf), npl_idx_.at(cf)).noalias() =
-            contact_status * kin.position_slip_cov * position_action_cov_gain_.at(cf) +
-            (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
+            contact_status * kin.position_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         if (!point_feet_) {
             Qc(nrl_idx_.at(cf), nrl_idx_.at(cf)).noalias() =
-                contact_status * kin.orientation_slip_cov * orientation_action_cov_gain_.at(cf) +
-                (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
+                contact_status * kin.orientation_slip_cov + (1 - contact_status) * 1e4 * Eigen::Matrix3d::Identity();
         }
     }
 
@@ -262,6 +255,9 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
     computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration,
                             kin.contacts_status, kin.contacts_position, kin.contacts_orientation);
     last_imu_timestamp_ = imu.timestamp;
+
+    // Clear the action covariance gain matrix
+    clearAction();
 
     // Clear the innovation and update buffers
     contact_position_innovation_.clear();
@@ -342,8 +338,13 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
             setAction(cf, onnx_action);
         }
 
-        cp_noise = csd * (cp_noise + position_cov) * contact_position_action_cov_gain_.at(cf) 
-            + (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
+        // Check if the action covariance gain matrix is not the zero matrix    
+        if (contact_position_action_cov_gain_.at(cf) != Eigen::Matrix3d::Zero()) {
+            cp_noise = csd * ((cp_noise + position_cov).array() * contact_position_action_cov_gain_.at(cf).array()).matrix();
+        } else {
+            cp_noise = csd * (cp_noise + position_cov);
+        }
+        cp_noise += (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
 
         // If the terrain estimator is in the loop reduce the effect that kinematics has in the
         // contact height update
@@ -693,17 +694,46 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
     }
 }
 
+void ContactEKF::clearAction() {
+    for (const auto& cf : contacts_frame_) {
+        contact_position_action_cov_gain_[cf] = Eigen::Matrix3d::Zero();
+        if (!point_feet_) {
+            contact_orientation_action_cov_gain_[cf] = 1.0;
+        }
+    }
+}
+
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    const size_t num_actions = 1 + 1 * !point_feet_;
-     if (action.size() != static_cast<Eigen::Index>(num_actions)) {
-        throw std::invalid_argument("Action size must be 1 + 1 if point_feet is false");
+    // Check if action vector has enough elements for the 3x3 matrix
+    if (action.size() < 6) {
+        throw std::invalid_argument("Action vector must have at least 9 elements for the 3x3 position covariance gain matrix");
     }
 
-    contact_position_action_cov_gain_.at(cf) = action(0);
-    if (!point_feet_ && orientation_action_cov_gain_.count(cf) > 0 &&
-        contact_orientation_action_cov_gain_.count(cf) > 0) {
-        contact_orientation_action_cov_gain_.at(cf) = action(1);
-    }   
+    // Get the action parameters
+    const double l11 = action(0);
+    const double l22 = action(1);
+    const double l33 = action(2);
+    const double l21 = action(3);
+    const double l31 = action(4);
+    const double l32 = action(5);
+
+    // Form the L matrix and then M = L @ L.T
+    Eigen::Matrix3d L_det;
+    L_det << l11, 0.0, 0.0,
+             l21, l22, 0.0,
+             l31, l32, l33;
+
+    // Set the position covariance gain matrix
+    contact_position_action_cov_gain_.at(cf) = L_det * L_det.transpose();
+
+    // Set orientation covariance gain if needed
+    // if (!point_feet_ && orientation_action_cov_gain_.count(cf) > 0 &&
+    //     contact_orientation_action_cov_gain_.count(cf) > 0) {
+    //     if (action.size() < 7) {
+    //         throw std::invalid_argument("Action vector must have at least 10 elements when using orientation gains");
+    //     }
+    //     contact_orientation_action_cov_gain_.at(cf) = action(9);
+    // }   
 }
 
 bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame,

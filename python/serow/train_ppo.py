@@ -25,98 +25,110 @@ from utils import(
     export_models_to_onnx
 )
 
-class SharedNetwork(nn.Module):
-    def __init__(self, params):
-        super(SharedNetwork, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 64)
-        self.layer2 = nn.Linear(64, 64)
-        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
-        torch.nn.init.constant_(self.layer1.bias, 0.0)
-        torch.nn.init.constant_(self.layer2.bias, 0.0)
-
-    def forward(self, state):
-        x = self.layer1(state)
-        x = F.relu(x)
-        x = self.layer2(x)
-        x = F.relu(x)
-        return x
-    
-# Actor network per leg end-effector
 class Actor(nn.Module):
     def __init__(self, params):
         super(Actor, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 64)
+        self.state_dim = params['state_dim']
+        # The action represents the parameters of L
+        self.action_dim = params['action_dim'] 
+        self.min_action = params['min_action']
+
+        self.layer1 = nn.Linear(self.state_dim, 64)
         self.layer2 = nn.Linear(64, 64)
+
         nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
         torch.nn.init.constant_(self.layer1.bias, 0.0)
         torch.nn.init.constant_(self.layer2.bias, 0.0)
 
-        self.mean_layer = nn.Linear(64, params['action_dim'])
-        self.log_std = nn.Parameter(torch.zeros(params['action_dim']))
+        self.mean_layer = nn.Linear(64, self.action_dim)
+        
+        # Initialize mean layer weights to small values
+        nn.init.orthogonal_(self.mean_layer.weight, gain=1.0)
+        torch.nn.init.constant_(self.mean_layer.bias, 0.0) 
 
-        self.min_action = params['min_action']
-        self.action_dim = params['action_dim']
-
-        # Initialize weights with larger gain for better initial exploration
-        nn.init.orthogonal_(self.mean_layer.weight, gain=np.sqrt(2))  
-        torch.nn.init.constant_(self.mean_layer.bias, 0.0)
+        self.log_std = nn.Parameter(torch.zeros(self.action_dim))
 
     def forward(self, state):
         x = self.layer1(state)
         x = F.relu(x)
         x = self.layer2(x)
         x = F.relu(x)
+        
         mean = self.mean_layer(x) 
+        
         # Clamp log_std for numerical stability
         log_std = self.log_std.clamp(-20, 2)
+        
         return mean, log_std
 
     def get_action(self, state, deterministic=False):
         if not isinstance(state, torch.Tensor):
-            state = torch.FloatTensor(state)
+            state = torch.FloatTensor(state).unsqueeze(0) # Add batch dimension if missing
 
         mean, log_std = self.forward(state)
-        std = log_std.exp()
+        std = log_std.exp().expand_as(mean)
 
         if deterministic:
-            action = mean
+            # For deterministic action, use the mean of the raw L parameters
+            raw = mean
         else:
             normal = torch.distributions.Normal(mean, std)
-            action = normal.sample()
+            raw = normal.sample()
         
-        # Use softplus with a small epsilon for numerical stability
-        action_scaled = F.softplus(action) + self.min_action
+        # Apply softplus and min_action offset to the first 3 elements (diagonal)
+        diag_params_scaled = F.softplus(raw[..., :3]) + self.min_action
+        
+        # Off-diagonal parameters remain untransformed
+        off_diag_params = raw[..., 3:]
+        
+        # Concatenate to form the final 6D action vector that the user receives
+        action = torch.cat((diag_params_scaled, off_diag_params), dim=-1)
         
         # Calculate log probability
+        log_prob = torch.zeros(1, device=state.device) # Initialize for deterministic case
         if not deterministic:
-            # Log prob with softplus correction
-            log_prob = normal.log_prob(action).sum(dim=-1)
-            # Apply softplus correction (derivative of softplus is sigmoid)
-            log_prob -= torch.log(torch.sigmoid(action) + 1e-8).sum(dim=-1)
-        else:
-            log_prob = torch.zeros(1)
+            # Log prob for the sampled raw L parameters
+            log_prob = normal.log_prob(raw).sum(dim=-1)
+            
+            # Apply correction for the Softplus transformation on diagonal elements
+            # Derivative of softplus(x) is sigmoid(x)
+            log_prob -= torch.log(torch.sigmoid(raw[..., :3]) + 1e-8).sum(dim=-1)
         
-        return action_scaled.detach().cpu().numpy(), log_prob.detach().cpu().item()
+        # Return action and log_prob (as a scalar)
+        return action.squeeze(0).detach().cpu().numpy(), log_prob.squeeze(0).detach().cpu().item()
 
     def evaluate_actions(self, states, actions):
-        """Evaluate log probabilities and entropy for given state-action pairs"""
         mean, log_std = self.forward(states)
         std = log_std.exp()
         
-        # Convert actions back to raw space (inverse of softplus scaling)
-        actions_raw = torch.log(actions - self.min_action + 1e-8)
+        # --- Inverse Transformation: From transformed 6D actions back to raw L parameters ---
         
+        # Split actions into diagonal and off-diagonal parts
+        evaluated_diag_params_scaled = actions[..., :3]
+        evaluated_off_diag_params = actions[..., 3:]
+        
+        # Reverse the min_action offset first
+        diag_params_minus_offset = evaluated_diag_params_scaled - self.min_action
+        
+        # Now apply the inverse of softplus: log(exp(x) - 1)
+        # Handle numerical stability carefully if diag_params_minus_offset is very small.
+        # It should always be positive after the subtraction if the original action was valid.
+        raw_diag_params_for_eval = torch.log(torch.exp(diag_params_minus_offset) - 1 + 1e-8)
+        
+        # Concatenate to form the 'raw_l_params_for_eval' that aligns with the Normal distribution
+        raw_l_params_for_eval = torch.cat((raw_diag_params_for_eval, evaluated_off_diag_params), dim=-1)
+
         # Calculate log probabilities
         normal = torch.distributions.Normal(mean, std)
-        log_probs = normal.log_prob(actions_raw).sum(dim=-1, keepdim=True)
+        log_probs = normal.log_prob(raw_l_params_for_eval).sum(dim=-1, keepdim=True)
         
-        # Apply softplus correction (derivative of softplus is sigmoid)
-        log_probs -= torch.log(torch.sigmoid(actions_raw) + 1e-8).sum(dim=-1, keepdim=True)
+        # Apply softplus correction for the diagonal elements
+        log_probs -= torch.log(torch.sigmoid(raw_diag_params_for_eval) + 1e-8).sum(dim=-1, keepdim=True)
         
-        # Calculate entropy
+        # Calculate entropy (for the 6 raw L parameters)
         entropy = normal.entropy().sum(dim=-1)
+        
         return log_probs, entropy
 
 class Critic(nn.Module):
@@ -211,7 +223,7 @@ def train_ppo(datasets, agent, params):
                             agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
 
                     else:
-                        action = np.ones(serow_env.action_dim)
+                        action = np.zeros(serow_env.action_dim)
                         # Just run the update step
                         post_state, _, _ = serow_env.update_step(cf, kin, action, gt, time_step)
 
@@ -295,7 +307,7 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     state_dim = 7  
-    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
     min_action = 1e-10
     robot = "go2"
 
@@ -373,18 +385,18 @@ if __name__ == "__main__":
         'gamma': 0.99,
         'gae_lambda': 0.95,
         'ppo_epochs': 5,  
-        'batch_size': 64,  
-        'max_grad_norm': 0.3,  
+        'batch_size': 128,  
+        'max_grad_norm': 0.5,  
         'buffer_size': 10000,  
-        'max_episodes': 30,
-        'actor_lr': 5e-5, 
-        'critic_lr': 1e-4,  
+        'max_episodes': 50,
+        'actor_lr': 1e-4, 
+        'critic_lr': 3e-4,  
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
         'update_lr': True,
         'n_steps': 512,
-        'convergence_threshold': 0.1,
-        'critic_convergence_threshold': 0.1,
+        'convergence_threshold': 0.15,
+        'critic_convergence_threshold': 0.15,
         'return_window_size': 15,
         'value_loss_window_size': 15,
         'checkpoint_dir': 'policy/ppo',
