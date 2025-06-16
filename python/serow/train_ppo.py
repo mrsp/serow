@@ -100,10 +100,9 @@ class Actor(nn.Module):
 
     def evaluate_actions(self, states, actions):
         mean, log_std = self.forward(states)
-        std = log_std.exp()
+        std = log_std.exp().expand_as(mean)
         
-        # --- Inverse Transformation: From transformed 6D actions back to raw L parameters ---
-        
+        # --- Inverse Transformation: From transformed actions back to raw L parameters ---
         # Split actions into diagonal and off-diagonal parts
         evaluated_diag_params_scaled = actions[..., :3]
         evaluated_off_diag_params = actions[..., 3:]
@@ -126,7 +125,7 @@ class Actor(nn.Module):
         # Apply softplus correction for the diagonal elements
         log_probs -= torch.log(torch.sigmoid(raw_diag_params_for_eval) + 1e-8).sum(dim=-1, keepdim=True)
         
-        # Calculate entropy (for the 6 raw L parameters)
+        # Calculate entropy
         entropy = normal.entropy().sum(dim=-1)
         
         return log_probs, entropy
@@ -178,20 +177,19 @@ def train_ppo(datasets, agent, params):
         max_steps = len(imu_measurements) - 1 
 
         for episode in range(max_episodes):
-            serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0])
+            serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
+                                 params['action_dim'], params['state_dim'])
             
             # Episode tracking variables
             episode_return = 0.0
             collected_steps = 0
 
             # Run episode
-            for time_step, (imu, joints, ft, gt, cs, next_cs) in enumerate(zip(
+            for time_step, (imu, joints, ft, gt) in enumerate(zip(
                 imu_measurements[:max_steps], 
                 joint_measurements[:max_steps], 
                 force_torque_measurements[:max_steps], 
-                base_pose_ground_truth[:max_steps],
-                contact_states[:max_steps],
-                contact_states[1:max_steps+1]
+                base_pose_ground_truth[:max_steps]
             )):
                 contact_frames = serow_env.contact_frames
                 rewards = {cf: None for cf in contact_frames}
@@ -201,11 +199,10 @@ def train_ppo(datasets, agent, params):
                 kin, prior_state = serow_env.predict_step(imu, joints, ft)
 
                 for cf in contact_frames:
-                    if (prior_state.get_contact_position(cf) is not None 
-                            and cs.contacts_status[cf] and next_cs.contacts_status[cf]):
+                    if (prior_state.get_contact_position(cf) is not None and kin.contacts_status[cf]):
                     
                         # Compute the state
-                        x = serow_env.compute_state(cf, prior_state, cs)
+                        x = serow_env.compute_state(cf, prior_state, kin)
 
                         # Compute the action
                         action, value, log_prob = agent.get_action(x, deterministic=False)
@@ -216,7 +213,7 @@ def train_ppo(datasets, agent, params):
                         dones[cf] = done
 
                         # Compute the next state
-                        next_x = serow_env.compute_state(cf, post_state, next_cs)
+                        next_x = serow_env.compute_state(cf, post_state, kin)
 
                         # Add to buffer
                         if reward is not None:
@@ -245,7 +242,7 @@ def train_ppo(datasets, agent, params):
                 if collected_steps >= params['n_steps']:
                     actor_loss, critic_loss, _, converged = agent.train()
                     if actor_loss is not None and critic_loss is not None:
-                        print(f"Policy Loss: {actor_loss:.4f}, Value Loss: {critic_loss:.4f}")
+                        print(f"Policy Loss: {actor_loss}, Value Loss: {critic_loss}")
                     collected_steps = 0
 
                 # Check for early termination due to filter divergence
@@ -311,7 +308,7 @@ if __name__ == "__main__":
     min_action = 1e-10
     robot = "go2"
 
-    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0])
+    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim)
     test_dataset = {
         'imu': imu_measurements,
         'joints': joint_measurements,
@@ -322,7 +319,7 @@ if __name__ == "__main__":
         'base_pose_ground_truth': base_pose_ground_truth
     }
     
-    timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards = \
+    timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards, kinematics = \
         serow_env.evaluate(test_dataset, agent=None)
 
     # Reform the ground truth data
@@ -339,32 +336,33 @@ if __name__ == "__main__":
     print(f"Contacts frame: {contact_frames}")
 
     # Compute max and min state values
-    feet_positions = []
+    local_contact_positions = []
     base_linear_velocities = []
-    for base_state in base_states:
-        R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
-        base_linear_velocities.append(R_base @ base_state.base_linear_velocity)
-        for cf in contact_frames:
-            if base_state.contacts_position[cf] is not None:
-                local_pos = R_base @ (base_state.base_position - base_state.contacts_position[cf])
-                feet_positions.append(np.array([abs(local_pos[0]), abs(local_pos[1]), local_pos[2]]))
-    
-    # Convert base_linear_velocities and feet_positions to numpy array for easier manipulation
-    base_linear_velocities = np.array(base_linear_velocities)
-    feet_positions = np.array(feet_positions)
     contact_probabilities = []
-    for contact_state in contact_states:
-        for cf in contact_frames:
-            if contact_state.contacts_status[cf]:
-                contact_probabilities.append(contact_state.contacts_probability[cf])
+    for (base_state, kin) in zip(base_states, kinematics):
+        # Check if we have at least one contact
+        if sum(kin.contacts_status[frame] for frame in contact_frames) > 0.0:
+            R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
+            base_linear_velocities.append(base_state.base_linear_velocity)
+            for cf in contact_frames:
+                if base_state.contacts_position[cf] is not None \
+                    and kin.contacts_position[cf] is not None \
+                    and kin.contacts_status[cf] > 0.0:
+                    local_pos = R_base @ (base_state.contacts_position[cf] - base_state.base_position)
+                    local_kin_pos = kin.contacts_position[cf]
+                    local_contact_positions.append(local_pos - local_kin_pos)
+                    contact_probabilities.append(kin.contacts_probability[cf])
+
+    # Convert to numpy array for easier manipulation
+    base_linear_velocities = np.array(base_linear_velocities)
+    local_contact_positions = np.array(local_contact_positions)
     contact_probabilities = np.array(contact_probabilities)
 
     # Create max and min state values with correct dimensions
-    # First 3 dimensions are for position, last dimension is for contact probability
-    max_state_value = np.concatenate([np.max(feet_positions, axis=0), 
+    max_state_value = np.concatenate([np.max(local_contact_positions, axis=0), 
                                       np.max(base_linear_velocities, axis=0),
                                       [np.max(contact_probabilities)]])
-    min_state_value = np.concatenate([np.min(feet_positions, axis=0), 
+    min_state_value = np.concatenate([np.min(local_contact_positions, axis=0), 
                                       np.min(base_linear_velocities, axis=0),
                                       [np.min(contact_probabilities)]])
     print(f"RL state max values: {max_state_value}")
@@ -402,7 +400,7 @@ if __name__ == "__main__":
         'checkpoint_dir': 'policy/ppo',
         'total_steps': 10000, 
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
-        'check_value_loss': True,
+        'check_value_loss': False,
     }
 
     device = 'cpu'
@@ -428,7 +426,7 @@ if __name__ == "__main__":
         checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')
         actor = Actor(params).to(device)
         critic = Critic(params).to(device)
-        best_policy = PPO(actor, critic, params, device=device)
+        best_policy = PPO(actor, critic, params, device=device, normalize_state=True)
         best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
         best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])
         print(f"Loaded optimal trained policy for {robot} from " 

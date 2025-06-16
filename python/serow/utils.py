@@ -275,8 +275,7 @@ def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_tim
     return common_timestamps, base_position_interp, base_orientation_interp, gt_position_interp, \
         gt_orientation_interp
 
-def plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation, 
-                      cumulative_rewards = None):
+def plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation):
     
      # Plot the synchronized and aligned data
     plt.figure(figsize=(12, 8))
@@ -324,22 +323,6 @@ def plot_trajectories(timestamps, base_position, base_orientation, gt_position, 
     ax.set_title('3D Trajectories')
     ax.legend()
     plt.show()
-    
-    if cumulative_rewards is not None:
-        n_cf = len(cumulative_rewards)
-        fig, axes = plt.subplots(n_cf, 1, figsize=(12, 4*n_cf))
-        if n_cf == 1:
-            axes = [axes]  # Make axes iterable for single subplot case
-        
-        for ax, cf in zip(axes, cumulative_rewards):
-            ax.plot(cumulative_rewards[cf])
-            ax.set_xlabel('steps')
-            ax.set_ylabel('Cumulative Reward')
-            ax.set_title(f'Cumulative Reward for {cf} over steps')
-            ax.grid(True)
-        
-        plt.tight_layout()
-        plt.show()
 
 def plot_joint_states(joint_states):
     """Plot joint positions and velocities over time."""
