@@ -208,7 +208,7 @@ def train_ppo(datasets, agent, params):
                         action, value, log_prob = agent.get_action(x, deterministic=False)
 
                         # Run the update step
-                        post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step)
+                        post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
                         rewards[cf] = reward
                         dones[cf] = done
 
@@ -222,7 +222,7 @@ def train_ppo(datasets, agent, params):
                     else:
                         action = np.zeros(serow_env.action_dim)
                         # Just run the update step
-                        post_state, _, _ = serow_env.update_step(cf, kin, action, gt, time_step)
+                        post_state, _, _ = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
 
                     # Update the prior state
                     prior_state = post_state
@@ -386,7 +386,7 @@ if __name__ == "__main__":
         'batch_size': 128,  
         'max_grad_norm': 0.5,  
         'buffer_size': 10000,  
-        'max_episodes': 50,
+        'max_episodes': 250,
         'actor_lr': 1e-4, 
         'critic_lr': 3e-4,  
         'max_state_value': max_state_value,
