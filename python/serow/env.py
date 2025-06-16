@@ -3,79 +3,6 @@ import numpy as np
 
 from utils import quaternion_to_rotation_matrix, logMap, sync_and_align_data, plot_trajectories
 
-class RewardShaper:
-    def __init__(self, buffer_size=1000):
-        self.buffer_size = buffer_size
-        self.recent_nis = []
-        self.recent_position_errors = []
-        self.recent_orientation_errors = []
-
-    def _update_buffer(self, buffer, value):
-        buffer.append(value)
-        if len(buffer) > self.buffer_size:
-            buffer.pop(0)
-
-    def _get_alpha(self, buffer, time_factor=1.0, percentile=95):
-        if len(buffer) > 10:
-            typical = np.percentile(buffer, percentile)
-            if typical * time_factor > 0:
-                return -np.log(0.5) / (typical * time_factor + 1e-8)
-        return 1.0
-
-    def compute_reward(self, cf, serow_framework, state, gt, step):
-        success = False
-        innovation = np.zeros(3)
-        covariance = np.zeros((3, 3))
-        success, _, _, innovation, covariance = serow_framework.get_contact_position_innovation(cf)
-        reward = None
-        done = None
-
-        DIVERGENCE_PENALTY = -10.0  
-        TIME_SCALE = 0.075
-        STEP_REWARD = 0.025
-
-        if success:
-            done = 0.0
-            # Position error
-            position_error = state.get_base_position() - gt.position
-            # Orientation error
-            orientation_error = logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
-                                       @ quaternion_to_rotation_matrix(state.get_base_orientation()))
-            
-            try:
-                reg_covariance = covariance + np.eye(3) * 1e-6
-                nis = innovation.dot(np.linalg.inv(reg_covariance).dot(innovation))
-            except np.linalg.LinAlgError:
-                nis = float('inf')
-                print("NIS is inf")
-            
-            if (nis > 25.0 or nis <= 0.0) or (np.linalg.norm(position_error) > 0.5  
-                                              or np.linalg.norm(orientation_error) > 0.2):
-                reward = DIVERGENCE_PENALTY 
-                done = 1.0  
-            else:
-                self._update_buffer(self.recent_nis, nis)
-                alpha_nis = self._get_alpha(self.recent_nis, percentile=85)
-                innovation_reward = np.exp(-alpha_nis * nis)
-                reward = innovation_reward + STEP_REWARD
-                
-                time_factor = 1.0 + TIME_SCALE * step
-                
-                position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-6
-                position_error = position_error.dot(np.linalg.inv(position_error_cov).dot(position_error))
-                self._update_buffer(self.recent_position_errors, position_error)
-                alpha_pos = self._get_alpha(self.recent_position_errors, time_factor, percentile=65)
-                position_reward = np.exp(-alpha_pos * position_error * time_factor)
-                
-                orientation_error_cov = state.get_base_orientation_cov() + np.eye(3) * 1e-6
-                orientation_error = orientation_error.dot(np.linalg.inv(orientation_error_cov).dot(orientation_error))
-                self._update_buffer(self.recent_orientation_errors, orientation_error)
-                alpha_ori = self._get_alpha(self.recent_orientation_errors, time_factor, percentile=65)
-                orientation_reward = np.exp(-alpha_ori * orientation_error * time_factor)
-                    
-                reward += position_reward + orientation_reward
-        return reward, done
-
 class SerowEnv:
     def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim):
         self.robot = robot
@@ -89,10 +16,40 @@ class SerowEnv:
         self.contact_frames = self.initial_state.get_contacts_frame()
         self.action_dim = action_dim
         self.state_dim = state_dim
-        self.reward_shaper = RewardShaper()
 
-    def _compute_reward(self, cf, state, gt, step):
-        return self.reward_shaper.compute_reward(cf, self.serow_framework, state, gt, step)
+    def compute_reward(self, state, gt, step, max_steps):
+        reward = None
+        done = None
+
+        # Position error
+        position_error = np.linalg.norm(state.get_base_position() - gt.position)
+        # Orientation error
+        orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
+                                                  @ quaternion_to_rotation_matrix(state.get_base_orientation())))
+            
+        if (position_error > 0.5  or orientation_error > 0.2):
+            done = 1.0  
+            reward = -10.0
+        else:
+            done = 0.0
+            reward = (step + 1) / max_steps
+                
+            # position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-6
+            # position_error = position_error.dot(np.linalg.inv(position_error_cov).dot(position_error))
+            alpha_pos = 200.0
+            position_reward = np.exp(-alpha_pos * position_error)
+            reward += position_reward
+
+            # orientation_error_cov = state.get_base_orientation_cov() + np.eye(3) * 1e-6
+            # orientation_error = orientation_error.dot(np.linalg.inv(orientation_error_cov).dot(orientation_error))
+            alpha_ori = 600.0
+            orientation_reward = np.exp(-alpha_ori * orientation_error)
+                    
+            reward += orientation_reward
+
+            # Normalize the reward
+            reward /= 3.0
+        return reward, done    
 
     def compute_state(self, cf, state, kin):
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
@@ -119,7 +76,7 @@ class SerowEnv:
         state = self.serow_framework.get_state(allow_invalid=True)
         return kin, state
 
-    def update_step(self, cf, kin, action, gt, step):
+    def update_step(self, cf, kin, action, gt, step, max_steps):
         # Reshape action to (m,1) numpy array
         action = np.array(action, dtype=np.float64).reshape(-1, 1)
         self.serow_framework.set_action(cf, action)
@@ -131,7 +88,7 @@ class SerowEnv:
         post_state = self.serow_framework.get_state(allow_invalid=True)
 
         # Compute the reward
-        reward, done = self._compute_reward(cf, post_state, gt, step)
+        reward, done = self.compute_reward(post_state, gt, step, max_steps)
         return post_state, reward, done
 
     def finish_update(self, imu, kin):
@@ -193,7 +150,7 @@ class SerowEnv:
                     action = np.zeros(self.action_dim)
 
                 # Run the update step
-                post_state, reward, _ = self.update_step(cf, kin, action, gt, step)
+                post_state, reward, _ = self.update_step(cf, kin, action, gt, step, max_steps)
                 rewards[cf] = reward
 
                 # Update the prior state
@@ -214,11 +171,13 @@ class SerowEnv:
             # Compute the rewards
             for cf in contact_frames:
                 if rewards[cf] is not None:
-                    immediate_rewards[cf].append(rewards[cf])
+                    # Ensure reward is a scalar value
+                    reward_value = float(rewards[cf])
+                    immediate_rewards[cf].append(reward_value)
                     if len(cumulative_rewards[cf]) == 0:
-                        cumulative_rewards[cf].append(rewards[cf])
+                        cumulative_rewards[cf].append(reward_value)
                     else:
-                        cumulative_rewards[cf].append(cumulative_rewards[cf][-1] + rewards[cf])
+                        cumulative_rewards[cf].append(cumulative_rewards[cf][-1] + reward_value)
 
         # Convert to numpy arrays
         timestamps = np.array(timestamps)
@@ -227,6 +186,7 @@ class SerowEnv:
         gt_positions = np.array(gt_positions)
         gt_orientations = np.array(gt_orientations)
         cumulative_rewards = {cf: np.array(cumulative_rewards[cf]) for cf in contact_frames}
+        immediate_rewards = {cf: np.array(immediate_rewards[cf]) for cf in contact_frames}
 
         # Sync and align the data
         timestamps, base_positions, base_orientations, gt_positions, gt_orientations = \
@@ -236,7 +196,7 @@ class SerowEnv:
         # Plot the trajectories
         plot_trajectories(timestamps, base_positions, base_orientations, gt_positions, 
                           gt_orientations)
-
+        
         # Print evaluation metrics
         print("\n Policy Evaluation Metrics:")
         for cf in contact_frames:
