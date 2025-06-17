@@ -36,7 +36,7 @@ class SerowEnv:
                 
             position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-8
             position_error = position_error.dot(np.linalg.inv(position_error_cov).dot(position_error))
-            alpha_pos = 400.0
+            alpha_pos = 800.0
             position_reward = np.exp(-alpha_pos * position_error)
             reward += position_reward
 
