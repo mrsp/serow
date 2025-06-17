@@ -6,6 +6,10 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import BaseCallback
+import warnings
+
+
 
 from read_mcap import(
     read_base_states, 
@@ -21,12 +25,100 @@ import numpy as np
 import serow
 from utils import quaternion_to_rotation_matrix, logMap, sync_and_align_data, plot_trajectories
 
+class InvalidSampleRemover(BaseCallback):
+    """
+    This version maintains separate valid/invalid buffers and only trains on valid data.
+    More aggressive but ensures no invalid data is used for training.
+    """
+    
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
+        self.valid_buffer_data = []
+        self.filtered_count = 0
+        self.total_count = 0
+        
+    def _on_step(self) -> bool:
+        """Collect only valid samples for training."""
+        try:
+            infos = self.locals.get('infos', [])
+            obs = self.locals.get('new_obs', [])
+            actions = self.locals.get('actions', [])
+            rewards = self.locals.get('rewards', [])
+            dones = self.locals.get('dones', [])
+            
+            # Only store valid transitions
+            for env_idx, info in enumerate(infos):
+                self.total_count += 1
+                
+                if info.get('valid_step', True):
+                    # This is a valid sample, keep it
+                    valid_data = {
+                        'obs': obs[env_idx] if env_idx < len(obs) else None,
+                        'action': actions[env_idx] if env_idx < len(actions) else None,
+                        'reward': rewards[env_idx] if env_idx < len(rewards) else None,
+                        'done': dones[env_idx] if env_idx < len(dones) else None,
+                        'info': info
+                    }
+                    self.valid_buffer_data.append(valid_data)
+                else:
+                    # Invalid sample, skip it
+                    self.filtered_count += 1
+                    if self.verbose >= 1:
+                        reason = info.get('invalid_reason', 'unknown')
+                        print(f"Skipping invalid sample: env {env_idx}, reason: {reason}")
+            
+        except Exception as e:
+            if self.verbose >= 1:
+                warnings.warn(f"Error in sample collection: {e}")
+        
+        return True
+
+    def _on_rollout_end(self) -> None:
+        """Called at the end of each rollout to filter out invalid samples from PPO's buffer."""
+        try:
+            # Get the rollout buffer from the model
+            rollout_buffer = self.model.rollout_buffer
+            
+            # Create masks for valid samples
+            valid_mask = np.array([info.get('valid_step', True) for info in self.locals.get('infos', [])])
+            
+            # Filter out invalid samples from the buffer
+            if hasattr(rollout_buffer, 'observations'):
+                rollout_buffer.observations = rollout_buffer.observations[valid_mask]
+            if hasattr(rollout_buffer, 'actions'):
+                rollout_buffer.actions = rollout_buffer.actions[valid_mask]
+            if hasattr(rollout_buffer, 'rewards'):
+                rollout_buffer.rewards = rollout_buffer.rewards[valid_mask]
+            if hasattr(rollout_buffer, 'dones'):
+                rollout_buffer.dones = rollout_buffer.dones[valid_mask]
+            if hasattr(rollout_buffer, 'values'):
+                rollout_buffer.values = rollout_buffer.values[valid_mask]
+            if hasattr(rollout_buffer, 'log_probs'):
+                rollout_buffer.log_probs = rollout_buffer.log_probs[valid_mask]
+            if hasattr(rollout_buffer, 'advantages'):
+                rollout_buffer.advantages = rollout_buffer.advantages[valid_mask]
+            
+            if self.verbose >= 1:
+                print(f"Filtered {len(valid_mask) - np.sum(valid_mask)} invalid samples from rollout buffer")
+                
+        except Exception as e:
+            if self.verbose >= 1:
+                warnings.warn(f"Error in filtering rollout buffer: {e}")
+    
+    def get_valid_data(self):
+        """Get the collected valid data."""
+        return self.valid_buffer_data
+    
+    def clear_buffer(self):
+        """Clear the valid data buffer."""
+        self.valid_buffer_data.clear()
+
 class CustomNetwork(nn.Module):
     """
     Custom network for policy and value function.
     It receives as input the features extracted by the features extractor.
     """
-    def __init__(self, feature_dim: int, last_layer_dim_pi: int = 64, last_layer_dim_vf: int = 64):
+    def __init__(self, feature_dim: int, last_layer_dim_pi: int = 6, last_layer_dim_vf: int = 1):
         super().__init__()
         
         # Required attributes for Stable Baselines3
@@ -137,9 +229,9 @@ class SerowEnv(gym.Env):
         
         # Define action and observation spaces (REQUIRED for SB3)
         if action_bounds is None:
-            # Default action bounds - adjust these based on your specific use case
-            action_bounds = spaces.Box(low=-np.ones(action_dim) * np.inf, 
-                                       high=np.ones(action_dim) * np.inf, shape=(action_dim,), 
+            # Default action bounds - using reasonable finite values
+            action_bounds = spaces.Box(low=-np.ones(action_dim) * 10.0, 
+                                       high=np.ones(action_dim) * 10.0, shape=(action_dim,), 
                                        dtype=np.float32)
         
         self.action_space = spaces.Box(
@@ -309,7 +401,7 @@ class SerowEnv(gym.Env):
             "contact_active": kin.contacts_status[self.cf],
             "valid_step": valid_step,
             "invalid_reason": invalid_reason,
-            "reward": reward,  # Store original None value
+            "reward": reward,  # Store original reward value
             "state_available": state is not None,
             "fallback_used": not valid_step
         }
@@ -322,6 +414,10 @@ class SerowEnv(gym.Env):
             truncated = True
             done = False
         
+        # Return default reward of 0.0 if reward is None
+        if reward is None:
+            reward = 0.0
+            
         return state, reward, done, truncated, info
     
     def reset(self, *, seed=None, options=None):
@@ -379,32 +475,11 @@ if __name__ == "__main__":
     env = SerowEnv(robot, initial_state, contact_frame, state_dim, action_dim, measurements)
 
     env.reset()
-    for i in range(1000):
-        state, reward, done, truncated, info = env.step(np.zeros(action_dim))
-        print(info)
+    filter_callback = InvalidSampleRemover()
 
-# # Instantiate the custom policy and pass it to PPO
-# model = PPO(CustomActorCriticPolicy, env, verbose=1)
+    # Instantiate the custom policy and pass it to PPO
+    model = PPO("MlpPolicy", env, verbose=1)
 
-# # Train the model
-# model.learn(total_timesteps=10000)
-
-# # Create a separate environment for evaluation
-# eval_env = CustomCartPole()
-# eval_env = Monitor(eval_env)
-
-# # Evaluate
-# mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=10)
-# print(f"Mean reward: {mean_reward:.2f} +/- {std_reward:.2f}")
-
-# # # Visualize the best policy
-# # obs, _ = eval_env.reset()
-# # done = False
-# # truncated = False
-# # while not (done or truncated):
-# #     action, _ = model.predict(obs)
-# #     obs, reward, done, truncated, info = eval_env.step(action)
-# #     eval_env.render()
-
-# env.close()
-# eval_env.close()
+    # Train the model
+    model.learn(total_timesteps=100000, callback=filter_callback)
+    env.close()
