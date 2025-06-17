@@ -112,13 +112,18 @@ class Actor(nn.Module):
         """Evaluate actions for PPO update"""
         dist = self.get_distribution(states)
         
+        # Transform actions back to raw space
+        raw_variances = torch.log(actions[..., :self.n_variances] - self.min_var)  # inverse of softplus
+        raw_correlations = torch.atanh(actions[..., self.n_variances:])  # inverse of tanh
+        raw_actions = torch.cat([raw_variances, raw_correlations], dim=-1)
+        
         # Compute jacobian for the transformation
-        var_jacobian = torch.sigmoid(actions[..., :self.n_variances])
-        corr_jacobian = 1 - torch.tanh(actions[..., self.n_variances:])**2
+        var_jacobian = torch.sigmoid(raw_actions[..., :self.n_variances])
+        corr_jacobian = 1 - torch.tanh(raw_actions[..., self.n_variances:])**2
         jacobian = torch.cat([var_jacobian, corr_jacobian], dim=-1)
         
         # Log probability with change of variables
-        log_probs = dist.log_prob(actions).sum(dim=-1) - torch.log(jacobian).sum(dim=-1)
+        log_probs = dist.log_prob(raw_actions).sum(dim=-1) - torch.log(jacobian).sum(dim=-1)
         entropy = dist.entropy().sum(dim=-1)
         return log_probs, entropy
 
