@@ -23,7 +23,7 @@ params = {
     'ppo_epochs': 5,         
     'batch_size': 128,      
     'max_grad_norm': 0.5,
-    'max_episodes': 100,
+    'max_episodes': 300,
     'actor_lr': 3e-4,       
     'critic_lr': 5e-4,       
     'buffer_size': 10000,
@@ -39,6 +39,7 @@ params = {
     'total_steps': 100000, 
     'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
     'check_value_loss': False,
+    'target_kl': 0.01,
 }
 
 class Actor(nn.Module):
