@@ -365,13 +365,13 @@ class PPO:
                 total_entropy += entropy.mean().item()
                 num_updates += 1
 
-        # Check KL divergence after each epoch for early stopping
-        if self.target_kl is not None:
-            kl_div = self.compute_kl_divergence(states, actions, old_log_probs)
-            
-            if kl_div > self.target_kl:
-                print(f"Early stopping at epoch {epoch + 1}/{self.ppo_epochs}, KL divergence: {kl_div} > target: {self.target_kl}")
-                early_stopped = True
+            # Check KL divergence after each epoch for early stopping
+            if self.target_kl is not None:
+                kl_div = self.compute_kl_divergence(states, actions, old_log_probs)
+                
+                if kl_div > self.target_kl:
+                    print(f"Early stopping at epoch {epoch + 1}/{self.ppo_epochs}, KL divergence: {kl_div} > target: {self.target_kl}")
+                    early_stopped = True
 
         # Clear buffer after training
         self.buffer.clear()
