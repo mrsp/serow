@@ -334,6 +334,15 @@ class SerowEnv(gym.Env):
         while reward is None:
            state, reward, _, _, _ = self.step(np.zeros(self.action_dim))
         return state, {}
+    
+    def render(self, mode='human'):
+        # Implement rendering if needed
+        pass
+    
+    def close(self):
+        if self.screen is not None:
+            self.screen = None
+        self.isopen = False
 
 if __name__ == "__main__":
     # Load and preprocess the data
