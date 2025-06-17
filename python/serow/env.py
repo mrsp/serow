@@ -22,29 +22,28 @@ class SerowEnv:
         done = None
 
         # Position error
-        position_error = np.linalg.norm(state.get_base_position() - gt.position)
+        position_error = state.get_base_position() - gt.position
         # Orientation error
-        orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
-                                                  @ quaternion_to_rotation_matrix(state.get_base_orientation())))
+        orientation_error = logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
+                                   @ quaternion_to_rotation_matrix(state.get_base_orientation()))
             
-        if (position_error > 0.5  or orientation_error > 0.2):
+        if (np.linalg.norm(position_error) > 0.5  or np.linalg.norm(orientation_error) > 0.2):
             done = 1.0  
-            reward = -10.0
+            reward = 0.0
         else:
             done = 0.0
             reward = (step + 1) / max_steps
                 
-            # position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-6
-            # position_error = position_error.dot(np.linalg.inv(position_error_cov).dot(position_error))
-            alpha_pos = 200.0
+            position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-8
+            position_error = position_error.dot(np.linalg.inv(position_error_cov).dot(position_error))
+            alpha_pos = 400.0
             position_reward = np.exp(-alpha_pos * position_error)
             reward += position_reward
 
-            # orientation_error_cov = state.get_base_orientation_cov() + np.eye(3) * 1e-6
-            # orientation_error = orientation_error.dot(np.linalg.inv(orientation_error_cov).dot(orientation_error))
+            orientation_error_cov = state.get_base_orientation_cov() + np.eye(3) * 1e-8
+            orientation_error = orientation_error.dot(np.linalg.inv(orientation_error_cov).dot(orientation_error))
             alpha_ori = 600.0
             orientation_reward = np.exp(-alpha_ori * orientation_error)
-                    
             reward += orientation_reward
 
             # Normalize the reward
@@ -144,7 +143,7 @@ class SerowEnv:
                     # Compute the state
                     x = self.compute_state(cf, prior_state, kin)
 
-                    # Compute the action
+                    # Compute the action    
                     action = agent.get_action(x, deterministic=True)[0]
                 else:
                     action = np.zeros(self.action_dim)

@@ -26,7 +26,8 @@ class PPO:
         self.final_lr_ratio = params.get('final_lr_ratio', 0.1)
         self.total_steps = params.get('total_steps', 1000000)
         self.training_step = 0
-        
+        self.target_kl = params.get('target_kl', None)
+
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.initial_actor_lr)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.initial_critic_lr)
       
@@ -47,8 +48,15 @@ class PPO:
         self.samples = 0
 
         self.normalize_state = normalize_state
-        self.max_state_value = params['max_state_value']
-        self.min_state_value = params['min_state_value']
+        # Remove min-max normalization for states
+        # self.max_state_value = params['max_state_value']
+        # self.min_state_value = params['min_state_value']
+
+        # Mean-std normalization for states
+        self.state_mean = np.zeros(self.state_dim, dtype=np.float32)
+        self.state_std = np.ones(self.state_dim, dtype=np.float32)
+        self.state_count = 0
+        self.state_m2 = np.zeros(self.state_dim, dtype=np.float32)  # For Welford's algorithm
         
         # Early stopping parameters
         self.value_loss_window_size = params.get('value_loss_window_size', 10) 
@@ -82,10 +90,25 @@ class PPO:
         self.actor.train()
         self.critic.train()
 
+    def update_state_stats(self, state):
+        # Welford's algorithm for numerically stable mean/std
+        self.state_count += 1
+        delta = state - self.state_mean
+        self.state_mean += delta / self.state_count
+        delta2 = state - self.state_mean
+        self.state_m2 += delta * delta2
+        if self.state_count > 1:
+            self.state_std = np.sqrt(self.state_m2 / (self.state_count - 1) + 1e-8)
+
+    def normalize_state_fn(self, state):
+        return (state - self.state_mean) / (self.state_std + 1e-8)
+
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
         if self.normalize_state:
-            state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
-            next_state = normalize_vector(next_state.copy(), self.min_state_value, self.max_state_value)
+            self.update_state_stats(state)
+            self.update_state_stats(next_state)
+            state = self.normalize_state_fn(state)
+            next_state = self.normalize_state_fn(next_state)
 
         # Convert to numpy and store in buffer
         state = np.array(state.flatten())
@@ -97,12 +120,13 @@ class PPO:
     
     def get_action(self, state, deterministic=False):
         if self.normalize_state:
-            state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
+            self.update_state_stats(state)
+            state = self.normalize_state_fn(state)
 
         with torch.no_grad():
             action, log_prob = self.actor.get_action(state, deterministic)
             state_tensor = torch.FloatTensor(state).reshape(1, -1).to(self.device)
-            value = self.critic(state_tensor).item()
+            value = self.critic(state_tensor).squeeze(0).detach().cpu().item()
         return action, value, log_prob
     
 
@@ -293,11 +317,16 @@ class PPO:
                 current_log_probs, entropy = self.actor.evaluate_actions(batch_states, batch_actions)
                 
                 # Calculate policy loss with clipping
-                ratio = torch.exp(current_log_probs - batch_old_log_probs)
+                log_ratio = current_log_probs - batch_old_log_probs
+                ratio = torch.exp(log_ratio)
                 surr1 = -ratio * batch_advantages
                 surr2 = -torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
                 policy_loss = torch.max(surr1, surr2).mean()
-                
+
+                # Calculate KL divergence
+                with torch.no_grad():
+                    approx_kl = ((ratio - 1) - log_ratio).mean()
+
                 # Calculate value loss with normalized returns and value clipping
                 current_values = self.critic(batch_states)
 
@@ -330,6 +359,9 @@ class PPO:
                 total_value_loss += value_loss.item()
                 total_entropy += entropy.mean().item()
                 num_updates += 1
+
+                if self.target_kl is not None and approx_kl > self.target_kl:
+                    break
         
         # Clear buffer after training
         self.buffer.clear()

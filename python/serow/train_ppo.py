@@ -29,105 +29,97 @@ class Actor(nn.Module):
     def __init__(self, params):
         super(Actor, self).__init__()
         self.state_dim = params['state_dim']
-        # The action represents the parameters of L
-        self.action_dim = params['action_dim'] 
-        self.min_action = params['min_action']
+        self.device = params['device']
 
+        # Output dimensions for covariance parameters
+        self.n_variances = 3
+        self.n_correlations = 3
+        self.min_var = params['min_action']
+        self.action_dim = params['action_dim']
+        
+        # Shared layers
         self.layer1 = nn.Linear(self.state_dim, 64)
         self.layer2 = nn.Linear(64, 64)
-
-        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
-        torch.nn.init.constant_(self.layer1.bias, 0.0)
-        torch.nn.init.constant_(self.layer2.bias, 0.0)
-
-        self.mean_layer = nn.Linear(64, self.action_dim)
+        self.layer3 = nn.Linear(64, 32)
         
-        # Initialize mean layer weights to small values
-        nn.init.orthogonal_(self.mean_layer.weight, gain=1.0)
-        torch.nn.init.constant_(self.mean_layer.bias, 0.0) 
-
-        self.log_std = nn.Parameter(torch.zeros(self.action_dim))
-
+        # Output layers for mean and log_std of each parameter
+        self.mean_layer = nn.Linear(32, self.action_dim)
+        self.log_std_layer = nn.Linear(32, self.action_dim)
+        
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize network weights for PPO"""
+        for layer in [self.layer1, self.layer2, self.layer3]:
+            nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
+            nn.init.constant_(layer.bias, 0.0)
+        
+        # Initialize output layers
+        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)
+        nn.init.constant_(self.mean_layer.bias, 0.0)
+        nn.init.orthogonal_(self.log_std_layer.weight, gain=0.01)
+        nn.init.constant_(self.log_std_layer.bias, -1.0)  # Start with small std
+    
     def forward(self, state):
-        x = self.layer1(state)
-        x = F.relu(x)
-        x = self.layer2(x)
-        x = F.relu(x)
+        """Forward pass to get distribution parameters"""
+        x = F.tanh(self.layer1(state))
+        x = F.tanh(self.layer2(x))
+        x = F.tanh(self.layer3(x))
         
-        mean = self.mean_layer(x) 
-        
-        # Clamp log_std for numerical stability
-        log_std = self.log_std.clamp(-20, 2)
+        mean = self.mean_layer(x)
+        log_std = self.log_std_layer(x).clamp(-20, 2)  # Constrain log_std
         
         return mean, log_std
-
-    def get_action(self, state, deterministic=False):
-        if not isinstance(state, torch.Tensor):
-            state = torch.FloatTensor(state).unsqueeze(0) # Add batch dimension if missing
-
+    
+    def get_distribution(self, state):
+        """Get the action distribution for PPO"""
         mean, log_std = self.forward(state)
-        std = log_std.exp().expand_as(mean)
-
+        std = log_std.exp()
+        return torch.distributions.Normal(mean, std)
+    
+    def get_action(self, state, deterministic=False):
+        """Sample action for PPO training"""
+        state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
+        dist = self.get_distribution(state)
+        
         if deterministic:
-            # For deterministic action, use the mean of the raw L parameters
-            raw = mean
+            action = dist.mean
         else:
-            normal = torch.distributions.Normal(mean, std)
-            raw = normal.sample()
+            action = dist.sample()
         
-        # Apply softplus and min_action offset to the first 3 elements (diagonal)
-        diag_params_scaled = F.softplus(raw[..., :3]) + self.min_action
+        # Transform raw action into covariance parameters
+        variances = F.softplus(action[..., :self.n_variances]) + self.min_var
+        correlations = torch.tanh(action[..., self.n_variances:])
+        transformed_action = torch.cat((variances, correlations), dim=-1)
         
-        # Off-diagonal parameters remain untransformed
-        off_diag_params = raw[..., 3:]
+        # Compute log probability with change of variables
+        # For softplus: d/dx softplus(x) = sigmoid(x)
+        # For tanh: d/dx tanh(x) = 1 - tanh^2(x)
+        var_jacobian = torch.sigmoid(action[..., :self.n_variances])
+        corr_jacobian = 1 - torch.tanh(action[..., self.n_variances:])**2
         
-        # Concatenate to form the final 6D action vector that the user receives
-        action = torch.cat((diag_params_scaled, off_diag_params), dim=-1)
+        # Combine jacobians
+        jacobian = torch.cat([var_jacobian, corr_jacobian], dim=-1)
         
-        # Calculate log probability
-        log_prob = torch.zeros(1, device=state.device) # Initialize for deterministic case
-        if not deterministic:
-            # Log prob for the sampled raw L parameters
-            log_prob = normal.log_prob(raw).sum(dim=-1)
-            
-            # Apply correction for the Softplus transformation on diagonal elements
-            # Derivative of softplus(x) is sigmoid(x)
-            log_prob -= torch.log(torch.sigmoid(raw[..., :3]) + 1e-8).sum(dim=-1)
+        # Log probability with change of variables
+        # log p(y) = log p(x) - log |det(J)|
+        # where J is the jacobian of the transformation
+        log_prob = dist.log_prob(action).sum(dim=-1) - torch.log(jacobian).sum(dim=-1)
         
-        # Return action and log_prob (as a scalar)
-        return action.squeeze(0).detach().cpu().numpy(), log_prob.squeeze(0).detach().cpu().item()
-
+        return transformed_action.squeeze(0).detach().cpu().numpy(), log_prob.squeeze(0).detach().cpu().item()
+    
     def evaluate_actions(self, states, actions):
-        mean, log_std = self.forward(states)
-        std = log_std.exp().expand_as(mean)
+        """Evaluate actions for PPO update"""
+        dist = self.get_distribution(states)
         
-        # --- Inverse Transformation: From transformed actions back to raw L parameters ---
-        # Split actions into diagonal and off-diagonal parts
-        evaluated_diag_params_scaled = actions[..., :3]
-        evaluated_off_diag_params = actions[..., 3:]
+        # Compute jacobian for the transformation
+        var_jacobian = torch.sigmoid(actions[..., :self.n_variances])
+        corr_jacobian = 1 - torch.tanh(actions[..., self.n_variances:])**2
+        jacobian = torch.cat([var_jacobian, corr_jacobian], dim=-1)
         
-        # Reverse the min_action offset first
-        diag_params_minus_offset = evaluated_diag_params_scaled - self.min_action
-        
-        # Now apply the inverse of softplus: log(exp(x) - 1)
-        # Handle numerical stability carefully if diag_params_minus_offset is very small.
-        # It should always be positive after the subtraction if the original action was valid.
-        raw_diag_params_for_eval = torch.log(torch.exp(diag_params_minus_offset) - 1 + 1e-8)
-        
-        # Concatenate to form the 'raw_l_params_for_eval' that aligns with the Normal distribution
-        raw_l_params_for_eval = torch.cat((raw_diag_params_for_eval, evaluated_off_diag_params), dim=-1)
-
-        # Calculate log probabilities
-        normal = torch.distributions.Normal(mean, std)
-        log_probs = normal.log_prob(raw_l_params_for_eval).sum(dim=-1, keepdim=True)
-        
-        # Apply softplus correction for the diagonal elements
-        log_probs -= torch.log(torch.sigmoid(raw_diag_params_for_eval) + 1e-8).sum(dim=-1, keepdim=True)
-        
-        # Calculate entropy
-        entropy = normal.entropy().sum(dim=-1)
-        
+        # Log probability with change of variables
+        log_probs = dist.log_prob(actions).sum(dim=-1) - torch.log(jacobian).sum(dim=-1)
+        entropy = dist.entropy().sum(dim=-1)
         return log_probs, entropy
 
 class Critic(nn.Module):
@@ -242,7 +234,7 @@ def train_ppo(datasets, agent, params):
                 if collected_steps >= params['n_steps']:
                     actor_loss, critic_loss, _, converged = agent.train()
                     if actor_loss is not None and critic_loss is not None:
-                        print(f"Policy Loss: {actor_loss}, Value Loss: {critic_loss}")
+                        print(f"[Episode {episode + 1}/{max_episodes}] Step [{time_step + 1}/{max_steps}] Policy Loss: {actor_loss}, Value Loss: {critic_loss}")
                     collected_steps = 0
 
                 # Check for early termination due to filter divergence
@@ -335,42 +327,44 @@ if __name__ == "__main__":
     contact_frames = serow_env.contact_frames
     print(f"Contacts frame: {contact_frames}")
 
-    # Compute max and min state values
-    local_contact_positions = []
-    base_linear_velocities = []
-    contact_probabilities = []
-    for (base_state, kin) in zip(base_states, kinematics):
-        # Check if we have at least one contact
-        if sum(kin.contacts_status[frame] for frame in contact_frames) > 0.0:
-            R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
-            base_linear_velocities.append(base_state.base_linear_velocity)
-            for cf in contact_frames:
-                if base_state.contacts_position[cf] is not None \
-                    and kin.contacts_position[cf] is not None \
-                    and kin.contacts_status[cf] > 0.0:
-                    local_pos = R_base @ (base_state.contacts_position[cf] - base_state.base_position)
-                    local_kin_pos = kin.contacts_position[cf]
-                    local_contact_positions.append(local_pos - local_kin_pos)
-                    contact_probabilities.append(kin.contacts_probability[cf])
+    # # Compute max and min state values
+    # local_contact_positions = []
+    # base_linear_velocities = []
+    # contact_probabilities = []
+    # for (base_state, kin) in zip(base_states, kinematics):
+    #     # Check if we have at least one contact
+    #     if sum(kin.contacts_status[frame] for frame in contact_frames) > 0.0:
+    #         R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
+    #         base_linear_velocities.append(base_state.base_linear_velocity)
+    #         for cf in contact_frames:
+    #             if base_state.contacts_position[cf] is not None \
+    #                 and kin.contacts_position[cf] is not None \
+    #                 and kin.contacts_status[cf] > 0.0:
+    #                 local_pos = R_base @ (base_state.contacts_position[cf] - base_state.base_position)
+    #                 local_kin_pos = kin.contacts_position[cf]
+    #                 local_contact_positions.append(local_pos - local_kin_pos)
+    #                 contact_probabilities.append(kin.contacts_probability[cf])
 
-    # Convert to numpy array for easier manipulation
-    base_linear_velocities = np.array(base_linear_velocities)
-    local_contact_positions = np.array(local_contact_positions)
-    contact_probabilities = np.array(contact_probabilities)
+    # # Convert to numpy array for easier manipulation
+    # base_linear_velocities = np.array(base_linear_velocities)
+    # local_contact_positions = np.array(local_contact_positions)
+    # contact_probabilities = np.array(contact_probabilities)
 
-    # Create max and min state values with correct dimensions
-    max_state_value = np.concatenate([np.max(local_contact_positions, axis=0), 
-                                      np.max(base_linear_velocities, axis=0),
-                                      [np.max(contact_probabilities)]])
-    min_state_value = np.concatenate([np.min(local_contact_positions, axis=0), 
-                                      np.min(base_linear_velocities, axis=0),
-                                      [np.min(contact_probabilities)]])
-    print(f"RL state max values: {max_state_value}")
-    print(f"RL state min values: {min_state_value}")
+    # # Create max and min state values with correct dimensions
+    # max_state_value = np.concatenate([np.max(local_contact_positions, axis=0), 
+    #                                   np.max(base_linear_velocities, axis=0),
+    #                                   [np.max(contact_probabilities)]])
+    # min_state_value = np.concatenate([np.min(local_contact_positions, axis=0), 
+    #                                   np.min(base_linear_velocities, axis=0),
+    #                                   [np.min(contact_probabilities)]])
+    # print(f"RL state max values: {max_state_value}")
+    # print(f"RL state min values: {min_state_value}")
 
     train_datasets = [test_dataset]
+    device = 'cpu'
 
     params = {
+        'device': device,
         'robot': robot,
         'state_dim': state_dim,
         'action_dim': action_dim,
@@ -380,30 +374,30 @@ if __name__ == "__main__":
         'value_clip_param': 0.2,
         'value_loss_coef': 0.5,  
         'entropy_coef': 0.01,  
-        'gamma': 0.99,
+        'gamma': 1.0,
         'gae_lambda': 0.95,
-        'ppo_epochs': 5,  
-        'batch_size': 256,  
+        'ppo_epochs': 10,  
+        'batch_size': 128,  
         'max_grad_norm': 0.5,  
         'buffer_size': 10000,  
-        'max_episodes': 250,
-        'actor_lr': 5e-5, 
-        'critic_lr': 1e-4,  
-        'max_state_value': max_state_value,
-        'min_state_value': min_state_value,
-        'update_lr': True,
-        'n_steps': 1024,
+        'max_episodes': 15,
+        'actor_lr': 1e-4, 
+        'critic_lr': 3e-4,  
+        'target_kl': 0.01,
+        # 'max_state_value': max_state_value,
+        # 'min_state_value': min_state_value,
+        'update_lr': False,
+        'n_steps': 2048,
         'convergence_threshold': 0.15,
         'critic_convergence_threshold': 0.15,
-        'return_window_size': 15,
-        'value_loss_window_size': 15,
+        'return_window_size': 10,
+        'value_loss_window_size': 10,
         'checkpoint_dir': 'policy/ppo',
-        'total_steps': 10000, 
+        'total_steps': 100000, 
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
         'check_value_loss': False,
     }
 
-    device = 'cpu'
     loaded = False
     print(f"Initializing agent for {robot}")
     actor = Actor(params).to(device)
