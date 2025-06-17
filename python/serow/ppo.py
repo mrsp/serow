@@ -232,6 +232,13 @@ class PPO:
                 
         return converged
     
+    def compute_kl_divergence(self, states, actions, old_log_probs):
+        """Compute KL divergence between old and new policy"""
+        with torch.no_grad():
+            new_log_probs, _ = self.actor.evaluate_actions(states, actions)
+            kl_div = (old_log_probs - new_log_probs).mean()
+        return kl_div.item()
+
     def train(self):
         if len(self.buffer) < self.batch_size:
             return 0.0, 0.0, 0.0
@@ -297,11 +304,13 @@ class PPO:
         total_value_loss = 0
         total_entropy = 0
         num_updates = 0
-
+        early_stopped = False
         for epoch in range(self.ppo_epochs):
+            if early_stopped:
+                break
+
             # Shuffle data
             indices = torch.randperm(dataset_size)
-            
             for start in range(0, dataset_size, self.batch_size):
                 end = min(start + self.batch_size, dataset_size)
                 batch_indices = indices[start:end]
@@ -322,10 +331,6 @@ class PPO:
                 surr1 = -ratio * batch_advantages
                 surr2 = -torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
                 policy_loss = torch.max(surr1, surr2).mean()
-
-                # Calculate KL divergence
-                with torch.no_grad():
-                    approx_kl = ((ratio - 1) - log_ratio).mean()
 
                 # Calculate value loss with normalized returns and value clipping
                 current_values = self.critic(batch_states)
@@ -360,9 +365,14 @@ class PPO:
                 total_entropy += entropy.mean().item()
                 num_updates += 1
 
-                if self.target_kl is not None and approx_kl > self.target_kl:
-                    break
-        
+        # Check KL divergence after each epoch for early stopping
+        if self.target_kl is not None:
+            kl_div = self.compute_kl_divergence(states, actions, old_log_probs)
+            
+            if kl_div > self.target_kl:
+                print(f"Early stopping at epoch {epoch + 1}/{self.ppo_epochs}, KL divergence: {kl_div} > target: {self.target_kl}")
+                early_stopped = True
+
         # Clear buffer after training
         self.buffer.clear()
         
