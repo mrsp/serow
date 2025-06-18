@@ -322,8 +322,11 @@ void ContactEKF::computeDiscreteDynamics(
 void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& cf,  const bool cs, 
     const double cp_prob, const Eigen::Vector3d& cp, Eigen::Matrix3d cp_noise, 
     const Eigen::Matrix3d& position_cov, std::shared_ptr<TerrainElevation> terrain_estimator) {
-        const double csd = cs ? 1.0 : 0.0;
+        if (!cs)
+            return;
         
+        const double csd = cs ? 1.0 : 0.0;
+
         if (use_onnx_) {
             Eigen::VectorXd onnx_state = Eigen::VectorXd::Zero(onnx_state_dim_);
             Eigen::VectorXd onnx_action = Eigen::VectorXd::Ones(onnx_action_dim_);
