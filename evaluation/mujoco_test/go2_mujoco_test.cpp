@@ -181,7 +181,7 @@ int main() {
         std::vector<Eigen::Vector3d> FR_contact_position, FL_contact_position, RL_contact_position,
             RR_contact_position;
         double log_timestamp = timestamps[0][0];
-
+        auto start = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < timestamps.size(); ++i) {
             double timestamp = timestamps[i][0];
 
@@ -344,6 +344,10 @@ int main() {
             b_wy.push_back(angVelBias.y());
             b_wz.push_back(angVelBias.z());
         }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        std::cout << "Time taken by for loop: " << duration.count() << " microseconds" << std::endl;
+
         // Write structured data to HDF5
         H5::H5File outputFile(OUTPUT_FILE, H5F_ACC_TRUNC);  // Create the output file
 
