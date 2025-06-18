@@ -53,7 +53,7 @@ void DataManager::loadConfig() {
     timestamps_dataset_ = config_["Dataset"]["timestamps"];
     feet_force_dataset_ = config_["Dataset"]["feet_force"].get<std::vector<std::string>>();
 
-    robot_frame_config_ = getSerowPath() + "serow_hypertuner/config/robots/" + getRobotName() + ".json";
+    robot_frame_config_ = getSerowPath() + "serow_hypertuner/config/robots/" + getRobotName() + "_frames.json";
     
     try {
         std::ifstream file(robot_frame_config_);
