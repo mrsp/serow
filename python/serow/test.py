@@ -36,43 +36,45 @@ class InvalidSampleRemover(BaseCallback):
     
     def __init__(self, verbose=0):
         super().__init__(verbose)
-        self.valid_buffer_data = []
+        self.valid_steps = []  # Track valid steps during rollout collection
         self.filtered_count = 0
         self.total_count = 0
+        self.num_envs = None  # Will be set during first step
         
     def _on_step(self) -> bool:
-        """Collect only valid samples for training."""
+        """Track valid steps during rollout collection."""
         try:
             infos = self.locals.get('infos', [])
-            obs = self.locals.get('new_obs', [])
-            actions = self.locals.get('actions', [])
-            rewards = self.locals.get('rewards', [])
-            dones = self.locals.get('dones', [])
             
-            # Only store valid transitions
+            # Set number of environments on first step
+            if self.num_envs is None:
+                self.num_envs = len(infos)
+                if self.verbose >= 1:
+                    print(f"Detected {self.num_envs} environments")
+            
+            # Track valid steps for each environment
             for env_idx, info in enumerate(infos):
                 self.total_count += 1
+                is_valid = info.get('valid_step', True)
+                self.valid_steps.append(is_valid)
                 
-                if info.get('valid_step', True):
-                    # This is a valid sample, keep it
-                    valid_data = {
-                        'obs': obs[env_idx] if env_idx < len(obs) else None,
-                        'action': actions[env_idx] if env_idx < len(actions) else None,
-                        'reward': rewards[env_idx] if env_idx < len(rewards) else None,
-                        'done': dones[env_idx] if env_idx < len(dones) else None,
-                        'info': info
-                    }
-                    self.valid_buffer_data.append(valid_data)
-                else:
-                    # Invalid sample, skip it
+                if not is_valid:
                     self.filtered_count += 1
                     if self.verbose >= 1:
                         reason = info.get('invalid_reason', 'unknown')
-                        print(f"Skipping invalid sample: env {env_idx}, reason: {reason}")
+                        print(f"Invalid sample detected: env {env_idx}, reason: {reason}")
+            
+            if self.verbose >= 2:
+                print(f"Step tracking: total={self.total_count}, filtered={self.filtered_count}, valid_steps={len(self.valid_steps)}")
             
         except Exception as e:
             if self.verbose >= 1:
-                warnings.warn(f"Error in sample collection: {e}")
+                warnings.warn(f"Error in sample tracking: {e}")
+            # Add valid steps for all environments by default to prevent buffer issues
+            if self.num_envs is not None:
+                self.valid_steps.extend([True] * self.num_envs)
+            else:
+                self.valid_steps.append(True)
         
         return True
 
@@ -82,36 +84,86 @@ class InvalidSampleRemover(BaseCallback):
             # Get the rollout buffer from the model
             rollout_buffer = self.model.rollout_buffer
             
-            # Create masks for valid samples
-            valid_mask = np.array([info.get('valid_step', True) for info in self.locals.get('infos', [])])
+            # Check if we have any valid steps tracked
+            if not self.valid_steps:
+                if self.verbose >= 1:
+                    print("No valid steps tracked, resetting buffer")
+                rollout_buffer.reset()
+                return
             
+            # Convert to numpy array for easier manipulation
+            valid_mask = np.array(self.valid_steps, dtype=bool)
+            print(f"Valid mask: {valid_mask}, Total steps: {len(valid_mask)}, Valid steps: {np.sum(valid_mask)}")
+
+            # Check if we have any valid samples
+            if not np.any(valid_mask):
+                rollout_buffer.reset()
+                if self.verbose >= 1:
+                    print("No valid samples found, resetting buffer")
+                return
+
+            # Check if we have enough valid samples for training (minimum batch size)
+            min_valid_samples = 32  # Minimum samples needed for training
+            if np.sum(valid_mask) < min_valid_samples:
+                if self.verbose >= 1:
+                    print(f"Not enough valid samples ({np.sum(valid_mask)}) for training (minimum {min_valid_samples}), resetting buffer")
+                rollout_buffer.reset()
+                return
+
+            # Verify buffer size matches our tracking
+            expected_buffer_size = len(valid_mask)
+            actual_buffer_size = rollout_buffer.size()
+            
+            if actual_buffer_size != expected_buffer_size:
+                if self.verbose >= 1:
+                    print(f"Buffer size mismatch: expected {expected_buffer_size}, got {actual_buffer_size}")
+                    print("Resetting buffer to prevent corruption")
+                rollout_buffer.reset()
+                return
+
             # Filter out invalid samples from the buffer
-            if hasattr(rollout_buffer, 'observations'):
+            # Note: rollout_buffer data is stored as numpy arrays
+            if hasattr(rollout_buffer, 'observations') and rollout_buffer.observations is not None:
                 rollout_buffer.observations = rollout_buffer.observations[valid_mask]
-            if hasattr(rollout_buffer, 'actions'):
+            if hasattr(rollout_buffer, 'actions') and rollout_buffer.actions is not None:
                 rollout_buffer.actions = rollout_buffer.actions[valid_mask]
-            if hasattr(rollout_buffer, 'rewards'):
+            if hasattr(rollout_buffer, 'rewards') and rollout_buffer.rewards is not None:
                 rollout_buffer.rewards = rollout_buffer.rewards[valid_mask]
-            if hasattr(rollout_buffer, 'dones'):
+            if hasattr(rollout_buffer, 'dones') and rollout_buffer.dones is not None:
                 rollout_buffer.dones = rollout_buffer.dones[valid_mask]
-            if hasattr(rollout_buffer, 'values'):
+            if hasattr(rollout_buffer, 'values') and rollout_buffer.values is not None:
                 rollout_buffer.values = rollout_buffer.values[valid_mask]
-            if hasattr(rollout_buffer, 'log_probs'):
+            if hasattr(rollout_buffer, 'log_probs') and rollout_buffer.log_probs is not None:
                 rollout_buffer.log_probs = rollout_buffer.log_probs[valid_mask]
-            if hasattr(rollout_buffer, 'advantages'):
+            if hasattr(rollout_buffer, 'advantages') and rollout_buffer.advantages is not None:
                 rollout_buffer.advantages = rollout_buffer.advantages[valid_mask]
+            
+            # Update buffer size and ensure it's consistent
+            new_size = np.sum(valid_mask)
+            rollout_buffer.buffer_size = new_size
+            
+            # Update the buffer's internal size tracking
+            if hasattr(rollout_buffer, '_size'):
+                rollout_buffer._size = new_size
             
             if self.verbose >= 1:
                 print(f"Filtered {len(valid_mask) - np.sum(valid_mask)} invalid samples from rollout buffer")
+                print(f"Buffer size after filtering: {rollout_buffer.buffer_size}")
+            
+            # Reset tracking for next rollout
+            self.valid_steps = []
                 
         except Exception as e:
             if self.verbose >= 1:
                 warnings.warn(f"Error in filtering rollout buffer: {e}")
+                import traceback
+                traceback.print_exc()
+            # Reset tracking on error
+            self.valid_steps = []
 
 class CustomNetwork(nn.Module):
     """
-    Custom network for policy and value function that replicates the Actor and Critic from train_ppo.py.
-    It receives as input the features extracted by the features extractor.
+    Custom network for policy and value function.
     """
     def __init__(self, feature_dim: int, last_layer_dim_pi: int = 6, last_layer_dim_vf: int = 1):
         super().__init__()
@@ -120,28 +172,28 @@ class CustomNetwork(nn.Module):
         self.latent_dim_pi = last_layer_dim_pi
         self.latent_dim_vf = last_layer_dim_vf
         
-        # Action transformation parameters (from train_ppo.py)
+        # Action transformation parameters
         self.n_variances = 3
         self.n_correlations = 3
-        self.min_var = 1e-10  # Default min_action from your code
+        self.min_var = 1e-10
         
-        # Actor (Policy) network - replicating from train_ppo.py
+        # Actor (Policy) network
         self.actor_layer1 = nn.Linear(feature_dim, 64)
         self.actor_layer2 = nn.Linear(64, 64)
         self.actor_layer3 = nn.Linear(64, 32)
         self.actor_mean_layer = nn.Linear(32, last_layer_dim_pi)
         self.actor_log_std_layer = nn.Linear(32, last_layer_dim_pi)
         
-        # Critic (Value) network - replicating from train_ppo.py
+        # Critic (Value) network
         self.critic_layer1 = nn.Linear(feature_dim, 128)
         self.critic_layer2 = nn.Linear(128, 128)
         self.critic_value_layer = nn.Linear(128, last_layer_dim_vf)
         
-        # Initialize weights like in train_ppo.py
+        # Initialize weights
         self._init_weights()
     
     def _init_weights(self):
-        """Initialize network weights for PPO like in train_ppo.py"""
+        """Initialize network weights for PPO."""
         # Actor weights
         for layer in [self.actor_layer1, self.actor_layer2, self.actor_layer3]:
             nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
@@ -151,7 +203,7 @@ class CustomNetwork(nn.Module):
         nn.init.orthogonal_(self.actor_mean_layer.weight, gain=0.01)
         nn.init.constant_(self.actor_mean_layer.bias, 0.0)
         nn.init.orthogonal_(self.actor_log_std_layer.weight, gain=0.01)
-        nn.init.constant_(self.actor_log_std_layer.bias, -1.0)  # Start with small std
+        nn.init.constant_(self.actor_log_std_layer.bias, -1.0)
         
         # Critic weights
         nn.init.orthogonal_(self.critic_layer1.weight, gain=np.sqrt(2))
@@ -163,18 +215,18 @@ class CustomNetwork(nn.Module):
         nn.init.constant_(self.critic_value_layer.bias, 0.0)
 
     def forward_actor(self, features: th.Tensor) -> th.Tensor:
-        """Forward pass for actor network with tanh activation like in train_ppo.py"""
+        """Forward pass for actor network."""
         x = th.tanh(self.actor_layer1(features))
         x = th.tanh(self.actor_layer2(x))
         x = th.tanh(self.actor_layer3(x))
         
         mean = self.actor_mean_layer(x)
-        log_std = self.actor_log_std_layer(x).clamp(-20, 2)  # Constrain log_std
+        log_std = self.actor_log_std_layer(x).clamp(-20, 2)
         
         return th.cat([mean, log_std], dim=-1)
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
-        """Forward pass for critic network with ReLU activation like in train_ppo.py"""
+        """Forward pass for critic network."""
         x = self.critic_layer1(features)
         x = th.relu(x)
         x = self.critic_layer2(x)
@@ -182,16 +234,18 @@ class CustomNetwork(nn.Module):
         return self.critic_value_layer(x)
 
     def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor]:
-        """Forward pass returning both actor and critic outputs"""
+        """Forward pass returning both actor and critic outputs."""
         return self.forward_actor(features), self.forward_critic(features)
 
 class CustomActorCriticPolicy(ActorCriticPolicy):
+    """Custom Actor-Critic policy with action transformations."""
+    
     def __init__(
         self,
         observation_space: gym.spaces.Space,
         action_space: gym.spaces.Space,
         lr_schedule: Callable[[float], float],
-        net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None, # Not used in this custom example
+        net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
         activation_fn: Type[nn.Module] = nn.Tanh,
         *args,
         **kwargs,
@@ -200,147 +254,69 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
             observation_space,
             action_space,
             lr_schedule,
-            net_arch, # Pass the default net_arch, but we'll override mlp_extractor
+            net_arch,
             activation_fn,
             *args,
             **kwargs,
         )
 
-
     def _build_mlp_extractor(self) -> None:
-        """
-        Create the policy and value networks.
-        Part of the `_build` method.
-        """
+        """Create the policy and value networks."""
         self.mlp_extractor = CustomNetwork(self.features_dim)
 
-    def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
-        """
-        Forward pass in the neural network to predict the next action.
-        """
-        # Extract features
-        features = self.extract_features(obs)
+    def _get_action_dist_from_latent(self, latent_pi: th.Tensor) -> th.distributions.Distribution:
+        """Get action distribution from latent representation."""
+        # Split the actor output into mean and log_std
+        mean, log_std = th.chunk(latent_pi, 2, dim=-1)
+        std = log_std.exp()
         
-        # Get actor and critic outputs
+        # Create normal distribution
+        return th.distributions.Normal(mean, std)
+
+    def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
+        """Forward pass to predict actions."""
+        features = self.extract_features(obs)
         latent_pi, latent_vf = self.mlp_extractor(features)
         
-        # Get the value function output
-        values = self.value_net(latent_vf)
+        # Get distribution
+        distribution = self._get_action_dist_from_latent(latent_pi)
         
-        # Get the distribution and sample actions
-        distribution = self.get_distribution(obs)
-        actions = distribution.sample()
-        log_prob = distribution.log_prob(actions)
+        # Sample actions
+        if deterministic:
+            actions = distribution.mean
+        else:
+            actions = distribution.sample()
+        
+        # Apply transformations
+        actions = self._transform_actions(actions)
+        
+        # Get log probabilities (need to account for transformation)
+        log_prob = distribution.log_prob(actions).sum(dim=-1)
+        
+        # Get values
+        values = self.value_net(latent_vf)
         
         return actions, values, log_prob
 
-    def get_distribution(self, obs: th.Tensor) -> th.distributions.Distribution:
-        """
-        Get the current policy distribution given the observations.
-        Override to handle action transformations like in train_ppo.py.
-        """
-        # Extract features
-        features = self.extract_features(obs)
-        
-        # Get actor output
-        latent_pi, _ = self.mlp_extractor(features)
-        
-        # Split the actor output into mean and log_std
-        mean, log_std = th.chunk(latent_pi, 2, dim=-1)
-        
-        # Create the base distribution
-        std = log_std.exp()
-        base_distribution = th.distributions.Normal(mean, std)
-        
-        # Create a custom distribution that applies the transformations
-        class TransformedDistribution(th.distributions.Distribution):
-            def __init__(self, base_dist, n_variances, n_correlations, min_var):
-                super().__init__()
-                self.base_dist = base_dist
-                self.n_variances = n_variances
-                self.n_correlations = n_correlations
-                self.min_var = min_var
-            
-            def sample(self, sample_shape=th.Size()):
-                # Sample from base distribution
-                raw_samples = self.base_dist.sample(sample_shape)
-                
-                # Apply transformations
-                variances = th.nn.functional.softplus(raw_samples[..., :self.n_variances]) + self.min_var
-                correlations = th.tanh(raw_samples[..., self.n_variances:])
-                transformed_samples = th.cat((variances, correlations), dim=-1)
-                
-                return transformed_samples
-            
-            def log_prob(self, value):
-                # Transform back to raw space
-                action_variances = value[..., :self.n_variances]
-                action_correlations = value[..., self.n_variances:]
-                
-                raw_variances = th.log(action_variances - self.min_var)
-                raw_correlations = th.atanh(action_correlations)
-                raw_value = th.cat([raw_variances, raw_correlations], dim=-1)
-                
-                # Get base log probability
-                log_prob = self.base_dist.log_prob(raw_value).sum(dim=-1)
-                
-                # Apply jacobian correction
-                var_jacobian = th.sigmoid(raw_value[..., :self.n_variances])
-                corr_jacobian = 1 - th.tanh(raw_value[..., self.n_variances:])**2
-                jacobian = th.cat([var_jacobian, corr_jacobian], dim=-1)
-                
-                log_prob = log_prob - th.log(jacobian).sum(dim=-1)
-                return log_prob
-            
-            def entropy(self):
-                return self.base_dist.entropy().sum(dim=-1)
-        
-        return TransformedDistribution(
-            base_distribution, 
-            self.mlp_extractor.n_variances, 
-            self.mlp_extractor.n_correlations, 
-            self.mlp_extractor.min_var
-        )
+    def _transform_actions(self, raw_actions: th.Tensor) -> th.Tensor:
+        """Transform raw actions using softplus and tanh."""
+        variances = th.nn.functional.softplus(raw_actions[..., :3]) + 1e-10
+        correlations = th.tanh(raw_actions[..., 3:])
+        return th.cat([variances, correlations], dim=-1)
 
     def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
-        """
-        Evaluate actions according to the current policy,
-        given the observations.
-        Override to handle action transformations like in train_ppo.py.
-        """
-        # Extract features
+        """Evaluate actions according to the current policy."""
         features = self.extract_features(obs)
-        
-        # Get actor and critic outputs
         latent_pi, latent_vf = self.mlp_extractor(features)
         
-        # Split the actor output into mean and log_std
-        mean, log_std = th.chunk(latent_pi, 2, dim=-1)
+        # Get distribution
+        distribution = self._get_action_dist_from_latent(latent_pi)
         
-        # Transform actions back to raw space (inverse of the transformation)
-        # Split actions into variances and correlations
-        action_variances = actions[..., :self.mlp_extractor.n_variances]
-        action_correlations = actions[..., self.mlp_extractor.n_variances:]
+        # Inverse transform actions to get raw actions
+        raw_actions = self._inverse_transform_actions(actions)
         
-        # Inverse transformations
-        raw_variances = th.log(action_variances - self.mlp_extractor.min_var)  # inverse of softplus
-        raw_correlations = th.atanh(action_correlations)  # inverse of tanh
-        raw_actions = th.cat([raw_variances, raw_correlations], dim=-1)
-        
-        # Create distribution with raw parameters
-        std = log_std.exp()
-        distribution = th.distributions.Normal(mean, std)
-        
-        # Compute log probabilities with change of variables
-        log_probs = distribution.log_prob(raw_actions).sum(dim=-1)
-        
-        # Compute jacobian for the transformation
-        var_jacobian = th.sigmoid(raw_actions[..., :self.mlp_extractor.n_variances])
-        corr_jacobian = 1 - th.tanh(raw_actions[..., self.mlp_extractor.n_variances:])**2
-        jacobian = th.cat([var_jacobian, corr_jacobian], dim=-1)
-        
-        # Apply jacobian correction
-        log_probs = log_probs - th.log(jacobian).sum(dim=-1)
+        # Get log probabilities
+        log_prob = distribution.log_prob(raw_actions).sum(dim=-1)
         
         # Get values
         values = self.value_net(latent_vf)
@@ -348,16 +324,31 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         # Get entropy
         entropy = distribution.entropy().sum(dim=-1)
         
-        return values, log_probs, entropy
+        return values, log_prob, entropy
+
+    def _inverse_transform_actions(self, actions: th.Tensor) -> th.Tensor:
+        """Inverse transform actions."""
+        variances = actions[..., :3]
+        correlations = actions[..., 3:]
+        
+        # Inverse transformations
+        raw_variances = th.log(th.clamp(variances - 1e-10, min=1e-10))
+        raw_correlations = th.atanh(th.clamp(correlations, min=-0.999, max=0.999))
+        
+        return th.cat([raw_variances, raw_correlations], dim=-1)
 
 class SerowEnv(gym.Env):
+    """SEROW Gymnasium environment for reinforcement learning."""
+    
     def __init__(self, robot, initial_state, contact_frame, state_dim, action_dim, measurements, action_bounds=None):
         super().__init__()
+        
+        # Initialize SEROW framework
         self.serow_framework = serow.Serow()
         self.robot = robot
         self.serow_framework.initialize(f"{self.robot}_rl.json")
 
-        # Initial state
+        # Set up initial state
         self.initial_state = self.serow_framework.get_state(allow_invalid=True)
         self.initial_state.set_joint_state(initial_state['joint_state'])
         self.initial_state.set_base_state(initial_state['base_state'])  
@@ -366,105 +357,101 @@ class SerowEnv(gym.Env):
 
         # Contact frames
         self.contact_frames = self.initial_state.get_contacts_frame()
+        self.cf = contact_frame if contact_frame in self.contact_frames else self.contact_frames[0]
 
-        # Action and state dimensions
+        # Dimensions
         self.action_dim = action_dim
         self.state_dim = state_dim
-
-        # Contact frame to control 
-        self.cf = contact_frame if contact_frame in self.contact_frames else self.contact_frames[0]
 
         # Measurements
         self.imu_measurements = measurements['imu']
         self.joint_measurements = measurements['joints']
         self.force_torque_measurements = measurements['ft']
         self.base_pose_ground_truth = measurements['base_pose_ground_truth']
+        
+        # Episode tracking
         self.step_count = 0
         self.max_steps = len(self.imu_measurements) - 1
         
-        # Define action and observation spaces (REQUIRED for SB3)
+        # Define action and observation spaces
         if action_bounds is None:
-            # Default action bounds - using reasonable finite values
-            action_bounds = gym.spaces.Box(low=-np.ones(action_dim) * 10.0, 
-                                       high=np.ones(action_dim) * 10.0, shape=(action_dim,), 
-                                       dtype=np.float64)
+            action_bounds = gym.spaces.Box(
+                low=np.array([1e-10, 1e-10, 1e-10, -1.0, -1.0, -1.0]), 
+                high=np.array([10.0, 10.0, 10.0, 1.0, 1.0, 1.0]), 
+                shape=(action_dim,), 
+                dtype=np.float32
+            )
         
-        self.action_space = gym.spaces.Box(
-            low=action_bounds.low, 
-            high=action_bounds.high, 
-            shape=(action_dim,), 
-            dtype=np.float64
-        )
-        
-        # Observation space - adjust bounds based on your state space
-        # Using conservative bounds - you should adjust these based on your actual state ranges
+        self.action_space = action_bounds
         self.observation_space = gym.spaces.Box(
             low=-np.inf, 
             high=np.inf, 
             shape=(state_dim,), 
-            dtype=np.float64
+            dtype=np.float32
         )
         
-        self.render_mode = None
-        self.screen = None
-        self.clock = None
-        self.isopen = True
+        # State tracking
+        self.kin = None
         self.state = None
 
     def _compute_reward(self, state, gt, step, max_steps):
-        reward = 0.0
-        done = False
-        truncated = False
-
+        """Compute reward based on state estimation accuracy."""
         try:
             # Position error
             position_error = state.get_base_position() - gt.position
             # Orientation error
-            orientation_error = logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
-                                       @ quaternion_to_rotation_matrix(state.get_base_orientation()))
+            orientation_error = logMap(
+                quaternion_to_rotation_matrix(gt.orientation).transpose() 
+                @ quaternion_to_rotation_matrix(state.get_base_orientation())
+            )
                 
-            if (np.linalg.norm(position_error) > 0.5 or np.linalg.norm(orientation_error) > 0.2):
-                done = True  
-                reward = -1.0  # Small negative reward instead of 0 for failed episodes
-            else:
-                done = False
-                reward = (step + 1) / max_steps
-                    
-                position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-8
-                position_error = position_error.dot(np.linalg.inv(position_error_cov).dot(position_error))
-                alpha_pos = 800.0
-                position_reward = np.exp(-alpha_pos * position_error)
-                reward += position_reward
-
-                orientation_error_cov = state.get_base_orientation_cov() + np.eye(3) * 1e-8
-                orientation_error = orientation_error.dot(np.linalg.inv(orientation_error_cov).dot(orientation_error))
-                alpha_ori = 600.0
-                orientation_reward = np.exp(-alpha_ori * orientation_error)
-                reward += orientation_reward
-
-                # Normalize the reward
-                reward /= 3.0
-                
+            # Check for failure conditions
+            if (np.linalg.norm(position_error) > 0.5 or 
+                np.linalg.norm(orientation_error) > 0.2):
+                return -1.0, True, False
+            
+            # Base survival reward
+            reward = (step + 1) / max_steps
+            
+            # Position accuracy reward
+            position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-8
+            position_error_weighted = position_error.T @ np.linalg.inv(position_error_cov) @ position_error
+            position_reward = np.exp(-800.0 * position_error_weighted)
+            
+            # Orientation accuracy reward
+            orientation_error_cov = state.get_base_orientation_cov() + np.eye(3) * 1e-8
+            orientation_error_weighted = orientation_error.T @ np.linalg.inv(orientation_error_cov) @ orientation_error
+            orientation_reward = np.exp(-600.0 * orientation_error_weighted)
+            
+            # Combine rewards
+            total_reward = (reward + position_reward + orientation_reward) / 3.0
+            
+            # Check for episode termination
+            done = False
+            truncated = (step + 1 >= int(0.85 * max_steps))
+            
+            return float(total_reward), done, truncated
+            
         except Exception as e:
-            # If reward computation fails, return safe defaults
             print(f"Warning: Reward computation failed: {e}")
-            done = True
-
-        if step + 1 == max_steps:
-            truncated = True
-            done = False  # Don't set done=True when truncated=True
-
-        return float(reward), done, truncated    
+            return -1.0, True, False
 
     def _compute_state(self, state, kin):
-        R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
-        local_pos = R_base @ (state.get_contact_position(self.cf) - state.get_base_position())   
-        local_kin_pos = kin.contacts_position[self.cf]
-        local_vel = state.get_base_linear_velocity()  
-        return np.concatenate((local_pos - local_kin_pos, local_vel, 
-                               np.array([kin.contacts_probability[self.cf]])), axis=0)
+        """Compute the observation state."""
+        try:
+            R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
+            local_pos = R_base @ (state.get_contact_position(self.cf) - state.get_base_position())   
+            local_kin_pos = kin.contacts_position[self.cf]
+            local_vel = state.get_base_linear_velocity()
+            contact_prob = np.array([kin.contacts_probability[self.cf]])
+            
+            return np.concatenate([local_pos - local_kin_pos, local_vel, contact_prob], axis=0)
+        except Exception as e:
+            print(f"Warning: State computation failed: {e}")
+            return np.zeros(self.state_dim)
 
     def _predict_step(self, imu, joint, ft):
+        """Predict the environment state."""
         # Process the measurements
         imu, kin, ft = self.serow_framework.process_measurements(imu, joint, ft, None)
 
@@ -476,6 +463,7 @@ class SerowEnv(gym.Env):
         return kin, state
 
     def _update_step(self, cf, kin, action, gt, step, max_steps):
+        """Update the environment state with the action."""
         self.serow_framework.set_action(cf, action)
 
         # Run the update step with the contact position
@@ -489,36 +477,44 @@ class SerowEnv(gym.Env):
         return state, reward, done, truncated
 
     def _finish_update(self, imu, kin):
+        """Finish the update step."""
         self.serow_framework.base_estimator_finish_update(imu, kin)
     
     def _get_measurements(self, step):
+        """Get the measurements for the current step."""
         return (self.imu_measurements[step], 
                 self.joint_measurements[step], 
                 self.force_torque_measurements[step], 
                 self.base_pose_ground_truth[step])
     
     def pre_step(self):
-        # Get the current measurements
+        """Prepare the environment state before action execution."""
+        # Get measurements
         imu, joint, ft, gt = self._get_measurements(self.step_count)
-
-        # Predict the SEROW state
+        
+        # Predict state
         kin, prior_state = self._predict_step(imu, joint, ft)
-
-        # Update the state for the rest of the contact frames
+        
+        # Update other contact frames
         post_state = prior_state
-        state = np.zeros(self.state_dim)
         for cf in self.contact_frames:
             if (cf != self.cf and 
                 post_state.get_contact_position(cf) is not None and 
                 kin.contacts_status[cf]):
                 try:
                     post_state, _, _, _ = self._update_step(
-                        cf, kin, np.zeros(self.action_dim), gt, self.step_count, self.max_steps)
-                    if post_state.get_contact_position(self.cf) is not None and kin.contacts_status[self.cf]:
-                        state = self._compute_state(post_state, kin)
+                        cf, kin, np.zeros(self.action_dim), gt, self.step_count, self.max_steps
+                    )
                 except Exception as e:
-                    print(f"Warning: Update step failed for contact frame {cf}: {e}")
-
+                    print(f"Warning: Update failed for {cf}: {e}")
+        
+        # Compute state
+        if (post_state.get_contact_position(self.cf) is not None and 
+            kin.contacts_status[self.cf]):
+            state = self._compute_state(post_state, kin)
+        else:
+            state = np.zeros(self.state_dim, dtype=np.float64)
+        
         self.kin = kin
         return state
 
@@ -535,13 +531,13 @@ class SerowEnv(gym.Env):
         
         # Initialize tracking variables
         reward = 0.0
-        state = np.zeros(self.state_dim)
+        state = np.zeros(self.state_dim, dtype=np.float64)
         done = False
         truncated = False
         valid_step = True
         invalid_reason = "valid"
         
-        # Update the state for the actionable contact frame
+        # Execute the action
         if (post_state.get_contact_position(self.cf) is not None and 
             kin.contacts_status[self.cf]):
             try:
@@ -564,10 +560,7 @@ class SerowEnv(gym.Env):
             "step": self.step_count, 
             "contact_active": kin.contacts_status[self.cf],
             "valid_step": valid_step,
-            "invalid_reason": invalid_reason,
-            "reward": reward,  # Store original reward value
-            "state_available": state is not None,
-            "fallback_used": not valid_step
+            "invalid_reason": invalid_reason
         }
 
         # Update the step count
@@ -581,11 +574,16 @@ class SerowEnv(gym.Env):
         return state, reward, done, truncated, info
     
     def reset(self, *, seed=None, options=None):
+        """Reset the environment."""
         super().reset(seed=seed)
+
+        # Reinitialize SEROW 
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{self.robot}_rl.json")
         self.serow_framework.set_state(self.initial_state)
         self.step_count = 0
+
+        # Take steps till the state is valid
         reward = None
         while reward is None:
            self.pre_step()
@@ -593,15 +591,16 @@ class SerowEnv(gym.Env):
         return state, {}
     
     def render(self, mode='human'):
-        # Implement rendering if needed
+        """Render the environment (placeholder)."""
         pass
     
     def close(self):
-        if self.screen is not None:
-            self.screen = None
-        self.isopen = False
+       """Close the environment."""
+       pass
 
 class SerowVecEnv(DummyVecEnv):
+    """Vectorized environment wrapper for SEROW environments."""
+
     def __init__(self, env_fns):
         super().__init__(env_fns)
 
@@ -610,12 +609,15 @@ class SerowVecEnv(DummyVecEnv):
         for env in self.envs:
             obs = env.pre_step()
             observations.append(obs)
-        return observations
+        return np.array(observations)
 
 class CustomPPO(PPO):
     """
     Custom PPO that handles invalid states and custom rollout collection.
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def collect_rollouts(
         self,
         env: VecEnv,
@@ -649,12 +651,22 @@ class CustomPPO(PPO):
                 last_obs = np.array(last_obs)
                 action, value, log_prob = self.policy(obs_as_tensor(last_obs, self.device))
                 action = action.detach().cpu().numpy()
-                value = value.detach().cpu().numpy()
-                log_prob = log_prob.detach().cpu().numpy()
-                    
 
-            # Convert to numpy arrays
+            # Step the environment
             new_obs, rewards, dones, infos = env.step(action)
+            
+            # Update callback with current step data
+            callback.locals.update({
+                'new_obs': new_obs,
+                'rewards': rewards,
+                'dones': dones,
+                'infos': infos,
+                'actions': action,
+                'values': value,
+                'log_probs': log_prob
+            })
+            
+            # Add to rollout buffer
             rollout_buffer.add(
                 new_obs,
                 action,
@@ -663,21 +675,24 @@ class CustomPPO(PPO):
                 value,
                 log_prob,
             )
-
-            # Update callback
-            callback.update_locals(locals(), verbose=self.verbose)
+            
             if callback.on_step() is False:
                 return False
             
-            n_steps += len(new_obs)  
+            n_steps += env.num_envs  # Count steps per environment
+            print(f"Collected {n_steps}/{n_rollout_steps} steps, buffer size: {rollout_buffer.size()}")
             
-            # Early termination if all environments are done
+            # Handle environment resets
             if dones.any():
                 # Get indices of done environments
                 done_indices = np.where(dones)[0]
                 # Reset those environments
                 for done_idx in done_indices:
-                    self._last_obs[done_idx] = env.reset()[0][done_idx]
+                    try:
+                        reset_obs = env.reset()[0][done_idx]
+                        self._last_obs[done_idx] = reset_obs
+                    except Exception as e:
+                        print(f"Warning: Failed to reset environment {done_idx}: {e}")
         
         # Compute value for the last timestep
         with th.no_grad():
@@ -688,10 +703,34 @@ class CustomPPO(PPO):
         
         callback.on_rollout_end()
         
+        # Check if buffer is empty after filtering
+        if rollout_buffer.size() == 0:
+            print("Warning: Rollout buffer is empty after filtering. Skipping this training iteration.")
+            return False
+        
+        # Additional safety check: ensure buffer has enough data
+        if rollout_buffer.size() < 32:
+            print(f"Warning: Rollout buffer too small ({rollout_buffer.size()}) after filtering. Skipping this training iteration.")
+            return False
+        
+        print(f"Rollout collection completed. Final buffer size: {rollout_buffer.size()}")
         return True
+
+    def train(self) -> None:
+        """
+        Override train method to handle empty buffers gracefully.
+        """
+        # Check if we have enough data to train
+        if self.rollout_buffer.size() == 0:
+            print("Warning: No data in rollout buffer, skipping training step")
+            return
+        
+        # Call parent train method
+        super().train()
 
 if __name__ == "__main__":
     # Load and preprocess the data
+    print("Loading measurements...")
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
@@ -720,12 +759,17 @@ if __name__ == "__main__":
         'contact_state': contact_states[0]
     }
 
+    print("Creating environments...")
     # Create environments
     env_fns = [
-        lambda: SerowEnv(robot=robot, initial_state=initial_state, contact_frame="FL_foot", state_dim=state_dim, action_dim=action_dim, measurements=measurements),
-        lambda: SerowEnv(robot=robot, initial_state=initial_state, contact_frame="FR_foot", state_dim=state_dim, action_dim=action_dim, measurements=measurements),
-        lambda: SerowEnv(robot=robot, initial_state=initial_state, contact_frame="RL_foot", state_dim=state_dim, action_dim=action_dim, measurements=measurements),
-        lambda: SerowEnv(robot=robot, initial_state=initial_state, contact_frame="RR_foot", state_dim=state_dim, action_dim=action_dim, measurements=measurements)
+        lambda cf=cf: SerowEnv(
+            robot=robot, 
+            initial_state=initial_state, 
+            contact_frame=cf, 
+            state_dim=state_dim, 
+            action_dim=action_dim, 
+            measurements=measurements
+        ) for cf in ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]
     ]
     vec_env = SerowVecEnv(env_fns)
     
@@ -736,7 +780,23 @@ if __name__ == "__main__":
     callbacks = [filter_callback]
 
     # Instantiate the custom PPO with custom rollout collection
-    model = CustomPPO(CustomActorCriticPolicy, vec_env, device='cpu', verbose=1)
-
+    model = CustomPPO(
+        CustomActorCriticPolicy, 
+        vec_env, 
+        device='cpu', 
+        verbose=1,
+        learning_rate=3e-4,
+        n_steps=2048,
+        batch_size=64,
+        n_epochs=10,
+        gamma=0.99,
+        gae_lambda=0.95,
+        clip_range=0.2,
+        ent_coef=0.01,
+        vf_coef=0.5,
+        max_grad_norm=0.5
+    )
     # Train the model with custom callbacks
     model.learn(total_timesteps=100000, callback=callbacks)
+    print("Training completed!")
+    model.save("serow_ppo_model")
