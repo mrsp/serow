@@ -30,136 +30,293 @@ from utils import(
 
 class InvalidSampleRemover(BaseCallback):
     """
-    This version maintains separate valid/invalid buffers and only trains on valid data.
-    More aggressive but ensures no invalid data is used for training.
+    Callback that removes invalid samples from the PPO rollout buffer before training.
+    This ensures that only valid data is used for policy updates.
     """
     
     def __init__(self, verbose=0):
         super().__init__(verbose)
-        self.valid_steps = []  # Track valid steps during rollout collection
+        self.valid_indices = []  # Track valid sample indices
+        self.current_step = 0
         self.filtered_count = 0
         self.total_count = 0
-        self.num_envs = None  # Will be set during first step
         
+    def _on_training_start(self) -> None:
+        """Called when training starts."""
+        if self.verbose >= 1:
+            print("InvalidSampleRemover callback initialized")
+    
     def _on_step(self) -> bool:
-        """Track valid steps during rollout collection."""
+        """Called after each environment step during rollout collection."""
         try:
+            # Get the current step information
             infos = self.locals.get('infos', [])
             
-            # Set number of environments on first step
-            if self.num_envs is None:
-                self.num_envs = len(infos)
-                if self.verbose >= 1:
-                    print(f"Detected {self.num_envs} environments")
-            
-            # Track valid steps for each environment
+            # Process each environment's info
             for env_idx, info in enumerate(infos):
                 self.total_count += 1
                 is_valid = info.get('valid_step', True)
-                self.valid_steps.append(is_valid)
                 
-                if not is_valid:
+                if is_valid:
+                    # Store the global index of this valid sample
+                    global_idx = self.current_step * len(infos) + env_idx
+                    self.valid_indices.append(global_idx)
+                else:
                     self.filtered_count += 1
                     if self.verbose >= 1:
                         reason = info.get('invalid_reason', 'unknown')
-                        print(f"Invalid sample detected: env {env_idx}, reason: {reason}")
+                        print(f"Invalid sample detected: step {self.current_step}, env {env_idx}, reason: {reason}")
             
-            if self.verbose >= 2:
-                print(f"Step tracking: total={self.total_count}, filtered={self.filtered_count}, valid_steps={len(self.valid_steps)}")
+            self.current_step += 1
+            
+            if self.verbose >= 2 and self.total_count % 100 == 0:
+                print(f"Step tracking: total={self.total_count}, filtered={self.filtered_count}, valid={len(self.valid_indices)}")
             
         except Exception as e:
             if self.verbose >= 1:
                 warnings.warn(f"Error in sample tracking: {e}")
-            # Add valid steps for all environments by default to prevent buffer issues
-            if self.num_envs is not None:
-                self.valid_steps.extend([True] * self.num_envs)
-            else:
-                self.valid_steps.append(True)
+            # On error, assume all samples in this step are valid to prevent buffer corruption
+            infos = self.locals.get('infos', [])
+            for env_idx in range(len(infos)):
+                global_idx = self.current_step * len(infos) + env_idx
+                self.valid_indices.append(global_idx)
+            self.current_step += 1
         
         return True
 
     def _on_rollout_end(self) -> None:
-        """Called at the end of each rollout to filter out invalid samples from PPO's buffer."""
+        """Called at the end of rollout collection to filter the buffer."""
         try:
-            # Get the rollout buffer from the model
+            if self.verbose >= 1:
+                print(f"Rollout ended. Total samples: {self.total_count}, Valid samples: {len(self.valid_indices)}, Filtered: {self.filtered_count}")
+            
+            # Get the rollout buffer
             rollout_buffer = self.model.rollout_buffer
             
-            # Check if we have any valid steps tracked
-            if not self.valid_steps:
-                if self.verbose >= 1:
-                    print("No valid steps tracked, resetting buffer")
-                rollout_buffer.reset()
-                return
-            
-            # Convert to numpy array for easier manipulation
-            valid_mask = np.array(self.valid_steps, dtype=bool)
-            print(f"Valid mask: {valid_mask}, Total steps: {len(valid_mask)}, Valid steps: {np.sum(valid_mask)}")
-
-            # Check if we have any valid samples
-            if not np.any(valid_mask):
-                rollout_buffer.reset()
+            # Check if we have valid samples
+            if not self.valid_indices:
                 if self.verbose >= 1:
                     print("No valid samples found, resetting buffer")
-                return
-
-            # Check if we have enough valid samples for training (minimum batch size)
-            min_valid_samples = 32  # Minimum samples needed for training
-            if np.sum(valid_mask) < min_valid_samples:
-                if self.verbose >= 1:
-                    print(f"Not enough valid samples ({np.sum(valid_mask)}) for training (minimum {min_valid_samples}), resetting buffer")
                 rollout_buffer.reset()
+                self._reset_tracking()
                 return
-
-            # Verify buffer size matches our tracking
-            expected_buffer_size = len(valid_mask)
-            actual_buffer_size = rollout_buffer.size()
             
-            if actual_buffer_size != expected_buffer_size:
+            # Check minimum sample requirement
+            min_valid_samples = max(32, self.model.batch_size)
+            if len(self.valid_indices) < min_valid_samples:
                 if self.verbose >= 1:
-                    print(f"Buffer size mismatch: expected {expected_buffer_size}, got {actual_buffer_size}")
-                    print("Resetting buffer to prevent corruption")
+                    print(f"Not enough valid samples ({len(self.valid_indices)}) for training (minimum {min_valid_samples}), resetting buffer")
                 rollout_buffer.reset()
+                self._reset_tracking()
                 return
-
-            # Filter out invalid samples from the buffer
-            # Note: rollout_buffer data is stored as numpy arrays
-            if hasattr(rollout_buffer, 'observations') and rollout_buffer.observations is not None:
-                rollout_buffer.observations = rollout_buffer.observations[valid_mask]
-            if hasattr(rollout_buffer, 'actions') and rollout_buffer.actions is not None:
-                rollout_buffer.actions = rollout_buffer.actions[valid_mask]
-            if hasattr(rollout_buffer, 'rewards') and rollout_buffer.rewards is not None:
-                rollout_buffer.rewards = rollout_buffer.rewards[valid_mask]
-            if hasattr(rollout_buffer, 'dones') and rollout_buffer.dones is not None:
-                rollout_buffer.dones = rollout_buffer.dones[valid_mask]
-            if hasattr(rollout_buffer, 'values') and rollout_buffer.values is not None:
-                rollout_buffer.values = rollout_buffer.values[valid_mask]
-            if hasattr(rollout_buffer, 'log_probs') and rollout_buffer.log_probs is not None:
-                rollout_buffer.log_probs = rollout_buffer.log_probs[valid_mask]
-            if hasattr(rollout_buffer, 'advantages') and rollout_buffer.advantages is not None:
-                rollout_buffer.advantages = rollout_buffer.advantages[valid_mask]
             
-            # Update buffer size and ensure it's consistent
-            new_size = np.sum(valid_mask)
-            rollout_buffer.buffer_size = new_size
+            # Convert valid indices to boolean mask
+            buffer_size = rollout_buffer.buffer_size
+            if buffer_size != self.total_count:
+                if self.verbose >= 1:
+                    print(f"Buffer size mismatch: expected {self.total_count}, got {buffer_size}")
+                    print("This might indicate a problem with step counting. Proceeding with available data.")
+                # Adjust valid indices to match actual buffer size
+                self.valid_indices = [idx for idx in self.valid_indices if idx < buffer_size]
             
-            # Update the buffer's internal size tracking
-            if hasattr(rollout_buffer, '_size'):
-                rollout_buffer._size = new_size
+            # Create boolean mask
+            valid_mask = np.zeros(buffer_size, dtype=bool)
+            valid_mask[self.valid_indices] = True
             
             if self.verbose >= 1:
-                print(f"Filtered {len(valid_mask) - np.sum(valid_mask)} invalid samples from rollout buffer")
-                print(f"Buffer size after filtering: {rollout_buffer.buffer_size}")
+                print(f"Filtering buffer: {buffer_size} -> {np.sum(valid_mask)} samples")
             
-            # Reset tracking for next rollout
-            self.valid_steps = []
+            # Filter all buffer components
+            self._filter_buffer_data(rollout_buffer, valid_mask)
+            
+            # Update buffer size
+            new_size = np.sum(valid_mask)
+            rollout_buffer.buffer_size = new_size
+            rollout_buffer.pos = new_size
+            
+            if hasattr(rollout_buffer, 'full'):
+                rollout_buffer.full = True
+            
+            if self.verbose >= 1:
+                print(f"Buffer filtering completed. New size: {rollout_buffer.buffer_size}")
                 
         except Exception as e:
             if self.verbose >= 1:
                 warnings.warn(f"Error in filtering rollout buffer: {e}")
                 import traceback
                 traceback.print_exc()
-            # Reset tracking on error
-            self.valid_steps = []
+        finally:
+            # Always reset tracking for next rollout
+            self._reset_tracking()
+
+    def _filter_buffer_data(self, rollout_buffer: RolloutBuffer, valid_mask: np.ndarray) -> None:
+        """Filter all data arrays in the rollout buffer."""
+        # List of attributes that contain data arrays
+        data_attributes = [
+            'observations', 'actions', 'rewards', 'episode_starts', 
+            'values', 'log_probs', 'advantages', 'returns'
+        ]
+        
+        for attr_name in data_attributes:
+            if hasattr(rollout_buffer, attr_name):
+                attr_value = getattr(rollout_buffer, attr_name)
+                if attr_value is not None:
+                    try:
+                        # Handle both tensor and numpy array cases
+                        if isinstance(attr_value, th.Tensor):
+                            filtered_value = attr_value[valid_mask]
+                        else:
+                            filtered_value = attr_value[valid_mask]
+                        setattr(rollout_buffer, attr_name, filtered_value)
+                        
+                        if self.verbose >= 2:
+                            print(f"Filtered {attr_name}: {len(attr_value)} -> {len(filtered_value)}")
+                            
+                    except Exception as e:
+                        if self.verbose >= 1:
+                            print(f"Warning: Could not filter {attr_name}: {e}")
+
+    def _reset_tracking(self) -> None:
+        """Reset tracking variables for the next rollout."""
+        self.valid_indices = []
+        self.current_step = 0
+        self.filtered_count = 0
+        self.total_count = 0
+
+    def _on_rollout_start(self) -> None:
+        """Called at the start of rollout collection."""
+        self._reset_tracking()
+        if self.verbose >= 2:
+            print("Starting new rollout collection")
+
+class CustomPPO(PPO):
+    """
+    Custom PPO that handles invalid states and integrates with the InvalidSampleRemover callback.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def collect_rollouts(
+        self,
+        env,
+        callback: BaseCallback,
+        rollout_buffer: RolloutBuffer, 
+        n_rollout_steps: int,
+    ) -> bool:
+        """
+        Custom rollout collection that properly integrates with the filtering callback.
+        """
+        # Switch to eval mode
+        self.policy.set_training_mode(False)
+        
+        n_steps = 0
+        rollout_buffer.reset()
+        
+        # Sample new weights for the state dependent exploration
+        if self.use_sde:
+            self.policy.reset_noise(env.num_envs)
+        
+        callback.on_rollout_start()
+        
+        while n_steps < n_rollout_steps:
+            if self.use_sde and self.sde_sample_freq > 0 and n_steps % self.sde_sample_freq == 0:
+                # Sample a new noise matrix
+                self.policy.reset_noise(env.num_envs)
+            
+            with th.no_grad():
+                # Get observations using the custom pre_step method
+                if hasattr(env, 'pre_step'):
+                    obs = env.pre_step()
+                else:
+                    obs = self._last_obs
+                
+                obs = np.array(obs)
+                obs_tensor = obs_as_tensor(obs, self.device)
+                actions, values, log_probs = self.policy(obs_tensor)
+                actions_np = actions.cpu().numpy()
+
+            # Step the environment
+            new_obs, rewards, dones, infos = env.step(actions_np)
+            
+            # Ensure infos is always a list
+            if not isinstance(infos, list):
+                infos = [infos]
+            
+            # Update callback locals for step tracking
+            callback.locals.update({
+                'new_obs': new_obs,
+                'rewards': rewards, 
+                'dones': dones,
+                'infos': infos,
+                'actions': actions_np,
+                'values': values,
+                'log_probs': log_probs
+            })
+            
+            # Convert episode_starts from dones
+            episode_starts = dones.copy()
+            
+            # Add to rollout buffer
+            rollout_buffer.add(
+                obs,
+                actions_np,
+                rewards,
+                episode_starts,
+                values,
+                log_probs,
+            )
+            
+            # Call callback step
+            if callback.on_step() is False:
+                return False
+            
+            # Update for next iteration
+            self._last_obs = new_obs
+            n_steps += env.num_envs
+            
+            if self.verbose >= 2 and n_steps % (env.num_envs * 10) == 0:
+                print(f"Collected {n_steps}/{n_rollout_steps} steps")
+
+        # Compute returns and advantages before filtering
+        with th.no_grad():
+            obs_tensor = obs_as_tensor(new_obs, self.device) 
+            _, values, _ = self.policy(obs_tensor)
+
+        rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
+        
+        # This will trigger the filtering in the callback
+        callback.on_rollout_end()
+        
+        # Check if we still have enough data after filtering
+        if rollout_buffer.size() == 0:
+            if self.verbose >= 1:
+                print("Warning: Rollout buffer is empty after filtering. Skipping this training iteration.")
+            return False
+        
+        if rollout_buffer.size() < self.batch_size:
+            if self.verbose >= 1:
+                print(f"Warning: Rollout buffer too small ({rollout_buffer.size()}) after filtering. Skipping this training iteration.")
+            return False
+        
+        return True
+
+    def train(self) -> None:
+        """
+        Override train method to handle filtered buffers gracefully.
+        """
+        # Check if we have enough data to train
+        if self.rollout_buffer.size() == 0:
+            if self.verbose >= 1:
+                print("Warning: No data in rollout buffer, skipping training step")
+            return
+        
+        if self.rollout_buffer.size() < self.batch_size:
+            if self.verbose >= 1:
+                print(f"Warning: Buffer size ({self.rollout_buffer.size()}) smaller than batch size ({self.batch_size}), skipping training step")
+            return
+        
+        # Call parent train method
+        super().train()
 
 class CustomNetwork(nn.Module):
     """
@@ -610,123 +767,6 @@ class SerowVecEnv(DummyVecEnv):
             obs = env.pre_step()
             observations.append(obs)
         return np.array(observations)
-
-class CustomPPO(PPO):
-    """
-    Custom PPO that handles invalid states and custom rollout collection.
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def collect_rollouts(
-        self,
-        env: VecEnv,
-        callback: BaseCallback,
-        rollout_buffer: RolloutBuffer,
-        n_rollout_steps: int,
-    ) -> bool:
-        """
-        Custom rollout collection that handles invalid states.
-        """
-        # Switch to eval mode
-        self.policy.set_training_mode(False)
-        
-        n_steps = 0
-        rollout_buffer.reset()
-        
-        # Sample new weights for the state dependent exploration
-        if self.use_sde:
-            self.policy.reset_noise(env.num_envs)
-        
-        callback.on_rollout_start()
-        
-        while n_steps < n_rollout_steps:
-            if self.use_sde and self.sde_sample_freq > 0 and n_steps % self.sde_sample_freq == 0:
-                # Sample a new noise matrix
-                self.policy.reset_noise(env.num_envs)
-            
-            with th.no_grad():
-                # Convert to pytorch tensor or to TensorDict
-                last_obs = env.pre_step()
-                last_obs = np.array(last_obs)
-                action, value, log_prob = self.policy(obs_as_tensor(last_obs, self.device))
-                action = action.detach().cpu().numpy()
-
-            # Step the environment
-            new_obs, rewards, dones, infos = env.step(action)
-            
-            # Update callback with current step data
-            callback.locals.update({
-                'new_obs': new_obs,
-                'rewards': rewards,
-                'dones': dones,
-                'infos': infos,
-                'actions': action,
-                'values': value,
-                'log_probs': log_prob
-            })
-            
-            # Add to rollout buffer
-            rollout_buffer.add(
-                new_obs,
-                action,
-                rewards,
-                dones,
-                value,
-                log_prob,
-            )
-            
-            if callback.on_step() is False:
-                return False
-            
-            n_steps += env.num_envs  # Count steps per environment
-            print(f"Collected {n_steps}/{n_rollout_steps} steps, buffer size: {rollout_buffer.size()}")
-            
-            # Handle environment resets
-            if dones.any():
-                # Get indices of done environments
-                done_indices = np.where(dones)[0]
-                # Reset those environments
-                for done_idx in done_indices:
-                    try:
-                        reset_obs = env.reset()[0][done_idx]
-                        self._last_obs[done_idx] = reset_obs
-                    except Exception as e:
-                        print(f"Warning: Failed to reset environment {done_idx}: {e}")
-        
-        # Compute value for the last timestep
-        with th.no_grad():
-            obs_tensor = obs_as_tensor(new_obs, self.device)
-            _, values, _ = self.policy(obs_tensor)
-        
-        rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
-        
-        callback.on_rollout_end()
-        
-        # Check if buffer is empty after filtering
-        if rollout_buffer.size() == 0:
-            print("Warning: Rollout buffer is empty after filtering. Skipping this training iteration.")
-            return False
-        
-        # Additional safety check: ensure buffer has enough data
-        if rollout_buffer.size() < 32:
-            print(f"Warning: Rollout buffer too small ({rollout_buffer.size()}) after filtering. Skipping this training iteration.")
-            return False
-        
-        print(f"Rollout collection completed. Final buffer size: {rollout_buffer.size()}")
-        return True
-
-    def train(self) -> None:
-        """
-        Override train method to handle empty buffers gracefully.
-        """
-        # Check if we have enough data to train
-        if self.rollout_buffer.size() == 0:
-            print("Warning: No data in rollout buffer, skipping training step")
-            return
-        
-        # Call parent train method
-        super().train()
 
 if __name__ == "__main__":
     # Load and preprocess the data
