@@ -5,6 +5,10 @@ import warnings
 import serow
 from utils import plot_trajectories
 import matplotlib.pyplot as plt
+import os
+# To view tensorboard logs, run:
+# tensorboard --logdir ./ppo_logs
+# Then open http://localhost:6006 in your browser
 
 from torch import nn
 from torch.nn import functional as F
@@ -148,6 +152,111 @@ class InvalidSampleRemover(BaseCallback):
         return self.valid_mask is not None and np.any(self.valid_mask)
 
 
+class EpisodeReturnCallback(BaseCallback):
+    """
+    Callback that tracks episode returns and logs them to tensorboard.
+    """
+    
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
+        self.episode_returns = []
+        self.episode_lengths = []
+        self.episode_samples = []  # Cumulative samples at episode end
+        self.current_episode_returns = []
+        self.current_episode_lengths = []
+        self.current_episode_samples = []
+        self.episode_count = 0
+        
+    def _on_training_start(self) -> None:
+        """Called when training starts."""
+        if self.verbose >= 1:
+            print("EpisodeReturnCallback initialized")
+    
+    def _on_rollout_start(self) -> None:
+        """Called at the start of rollout collection."""
+        # Initialize tracking for new rollout
+        self.current_episode_returns = []
+        self.current_episode_lengths = []
+        self.current_episode_samples = []
+        
+        if self.verbose >= 2:
+            print(f"Starting new rollout collection")
+    
+    def _on_step(self) -> bool:
+        """Called after each environment step during rollout collection."""
+        try:
+            # Get the current step information
+            infos = self.locals.get('infos', [])
+            rewards = self.locals.get('rewards', [])
+            
+            # Process each environment's info
+            for env_idx, info in enumerate(infos):
+                # Check if episode ended
+                if info.get('episode', {}).get('l') is not None:  # Episode length
+                    episode_length = info['episode']['l']
+                    episode_return = info['episode']['r']  # Episode return
+                    
+                    self.episode_count += 1
+                    self.episode_returns.append(episode_return)
+                    self.episode_lengths.append(episode_length)
+                    self.episode_samples.append(self.num_timesteps)
+                    
+                    # Log to tensorboard
+                    self.logger.record("train/episode_return", episode_return)
+                    self.logger.record("train/episode_length", episode_length)
+                    self.logger.record("train/episode_count", self.episode_count)
+                    
+                    if self.verbose >= 1:
+                        print(f"Episode {self.episode_count}: return={episode_return:.3f}, length={episode_length}, samples={self.num_timesteps}")
+            
+        except Exception as e:
+            if self.verbose >= 1:
+                warnings.warn(f"Error in episode tracking: {e}")
+        
+        return True
+
+    def _on_rollout_end(self) -> None:
+        """Called at the end of rollout collection."""
+        try:
+            # Log rolling statistics if we have episodes
+            if len(self.episode_returns) > 0:
+                # Calculate rolling averages
+                window_size = min(10, len(self.episode_returns))
+                recent_returns = self.episode_returns[-window_size:]
+                recent_lengths = self.episode_lengths[-window_size:]
+                
+                avg_return = np.mean(recent_returns)
+                avg_length = np.mean(recent_lengths)
+                std_return = np.std(recent_returns)
+                
+                # Log to tensorboard
+                self.logger.record("train/avg_episode_return", avg_return)
+                self.logger.record("train/avg_episode_length", avg_length)
+                self.logger.record("train/episode_return_std", std_return)
+                
+                if self.verbose >= 1:
+                    print(f"Rollout ended. Recent episodes (last {window_size}): avg_return={avg_return:.3f}, avg_length={avg_length:.1f}")
+                
+        except Exception as e:
+            if self.verbose >= 1:
+                warnings.warn(f"Error in rollout end processing: {e}")
+
+    def get_episode_stats(self):
+        """Get episode statistics."""
+        if len(self.episode_returns) == 0:
+            return None
+        
+        return {
+            'episode_returns': self.episode_returns,
+            'episode_lengths': self.episode_lengths,
+            'episode_samples': self.episode_samples,
+            'episode_count': self.episode_count,
+            'avg_return': np.mean(self.episode_returns),
+            'std_return': np.std(self.episode_returns),
+            'min_return': np.min(self.episode_returns),
+            'max_return': np.max(self.episode_returns)
+        }
+
 class CustomPPO(PPO):
     """
     Custom PPO that handles invalid states by filtering data during training.
@@ -159,6 +268,10 @@ class CustomPPO(PPO):
     def set_invalid_sample_remover(self, callback):
         """Set the InvalidSampleRemover callback reference."""
         self.invalid_sample_remover = callback
+
+    def set_episode_return_callback(self, callback):
+        """Set the EpisodeReturnCallback reference."""
+        self.episode_return_callback = callback
 
     def collect_rollouts(
         self,
@@ -448,47 +561,77 @@ class CustomPPO(PPO):
         # Log some statistics
         if self.verbose >= 1:
             print(f"Training completed with {len(valid_indices)} valid samples")
+        
+        # Log additional training statistics to tensorboard
+        valid_count = len(valid_indices)
+        total_samples = len(valid_mask)
+        valid_ratio = valid_count / total_samples if total_samples > 0 else 0.0
+        
+        self.logger.record("train/valid_samples", valid_count)
+        self.logger.record("train/total_samples", total_samples)
+        self.logger.record("train/valid_sample_ratio", valid_ratio)
+        
+        # Get episode statistics if available from callback
+        if (self.episode_return_callback is not None and 
+            hasattr(self.episode_return_callback, 'get_episode_stats')):
+            episode_stats = self.episode_return_callback.get_episode_stats()
+            if episode_stats:
+                self.logger.record("train/avg_episode_return", episode_stats['avg_return'])
+                self.logger.record("train/episode_return_std", episode_stats['std_return'])
+                self.logger.record("train/episode_count", episode_stats['episode_count'])
 
-    def save_model(model, filepath):
-        """Save the minimum required to load the model"""
+    def save_model(self, filepath: str) -> None:
+        """Save NN model for inference"""
         import pickle
         
-        # Save both the model state and any custom attributes
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+       
+        # Save the ActorCriticPolicy 
         save_dict = {
-            'model_state_dict': model.policy.state_dict(),
-            'model_class': model.__class__,
-            'policy_class': model.policy.__class__,
+            'policy_class': self.policy.__class__,
+            'observation_space': self.observation_space,
+            'action_space': self.action_space,
+            'model_state_dict': self.policy.state_dict(),
+            'device': self.device,
         }
         
-        with open(filepath, 'wb') as f:
-            pickle.dump(save_dict, f)
-        print(f"Model saved to {filepath}")
-
-    def load_model(filepath, env=None):
-        """Load the CustomPPO model"""
+        try:
+            with open(filepath, 'wb') as f:
+                pickle.dump(save_dict, f)
+            if self.verbose >= 1:
+                print(f"CustomPPO model saved successfully to {filepath}")
+        except Exception as e:
+            print(f"Error saving model: {e}")
+            raise
+    
+    def load_model(self, filepath: str):
+        """Load NN model for inference"""
         import pickle
         
         with open(filepath, 'rb') as f:
             save_dict = pickle.load(f)
         
-        # Recreate the model
-        model = save_dict['model_class'](
-            save_dict['policy_class'],
-            env,
-            device='cpu',
-            verbose=1
+        # Create a dummy learning rate schedule
+        def dummy_lr_schedule(progress):
+            return 3e-4
+
+        # Create the policy with the saved spaces
+        self.policy = CustomActorCriticPolicy(
+            observation_space=save_dict['observation_space'],
+            action_space=save_dict['action_space'],
+            lr_schedule=dummy_lr_schedule
         )
         
-        # Load the model weights
-        model.policy.load_state_dict(save_dict['model_state_dict'])
+        # Load the saved state dict
+        self.policy.load_state_dict(save_dict['model_state_dict'])
         
-        # Restore custom attributes
-        if save_dict.get('invalid_sample_remover'):
-            model.set_invalid_sample_remover(save_dict['invalid_sample_remover'])
+        # Set to evaluation mode
+        self.policy.set_training_mode(False)
         
-        print(f"Model loaded from {filepath}")
-        return model
-
+        return self.policy
+    
 class CustomNetwork(nn.Module):
     """
     Custom network for policy and value function.
@@ -787,6 +930,8 @@ class SerowEnv(gym.Env):
         # Episode tracking
         self.step_count = 0
         self.max_steps = len(self.imu_measurements) - 1
+        self.episode_return = 0.0
+        self.episode_length = 0
         
         # Define action and observation spaces
         if action_bounds is None:
@@ -999,6 +1144,11 @@ class SerowEnv(gym.Env):
         # Finish the update step
         self._finish_update(imu, kin)
 
+        # Update episode tracking
+        if valid_step:
+            self.episode_return += reward
+            self.episode_length += 1
+
         # Fill in the info
         info = {
             "step": self.step_count, 
@@ -1006,6 +1156,13 @@ class SerowEnv(gym.Env):
             "valid_step": valid_step,
             "invalid_reason": invalid_reason
         }
+        
+        # Add episode information for tensorboard logging
+        if done or truncated:
+            info["episode"] = {
+                "r": self.episode_return,  # Episode return
+                "l": self.episode_length,  # Episode length
+            }
 
         # Update the step count
         self.step_count += 1
@@ -1033,6 +1190,8 @@ class SerowEnv(gym.Env):
         self.serow_framework.set_state(self.initial_state)
         
         self.step_count = 0
+        self.episode_return = 0.0
+        self.episode_length = 0
 
         # Take steps till the state is valid
         while True:
@@ -1185,7 +1344,6 @@ def evaluate_model(eval_env, model=None):
     plt.tight_layout()
     plt.show()
 
-
 if __name__ == "__main__":
     # Load and preprocess the data
     print("Loading measurements...")
@@ -1242,6 +1400,7 @@ if __name__ == "__main__":
     
     # Create the callback
     invalid_sample_remover = InvalidSampleRemover(verbose=1)
+    episode_return_callback = EpisodeReturnCallback(verbose=1)
 
     # Instantiate the custom PPO with custom rollout collection
     model = CustomPPO(
@@ -1250,8 +1409,8 @@ if __name__ == "__main__":
         device='cpu', 
         verbose=1,
         learning_rate=1e-4,
-        n_steps=1024,
-        batch_size=128,
+        n_steps=2048,
+        batch_size=256,
         n_epochs=10,
         gamma=1.0,
         gae_lambda=0.95,
@@ -1261,19 +1420,23 @@ if __name__ == "__main__":
         max_grad_norm=0.5,
         target_kl=0.01,
         normalize_advantage=True,
-        clip_range_vf=0.2,
+        # clip_range_vf=0.2,
         tensorboard_log="./ppo_logs"
     )
 
     model.set_invalid_sample_remover(invalid_sample_remover)
+    model.set_episode_return_callback(episode_return_callback)
 
     # Train the model with custom callbacks
-    callbacks = [invalid_sample_remover]
-    model.learn(total_timesteps=100000, callback=callbacks)
+    callbacks = [invalid_sample_remover, episode_return_callback]
+    model.learn(total_timesteps=5000000, callback=callbacks)
     print("Training completed!")
-    # model.save_model("serow_ppo_model")
+    file_path = os.path.join(os.path.dirname(__file__), "serow_ppo_model.pkl")
+    model.save_model(file_path)
 
-    # model = CustomPPO.load_model("serow_ppo_model")
+    # Load the model for evaluation
+    loaded_model = CustomPPO(CustomActorCriticPolicy, vec_env, device='cpu')
+    loaded_model.load_model(file_path)
     # Evaluate the model
-    model.policy.set_training_mode(False)
-    evaluate_model(eval_env, model)
+    loaded_model.policy.set_training_mode(False)
+    evaluate_model(eval_env, loaded_model)
