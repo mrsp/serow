@@ -5,12 +5,13 @@ import warnings
 import serow
 
 from torch import nn
+from torch.nn import functional as F
 from typing import Callable, Optional, List, Union, Dict, Type, Tuple
 from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.buffers import RolloutBuffer
-from stable_baselines3.common.utils import obs_as_tensor
+from stable_baselines3.common.utils import obs_as_tensor, explained_variance
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv
 
 from read_mcap import(
@@ -30,14 +31,13 @@ from utils import(
 
 class InvalidSampleRemover(BaseCallback):
     """
-    Callback that removes invalid samples from the PPO rollout buffer before training.
-    This ensures that only valid data is used for policy updates.
+    Callback that tracks invalid samples and provides filtered data during training.
+    Does not modify the rollout buffer - instead provides filtered data access.
     """
     
     def __init__(self, verbose=0):
         super().__init__(verbose)
-        self.valid_indices = []  # Track valid sample indices
-        self.current_step = 0
+        self.valid_mask = None
         self.filtered_count = 0
         self.total_count = 0
         
@@ -46,155 +46,109 @@ class InvalidSampleRemover(BaseCallback):
         if self.verbose >= 1:
             print("InvalidSampleRemover callback initialized")
     
+    def _on_rollout_start(self) -> None:
+        """Called at the start of rollout collection."""
+        # Initialize tracking for new rollout
+        rollout_buffer = self.model.rollout_buffer
+        buffer_size = rollout_buffer.buffer_size
+        self.valid_mask = np.ones(buffer_size, dtype=bool)
+        self.filtered_count = 0
+        self.total_count = 0
+        
+        if self.verbose >= 2:
+            print(f"Starting new rollout collection with buffer size: {buffer_size}")
+    
     def _on_step(self) -> bool:
         """Called after each environment step during rollout collection."""
         try:
             # Get the current step information
             infos = self.locals.get('infos', [])
+            rollout_buffer = self.model.rollout_buffer
+            
+            # Get the current buffer position before this step was added
+            current_pos = rollout_buffer.pos
+            num_envs = len(infos)
+            
+            # Calculate the buffer positions for this step's samples
+            start_pos = (current_pos - num_envs) % rollout_buffer.buffer_size
             
             # Process each environment's info
             for env_idx, info in enumerate(infos):
                 self.total_count += 1
+                
+                # Calculate the actual buffer position for this sample
+                buffer_pos = (start_pos + env_idx) % rollout_buffer.buffer_size
+                
                 is_valid = info.get('valid_step', True)
                 
-                if is_valid:
-                    # Store the global index of this valid sample
-                    global_idx = self.current_step * len(infos) + env_idx
-                    self.valid_indices.append(global_idx)
-                else:
+                if not is_valid:
                     self.filtered_count += 1
-                    if self.verbose >= 1:
-                        reason = info.get('invalid_reason', 'unknown')
-                        print(f"Invalid sample detected: step {self.current_step}, env {env_idx}, reason: {reason}")
-            
-            self.current_step += 1
+                    # Mark this position as invalid
+                    if buffer_pos < len(self.valid_mask):
+                        self.valid_mask[buffer_pos] = False
+                    
+                    # if self.verbose >= 1:
+                    #     reason = info.get('invalid_reason', 'unknown')
+                    #     print(f"Invalid sample detected: buffer_pos {buffer_pos}, reason: {reason}")
             
             if self.verbose >= 2 and self.total_count % 100 == 0:
-                print(f"Step tracking: total={self.total_count}, filtered={self.filtered_count}, valid={len(self.valid_indices)}")
+                valid_count = np.sum(self.valid_mask)
+                print(f"Step tracking: total={self.total_count}, filtered={self.filtered_count}, valid={valid_count}")
             
         except Exception as e:
             if self.verbose >= 1:
                 warnings.warn(f"Error in sample tracking: {e}")
-            # On error, assume all samples in this step are valid to prevent buffer corruption
-            infos = self.locals.get('infos', [])
-            for env_idx in range(len(infos)):
-                global_idx = self.current_step * len(infos) + env_idx
-                self.valid_indices.append(global_idx)
-            self.current_step += 1
         
         return True
 
     def _on_rollout_end(self) -> None:
-        """Called at the end of rollout collection to filter the buffer."""
+        """Called at the end of rollout collection to set up filtering."""
         try:
-            if self.verbose >= 1:
-                print(f"Rollout ended. Total samples: {self.total_count}, Valid samples: {len(self.valid_indices)}, Filtered: {self.filtered_count}")
-            
-            # Get the rollout buffer
             rollout_buffer = self.model.rollout_buffer
+            actual_buffer_size = rollout_buffer.buffer_size
             
-            # Check if we have valid samples
-            if not self.valid_indices:
-                if self.verbose >= 1:
-                    print("No valid samples found, resetting buffer")
-                rollout_buffer.reset()
-                self._reset_tracking()
-                return
+            valid_count = np.sum(self.valid_mask)
             
-            # Check minimum sample requirement
+            if self.verbose >= 1:
+                print(f"Rollout ended. Buffer samples: {actual_buffer_size}, Valid samples: {valid_count}, Filtered: {actual_buffer_size - valid_count}")
+            
+            # Check if we have enough valid samples for training
             min_valid_samples = max(32, self.model.batch_size)
-            if len(self.valid_indices) < min_valid_samples:
+            if valid_count < min_valid_samples:
                 if self.verbose >= 1:
-                    print(f"Not enough valid samples ({len(self.valid_indices)}) for training (minimum {min_valid_samples}), resetting buffer")
-                rollout_buffer.reset()
-                self._reset_tracking()
+                    print(f"Not enough valid samples ({valid_count}) for training (minimum {min_valid_samples})")
+                    print("Training will be skipped for this iteration")
+                # Set all samples as invalid to skip training
+                self.valid_mask[:] = False
                 return
             
-            # Convert valid indices to boolean mask
-            buffer_size = rollout_buffer.buffer_size
-            if buffer_size != self.total_count:
-                if self.verbose >= 1:
-                    print(f"Buffer size mismatch: expected {self.total_count}, got {buffer_size}")
-                    print("This might indicate a problem with step counting. Proceeding with available data.")
-                # Adjust valid indices to match actual buffer size
-                self.valid_indices = [idx for idx in self.valid_indices if idx < buffer_size]
-            
-            # Create boolean mask
-            valid_mask = np.zeros(buffer_size, dtype=bool)
-            valid_mask[self.valid_indices] = True
-            
             if self.verbose >= 1:
-                print(f"Filtering buffer: {buffer_size} -> {np.sum(valid_mask)} samples")
-            
-            # Filter all buffer components
-            self._filter_buffer_data(rollout_buffer, valid_mask)
-            
-            # Update buffer size
-            new_size = np.sum(valid_mask)
-            rollout_buffer.buffer_size = new_size
-            rollout_buffer.pos = new_size
-            
-            if hasattr(rollout_buffer, 'full'):
-                rollout_buffer.full = True
-            
-            if self.verbose >= 1:
-                print(f"Buffer filtering completed. New size: {rollout_buffer.buffer_size}")
+                print(f"Ready for training with {valid_count} valid samples")
                 
         except Exception as e:
             if self.verbose >= 1:
-                warnings.warn(f"Error in filtering rollout buffer: {e}")
-                import traceback
-                traceback.print_exc()
-        finally:
-            # Always reset tracking for next rollout
-            self._reset_tracking()
+                warnings.warn(f"Error in rollout end processing: {e}")
 
-    def _filter_buffer_data(self, rollout_buffer: RolloutBuffer, valid_mask: np.ndarray) -> None:
-        """Filter all data arrays in the rollout buffer."""
-        # List of attributes that contain data arrays
-        data_attributes = [
-            'observations', 'actions', 'rewards', 'episode_starts', 
-            'values', 'log_probs', 'advantages', 'returns'
-        ]
-        
-        for attr_name in data_attributes:
-            if hasattr(rollout_buffer, attr_name):
-                attr_value = getattr(rollout_buffer, attr_name)
-                if attr_value is not None:
-                    try:
-                        # Handle both tensor and numpy array cases
-                        if isinstance(attr_value, th.Tensor):
-                            filtered_value = attr_value[valid_mask]
-                        else:
-                            filtered_value = attr_value[valid_mask]
-                        setattr(rollout_buffer, attr_name, filtered_value)
-                        
-                        if self.verbose >= 2:
-                            print(f"Filtered {attr_name}: {len(attr_value)} -> {len(filtered_value)}")
-                            
-                    except Exception as e:
-                        if self.verbose >= 1:
-                            print(f"Warning: Could not filter {attr_name}: {e}")
+    def get_valid_mask(self):
+        """Get the current valid sample mask."""
+        return self.valid_mask
+    
+    def has_valid_samples(self):
+        """Check if there are any valid samples."""
+        return self.valid_mask is not None and np.any(self.valid_mask)
 
-    def _reset_tracking(self) -> None:
-        """Reset tracking variables for the next rollout."""
-        self.valid_indices = []
-        self.current_step = 0
-        self.filtered_count = 0
-        self.total_count = 0
-
-    def _on_rollout_start(self) -> None:
-        """Called at the start of rollout collection."""
-        self._reset_tracking()
-        if self.verbose >= 2:
-            print("Starting new rollout collection")
 
 class CustomPPO(PPO):
     """
-    Custom PPO that handles invalid states and integrates with the InvalidSampleRemover callback.
+    Custom PPO that handles invalid states by filtering data during training.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.invalid_sample_remover = None
+
+    def set_invalid_sample_remover(self, callback):
+        """Set the InvalidSampleRemover callback reference."""
+        self.invalid_sample_remover = callback
 
     def collect_rollouts(
         self,
@@ -256,7 +210,7 @@ class CustomPPO(PPO):
             # Convert episode_starts from dones
             episode_starts = dones.copy()
             
-            # Add to rollout buffer
+            # Add to rollout buffer (this keeps ALL samples, valid and invalid)
             rollout_buffer.add(
                 obs,
                 actions_np,
@@ -277,46 +231,205 @@ class CustomPPO(PPO):
             if self.verbose >= 2 and n_steps % (env.num_envs * 10) == 0:
                 print(f"Collected {n_steps}/{n_rollout_steps} steps")
 
-        # Compute returns and advantages before filtering
+        # Compute returns and advantages on ALL data (including invalid)
         with th.no_grad():
             obs_tensor = obs_as_tensor(new_obs, self.device) 
             _, values, _ = self.policy(obs_tensor)
 
         rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
         
-        # This will trigger the filtering in the callback
+        # This will set up the filtering mask
         callback.on_rollout_end()
         
-        # Check if we still have enough data after filtering
-        if rollout_buffer.size() == 0:
+        # Check if we have any valid data for training
+        if (hasattr(callback, 'has_valid_samples') and 
+            not callback.has_valid_samples()):
             if self.verbose >= 1:
-                print("Warning: Rollout buffer is empty after filtering. Skipping this training iteration.")
-            return False
-        
-        if rollout_buffer.size() < self.batch_size:
-            if self.verbose >= 1:
-                print(f"Warning: Rollout buffer too small ({rollout_buffer.size()}) after filtering. Skipping this training iteration.")
+                print("Warning: No valid samples for training. Skipping this training iteration.")
             return False
         
         return True
 
     def train(self) -> None:
         """
-        Override train method to handle filtered buffers gracefully.
+        Override train method to use filtered data.
         """
+        # Check if we have a filter callback
+        if (self.invalid_sample_remover is None or 
+            not hasattr(self.invalid_sample_remover, 'get_valid_mask')):
+            # No filtering - use parent train method
+            super().train()
+            return
+        
+        # Get the valid mask
+        valid_mask = self.invalid_sample_remover.get_valid_mask()
+        if valid_mask is None or not np.any(valid_mask):
+            if self.verbose >= 1:
+                print("Warning: No valid samples for training, skipping training step")
+            return
+        
         # Check if we have enough data to train
-        if self.rollout_buffer.size() == 0:
+        valid_count = np.sum(valid_mask)
+        if valid_count < self.batch_size:
             if self.verbose >= 1:
-                print("Warning: No data in rollout buffer, skipping training step")
+                print(f"Warning: Not enough valid samples ({valid_count}) for batch size ({self.batch_size}), skipping training step")
             return
         
-        if self.rollout_buffer.size() < self.batch_size:
-            if self.verbose >= 1:
-                print(f"Warning: Buffer size ({self.rollout_buffer.size()}) smaller than batch size ({self.batch_size}), skipping training step")
-            return
+        # Train using only valid samples
+        self._train_with_mask(valid_mask)
+
+    def _train_with_mask(self, valid_mask: np.ndarray) -> None:
+        """
+        Train the policy using only valid samples identified by the mask.
+        """
+        # Switch to train mode (this affects batch norm / dropout)
+        self.policy.set_training_mode(True)
+        # Update optimizer learning rate
+        self._update_learning_rate(self.policy.optimizer)
+        # Compute current clip range
+        clip_range = self.clip_range(self._current_progress_remaining)  # type: ignore[operator]
+        # Optional: clip range for the value function
+        if self.clip_range_vf is not None:
+            clip_range_vf = self.clip_range_vf(self._current_progress_remaining)  # type: ignore[operator]
+
+        entropy_losses = []
+        pg_losses, value_losses = [], []
+        clip_fractions = []
+
+        # Get valid data from rollout buffer
+        rollout_buffer = self.rollout_buffer
+
+        # Extract valid samples
+        valid_indices = np.where(valid_mask)[0]
         
-        # Call parent train method
-        super().train()
+        # Create filtered data
+        observations = rollout_buffer.observations[valid_indices]
+        actions = rollout_buffer.actions[valid_indices]
+        old_values = rollout_buffer.values[valid_indices]
+        old_log_prob = rollout_buffer.log_probs[valid_indices]
+        advantages = rollout_buffer.advantages[valid_indices]
+        returns = rollout_buffer.returns[valid_indices]
+
+        continue_training = True
+        # train for n_epochs epochs
+        for epoch in range(self.n_epochs):
+            approx_kl_divs = []
+            indices = np.random.permutation(len(valid_indices))
+
+            # Train on mini-batches
+            for start_idx in range(0, len(indices), self.batch_size):
+                end_idx = min(start_idx + self.batch_size, len(indices))
+                batch_indices = indices[start_idx:end_idx]
+
+                if len(batch_indices) < self.batch_size:
+                    continue  # Skip incomplete batches
+
+                # Get batch data
+                batch_obs = observations[batch_indices]
+                batch_actions = actions[batch_indices]
+                batch_old_values = old_values[batch_indices]
+                batch_old_log_prob = old_log_prob[batch_indices]
+                batch_advantages = advantages[batch_indices]
+                batch_returns = returns[batch_indices]
+                
+                # Convert to tensors
+                batch_obs = obs_as_tensor(batch_obs, self.device)
+                batch_actions = th.as_tensor(batch_actions, device=self.device, dtype=th.float32)
+                batch_old_values = th.as_tensor(batch_old_values, device=self.device, dtype=th.float32)
+                batch_old_log_prob = th.as_tensor(batch_old_log_prob, device=self.device, dtype=th.float32)
+                batch_advantages = th.as_tensor(batch_advantages, device=self.device, dtype=th.float32)
+                batch_returns = th.as_tensor(batch_returns, device=self.device, dtype=th.float32)
+                
+                values, log_prob, entropy = self.policy.evaluate_actions(batch_obs, batch_actions)
+                values = values.flatten()
+                
+                # Normalization does not make sense if mini batchsize == 1, see GH issue #325
+                if self.normalize_advantage and len(batch_advantages) > 1:
+                    batch_advantages = (batch_advantages - batch_advantages.mean()) / (batch_advantages.std() + 1e-8)
+
+                # ratio between old and new policy, should be one at the first iteration
+                ratio = th.exp(log_prob - batch_old_log_prob)
+
+                # clipped surrogate loss
+                policy_loss_1 = batch_advantages * ratio
+                policy_loss_2 = batch_advantages * th.clamp(ratio, 1 - clip_range, 1 + clip_range)
+                policy_loss = -th.min(policy_loss_1, policy_loss_2).mean()
+
+                # Logging
+                pg_losses.append(policy_loss.item())
+                clip_fraction = th.mean((th.abs(ratio - 1) > clip_range).float()).item()
+                clip_fractions.append(clip_fraction)
+
+                if self.clip_range_vf is None:
+                    # No clipping
+                    values_pred = values
+                else:
+                    # Clip the difference between old and new value
+                    # NOTE: this depends on the reward scaling
+                    values_pred = batch_old_values + th.clamp(
+                        values - batch_old_values, -clip_range_vf, clip_range_vf
+                    )
+                # Value loss using the TD(gae_lambda) target
+                value_loss = F.mse_loss(batch_returns.flatten(), values_pred)
+                value_losses.append(value_loss.item())
+
+                # Entropy loss favor exploration
+                if entropy is None:
+                    # Approximate entropy when no analytical form
+                    entropy_loss = -th.mean(-log_prob)
+                else:
+                    entropy_loss = -th.mean(entropy)
+
+                entropy_losses.append(entropy_loss.item())
+
+                loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
+
+                # Calculate approximate form of reverse KL Divergence for early stopping
+                # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
+                # and discussion in PR #419: https://github.com/DLR-RM/stable-baselines3/pull/419
+                # and Schulman blog: http://joschu.net/blog/kl-approx.html
+                with th.no_grad():
+                    log_ratio = log_prob - batch_old_log_prob
+                    approx_kl_div = th.mean((th.exp(log_ratio) - 1) - log_ratio).cpu().numpy()
+                    approx_kl_divs.append(approx_kl_div)
+
+                if self.target_kl is not None and approx_kl_div > 1.5 * self.target_kl:
+                    continue_training = False
+                    if self.verbose >= 1:
+                        print(f"Early stopping at step {epoch} due to reaching max kl: {approx_kl_div:.2f}")
+                    break
+
+                # Optimization step
+                self.policy.optimizer.zero_grad()
+                loss.backward()
+                # Clip grad norm
+                th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+                self.policy.optimizer.step()
+
+            self._n_updates += 1
+            if not continue_training:
+                break
+
+        explained_var = explained_variance(self.rollout_buffer.values.flatten(), self.rollout_buffer.returns.flatten())
+
+        # Logs
+        self.logger.record("train/entropy_loss", np.mean(entropy_losses))
+        self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
+        self.logger.record("train/value_loss", np.mean(value_losses))
+        self.logger.record("train/approx_kl", np.mean(approx_kl_divs))
+        self.logger.record("train/clip_fraction", np.mean(clip_fractions))
+        self.logger.record("train/loss", loss.item())
+        self.logger.record("train/explained_variance", explained_var)
+        if hasattr(self.policy, "log_std"):
+            self.logger.record("train/std", th.exp(self.policy.log_std).mean().item())
+
+        self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
+        self.logger.record("train/clip_range", clip_range)
+        if self.clip_range_vf is not None:
+            self.logger.record("train/clip_range_vf", clip_range_vf)
+        # Log some statistics
+        if self.verbose >= 1:
+            print(f"Training completed with {len(valid_indices)} valid samples")
 
 class CustomNetwork(nn.Module):
     """
@@ -334,48 +447,53 @@ class CustomNetwork(nn.Module):
         self.n_correlations = 3
         self.min_var = 1e-10
         
+        # Debug flag
+        self.verbose = 0
+        
         # Actor (Policy) network
         self.actor_layer1 = nn.Linear(feature_dim, 64)
         self.actor_layer2 = nn.Linear(64, 64)
         self.actor_layer3 = nn.Linear(64, 32)
+
+        # Initialize actor layers
+        nn.init.orthogonal_(self.actor_layer1.weight, gain=np.sqrt(2))
+        nn.init.constant_(self.actor_layer1.bias, 0.0)
+        nn.init.orthogonal_(self.actor_layer2.weight, gain=np.sqrt(2))
+        nn.init.constant_(self.actor_layer2.bias, 0.0)
+        nn.init.orthogonal_(self.actor_layer3.weight, gain=np.sqrt(2))
+        nn.init.constant_(self.actor_layer3.bias, 0.0)
+
+        # Output layers for mean and log_std of each parameter
         self.actor_mean_layer = nn.Linear(32, last_layer_dim_pi)
         self.actor_log_std_layer = nn.Linear(32, last_layer_dim_pi)
         
-        # Critic (Value) network
-        self.critic_layer1 = nn.Linear(feature_dim, 128)
-        self.critic_layer2 = nn.Linear(128, 128)
-        self.critic_value_layer = nn.Linear(128, last_layer_dim_vf)
-        
-        # Initialize weights
-        self._init_weights()
-    
-    def _init_weights(self):
-        """Initialize network weights for PPO."""
-        # Actor weights
-        for layer in [self.actor_layer1, self.actor_layer2, self.actor_layer3]:
-            nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
-            nn.init.constant_(layer.bias, 0.0)
-        
-        # Actor output layers
+        # Initialize output layers
         nn.init.orthogonal_(self.actor_mean_layer.weight, gain=0.01)
         nn.init.constant_(self.actor_mean_layer.bias, 0.0)
         nn.init.orthogonal_(self.actor_log_std_layer.weight, gain=0.01)
-        nn.init.constant_(self.actor_log_std_layer.bias, -1.0)
-        
-        # Critic weights
+        nn.init.constant_(self.actor_log_std_layer.bias, -1.0)  # Start with small std
+
+
+        # Critic (Value) network
+        self.critic_layer1 = nn.Linear(feature_dim, 128)
+        self.critic_layer2 = nn.Linear(128, 128)
         nn.init.orthogonal_(self.critic_layer1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.critic_layer2.weight, gain=np.sqrt(2))
-        nn.init.constant_(self.critic_layer1.bias, 0.0)
-        nn.init.constant_(self.critic_layer2.bias, 0.0)
-        
+        th.nn.init.constant_(self.critic_layer1.bias, 0.0)
+        th.nn.init.constant_(self.critic_layer2.bias, 0.0)
+
+        self.critic_value_layer = nn.Linear(128, last_layer_dim_vf)
         nn.init.orthogonal_(self.critic_value_layer.weight, gain=1.0)
-        nn.init.constant_(self.critic_value_layer.bias, 0.0)
+        th.nn.init.constant_(self.critic_value_layer.bias, 0.0)
 
     def forward_actor(self, features: th.Tensor) -> th.Tensor:
         """Forward pass for actor network."""
-        x = th.tanh(self.actor_layer1(features))
-        x = th.tanh(self.actor_layer2(x))
-        x = th.tanh(self.actor_layer3(x))
+        if hasattr(self, 'verbose') and self.verbose >= 2:
+            print(f"Actor forward - features shape: {features.shape}")
+        
+        x = F.tanh(self.actor_layer1(features))
+        x = F.tanh(self.actor_layer2(x))
+        x = F.tanh(self.actor_layer3(x))
         
         mean = self.actor_mean_layer(x)
         log_std = self.actor_log_std_layer(x).clamp(-20, 2)
@@ -385,9 +503,9 @@ class CustomNetwork(nn.Module):
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
         """Forward pass for critic network."""
         x = self.critic_layer1(features)
-        x = th.relu(x)
+        x = F.relu(x)
         x = self.critic_layer2(x)
-        x = th.relu(x)
+        x = F.relu(x)
         return self.critic_value_layer(x)
 
     def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor]:
@@ -407,6 +525,9 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         *args,
         **kwargs,
     ):
+        # Set verbose before calling super().__init__
+        self.verbose = kwargs.get('verbose', 0)
+        
         super().__init__(
             observation_space,
             action_space,
@@ -416,10 +537,29 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
             *args,
             **kwargs,
         )
+        
+        # Ensure features_dim is set correctly
+        if hasattr(observation_space, 'shape'):
+            self.features_dim = observation_space.shape[0]
+        else:
+            # Fallback for other space types
+            self.features_dim = np.prod(observation_space.shape)
+        
+        print(f"CustomActorCriticPolicy initialized with features_dim: {self.features_dim}")
+        print(f"Observation space shape: {observation_space.shape}")
+        print(f"Action space shape: {action_space.shape}")
+
+    def extract_features(self, obs: th.Tensor) -> th.Tensor:
+        """Extract features from observations."""
+        # Convert to float32 to match network expectations
+        return obs.float()
 
     def _build_mlp_extractor(self) -> None:
         """Create the policy and value networks."""
+        print(f"Building MLP extractor with features_dim: {self.features_dim}")
         self.mlp_extractor = CustomNetwork(self.features_dim)
+        if hasattr(self, 'verbose'):
+            self.mlp_extractor.verbose = self.verbose
 
     def _get_action_dist_from_latent(self, latent_pi: th.Tensor) -> th.distributions.Distribution:
         """Get action distribution from latent representation."""
@@ -432,7 +572,14 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
     def forward(self, obs: th.Tensor, deterministic: bool = False) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """Forward pass to predict actions."""
+        if hasattr(self, 'verbose') and self.verbose >= 2:
+            print(f"Forward pass - obs shape: {obs.shape}")
+        
         features = self.extract_features(obs)
+        
+        if hasattr(self, 'verbose') and self.verbose >= 2:
+            print(f"Forward pass - features shape: {features.shape}")
+        
         latent_pi, latent_vf = self.mlp_extractor(features)
         
         # Get distribution
@@ -440,15 +587,26 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         
         # Sample actions
         if deterministic:
-            actions = distribution.mean
+            raw_actions = distribution.mean
         else:
-            actions = distribution.sample()
+            raw_actions = distribution.sample()
         
         # Apply transformations
-        actions = self._transform_actions(actions)
+        actions = self._transform_actions(raw_actions)
         
-        # Get log probabilities (need to account for transformation)
-        log_prob = distribution.log_prob(actions).sum(dim=-1)
+        # Compute log probability with change of variables
+        # For softplus: d/dx softplus(x) = sigmoid(x)
+        # For tanh: d/dx tanh(x) = 1 - tanh^2(x)
+        var_jacobian = th.sigmoid(raw_actions[..., :3])
+        corr_jacobian = 1 - th.tanh(raw_actions[..., 3:])**2
+        
+        # Combine jacobians
+        jacobian = th.cat([var_jacobian, corr_jacobian], dim=-1)
+        
+        # Log probability with change of variables
+        # log p(y) = log p(x) - log |det(J)|
+        # where J is the jacobian of the transformation
+        log_prob = distribution.log_prob(raw_actions).sum(dim=-1) - th.log(jacobian).sum(dim=-1)
         
         # Get values
         values = self.value_net(latent_vf)
@@ -457,13 +615,20 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
     def _transform_actions(self, raw_actions: th.Tensor) -> th.Tensor:
         """Transform raw actions using softplus and tanh."""
-        variances = th.nn.functional.softplus(raw_actions[..., :3]) + 1e-10
+        variances = F.softplus(raw_actions[..., :3]) + 1e-10
         correlations = th.tanh(raw_actions[..., 3:])
         return th.cat([variances, correlations], dim=-1)
 
     def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
         """Evaluate actions according to the current policy."""
+        if hasattr(self, 'verbose') and self.verbose >= 2:
+            print(f"Evaluate actions - obs shape: {obs.shape}, actions shape: {actions.shape}")
+        
         features = self.extract_features(obs)
+        
+        if hasattr(self, 'verbose') and self.verbose >= 2:
+            print(f"Evaluate actions - features shape: {features.shape}")
+        
         latent_pi, latent_vf = self.mlp_extractor(features)
         
         # Get distribution
@@ -472,8 +637,13 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         # Inverse transform actions to get raw actions
         raw_actions = self._inverse_transform_actions(actions)
         
-        # Get log probabilities
-        log_prob = distribution.log_prob(raw_actions).sum(dim=-1)
+        # Compute jacobian for the transformation
+        var_jacobian = th.sigmoid(raw_actions[..., :3])
+        corr_jacobian = 1 - th.tanh(raw_actions[..., 3:])**2
+        jacobian = th.cat([var_jacobian, corr_jacobian], dim=-1)
+        
+        # Log probability with change of variables
+        log_prob = distribution.log_prob(raw_actions).sum(dim=-1) - th.log(jacobian).sum(dim=-1)
         
         # Get values
         values = self.value_net(latent_vf)
@@ -484,15 +654,19 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         return values, log_prob, entropy
 
     def _inverse_transform_actions(self, actions: th.Tensor) -> th.Tensor:
-        """Inverse transform actions."""
-        variances = actions[..., :3]
-        correlations = actions[..., 3:]
+        """Inverse transform actions with numerical stability."""
+        # Transform actions back to raw space
         
-        # Inverse transformations
-        raw_variances = th.log(th.clamp(variances - 1e-10, min=1e-10))
-        raw_correlations = th.atanh(th.clamp(correlations, min=-0.999, max=0.999))
+        # For variances: ensure they're > 1e-10 before inverse softplus
+        variances_clamped = th.clamp(actions[..., :3], min=1e-8)
+        raw_variances = th.log(th.exp(variances_clamped - 1e-10) - 1)
         
-        return th.cat([raw_variances, raw_correlations], dim=-1)
+        # For correlations: clamp to prevent atanh explosion
+        correlations_clamped = th.clamp(actions[..., 3:], min=-0.9999999, max=0.9999999)
+        raw_correlations = th.atanh(correlations_clamped)
+        
+        raw_actions = th.cat([raw_variances, raw_correlations], dim=-1)
+        return raw_actions
 
 class SerowEnv(gym.Env):
     """SEROW Gymnasium environment for reinforcement learning."""
@@ -533,8 +707,8 @@ class SerowEnv(gym.Env):
         # Define action and observation spaces
         if action_bounds is None:
             action_bounds = gym.spaces.Box(
-                low=np.array([1e-10, 1e-10, 1e-10, -1.0, -1.0, -1.0]), 
-                high=np.array([10.0, 10.0, 10.0, 1.0, 1.0, 1.0]), 
+                low=np.array([1e-6, 1e-6, 1e-6, -1.0, -1.0, -1.0]),  # Tighter bounds
+                high=np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0]),  # Tighter bounds
                 shape=(action_dim,), 
                 dtype=np.float32
             )
@@ -567,21 +741,19 @@ class SerowEnv(gym.Env):
                 np.linalg.norm(orientation_error) > 0.2):
                 return -1.0, True, False
             
-            # Base survival reward
-            reward = (step + 1) / max_steps
+            # Base survival reward (smaller to reduce sparsity)
+            reward = 0.01 * (step + 1) / max_steps  # Even smaller survival reward
             
-            # Position accuracy reward
-            position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-8
-            position_error_weighted = position_error.T @ np.linalg.inv(position_error_cov) @ position_error
-            position_reward = np.exp(-800.0 * position_error_weighted)
+            # Position accuracy reward (more stable scaling)
+            position_error_norm = np.linalg.norm(position_error)
+            position_reward = np.exp(-5.0 * position_error_norm)  # Simpler reward
             
-            # Orientation accuracy reward
-            orientation_error_cov = state.get_base_orientation_cov() + np.eye(3) * 1e-8
-            orientation_error_weighted = orientation_error.T @ np.linalg.inv(orientation_error_cov) @ orientation_error
-            orientation_reward = np.exp(-600.0 * orientation_error_weighted)
+            # Orientation accuracy reward (more stable scaling)
+            orientation_error_norm = np.linalg.norm(orientation_error)
+            orientation_reward = np.exp(-5.0 * orientation_error_norm)  # Simpler reward
             
-            # Combine rewards
-            total_reward = (reward + position_reward + orientation_reward) / 3.0
+            # Combine rewards with better weighting
+            total_reward = 0.1 * reward + 0.45 * position_reward + 0.45 * orientation_reward
             
             # Check for episode termination
             done = False
@@ -600,12 +772,12 @@ class SerowEnv(gym.Env):
             local_pos = R_base @ (state.get_contact_position(self.cf) - state.get_base_position())   
             local_kin_pos = kin.contacts_position[self.cf]
             local_vel = state.get_base_linear_velocity()
-            contact_prob = np.array([kin.contacts_probability[self.cf]])
+            contact_prob = np.array([kin.contacts_probability[self.cf]], dtype=np.float32)
             
-            return np.concatenate([local_pos - local_kin_pos, local_vel, contact_prob], axis=0)
+            return np.concatenate([local_pos - local_kin_pos, local_vel, contact_prob], axis=0).astype(np.float32)
         except Exception as e:
             print(f"Warning: State computation failed: {e}")
-            return np.zeros(self.state_dim)
+            return np.zeros(self.state_dim, dtype=np.float32)
 
     def _predict_step(self, imu, joint, ft):
         """Predict the environment state."""
@@ -670,14 +842,14 @@ class SerowEnv(gym.Env):
             kin.contacts_status[self.cf]):
             state = self._compute_state(post_state, kin)
         else:
-            state = np.zeros(self.state_dim, dtype=np.float64)
+            state = np.zeros(self.state_dim, dtype=np.float32)
         
         self.kin = kin
         return state
 
     def step(self, action):
         # Ensure action is the right type and shape
-        action = np.array(action, dtype=np.float64)
+        action = np.array(action, dtype=np.float32)
         if action.shape[0] != self.action_dim:
             raise ValueError(f"Action dimension mismatch. Expected {self.action_dim}, got {action.shape[0]}")
         
@@ -688,7 +860,7 @@ class SerowEnv(gym.Env):
         
         # Initialize tracking variables
         reward = 0.0
-        state = np.zeros(self.state_dim, dtype=np.float64)
+        state = np.zeros(self.state_dim, dtype=np.float32)
         done = False
         truncated = False
         valid_step = True
@@ -813,11 +985,8 @@ if __name__ == "__main__":
     ]
     vec_env = SerowVecEnv(env_fns)
     
-    # Create custom callbacks
-    filter_callback = InvalidSampleRemover(verbose=1)
-    
-    # Combine callbacks
-    callbacks = [filter_callback]
+    # Create the callback
+    invalid_sample_remover = InvalidSampleRemover(verbose=1)
 
     # Instantiate the custom PPO with custom rollout collection
     model = CustomPPO(
@@ -825,18 +994,23 @@ if __name__ == "__main__":
         vec_env, 
         device='cpu', 
         verbose=1,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         n_steps=2048,
         batch_size=64,
-        n_epochs=10,
+        n_epochs=4,
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
         ent_coef=0.01,
         vf_coef=0.5,
-        max_grad_norm=0.5
+        max_grad_norm=0.5,
+        target_kl=0.01
     )
+
+    model.set_invalid_sample_remover(invalid_sample_remover)
+
     # Train the model with custom callbacks
+    callbacks = [invalid_sample_remover]
     model.learn(total_timesteps=100000, callback=callbacks)
     print("Training completed!")
     model.save("serow_ppo_model")
