@@ -162,7 +162,7 @@ class CustomPPO(PPO):
 
     def collect_rollouts(
         self,
-        env,
+        env: VecEnv,
         callback: BaseCallback,
         rollout_buffer: RolloutBuffer, 
         n_rollout_steps: int,
@@ -188,24 +188,10 @@ class CustomPPO(PPO):
                 self.policy.reset_noise(env.num_envs)
             
             with th.no_grad():
-                # Get observations using the custom pre_step method
-                if hasattr(env, 'pre_step'):
-                    obs = env.pre_step()
-                else:
-                    obs = self._last_obs
-                
-                # IMPORTANT: Check for NaNs/Infs in observations before passing to policy
-                if isinstance(obs, np.ndarray):
-                    if np.isnan(obs).any() or np.isinf(obs).any():
-                        if self.verbose >= 1:
-                            warnings.warn("NaN or Inf detected in observations during rollout collection.")
-                        # You might want to handle this more gracefully, e.g., skip step, reset env, etc.
-                        # For now, let it propagate to see if other mechanisms catch it.
-                
-                obs = np.array(obs)
+                obs = np.array(env.pre_step())
                 obs_tensor = obs_as_tensor(obs, self.device)
                 actions, values, log_probs = self.policy(obs_tensor)
-                actions_np = actions.cpu().numpy()
+            actions_np = actions.cpu().numpy()
 
             # Step the environment
             new_obs, rewards, dones, infos = env.step(actions_np)
@@ -214,6 +200,8 @@ class CustomPPO(PPO):
             if not isinstance(infos, list):
                 infos = [infos]
             
+            self.num_timesteps += env.num_envs
+
             # Update callback locals for step tracking
             callback.locals.update({
                 'new_obs': new_obs,
@@ -225,37 +213,37 @@ class CustomPPO(PPO):
                 'log_probs': log_probs
             })
             
-            # Convert episode_starts from dones
-            episode_starts = dones.copy()
-            
             # Add to rollout buffer (this keeps ALL samples, valid and invalid)
             rollout_buffer.add(
                 obs,
                 actions_np,
                 rewards,
-                episode_starts,
+                dones,
                 values,
                 log_probs,
             )
-            
+
+            self._last_episode_starts = dones
+
             # Call callback step
             if callback.on_step() is False:
                 return False
             
             # Update for next iteration
-            self._last_obs = new_obs
-            n_steps += env.num_envs
-            
+            n_steps += 1
+
             if self.verbose >= 2 and n_steps % (env.num_envs * 10) == 0:
                 print(f"Collected {n_steps}/{n_rollout_steps} steps")
 
         # Compute returns and advantages on ALL data (including invalid)
         with th.no_grad():
-            obs_tensor = obs_as_tensor(new_obs, self.device) 
-            _, values, _ = self.policy(obs_tensor)
+            # Compute value for the last timestep
+            values = self.policy.predict_values(obs_as_tensor(new_obs, self.device))  # type: ignore[arg-type]
 
         rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
         
+        callback.update_locals(locals())
+
         # This will set up the filtering mask
         callback.on_rollout_end()
         
@@ -461,6 +449,52 @@ class CustomPPO(PPO):
         if self.verbose >= 1:
             print(f"Training completed with {len(valid_indices)} valid samples")
 
+    def save_model(model, filepath):
+        """Save the minimum required to load the model"""
+        import pickle
+        
+        # Save both the model state and any custom attributes
+        save_dict = {
+            'model_state_dict': model.policy.state_dict(),
+            'model_class': model.__class__,
+            'policy_class': model.policy.__class__,
+        }
+        
+        with open(filepath, 'wb') as f:
+            pickle.dump(save_dict, f)
+        print(f"Model saved to {filepath}")
+
+    def load_model(filepath, env=None):
+        """Load the CustomPPO model"""
+        import pickle
+        
+        with open(filepath, 'rb') as f:
+            save_dict = pickle.load(f)
+        
+        # Recreate the model
+        model = save_dict['model_class'](
+            save_dict['policy_class'],
+            env,
+            device='cpu',
+            verbose=1
+        )
+        
+        # Load the model weights
+        model.policy.load_state_dict(save_dict['model_state_dict'])
+        
+        # Restore custom attributes
+        if save_dict.get('invalid_sample_remover'):
+            model.set_invalid_sample_remover(save_dict['invalid_sample_remover'])
+        
+        print(f"Model loaded from {filepath}")
+        return model
+
+    def eval(self):
+        self.policy.set_training_mode(False)
+
+    def train(self):
+        self.policy.set_training_mode(True)
+
 class CustomNetwork(nn.Module):
     """
     Custom network for policy and value function.
@@ -529,14 +563,6 @@ class CustomNetwork(nn.Module):
         mean = self.actor_mean_layer(x)
         # Ensure log_std is finite after clamping
         log_std = self.actor_log_std_layer(x).clamp(-20, 2) 
-        
-        # Add checks here to debug NaN propagation
-        # if th.isnan(mean).any():
-        #     print("NaN detected in actor mean output!")
-        #     import pdb; pdb.set_trace()
-        # if th.isnan(log_std).any():
-        #     print("NaN detected in actor log_std output!")
-        #     import pdb; pdb.set_trace()
 
         return th.cat([mean, log_std], dim=-1)
 
@@ -704,15 +730,7 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         values = self.value_net(latent_vf)
         
         # Get entropy
-        # Ensure entropy calculation is robust to potential NaNs/Infs
         entropy = distribution.entropy().sum(dim=-1)
-        
-        # if th.isnan(entropy).any() or th.isinf(entropy).any():
-        #     print("NaN/Inf detected in entropy!")
-        #     import pdb; pdb.set_trace()
-        # if th.isnan(log_prob).any() or th.isinf(log_prob).any():
-        #     print("NaN/Inf detected in log_prob during evaluate_actions!")
-        #     import pdb; pdb.set_trace()
 
         return values, log_prob, entropy
 
@@ -738,9 +756,17 @@ class SerowEnv(gym.Env):
     def __init__(self, robot, initial_state, contact_frame, state_dim, action_dim, measurements, action_bounds=None):
         super().__init__()
         
+        # Store parameters for recreation
+        self.robot = robot
+        self.initial_state_data = initial_state  # Store the data, not the object
+        self.contact_frame = contact_frame
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.measurements = measurements
+        self.action_bounds = action_bounds
+        
         # Initialize SEROW framework
         self.serow_framework = serow.Serow()
-        self.robot = robot
         self.serow_framework.initialize(f"{self.robot}_rl.json")
 
         # Set up initial state
@@ -786,6 +812,38 @@ class SerowEnv(gym.Env):
         )
         
         # State tracking
+        self.kin = None
+        self.state = None
+
+    def __getstate__(self):
+        """Return state for pickling, excluding non-serializable objects."""
+        state = self.__dict__.copy()
+        # Remove non-serializable objects
+        state['serow_framework'] = None
+        state['initial_state'] = None
+        state['kin'] = None
+        state['state'] = None
+        return state
+
+    def __setstate__(self, state):
+        """Restore state from pickling, recreating non-serializable objects."""
+        self.__dict__.update(state)
+        # Recreate the SEROW framework
+        self.serow_framework = serow.Serow()
+        self.serow_framework.initialize(f"{self.robot}_rl.json")
+        
+        # Recreate the initial state
+        self.initial_state = self.serow_framework.get_state(allow_invalid=True)
+        self.initial_state.set_joint_state(self.initial_state_data['joint_state'])
+        self.initial_state.set_base_state(self.initial_state_data['base_state'])
+        self.initial_state.set_contact_state(self.initial_state_data['contact_state'])
+        self.serow_framework.set_state(self.initial_state)
+        
+        # Recreate contact frames
+        self.contact_frames = self.initial_state.get_contacts_frame()
+        self.cf = self.contact_frame if self.contact_frame in self.contact_frames else self.contact_frames[0]
+        
+        # Reset state tracking
         self.kin = None
         self.state = None
 
@@ -972,7 +1030,14 @@ class SerowEnv(gym.Env):
         # Reinitialize SEROW 
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{self.robot}_rl.json")
+        
+        # Recreate the initial state from stored data
+        self.initial_state = self.serow_framework.get_state(allow_invalid=True)
+        self.initial_state.set_joint_state(self.initial_state_data['joint_state'])
+        self.initial_state.set_base_state(self.initial_state_data['base_state'])
+        self.initial_state.set_contact_state(self.initial_state_data['contact_state'])
         self.serow_framework.set_state(self.initial_state)
+        
         self.step_count = 0
 
         # Take steps till the state is valid
@@ -1004,46 +1069,7 @@ class SerowVecEnv(DummyVecEnv):
             observations.append(obs)
         return np.array(observations)
 
-if __name__ == "__main__":
-    # Load and preprocess the data
-    print("Loading measurements...")
-    imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
-    joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
-    force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
-    base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
-    base_states = read_base_states("/tmp/serow_proprioception.mcap")
-    contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
-    joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
-
-    measurements = {
-        'imu': imu_measurements,
-        'joints': joint_measurements,
-        'ft': force_torque_measurements,
-        'base_pose_ground_truth': base_pose_ground_truth
-    }
-
-    # Define the dimensions of your state and action spaces
-    state_dim = 7  
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = 1e-10
-    robot = "go2"
-
-    # Create the initial state
-    initial_state = {
-        'joint_state': joint_states[0],
-        'base_state': base_states[0],
-        'contact_state': contact_states[0]
-    }
-
-    # Run the baseline policy
-    eval_env = SerowEnv(
-        robot=robot, 
-        initial_state=initial_state, 
-        contact_frame="RL_foot", 
-        state_dim=state_dim, 
-        action_dim=action_dim, 
-        measurements=measurements)
-
+def evaluate_model(eval_env, model=None):
     done = False
     truncated = False
     last_observations = []
@@ -1060,7 +1086,11 @@ if __name__ == "__main__":
         obs = eval_env.pre_step()
         last_observations.append(obs)
         imu, _, _, gt = eval_env._get_measurements(eval_env.step_count)
-        action = np.zeros(action_dim)
+        if model is None:   
+            action = np.zeros(eval_env.action_dim)
+        else:
+            action = model.policy(obs_as_tensor(obs, device='cpu'), deterministic=True)[0]
+            action = action.detach().cpu().numpy()
 
         # Step the environment
         state, reward, done, truncated, info = eval_env.step(action)
@@ -1161,48 +1191,94 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    # print("Creating environments...")
-    # # Create environments
-    # env_fns = [
-    #     lambda cf=cf: SerowEnv(
-    #         robot=robot, 
-    #         initial_state=initial_state, 
-    #         contact_frame=cf, 
-    #         state_dim=state_dim, 
-    #         action_dim=action_dim, 
-    #         measurements=measurements
-    #     ) for cf in ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]
-    # ]
-    # vec_env = SerowVecEnv(env_fns)
+
+if __name__ == "__main__":
+    # Load and preprocess the data
+    print("Loading measurements...")
+    imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
+    joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
+    force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
+    base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
+    base_states = read_base_states("/tmp/serow_proprioception.mcap")
+    contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
+    joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
+
+    measurements = {
+        'imu': imu_measurements,
+        'joints': joint_measurements,
+        'ft': force_torque_measurements,
+        'base_pose_ground_truth': base_pose_ground_truth
+    }
+
+    # Define the dimensions of your state and action spaces
+    state_dim = 7  
+    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
+    min_action = 1e-10
+    robot = "go2"
+
+    # Create the initial state
+    initial_state = {
+        'joint_state': joint_states[0],
+        'base_state': base_states[0],
+        'contact_state': contact_states[0]
+    }
+
+    # Run the baseline policy
+    eval_env = SerowEnv(
+        robot=robot, 
+        initial_state=initial_state, 
+        contact_frame="RL_foot", 
+        state_dim=state_dim, 
+        action_dim=action_dim, 
+        measurements=measurements)
+
+    print("Creating environments...")
+    # Create environments
+    env_fns = [
+        lambda cf=cf: SerowEnv(
+            robot=robot, 
+            initial_state=initial_state, 
+            contact_frame=cf, 
+            state_dim=state_dim, 
+            action_dim=action_dim, 
+            measurements=measurements
+        ) for cf in ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]
+    ]
+    vec_env = SerowVecEnv(env_fns)
     
-    # # Create the callback
-    # invalid_sample_remover = InvalidSampleRemover(verbose=1)
+    # Create the callback
+    invalid_sample_remover = InvalidSampleRemover(verbose=1)
 
-    # # Instantiate the custom PPO with custom rollout collection
-    # model = CustomPPO(
-    #     CustomActorCriticPolicy, 
-    #     vec_env, 
-    #     device='cpu', 
-    #     verbose=1,
-    #     learning_rate=1e-4,
-    #     n_steps=512,
-    #     batch_size=64,
-    #     n_epochs=4,
-    #     gamma=1.0,
-    #     gae_lambda=0.95,
-    #     clip_range=0.2,
-    #     ent_coef=0.0,
-    #     vf_coef=0.5,
-    #     max_grad_norm=0.5,
-    #     target_kl=0.01,
-    #     normalize_advantage=True,
-    #     clip_range_vf=0.02
-    # )
+    # Instantiate the custom PPO with custom rollout collection
+    model = CustomPPO(
+        CustomActorCriticPolicy, 
+        vec_env, 
+        device='cpu', 
+        verbose=1,
+        learning_rate=1e-4,
+        n_steps=1024,
+        batch_size=128,
+        n_epochs=10,
+        gamma=1.0,
+        gae_lambda=0.95,
+        clip_range=0.2,
+        ent_coef=0.0,
+        vf_coef=0.5,
+        max_grad_norm=0.5,
+        target_kl=0.01,
+        normalize_advantage=True,
+        clip_range_vf=0.2
+    )
 
-    # model.set_invalid_sample_remover(invalid_sample_remover)
+    model.set_invalid_sample_remover(invalid_sample_remover)
 
-    # # Train the model with custom callbacks
-    # callbacks = [invalid_sample_remover]
-    # model.learn(total_timesteps=100000, callback=callbacks)
-    # print("Training completed!")
-    # model.save("serow_ppo_model")
+    # Train the model with custom callbacks
+    callbacks = [invalid_sample_remover]
+    model.learn(total_timesteps=100000, callback=callbacks)
+    print("Training completed!")
+    # model.save_model("serow_ppo_model")
+
+    # model = CustomPPO.load_model("serow_ppo_model")
+    # Evaluate the model
+    model.eval()
+    evaluate_model(eval_env, model)
