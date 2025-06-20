@@ -501,7 +501,13 @@ class CustomPPO(PPO):
                         values - batch_old_values_flat, -clip_range_vf, clip_range_vf
                     )
                 # Value loss using the TD(gae_lambda) target
-                value_loss = F.mse_loss(batch_returns.flatten(), values_pred)
+                # Normalize returns to help stabilize value function training
+                returns_mean = batch_returns.mean()
+                returns_std = batch_returns.std() + 1e-8
+                normalized_returns = (batch_returns - returns_mean) / returns_std
+                normalized_values = (values_pred - returns_mean) / returns_std
+                
+                value_loss = F.mse_loss(normalized_returns.flatten(), normalized_values.flatten())
                 value_losses.append(value_loss.item())
 
                 # Entropy loss favor exploration
@@ -570,6 +576,20 @@ class CustomPPO(PPO):
         self.logger.record("train/valid_samples", valid_count)
         self.logger.record("train/total_samples", total_samples)
         self.logger.record("train/valid_sample_ratio", valid_ratio)
+        
+        # Log value function statistics
+        if len(value_losses) > 0:
+            self.logger.record("train/value_loss_mean", np.mean(value_losses))
+            self.logger.record("train/value_loss_std", np.std(value_losses))
+            self.logger.record("train/value_loss_min", np.min(value_losses))
+            self.logger.record("train/value_loss_max", np.max(value_losses))
+        
+        # Log return statistics
+        if len(returns) > 0:
+            self.logger.record("train/returns_mean", np.mean(returns))
+            self.logger.record("train/returns_std", np.std(returns))
+            self.logger.record("train/returns_min", np.min(returns))
+            self.logger.record("train/returns_max", np.max(returns))
         
         # Get episode statistics if available from callback
         if (self.episode_return_callback is not None and 
@@ -686,7 +706,7 @@ class CustomNetwork(nn.Module):
 
         self.critic_value_layer = nn.Linear(128, last_layer_dim_vf)
         nn.init.orthogonal_(self.critic_value_layer.weight, gain=1.0)
-        th.nn.init.constant_(self.critic_value_layer.bias, 0.0)
+        th.nn.init.constant_(self.critic_value_layer.bias, 1000.0)  # Initialize with bias to match expected return scale
 
     def forward_actor(self, features: th.Tensor) -> th.Tensor:
         """Forward pass for actor network."""
@@ -1408,19 +1428,19 @@ if __name__ == "__main__":
         vec_env, 
         device='cpu', 
         verbose=1,
-        learning_rate=1e-4,
+        learning_rate=5e-5,
         n_steps=2048,
-        batch_size=256,
+        batch_size=64,
         n_epochs=10,
-        gamma=1.0,
+        gamma=0.995,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.0,
-        vf_coef=0.5,
+        ent_coef=0.05,
+        vf_coef=0.25,  
         max_grad_norm=0.5,
-        target_kl=0.01,
+        target_kl=0.02,
         normalize_advantage=True,
-        # clip_range_vf=0.2,
+        clip_range_vf=0.2,  
         tensorboard_log="./ppo_logs"
     )
 
