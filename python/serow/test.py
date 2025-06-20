@@ -29,6 +29,14 @@ from utils import(
     logMap
 )
 
+import numpy as np
+import torch as th
+from torch import nn
+from torch.nn import functional as F
+import gym
+from typing import Callable, Dict, List, Optional, Tuple, Type, Union
+import warnings
+
 class InvalidSampleRemover(BaseCallback):
     """
     Callback that tracks invalid samples and provides filtered data during training.
@@ -183,6 +191,14 @@ class CustomPPO(PPO):
                     obs = env.pre_step()
                 else:
                     obs = self._last_obs
+                
+                # IMPORTANT: Check for NaNs/Infs in observations before passing to policy
+                if isinstance(obs, np.ndarray):
+                    if np.isnan(obs).any() or np.isinf(obs).any():
+                        if self.verbose >= 1:
+                            warnings.warn("NaN or Inf detected in observations during rollout collection.")
+                        # You might want to handle this more gracefully, e.g., skip step, reset env, etc.
+                        # For now, let it propagate to see if other mechanisms catch it.
                 
                 obs = np.array(obs)
                 obs_tensor = obs_as_tensor(obs, self.device)
@@ -340,6 +356,18 @@ class CustomPPO(PPO):
                 batch_advantages = th.as_tensor(batch_advantages, device=self.device, dtype=th.float32)
                 batch_returns = th.as_tensor(batch_returns, device=self.device, dtype=th.float32)
                 
+                # Check for NaNs/Infs in batch data before policy evaluation
+                if (th.isnan(batch_obs).any() or th.isinf(batch_obs).any() or
+                    th.isnan(batch_actions).any() or th.isinf(batch_actions).any() or
+                    th.isnan(batch_old_values).any() or th.isinf(batch_old_values).any() or
+                    th.isnan(batch_old_log_prob).any() or th.isinf(batch_old_log_prob).any() or
+                    th.isnan(batch_advantages).any() or th.isinf(batch_advantages).any() or
+                    th.isnan(batch_returns).any() or th.isinf(batch_returns).any()):
+                    if self.verbose >= 1:
+                        warnings.warn("NaN or Inf detected in batch data during training. Skipping batch.")
+                    continue
+
+
                 values, log_prob, entropy = self.policy.evaluate_actions(batch_obs, batch_actions)
                 values = values.flatten()
                 
@@ -365,9 +393,9 @@ class CustomPPO(PPO):
                     values_pred = values
                 else:
                     # Clip the difference between old and new value
-                    # NOTE: this depends on the reward scaling
-                    values_pred = batch_old_values + th.clamp(
-                        values - batch_old_values, -clip_range_vf, clip_range_vf
+                    batch_old_values_flat = batch_old_values.flatten()
+                    values_pred = batch_old_values_flat + th.clamp(
+                        values - batch_old_values_flat, -clip_range_vf, clip_range_vf
                     )
                 # Value loss using the TD(gae_lambda) target
                 value_loss = F.mse_loss(batch_returns.flatten(), values_pred)
@@ -445,7 +473,8 @@ class CustomNetwork(nn.Module):
         # Action transformation parameters
         self.n_variances = 3
         self.n_correlations = 3
-        self.min_var = 1e-10
+        # Use this min_var consistently for transformations
+        self.min_var_transform = 1e-10 
         
         # Debug flag
         self.verbose = 0
@@ -496,8 +525,17 @@ class CustomNetwork(nn.Module):
         x = F.tanh(self.actor_layer3(x))
         
         mean = self.actor_mean_layer(x)
-        log_std = self.actor_log_std_layer(x).clamp(-20, 2)
+        # Ensure log_std is finite after clamping
+        log_std = self.actor_log_std_layer(x).clamp(-20, 2) 
         
+        # Add checks here to debug NaN propagation
+        # if th.isnan(mean).any():
+        #     print("NaN detected in actor mean output!")
+        #     import pdb; pdb.set_trace()
+        # if th.isnan(log_std).any():
+        #     print("NaN detected in actor log_std output!")
+        #     import pdb; pdb.set_trace()
+
         return th.cat([mean, log_std], dim=-1)
 
     def forward_critic(self, features: th.Tensor) -> th.Tensor:
@@ -565,8 +603,20 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         """Get action distribution from latent representation."""
         # Split the actor output into mean and log_std
         mean, log_std = th.chunk(latent_pi, 2, dim=-1)
-        std = log_std.exp()
         
+        # Ensure std is strictly positive
+        std = log_std.exp()
+        # Add a small epsilon to std to prevent zero std which can lead to NaNs in log_prob
+        # This is also good for exploration.
+        std = std + 1e-8 
+        
+        # if th.isnan(mean).any() or th.isinf(mean).any():
+        #     print("NaN/Inf detected in mean before Normal distribution!")
+        #     import pdb; pdb.set_trace()
+        # if th.isnan(std).any() or th.isinf(std).any():
+        #     print("NaN/Inf detected in std before Normal distribution!")
+        #     import pdb; pdb.set_trace()
+
         # Create normal distribution
         return th.distributions.Normal(mean, std)
 
@@ -597,11 +647,11 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         # Compute log probability with change of variables
         # For softplus: d/dx softplus(x) = sigmoid(x)
         # For tanh: d/dx tanh(x) = 1 - tanh^2(x)
-        var_jacobian = th.sigmoid(raw_actions[..., :3])
-        corr_jacobian = 1 - th.tanh(raw_actions[..., 3:])**2
+        var_jacobian = th.sigmoid(raw_actions[..., :self.mlp_extractor.n_variances])
+        corr_jacobian = 1 - th.tanh(raw_actions[..., self.mlp_extractor.n_variances:])**2
         
-        # Combine jacobians
-        jacobian = th.cat([var_jacobian, corr_jacobian], dim=-1)
+        # Add a small epsilon to jacobians before taking log to prevent log(0)
+        jacobian = th.cat([var_jacobian, corr_jacobian], dim=-1) + 1e-8
         
         # Log probability with change of variables
         # log p(y) = log p(x) - log |det(J)|
@@ -615,8 +665,9 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
 
     def _transform_actions(self, raw_actions: th.Tensor) -> th.Tensor:
         """Transform raw actions using softplus and tanh."""
-        variances = F.softplus(raw_actions[..., :3]) + 1e-10
-        correlations = th.tanh(raw_actions[..., 3:])
+        # Ensure min_var_transform is used consistently
+        variances = F.softplus(raw_actions[..., :self.mlp_extractor.n_variances]) + self.mlp_extractor.min_var_transform
+        correlations = th.tanh(raw_actions[..., self.mlp_extractor.n_variances:])
         return th.cat([variances, correlations], dim=-1)
 
     def evaluate_actions(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, th.Tensor, th.Tensor]:
@@ -638,9 +689,11 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         raw_actions = self._inverse_transform_actions(actions)
         
         # Compute jacobian for the transformation
-        var_jacobian = th.sigmoid(raw_actions[..., :3])
-        corr_jacobian = 1 - th.tanh(raw_actions[..., 3:])**2
-        jacobian = th.cat([var_jacobian, corr_jacobian], dim=-1)
+        var_jacobian = th.sigmoid(raw_actions[..., :self.mlp_extractor.n_variances])
+        corr_jacobian = 1 - th.tanh(raw_actions[..., self.mlp_extractor.n_variances:])**2
+        
+        # Add a small epsilon to jacobians before taking log to prevent log(0)
+        jacobian = th.cat([var_jacobian, corr_jacobian], dim=-1) + 1e-8
         
         # Log probability with change of variables
         log_prob = distribution.log_prob(raw_actions).sum(dim=-1) - th.log(jacobian).sum(dim=-1)
@@ -649,20 +702,29 @@ class CustomActorCriticPolicy(ActorCriticPolicy):
         values = self.value_net(latent_vf)
         
         # Get entropy
+        # Ensure entropy calculation is robust to potential NaNs/Infs
         entropy = distribution.entropy().sum(dim=-1)
         
+        # if th.isnan(entropy).any() or th.isinf(entropy).any():
+        #     print("NaN/Inf detected in entropy!")
+        #     import pdb; pdb.set_trace()
+        # if th.isnan(log_prob).any() or th.isinf(log_prob).any():
+        #     print("NaN/Inf detected in log_prob during evaluate_actions!")
+        #     import pdb; pdb.set_trace()
+
         return values, log_prob, entropy
 
     def _inverse_transform_actions(self, actions: th.Tensor) -> th.Tensor:
         """Inverse transform actions with numerical stability."""
-        # Transform actions back to raw space
+        # For variances: ensure they're > min_var_transform before inverse softplus
+        variances_clamped = th.clamp(actions[..., :self.mlp_extractor.n_variances], min=self.mlp_extractor.min_var_transform)
         
-        # For variances: ensure they're > 1e-10 before inverse softplus
-        variances_clamped = th.clamp(actions[..., :3], min=1e-8)
-        raw_variances = th.log(th.exp(variances_clamped - 1e-10) - 1)
+        # Inverse of softplus(x) + min_var_transform is log(exp(y - min_var_transform) - 1)
+        # Use torch.expm1 for numerical stability when x is close to 0
+        raw_variances = th.log(th.expm1(variances_clamped - self.mlp_extractor.min_var_transform) + 1e-8) # Added 1e-8 for stability of log
         
         # For correlations: clamp to prevent atanh explosion
-        correlations_clamped = th.clamp(actions[..., 3:], min=-0.9999999, max=0.9999999)
+        correlations_clamped = th.clamp(actions[..., self.mlp_extractor.n_variances:], min=-0.9999999, max=0.9999999)
         raw_correlations = th.atanh(correlations_clamped)
         
         raw_actions = th.cat([raw_variances, raw_correlations], dim=-1)
@@ -995,16 +1057,18 @@ if __name__ == "__main__":
         device='cpu', 
         verbose=1,
         learning_rate=1e-4,
-        n_steps=2048,
+        n_steps=512,
         batch_size=64,
         n_epochs=4,
-        gamma=0.99,
+        gamma=1.0,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.01,
+        ent_coef=0.0,
         vf_coef=0.5,
         max_grad_norm=0.5,
-        target_kl=0.01
+        target_kl=0.01,
+        normalize_advantage=True,
+        clip_range_vf=0.02
     )
 
     model.set_invalid_sample_remover(invalid_sample_remover)
