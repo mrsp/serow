@@ -3,6 +3,8 @@ import torch as th
 import numpy as np
 import warnings
 import serow
+from utils import plot_trajectories
+import matplotlib.pyplot as plt
 
 from torch import nn
 from torch.nn import functional as F
@@ -910,8 +912,7 @@ class SerowEnv(gym.Env):
         return state
 
     def step(self, action):
-        # Ensure action is the right type and shape
-        action = np.array(action, dtype=np.float32)
+        # Ensure action is the right shape
         if action.shape[0] != self.action_dim:
             raise ValueError(f"Action dimension mismatch. Expected {self.action_dim}, got {action.shape[0]}")
         
@@ -946,7 +947,7 @@ class SerowEnv(gym.Env):
         # Finish the update step
         self._finish_update(imu, kin)
 
-        # Ensure all return values are valid
+        # Fill in the info
         info = {
             "step": self.step_count, 
             "contact_active": kin.contacts_status[self.cf],
@@ -958,7 +959,7 @@ class SerowEnv(gym.Env):
         self.step_count += 1
         
         # Check if we've reached the end of the episode
-        if self.step_count >= 0.85 * self.max_steps and reward is not None:
+        if self.step_count >= 0.85 * self.max_steps and valid_step:
             truncated = True
             done = False
             
@@ -975,10 +976,11 @@ class SerowEnv(gym.Env):
         self.step_count = 0
 
         # Take steps till the state is valid
-        reward = None
-        while reward is None:
+        while True:
            self.pre_step()
-           state, reward, _, _, _ = self.step(np.zeros(self.action_dim))
+           state, _, _, _, info = self.step(np.zeros(self.action_dim))
+           if info['valid_step']:
+               break
         return state, {}
     
     def render(self, mode='human'):
@@ -1033,48 +1035,174 @@ if __name__ == "__main__":
         'contact_state': contact_states[0]
     }
 
-    print("Creating environments...")
-    # Create environments
-    env_fns = [
-        lambda cf=cf: SerowEnv(
-            robot=robot, 
-            initial_state=initial_state, 
-            contact_frame=cf, 
-            state_dim=state_dim, 
-            action_dim=action_dim, 
-            measurements=measurements
-        ) for cf in ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]
-    ]
-    vec_env = SerowVecEnv(env_fns)
+    # Run the baseline policy
+    eval_env = SerowEnv(
+        robot=robot, 
+        initial_state=initial_state, 
+        contact_frame="RL_foot", 
+        state_dim=state_dim, 
+        action_dim=action_dim, 
+        measurements=measurements)
+
+    done = False
+    truncated = False
+    last_observations = []
+    observations = []
+
+    timestamps = []
+    base_positions = []
+    base_orientations = []
+    gt_base_positions = []
+    gt_base_orientations = []
+    rewards = []
+    infos = []
+    while not done and not truncated:
+        obs = eval_env.pre_step()
+        last_observations.append(obs)
+        imu, _, _, gt = eval_env._get_measurements(eval_env.step_count)
+        action = np.zeros(action_dim)
+
+        # Step the environment
+        state, reward, done, truncated, info = eval_env.step(action)
+        
+        # Get the serow base state
+        serow_state = eval_env.serow_framework.get_state(allow_invalid=True)
+        base_positions.append(serow_state.get_base_position())
+        base_orientations.append(serow_state.get_base_orientation())
+        # Get the ground truth base state
+        gt_base_positions.append(gt.position)
+        gt_base_orientations.append(gt.orientation)
+        timestamps.append(imu.timestamp)
+
+        # Save the agent data
+        observations.append(state)
+        rewards.append(reward)
+        infos.append(info)
+
+    # Convert to numpy arrays
+    base_positions = np.array(base_positions)
+    base_orientations = np.array(base_orientations)
+    gt_base_positions = np.array(gt_base_positions)
+    gt_base_orientations = np.array(gt_base_orientations)
+    timestamps = np.array(timestamps)
+
+    # Based on info remove invalid steps
+    last_observations = np.array(last_observations)
+    observations = np.array(observations)
+    rewards = np.array(rewards)
+    valid_indices = [info['valid_step'] for info in infos]
+    last_observations = last_observations[valid_indices]
+    observations = observations[valid_indices]
+    rewards = rewards[valid_indices]
+
+    # Plot the trajectories
+    plot_trajectories(timestamps, base_positions, base_orientations, gt_base_positions, gt_base_orientations)
+
+    # plot the cummulative reward
+    plt.figure(figsize=(15, 12))
     
-    # Create the callback
-    invalid_sample_remover = InvalidSampleRemover(verbose=1)
+    # First subplot: Instantaneous rewards
+    plt.subplot(4, 1, 1)
+    plt.plot(rewards, 'b-', linewidth=1)
+    plt.xlabel('Step')
+    plt.ylabel('Instantaneous Reward')
+    plt.title('Instantaneous Rewards')
+    plt.grid(True, alpha=0.3)
+    
+    # Second subplot: Cumulative rewards
+    plt.subplot(4, 1, 2)
+    plt.plot(np.cumsum(rewards), 'r-', linewidth=2)
+    plt.xlabel('Step')
+    plt.ylabel('Cumulative Reward')
+    plt.title('Cumulative Reward')
+    plt.grid(True, alpha=0.3)
+    
+    # Third subplot: Last observation components
+    plt.subplot(4, 1, 3)
+    # Plot relative position error (first 3 components)
+    plt.plot(last_observations[:, 0], 'g-', label='rel_pos_x', linewidth=1)
+    plt.plot(last_observations[:, 1], 'g--', label='rel_pos_y', linewidth=1)
+    plt.plot(last_observations[:, 2], 'g:', label='rel_pos_z', linewidth=1)
+    
+    # Plot base velocity (next 3 components)
+    plt.plot(last_observations[:, 3], 'b-', label='base_vel_x', linewidth=1)
+    plt.plot(last_observations[:, 4], 'b--', label='base_vel_y', linewidth=1)
+    plt.plot(last_observations[:, 5], 'b:', label='base_vel_z', linewidth=1)
+    
+    # Plot contact probability (last component)
+    plt.plot(last_observations[:, 6], 'm-', label='contact_prob', linewidth=2)
+    
+    plt.xlabel('Step')
+    plt.ylabel('Last Observation Values')
+    plt.title('Last Observation Components: Relative Position Error, Base Velocity, Contact Probability')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
 
-    # Instantiate the custom PPO with custom rollout collection
-    model = CustomPPO(
-        CustomActorCriticPolicy, 
-        vec_env, 
-        device='cpu', 
-        verbose=1,
-        learning_rate=1e-4,
-        n_steps=512,
-        batch_size=64,
-        n_epochs=4,
-        gamma=1.0,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.0,
-        vf_coef=0.5,
-        max_grad_norm=0.5,
-        target_kl=0.01,
-        normalize_advantage=True,
-        clip_range_vf=0.02
-    )
+    # Third subplot: Observation components
+    plt.subplot(4, 1, 4)
+    # Plot relative position error (first 3 components)
+    plt.plot(observations[:, 0], 'g-', label='rel_pos_x', linewidth=1)
+    plt.plot(observations[:, 1], 'g--', label='rel_pos_y', linewidth=1)
+    plt.plot(observations[:, 2], 'g:', label='rel_pos_z', linewidth=1)
+    
+    # Plot base velocity (next 3 components)
+    plt.plot(observations[:, 3], 'b-', label='base_vel_x', linewidth=1)
+    plt.plot(observations[:, 4], 'b--', label='base_vel_y', linewidth=1)
+    plt.plot(observations[:, 5], 'b:', label='base_vel_z', linewidth=1)
+    
+    # Plot contact probability (last component)
+    plt.plot(observations[:, 6], 'm-', label='contact_prob', linewidth=2)
+    
+    plt.xlabel('Step')
+    plt.ylabel('Observation Values')
+    plt.title('Observation Components: Relative Position Error, Base Velocity, Contact Probability')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
 
-    model.set_invalid_sample_remover(invalid_sample_remover)
+    # print("Creating environments...")
+    # # Create environments
+    # env_fns = [
+    #     lambda cf=cf: SerowEnv(
+    #         robot=robot, 
+    #         initial_state=initial_state, 
+    #         contact_frame=cf, 
+    #         state_dim=state_dim, 
+    #         action_dim=action_dim, 
+    #         measurements=measurements
+    #     ) for cf in ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]
+    # ]
+    # vec_env = SerowVecEnv(env_fns)
+    
+    # # Create the callback
+    # invalid_sample_remover = InvalidSampleRemover(verbose=1)
 
-    # Train the model with custom callbacks
-    callbacks = [invalid_sample_remover]
-    model.learn(total_timesteps=100000, callback=callbacks)
-    print("Training completed!")
-    model.save("serow_ppo_model")
+    # # Instantiate the custom PPO with custom rollout collection
+    # model = CustomPPO(
+    #     CustomActorCriticPolicy, 
+    #     vec_env, 
+    #     device='cpu', 
+    #     verbose=1,
+    #     learning_rate=1e-4,
+    #     n_steps=512,
+    #     batch_size=64,
+    #     n_epochs=4,
+    #     gamma=1.0,
+    #     gae_lambda=0.95,
+    #     clip_range=0.2,
+    #     ent_coef=0.0,
+    #     vf_coef=0.5,
+    #     max_grad_norm=0.5,
+    #     target_kl=0.01,
+    #     normalize_advantage=True,
+    #     clip_range_vf=0.02
+    # )
+
+    # model.set_invalid_sample_remover(invalid_sample_remover)
+
+    # # Train the model with custom callbacks
+    # callbacks = [invalid_sample_remover]
+    # model.learn(total_timesteps=100000, callback=callbacks)
+    # print("Training completed!")
+    # model.save("serow_ppo_model")
