@@ -489,12 +489,6 @@ class CustomPPO(PPO):
         print(f"Model loaded from {filepath}")
         return model
 
-    def eval(self):
-        self.policy.set_training_mode(False)
-
-    def train(self):
-        self.policy.set_training_mode(True)
-
 class CustomNetwork(nn.Module):
     """
     Custom network for policy and value function.
@@ -1267,7 +1261,8 @@ if __name__ == "__main__":
         max_grad_norm=0.5,
         target_kl=0.01,
         normalize_advantage=True,
-        clip_range_vf=0.2
+        clip_range_vf=0.2,
+        tensorboard_log="./ppo_logs"
     )
 
     model.set_invalid_sample_remover(invalid_sample_remover)
@@ -1280,5 +1275,5 @@ if __name__ == "__main__":
 
     # model = CustomPPO.load_model("serow_ppo_model")
     # Evaluate the model
-    model.eval()
+    model.policy.set_training_mode(False)
     evaluate_model(eval_env, model)
