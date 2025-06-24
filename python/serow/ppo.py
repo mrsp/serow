@@ -22,10 +22,11 @@ class PPO:
         # Learning rate parameters
         self.initial_actor_lr = params['actor_lr']
         self.initial_critic_lr = params['critic_lr']
-        self.update_lr = params.get('update_lr', False)
-        self.final_lr_ratio = params.get('final_lr_ratio', 0.1)
+        self.initial_entropy_coef = params['entropy_coef']
+        self.final_lr_ratio = params.get('final_lr_ratio', 1.0)
         self.total_steps = params.get('total_steps', 1000000)
         self.training_step = 0
+        self.total_training_steps = params.get('total_training_steps', 1000000)
         self.target_kl = params.get('target_kl', None)
 
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.initial_actor_lr)
@@ -37,7 +38,7 @@ class PPO:
         self.gamma = params['gamma']
         self.gae_lambda = params['gae_lambda']
         self.clip_param = params['clip_param']
-        self.entropy_coef = params['entropy_coef']
+        self.entropy_coef = self.initial_entropy_coef
         self.value_loss_coef = params['value_loss_coef']
         self.max_grad_norm = params['max_grad_norm']
         self.ppo_epochs = params['ppo_epochs']
@@ -48,15 +49,8 @@ class PPO:
         self.samples = 0
 
         self.normalize_state = normalize_state
-        # Remove min-max normalization for states
-        # self.max_state_value = params['max_state_value']
-        # self.min_state_value = params['min_state_value']
-
-        # Mean-std normalization for states
-        self.state_mean = np.zeros(self.state_dim, dtype=np.float32)
-        self.state_std = np.ones(self.state_dim, dtype=np.float32)
-        self.state_count = 0
-        self.state_m2 = np.zeros(self.state_dim, dtype=np.float32)  # For Welford's algorithm
+        self.max_state_value = params['max_state_value']
+        self.min_state_value = params['min_state_value']
         
         # Early stopping parameters
         self.value_loss_window_size = params.get('value_loss_window_size', 10) 
@@ -73,7 +67,7 @@ class PPO:
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
         # Define a separate clipping parameter for the value function
-        self.value_clip_param = params.get('value_clip_param', 0.2)  
+        self.value_clip_param = params.get('value_clip_param', None)  
         
         # Running statistics for advantage normalization
         self.running_advantage_mean = 0.0
@@ -90,38 +84,17 @@ class PPO:
         self.actor.train()
         self.critic.train()
 
-    def update_state_stats(self, state):
-        # Welford's algorithm for numerically stable mean/std
-        self.state_count += 1
-        delta = state - self.state_mean
-        self.state_mean += delta / self.state_count
-        delta2 = state - self.state_mean
-        self.state_m2 += delta * delta2
-        if self.state_count > 1:
-            self.state_std = np.sqrt(self.state_m2 / (self.state_count - 1) + 1e-8)
-
-    def normalize_state_fn(self, state):
-        return (state - self.state_mean) / (self.state_std + 1e-8)
-
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
         if self.normalize_state:
-            self.update_state_stats(state)
-            self.update_state_stats(next_state)
-            state = self.normalize_state_fn(state)
-            next_state = self.normalize_state_fn(next_state)
-
-        # Convert to numpy and store in buffer
-        state = np.array(state.flatten())
-        action = np.array(action.flatten())
-        next_state = np.array(next_state.flatten())
+           state = normalize_vector(state, self.min_state_value, self.max_state_value)
+           next_state = normalize_vector(next_state, self.min_state_value, self.max_state_value)
 
         experience = (state, action, reward, next_state, done, value, log_prob) 
         self.buffer.append(experience)
     
     def get_action(self, state, deterministic=False):
         if self.normalize_state:
-            self.update_state_stats(state)
-            state = self.normalize_state_fn(state)
+            state = normalize_vector(state, self.min_state_value, self.max_state_value)
 
         with torch.no_grad():
             action, log_prob = self.actor.get_action(state, deterministic)
@@ -131,32 +104,44 @@ class PPO:
     
 
     def compute_gae(self, rewards, values, dones, next_values):
-        # Use the last next_value as bootstrap for incomplete episodes
+        """
+        Compute Generalized Advantage Estimation (GAE)
+        
+        Args:
+            rewards: rewards for each step [T]
+            values: value estimates for each step [T] 
+            dones: done flags for each step [T]
+            next_values: value estimates for next states [T]
+        """
         advantages = torch.zeros_like(rewards, dtype=torch.float32)
         last_gae_lam = 0
         
         for step in reversed(range(len(rewards))):
-            if step == len(rewards) - 1:
-                next_non_terminal = 1.0 - dones[step]
-                next_value = next_values[step]
-            else:
-                next_non_terminal = 1.0 - dones[step + 1]
-                next_value = values[step + 1]
+            # For GAE, we need the terminal flag for the NEXT state
+            # If current step is done, then next state is terminal
+            next_non_terminal = 1.0 - dones[step]
+            next_value = next_values[step]
             
+            # TD error: r + γ * V(s') * (1-done) - V(s)
             delta = rewards[step] + self.gamma * next_value * next_non_terminal - values[step]
+            
+            # GAE: A = δ + γλ * (1-done) * A_next
             advantages[step] = last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
         
         returns = advantages + values
         return advantages, returns
 
-    def update_learning_rates(self):
-        """Update learning rates using linear decay."""
-        progress = min(1.0, self.training_step / self.total_steps)
-        
+    def update_learning_params(self):
+        """Update learning rates and entropy coefficient using linear decay."""
+        progress = min(1.0, self.training_step / self.total_training_steps)
+
         # Linear decay from initial_lr to final_lr
         actor_lr = self.initial_actor_lr - (self.initial_actor_lr - self.initial_actor_lr * self.final_lr_ratio) * progress
         critic_lr = self.initial_critic_lr - (self.initial_critic_lr - self.initial_critic_lr * self.final_lr_ratio) * progress
-        
+        # Decay to 0 at the halfway point
+        self.entropy_coef = self.initial_entropy_coef - (self.initial_entropy_coef * 2.0 * progress)
+        self.entropy_coef = max(self.entropy_coef, 0.0)
+
         # Update optimizer learning rates
         for param_group in self.actor_optimizer.param_groups:
             param_group['lr'] = actor_lr
@@ -243,9 +228,8 @@ class PPO:
         if len(self.buffer) < self.batch_size:
             return 0.0, 0.0, 0.0
 
-        # Update learning rates before training
-        if self.update_lr:
-            self.update_learning_rates()  
+        # Update learning parameters before training
+        self.update_learning_params()  
 
         # Convert buffer to tensors
         states, actions, rewards, next_states, dones, values, log_probs = zip(*self.buffer)
@@ -336,13 +320,16 @@ class PPO:
                 current_values = self.critic(batch_states)
 
                 # Value clipping in normalized space
-                value_pred_clipped = batch_values + torch.clamp(
-                    current_values - batch_values,
-                    -self.value_clip_param, self.value_clip_param
-                )
-                value_loss_unclipped = (current_values - batch_returns) ** 2
-                value_loss_clipped = (value_pred_clipped - batch_returns) ** 2
-                value_loss = torch.max(value_loss_unclipped, value_loss_clipped)
+                if self.value_clip_param is not None:
+                    value_pred_clipped = batch_values + torch.clamp(
+                            current_values - batch_values,
+                            -self.value_clip_param, self.value_clip_param
+                        )
+                    value_loss_unclipped = (current_values - batch_returns) ** 2
+                    value_loss_clipped = (value_pred_clipped - batch_returns) ** 2
+                    value_loss = torch.max(value_loss_unclipped, value_loss_clipped)
+                else:
+                    value_loss = (current_values - batch_returns) ** 2
                 value_loss = 0.5 * value_loss.mean()
                 
                 # Calculate total loss
