@@ -9,6 +9,7 @@ import os
 
 from env import SerowEnv
 from ppo import PPO
+from typing import Callable, Optional, List, Union, Dict, Type, Tuple
 
 from read_mcap import(
     read_base_states, 
@@ -31,9 +32,7 @@ class Actor(nn.Module):
         self.state_dim = params['state_dim']
         self.device = params['device']
 
-        # Output dimensions for covariance parameters
-        self.n_variances = 3
-        self.n_correlations = 3
+        # Output dimensions for action parameters
         self.min_action = params['min_action']
         self.action_dim = params['action_dim']
         
@@ -62,11 +61,11 @@ class Actor(nn.Module):
     
     def forward(self, state):
         """Forward pass to get distribution parameters"""
-        x = F.relu(self.layer1(state))
-        x = F.relu(self.layer2(x))
-        x = F.relu(self.layer3(x))
+        x = F.tanh(self.layer1(state))
+        x = F.tanh(self.layer2(x))
+        x = F.tanh(self.layer3(x))
         
-        mean = self.mean_layer(x)
+        mean = self.mean_layer(x) 
         log_std = self.log_std_layer(x).clamp(-20, 2)  # Constrain log_std
         
         return mean, log_std
@@ -76,49 +75,7 @@ class Actor(nn.Module):
         mean, log_std = self.forward(state)
         std = log_std.exp()
         return torch.distributions.Normal(mean, std)
-
-    def _transform_actions(self, raw_actions: torch.Tensor) -> torch.Tensor:
-        """Transform raw actions using softplus and tanh."""
-        variances = F.softplus(raw_actions[..., :self.n_variances]) + self.min_action
-        correlations = torch.tanh(raw_actions[..., self.n_variances:])
-        return torch.cat([variances, correlations], dim=-1)
-
-    def _inverse_transform_actions(self, transformed_actions: torch.Tensor) -> torch.Tensor:
-        """Inverse transform actions back to raw space."""
-        # Inverse of softplus: x = log(exp(y - min_action) - 1)
-        # But softplus(x) = log(1 + exp(x)), so inverse is log(exp(y) - 1)
-        variances = transformed_actions[..., :self.n_variances]
-        correlations = transformed_actions[..., self.n_variances:]
-        
-        # Inverse softplus: if y = softplus(x) + min_action, then x = log(exp(y - min_action) - 1)
-        # However, this can be numerically unstable. Better approach:
-        # if y = log(1 + exp(x)) + min_action, then exp(y - min_action) = 1 + exp(x)
-        # so exp(x) = exp(y - min_action) - 1, and x = log(exp(y - min_action) - 1)
-        
-        # Clamp to avoid numerical issues
-        var_clamped = torch.clamp(variances - self.min_action, min=1e-8)
-        raw_variances = torch.log(torch.expm1(var_clamped))  # expm1(x) = exp(x) - 1
-        
-        # Inverse tanh: x = arctanh(y) = 0.5 * log((1+y)/(1-y))
-        # Clamp correlations to avoid numerical issues at boundaries
-        corr_clamped = torch.clamp(correlations, min=-0.999, max=0.999)
-        raw_correlations = 0.5 * torch.log((1 + corr_clamped) / (1 - corr_clamped))
-        
-        return torch.cat([raw_variances, raw_correlations], dim=-1)
-        
-    def _compute_jacobian(self, raw_actions: torch.Tensor) -> torch.Tensor:
-        """Compute the jacobian of the transformation."""
-        # For softplus: d/dx softplus(x) = sigmoid(x) = 1/(1 + exp(-x))
-        var_jacobian = torch.sigmoid(raw_actions[..., :self.n_variances])
-        
-        # For tanh: d/dx tanh(x) = 1 - tanh^2(x) = sech^2(x)
-        tanh_vals = torch.tanh(raw_actions[..., self.n_variances:])
-        corr_jacobian = 1 - tanh_vals**2
-        
-        # Combine jacobians and add epsilon for numerical stability
-        jacobian = torch.cat([var_jacobian, corr_jacobian], dim=-1)
-        return torch.clamp(jacobian, min=1e-8)  # Prevent division by zero in log
-
+   
     def get_action(self, state, deterministic=False):
         """Sample action for PPO training"""
         state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
@@ -129,41 +86,55 @@ class Actor(nn.Module):
         else:
             raw_actions = dist.sample()
         
-        # Apply transformations
-        actions = self._transform_actions(raw_actions)
-
-        # Compute jacobian for change of variables
-        jacobian = self._compute_jacobian(raw_actions)
+        # Apply softplus transformation to ensure positive actions
+        actions = F.softplus(raw_actions) + self.min_action
         
+        # Compute Jacobian of softplus transformation
+        # d/dx softplus(x) = sigmoid(x)
+        jacobian = torch.sigmoid(raw_actions)
+        jacobian_log_det = torch.log(jacobian).sum(dim=-1)
+
         # Log probability with change of variables
         # log p(y) = log p(x) - log |det(J)|
-        log_prob = dist.log_prob(raw_actions).sum(dim=-1) - torch.log(jacobian).sum(dim=-1)
-        
+        log_prob = dist.log_prob(raw_actions).sum(dim=-1) - jacobian_log_det
+
         return actions.squeeze(0).detach().cpu().numpy(), log_prob.squeeze(0).detach().cpu().item()
     
     def evaluate_actions(self, states, actions):
-        """Evaluate actions for PPO update"""
+        """Evaluate actions for PPO update - expects transformed actions"""
         dist = self.get_distribution(states)
         
-        # Inverse transform actions to get raw actions
-        raw_actions = self._inverse_transform_actions(actions)
+        # Invert the softplus transformation: softplus^(-1)(y - min_action)
+        # If y = softplus(x) + min_action, then x = softplus^(-1)(y - min_action)
+        # softplus^(-1)(y) = log(exp(y) - 1) for y > 0
+        y_shifted = actions - self.min_action
+        
+        # Numerically stable inverse softplus
+        # For large y: softplus^(-1)(y) ≈ y
+        # For small y: softplus^(-1)(y) = log(exp(y) - 1)
+        raw_actions = torch.where(
+            y_shifted > 20,
+            y_shifted,
+            torch.log(torch.expm1(y_shifted))  # expm1(x) = exp(x) - 1, more stable
+        )
 
-        # Compute jacobian
-        jacobian = self._compute_jacobian(raw_actions)
+        # Compute log probability of raw actions
+        log_probs = dist.log_prob(raw_actions).sum(dim=-1)
         
-        # Log probability with change of variables
-        # log p(y) = log p(x) - log |det(J)|
-        log_probs = dist.log_prob(raw_actions).sum(dim=-1) - torch.log(jacobian).sum(dim=-1)
-        
-        # Entropy of transformed distribution
-        # For a transformation y = f(x), the entropy transforms as:
-        # H(Y) = H(X) + E[log |det(J)|]
-        # However, since we're working with the raw distribution X, we need to be careful
-        base_entropy = dist.entropy().sum(dim=-1)
+        # Compute Jacobian for transformation correction
+        jacobian = torch.sigmoid(raw_actions)
         jacobian_log_det = torch.log(jacobian).sum(dim=-1)
-        entropy = base_entropy + jacobian_log_det
-
-        return log_probs, entropy
+        
+        # Adjust log probability for transformation
+        # log p(y) = log p(x) - log |det(J)|
+        log_probs = log_probs - jacobian_log_det
+        
+        # Compute entropy of the transformed distribution
+        # For transformed distribution: H(Y) = H(X) + E[log |det(J)|]
+        base_entropy = dist.entropy().sum(dim=-1)
+        transformed_entropy = base_entropy + jacobian_log_det
+        
+        return log_probs, transformed_entropy
 
 class Critic(nn.Module):
     def __init__(self, params):
@@ -241,7 +212,7 @@ def train_ppo(datasets, agent, params):
 
                         # Compute the action
                         action, value, log_prob = agent.get_action(x, deterministic=False)
-
+                    
                         # Run the update step
                         post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
                         rewards[cf] = reward
@@ -332,7 +303,7 @@ if __name__ == "__main__":
 
     # Compute the dt
     dt = []
-    dataset_size = len(imu_measurements) - 1    
+    dataset_size = len(imu_measurements) - 1
     for i in range(dataset_size):
         dt.append(imu_measurements[i+1].timestamp - imu_measurements[i].timestamp)
     dt = np.median(np.array(dt))
@@ -340,7 +311,7 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     state_dim = 7  
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
+    action_dim = 3  # Based on the action vector used in ContactEKF.setAction()
     min_action = 1e-8
     robot = "go2"
 
@@ -406,7 +377,6 @@ if __name__ == "__main__":
 
     train_datasets = [test_dataset]
     device = 'cpu'
-
     max_episodes = 15
     n_steps = 1024
     total_steps = max_episodes * dataset_size * len(contact_frames)

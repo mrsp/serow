@@ -26,28 +26,28 @@ class SerowEnv:
         # Orientation error
         orientation_error = logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
                                    @ quaternion_to_rotation_matrix(state.get_base_orientation()))
-            
-        if (np.linalg.norm(position_error) > 0.5  or np.linalg.norm(orientation_error) > 0.2):
+        position_error_val = np.linalg.norm(position_error)
+        orientation_error_val = np.linalg.norm(orientation_error)
+        if (position_error_val > 0.5  or orientation_error_val > 0.2):
             done = 1.0  
             reward = 0.0
+            position_reward = 0.0
+            orientation_reward = 0.0
         else:
             done = 0.0
             reward = (step + 1) / max_steps
                 
-            position_error_cov = state.get_base_position_cov() + np.eye(3) * 1e-8
-            position_error = position_error.dot(np.linalg.inv(position_error_cov).dot(position_error))
-            alpha_pos = 800.0
-            position_reward = np.exp(-alpha_pos * position_error)
-            reward += position_reward
+            alpha_pos = 1.0
+            position_reward = np.exp(-alpha_pos * position_error_val)
+            reward += 0.1 * position_reward
 
-            orientation_error_cov = state.get_base_orientation_cov() + np.eye(3) * 1e-8
-            orientation_error = orientation_error.dot(np.linalg.inv(orientation_error_cov).dot(orientation_error))
-            alpha_ori = 600.0
-            orientation_reward = np.exp(-alpha_ori * orientation_error)
-            reward += orientation_reward
+            alpha_ori = 1.0
+            orientation_reward = np.exp(-alpha_ori * orientation_error_val)
+            reward += 0.1 * orientation_reward
 
-            # Normalize the reward
-            reward /= 3.0
+        # Reward diagnostics
+        # print(f"[Reward Debug] step={step}, done = {done}, pos_reward={position_reward}, ori_reward={orientation_reward}, total_reward={reward}")
+
         return reward, done    
 
     def compute_state(self, cf, state, kin):
