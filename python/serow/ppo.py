@@ -25,7 +25,6 @@ class PPO:
         self.initial_entropy_coef = params['entropy_coef']
         self.final_lr_ratio = params.get('final_lr_ratio', 1.0)
         self.total_steps = params.get('total_steps', 1000000)
-        self.training_step = 0
         self.total_training_steps = params.get('total_training_steps', 1000000)
         self.target_kl = params.get('target_kl', None)
 
@@ -117,9 +116,12 @@ class PPO:
         last_gae_lam = 0
         
         for step in reversed(range(len(rewards))):
-            # For GAE, we need the terminal flag for the NEXT state
-            # If current step is done, then next state is terminal
-            next_non_terminal = 1.0 - dones[step]
+            # Use next step's done flag, or 0 if this is the last step
+            if step == len(rewards) - 1:
+                next_non_terminal = 0.0  # Episode ended
+            else:
+                next_non_terminal = 1.0 - dones[step + 1]
+           
             next_value = next_values[step]
             
             # TD error: r + γ * V(s') * (1-done) - V(s)
@@ -224,9 +226,9 @@ class PPO:
             kl_div = (old_log_probs - new_log_probs).mean()
         return kl_div.item()
 
-    def train(self):
-        if len(self.buffer) < self.batch_size:
-            return 0.0, 0.0, 0.0
+    def learn(self):
+        if len(self.buffer) < 3.0 *self.batch_size:
+            return 0.0, 0.0, 0.0, False
 
         # Update learning parameters before training
         self.update_learning_params()  
@@ -254,7 +256,7 @@ class PPO:
 
         # Compute next state values
         with torch.no_grad():
-            next_values = self.critic(next_states) * (1 - dones)
+            next_values = self.critic(next_states).squeeze(-1)  # Keep all values for GAE
         
         # Compute GAE and returns
         advantages, returns = self.compute_gae(rewards, values, dones, next_values)

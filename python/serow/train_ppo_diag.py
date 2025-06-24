@@ -242,11 +242,11 @@ def train_ppo(datasets, agent, params):
                     if reward is not None:
                         step_reward += reward
                         collected_steps += 1
-                episode_return = params['gamma'] * episode_return + step_reward
+                episode_return += step_reward
                 
                 # Train policy periodically
                 if collected_steps >= params['n_steps']:
-                    actor_loss, critic_loss, _, converged = agent.train()
+                    actor_loss, critic_loss, _, converged = agent.learn()
                     if actor_loss is not None and critic_loss is not None:
                         print(f"[Episode {episode + 1}/{max_episodes}] Step [{time_step + 1}/{max_steps}] Policy Loss: {actor_loss}, Value Loss: {critic_loss}")
                     collected_steps = 0

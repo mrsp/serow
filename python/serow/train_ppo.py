@@ -30,97 +30,47 @@ class Actor(nn.Module):
         super(Actor, self).__init__()
         self.state_dim = params['state_dim']
         self.device = params['device']
-
-        # Output dimensions for covariance parameters
-        self.n_variances = 3
-        self.n_correlations = 3
-        self.min_action = params['min_action']
         self.action_dim = params['action_dim']
+        self.min_action = torch.from_numpy(params['min_action']).to(self.device)
+        self.max_action = torch.from_numpy(params['max_action']).to(self.device)
         
         # Shared layers
         self.layer1 = nn.Linear(self.state_dim, 64)
         self.layer2 = nn.Linear(64, 64)
         self.layer3 = nn.Linear(64, 32)
         
-        # Output layers for mean and log_std of each parameter
+        # Output layers
         self.mean_layer = nn.Linear(32, self.action_dim)
         self.log_std_layer = nn.Linear(32, self.action_dim)
         
         self._init_weights()
     
     def _init_weights(self):
-        """Initialize network weights for PPO"""
         for layer in [self.layer1, self.layer2, self.layer3]:
             nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
             nn.init.constant_(layer.bias, 0.0)
         
-        # Initialize output layers
         nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)
         nn.init.constant_(self.mean_layer.bias, 0.0)
         nn.init.orthogonal_(self.log_std_layer.weight, gain=0.01)
-        nn.init.constant_(self.log_std_layer.bias, -1.0)  # Start with small std
+        nn.init.constant_(self.log_std_layer.bias, -1.0)
     
     def forward(self, state):
-        """Forward pass to get distribution parameters"""
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
         x = F.relu(self.layer3(x))
         
         mean = self.mean_layer(x)
-        log_std = self.log_std_layer(x).clamp(-20, 2)  # Constrain log_std
+        log_std = self.log_std_layer(x).clamp(-20, 2)
         
         return mean, log_std
     
     def get_distribution(self, state):
-        """Get the action distribution for PPO"""
         mean, log_std = self.forward(state)
         std = log_std.exp()
         return torch.distributions.Normal(mean, std)
-
-    def _transform_actions(self, raw_actions: torch.Tensor) -> torch.Tensor:
-        """Transform raw actions using softplus and tanh."""
-        variances = F.softplus(raw_actions[..., :self.n_variances]) + self.min_action
-        correlations = torch.tanh(raw_actions[..., self.n_variances:])
-        return torch.cat([variances, correlations], dim=-1)
-
-    def _inverse_transform_actions(self, transformed_actions: torch.Tensor) -> torch.Tensor:
-        """Inverse transform actions back to raw space."""
-        # Inverse of softplus: x = log(exp(y - min_action) - 1)
-        # But softplus(x) = log(1 + exp(x)), so inverse is log(exp(y) - 1)
-        variances = transformed_actions[..., :self.n_variances]
-        correlations = transformed_actions[..., self.n_variances:]
-        
-        # Inverse softplus: if y = softplus(x) + min_action, then x = log(exp(y - min_action) - 1)
-        # However, this can be numerically unstable. Better approach:
-        # if y = log(1 + exp(x)) + min_action, then exp(y - min_action) = 1 + exp(x)
-        # so exp(x) = exp(y - min_action) - 1, and x = log(exp(y - min_action) - 1)
-        
-        # Clamp to avoid numerical issues
-        var_clamped = torch.clamp(variances - self.min_action, min=1e-8)
-        raw_variances = torch.log(torch.expm1(var_clamped))  # expm1(x) = exp(x) - 1
-        
-        # Inverse tanh: x = arctanh(y) = 0.5 * log((1+y)/(1-y))
-        # Clamp correlations to avoid numerical issues at boundaries
-        corr_clamped = torch.clamp(correlations, min=-0.999, max=0.999)
-        raw_correlations = 0.5 * torch.log((1 + corr_clamped) / (1 - corr_clamped))
-        
-        return torch.cat([raw_variances, raw_correlations], dim=-1)
-        
-    def _compute_jacobian(self, raw_actions: torch.Tensor) -> torch.Tensor:
-        """Compute the jacobian of the transformation."""
-        # For softplus: d/dx softplus(x) = sigmoid(x) = 1/(1 + exp(-x))
-        var_jacobian = torch.sigmoid(raw_actions[..., :self.n_variances])
-        
-        # For tanh: d/dx tanh(x) = 1 - tanh^2(x) = sech^2(x)
-        tanh_vals = torch.tanh(raw_actions[..., self.n_variances:])
-        corr_jacobian = 1 - tanh_vals**2
-        
-        # Combine jacobians and add epsilon for numerical stability
-        jacobian = torch.cat([var_jacobian, corr_jacobian], dim=-1)
-        return torch.clamp(jacobian, min=1e-8)  # Prevent division by zero in log
-
+    
     def get_action(self, state, deterministic=False):
-        """Sample action for PPO training"""
         state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
         dist = self.get_distribution(state)
         
@@ -129,40 +79,24 @@ class Actor(nn.Module):
         else:
             raw_actions = dist.sample()
         
-        # Apply transformations
-        actions = self._transform_actions(raw_actions)
-
-        # Compute jacobian for change of variables
-        jacobian = self._compute_jacobian(raw_actions)
+        # Clip actions
+        actions = torch.clamp(raw_actions, self.min_action, self.max_action)
         
-        # Log probability with change of variables
-        # log p(y) = log p(x) - log |det(J)|
-        log_prob = dist.log_prob(raw_actions).sum(dim=-1) - torch.log(jacobian).sum(dim=-1)
+        # Compute log probability on the clipped actions
+        log_prob = dist.log_prob(actions).sum(dim=-1)
         
         return actions.squeeze(0).detach().cpu().numpy(), log_prob.squeeze(0).detach().cpu().item()
     
     def evaluate_actions(self, states, actions):
-        """Evaluate actions for PPO update"""
         dist = self.get_distribution(states)
         
-        # Inverse transform actions to get raw actions
-        raw_actions = self._inverse_transform_actions(actions)
-
-        # Compute jacobian
-        jacobian = self._compute_jacobian(raw_actions)
+        # Clip actions
+        actions = torch.clamp(actions, self.min_action, self.max_action)
         
-        # Log probability with change of variables
-        # log p(y) = log p(x) - log |det(J)|
-        log_probs = dist.log_prob(raw_actions).sum(dim=-1) - torch.log(jacobian).sum(dim=-1)
+        # Compute log probabilities with proper handling of boundary cases
+        log_probs = dist.log_prob(actions).sum(dim=-1)
+        entropy = dist.entropy().sum(dim=-1)
         
-        # Entropy of transformed distribution
-        # For a transformation y = f(x), the entropy transforms as:
-        # H(Y) = H(X) + E[log |det(J)|]
-        # However, since we're working with the raw distribution X, we need to be careful
-        base_entropy = dist.entropy().sum(dim=-1)
-        jacobian_log_det = torch.log(jacobian).sum(dim=-1)
-        entropy = base_entropy + jacobian_log_det
-
         return log_probs, entropy
 
 class Critic(nn.Module):
@@ -271,11 +205,11 @@ def train_ppo(datasets, agent, params):
                     if reward is not None:
                         step_reward += reward
                         collected_steps += 1
-                episode_return = params['gamma'] * episode_return + step_reward
+                episode_return += step_reward
                 
                 # Train policy periodically
                 if collected_steps >= params['n_steps']:
-                    actor_loss, critic_loss, _, converged = agent.train()
+                    actor_loss, critic_loss, _, converged = agent.learn()
                     if actor_loss is not None and critic_loss is not None:
                         print(f"[Episode {episode + 1}/{max_episodes}] Step [{time_step + 1}/{max_steps}] Policy Loss: {actor_loss}, Value Loss: {critic_loss}")
                     collected_steps = 0
@@ -341,7 +275,8 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     state_dim = 7  
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = 1e-8
+    min_action = np.array([1e-3, 1e-3, 1e-3, -2, -2, -2])
+    max_action = np.array([1e3, 1e3, 1e3, 2, 2, 2])
     robot = "go2"
 
     serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim)
@@ -407,7 +342,7 @@ if __name__ == "__main__":
     train_datasets = [test_dataset]
     device = 'cpu'
 
-    max_episodes = 15
+    max_episodes = 250
     n_steps = 1024
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
@@ -418,12 +353,12 @@ if __name__ == "__main__":
         'robot': robot,
         'state_dim': state_dim,
         'action_dim': action_dim,
-        'max_action': None,
+        'max_action': max_action,
         'min_action': min_action,
         'clip_param': 0.2,  
         'value_clip_param': 0.2,
         'value_loss_coef': 0.25,  
-        'entropy_coef': 0.001,  
+        'entropy_coef': 0.005,  
         'gamma': 0.99,
         'gae_lambda': 0.95,
         'ppo_epochs': 5,  
@@ -431,8 +366,8 @@ if __name__ == "__main__":
         'max_grad_norm': 0.5,  
         'buffer_size': 10000,  
         'max_episodes': max_episodes,
-        'actor_lr': 1e-5, 
-        'critic_lr': 3e-5,  
+        'actor_lr': 1e-6, 
+        'critic_lr': 3e-6,  
         'target_kl': 0.01,
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
