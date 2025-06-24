@@ -275,8 +275,8 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     state_dim = 7  
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-3, 1e-3, 1e-3, -2, -2, -2])
-    max_action = np.array([1e3, 1e3, 1e3, 2, 2, 2])
+    min_action = np.array([1e-8, 1e-8, 1e-8, -1e2, -1e2, -1e2])
+    max_action = np.array([1e4, 1e4, 1e4, 1e2, 1e2, 1e2])
     robot = "go2"
 
     serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim)
@@ -342,7 +342,7 @@ if __name__ == "__main__":
     train_datasets = [test_dataset]
     device = 'cpu'
 
-    max_episodes = 250
+    max_episodes = 120
     n_steps = 1024
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
