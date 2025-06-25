@@ -67,12 +67,6 @@ class PPO:
 
         # Define a separate clipping parameter for the value function
         self.value_clip_param = params.get('value_clip_param', None)  
-        
-        # Running statistics for advantage normalization
-        self.running_advantage_mean = 0.0
-        self.running_advantage_std = 1.0 # Initialize to 1.0 to avoid division by zero
-        self.advantage_stats_count = 0
-        self.advantage_stats_alpha = 0.001 # Small learning rate for updating running stats
         self.check_value_loss = params.get('check_value_loss', False)
 
     def eval(self):
@@ -226,7 +220,7 @@ class PPO:
         return kl_div.item()
 
     def learn(self):
-        if len(self.buffer) < 3.0 *self.batch_size:
+        if len(self.buffer) < 3 * self.batch_size:
             return 0.0, 0.0, 0.0, False
 
         # Update learning parameters before training
@@ -239,10 +233,10 @@ class PPO:
         states = np.array([np.array(s).flatten() for s in states])
         next_states = np.array([np.array(s).flatten() for s in next_states])
         actions = np.array([np.array(a).flatten() for a in actions])
-        rewards = np.array(rewards).reshape(-1, 1)
-        dones = np.array(dones).reshape(-1, 1)
-        values = np.array(values).reshape(-1, 1)
-        old_log_probs = np.array(log_probs).reshape(-1, 1)
+        rewards = np.array(rewards).flatten()
+        dones = np.array(dones).flatten()
+        values = np.array(values).flatten()
+        old_log_probs = np.array(log_probs).flatten()
 
         # Convert to tensors
         states = torch.FloatTensor(states).to(self.device)
@@ -260,20 +254,6 @@ class PPO:
         # Compute GAE and returns
         advantages, returns = self.compute_gae(rewards, values, dones, next_values)
         
-        advantages_mean = advantages.mean()
-        advantages_std = advantages.std()
-
-        # Simple online update
-        # Using a fixed alpha (EWMA-like) for simplicity
-        if self.advantage_stats_count == 0:
-            self.running_advantage_mean = advantages_mean
-            self.running_advantage_std = advantages_std
-        else:
-            self.running_advantage_mean = (1 - self.advantage_stats_alpha) * self.running_advantage_mean + self.advantage_stats_alpha * advantages_mean
-            self.running_advantage_std = (1 - self.advantage_stats_alpha) * self.running_advantage_std + self.advantage_stats_alpha * advantages_std
-        
-        self.advantage_stats_count += 1
-
         # Log data
         for i in range(len(rewards)):
             self.logger.log_step(self.samples, rewards[i], values[i], advantages[i])
@@ -281,7 +261,7 @@ class PPO:
 
         # Normalize advantages using running statistics
         # Use a small epsilon for numerical stability
-        advantages = (advantages - self.running_advantage_mean) / (self.running_advantage_std + 1e-8)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         
         # Training loop
         dataset_size = len(states)
@@ -309,7 +289,7 @@ class PPO:
 
                 # Get current policy outputs using the new evaluate_actions method
                 current_log_probs, entropy = self.actor.evaluate_actions(batch_states, batch_actions)
-                
+
                 # Calculate policy loss with clipping
                 log_ratio = current_log_probs - batch_old_log_probs
                 ratio = torch.exp(log_ratio)
@@ -332,7 +312,7 @@ class PPO:
                 else:
                     value_loss = (current_values - batch_returns) ** 2
                 value_loss = 0.5 * value_loss.mean()
-                
+
                 # Calculate total loss
                 total_loss = policy_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy.mean()
 
