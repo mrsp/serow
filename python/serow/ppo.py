@@ -116,25 +116,15 @@ class PPO:
         last_gae_lam = 0
         
         for step in reversed(range(len(rewards))):
-            # next_non_terminal should refer to the 'done' status of the state *after* rewards[step]
-            # which is dones[step] if dones[i] corresponds to next_states[i]
-            if step == len(rewards) - 1:
-                # If this is the last step in the collected trajectory, 
-                # there is no 'actual' next state in the buffer.
-                # So, we treat it as if the episode ended, and V(S_next) is 0, A_next is 0.
-                next_non_terminal = 0.0
-                # The next_value here (next_values[step]) would be V(S_T) if T is the last step index, 
-                # but it refers to V(S_{t+1}) for a regular step.
-                # It's V(S_{last_step_in_batch + 1}) conceptually.
-            else:
-                # dones[step] indicates if next_states[step] (which is S_{t+1} for current step t) is terminal
-                next_non_terminal = 1.0 - dones[step] # <-- CORRECTED LINE
-            
-            next_value = next_values[step] # This is V(S_{t+1})
+            # dones[step] indicates if next_states[step] (which is S_{t+1} for current step t) is terminal
+            next_non_terminal = 1.0 - dones[step]
+            # If the episode is done, next state is terminal, so V(s_{t+1}) = 0
+            # Otherwise, use the value estimate of the next state
+            next_value = next_values[step] * next_non_terminal
             
             # TD error: r_t + γ * V(s_{t+1}) * (1-done_{t+1}) - V(s_t)
             # done_{t+1} is dones[step]
-            delta = rewards[step] + self.gamma * next_value * next_non_terminal - values[step]
+            delta = rewards[step] + self.gamma * next_value - values[step]
             
             # GAE: A_t = δ_t + γλ * (1-done_{t+1}) * A_{t+1}
             advantages[step] = last_gae_lam = delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam

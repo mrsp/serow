@@ -61,7 +61,7 @@ class Actor(nn.Module):
         x = F.relu(self.layer3(x))
         
         mean = self.mean_layer(x)
-        log_std = self.log_std_layer(x).clamp(-20, 2)
+        log_std = self.log_std_layer(x).clamp(-4, 1)
         
         return mean, log_std
     
@@ -147,7 +147,7 @@ def train_ppo(datasets, agent, params):
 
         for episode in range(max_episodes):
             serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
-                                 params['action_dim'], params['state_dim'])
+                                 params['action_dim'], params['state_dim'], params['dt'])
             
             # Episode tracking variables
             episode_return = 0.0
@@ -273,13 +273,13 @@ if __name__ == "__main__":
     print(f"dt: {dt}")
 
     # Define the dimensions of your state and action spaces
-    state_dim = 7  
+    state_dim = 4  
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8, 1e-8, 1e-8, -1e2, -1e2, -1e2])
-    max_action = np.array([1e4, 1e4, 1e4, 1e2, 1e2, 1e2])
+    min_action = np.array([1e-10, 1e-10, 1e-10, -10, -10, -10])
+    max_action = np.array([1e2, 1e2, 1e2, 10, 10, 10])
     robot = "go2"
 
-    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim)
+    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, dt)
     test_dataset = {
         'imu': imu_measurements,
         'joints': joint_measurements,
@@ -308,33 +308,31 @@ if __name__ == "__main__":
 
     # Compute max and min state values
     local_contact_positions = []
-    base_linear_velocities = []
     contact_probabilities = []
     for (base_state, kin) in zip(base_states, kinematics):
         # Check if we have at least one contact
         if sum(kin.contacts_status[frame] for frame in contact_frames) > 0.0:
             R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
-            base_linear_velocities.append(base_state.base_linear_velocity)
             for cf in contact_frames:
                 if base_state.contacts_position[cf] is not None \
                     and kin.contacts_position[cf] is not None \
                     and kin.contacts_status[cf] > 0.0:
                     local_pos = R_base @ (base_state.contacts_position[cf] - base_state.base_position)
                     local_kin_pos = kin.contacts_position[cf]
-                    local_contact_positions.append(local_pos - local_kin_pos)
+                    R = kin.contacts_position_noise[cf] + kin.position_cov
+                    e = np.absolute(local_pos - local_kin_pos)
+                    e = np.linalg.inv(R) @ e
+                    local_contact_positions.append(e)
                     contact_probabilities.append(kin.contacts_probability[cf])
 
     # Convert to numpy array for easier manipulation
-    base_linear_velocities = np.array(base_linear_velocities)
     local_contact_positions = np.array(local_contact_positions)
     contact_probabilities = np.array(contact_probabilities)
 
     # Create max and min state values with correct dimensions
     max_state_value = np.concatenate([np.max(local_contact_positions, axis=0), 
-                                      np.max(base_linear_velocities, axis=0),
                                       [np.max(contact_probabilities)]])
     min_state_value = np.concatenate([np.min(local_contact_positions, axis=0), 
-                                      np.min(base_linear_velocities, axis=0),
                                       [np.min(contact_probabilities)]])
     print(f"RL state max values: {max_state_value}")
     print(f"RL state min values: {min_state_value}")
@@ -356,19 +354,19 @@ if __name__ == "__main__":
         'max_action': max_action,
         'min_action': min_action,
         'clip_param': 0.2,  
-        'value_clip_param': 0.2,
-        'value_loss_coef': 0.25,  
-        'entropy_coef': 0.005,  
+        'value_clip_param': None,
+        'value_loss_coef': 0.5,  
+        'entropy_coef': 0.01,  
         'gamma': 0.99,
         'gae_lambda': 0.95,
         'ppo_epochs': 5,  
-        'batch_size': 128,  
+        'batch_size': 64,  
         'max_grad_norm': 0.5,  
         'buffer_size': 10000,  
         'max_episodes': max_episodes,
         'actor_lr': 1e-6, 
-        'critic_lr': 3e-6,  
-        'target_kl': 0.01,
+        'critic_lr': 1e-5,  
+        'target_kl': 0.05,
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
         'n_steps': n_steps,
@@ -381,6 +379,7 @@ if __name__ == "__main__":
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
         'check_value_loss': False,
         'total_training_steps': total_training_steps,
+        'dt': dt
     }
 
     loaded = False

@@ -4,7 +4,7 @@ import numpy as np
 from utils import quaternion_to_rotation_matrix, logMap, sync_and_align_data, plot_trajectories
 
 class SerowEnv:
-    def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim):
+    def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim, dt):
         self.robot = robot
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{robot}_rl.json")
@@ -16,35 +16,36 @@ class SerowEnv:
         self.contact_frames = self.initial_state.get_contacts_frame()
         self.action_dim = action_dim
         self.state_dim = state_dim
+        self.previous_position_error_ = 0.0
+        self.previous_orientation_error_ = 0.0
+        self.dt = dt
 
     def compute_reward(self, state, gt, step, max_steps):
         reward = None
         done = None
 
         # Position error
-        position_error = state.get_base_position() - gt.position
+        position_error = np.linalg.norm(state.get_base_position() - gt.position)
         # Orientation error
-        orientation_error = logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
-                                   @ quaternion_to_rotation_matrix(state.get_base_orientation()))
-        position_error_val = np.linalg.norm(position_error)
-        orientation_error_val = np.linalg.norm(orientation_error)
-        if (position_error_val > 0.5  or orientation_error_val > 0.2):
+        orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
+                                                   @ quaternion_to_rotation_matrix(state.get_base_orientation())))
+        position_improvement = max(0, (self.previous_position_error_ - position_error) / self.dt)
+        self.previous_position_error_ = position_error
+
+        orientation_improvement = max(0, (self.previous_orientation_error_ - orientation_error) / self.dt)
+        self.previous_orientation_error_ = orientation_error
+
+        if (np.linalg.norm(position_error) > 0.15 or np.linalg.norm(orientation_error) > 0.1):
             done = 1.0  
-            reward = 0.0
+            reward = -100.0
             position_reward = 0.0
             orientation_reward = 0.0
         else:
             done = 0.0
-            reward = (step + 1) / max_steps
-                
-            alpha_pos = 1.0
-            position_reward = np.exp(-alpha_pos * position_error_val)
-            reward += 0.1 * position_reward
-
-            alpha_ori = 1.0
-            orientation_reward = np.exp(-alpha_ori * orientation_error_val)
-            reward += 0.1 * orientation_reward
-
+            position_reward = position_improvement
+            orientation_reward = orientation_improvement
+            reward = position_reward + orientation_reward + (step + 1) / max_steps
+        
         # Reward diagnostics
         # print(f"[Reward Debug] step={step}, done = {done}, pos_reward={position_reward}, ori_reward={orientation_reward}, total_reward={reward}")
 
@@ -54,9 +55,10 @@ class SerowEnv:
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
         local_pos = R_base @ (state.get_contact_position(cf) - state.get_base_position())   
         local_kin_pos = kin.contacts_position[cf]
-        local_vel = state.get_base_linear_velocity()  
-        return np.concatenate((local_pos - local_kin_pos, local_vel, 
-                               np.array([kin.contacts_probability[cf]])), axis=0)
+        R = kin.contacts_position_noise[cf] + kin.position_cov
+        e = np.absolute(local_pos - local_kin_pos)
+        e = np.linalg.inv(R) @ e
+        return np.concatenate((e, np.array([kin.contacts_probability[cf]])), axis=0)
 
     def reset(self):
         self.serow_framework = serow.Serow()
