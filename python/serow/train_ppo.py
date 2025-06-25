@@ -366,7 +366,7 @@ if __name__ == "__main__":
         'max_episodes': max_episodes,
         'actor_lr': 1e-6, 
         'critic_lr': 1e-5,  
-        'target_kl': 0.05,
+        'target_kl': 0.03,
         'max_state_value': max_state_value,
         'min_state_value': min_state_value,
         'n_steps': n_steps,
