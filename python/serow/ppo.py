@@ -79,15 +79,15 @@ class PPO:
 
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
         if self.normalize_state:
-           state = normalize_vector(state, self.min_state_value, self.max_state_value)
-           next_state = normalize_vector(next_state, self.min_state_value, self.max_state_value)
+           state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
+           next_state = normalize_vector(next_state.copy(), self.min_state_value, self.max_state_value)
 
         experience = (state, action, reward, next_state, done, value, log_prob) 
         self.buffer.append(experience)
     
     def get_action(self, state, deterministic=False):
         if self.normalize_state:
-            state = normalize_vector(state, self.min_state_value, self.max_state_value)
+            state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
 
         with torch.no_grad():
             action, log_prob = self.actor.get_action(state, deterministic)
