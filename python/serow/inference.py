@@ -58,8 +58,7 @@ class ONNXInference:
         # Get action from actor output and apply softplus scaling
         action = actor_output[0]
         action_scaled = np.log1p(np.exp(action)) + self.min_action  # softplus scaling
-        
-        return action_scaled
+        return np.array([action_scaled])
 
     def get_value(self, state, action):
         # Prepare inputs
@@ -105,6 +104,10 @@ if __name__ == "__main__":
     contacts_frame = set(contact_states[0].contacts_status.keys())
     print(f"Contacts frame: {contacts_frame}")
 
+    # Define the dimensions of your state and action spaces
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    state_dim = 3 
+ 
     # Evaluate the policy
-    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0])
+    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim)
     serow_env.evaluate(test_dataset, agent)

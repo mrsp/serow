@@ -31,17 +31,21 @@ class Actor(nn.Module):
         self.state_dim = params['state_dim']
         self.device = params['device']
         self.action_dim = params['action_dim']
-        self.min_action = torch.from_numpy(params['min_action']).to(self.device)
-        self.max_action = torch.from_numpy(params['max_action']).to(self.device)
+        self.min_action = params['min_action']
+        self.max_action = params['max_action']
+        
+        # Precompute scaling factors
+        self.action_scale = (self.max_action - self.min_action) / 2.0
+        self.action_bias = (self.max_action + self.min_action) / 2.0
         
         # Shared layers
-        self.layer1 = nn.Linear(self.state_dim, 64)
-        self.layer2 = nn.Linear(64, 64)
-        self.layer3 = nn.Linear(64, 32)
+        self.layer1 = nn.Linear(self.state_dim, 128)
+        self.layer2 = nn.Linear(128, 128)
+        self.layer3 = nn.Linear(128, 64)
         
         # Output layers
-        self.mean_layer = nn.Linear(32, self.action_dim)
-        self.log_std_layer = nn.Linear(32, self.action_dim)
+        self.mean_layer = nn.Linear(64, self.action_dim)
+        self.log_std_layer = nn.Linear(64, self.action_dim)
         
         self._init_weights()
     
@@ -76,28 +80,52 @@ class Actor(nn.Module):
         
         if deterministic:
             raw_actions = dist.mean
+            log_prob = torch.zeros(1, device=self.device)
         else:
             raw_actions = dist.sample()
+            log_prob = dist.log_prob(raw_actions).sum(dim=-1)
+
+        # Apply tanh transformation and scale to action bounds
+        tanh_actions = torch.tanh(raw_actions)
+        actions = tanh_actions * self.action_scale + self.action_bias
         
-        # Clip actions
-        actions = torch.clamp(raw_actions, self.min_action, self.max_action)
-        
-        # Compute log probability on the clipped actions
-        log_prob = dist.log_prob(actions).sum(dim=-1)
+        # Calculate log probability with tanh correction
+        if not deterministic:
+            # Jacobian correction for tanh: log |det(J)| = log(1 - tanh²(x))
+            tanh_correction = torch.log(1 - tanh_actions.pow(2) + 1e-8).sum(dim=-1)
+            log_prob = log_prob - tanh_correction
         
         return actions.squeeze(0).detach().cpu().numpy(), log_prob.squeeze(0).detach().cpu().item()
     
     def evaluate_actions(self, states, actions):
         dist = self.get_distribution(states)
         
-        # Clip actions
-        actions = torch.clamp(actions, self.min_action, self.max_action)
+        # Convert actions back to tanh space
+        actions_normalized = (actions - self.action_bias) / self.action_scale
+        # Clamp to valid tanh range to avoid numerical issues
+        actions_normalized = torch.clamp(actions_normalized, -0.999999, 0.999999)
         
-        # Compute log probabilities with proper handling of boundary cases
-        log_probs = dist.log_prob(actions).sum(dim=-1)
-        entropy = dist.entropy().sum(dim=-1)
+        # Convert to raw action space using atanh
+        raw_actions = 0.5 * torch.log((1 + actions_normalized) / (1 - actions_normalized + 1e-8) + 1e-8)
         
-        return log_probs, entropy
+        # Calculate log probabilities of raw actions
+        log_probs = dist.log_prob(raw_actions).sum(dim=-1)
+        
+        # Apply tanh correction (subtract log of Jacobian determinant)
+        tanh_correction = torch.log(1 - actions_normalized.pow(2) + 1e-8).sum(dim=-1)
+        log_probs = log_probs - tanh_correction
+        
+        # Calculate entropy of the base distribution
+        # For the transformed distribution, we need to account for the transformation
+        base_entropy = dist.entropy().sum(dim=-1)
+        
+        # For tanh transformation, the entropy becomes:
+        # H(Y) = H(X) + E[log |J|] where J is the Jacobian
+        # Since we're dealing with the same samples, we can use the current tanh_correction
+        transformed_entropy = base_entropy - tanh_correction
+        
+        return log_probs, transformed_entropy
+    
 
 class Critic(nn.Module):
     def __init__(self, params):
@@ -147,7 +175,7 @@ def train_ppo(datasets, agent, params):
 
         for episode in range(max_episodes):
             serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
-                                 params['action_dim'], params['state_dim'], params['dt'])
+                                 params['action_dim'], params['state_dim'])
             
             # Episode tracking variables
             episode_return = 0.0
@@ -161,67 +189,64 @@ def train_ppo(datasets, agent, params):
                 base_pose_ground_truth[:max_steps]
             )):
                 contact_frames = serow_env.contact_frames
-                rewards = {cf: None for cf in contact_frames}
-                dones = {cf: None for cf in contact_frames}
 
                 # Run the predict step
                 kin, prior_state = serow_env.predict_step(imu, joints, ft)
 
+                # Pick a valid contact frame at random
+                contact_frames_list = list(contact_frames)
+                agent_cf = np.random.choice(contact_frames_list)
+                while True:
+                    if (prior_state.get_contact_position(agent_cf) is None or not kin.contacts_status[agent_cf]):
+                        # Pick a new contact frame excluding the current one
+                        rand_cf = np.random.choice(contact_frames_list)
+                        while rand_cf == agent_cf:
+                            rand_cf = np.random.choice(contact_frames_list)
+                        agent_cf = rand_cf
+                    else:
+                        break
+
+                # Run the update step
+                done = 0.0
+                post_state = prior_state
                 for cf in contact_frames:
-                    if (prior_state.get_contact_position(cf) is not None and kin.contacts_status[cf]):
-                    
+                    if (agent_cf == cf):
                         # Compute the state
-                        x = serow_env.compute_state(cf, prior_state, kin)
+                        x = serow_env.compute_state(cf, post_state, kin)
 
                         # Compute the action
                         action, value, log_prob = agent.get_action(x, deterministic=False)
 
                         # Run the update step
                         post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
-                        rewards[cf] = reward
-                        dones[cf] = done
 
                         # Compute the next state
                         next_x = serow_env.compute_state(cf, post_state, kin)
 
                         # Add to buffer
-                        if reward is not None:
-                            agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
+                        agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
 
                     else:
                         action = np.zeros(serow_env.action_dim)
                         # Just run the update step
                         post_state, _, _ = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
 
-                    # Update the prior state
-                    prior_state = post_state
-
                 # Finish the update
                 serow_env.finish_update(imu, kin)
 
                 # Accumulate rewards
-                step_reward = 0
-                for _, reward in rewards.items():
-                    if reward is not None:
-                        step_reward += reward
-                        collected_steps += 1
-                episode_return += step_reward
+                collected_steps += 1
+                episode_return += reward
                 
                 # Train policy periodically
                 if collected_steps >= params['n_steps']:
-                    actor_loss, critic_loss, _, converged = agent.learn()
+                    actor_loss, critic_loss, entropy, converged = agent.learn()
                     if actor_loss is not None and critic_loss is not None:
-                        print(f"[Episode {episode + 1}/{max_episodes}] Step [{time_step + 1}/{max_steps}] Policy Loss: {actor_loss}, Value Loss: {critic_loss}")
+                        print(f"[Episode {episode + 1}/{max_episodes}] Step [{time_step + 1}/{max_steps}] Policy Loss: {actor_loss}, Value Loss: {critic_loss}, Entropy: {entropy}")
                     collected_steps = 0
 
                 # Check for early termination due to filter divergence
-                terminated = False
-                for cf in contact_frames:
-                    if dones[cf] is not None and dones[cf]:
-                        terminated = True
-                        break
-                
-                if terminated:
+                if done:
                     print(f"Episode {episode + 1} terminated early at step {time_step + 1}/{max_steps} due to " 
                           f"filter divergence")
                     break
@@ -273,13 +298,13 @@ if __name__ == "__main__":
     print(f"dt: {dt}")
 
     # Define the dimensions of your state and action spaces
-    state_dim = 4  
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-10, 1e-10, 1e-10, -10, -10, -10])
-    max_action = np.array([1e2, 1e2, 1e2, 10, 10, 10])
+    state_dim = 3 
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    min_action = 1e-10
+    max_action = 1e2
     robot = "go2"
 
-    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, dt)
+    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim)
     test_dataset = {
         'imu': imu_measurements,
         'joints': joint_measurements,
@@ -308,7 +333,6 @@ if __name__ == "__main__":
 
     # Compute max and min state values
     local_contact_positions = []
-    contact_probabilities = []
     for (base_state, kin) in zip(base_states, kinematics):
         # Check if we have at least one contact
         if sum(kin.contacts_status[frame] for frame in contact_frames) > 0.0:
@@ -320,28 +344,24 @@ if __name__ == "__main__":
                     local_pos = R_base @ (base_state.contacts_position[cf] - base_state.base_position)
                     local_kin_pos = kin.contacts_position[cf]
                     R = kin.contacts_position_noise[cf] + kin.position_cov
-                    e = np.absolute(local_pos - local_kin_pos)
-                    e = np.linalg.inv(R) @ e
+                    e = local_pos - local_kin_pos
+                    e = kin.contacts_probability[cf] * np.linalg.inv(R) @ e
                     local_contact_positions.append(e)
-                    contact_probabilities.append(kin.contacts_probability[cf])
 
     # Convert to numpy array for easier manipulation
     local_contact_positions = np.array(local_contact_positions)
-    contact_probabilities = np.array(contact_probabilities)
 
     # Create max and min state values with correct dimensions
-    max_state_value = np.concatenate([np.max(local_contact_positions, axis=0), 
-                                      [np.max(contact_probabilities)]])
-    min_state_value = np.concatenate([np.min(local_contact_positions, axis=0), 
-                                      [np.min(contact_probabilities)]])
-    print(f"RL state max values: {max_state_value}")
+    max_state_value = np.max(local_contact_positions, axis=0)
+    min_state_value = np.min(local_contact_positions, axis=0)
+    print(f"RL state max values: {max_state_value}")    
     print(f"RL state min values: {min_state_value}")
 
     train_datasets = [test_dataset]
     device = 'cpu'
 
     max_episodes = 120
-    n_steps = 1024
+    n_steps = 512
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
     print(f"Total training steps: {total_training_steps}")

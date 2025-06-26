@@ -192,8 +192,8 @@ class PPO:
         recent_returns = np.array(self.logger.returns[-self.returns_window_size:])
         
         # Check if all recent returns are within convergence threshold of best_return
-        recent_return_converged = np.all(np.abs(recent_returns - self.best_return) <= 
-                                        (self.best_return * self.convergence_threshold))
+        threshold = max(abs(self.best_return) * self.convergence_threshold, 0.01)  # minimum 0.01
+        recent_return_converged = np.all(np.abs(recent_returns - self.best_return) <= threshold)
 
         # Check if value function has converged
         value_loss_converged = False
@@ -220,7 +220,7 @@ class PPO:
         return kl_div.item()
 
     def learn(self):
-        if len(self.buffer) < 3 * self.batch_size:
+        if len(self.buffer) < self.batch_size:
             return 0.0, 0.0, 0.0, False
 
         # Update learning parameters before training
@@ -279,7 +279,9 @@ class PPO:
             for start in range(0, dataset_size, self.batch_size):
                 end = min(start + self.batch_size, dataset_size)
                 batch_indices = indices[start:end]
-                
+                if (batch_indices.shape[0] != self.batch_size):
+                    continue
+
                 batch_states = states[batch_indices]
                 batch_actions = actions[batch_indices]
                 batch_advantages = advantages[batch_indices]
