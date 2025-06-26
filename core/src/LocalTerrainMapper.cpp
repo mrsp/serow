@@ -235,8 +235,17 @@ std::optional<ElevationCell> LocalTerrainMapper::getElevation(const std::array<f
     if (!inside(loc)) {
         return std::nullopt;
     }
+    
+    std::lock_guard lock(mutex_);
     const int hash_id = locationToHashId(loc);
-    std::lock_guard<std::mutex> lock(mutex_);
+    
+    // Add bounds check!
+    if (hash_id < 0 || hash_id >= static_cast<int>(elevation_.size())) {
+        std::cout << "ERROR: hash_id " << hash_id << " is out of bounds! Array size: " 
+                  << elevation_.size() << std::endl;
+        return std::nullopt;
+    }
+    
     return elevation_[hash_id];
 }
 
