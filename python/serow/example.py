@@ -116,7 +116,7 @@ def main():
         
         # Set action
         for cf in contacts_frame:
-            ekf.set_action(cf, np.zeros(6))
+            ekf.set_action(cf, np.zeros(1))
 
         # Predict step
         ekf.predict(state, imu, kin)
