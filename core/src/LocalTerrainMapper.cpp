@@ -241,8 +241,6 @@ std::optional<ElevationCell> LocalTerrainMapper::getElevation(const std::array<f
     
     // Add bounds check!
     if (hash_id < 0 || hash_id >= static_cast<int>(elevation_.size())) {
-        std::cout << "ERROR: hash_id " << hash_id << " is out of bounds! Array size: " 
-                  << elevation_.size() << std::endl;
         return std::nullopt;
     }
     
