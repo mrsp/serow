@@ -8,7 +8,7 @@ import serow
 import os
 
 from env import SerowEnv
-from ppo import PPO
+from ddpg import DDPG
 
 from read_mcap import(
     read_base_states, 
@@ -25,6 +25,22 @@ from utils import(
     export_models_to_onnx
 )
 
+class OUNoise:
+    def __init__(self, size, mu=0.0, theta=0.15, sigma=0.3):
+        self.mu = mu * np.ones(size)
+        self.theta = theta
+        self.sigma = sigma
+        self.state = np.copy(self.mu)
+
+    def reset(self):
+        self.state = np.copy(self.mu)
+
+    def sample(self):
+        x = self.state
+        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
+        self.state = x + dx
+        return self.state
+
 class Actor(nn.Module):
     def __init__(self, params):
         super(Actor, self).__init__()
@@ -34,20 +50,23 @@ class Actor(nn.Module):
         self.min_action = torch.FloatTensor(params['min_action']).to(self.device)
         self.max_action = torch.FloatTensor(params['max_action']).to(self.device)
         
-        # Precompute scaling factors
-        self.action_scale = (self.max_action - self.min_action) / 2.0
-        self.action_bias = (self.max_action + self.min_action) / 2.0
-        
         self.layer1 = nn.Linear(self.state_dim, 512)
         self.layer2 = nn.Linear(512, 512)
         self.layer3 = nn.Linear(512, 256)
         self.layer4 = nn.Linear(256, 128)
         
         # Output layers
-        self.mean_layer = nn.Linear(128, self.action_dim)
-        self.log_std_layer = nn.Linear(128, self.action_dim)
+        self.mean_layer = nn.Linear(128, self.action_dim) 
         self._init_weights()
-    
+        
+        # Exploration noise
+        self.noise = OUNoise(params['action_dim'], sigma=0.1)
+        self.noise_scale = params['noise_scale']
+        self.noise_decay = params['noise_decay']
+
+        self.action_scale = (self.max_action - self.min_action) / 2.0
+        self.action_bias = (self.max_action + self.min_action) / 2.0
+
     def _init_weights(self):
         for layer in [self.layer1, self.layer2, self.layer3, self.layer4]:
             nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
@@ -55,131 +74,63 @@ class Actor(nn.Module):
         
         nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)
         nn.init.constant_(self.mean_layer.bias, 0.0)
-        nn.init.orthogonal_(self.log_std_layer.weight, gain=0.01)
-        nn.init.constant_(self.log_std_layer.bias, -1.0)
     
     def forward(self, state):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
-        x = F.relu(self.layer3(x))  
+        x = F.relu(self.layer3(x))
         x = F.relu(self.layer4(x))
-        mean = self.mean_layer(x)
-        log_std = self.log_std_layer(x).clamp(-4, 1)
-        
-        return mean, log_std
-    
-    def get_distribution(self, state):
-        mean, log_std = self.forward(state)
-        std = log_std.exp()
-        return torch.distributions.Normal(mean, std)
-    
-    def _transform_actions(self, raw_actions):
-        """Transform raw actions and compute log determinant of Jacobian"""
-        # Split into diagonal and off-diagonal components
-        raw_diag = raw_actions[:, :3]
-        raw_off_diag = raw_actions[:, 3:]
-        
-        # Apply transformations
-        diag = F.softplus(raw_diag) + self.min_action[:3]
-        off_diag = self.action_scale[3:] * torch.tanh(raw_off_diag)
-        
-        # Compute log determinant of Jacobian
-        # For softplus: d/dx softplus(x) = sigmoid(x)
-        log_det_diag = torch.log(torch.sigmoid(raw_diag)).sum(dim=-1)
-        
-        # For tanh: d/dx tanh(x) = 1 - tanh²(x) = sech²(x)
-        tanh_off_diag = torch.tanh(raw_off_diag)
-        log_det_off_diag = torch.log(1 - tanh_off_diag.pow(2) + 1e-8).sum(dim=-1)  # Add small epsilon for numerical stability
-        # Also account for the scaling factor
-        log_det_off_diag += torch.log(self.action_scale[3:]).sum()
-        
-        log_det_jacobian = log_det_diag + log_det_off_diag
-        
-        actions = torch.cat([diag, off_diag], dim=-1)
-        return actions, log_det_jacobian
+        mean = self.mean_layer(x) 
+        # First three elements are the diagonal of the action covariance matrix and must be strictly positive
+        diag = F.softplus(mean[:, :3]) + self.min_action[:3]
+        off_diag = self.action_scale[3:] * F.tanh(mean[:, 3:]) + self.action_bias[3:]
+        return torch.cat([diag, off_diag], dim=-1)
     
     def get_action(self, state, deterministic=False):
         state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
-        dist = self.get_distribution(state)
-        
+        mean = self.forward(state)
+
         if deterministic:
-            raw_actions = dist.mean
+            action = mean
         else:
-            raw_actions = dist.sample()
+            noise = torch.FloatTensor(self.noise.sample() * self.noise_scale).to(self.device)
+            action = mean + noise
+            self.noise_scale *= self.noise_decay
+            action[:, :3] = torch.clamp(action[:, :3], min=self.min_action[:3])
+            action[:, 3:] = torch.clamp(action[:, 3:], min=self.min_action[3:], max=self.max_action[3:])
 
-        # Transform actions and get corrected log probability
-        actions, log_det_jacobian = self._transform_actions(raw_actions)
-        
-        # Compute log probability of raw actions, then adjust for transformation
-        raw_log_prob = dist.log_prob(raw_actions).sum(dim=-1)
-        log_prob = raw_log_prob - log_det_jacobian  # Change of variables formula
-        
-        return actions.squeeze(0).detach().cpu().numpy(), log_prob.squeeze(0).detach().cpu().item()
+        return action.squeeze(0).detach().cpu().numpy()
     
-    def evaluate_actions(self, states, actions):
-        """
-        For evaluate_actions, we need to work backwards from the transformed actions
-        to get the raw actions, then compute probabilities correctly.
-        """
-        dist = self.get_distribution(states)
-        
-        # Work backwards to get raw actions from transformed actions
-        # This requires inverting the transformations
-        diag_actions = actions[:, :3]
-        off_diag_actions = actions[:, 3:]
-        
-        # Inverse of softplus + min_action: log(exp(x - min_action) - 1)
-        raw_diag = torch.log(torch.exp(diag_actions - self.min_action[:3]) - 1 + 1e-8)
-        
-        # Inverse of scaled tanh: atanh(x / scale)
-        normalized_off_diag = off_diag_actions / self.action_scale[3:]
-        # Clamp to prevent atanh from going to infinity
-        normalized_off_diag = torch.clamp(normalized_off_diag, -0.9999, 0.9999)
-        raw_off_diag = torch.atanh(normalized_off_diag)
-        
-        raw_actions = torch.cat([raw_diag, raw_off_diag], dim=-1)
-        
-        # Compute log probabilities and adjust for transformation
-        _, log_det_jacobian = self._transform_actions(raw_actions)
-        raw_log_probs = dist.log_prob(raw_actions).sum(dim=-1)
-        log_probs = raw_log_probs - log_det_jacobian
-        
-        # For entropy, we need to be more careful since it's not just a simple transformation
-        # The entropy of the transformed distribution is:
-        # H(Y) = H(X) + E[log|det(J)|] where Y = f(X) and J is the Jacobian
-        raw_entropy = dist.entropy().sum(dim=-1)
-        entropy = raw_entropy + log_det_jacobian
-        
-        return log_probs, entropy
-    
-
 class Critic(nn.Module):
     def __init__(self, params):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 256)
-        self.layer2 = nn.Linear(256, 256)
-        self.layer3 = nn.Linear(256, 128)
-        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
+        self.state_layer = nn.Linear(params['state_dim'], 256)
+        self.action_layer = nn.Linear(params['action_dim'], 256)
+
+        self.layer2 = nn.Linear(512, 512)
+        self.layer3 = nn.Linear(512, 256)
+        self.layer4 = nn.Linear(256, 1)
+        nn.init.orthogonal_(self.state_layer.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.action_layer.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
-        torch.nn.init.constant_(self.layer1.bias, 0.0)
+        nn.init.orthogonal_(self.layer4.weight, gain=np.sqrt(2))
+        torch.nn.init.constant_(self.state_layer.bias, 0.0)
+        torch.nn.init.constant_(self.action_layer.bias, 0.0)
         torch.nn.init.constant_(self.layer2.bias, 0.0)
         torch.nn.init.constant_(self.layer3.bias, 0.0)
+        torch.nn.init.constant_(self.layer4.bias, 0.0)
 
-        self.value_layer = nn.Linear(128, 1)
-        nn.init.orthogonal_(self.value_layer.weight, gain=1.0)
-        torch.nn.init.constant_(self.value_layer.bias, 0.0)
+    def forward(self, state, action):
+        s = F.relu(self.state_layer(state))
+        a = F.relu(self.action_layer(action))
+        x = torch.cat([s, a], dim=-1) # Concatenate state and action
+        x = F.relu(self.layer2(x))
+        x = F.relu(self.layer3(x))
+        # No activation on final layer to allow negative values
+        return self.layer4(x)
 
-    def forward(self, state):
-        x = self.layer1(state)
-        x = F.relu(x)
-        x = self.layer2(x)
-        x = F.relu(x)
-        x = self.layer3(x)
-        x = F.relu(x)
-        return self.value_layer(x)
-
-def train_ppo(datasets, agent, params):
+def train_ddpg(datasets, agent, params):
     # Set to train mode
     agent.train()
 
@@ -200,12 +151,14 @@ def train_ppo(datasets, agent, params):
         joint_states = dataset['joint_states']
         base_states = dataset['base_states']
         kinematics = dataset['kinematics']
-        
         # Set proper limits on number of episodes
         max_episodes = params['max_episodes']
         max_steps = len(imu_measurements) - 1 
 
-        for episode in range(max_episodes):
+        # Warm-up phase: collect initial experiences without training
+        warmup_episodes = 0
+
+        for episode in range(max_episodes + warmup_episodes):
             serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
                                  params['action_dim'], params['state_dim'], params['R_history_buffer_size'])
             
@@ -235,7 +188,10 @@ def train_ppo(datasets, agent, params):
                         x = serow_env.compute_state(cf, post_state, kin)
 
                         # Compute the action
-                        action, value, log_prob = agent.get_action(x, deterministic=False)
+                        if episode < warmup_episodes:
+                            action = np.zeros((params['action_dim'],))
+                        else:
+                            action = agent.get_action(x, deterministic=False)
 
                         # Run the update step
                         post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
@@ -244,12 +200,12 @@ def train_ppo(datasets, agent, params):
                         next_x = serow_env.compute_state(cf, post_state, next_kin, action)
 
                         # Add to buffer
-                        agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
+                        agent.add_to_buffer(x, action, reward, next_x, done)
                         # Accumulate rewards
                         collected_steps += 1
                         episode_return += reward
                     else:
-                        action = np.zeros(serow_env.action_dim)
+                        action = np.zeros((serow_env.action_dim, 1), dtype=np.float64)
                         # Just run the update step
                         post_state, _, _ = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
 
@@ -258,12 +214,12 @@ def train_ppo(datasets, agent, params):
 
                 # Finish the update
                 serow_env.finish_update(imu, kin)
-
+                
                 # Train policy periodically
                 if collected_steps >= params['n_steps']:
-                    actor_loss, critic_loss, entropy, converged = agent.learn()
+                    actor_loss, critic_loss, converged = agent.learn()
                     if actor_loss is not None and critic_loss is not None:
-                        print(f"[Episode {episode + 1}/{max_episodes}] Step [{time_step + 1}/{max_steps}] Policy Loss: {actor_loss}, Value Loss: {critic_loss}, Entropy: {entropy}")
+                        print(f"[Episode {episode + 1}/{max_episodes}] Step [{time_step + 1}/{max_steps}] Policy Loss: {actor_loss}, Value Loss: {critic_loss}")
                     collected_steps = 0
 
                 # Check for early termination due to filter divergence
@@ -318,8 +274,8 @@ if __name__ == "__main__":
     dt = np.median(np.array(dt))
     print(f"dt: {dt}")
 
-    # Define the dimensions of your state and action spaces
     R_history_buffer_size = 10
+    # Define the dimensions of your state and action spaces
     state_dim = 3 + 3 * 3 + 3 * 3 * R_history_buffer_size
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
     min_action = np.array([1e-10, 1e-10, 1e-10, -1e2, -1e2, -1e2])
@@ -339,7 +295,6 @@ if __name__ == "__main__":
     
     timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards, kinematics = \
         serow_env.evaluate(test_dataset, agent=None)
-
     test_dataset['kinematics'] = kinematics
 
     # Reform the ground truth data
@@ -354,56 +309,53 @@ if __name__ == "__main__":
     # Get the contacts frame
     contact_frames = serow_env.contact_frames
     print(f"Contacts frame: {contact_frames}")
+
     train_datasets = [test_dataset]
     device = 'cpu'
 
-    max_episodes = 120
-    n_steps = 512
+    max_episodes = 1200
+    n_steps = 256
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
     print(f"Total training steps: {total_training_steps}")
 
     params = {
-        'R_history_buffer_size': R_history_buffer_size,
         'device': device,
         'robot': robot,
         'state_dim': state_dim,
         'action_dim': action_dim,
         'max_action': max_action,
         'min_action': min_action,
-        'clip_param': 0.2,  
-        'value_clip_param': None,
-        'value_loss_coef': 0.5,  
-        'entropy_coef': 0.01,  
         'gamma': 0.99,
-        'gae_lambda': 0.95,
-        'ppo_epochs': 5,  
         'batch_size': 64,  
-        'max_grad_norm': 0.5,  
-        'buffer_size': 10000,  
+        'max_grad_norm': 1.0, 
+        'tau': 0.01,
+        'buffer_size': 1000000,
         'max_episodes': max_episodes,
-        'actor_lr': 1e-6, 
+        'actor_lr': 1e-5, 
         'critic_lr': 1e-5,  
-        'target_kl': 0.03,
+        'noise_scale': 0.1,
+        'noise_decay': 0.9999,
         'n_steps': n_steps,
-        'convergence_threshold': 0.15,
+        'train_for_batches': 5,
+        'convergence_threshold': 0.25,
         'critic_convergence_threshold': 0.15,
-        'return_window_size': 10,
-        'value_loss_window_size': 10,
-        'checkpoint_dir': 'policy/ppo',
+        'return_window_size': 20,
+        'value_loss_window_size': 20,
+        'checkpoint_dir': 'policy/ddpg',
         'total_steps': total_steps, 
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
         'check_value_loss': False,
         'total_training_steps': total_training_steps,
-        'dt': dt
+        'R_history_buffer_size': R_history_buffer_size,
     }
 
     loaded = False
-    normalize_state = False
     print(f"Initializing agent for {robot}")
     actor = Actor(params).to(device)
     critic = Critic(params).to(device)
-    agent = PPO(actor, critic, params, device=device, normalize_state=normalize_state)
+    normalize_state = False
+    agent = DDPG(actor, critic, params, device=device, normalize_state=normalize_state)
 
     policy_path = params['checkpoint_dir']
     # Try to load a trained policy for this robot if it exists
@@ -416,12 +368,12 @@ if __name__ == "__main__":
 
     if not loaded:
         # Train the policy
-        train_ppo(train_datasets, agent, params)
+        train_ddpg(train_datasets, agent, params)
         # Load the best policy
         checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')
         actor = Actor(params).to(device)
         critic = Critic(params).to(device)
-        best_policy = PPO(actor, critic, params, device=device, normalize_state=normalize_state)
+        best_policy = DDPG(actor, critic, params, device=device, normalize_state=normalize_state)
         best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
         best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])
         print(f"Loaded optimal trained policy for {robot} from " 

@@ -42,14 +42,14 @@ class DDPG:
         self.train_for_batches = params['train_for_batches']
         self.gamma = params['gamma']
         self.tau = params['tau']
-        self.min_action = params['min_action']
-        self.max_action = params['max_action']
+        self.min_action = params.get('min_action', -1e4 * torch.ones(self.action_dim))
+        self.max_action = params.get('max_action', 1e4 * torch.ones(self.action_dim))
         self.num_updates = 0
         self.max_grad_norm = params['max_grad_norm']
 
         self.normalize_state = normalize_state
-        self.max_state_value = params['max_state_value']
-        self.min_state_value = params['min_state_value']
+        self.max_state_value = params.get('max_state_value', 1e4 * torch.ones(self.state_dim))
+        self.min_state_value = params.get('min_state_value', -1e4 * torch.ones(self.state_dim))
         
         # Early stopping parameters
         self.check_value_loss = params.get('check_value_loss', False)
@@ -206,7 +206,7 @@ class DDPG:
         # Critic update with target network
         with torch.no_grad():
             next_actions = self.actor_target(next_states)
-            next_actions = torch.clamp(next_actions, self.min_action, self.max_action)
+            # next_actions = torch.clamp(next_actions, self.min_action, self.max_action)
             next_Q = self.critic_target(next_states, next_actions).squeeze(-1)
             target_Q = rewards + (1 - dones) * self.gamma * next_Q
             
