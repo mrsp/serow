@@ -237,6 +237,8 @@ PYBIND11_MODULE(serow, m) {
         .def("init", &serow::ContactEKF::init, 
              py::arg("state"), py::arg("contacts_frame"), py::arg("point_feet"), 
              py::arg("g"), py::arg("imu_rate"), py::arg("outlier_detection") = false,
+             py::arg("use_onnx") = false, py::arg("robot_name") = "",
+             py::arg("model_path") = "policy/ddpg",
              "Initializes the EKF with the initial robot state and parameters")
         .def("predict", &serow::ContactEKF::predict, 
              py::arg("state"), py::arg("imu"), py::arg("kin"),
@@ -269,19 +271,23 @@ PYBIND11_MODULE(serow, m) {
              "Sets the action for the EKF for a given contact frame")
         .def("get_contact_position_innovation", 
              [](serow::ContactEKF& self, const std::string& contact_frame) {
+                 Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
+                 Eigen::Quaterniond base_orientation = Eigen::Quaterniond::Identity();
                  Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
                  Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
-                 bool success = self.getContactPositionInnovation(contact_frame, innovation, covariance);
-                 return std::make_tuple(success, innovation, covariance);
+                 bool success = self.getContactPositionInnovation(contact_frame, base_position, base_orientation, innovation, covariance);
+                 return std::make_tuple(success, base_position, quaternion_to_numpy(base_orientation), innovation, covariance);
              },
              py::arg("contact_frame"),
              "Gets the contact position innovation and covariance for a given contact frame")
         .def("get_contact_orientation_innovation", 
              [](serow::ContactEKF& self, const std::string& contact_frame) {
+                 Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
+                 Eigen::Quaterniond base_orientation = Eigen::Quaterniond::Identity();
                  Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
                  Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
-                 bool success = self.getContactOrientationInnovation(contact_frame, innovation, covariance);
-                 return std::make_tuple(success, innovation, covariance);
+                 bool success = self.getContactOrientationInnovation(contact_frame, base_position, base_orientation, innovation, covariance);
+                 return std::make_tuple(success, base_position, quaternion_to_numpy(base_orientation), innovation, covariance);
              },
              py::arg("contact_frame"),
              "Gets the contact orientation innovation and covariance for a given contact frame");
@@ -344,7 +350,65 @@ PYBIND11_MODULE(serow, m) {
              "Returns true if SEROW is initialized")
         .def("set_state", &serow::Serow::setState,
              py::arg("state"),
-             "Sets the state of the robot");
+             "Sets the state of the robot")
+        .def("get_contact_position_innovation", 
+             [](serow::Serow& self, const std::string& contact_frame) {
+                 Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
+                 Eigen::Quaterniond base_orientation = Eigen::Quaterniond::Identity();
+                 Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
+                 Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+                 bool success = self.getContactPositionInnovation(contact_frame, base_position, base_orientation, innovation, covariance);
+                 return std::make_tuple(success, base_position, quaternion_to_numpy(base_orientation), innovation, covariance);
+             },
+             py::arg("contact_frame"),
+             "Returns the contact position innovation and covariance for a given contact frame")
+        .def("get_contact_orientation_innovation", 
+             [](serow::Serow& self, const std::string& contact_frame) {
+                 Eigen::Vector3d base_position = Eigen::Vector3d::Zero();
+                 Eigen::Quaterniond base_orientation = Eigen::Quaterniond::Identity();
+                 Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
+                 Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+                 bool success = self.getContactOrientationInnovation(contact_frame, base_position, base_orientation, innovation, covariance);
+                 return std::make_tuple(success, base_position, quaternion_to_numpy(base_orientation), innovation, covariance);
+             },
+             py::arg("contact_frame"),
+             "Returns the contact orientation innovation and covariance for a given contact frame")
+        .def("process_measurements",
+             [](serow::Serow& self, const serow::ImuMeasurement& imu,
+                const std::map<std::string, serow::JointMeasurement>& joints,
+                py::object force_torque, py::object contacts_probability) {
+                 std::optional<std::map<std::string, serow::ForceTorqueMeasurement>> ft_opt;
+                 if (!force_torque.is_none()) {
+                     ft_opt = force_torque.cast<std::map<std::string, serow::ForceTorqueMeasurement>>();
+                 }
+
+                 std::optional<std::map<std::string, serow::ContactMeasurement>> contact_prob_opt;
+                 if (!contacts_probability.is_none()) {
+                     contact_prob_opt = contacts_probability.cast<std::map<std::string, serow::ContactMeasurement>>();
+                 }
+
+                 return self.processMeasurements(imu, joints, ft_opt, contact_prob_opt);
+             },
+             py::arg("imu"),
+             py::arg("joints"),
+             py::arg("force_torque") = py::none(),
+             py::arg("contacts_probability") = py::none(),
+             "Processes the measurements and returns a tuple of IMU, kinematic, and force-torque measurements")
+        .def("base_estimator_predict_step",
+             &serow::Serow::baseEstimatorPredictStep,
+             py::arg("imu"),
+             py::arg("kin"),
+             "Runs the base estimator's predict step")
+        .def("base_estimator_update_with_contact_position",
+             &serow::Serow::baseEstimatorUpdateWithContactPosition,
+             py::arg("contact_frame"),
+             py::arg("kin"),
+             "Runs the base estimator's update step with contact position")
+        .def("base_estimator_finish_update",
+             &serow::Serow::baseEstimatorFinishUpdate,
+             py::arg("imu"),
+             py::arg("kin"),
+             "Concludes the base estimator's update step with the IMU measurement");
 
     // Binding for CentroidalState
     py::class_<serow::CentroidalState>(m, "CentroidalState", "Represents the centroidal state of the robot")
@@ -422,6 +486,10 @@ PYBIND11_MODULE(serow, m) {
         .def("set_base_state", &serow::State::setBaseState, py::arg("base_state"), "Sets the base state of the robot")
         .def("set_contact_state", &serow::State::setContactState, py::arg("contact_state"), "Sets the contact state of the robot")
         .def("set_centroidal_state", &serow::State::setCentroidalState, py::arg("centroidal_state"), "Sets the centroidal state of the robot")
-        .def("set_joint_state", &serow::State::setJointState, py::arg("joint_state"), "Sets the joint state of the robot");
+        .def("set_joint_state", &serow::State::setJointState, py::arg("joint_state"), "Sets the joint state of the robot")
+        .def("get_base_state", &serow::State::getBaseState, "Returns the base state of the robot")
+        .def("get_contact_state", &serow::State::getContactState, "Returns the contact state of the robot")
+        .def("get_centroidal_state", &serow::State::getCentroidalState, "Returns the centroidal state of the robot")
+        .def("get_joint_state", &serow::State::getJointState, "Returns the joint state of the robot");
 }
 

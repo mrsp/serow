@@ -3,8 +3,27 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <filesystem>
+#include <optional>
 
 namespace serow {
+
+inline std::string findFilepath(const std::string& filename) {
+    const char* serow_path_env = std::getenv("SEROW_PATH");
+    if (serow_path_env == nullptr) {
+        throw std::runtime_error("Environmental variable SEROW_PATH is not set.");
+    }
+
+    std::filesystem::path serow_path(serow_path_env);
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(serow_path)) {
+        if (std::filesystem::is_regular_file(entry) && entry.path().filename() == filename) {
+            return entry.path().string();
+        }
+    }
+
+    throw std::runtime_error("File '" + filename + "' not found.");
+}
+
 
 constexpr float resolution = 0.01;
 constexpr float resolution_inv = 1.0 / resolution;

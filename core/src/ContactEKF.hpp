@@ -37,7 +37,10 @@
 #include "Measurement.hpp"  // Includes various sensor measurements
 #include "OutlierDetector.hpp"
 #include "State.hpp"  // Includes definitions of robot state variables
-#include "common.hpp"
+
+#ifdef USE_ONNX
+#include "ONNXInference.hpp"
+#endif
 
 namespace serow {
 
@@ -59,9 +62,14 @@ public:
      * @param g Acceleration due to gravity.
      * @param imu_rate IMU update rate.
      * @param outlier_detection Flag indicating if outlier detection mechanisms should be enabled.
+     * @param use_onnx Flag indicating if ONNX inference should be used for action selection.
+     * @param robot_name Name of the robot for ONNX model loading.
+     * @param model_path Path to the ONNX models directory.
      */
     void init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-              double g, double imu_rate, bool outlier_detection = false);
+              double g, double imu_rate, bool outlier_detection = false,
+              bool use_onnx = false, const std::string& robot_name = "",
+              const std::string& model_path = "policy/ddpg");
 
     /**
      * @brief Predicts the robot's state forward based on IMU and kinematic measurements.
@@ -93,13 +101,31 @@ public:
     /**
      * @brief Get the contact innovation and covariance for a given contact frame.
      * @param contact_frame Name of the contact frame.
+     * @param base_position Position of the robot's base.
+     * @param base_orientation Orientation of the robot's base.
      * @param innovation Innovation of the contact position.
      * @param covariance Covariance of the contact position.
      * @return True if the contact innovation and covariance are available, false otherwise.
      */
-    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+    bool getContactPositionInnovation(const std::string& contact_frame, 
+                                      Eigen::Vector3d& base_position,
+                                      Eigen::Quaterniond& base_orientation,
+                                      Eigen::Vector3d& innovation,
                                       Eigen::Matrix3d& covariance) const;
-    bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+
+    /**
+     * @brief Get the contact innovation and covariance for a given contact frame.
+     * @param contact_frame Name of the contact frame.
+     * @param base_position Position of the robot's base.
+     * @param base_orientation Orientation of the robot's base.
+     * @param innovation Innovation of the contact orientation.
+     * @param covariance Covariance of the contact orientation.
+     * @return True if the contact innovation and covariance are available, false otherwise.
+     */
+    bool getContactOrientationInnovation(const std::string& contact_frame, 
+                                         Eigen::Vector3d& base_position,
+                                         Eigen::Quaterniond& base_orientation,
+                                         Eigen::Vector3d& innovation,
                                          Eigen::Matrix3d& covariance) const;
 
     /**
@@ -107,6 +133,22 @@ public:
      * @param state The state to set.
      */
     void setState(const BaseState& state);
+
+    /**
+     * @brief Updates the robot's state based on contact position measurements.
+     * @param state Current state of the robot.
+     * @param cf Contact frame name.
+     * @param cs Leg contact status.
+     * @param cp_prob Probability of contact.
+     * @param cp Leg contact position.
+     * @param cp_noise Covariance of leg contact position measurement.
+     * @param position_cov Covariance of position measurements.
+     * @param terrain_estimator Terrain elevation estimator.
+     */ 
+    void updateWithContactPosition(BaseState& state, const std::string& cf, const bool cs, 
+                                   const double cp_prob, const Eigen::Vector3d& cp, 
+                                   Eigen::Matrix3d cp_noise, const Eigen::Matrix3d& position_cov, 
+                                   std::shared_ptr<TerrainElevation> terrain_estimator);
 
 private:
     int num_states_{};                      ///< Number of state variables.
@@ -146,13 +188,30 @@ private:
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
 
-    std::map<std::string, double> position_action_cov_gain_;
-    std::map<std::string, double> orientation_action_cov_gain_;
     std::map<std::string, double> contact_position_action_cov_gain_;
     std::map<std::string, double> contact_orientation_action_cov_gain_;
     
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_orientation_innovation_;
+    std::map<std::string, Eigen::Vector3d> base_position_per_contact_position_update_;
+    std::map<std::string, Eigen::Quaterniond> base_orientation_per_contact_position_update_;
+    std::map<std::string, Eigen::Vector3d> base_position_per_contact_orientation_update_;
+    std::map<std::string, Eigen::Quaterniond> base_orientation_per_contact_orientation_update_;
+
+    // ONNX inference
+    bool use_onnx_{};
+    #ifdef USE_ONNX
+    std::unique_ptr<ONNXInference> onnx_inference_;
+    #endif
+    int onnx_state_dim_{};  ///< Dimension of the state vector for ONNX inference
+    int onnx_action_dim_{};  ///< Dimension of the action vector from ONNX inference
+
+    /**
+     * @brief Gets the action from ONNX model or default values
+     * @param state Current state vector
+     * @return Action vector
+     */
+    Eigen::VectorXd getAction(const Eigen::VectorXd& state);
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.
@@ -187,6 +246,7 @@ private:
      * @param contacts_position Positions of leg contacts.
      * @param contacts_position_noise Noise in position measurements.
      * @param contacts_status Status of leg contacts.
+     * @param contacts_probability Probability of contacts.
      * @param position_cov Covariance of position measurements.
      * @param contacts_orientation Orientations of leg contacts (optional).
      * @param contacts_orientation_noise Noise in orientation measurements (optional).
@@ -196,11 +256,25 @@ private:
     void updateWithContacts(
         BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
         std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
-        const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
+        const std::map<std::string, bool>& contacts_status, 
+        const std::map<std::string, double>& contacts_probability, const Eigen::Matrix3d& position_cov,
         std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov,
         std::shared_ptr<TerrainElevation> terrain_estimator);
+
+    /** 
+     * @brief Updates the robot's state based on contact orientation measurements.
+     * @param state Current state of the robot.
+     * @param cf Contact frame name.
+     * @param cs Leg contact status.
+     * @param co Leg contact orientation.
+     * @param co_noise Covariance of leg contact orientation measurement.
+     * @param orientation_cov Covariance of orientation measurements.
+     */
+    void updateWithContactOrientation(BaseState& state, const std::string& cf, const bool cs, 
+                                     const Eigen::Quaterniond& co, Eigen::Matrix3d co_noise, 
+                                     const Eigen::Matrix3d& orientation_cov);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
@@ -242,6 +316,11 @@ private:
      */
     BaseState updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
                               const Eigen::MatrixXd& P) const;
+
+    /**
+     * @brief Clears the action covariance gain matrix.
+     */
+    void clearAction();
 };
 
 }  // namespace serow

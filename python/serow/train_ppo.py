@@ -1,310 +1,286 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import serow
+import os
+
+from env import SerowEnv
 from ppo import PPO
+
 from read_mcap import(
     read_base_states, 
     read_contact_states, 
     read_force_torque_measurements, 
     read_joint_measurements, 
-    read_joint_states,
     read_imu_measurements, 
     read_base_pose_ground_truth,
-    run_step,
-    plot_trajectories,
-    sync_and_align_data
+    read_joint_states
 )
 
-# Actor network per leg end-effector
+from utils import(
+    quaternion_to_rotation_matrix,
+    export_models_to_onnx
+)
+
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, max_action, min_action):
+    def __init__(self, params):
         super(Actor, self).__init__()
-        # Initialize layers with smaller weights
-        self.layer1 = nn.Linear(state_dim, 128)
-        self.layer2 = nn.Linear(128, 64)
-        self.mean_layer = nn.Linear(64, action_dim)
-        self.log_std_layer = nn.Linear(64, action_dim)
+        self.state_dim = params['state_dim']
+        self.device = params['device']
+        self.action_dim = params['action_dim']
+        self.min_action = params['min_action']
+        self.max_action = params['max_action']
         
-        # Initialize weights with smaller values
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.orthogonal_(m.weight, gain=0.01)
-                nn.init.constant_(m.bias, 0.0)
+        # Precompute scaling factors
+        self.action_scale = (self.max_action - self.min_action) / 2.0
+        self.action_bias = (self.max_action + self.min_action) / 2.0
         
-        self.max_action = max_action
-        self.min_action = min_action
-
-    def forward(self, state):
-        # Use tanh for more stable gradients
-        x = torch.tanh(self.layer1(state))
-        x = torch.tanh(self.layer2(x))
-        mean = self.mean_layer(x)
-        log_std = self.log_std_layer(x)
-        # Constrain log_std to a smaller range
-        log_std = torch.clamp(log_std, min=-3, max=0.5)
-        return mean, log_std
-
-    def get_action(self, state, deterministic=False):
-        state = torch.FloatTensor(state).reshape(1, -1).to(next(self.parameters()).device)
-        mean, log_std = self.forward(state)
+        # Shared layers
+        self.layer1 = nn.Linear(self.state_dim, 128)
+        self.layer2 = nn.Linear(128, 128)
+        self.layer3 = nn.Linear(128, 64)
         
-        # Calculate the range once
-        action_range = self.max_action - self.min_action
-
-        if deterministic:
-            # Scale to [min_action, max_action]
-            action = torch.sigmoid(mean) * action_range + self.min_action
-            log_prob = torch.tensor(0.0)
-        else:
-            std = log_std.exp()
-            # Add small epsilon to std for numerical stability
-            std = std + 1e-6
-            normal = torch.distributions.Normal(mean, std)
-            z = normal.rsample()
-            
-            # Transform to bounded range with tanh for more stable gradients
-            tanh_z = torch.tanh(z)
-            action = (tanh_z + 1.0) * 0.5 * action_range + self.min_action
-            
-            # Correct log prob adjustment for tanh
-            log_prob = normal.log_prob(z) - torch.log(torch.clamp(1 - tanh_z.pow(2), min=1e-8))
-            log_prob = log_prob.sum(dim=-1, keepdim=True)
-
-        return action.detach().cpu().numpy()[0], log_prob.detach().cpu().item()
-
-class Critic(nn.Module):
-    def __init__(self, state_dim):
-        super(Critic, self).__init__()
-        self.layer1 = nn.Linear(state_dim, 128)
-        self.layer2 = nn.Linear(128, 64)
-        self.layer3 = nn.Linear(64, 1)
-
+        # Output layers
+        self.mean_layer = nn.Linear(64, self.action_dim)
+        self.log_std_layer = nn.Linear(64, self.action_dim)
+        
+        self._init_weights()
+    
+    def _init_weights(self):
+        for layer in [self.layer1, self.layer2, self.layer3]:
+            nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
+            nn.init.constant_(layer.bias, 0.0)
+        
+        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)
+        nn.init.constant_(self.mean_layer.bias, 0.0)
+        nn.init.orthogonal_(self.log_std_layer.weight, gain=0.01)
+        nn.init.constant_(self.log_std_layer.bias, -1.0)
+    
     def forward(self, state):
         x = F.relu(self.layer1(state))
         x = F.relu(self.layer2(x))
-        x = self.layer3(x)
-        return x
+        x = F.relu(self.layer3(x))
+        
+        mean = self.mean_layer(x)
+        log_std = self.log_std_layer(x).clamp(-4, 1)
+        
+        return mean, log_std
+    
+    def get_distribution(self, state):
+        mean, log_std = self.forward(state)
+        std = log_std.exp()
+        return torch.distributions.Normal(mean, std)
+    
+    def get_action(self, state, deterministic=False):
+        state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
+        dist = self.get_distribution(state)
+        
+        if deterministic:
+            raw_actions = dist.mean
+            log_prob = torch.zeros(1, device=self.device)
+        else:
+            raw_actions = dist.sample()
+            log_prob = dist.log_prob(raw_actions).sum(dim=-1)
 
-def train_policy(datasets, contacts_frame, agents):
-    episode_rewards = {}
-    collected_steps = {}
+        # Apply tanh transformation and scale to action bounds
+        tanh_actions = torch.tanh(raw_actions)
+        actions = tanh_actions * self.action_scale + self.action_bias
+        
+        # Calculate log probability with tanh correction
+        if not deterministic:
+            # Jacobian correction for tanh: log |det(J)| = log(1 - tanh²(x))
+            tanh_correction = torch.log(1 - tanh_actions.pow(2) + 1e-8).sum(dim=-1)
+            log_prob = log_prob - tanh_correction
+        
+        return actions.squeeze(0).detach().cpu().numpy(), log_prob.squeeze(0).detach().cpu().item()
+    
+    def evaluate_actions(self, states, actions):
+        dist = self.get_distribution(states)
+        
+        # Convert actions back to tanh space
+        actions_normalized = (actions - self.action_bias) / self.action_scale
+        # Clamp to valid tanh range to avoid numerical issues
+        actions_normalized = torch.clamp(actions_normalized, -0.999999, 0.999999)
+        
+        # Convert to raw action space using atanh
+        raw_actions = 0.5 * torch.log((1 + actions_normalized) / (1 - actions_normalized + 1e-8) + 1e-8)
+        
+        # Calculate log probabilities of raw actions
+        log_probs = dist.log_prob(raw_actions).sum(dim=-1)
+        
+        # Apply tanh correction (subtract log of Jacobian determinant)
+        tanh_correction = torch.log(1 - actions_normalized.pow(2) + 1e-8).sum(dim=-1)
+        log_probs = log_probs - tanh_correction
+        
+        # Calculate entropy of the base distribution
+        # For the transformed distribution, we need to account for the transformation
+        base_entropy = dist.entropy().sum(dim=-1)
+        
+        # For tanh transformation, the entropy becomes:
+        # H(Y) = H(X) + E[log |J|] where J is the Jacobian
+        # Since we're dealing with the same samples, we can use the current tanh_correction
+        transformed_entropy = base_entropy - tanh_correction
+        
+        return log_probs, transformed_entropy
+    
 
-    for cf in contacts_frame:
-        episode_rewards[cf] = []
-        collected_steps[cf] = 0
+class Critic(nn.Module):
+    def __init__(self, params):
+        super(Critic, self).__init__()
+        self.layer1 = nn.Linear(params['state_dim'], 128)
+        self.layer2 = nn.Linear(128, 128)
+        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
+        torch.nn.init.constant_(self.layer1.bias, 0.0)
+        torch.nn.init.constant_(self.layer2.bias, 0.0)
 
+        self.value_layer = nn.Linear(128, 1)
+        nn.init.orthogonal_(self.value_layer.weight, gain=1.0)
+        torch.nn.init.constant_(self.value_layer.bias, 0.0)
+
+    def forward(self, state):
+        x = self.layer1(state)
+        x = F.relu(x)
+        x = self.layer2(x)
+        x = F.relu(x)
+        return self.value_layer(x)
+
+def train_ppo(datasets, agent, params):
+    # Set to train mode
+    agent.train()
+
+    converged = False
+    best_return = float('-inf')
+    best_return_episode = 0
+
+    # Training loop with evaluation phases
     for i, dataset in enumerate(datasets):
-        best_reward = {}
-        for cf in contacts_frame:
-            best_reward[cf] = float('-inf')
+        print(f"Training on dataset {i+1}/{len(datasets)}")
 
-        # Get the measurements and the ground truth
+        # Get dataset measurements
         imu_measurements = dataset['imu']
         joint_measurements = dataset['joints']
         force_torque_measurements = dataset['ft']
         base_pose_ground_truth = dataset['base_pose_ground_truth']
-        
-        # Reset to initial state
-        initial_base_state = dataset['base_states'][0]
-        initial_contact_state = dataset['contact_states'][0]
-        initial_joint_state = dataset['joint_states'][0]
+        contact_states = dataset['contact_states']
+        joint_states = dataset['joint_states']
+        base_states = dataset['base_states']
 
-        max_episode = 100
-        update_steps = 64  # Train after collecting this many timesteps
+        # Set proper limits on number of episodes
+        max_episodes = params['max_episodes']
+        max_steps = len(imu_measurements) - 1 
 
-        for episode in range(max_episode):
-            serow_framework = serow.Serow()
-            serow_framework.initialize("go2_rl.json")
-            state = serow_framework.get_state(allow_invalid=True)
-
-            # Initialize the state
-            state.set_base_state(initial_base_state)
-            state.set_contact_state(initial_contact_state)
-            state.set_joint_state(initial_joint_state)
-            serow_framework.set_state(state)
-
-            episode_reward = {}
-            for cf in contacts_frame:
-                episode_reward[cf] = 0.0
+        for episode in range(max_episodes):
+            serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
+                                 params['action_dim'], params['state_dim'])
             
-            for step, (imu, joints, ft, gt) in enumerate(zip(imu_measurements, 
-                                                             joint_measurements, 
-                                                             force_torque_measurements, 
-                                                             base_pose_ground_truth)):
-                actions = {}
-                log_probs = {}
-                values = {}
-                contact_status = {}
-                for cf in contacts_frame:
-                    contact_status[cf] = state.get_contact_status(cf)
+            # Episode tracking variables
+            episode_return = 0.0
+            collected_steps = 0
 
-                x = np.concatenate([
-                    state.get_base_position(),
-                    state.get_base_orientation()
-                ])
+            # Run episode
+            for time_step, (imu, joints, ft, gt) in enumerate(zip(
+                imu_measurements[:max_steps], 
+                joint_measurements[:max_steps], 
+                force_torque_measurements[:max_steps], 
+                base_pose_ground_truth[:max_steps]
+            )):
+                contact_frames = serow_env.contact_frames
 
-                for cf in state.get_contacts_frame():
-                    if contact_status[cf]:
-                        actions[cf], log_probs[cf] = agents[cf].actor.get_action(x, deterministic=False)
-                        values[cf] = agents[cf].critic(torch.FloatTensor(x).reshape(1, -1).to(next(agents[cf].critic.parameters()).device)).item()
+                # Run the predict step
+                kin, prior_state = serow_env.predict_step(imu, joints, ft)
 
-                _, state, reward = run_step(imu, joints, ft, gt, serow_framework, state, actions)
+                # Pick a valid contact frame at random
+                contact_frames_list = list(contact_frames)
+                agent_cf = np.random.choice(contact_frames_list)
+                while True:
+                    if (prior_state.get_contact_position(agent_cf) is None or not kin.contacts_status[agent_cf]):
+                        # Pick a new contact frame excluding the current one
+                        rand_cf = np.random.choice(contact_frames_list)
+                        while rand_cf == agent_cf:
+                            rand_cf = np.random.choice(contact_frames_list)
+                        agent_cf = rand_cf
+                    else:
+                        break
 
-                 # Compute the next state
-                next_x = np.concatenate([
-                    state.get_base_position(),
-                    state.get_base_orientation()
-                ])
+                # Run the update step
+                done = 0.0
+                post_state = prior_state
+                for cf in contact_frames:
+                    if (agent_cf == cf):
+                        # Compute the state
+                        x = serow_env.compute_state(cf, post_state, kin)
 
-                # Add to buffer
-                for cf in contacts_frame:
-                    if contact_status[cf]:
-                        episode_reward[cf] += reward
-                        agents[cf].add_to_buffer(x, actions[cf], reward, next_x, 0.0, values[cf], log_probs[cf])
+                        # Compute the action
+                        action, value, log_prob = agent.get_action(x, deterministic=False)
 
-                        # Train policy if we've collected enough steps
-                        if collected_steps[cf] >= update_steps:
-                            agents[cf].train()
-                            collected_steps[cf] = 0
+                        # Run the update step
+                        post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
+
+                        # Compute the next state
+                        next_x = serow_env.compute_state(cf, post_state, kin)
+
+                        # Add to buffer
+                        agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
+
+                    else:
+                        action = np.zeros(serow_env.action_dim)
+                        # Just run the update step
+                        post_state, _, _ = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
+
+                # Finish the update
+                serow_env.finish_update(imu, kin)
+
+                # Accumulate rewards
+                collected_steps += 1
+                episode_return += reward
                 
-                if step % 100 == 0:  # Print progress every 100 steps
-                    for cf in contacts_frame:
-                        print(f"Episode {episode}, Step {step}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
-            
-            for cf in contacts_frame:   
-                print(f"Dataset {i}, Episode {episode}, {cf} has Reward: {episode_reward[cf]:.2f}, Best Reward: {best_reward[cf]:.2f}")
-                episode_rewards[cf].append(episode_reward[cf])
-                if episode_reward[cf] > best_reward[cf]:
-                    best_reward[cf] = episode_reward[cf]
+                # Train policy periodically
+                if collected_steps >= params['n_steps']:
+                    actor_loss, critic_loss, entropy, converged = agent.learn()
+                    if actor_loss is not None and critic_loss is not None:
+                        print(f"[Episode {episode + 1}/{max_episodes}] Step [{time_step + 1}/{max_steps}] Policy Loss: {actor_loss}, Value Loss: {critic_loss}, Entropy: {entropy}")
+                    collected_steps = 0
 
-    # Convert episode_rewards to numpy arrays and compute a smoothed reward curve using a low pass filter
-    smoothed_episode_rewards = {}
-    for cf in contacts_frame:
-        episode_rewards[cf] = np.array(episode_rewards[cf])
-        smoothed_episode_rewards[cf] = np.convolve(episode_rewards[cf], np.ones(10)/10, mode='valid')
+                # Check for early termination due to filter divergence
+                if done:
+                    print(f"Episode {episode + 1} terminated early at step {time_step + 1}/{max_steps} due to " 
+                          f"filter divergence")
+                    break
+                
+            print(f"Episode {episode + 1}/{max_episodes}, Step {time_step + 1}/{max_steps}, " 
+                  f"Episode return: {episode_return}, Best: {best_return}, " 
+                  f"in episode {best_return_episode}")
 
+            # End of episode processing
+            if episode_return > best_return:
+                best_return = episode_return
+                best_return_episode = episode
+                export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
 
-    # Create a single figure with subplots for each contact frame
-    n_cf = len(contacts_frame)
-    fig, axes = plt.subplots(n_cf, 1, figsize=(10, 5*n_cf))
-    if n_cf == 1:
-        axes = [axes]  # Make axes iterable for single subplot case
+            agent.logger.log_episode(episode_return, time_step)
+
+            # Check for early stopping
+            if converged:
+                break
+
+        if converged or episode == max_episodes - 1:
+            try:
+                agent.load_checkpoint(os.path.join(agent.checkpoint_dir, f'trained_policy_{robot}.pth'))
+            except FileNotFoundError:
+                print(f"No trained policy found for {robot}. Training new policy...")
+            export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
+            break  # Break out of dataset loop
     
-    for ax, cf in zip(axes, contacts_frame):
-        ax.plot(episode_rewards[cf], label='Episode Rewards')
-        ax.plot(smoothed_episode_rewards[cf], label='Smoothed Rewards')
-        ax.fill_between(range(len(episode_rewards[cf])), 
-                       episode_rewards[cf] - np.std(episode_rewards[cf]), 
-                       episode_rewards[cf] + np.std(episode_rewards[cf]), 
-                       alpha=0.2)
-        ax.set_xlabel('Episode')
-        ax.set_ylabel('Reward')
-        ax.set_title(f'Episode Rewards for {cf}')
-        ax.grid(True)
-        ax.legend()
-    
-    plt.tight_layout()
-    plt.show()
-
-def evaluate_policy(dataset, contacts_frame, agents, save_policy=False):
-        # After training, evaluate the policy
-        print("\nEvaluating trained policy...")
-        
-        # Get the measurements and the ground truth
-        imu_measurements = dataset['imu']
-        joint_measurements = dataset['joints']
-        force_torque_measurements = dataset['ft']
-        base_pose_ground_truth = dataset['base_pose_ground_truth']
-
-        # Reset to initial state
-        initial_base_state = dataset['base_states'][0]
-        initial_contact_state = dataset['contact_states'][0]
-        initial_joint_state = dataset['joint_states'][0]
-
-        # Initialize SEROW
-        serow_framework = serow.Serow()
-        serow_framework.initialize("go2_rl.json")
-        state = serow_framework.get_state(allow_invalid=True)
-        state.set_base_state(initial_base_state)
-        state.set_contact_state(initial_contact_state)
-        state.set_joint_state(initial_joint_state)
-        serow_framework.set_state(state)
-
-        # Run SEROW
-        timestamps = []
-        base_positions = []
-        base_orientations = []
-        cumulative_rewards = {}
-        for cf in contacts_frame:
-            cumulative_rewards[cf] = []
-
-        gt_positions = []
-        gt_orientations = []
-        gt_timestamps = []
-
-        for imu, joints, ft, gt in zip(imu_measurements, 
-                                       joint_measurements, 
-                                       force_torque_measurements, 
-                                       base_pose_ground_truth):
-            x = np.concatenate([
-                state.get_base_position(),
-                state.get_base_orientation()
-            ])
-
-            actions = {}
-            for cf in contacts_frame:
-                actions[cf], _ = agents[cf].actor.get_action(x, deterministic=True)
-
-            timestamp, state, reward = run_step(imu, joints, ft, gt, serow_framework, state, actions)
-            
-            timestamps.append(timestamp)
-            base_positions.append(state.get_base_position())
-            base_orientations.append(state.get_base_orientation())
-            gt_positions.append(gt.position)
-            gt_orientations.append(gt.orientation)
-            gt_timestamps.append(gt.timestamp)
-            for cf in contacts_frame:
-                cumulative_rewards[cf].append(reward)
-
-        # Convert to numpy arrays
-        timestamps = np.array(timestamps)
-        base_positions = np.array(base_positions)
-        base_orientations = np.array(base_orientations)
-        gt_positions = np.array(gt_positions)
-        gt_orientations = np.array(gt_orientations)
-        cumulative_rewards = {cf: np.array(cumulative_rewards[cf]) for cf in contacts_frame}
-
-        # Sync and align the data
-        timestamps, base_positions, base_orientations, gt_positions, gt_orientations = sync_and_align_data(timestamps, base_positions, base_orientations, gt_timestamps, gt_positions, gt_orientations, align = False)
-
-        # Plot the trajectories
-        plot_trajectories(timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards)
-
-        # Print evaluation metrics
-        print("\nPolicy Evaluation Metrics:")
-        for cf in contacts_frame:
-            print(f"Average Cumulative Reward for {cf}: {np.mean(cumulative_rewards[cf]):.4f}")
-            print(f"Max Cumulative Reward for {cf}: {np.max(cumulative_rewards[cf]):.4f}")
-            print(f"Min Cumulative Reward for {cf}: {np.min(cumulative_rewards[cf]):.4f}")
-            print("-------------------------------------------------")
-        # Save the trained policy for each contact frame
-        if save_policy:
-            for cf in contacts_frame:
-                torch.save({
-                    'actor_state_dict': agents[cf].actor.state_dict(),
-                    'critic_state_dict': agents[cf].critic.state_dict(),
-                    'actor_optimizer_state_dict': agents[cf].actor_optimizer.state_dict(),
-                    'critic_optimizer_state_dict': agents[cf].critic_optimizer.state_dict(),
-                }, f'policy/trained_policy_{cf}.pth')
-                print(f"Saved policy for {cf} to 'policy/trained_policy_{cf}.pth'")
+    # Plot training curves
+    agent.logger.plot_training_curves()
+    return agent
 
 if __name__ == "__main__":
-    # Read the data
+    # Load and preprocess the data
     imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
     joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
     force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
@@ -313,41 +289,22 @@ if __name__ == "__main__":
     contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
     joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
 
-    offset = len(imu_measurements) - len(base_states)
+    # Compute the dt
+    dt = []
+    dataset_size = len(imu_measurements) - 1    
+    for i in range(dataset_size):
+        dt.append(imu_measurements[i+1].timestamp - imu_measurements[i].timestamp)
+    dt = np.median(np.array(dt))
+    print(f"dt: {dt}")
 
-    imu_measurements = imu_measurements[offset:]
-    joint_measurements = joint_measurements[offset:]
-    force_torque_measurements = force_torque_measurements[offset:]
-    base_pose_ground_truth = base_pose_ground_truth[offset:]
+    # Define the dimensions of your state and action spaces
+    state_dim = 3 
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    min_action = 1e-10
+    max_action = 1e2
+    robot = "go2"
 
-    # Dataset length
-    dataset_length = len(imu_measurements)
-    print(f"Dataset length: {dataset_length}")
-
-    # Calculate the size of each dataset
-    total_size = len(contact_states)
-    print(f"Total size: {total_size}")
-
-    # N = 10  # Number of datasets
-    # dataset_size = total_size // N  # Size of each dataset
-
-    # # Create N contiguous datasets
-    # train_datasets = []
-    # for i in range(N):
-    #     start_idx = i * dataset_size
-    #     end_idx = start_idx + dataset_size
-        
-    #     # Create a dataset with measurements and states from start_idx to end_idx
-    #     dataset = {
-    #         'imu': imu_measurements[start_idx:end_idx],
-    #         'joints': joint_measurements[start_idx:end_idx],
-    #         'ft': force_torque_measurements[start_idx:end_idx],
-    #         'base_states': base_states[start_idx:end_idx],
-    #         'contact_states': contact_states[start_idx:end_idx],
-    #         'joint_states': joint_states[start_idx:end_idx],
-    #         'base_pose_ground_truth': base_pose_ground_truth[start_idx:end_idx]
-    #     }
-    #     train_datasets.append(dataset)
+    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim)
     test_dataset = {
         'imu': imu_measurements,
         'joints': joint_measurements,
@@ -357,62 +314,122 @@ if __name__ == "__main__":
         'joint_states': joint_states,
         'base_pose_ground_truth': base_pose_ground_truth
     }
-    train_datasets = [test_dataset]
+    
+    timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards, kinematics = \
+        serow_env.evaluate(test_dataset, agent=None)
+
+    # Reform the ground truth data
+    base_pose_ground_truth = []
+    for i in range(len(timestamps)):
+        gt = serow.BasePoseGroundTruth()
+        gt.timestamp = timestamps[i]
+        gt.position = gt_positions[i]
+        gt.orientation = gt_orientations[i]
+        base_pose_ground_truth.append(gt)
 
     # Get the contacts frame
-    contacts_frame = set(contact_states[0].contacts_status.keys())
-    print(f"Contacts frame: {contacts_frame}")
+    contact_frames = serow_env.contact_frames
+    print(f"Contacts frame: {contact_frames}")
 
-    # Define the dimensions of your state and action spaces
-    state_dim = 7  # 3 position, 4 orientation
-    action_dim = 2  # Based on the action vector used in ContactEKF.setAction()
-    max_action = 100.0 
-    min_action = 0.01  
+    # Compute max and min state values
+    local_contact_positions = []
+    for (base_state, kin) in zip(base_states, kinematics):
+        # Check if we have at least one contact
+        if sum(kin.contacts_status[frame] for frame in contact_frames) > 0.0:
+            R_base = quaternion_to_rotation_matrix(base_state.base_orientation).transpose()
+            for cf in contact_frames:
+                if base_state.contacts_position[cf] is not None \
+                    and kin.contacts_position[cf] is not None \
+                    and kin.contacts_status[cf] > 0.0:
+                    local_pos = R_base @ (base_state.contacts_position[cf] - base_state.base_position)
+                    local_kin_pos = kin.contacts_position[cf]
+                    R = kin.contacts_position_noise[cf] + kin.position_cov
+                    e = local_pos - local_kin_pos
+                    e = kin.contacts_probability[cf] * np.linalg.inv(R) @ e
+                    local_contact_positions.append(e)
+
+    # Convert to numpy array for easier manipulation
+    local_contact_positions = np.array(local_contact_positions)
+
+    # Create max and min state values with correct dimensions
+    max_state_value = np.max(local_contact_positions, axis=0)
+    min_state_value = np.min(local_contact_positions, axis=0)
+    print(f"RL state max values: {max_state_value}")    
+    print(f"RL state min values: {min_state_value}")
+
+    train_datasets = [test_dataset]
+    device = 'cpu'
+
+    max_episodes = 120
+    n_steps = 512
+    total_steps = max_episodes * dataset_size * len(contact_frames)
+    total_training_steps = total_steps // n_steps
+    print(f"Total training steps: {total_training_steps}")
 
     params = {
+        'device': device,
+        'robot': robot,
         'state_dim': state_dim,
         'action_dim': action_dim,
         'max_action': max_action,
         'min_action': min_action,
-        'clip_param': 0.2,
-        'value_loss_coef': 0.5,
-        'entropy_coef': 0.5,
+        'clip_param': 0.2,  
+        'value_clip_param': None,
+        'value_loss_coef': 0.5,  
+        'entropy_coef': 0.01,  
         'gamma': 0.99,
         'gae_lambda': 0.95,
-        'ppo_epochs': 5,
-        'batch_size': 64,
-        'max_grad_norm': 0.5,
-        'actor_lr': 1e-4,
-        'critic_lr': 1e-4,
+        'ppo_epochs': 5,  
+        'batch_size': 64,  
+        'max_grad_norm': 0.5,  
+        'buffer_size': 10000,  
+        'max_episodes': max_episodes,
+        'actor_lr': 1e-6, 
+        'critic_lr': 1e-5,  
+        'target_kl': 0.03,
+        'max_state_value': max_state_value,
+        'min_state_value': min_state_value,
+        'n_steps': n_steps,
+        'convergence_threshold': 0.15,
+        'critic_convergence_threshold': 0.15,
+        'return_window_size': 10,
+        'value_loss_window_size': 10,
+        'checkpoint_dir': 'policy/ppo',
+        'total_steps': total_steps, 
+        'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
+        'check_value_loss': False,
+        'total_training_steps': total_training_steps,
+        'dt': dt
     }
 
-    # Initialize the actor and critic
-    agents = {}
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = 'cpu'
     loaded = False
-    for cf in contacts_frame:
-        print(f"Initializing agent for {cf}")
-        actor = Actor(state_dim, action_dim, max_action, min_action).to(device)
-        critic = Critic(state_dim).to(device)
-        agents[cf] = PPO(actor, critic, params, device=device)
+    print(f"Initializing agent for {robot}")
+    actor = Actor(params).to(device)
+    critic = Critic(params).to(device)
+    agent = PPO(actor, critic, params, device=device, normalize_state=True)
 
-    # Try to load a trained policy for this contact frame if it exists
+    policy_path = params['checkpoint_dir']
+    # Try to load a trained policy for this robot if it exists
     try:
-        for cf in contacts_frame:
-            checkpoint = torch.load(f'policy/trained_policy_{cf}.pth')
-            agents[cf].actor.load_state_dict(checkpoint['actor_state_dict'])
-            agents[cf].critic.load_state_dict(checkpoint['critic_state_dict'])
-            print(f"Loaded trained policy for {cf} from 'policy/trained_policy_{cf}.pth'")
-            loaded = True
+        agent.load_checkpoint(f'{policy_path}/trained_policy_{robot}.pth')
+        print(f"Loaded trained policy for {robot} from '{policy_path}/trained_policy_{robot}.pth'")
+        loaded = True
     except FileNotFoundError:
-        print(f"No trained policy found for {cf}. Training new policy...")
-        loaded = False
+        print(f"No trained policy found for {robot}. Training new policy...")
 
     if not loaded:
         # Train the policy
-        train_policy(train_datasets, contacts_frame, agents)
-        evaluate_policy(test_dataset, contacts_frame, agents, save_policy=True)
+        train_ppo(train_datasets, agent, params)
+        # Load the best policy
+        checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')
+        actor = Actor(params).to(device)
+        critic = Critic(params).to(device)
+        best_policy = PPO(actor, critic, params, device=device, normalize_state=True)
+        best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
+        best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])
+        print(f"Loaded optimal trained policy for {robot} from " 
+              f"'{policy_path}/trained_policy_{robot}.pth'")
+        serow_env.evaluate(test_dataset, agent)
     else:
         # Just evaluate the loaded policy
-        evaluate_policy(test_dataset, contacts_frame, agents, save_policy=False)
+        serow_env.evaluate(test_dataset, agent)

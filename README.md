@@ -53,6 +53,35 @@ export SEROW_PATH=<path-to-serow-package>
 * `cmake .. && make -j4`
 * `./nao_test`
 
+# Use with ONNX CPU runtime - Ubuntu 22.04
+## Install dependencies:
+```
+sudo apt update
+sudo apt install -y wget unzip build-essential libprotobuf-dev protobuf-compiler
+```
+
+## Download the ONNX Rruntime release
+```
+wget https://github.com/microsoft/onnxruntime/releases/download/v1.18.0/onnxruntime-linux-x64-1.18.0.tgz
+```
+
+## Extract and install:
+```
+tar -xzf onnxruntime-linux-x64-1.18.0.tgz
+sudo mv onnxruntime-linux-x64-1.18.0 /usr/local/onnxruntime
+```
+
+## Set environment variables
+``
+echo 'export LD_LIBRARY_PATH=/usr/local/onnxruntime/lib:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
+``
+
+## Verify
+``
+ls /usr/local/onnxruntime/lib
+``
+
 ## Visualize data 
 * Logs are saved under `/tmp` 
 * Run [Foxglove](https://foxglove.dev/download)

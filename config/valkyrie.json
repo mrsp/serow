@@ -1,4 +1,5 @@
 {
+    "robot_name": "valkyrie",
     "base_frame": "pelvis",
     "point_feet": false,
     "foot_frames": {
