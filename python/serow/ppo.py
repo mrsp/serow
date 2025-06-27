@@ -41,15 +41,15 @@ class PPO:
         self.value_loss_coef = params['value_loss_coef']
         self.max_grad_norm = params['max_grad_norm']
         self.ppo_epochs = params['ppo_epochs']
-        self.min_action = params['min_action']
-        self.max_action = params['max_action']
+        self.min_action = params.get('min_action', -1e2 * torch.ones(self.action_dim))
+        self.max_action = params.get('max_action', 1e2 * torch.ones(self.action_dim))
         self.num_updates = 0
         self.training_step = 0
         self.samples = 0
 
         self.normalize_state = normalize_state
-        self.max_state_value = params['max_state_value']
-        self.min_state_value = params['min_state_value']
+        self.max_state_value = params.get('max_state_value', 1e2 * torch.ones(self.state_dim))
+        self.min_state_value = params.get('min_state_value', -1e2 * torch.ones(self.state_dim))
         
         # Early stopping parameters
         self.value_loss_window_size = params.get('value_loss_window_size', 10) 
