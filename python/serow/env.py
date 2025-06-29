@@ -4,7 +4,7 @@ import numpy as np
 from utils import quaternion_to_rotation_matrix, logMap, sync_and_align_data, plot_trajectories
 
 class SerowEnv:
-    def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim, R_history_buffer_size):
+    def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim, history_buffer_size):
         self.robot = robot
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{robot}_rl.json")
@@ -17,21 +17,36 @@ class SerowEnv:
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.R_history_buffer = []
-        self.R_history_buffer_size = R_history_buffer_size
+        self.R_initial = np.eye(3, dtype=np.float64)
+        self.R_history_buffer_size = history_buffer_size
+        self.innovation_buffer = []
+        self.innovation_buffer_size = history_buffer_size
+        self.innovation_initial = np.zeros(3, dtype=np.float64)
+        self.state_normalizer = None
 
-    def get_R_history(self, R_initial):
+    def get_R_history(self):
         max_history_size = self.R_history_buffer_size
         if len(self.R_history_buffer) == 0:
             # Fill entire history with initial R
-            R_history_filled = [R_initial] * max_history_size
+            R_history_filled = [self.R_initial] * max_history_size
         elif len(self.R_history_buffer) < max_history_size:
             # Fill missing entries with initial R
             padding_needed = max_history_size - len(self.R_history_buffer)
-            R_history_filled = [R_initial] * padding_needed + self.R_history_buffer
+            R_history_filled = [self.R_initial] * padding_needed + self.R_history_buffer
         else:
             R_history_filled = self.R_history_buffer[-max_history_size:]
         
         return np.stack(R_history_filled).flatten()
+
+    def get_innovation_history(self):
+        if len(self.innovation_buffer) == 0:
+            innovation_history_filled = [self.innovation_initial] * self.innovation_buffer_size
+        elif len(self.innovation_buffer) < self.innovation_buffer_size:
+            padding_needed = self.innovation_buffer_size - len(self.innovation_buffer)
+            innovation_history_filled = [self.innovation_initial] * padding_needed + self.innovation_buffer
+        else:
+            innovation_history_filled = self.innovation_buffer[-self.innovation_buffer_size:]
+        return np.stack(innovation_history_filled).flatten()
 
     def compute_reward(self, cf, state, gt, step, max_steps):
         reward = 0.0
@@ -45,25 +60,26 @@ class SerowEnv:
 
         success, _, _, innovation, covariance = self.serow_framework.get_contact_position_innovation(cf)
 
-        if (np.linalg.norm(position_error) > 0.25 or np.linalg.norm(orientation_error) > 0.1):
+        if (np.linalg.norm(position_error) > 0.35 or np.linalg.norm(orientation_error) > 0.1):
             done = 1.0  
-            reward = -100.0
+            reward = 0.0
             position_reward = 0.0
             orientation_reward = 0.0
         else:
             if success: 
                 done = 0.0
                 nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-                nis_reward = -100.0 * nis
+                nis_reward = -5.0 * nis
                 trace_base_position_covariance = np.trace(state.get_base_position_cov())
                 trace_base_orientation_covariance = np.trace(state.get_base_orientation_cov())
-                trace_reward = -100.0 * (trace_base_position_covariance + trace_base_orientation_covariance)
-                position_reward = -position_error
+                trace_reward = -10.0 * (trace_base_position_covariance + trace_base_orientation_covariance)
+                position_reward = -5 * position_error
                 orientation_reward = -10 * orientation_error
-                # print(f"NIS reward: {nis_reward}, Trace reward: {trace_reward}, Position reward: {position_reward}, Orientation reward: {orientation_reward}")
-                reward = nis_reward + trace_reward + position_reward + orientation_reward + (step + 1) / max_steps
+                step_reward = 0.5 * (step + 1) / max_steps
+                # print(f"NIS reward: {nis_reward}, Trace reward: {trace_reward}, Position reward: {position_reward}, Orientation reward: {orientation_reward}, (step: {step_reward})")
+                reward = nis_reward + trace_reward + position_reward + orientation_reward + step_reward
         
-        return reward, done    
+        return reward, done, innovation
 
     def compute_state(self, cf, state, kin, action = None):
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
@@ -80,9 +96,10 @@ class SerowEnv:
             L[2, 1] = action[5]
             R = R * (L @ L.T)
 
-        e = local_pos - local_kin_pos
-        R_history = self.get_R_history(R)
-        return np.concatenate([e, R_history, R.flatten()], axis=0)
+        innovation = local_pos - local_kin_pos
+        R_history = self.get_R_history()
+        innovation_history = self.get_innovation_history()
+        return np.concatenate([innovation, R_history, R.flatten(), innovation_history], axis=0)
     
     def reset(self):
         self.serow_framework = serow.Serow()
@@ -129,7 +146,12 @@ class SerowEnv:
         post_state = self.serow_framework.get_state(allow_invalid=True)
 
         # Compute the reward
-        reward, done = self.compute_reward(cf, post_state, gt, step, max_steps)
+        reward, done, innovation = self.compute_reward(cf, post_state, gt, step, max_steps)
+        if (len(self.innovation_buffer) < self.innovation_buffer_size):
+            self.innovation_buffer.append(innovation)
+        else:
+            self.innovation_buffer.pop(0)
+            self.innovation_buffer.append(innovation)
         return post_state, reward, done
 
     def finish_update(self, imu, kin):
@@ -184,6 +206,8 @@ class SerowEnv:
                 if not baseline and post_state.get_contact_position(cf) is not None:
                     # Compute the state
                     x = self.compute_state(cf, post_state, kin)
+                    if self.state_normalizer is not None:
+                        x = self.state_normalizer.normalize_state(x)
 
                     # Compute the action 
                     if agent.name == 'ddpg':
