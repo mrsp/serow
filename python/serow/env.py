@@ -213,7 +213,7 @@ class SerowEnv:
                     x = self.compute_state(cf, post_state, kin)
 
                     # Compute the action 
-                    if agent.name == 'ddpg':
+                    if agent.name == 'DDPG':
                         action = agent.get_action(x, deterministic=True)
                     else:
                         action = agent.get_action(x, deterministic=True)[0]
