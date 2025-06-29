@@ -7,10 +7,9 @@ import random
 from logger import Logger
 
 from collections import deque
-from utils import normalize_vector
 
 class PPO:
-    def __init__(self, actor, critic, params, device='cpu', normalize_state=False):
+    def __init__(self, actor, critic, params, device='cpu'):
         self.name = "PPO"
         self.robot = params['robot']
         self.device = torch.device(device)
@@ -46,10 +45,6 @@ class PPO:
         self.num_updates = 0
         self.training_step = 0
         self.samples = 0
-
-        self.normalize_state = normalize_state
-        self.max_state_value = params.get('max_state_value', 1e2 * torch.ones(self.state_dim))
-        self.min_state_value = params.get('min_state_value', -1e2 * torch.ones(self.state_dim))
         
         # Early stopping parameters
         self.value_loss_window_size = params.get('value_loss_window_size', 10) 
@@ -78,17 +73,10 @@ class PPO:
         self.critic.train()
 
     def add_to_buffer(self, state, action, reward, next_state, done, value, log_prob):
-        if self.normalize_state:
-           state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
-           next_state = normalize_vector(next_state.copy(), self.min_state_value, self.max_state_value)
-
         experience = (state, action, reward, next_state, done, value, log_prob) 
         self.buffer.append(experience)
     
     def get_action(self, state, deterministic=False):
-        if self.normalize_state:
-            state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
-
         with torch.no_grad():
             action, log_prob = self.actor.get_action(state, deterministic)
             state_tensor = torch.FloatTensor(state).reshape(1, -1).to(self.device)

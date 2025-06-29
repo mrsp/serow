@@ -21,7 +21,7 @@ from read_mcap import(
 )
 
 from utils import(
-    quaternion_to_rotation_matrix,
+    Normalizer,
     export_models_to_onnx
 )
 
@@ -156,27 +156,30 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, params):
         super(Critic, self).__init__()
-        self.layer1 = nn.Linear(params['state_dim'], 256)
-        self.layer2 = nn.Linear(256, 256)
-        self.layer3 = nn.Linear(256, 128)
+        self.layer1 = nn.Linear(params['state_dim'], 512)
+        self.layer2 = nn.Linear(512, 512)
+        self.layer3 = nn.Linear(512, 256)
+        self.layer4 = nn.Linear(256, 128)
+        
+        # Initialize weights with smaller gains for value function
         nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
+        nn.init.orthogonal_(self.layer4.weight, gain=np.sqrt(2))
         torch.nn.init.constant_(self.layer1.bias, 0.0)
         torch.nn.init.constant_(self.layer2.bias, 0.0)
         torch.nn.init.constant_(self.layer3.bias, 0.0)
+        torch.nn.init.constant_(self.layer4.bias, 0.0)
 
         self.value_layer = nn.Linear(128, 1)
         nn.init.orthogonal_(self.value_layer.weight, gain=1.0)
         torch.nn.init.constant_(self.value_layer.bias, 0.0)
 
     def forward(self, state):
-        x = self.layer1(state)
-        x = F.relu(x)
-        x = self.layer2(x)
-        x = F.relu(x)
-        x = self.layer3(x)
-        x = F.relu(x)
+        x = F.relu(self.layer1(state))
+        x = F.relu(self.layer2(x))
+        x = F.relu(self.layer3(x))
+        x = F.relu(self.layer4(x))
         return self.value_layer(x)
 
 def train_ppo(datasets, agent, params):
@@ -207,7 +210,8 @@ def train_ppo(datasets, agent, params):
 
         for episode in range(max_episodes):
             serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
-                                 params['action_dim'], params['state_dim'], params['R_history_buffer_size'])
+                                 params['action_dim'], params['state_dim'], 
+                                 params['history_buffer_size'])
             
             # Episode tracking variables
             episode_return = 0.0
@@ -233,6 +237,8 @@ def train_ppo(datasets, agent, params):
                     if (post_state.get_contact_position(cf) is not None and kin.contacts_status[cf] and next_kin.contacts_status[cf]):
                         # Compute the state
                         x = serow_env.compute_state(cf, post_state, kin)
+                        if agent.state_normalizer is not None:
+                            x = agent.state_normalizer.normalize_state(x)
 
                         # Compute the action
                         action, value, log_prob = agent.get_action(x, deterministic=False)
@@ -242,9 +248,12 @@ def train_ppo(datasets, agent, params):
 
                         # Compute the next state
                         next_x = serow_env.compute_state(cf, post_state, next_kin, action)
+                        if agent.state_normalizer is not None:
+                            next_x = agent.state_normalizer.normalize_state(next_x)
 
                         # Add to buffer
                         agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
+
                         # Accumulate rewards
                         collected_steps += 1
                         episode_return += reward
@@ -319,14 +328,15 @@ if __name__ == "__main__":
     print(f"dt: {dt}")
 
     # Define the dimensions of your state and action spaces
-    R_history_buffer_size = 10
-    state_dim = 3 + 3 * 3 + 3 * 3 * R_history_buffer_size
+    history_buffer_size = 10
+    state_dim = 3 + 3 * 3 + 3 * 3 * history_buffer_size + 3 * history_buffer_size
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
     min_action = np.array([1e-10, 1e-10, 1e-10, -1e2, -1e2, -1e2])
     max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
     robot = "go2"
 
-    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, R_history_buffer_size)
+    normalizer = Normalizer(history_buffer_size, history_buffer_size)
+    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, history_buffer_size)
     test_dataset = {
         'imu': imu_measurements,
         'joints': joint_measurements,
@@ -364,7 +374,7 @@ if __name__ == "__main__":
     print(f"Total training steps: {total_training_steps}")
 
     params = {
-        'R_history_buffer_size': R_history_buffer_size,
+        'history_buffer_size': history_buffer_size,
         'device': device,
         'robot': robot,
         'state_dim': state_dim,
@@ -382,8 +392,8 @@ if __name__ == "__main__":
         'max_grad_norm': 0.5,  
         'buffer_size': 10000,  
         'max_episodes': max_episodes,
-        'actor_lr': 1e-6, 
-        'critic_lr': 1e-5,  
+        'actor_lr': 1e-5, 
+        'critic_lr': 1e-4,
         'target_kl': 0.03,
         'n_steps': n_steps,
         'convergence_threshold': 0.15,
@@ -392,18 +402,18 @@ if __name__ == "__main__":
         'value_loss_window_size': 10,
         'checkpoint_dir': 'policy/ppo',
         'total_steps': total_steps, 
-        'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
-        'check_value_loss': False,
+        'final_lr_ratio': 0.01,
+        'check_value_loss': True,
         'total_training_steps': total_training_steps,
-        'dt': dt
+        'dt': dt,
+        'state_normalizer': normalizer
     }
 
     loaded = False
-    normalize_state = False
     print(f"Initializing agent for {robot}")
     actor = Actor(params).to(device)
     critic = Critic(params).to(device)
-    agent = PPO(actor, critic, params, device=device, normalize_state=normalize_state)
+    agent = PPO(actor, critic, params, device=device)
 
     policy_path = params['checkpoint_dir']
     # Try to load a trained policy for this robot if it exists
@@ -421,7 +431,7 @@ if __name__ == "__main__":
         checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')
         actor = Actor(params).to(device)
         critic = Critic(params).to(device)
-        best_policy = PPO(actor, critic, params, device=device, normalize_state=normalize_state)
+        best_policy = PPO(actor, critic, params, device=device)
         best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
         best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])
         print(f"Loaded optimal trained policy for {robot} from " 
