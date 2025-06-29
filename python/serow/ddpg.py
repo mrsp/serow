@@ -8,10 +8,9 @@ import os
 from logger import Logger
 
 from collections import deque
-from utils import normalize_vector
 
 class DDPG:
-    def __init__(self, actor, critic, params, device='cpu', normalize_state=False):
+    def __init__(self, actor, critic, params, device='cpu'):
         self.name = "DDPG"
         self.robot = params['robot']
         self.device = torch.device(device)
@@ -47,10 +46,6 @@ class DDPG:
         self.num_updates = 0
         self.max_grad_norm = params['max_grad_norm']
 
-        self.normalize_state = normalize_state
-        self.max_state_value = params.get('max_state_value', 1e4 * torch.ones(self.state_dim))
-        self.min_state_value = params.get('min_state_value', -1e4 * torch.ones(self.state_dim))
-        
         # Early stopping parameters
         self.check_value_loss = params.get('check_value_loss', False)
         self.value_loss_window_size = params.get('value_loss_window_size', 10) 
@@ -158,10 +153,6 @@ class DDPG:
             param_group['lr'] = critic_lr
 
     def add_to_buffer(self, state, action, reward, next_state, done):
-        if self.normalize_state:
-           state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
-           next_state = normalize_vector(next_state.copy(), self.min_state_value, self.max_state_value)
-
         # Store experience
         experience = (state, action, reward, next_state, done)
         self.buffer.append(experience)
@@ -171,9 +162,6 @@ class DDPG:
         self.samples += 1
 
     def get_action(self, state, deterministic=False):
-        if self.normalize_state:
-            state = normalize_vector(state.copy(), self.min_state_value, self.max_state_value)
-        
         return self.actor.get_action(state, deterministic)
             
     def learn(self):

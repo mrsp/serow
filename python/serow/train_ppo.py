@@ -237,8 +237,6 @@ def train_ppo(datasets, agent, params):
                     if (post_state.get_contact_position(cf) is not None and kin.contacts_status[cf] and next_kin.contacts_status[cf]):
                         # Compute the state
                         x = serow_env.compute_state(cf, post_state, kin)
-                        if agent.state_normalizer is not None:
-                            x = agent.state_normalizer.normalize_state(x)
 
                         # Compute the action
                         action, value, log_prob = agent.get_action(x, deterministic=False)
@@ -247,9 +245,7 @@ def train_ppo(datasets, agent, params):
                         post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
 
                         # Compute the next state
-                        next_x = serow_env.compute_state(cf, post_state, next_kin, action)
-                        if agent.state_normalizer is not None:
-                            next_x = agent.state_normalizer.normalize_state(next_x)
+                        next_x = serow_env.compute_state(cf, post_state, next_kin)
 
                         # Add to buffer
                         agent.add_to_buffer(x, action, reward, next_x, done, value, log_prob)
@@ -335,7 +331,7 @@ if __name__ == "__main__":
     max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
     robot = "go2"
 
-    normalizer = Normalizer(history_buffer_size, history_buffer_size)
+    normalizer = Normalizer()
     serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, history_buffer_size)
     test_dataset = {
         'imu': imu_measurements,

@@ -21,7 +21,7 @@ from read_mcap import(
 )
 
 from utils import(
-    quaternion_to_rotation_matrix,
+    Normalizer,
     export_models_to_onnx
 )
 
@@ -160,7 +160,7 @@ def train_ddpg(datasets, agent, params):
 
         for episode in range(max_episodes + warmup_episodes):
             serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
-                                 params['action_dim'], params['state_dim'], params['R_history_buffer_size'])
+                                 params['action_dim'], params['state_dim'], params['history_buffer_size'])
             
             # Episode tracking variables
             episode_return = 0.0
@@ -197,7 +197,7 @@ def train_ddpg(datasets, agent, params):
                         post_state, reward, done = serow_env.update_step(cf, kin, action, gt, time_step, max_steps)
 
                         # Compute the next state
-                        next_x = serow_env.compute_state(cf, post_state, next_kin, action)
+                        next_x = serow_env.compute_state(cf, post_state, next_kin)
 
                         # Add to buffer
                         agent.add_to_buffer(x, action, reward, next_x, done)
@@ -274,15 +274,15 @@ if __name__ == "__main__":
     dt = np.median(np.array(dt))
     print(f"dt: {dt}")
 
-    R_history_buffer_size = 10
-    # Define the dimensions of your state and action spaces
-    state_dim = 3 + 3 * 3 + 3 * 3 * R_history_buffer_size
+    history_buffer_size = 10
+    state_dim = 3 + 3 * 3 + 3 * 3 * history_buffer_size + 3 * history_buffer_size
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
     min_action = np.array([1e-10, 1e-10, 1e-10, -1e2, -1e2, -1e2])
     max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
     robot = "go2"
-
-    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, R_history_buffer_size)
+    
+    normalizer = Normalizer()
+    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, history_buffer_size)
     test_dataset = {
         'imu': imu_measurements,
         'joints': joint_measurements,
@@ -320,6 +320,7 @@ if __name__ == "__main__":
     print(f"Total training steps: {total_training_steps}")
 
     params = {
+        'history_buffer_size': history_buffer_size,
         'device': device,
         'robot': robot,
         'state_dim': state_dim,
@@ -347,7 +348,6 @@ if __name__ == "__main__":
         'final_lr_ratio': 0.01,  # Learning rate will decay to 1% of initial value
         'check_value_loss': False,
         'total_training_steps': total_training_steps,
-        'R_history_buffer_size': R_history_buffer_size,
     }
 
     loaded = False
@@ -355,7 +355,7 @@ if __name__ == "__main__":
     actor = Actor(params).to(device)
     critic = Critic(params).to(device)
     normalize_state = False
-    agent = DDPG(actor, critic, params, device=device, normalize_state=normalize_state)
+    agent = DDPG(actor, critic, params, device=device)
 
     policy_path = params['checkpoint_dir']
     # Try to load a trained policy for this robot if it exists
@@ -373,7 +373,7 @@ if __name__ == "__main__":
         checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')
         actor = Actor(params).to(device)
         critic = Critic(params).to(device)
-        best_policy = DDPG(actor, critic, params, device=device, normalize_state=normalize_state)
+        best_policy = DDPG(actor, critic, params, device=device)
         best_policy.actor.load_state_dict(checkpoint['actor_state_dict'])
         best_policy.critic.load_state_dict(checkpoint['critic_state_dict'])
         print(f"Loaded optimal trained policy for {robot} from " 

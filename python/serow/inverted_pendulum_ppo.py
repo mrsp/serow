@@ -204,7 +204,7 @@ class TestPPOInvertedPendulum(unittest.TestCase):
         # Create actor and critic 
         self.actor = Actor(params)
         self.critic = Critic(params)
-        self.agent = PPO(self.actor, self.critic, params, device=self.device, normalize_state=False)
+        self.agent = PPO(self.actor, self.critic, params, device=self.device)
         self.env = InvertedPendulum()
 
     def test_initialization(self):
