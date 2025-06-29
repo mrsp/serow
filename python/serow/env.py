@@ -81,22 +81,17 @@ class SerowEnv:
         
         return reward, done, innovation
 
-    def compute_state(self, cf, state, kin, action = None):
+    def compute_state(self, cf, state, kin):
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
         local_pos = R_base @ (state.get_contact_position(cf) - state.get_base_position())   
         local_kin_pos = kin.contacts_position[cf]
         R = kin.contacts_position_noise[cf] + kin.position_cov
-        if action is not None and np.any(action != np.zeros(self.action_dim)):
-            L = np.zeros((3, 3))
-            L[0, 0] = action[0]
-            L[1, 1] = action[1]
-            L[2, 2] = action[2]
-            L[1, 0] = action[3]
-            L[2, 0] = action[4]
-            L[2, 1] = action[5]
-            R = R * (L @ L.T)
-
         innovation = local_pos - local_kin_pos
+
+        if self.state_normalizer is not None:
+            innovation = self.state_normalizer.normalize_innovation(innovation)
+            R = self.state_normalizer.normalize_R(R)
+
         R_history = self.get_R_history()
         innovation_history = self.get_innovation_history()
         return np.concatenate([innovation, R_history, R.flatten(), innovation_history], axis=0)
@@ -119,23 +114,7 @@ class SerowEnv:
         return kin, state
 
     def update_step(self, cf, kin, action, gt, step, max_steps):
-        # Update the R history buffer
-        R = (kin.contacts_position_noise[cf] + kin.position_cov)
-        if np.any(action != np.zeros(self.action_dim)):
-            L = np.zeros((3, 3))
-            L[0, 0] = action[0]
-            L[1, 1] = action[1]
-            L[2, 2] = action[2]
-            L[1, 0] = action[3]
-            L[2, 0] = action[4]
-            L[2, 1] = action[5]
-            R = R * (L @ L.T)
-        if len(self.R_history_buffer) < self.R_history_buffer_size:
-            self.R_history_buffer.append(R)
-        else:
-            self.R_history_buffer.pop(0)
-            self.R_history_buffer.append(R)
-        
+
         # Set the action
         self.serow_framework.set_action(cf, action)
 
@@ -147,11 +126,37 @@ class SerowEnv:
 
         # Compute the reward
         reward, done, innovation = self.compute_reward(cf, post_state, gt, step, max_steps)
+
+        if self.state_normalizer is not None:
+            innovation = self.state_normalizer.normalize_innovation(innovation)
+
         if (len(self.innovation_buffer) < self.innovation_buffer_size):
             self.innovation_buffer.append(innovation)
         else:
             self.innovation_buffer.pop(0)
             self.innovation_buffer.append(innovation)
+
+        # Update the R history buffer
+        R = (kin.contacts_position_noise[cf] + kin.position_cov)
+        if np.any(action != np.zeros(self.action_dim)):
+            L = np.zeros((3, 3))
+            L[0, 0] = action[0]
+            L[1, 1] = action[1]
+            L[2, 2] = action[2]
+            L[1, 0] = action[3]
+            L[2, 0] = action[4]
+            L[2, 1] = action[5]
+            R = R * (L @ L.T)
+
+        if self.state_normalizer is not None:
+            R = self.state_normalizer.normalize_R_with_action(R)
+
+        if len(self.R_history_buffer) < self.R_history_buffer_size:
+            self.R_history_buffer.append(R)
+        else:
+            self.R_history_buffer.pop(0)
+            self.R_history_buffer.append(R)
+
         return post_state, reward, done
 
     def finish_update(self, imu, kin):
@@ -206,8 +211,6 @@ class SerowEnv:
                 if not baseline and post_state.get_contact_position(cf) is not None:
                     # Compute the state
                     x = self.compute_state(cf, post_state, kin)
-                    if self.state_normalizer is not None:
-                        x = self.state_normalizer.normalize_state(x)
 
                     # Compute the action 
                     if agent.name == 'ddpg':
