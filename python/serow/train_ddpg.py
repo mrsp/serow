@@ -231,7 +231,8 @@ def train_ddpg(datasets, agent, params):
                 
             print(f"Episode {episode + 1}/{max_episodes}, Step {time_step + 1}/{max_steps}, " 
                   f"Episode return: {episode_return}, Best: {best_return}, " 
-                  f"in episode {best_return_episode}")
+                  f"in episode {best_return_episode}, "
+                  f"Normalization stats: {params['state_normalizer'].get_normalization_stats()}")
 
             # End of episode processing
             if episode_return > best_return:
@@ -251,6 +252,7 @@ def train_ddpg(datasets, agent, params):
             except FileNotFoundError:
                 print(f"No trained policy found for {robot}. Training new policy...")
             export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
+            params['state_normalizer'].save_stats(agent.checkpoint_dir, '/state_normalizer')
             break  # Break out of dataset loop
     
     # Plot training curves
@@ -360,9 +362,12 @@ if __name__ == "__main__":
     agent = DDPG(actor, critic, params, device=device)
 
     policy_path = params['checkpoint_dir']
+    print(f"Policy path: {policy_path}")
     # Try to load a trained policy for this robot if it exists
     try:
         agent.load_checkpoint(f'{policy_path}/trained_policy_{robot}.pth')
+        params['state_normalizer'].load_stats(policy_path, '/state_normalizer')
+        print(f"Stats loaded: {params['state_normalizer'].get_normalization_stats()}")
         print(f"Loaded trained policy for {robot} from '{policy_path}/trained_policy_{robot}.pth'")
         loaded = True
     except FileNotFoundError:
@@ -370,6 +375,7 @@ if __name__ == "__main__":
 
     if not loaded:
         # Train the policy
+        params['state_normalizer'].reset_stats()
         train_ddpg(train_datasets, agent, params)
         # Load the best policy
         checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')

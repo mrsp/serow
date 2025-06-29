@@ -36,15 +36,23 @@ class RunningStats:
         """Get current mean and standard deviation."""
         return self.mean, max(self.std, 1e-8)  # Ensure std is not too small
 
+    def save_stats(self, path, name):
+        np.save(path + name + '.npy', 
+                {'mean': self.mean, 'M2': self.M2, 'n': self.n, 'std': self.std})
+
+    def load_stats(self, path, name):
+        stats = np.load(path + name + '.npy', allow_pickle=True).item()
+        self.mean = stats['mean']
+        self.M2 = stats['M2']
+        self.n = stats['n']
+        self.std = stats['std']
+
 class Normalizer:
     def __init__(self):
         # Running statistics for different components
         self.innovation_stats = RunningStats()
         self.R_history_stats = RunningStats()
         self.R_stats = RunningStats()
-        
-        # Flag to track if we have any data
-        self.initialized = False
 
     def _normalize_covariance_matrix(self, R, mean=None, std=None):
         """
@@ -86,6 +94,7 @@ class Normalizer:
     def normalize_innovation(self, innovation):
         innovation_mean, innovation_std = self.innovation_stats.get_stats()
         innovation_normalized = (innovation - innovation_mean) / innovation_std
+        self.innovation_stats.update(innovation_normalized)
         return innovation_normalized
     
     def normalize_R_with_action(self, R):
@@ -101,11 +110,10 @@ class Normalizer:
     def get_normalization_stats(self):
         """Get current normalization statistics for debugging/monitoring."""
         stats = {}
-        if self.initialized:
-            stats['innovation_mean'], stats['innovation_std'] = self.innovation_stats.get_stats()
-            stats['R_mean'], stats['R_std'] = self.R_stats.get_stats()
-            stats['R_history_mean'], stats['R_history_std'] = self.R_history_stats.get_stats()
-            stats['n_samples'] = self.innovation_stats.n
+        stats['innovation_mean'], stats['innovation_std'] = self.innovation_stats.get_stats()
+        stats['R_mean'], stats['R_std'] = self.R_stats.get_stats()
+        stats['R_history_mean'], stats['R_history_std'] = self.R_history_stats.get_stats()
+        stats['n_samples'] = self.innovation_stats.n
         return stats
     
     def reset_stats(self):
@@ -113,7 +121,16 @@ class Normalizer:
         self.innovation_stats = RunningStats()
         self.R_history_stats = RunningStats()
         self.R_stats = RunningStats()
-        self.initialized = False
+
+    def save_stats(self, path, name):
+        self.innovation_stats.save_stats(path, name + '_innovation')
+        self.R_history_stats.save_stats(path, name + '_R_history')
+        self.R_stats.save_stats(path, name + '_R')
+
+    def load_stats(self, path, name):
+        self.innovation_stats.load_stats(path, name + '_innovation')
+        self.R_history_stats.load_stats(path, name + '_R_history')
+        self.R_stats.load_stats(path, name + '_R')
 
 def rotation_matrix_to_quaternion(R):
     """
@@ -201,17 +218,17 @@ def logMap(R):
     numpy array with shape (3,)
         The corresponding so(3) Lie algebra element.
     """
-    R11 = R[0, 0];
-    R12 = R[0, 1];
-    R13 = R[0, 2];
-    R21 = R[1, 0];
-    R22 = R[1, 1];
-    R23 = R[1, 2];
-    R31 = R[2, 0];
-    R32 = R[2, 1];
-    R33 = R[2, 2];
+    R11 = R[0, 0]
+    R12 = R[0, 1]
+    R13 = R[0, 2]
+    R21 = R[1, 0]
+    R22 = R[1, 1]
+    R23 = R[1, 2]
+    R31 = R[2, 0]
+    R32 = R[2, 1]
+    R33 = R[2, 2]
 
-    trace = R.trace();
+    trace = R.trace()
 
     omega = np.zeros(3)
 
@@ -219,8 +236,8 @@ def logMap(R):
     if (trace + 1.0 < 1e-3) :
         if (R33 > R22 and R33 > R11) :
             # R33 is the largest diagonal, a=3, b=1, c=2
-            W = R21 - R12;
-            Q1 = 2.0 + 2.0 * R33;
+            W = R21 - R12
+            Q1 = 2.0 + 2.0 * R33
             Q2 = R31 + R13
             Q3 = R23 + R32
             r = np.sqrt(Q1)
@@ -232,33 +249,33 @@ def logMap(R):
             omega = sgn_w * scale * np.array([Q2, Q3, Q1])
         elif (R22 > R11):
             # R22 is the largest diagonal, a=2, b=3, c=1
-            W = R13 - R31;
-            Q1 = 2.0 + 2.0 * R22;
-            Q2 = R23 + R32;
-            Q3 = R12 + R21;
-            r = np.sqrt(Q1);
-            one_over_r = 1 / r;
-            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W);
-            sgn_w = -1.0 if W < 0 else 1.0;
-            mag = np.pi - (2 * sgn_w * W) / norm;
-            scale = 0.5 * one_over_r * mag;
-            omega = sgn_w * scale * np.array([Q3, Q1, Q2]);
+            W = R13 - R31
+            Q1 = 2.0 + 2.0 * R22
+            Q2 = R23 + R32
+            Q3 = R12 + R21
+            r = np.sqrt(Q1)
+            one_over_r = 1 / r
+            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W)
+            sgn_w = -1.0 if W < 0 else 1.0
+            mag = np.pi - (2 * sgn_w * W) / norm
+            scale = 0.5 * one_over_r * mag
+            omega = sgn_w * scale * np.array([Q3, Q1, Q2])
         else:
             # R11 is the largest diagonal, a=1, b=2, c=3
-            W = R32 - R23;
-            Q1 = 2.0 + 2.0 * R11;
-            Q2 = R12 + R21;
-            Q3 = R31 + R13;
-            r = np.sqrt(Q1);
-            one_over_r = 1 / r;
-            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W);
-            sgn_w = -1.0 if W < 0 else 1.0;
-            mag = np.pi - (2 * sgn_w * W) / norm;
-            scale = 0.5 * one_over_r * mag;
+            W = R32 - R23
+            Q1 = 2.0 + 2.0 * R11
+            Q2 = R12 + R21
+            Q3 = R31 + R13
+            r = np.sqrt(Q1)
+            one_over_r = 1 / r
+            norm = np.sqrt(Q1 * Q1 + Q2 * Q2 + Q3 * Q3 + W * W)
+            sgn_w = -1.0 if W < 0 else 1.0
+            mag = np.pi - (2 * sgn_w * W) / norm
+            scale = 0.5 * one_over_r * mag
             omega = sgn_w * scale * np.array([Q1, Q2, Q3])
     else:
-        magnitude = 0.0;
-        tr_3 = trace - 3.0;  # could be non-negative if the matrix is off orthogonal
+        magnitude = 0.0
+        tr_3 = trace - 3.0  # could be non-negative if the matrix is off orthogonal
         if (tr_3 < -1e-6):
             # this is the normal case -1 < trace < 3
             theta = np.arccos((trace - 1.0) / 2.0)
@@ -267,10 +284,10 @@ def logMap(R):
             # when theta near 0, +-2pi, +-4pi, etc. (trace near 3.0)
             # use Taylor expansion: theta \approx 1/2-(t-3)/12 + O((t-3)^2)
             # see https://github.com/borglab/gtsam/issues/746 for details
-            magnitude = 0.5 - tr_3 / 12.0 + tr_3 * tr_3 / 60.0;
+            magnitude = 0.5 - tr_3 / 12.0 + tr_3 * tr_3 / 60.0
 
-        omega = magnitude * np.array([R32 - R23, R13 - R31, R21 - R12]);
-    return omega;
+        omega = magnitude * np.array([R32 - R23, R13 - R31, R21 - R12])
+    return omega
 
 def normalize_quaternion(quaternion):
     """
