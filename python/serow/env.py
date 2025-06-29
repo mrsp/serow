@@ -4,7 +4,7 @@ import numpy as np
 from utils import quaternion_to_rotation_matrix, logMap, sync_and_align_data, plot_trajectories
 
 class SerowEnv:
-    def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim, history_buffer_size):
+    def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim, history_buffer_size, state_normalizer = None):
         self.robot = robot
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{robot}_rl.json")
@@ -22,7 +22,7 @@ class SerowEnv:
         self.innovation_buffer = []
         self.innovation_buffer_size = history_buffer_size
         self.innovation_initial = np.zeros(3, dtype=np.float64)
-        self.state_normalizer = None
+        self.state_normalizer = state_normalizer
 
     def get_R_history(self):
         max_history_size = self.R_history_buffer_size

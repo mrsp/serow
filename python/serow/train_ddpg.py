@@ -160,7 +160,8 @@ def train_ddpg(datasets, agent, params):
 
         for episode in range(max_episodes + warmup_episodes):
             serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
-                                 params['action_dim'], params['state_dim'], params['history_buffer_size'])
+                                 params['action_dim'], params['state_dim'], 
+                                 params['history_buffer_size'], params['state_normalizer'])
             
             # Episode tracking variables
             episode_return = 0.0
@@ -282,7 +283,7 @@ if __name__ == "__main__":
     robot = "go2"
     
     normalizer = Normalizer()
-    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, history_buffer_size)
+    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, history_buffer_size, normalizer)
     test_dataset = {
         'imu': imu_measurements,
         'joints': joint_measurements,
@@ -320,6 +321,7 @@ if __name__ == "__main__":
     print(f"Total training steps: {total_training_steps}")
 
     params = {
+        'state_normalizer': normalizer,
         'history_buffer_size': history_buffer_size,
         'device': device,
         'robot': robot,
