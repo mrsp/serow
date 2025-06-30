@@ -22,6 +22,11 @@ class RunningStats:
             x = np.array([x])
         x = np.asarray(x).flatten()
         
+        # Check for NaN values and replace them with zeros
+        if np.any(np.isnan(x)):
+            print(f"Warning: NaN detected in RunningStats.update, replacing with zeros. Input: {x}")
+            x = np.nan_to_num(x, nan=0.0)
+        
         # Ensure x matches the expected dimension
         if len(x) != self.dim:
             raise ValueError(f"Expected {self.dim} dimensions, got {len(x)}")
@@ -34,7 +39,7 @@ class RunningStats:
         
         if self.n >= 2:
             variance = self.M2 / (self.n - 1)  # Sample variance
-            self.std = np.sqrt(np.maximum(variance, 1e-16))  # Avoid sqrt of negative
+            self.std = np.sqrt(np.maximum(variance, 1e-8))  # Avoid sqrt of negative
 
     def get_stats(self):
         """Get current mean and standard deviation."""
@@ -64,7 +69,7 @@ class Normalizer:
         Normalize a covariance matrix using log-Euclidean approach.
         """
         # Ensure R is positive definite by adding small regularization
-        R_reg = R + 1e-10 * np.eye(R.shape[0])
+        R_reg = R + 1e-8 * np.eye(R.shape[0])
         
         # Compute log of the matrix
         try:
@@ -74,7 +79,7 @@ class Normalizer:
                 log_R = np.real(log_R)
         except:
             # Fallback: use element-wise log (not mathematically correct but stable)
-            log_R = np.log(np.maximum(R_reg, 1e-10))
+            log_R = np.log(np.maximum(R_reg, 1e-8))
         
         # Extract the unique elements (upper triangular part)
         upper_tri_indices = np.triu_indices(3)
