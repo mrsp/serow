@@ -9,12 +9,12 @@ from scipy.linalg import logm
 
 class RunningStats:
     """Helper class to compute running mean and standard deviation."""
-    def __init__(self):
+    def __init__(self, dim):
         self.n = 0
-        self.mean = 0.0
-        self.M2 = 0.0  # Sum of squares of differences from mean
-        self.mean = 0.0
-        self.std = 1.0
+        self.mean = np.zeros(dim)
+        self.M2 = np.zeros(dim)  # Sum of squares of differences from mean
+        self.std = np.ones(dim)
+        self.dim = dim
         
     def update(self, x):
         """Update running statistics with new data point(s)."""
@@ -22,19 +22,24 @@ class RunningStats:
             x = np.array([x])
         x = np.asarray(x).flatten()
         
-        for value in x:
-            self.n += 1
-            delta = value - self.mean
-            self.mean += delta / self.n
-            delta2 = value - self.mean
-            self.M2 += delta * delta2
-            if self.n >= 2:
-                variance = self.M2 / (self.n - 1)  # Sample variance
-                self.std = np.sqrt(variance)
-            
+        # Ensure x matches the expected dimension
+        if len(x) != self.dim:
+            raise ValueError(f"Expected {self.dim} dimensions, got {len(x)}")
+        
+        self.n += 1
+        delta = x - self.mean
+        self.mean += delta / self.n
+        delta2 = x - self.mean
+        self.M2 += delta * delta2
+        
+        if self.n >= 2:
+            variance = self.M2 / (self.n - 1)  # Sample variance
+            self.std = np.sqrt(np.maximum(variance, 1e-16))  # Avoid sqrt of negative
+
     def get_stats(self):
         """Get current mean and standard deviation."""
-        return self.mean, max(self.std, 1e-8)  # Ensure std is not too small
+        std_safe = np.maximum(self.std, 1e-8)  # Prevent division by zero
+        return self.mean.copy(), std_safe.copy()
 
     def save_stats(self, path, name):
         np.save(path + name + '.npy', 
@@ -50,14 +55,13 @@ class RunningStats:
 class Normalizer:
     def __init__(self):
         # Running statistics for different components
-        self.innovation_stats = RunningStats()
-        self.R_history_stats = RunningStats()
-        self.R_stats = RunningStats()
+        self.innovation_stats = RunningStats(dim=3)
+        self.R_history_stats = RunningStats(dim=6)
+        self.R_stats = RunningStats(dim=6)
 
-    def _normalize_covariance_matrix(self, R, mean=None, std=None):
+    def _normalize_covariance_matrix(self, R, mean, std):
         """
         Normalize a covariance matrix using log-Euclidean approach.
-        Returns the normalized matrix and the normalization parameters.
         """
         # Ensure R is positive definite by adding small regularization
         R_reg = R + 1e-10 * np.eye(R.shape[0])
@@ -65,46 +69,59 @@ class Normalizer:
         # Compute log of the matrix
         try:
             log_R = logm(R_reg)
+            # Handle complex results (shouldn't happen for positive definite matrices)
+            if np.iscomplexobj(log_R):
+                log_R = np.real(log_R)
         except:
-            # Fallback if logm fails
-            log_R = np.zeros_like(R)
+            # Fallback: use element-wise log (not mathematically correct but stable)
+            log_R = np.log(np.maximum(R_reg, 1e-10))
         
         # Extract the unique elements (upper triangular part)
-        # For 3x3 symmetric matrix, we have 6 unique elements
         upper_tri_indices = np.triu_indices(3)
-        log_R_flat = log_R[upper_tri_indices]
+        log_R_flat = log_R[upper_tri_indices]  # Shape: (6,)
         
-        if mean is None or std is None:
-            # This shouldn't happen in the running stats version
-            mean = np.mean(log_R_flat)
-            std = np.std(log_R_flat)
-            if std < 1e-8:
-                std = 1.0
-        
-        # Normalize
+        # Normalize using provided mean and std
         log_R_flat_normalized = (log_R_flat - mean) / std
         
         # Reconstruct the symmetric matrix
         R_normalized = np.zeros_like(R)
         R_normalized[upper_tri_indices] = log_R_flat_normalized
+        # Make symmetric
         R_normalized = R_normalized + R_normalized.T - np.diag(np.diag(R_normalized))
         
-        return R_normalized
+        return R_normalized, log_R_flat
 
     def normalize_innovation(self, innovation):
+        """Normalize 3D innovation vector."""
+        # First get current stats
         innovation_mean, innovation_std = self.innovation_stats.get_stats()
+        
+        # Then normalize using current stats
         innovation_normalized = (innovation - innovation_mean) / innovation_std
+        
+        # Update stats with the normalized innovation
         self.innovation_stats.update(innovation_normalized)
+        
         return innovation_normalized
     
     def normalize_R_with_action(self, R):
-        R_normalized = self._normalize_covariance_matrix(R, self.R_history_stats.mean, self.R_history_stats.std)
-        self.R_history_stats.update(R_normalized)
+        """Normalize 3x3 covariance matrix R using history stats."""
+        R_mean, R_std = self.R_history_stats.get_stats()
+        R_normalized, log_R_flat = self._normalize_covariance_matrix(R, R_mean, R_std)
+        
+        # Update stats with the log-transformed flattened matrix
+        self.R_history_stats.update(log_R_flat)
+        
         return R_normalized
     
     def normalize_R(self, R):
-        R_normalized = self._normalize_covariance_matrix(R, self.R_stats.mean, self.R_stats.std)
-        self.R_stats.update(R_normalized)
+        """Normalize 3x3 covariance matrix R using R stats."""
+        R_mean, R_std = self.R_stats.get_stats()
+        R_normalized, log_R_flat = self._normalize_covariance_matrix(R, R_mean, R_std)
+        
+        # Update stats with the log-transformed flattened matrix
+        self.R_stats.update(log_R_flat)
+        
         return R_normalized
 
     def get_normalization_stats(self):
@@ -118,9 +135,9 @@ class Normalizer:
     
     def reset_stats(self):
         """Reset all running statistics (useful for retraining)."""
-        self.innovation_stats = RunningStats()
-        self.R_history_stats = RunningStats()
-        self.R_stats = RunningStats()
+        self.innovation_stats = RunningStats(dim=3)
+        self.R_history_stats = RunningStats(dim=6)
+        self.R_stats = RunningStats(dim=6)
 
     def save_stats(self, path, name):
         self.innovation_stats.save_stats(path, name + '_innovation')
@@ -131,6 +148,7 @@ class Normalizer:
         self.innovation_stats.load_stats(path, name + '_innovation')
         self.R_history_stats.load_stats(path, name + '_R_history')
         self.R_stats.load_stats(path, name + '_R')
+
 
 def rotation_matrix_to_quaternion(R):
     """
