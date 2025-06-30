@@ -34,10 +34,6 @@ class Actor(nn.Module):
         self.min_action = torch.FloatTensor(params['min_action']).to(self.device)
         self.max_action = torch.FloatTensor(params['max_action']).to(self.device)
         
-        # Precompute scaling factors
-        self.action_scale = (self.max_action - self.min_action) / 2.0
-        self.action_bias = (self.max_action + self.min_action) / 2.0
-        
         self.layer1 = nn.Linear(self.state_dim, 512)
         self.layer2 = nn.Linear(512, 512)
         self.layer3 = nn.Linear(512, 256)
@@ -75,27 +71,17 @@ class Actor(nn.Module):
     
     def _transform_actions(self, raw_actions):
         """Transform raw actions and compute log determinant of Jacobian"""
-        # Split into diagonal and off-diagonal components
-        raw_diag = raw_actions[:, :3]
-        raw_off_diag = raw_actions[:, 3:]
         
         # Apply transformations
-        diag = F.softplus(raw_diag) + self.min_action[:3]
-        off_diag = self.action_scale[3:] * torch.tanh(raw_off_diag)
+        actions = torch.exp(raw_actions) + self.min_action
         
         # Compute log determinant of Jacobian
-        # For softplus: d/dx softplus(x) = sigmoid(x)
-        log_det_diag = torch.log(torch.sigmoid(raw_diag)).sum(dim=-1)
-        
-        # For tanh: d/dx tanh(x) = 1 - tanh²(x) = sech²(x)
-        tanh_off_diag = torch.tanh(raw_off_diag)
-        log_det_off_diag = torch.log(1 - tanh_off_diag.pow(2) + 1e-8).sum(dim=-1)  # Add small epsilon for numerical stability
-        # Also account for the scaling factor
-        log_det_off_diag += torch.log(self.action_scale[3:]).sum()
-        
-        log_det_jacobian = log_det_diag + log_det_off_diag
-        
-        actions = torch.cat([diag, off_diag], dim=-1)
+        # For exp transformation: d/dx exp(x) = exp(x)
+        # Since the transformation is element-wise, the Jacobian is diagonal
+        # det(J) = ∏_i exp(x_i) = exp(∑_i x_i)
+        # log(det(J)) = ∑_i x_i
+        log_det_jacobian = raw_actions.sum(dim=-1)
+
         return actions, log_det_jacobian
     
     def get_action(self, state, deterministic=False):
@@ -124,20 +110,9 @@ class Actor(nn.Module):
         dist = self.get_distribution(states)
         
         # Work backwards to get raw actions from transformed actions
-        # This requires inverting the transformations
-        diag_actions = actions[:, :3]
-        off_diag_actions = actions[:, 3:]
-        
-        # Inverse of softplus + min_action: log(exp(x - min_action) - 1)
-        raw_diag = torch.log(torch.exp(diag_actions - self.min_action[:3]) - 1 + 1e-8)
-        
-        # Inverse of scaled tanh: atanh(x / scale)
-        normalized_off_diag = off_diag_actions / self.action_scale[3:]
-        # Clamp to prevent atanh from going to infinity
-        normalized_off_diag = torch.clamp(normalized_off_diag, -0.9999, 0.9999)
-        raw_off_diag = torch.atanh(normalized_off_diag)
-        
-        raw_actions = torch.cat([raw_diag, raw_off_diag], dim=-1)
+        # The transformation is: actions = exp(raw_actions) + min_action
+        # So the inverse is: raw_actions = log(actions - min_action)
+        raw_actions = torch.log(actions - self.min_action + 1e-8)
         
         # Compute log probabilities and adjust for transformation
         _, log_det_jacobian = self._transform_actions(raw_actions)
@@ -146,9 +121,9 @@ class Actor(nn.Module):
         
         # For entropy, we need to be more careful since it's not just a simple transformation
         # The entropy of the transformed distribution is:
-        # H(Y) = H(X) + E[log|det(J)|] where Y = f(X) and J is the Jacobian
+        # H(Y) = H(X) - E[log|det(J)|] where Y = f(X) and J is the Jacobian
         raw_entropy = dist.entropy().sum(dim=-1)
-        entropy = raw_entropy + log_det_jacobian
+        entropy = raw_entropy - log_det_jacobian
         
         return log_probs, entropy
     
@@ -287,6 +262,7 @@ def train_ppo(datasets, agent, params):
             if episode_return > best_return:
                 best_return = episode_return
                 best_return_episode = episode
+                params['state_normalizer'].save_stats(agent.checkpoint_dir, '/state_normalizer')
                 export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
 
             agent.logger.log_episode(episode_return, time_step)
@@ -329,9 +305,9 @@ if __name__ == "__main__":
     # Define the dimensions of your state and action spaces
     history_buffer_size = 10
     state_dim = 3 + 3 * 3 + 3 * 3 * history_buffer_size + 3 * history_buffer_size
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-10, 1e-10, 1e-10, -1e2, -1e2, -1e2])
-    max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
+    action_dim = 3  # Based on the action vector used in ContactEKF.setAction()
+    min_action = np.array([1e-8, 1e-8, 1e-8])
+    max_action = np.array([1e2, 1e2, 1e2])
     robot = "go2"
 
     normalizer = Normalizer()

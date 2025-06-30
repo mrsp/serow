@@ -81,10 +81,7 @@ class Actor(nn.Module):
         x = F.relu(self.layer3(x))
         x = F.relu(self.layer4(x))
         mean = self.mean_layer(x) 
-        # First three elements are the diagonal of the action covariance matrix and must be strictly positive
-        diag = F.softplus(mean[:, :3]) + self.min_action[:3]
-        off_diag = self.action_scale[3:] * F.tanh(mean[:, 3:]) + self.action_bias[3:]
-        return torch.cat([diag, off_diag], dim=-1)
+        return torch.exp(mean) + self.min_action
     
     def get_action(self, state, deterministic=False):
         state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
@@ -96,8 +93,7 @@ class Actor(nn.Module):
             noise = torch.FloatTensor(self.noise.sample() * self.noise_scale).to(self.device)
             action = mean + noise
             self.noise_scale *= self.noise_decay
-            action[:, :3] = torch.clamp(action[:, :3], min=self.min_action[:3])
-            action[:, 3:] = torch.clamp(action[:, 3:], min=self.min_action[3:], max=self.max_action[3:])
+            action = torch.clamp(action, min=self.min_action)
 
         return action.squeeze(0).detach().cpu().numpy()
     
@@ -156,7 +152,7 @@ def train_ddpg(datasets, agent, params):
         max_steps = len(imu_measurements) - 1 
 
         # Warm-up phase: collect initial experiences without training
-        warmup_episodes = 0
+        warmup_episodes = 1
 
         for episode in range(max_episodes + warmup_episodes):
             serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
@@ -238,6 +234,7 @@ def train_ddpg(datasets, agent, params):
             if episode_return > best_return:
                 best_return = episode_return
                 best_return_episode = episode
+                params['state_normalizer'].save_stats(agent.checkpoint_dir, '/state_normalizer')
                 export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
 
             agent.logger.log_episode(episode_return, time_step)
@@ -279,9 +276,9 @@ if __name__ == "__main__":
 
     history_buffer_size = 10
     state_dim = 3 + 3 * 3 + 3 * 3 * history_buffer_size + 3 * history_buffer_size
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-10, 1e-10, 1e-10, -1e2, -1e2, -1e2])
-    max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
+    action_dim = 3  # Based on the action vector used in ContactEKF.setAction()
+    min_action = np.array([1e-10, 1e-10, 1e-10])
+    max_action = np.array([1e2, 1e2, 1e2])
     robot = "go2"
     
     normalizer = Normalizer()
@@ -316,8 +313,8 @@ if __name__ == "__main__":
     train_datasets = [test_dataset]
     device = 'cpu'
 
-    max_episodes = 1200
-    n_steps = 256
+    max_episodes = 120
+    n_steps = 512
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
     print(f"Total training steps: {total_training_steps}")
@@ -332,9 +329,9 @@ if __name__ == "__main__":
         'max_action': max_action,
         'min_action': min_action,
         'gamma': 0.99,
-        'batch_size': 64,  
-        'max_grad_norm': 1.0, 
-        'tau': 0.01,
+        'batch_size': 128,  
+        'max_grad_norm': 0.5, 
+        'tau': 0.005,
         'buffer_size': 1000000,
         'max_episodes': max_episodes,
         'actor_lr': 1e-5, 
