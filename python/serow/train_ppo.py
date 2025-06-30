@@ -172,7 +172,8 @@ class Critic(nn.Module):
         torch.nn.init.constant_(self.layer4.bias, 0.0)
 
         self.value_layer = nn.Linear(128, 1)
-        nn.init.orthogonal_(self.value_layer.weight, gain=1.0)
+        # Use smaller gain for value function to prevent initial large predictions
+        nn.init.orthogonal_(self.value_layer.weight, gain=0.1)
         torch.nn.init.constant_(self.value_layer.bias, 0.0)
 
     def forward(self, state):
@@ -365,7 +366,7 @@ if __name__ == "__main__":
     train_datasets = [test_dataset]
     device = 'cpu'
 
-    max_episodes = 3
+    max_episodes = 120
     n_steps = 512
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
@@ -380,8 +381,8 @@ if __name__ == "__main__":
         'max_action': max_action,
         'min_action': min_action,
         'clip_param': 0.2,  
-        'value_clip_param': None,
-        'value_loss_coef': 0.5,  
+        'value_clip_param': 0.2,
+        'value_loss_coef': 0.35,  
         'entropy_coef': 0.01,  
         'gamma': 0.99,
         'gae_lambda': 0.95,
@@ -391,7 +392,7 @@ if __name__ == "__main__":
         'buffer_size': 10000,  
         'max_episodes': max_episodes,
         'actor_lr': 1e-5, 
-        'critic_lr': 1e-4,
+        'critic_lr': 1e-5,
         'target_kl': 0.03,
         'n_steps': n_steps,
         'convergence_threshold': 0.15,

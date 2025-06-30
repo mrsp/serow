@@ -344,7 +344,7 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
         // Check if the action covariance gain matrix is not the zero matrix    
         cp_noise = csd * (cp_noise + position_cov);
         if (contact_position_action_cov_gain_.at(cf) != Eigen::Matrix3d::Zero()) {
-            cp_noise = (cp_noise.array() * contact_position_action_cov_gain_.at(cf).array()).matrix();
+            cp_noise = contact_position_action_cov_gain_.at(cf);
         }       
         cp_noise += (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
 
