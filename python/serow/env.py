@@ -142,14 +142,9 @@ class SerowEnv:
         # Update the R history buffer
         R = (kin.contacts_position_noise[cf] + kin.position_cov)
         if np.any(action != np.zeros(self.action_dim)):
-            L = np.zeros((3, 3))
-            L[0, 0] = action[0]
-            L[1, 1] = action[1]
-            L[2, 2] = action[2]
-            L[1, 0] = action[3]
-            L[2, 0] = action[4]
-            L[2, 1] = action[5]
-            R = R * (L @ L.T)
+            eig_vals, eig_vecs = np.linalg.eig(R)
+            new_eig_vals = eig_vals * action
+            R = eig_vecs @ np.diag(new_eig_vals) @ eig_vecs.T
 
         if self.state_normalizer is not None:
             R = self.state_normalizer.normalize_R_with_action(R)
