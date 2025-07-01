@@ -85,7 +85,7 @@ class SerowEnv:
         local_pos = R_base @ (state.get_contact_position(cf) - state.get_base_position())   
         local_kin_pos = kin.contacts_position[cf]
         R = kin.contacts_position_noise[cf] + kin.position_cov
-        innovation = local_pos - local_kin_pos
+        innovation = local_kin_pos - local_pos
 
         if self.state_normalizer is not None:
             innovation = self.state_normalizer.normalize_innovation(innovation)
@@ -132,11 +132,9 @@ class SerowEnv:
         if self.state_normalizer is not None:
             innovation = self.state_normalizer.normalize_innovation(innovation)
 
-        if (len(self.innovation_buffer) < self.innovation_buffer_size):
-            self.innovation_buffer.append(innovation)
-        else:
+        while len(self.innovation_buffer) >= self.innovation_buffer_size:
             self.innovation_buffer.pop(0)
-            self.innovation_buffer.append(innovation)
+        self.innovation_buffer.append(innovation)
 
         # Update the R history buffer
         R = (kin.contacts_position_noise[cf] + kin.position_cov)
@@ -148,11 +146,9 @@ class SerowEnv:
         if self.state_normalizer is not None:
             R = self.state_normalizer.normalize_R_with_action(R)
 
-        if len(self.R_history_buffer) < self.R_history_buffer_size:
-            self.R_history_buffer.append(R)
-        else:
+        while len(self.R_history_buffer) >= self.R_history_buffer_size:
             self.R_history_buffer.pop(0)
-            self.R_history_buffer.append(R)
+        self.R_history_buffer.append(R)
 
         return post_state, reward, done
 

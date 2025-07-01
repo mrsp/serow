@@ -102,18 +102,17 @@ class Actor(nn.Module):
         # Work backwards to get raw actions from transformed actions
         # The transformation is: actions = exp(raw_actions) + min_action
         # So the inverse is: raw_actions = log(actions - min_action)
-        raw_actions = torch.log(actions - self.min_action + 1e-8)
+        raw_actions = torch.log(actions - self.min_action)
         
         # Compute log probabilities and adjust for transformation
         _, log_det_jacobian = self._transform_actions(raw_actions)
         raw_log_probs = dist.log_prob(raw_actions).sum(dim=-1)
         log_probs = raw_log_probs - log_det_jacobian
         
-        # For entropy, we need to be more careful since it's not just a simple transformation
         # The entropy of the transformed distribution is:
-        # H(Y) = H(X) - E[log|det(J)|] where Y = f(X) and J is the Jacobian
-        raw_entropy = dist.entropy().sum(dim=-1)
-        entropy = raw_entropy - log_det_jacobian
+        # H(Y) = H(X) + E[log|det(J)|] where Y = f(X) and J is the Jacobian
+        raw_entropy = dist.entropy().sum(dim=-1)  # Sum over action dimensions
+        entropy = raw_entropy + log_det_jacobian   
         
         return log_probs, entropy
     
@@ -287,7 +286,8 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     normalizer = None
-    history_buffer_size = 10
+    history_buffer_size = 250
+    print(f"History buffer size: {history_buffer_size * dt} seconds")
     state_dim = 3 + 3 * 3 + 3 * 3 * history_buffer_size + 3 * history_buffer_size
     action_dim = 3  # Based on the action vector used in ContactEKF.setAction()
     min_action = np.array([1e-8, 1e-8, 1e-8])
@@ -303,7 +303,7 @@ if __name__ == "__main__":
     train_datasets = [dataset]
     device = 'cpu'
 
-    max_episodes = 2
+    max_episodes = 100
     n_steps = 512
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
@@ -320,8 +320,8 @@ if __name__ == "__main__":
         'clip_param': 0.2,  
         'value_clip_param': 0.2,
         'value_loss_coef': 0.35,  
-        'entropy_coef': 0.01,  
-        'gamma': 0.99,
+        'entropy_coef': 0.005,  
+        'gamma': 0.98,
         'gae_lambda': 0.95,
         'ppo_epochs': 5,  
         'batch_size': 64,  
@@ -329,7 +329,7 @@ if __name__ == "__main__":
         'buffer_size': 10000,  
         'max_episodes': max_episodes,
         'actor_lr': 1e-5, 
-        'critic_lr': 1e-5,
+        'critic_lr': 1e-4,
         'target_kl': 0.03,
         'n_steps': n_steps,
         'convergence_threshold': 0.15,
