@@ -103,6 +103,9 @@ class SerowEnv:
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{self.robot}_rl.json")
         self.serow_framework.set_state(self.initial_state)
+        # Reset history buffers to ensure consistent state
+        self.R_history_buffer = []
+        self.innovation_buffer = []
         return self.initial_state
 
     def predict_step(self, imu, joint, ft):
@@ -215,14 +218,6 @@ class SerowEnv:
                         action = agent.get_action(x, deterministic=True)
                     else:
                         action = agent.get_action(x, deterministic=True)[0]
-
-                    # Ensure action is a numpy array with correct shape (action_dim, 1)
-                    if np.isscalar(action):
-                        action = np.array([[action]], dtype=np.float64)
-                    elif action.ndim == 1:
-                        action = action.reshape(-1, 1).astype(np.float64)
-                    else:
-                        action = action.astype(np.float64)
                 else:
                     action = np.zeros((self.action_dim, 1), dtype=np.float64)
 
