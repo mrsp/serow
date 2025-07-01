@@ -18,3 +18,4 @@ serow_layout.json:Zone.Identifier
 /python/policy
 /python/policy/*
 /python/datasets/*
+/python/*_training_dataset.npz
