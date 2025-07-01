@@ -10,16 +10,6 @@ import os
 from env import SerowEnv
 from ppo import PPO
 
-from read_mcap import(
-    read_base_states, 
-    read_contact_states, 
-    read_force_torque_measurements, 
-    read_joint_measurements, 
-    read_imu_measurements, 
-    read_base_pose_ground_truth,
-    read_joint_states
-)
-
 from utils import(
     Normalizer,
     export_models_to_onnx
@@ -256,13 +246,14 @@ def train_ppo(datasets, agent, params):
             print(f"Episode {episode + 1}/{max_episodes}, Step {time_step + 1}/{max_steps}, " 
                   f"Episode return: {episode_return}, Best: {best_return}, " 
                   f"in episode {best_return_episode}, "
-                  f"Normalization stats: {params['state_normalizer'].get_normalization_stats()}")
+                  f"Normalization stats: {params['state_normalizer'].get_normalization_stats() if params['state_normalizer'] is not None else 'None'}")
 
             # End of episode processing
             if episode_return > best_return:
                 best_return = episode_return
                 best_return_episode = episode
-                params['state_normalizer'].save_stats(agent.checkpoint_dir, '/state_normalizer')
+                if params['state_normalizer'] is not None:
+                    params['state_normalizer'].save_stats(agent.checkpoint_dir, '/state_normalizer')
                 export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
 
             agent.logger.log_episode(episode_return, time_step)
@@ -277,7 +268,8 @@ def train_ppo(datasets, agent, params):
             except FileNotFoundError:
                 print(f"No trained policy found for {robot}. Training new policy...")
             export_models_to_onnx(agent, robot, params, agent.checkpoint_dir)
-            params['state_normalizer'].save_stats(agent.checkpoint_dir, '/state_normalizer')
+            if params['state_normalizer'] is not None:  
+                params['state_normalizer'].save_stats(agent.checkpoint_dir, '/state_normalizer')
             break  # Break out of dataset loop
     
     # Plot training curves
@@ -286,23 +278,15 @@ def train_ppo(datasets, agent, params):
 
 if __name__ == "__main__":
     # Load and preprocess the data
-    imu_measurements  = read_imu_measurements("/tmp/serow_measurements.mcap")
-    joint_measurements = read_joint_measurements("/tmp/serow_measurements.mcap")
-    force_torque_measurements = read_force_torque_measurements("/tmp/serow_measurements.mcap")
-    base_pose_ground_truth = read_base_pose_ground_truth("/tmp/serow_measurements.mcap")
-    base_states = read_base_states("/tmp/serow_proprioception.mcap")
-    contact_states = read_contact_states("/tmp/serow_proprioception.mcap")
-    joint_states = read_joint_states("/tmp/serow_proprioception.mcap")
-
-    # Compute the dt
-    dt = []
-    dataset_size = len(imu_measurements) - 1    
-    for i in range(dataset_size):
-        dt.append(imu_measurements[i+1].timestamp - imu_measurements[i].timestamp)
-    dt = np.median(np.array(dt))
-    print(f"dt: {dt}")
+    dataset = np.load("go2_training_dataset.npz", allow_pickle=True)
+    test_dataset = dataset
+    imu_measurements = dataset['imu']
+    contact_states = dataset['contact_states']
+    dt = dataset['dt']
+    dataset_size = len(imu_measurements) - 1
 
     # Define the dimensions of your state and action spaces
+    normalizer = None
     history_buffer_size = 10
     state_dim = 3 + 3 * 3 + 3 * 3 * history_buffer_size + 3 * history_buffer_size
     action_dim = 3  # Based on the action vector used in ContactEKF.setAction()
@@ -310,39 +294,16 @@ if __name__ == "__main__":
     max_action = np.array([1e2, 1e2, 1e2])
     robot = "go2"
 
-    normalizer = Normalizer()
-    serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, state_dim, history_buffer_size, normalizer)
-    test_dataset = {
-        'imu': imu_measurements,
-        'joints': joint_measurements,
-        'ft': force_torque_measurements,
-        'base_states': base_states,
-        'contact_states': contact_states,
-        'joint_states': joint_states,
-        'base_pose_ground_truth': base_pose_ground_truth
-    }
-    
-    timestamps, base_positions, base_orientations, gt_positions, gt_orientations, cumulative_rewards, kinematics = \
-        serow_env.evaluate(test_dataset, agent=None)
-
-    test_dataset['kinematics'] = kinematics
-
-    # Reform the ground truth data
-    base_pose_ground_truth = []
-    for i in range(len(timestamps)):
-        gt = serow.BasePoseGroundTruth()
-        gt.timestamp = timestamps[i]
-        gt.position = gt_positions[i]
-        gt.orientation = gt_orientations[i]
-        base_pose_ground_truth.append(gt)
-
-    # Get the contacts frame
+    # Create the evaluation environment and get the contacts frames
+    serow_env = SerowEnv(robot, dataset['joint_states'][0], dataset['base_states'][0], 
+                         dataset['contact_states'][0], action_dim, state_dim, 
+                         history_buffer_size, normalizer)
     contact_frames = serow_env.contact_frames
     print(f"Contacts frame: {contact_frames}")
-    train_datasets = [test_dataset]
+    train_datasets = [dataset]
     device = 'cpu'
 
-    max_episodes = 120
+    max_episodes = 2
     n_steps = 512
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
@@ -394,8 +355,9 @@ if __name__ == "__main__":
     # Try to load a trained policy for this robot if it exists
     try:
         agent.load_checkpoint(f'{policy_path}/trained_policy_{robot}.pth')
-        params['state_normalizer'].load_stats(policy_path, '/state_normalizer')
-        print(f"Stats loaded: {params['state_normalizer'].get_normalization_stats()}")
+        if params['state_normalizer'] is not None:
+            params['state_normalizer'].load_stats(policy_path, '/state_normalizer')
+            print(f"Stats loaded: {params['state_normalizer'].get_normalization_stats()}")
         print(f"Loaded trained policy for {robot} from '{policy_path}/trained_policy_{robot}.pth'")
         loaded = True
     except FileNotFoundError:
@@ -403,7 +365,8 @@ if __name__ == "__main__":
 
     if not loaded:
         # Train the policy
-        params['state_normalizer'].reset_stats()
+        if params['state_normalizer'] is not None:
+            params['state_normalizer'].reset_stats()
         train_ppo(train_datasets, agent, params)
         # Load the best policy
         checkpoint = torch.load(f'{policy_path}/trained_policy_{robot}.pth')
