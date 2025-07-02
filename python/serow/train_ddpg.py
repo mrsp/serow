@@ -71,7 +71,7 @@ class Actor(nn.Module):
         x = F.relu(self.layer3(x))
         x = F.relu(self.layer4(x))
         mean = self.mean_layer(x) 
-        return torch.exp(mean) + self.min_action
+        return mean
     
     def get_action(self, state, deterministic=False):
         state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
@@ -259,11 +259,11 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     normalizer = None
-    history_buffer_size = 10
+    history_buffer_size = 250
     state_dim = 3 + 3 * 3 + 3 * 3 * history_buffer_size + 3 * history_buffer_size
-    action_dim = 3  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8, 1e-8, 1e-8])
-    max_action = np.array([1e2, 1e2, 1e2])
+    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
+    min_action = np.array([1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8])
+    max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
     robot = "go2"
 
     # Create the evaluation environment and get the contacts frames
@@ -275,7 +275,7 @@ if __name__ == "__main__":
     train_datasets = [dataset]
     device = 'cpu'
 
-    max_episodes = 2
+    max_episodes = 120
     n_steps = 512
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps

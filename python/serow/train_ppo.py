@@ -50,7 +50,7 @@ class Actor(nn.Module):
         x = F.relu(self.layer3(x))  
         x = F.relu(self.layer4(x))
         mean = self.mean_layer(x)
-        log_std = self.log_std_layer(x).clamp(-4, 1)
+        log_std = self.log_std_layer(x).clamp(-20, 2)
         
         return mean, log_std
     
@@ -58,21 +58,6 @@ class Actor(nn.Module):
         mean, log_std = self.forward(state)
         std = log_std.exp()
         return torch.distributions.Normal(mean, std)
-    
-    def _transform_actions(self, raw_actions):
-        """Transform raw actions and compute log determinant of Jacobian"""
-        
-        # Apply transformations
-        actions = torch.exp(raw_actions) + self.min_action
-        
-        # Compute log determinant of Jacobian
-        # For exp transformation: d/dx exp(x) = exp(x)
-        # Since the transformation is element-wise, the Jacobian is diagonal
-        # det(J) = ∏_i exp(x_i) = exp(∑_i x_i)
-        # log(det(J)) = ∑_i x_i
-        log_det_jacobian = raw_actions.sum(dim=-1)
-
-        return actions, log_det_jacobian
     
     def get_action(self, state, deterministic=False):
         state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
@@ -83,37 +68,17 @@ class Actor(nn.Module):
         else:
             raw_actions = dist.sample()
 
-        # Transform actions and get corrected log probability
-        actions, log_det_jacobian = self._transform_actions(raw_actions)
+        actions = torch.clamp(raw_actions, self.min_action, self.max_action)
+        log_probs = dist.log_prob(actions).sum(dim=-1)
         
-        # Compute log probability of raw actions, then adjust for transformation
-        raw_log_prob = dist.log_prob(raw_actions).sum(dim=-1)
-        log_prob = raw_log_prob - log_det_jacobian  # Change of variables formula
-        
-        return actions.squeeze(0).detach().cpu().numpy(), log_prob.squeeze(0).detach().cpu().item()
+        return actions.squeeze(0).detach().cpu().numpy(), log_probs.squeeze(0).detach().cpu().item()
     
     def evaluate_actions(self, states, actions):
-        """
-        For evaluate_actions, we need to work backwards from the transformed actions
-        to get the raw actions, then compute probabilities correctly.
-        """
         dist = self.get_distribution(states)
-        
-        # Work backwards to get raw actions from transformed actions
-        # The transformation is: actions = exp(raw_actions) + min_action
-        # So the inverse is: raw_actions = log(actions - min_action)
-        raw_actions = torch.log(actions - self.min_action)
-        
-        # Compute log probabilities and adjust for transformation
-        _, log_det_jacobian = self._transform_actions(raw_actions)
-        raw_log_probs = dist.log_prob(raw_actions).sum(dim=-1)
-        log_probs = raw_log_probs - log_det_jacobian
-        
-        # The entropy of the transformed distribution is:
-        # H(Y) = H(X) + E[log|det(J)|] where Y = f(X) and J is the Jacobian
-        raw_entropy = dist.entropy().sum(dim=-1)  # Sum over action dimensions
-        entropy = raw_entropy + log_det_jacobian   
-        
+        actions = torch.clamp(actions, self.min_action, self.max_action)
+        log_probs = dist.log_prob(actions).sum(dim=-1)
+        entropy = dist.entropy().sum(dim=-1)  
+
         return log_probs, entropy
     
 
@@ -289,9 +254,9 @@ if __name__ == "__main__":
     history_buffer_size = 250
     print(f"History buffer size: {history_buffer_size * dt} seconds")
     state_dim = 3 + 3 * 3 + 3 * 3 * history_buffer_size + 3 * history_buffer_size
-    action_dim = 3  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8, 1e-8, 1e-8])
-    max_action = np.array([1e2, 1e2, 1e2])
+    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
+    min_action = np.array([1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8])
+    max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
     robot = "go2"
 
     # Create the evaluation environment and get the contacts frames
@@ -323,14 +288,14 @@ if __name__ == "__main__":
         'entropy_coef': 0.005,  
         'gamma': 0.98,
         'gae_lambda': 0.95,
-        'ppo_epochs': 5,  
+        'ppo_epochs': 10,  
         'batch_size': 64,  
-        'max_grad_norm': 0.5,  
+        'max_grad_norm': 0.35,  
         'buffer_size': 10000,  
         'max_episodes': max_episodes,
-        'actor_lr': 1e-5, 
-        'critic_lr': 1e-4,
-        'target_kl': 0.03,
+        'actor_lr': 1e-6,  # Reduced from 1e-5
+        'critic_lr': 1e-5,  # Reduced from 1e-4
+        'target_kl': 0.05,
         'n_steps': n_steps,
         'convergence_threshold': 0.15,
         'critic_convergence_threshold': 0.15,
