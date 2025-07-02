@@ -285,7 +285,7 @@ if __name__ == "__main__":
     state_dim = state_fb_dim + state_short_history_dim + state_long_history_dim
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
     min_action = np.array([1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8])
-    max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
+    max_action = np.array([1e4, 1e4, 1e4, 1e4, 1e4, 1e4])
     robot = "go2"
 
     # Create the evaluation environment and get the contacts frames
@@ -317,7 +317,7 @@ if __name__ == "__main__":
         'min_action': min_action,
         'clip_param': 0.2,  
         'value_clip_param': 0.2,
-        'value_loss_coef': 0.35,  
+        'value_loss_coef': 0.5,  
         'entropy_coef': 0.01,  
         'gamma': 0.98,
         'gae_lambda': 0.95,
