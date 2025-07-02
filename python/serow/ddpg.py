@@ -41,8 +41,10 @@ class DDPG:
         self.train_for_batches = params['train_for_batches']
         self.gamma = params['gamma']
         self.tau = params['tau']
-        self.min_action = params.get('min_action', -1e4 * torch.ones(self.action_dim))
-        self.max_action = params.get('max_action', 1e4 * torch.ones(self.action_dim))
+        self.min_action = torch.tensor(params.get('min_action', -1e4 * torch.ones(self.action_dim)), 
+                                       device=self.device, dtype=torch.float32)
+        self.max_action = torch.tensor(params.get('max_action', 1e4 * torch.ones(self.action_dim)), 
+                                       device=self.device, dtype=torch.float32)
         self.num_updates = 0
         self.max_grad_norm = params['max_grad_norm']
 
@@ -93,7 +95,7 @@ class DDPG:
 
     def load_checkpoint(self, checkpoint_path):
         """Load a checkpoint"""
-        checkpoint = torch.load(checkpoint_path)
+        checkpoint = torch.load(checkpoint_path, weights_only=False)
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
         self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer'])
@@ -194,7 +196,7 @@ class DDPG:
         # Critic update with target network
         with torch.no_grad():
             next_actions = self.actor_target(next_states)
-            # next_actions = torch.clamp(next_actions, self.min_action, self.max_action)
+            next_actions = torch.clamp(next_actions, self.min_action, self.max_action)
             next_Q = self.critic_target(next_states, next_actions).squeeze(-1)
             target_Q = rewards + (1 - dones) * self.gamma * next_Q
             
