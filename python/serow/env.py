@@ -4,7 +4,8 @@ import numpy as np
 from utils import quaternion_to_rotation_matrix, logMap, sync_and_align_data, plot_trajectories
 
 class SerowEnv:
-    def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim, history_buffer_size, state_normalizer = None):
+    def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim, 
+                 short_history_buffer_size, long_history_buffer_size, state_normalizer = None):
         self.robot = robot
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{robot}_rl.json")
@@ -18,14 +19,22 @@ class SerowEnv:
         self.state_dim = state_dim
         self.R_history_buffer = []
         self.R_initial = np.eye(3, dtype=np.float64)
-        self.R_history_buffer_size = history_buffer_size
-        self.innovation_buffer = []
-        self.innovation_buffer_size = history_buffer_size
+        self.R_short_history_buffer_size = short_history_buffer_size
+        self.R_long_history_buffer_size = long_history_buffer_size
+        self.innovation_history_buffer = []
+        self.innovation_short_history_buffer_size = short_history_buffer_size
+        self.innovation_long_history_buffer_size = long_history_buffer_size
         self.innovation_initial = np.zeros(3, dtype=np.float64)
         self.state_normalizer = state_normalizer
 
-    def get_R_history(self):
-        max_history_size = self.R_history_buffer_size
+    def get_R_history(self, type = 'short'):
+        if type == 'short':
+            max_history_size = self.R_short_history_buffer_size
+        elif type == 'long':
+            max_history_size = self.R_long_history_buffer_size
+        else:
+            raise ValueError(f"Invalid history type: {type}")
+        
         if len(self.R_history_buffer) == 0:
             # Fill entire history with initial R
             R_history_filled = [self.R_initial] * max_history_size
@@ -38,14 +47,21 @@ class SerowEnv:
         
         return np.stack(R_history_filled).flatten()
 
-    def get_innovation_history(self):
-        if len(self.innovation_buffer) == 0:
-            innovation_history_filled = [self.innovation_initial] * self.innovation_buffer_size
-        elif len(self.innovation_buffer) < self.innovation_buffer_size:
-            padding_needed = self.innovation_buffer_size - len(self.innovation_buffer)
-            innovation_history_filled = [self.innovation_initial] * padding_needed + self.innovation_buffer
+    def get_innovation_history(self, type = 'short'):
+        if type == 'short':
+            max_history_size = self.innovation_short_history_buffer_size
+        elif type == 'long':
+            max_history_size = self.innovation_long_history_buffer_size
         else:
-            innovation_history_filled = self.innovation_buffer[-self.innovation_buffer_size:]
+            raise ValueError(f"Invalid history type: {type}")
+        
+        if len(self.innovation_history_buffer) == 0:
+            innovation_history_filled = [self.innovation_initial] * max_history_size
+        elif len(self.innovation_history_buffer) < max_history_size:
+            padding_needed = max_history_size - len(self.innovation_history_buffer)
+            innovation_history_filled = [self.innovation_initial] * padding_needed + self.innovation_history_buffer
+        else:
+            innovation_history_filled = self.innovation_history_buffer[-max_history_size:]
         return np.stack(innovation_history_filled).flatten()
 
     def compute_reward(self, cf, state, gt, step, max_steps):
@@ -91,17 +107,33 @@ class SerowEnv:
             innovation = self.state_normalizer.normalize_innovation(innovation)
             R = self.state_normalizer.normalize_R(R)
 
-        R_history = self.get_R_history()
-        innovation_history = self.get_innovation_history()
-        return np.concatenate([innovation, R_history, R.flatten(), innovation_history], axis=0)
+        R_short_history = self.get_R_history(type = 'short')
+        innovation_short_history = self.get_innovation_history(type = 'short')
+        R_long_history = self.get_R_history(type = 'long')
+        innovation_long_history = self.get_innovation_history(type = 'long')
+        return np.concatenate([innovation, R_short_history, R.flatten(), 
+                               innovation_short_history, R_long_history, innovation_long_history], 
+                               axis=0)
     
     def reset(self):
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{self.robot}_rl.json")
         self.serow_framework.set_state(self.initial_state)
-        # Reset history buffers to ensure consistent state
+
+        self.innovation_initial = np.zeros(3, dtype=np.float64)
+        if len(self.innovation_history_buffer) > 0:
+            for i in range(0, len(self.innovation_history_buffer)):
+                self.innovation_initial += self.innovation_history_buffer[i]
+            self.innovation_initial /= len(self.innovation_history_buffer)
+
+        self.R_initial = np.eye(3, dtype=np.float64)
+        if len(self.R_history_buffer) > 0:
+            self.R_initial = np.zeros((3, 3), dtype=np.float64)
+            for i in range(0, len(self.R_history_buffer)):
+                self.R_initial += self.R_history_buffer[i]
+            self.R_initial /= len(self.R_history_buffer)
         self.R_history_buffer = []
-        self.innovation_buffer = []
+        self.innovation_history_buffer = []
         return self.initial_state
 
     def predict_step(self, imu, joint, ft):
@@ -116,7 +148,6 @@ class SerowEnv:
         return kin, state
 
     def update_step(self, cf, kin, action, gt, step, max_steps):
-
         # Set the action
         self.serow_framework.set_action(cf, action)
 
@@ -132,9 +163,9 @@ class SerowEnv:
         if self.state_normalizer is not None:
             innovation = self.state_normalizer.normalize_innovation(innovation)
 
-        while len(self.innovation_buffer) >= self.innovation_buffer_size:
-            self.innovation_buffer.pop(0)
-        self.innovation_buffer.append(innovation)
+        while len(self.innovation_history_buffer) >= self.innovation_long_history_buffer_size:
+            self.innovation_history_buffer.pop(0)
+        self.innovation_history_buffer.append(innovation)
 
         # Update the R history buffer
         R = (kin.contacts_position_noise[cf] + kin.position_cov)
@@ -153,7 +184,7 @@ class SerowEnv:
         if self.state_normalizer is not None:
             R = self.state_normalizer.normalize_R_with_action(R)
 
-        while len(self.R_history_buffer) >= self.R_history_buffer_size:
+        while len(self.R_history_buffer) >= self.R_long_history_buffer_size:
             self.R_history_buffer.pop(0)
         self.R_history_buffer.append(R)
 
@@ -216,7 +247,7 @@ class SerowEnv:
                     if agent.name == 'DDPG':
                         action = agent.get_action(x, deterministic=True)
                     else:
-                        action = agent.get_action(x, deterministic=True)[0]
+                        action, _, _ = agent.get_action(x, deterministic=True)
                 else:
                     action = np.zeros((self.action_dim, 1), dtype=np.float64)
 
