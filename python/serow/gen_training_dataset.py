@@ -32,10 +32,9 @@ def generate_training_dataset(robot, mcap_path):
     print(f"dt: {dt}")
 
     # Define the dimensions of your state and action spaces
-    history_buffer_size = 10
-    action_dim = 3  # Based on the action vector used in ContactEKF.setAction()
+    history_buffer_size = 1
+    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
     state_dim = 3 + 3 * 3 + 3 * 3 * history_buffer_size + 3 * history_buffer_size
-    history_buffer_size = 10
 
     normalizer = None
     serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0], action_dim, 

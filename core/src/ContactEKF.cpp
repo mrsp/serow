@@ -343,11 +343,21 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
 
         // Check if the action covariance gain matrix is not the zero matrix    
         cp_noise = csd * (cp_noise + position_cov);
-        if (contact_position_action_cov_gain_.at(cf) != Eigen::Vector3d::Zero()) {
-            const Eigen::EigenSolver<Eigen::Matrix3d> es(cp_noise);
-            const Eigen::Vector3d eig_vals = (es.eigenvalues().real().array() * contact_position_action_cov_gain_.at(cf).array()).matrix();
-            const Eigen::Matrix3d eig_vecs = es.eigenvectors().real();
-            cp_noise = eig_vecs * eig_vals.asDiagonal() * eig_vecs.transpose();
+        if (contact_position_action_cov_gain_.at(cf) != Eigen::VectorXd::Zero(6)) {
+            // Do cholesky decomposition
+            Eigen::LLT<Eigen::Matrix3d> llt(cp_noise);
+            if (llt.info() == Eigen::Success) {
+                Eigen::Matrix3d L = llt.matrixL();
+                const Eigen::VectorXd& action = contact_position_action_cov_gain_.at(cf);
+                L(0, 0) *= action(0);
+                L(1, 1) *= action(1);
+                L(2, 2) *= action(2);
+                L(0, 1) *= action(3);
+                L(0, 2) *= action(4);
+                L(1, 2) *= action(5);
+                // Reconstruct the matrix
+                cp_noise = L * L.transpose();
+            }
         }       
         cp_noise += (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
 
@@ -438,11 +448,19 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
     
     // Check if the action covariance gain matrix is not the zero matrix    
     co_noise = csd * (co_noise + orientation_cov);
-    if (contact_orientation_action_cov_gain_.at(cf) != Eigen::Vector3d::Zero()) {
-        const Eigen::EigenSolver<Eigen::Matrix3d> es(co_noise);
-        const Eigen::Vector3d eig_vals = (es.eigenvalues().real().array() * contact_orientation_action_cov_gain_.at(cf).array()).matrix();
-        const Eigen::Matrix3d eig_vecs = es.eigenvectors().real();
-        co_noise = eig_vecs * eig_vals.asDiagonal() * eig_vecs.transpose();
+    if (contact_orientation_action_cov_gain_.at(cf) != Eigen::VectorXd::Zero(6)) {
+        Eigen::LLT<Eigen::Matrix3d> llt(co_noise);
+        if (llt.info() == Eigen::Success) {
+            Eigen::Matrix3d L = llt.matrixL();
+            const Eigen::VectorXd& action = contact_orientation_action_cov_gain_.at(cf);
+            L(0, 0) *= action(0);
+            L(1, 1) *= action(1);
+            L(2, 2) *= action(2);
+            L(0, 1) *= action(3);
+            L(0, 2) *= action(4);
+            L(1, 2) *= action(5);
+            co_noise = L * L.transpose();
+        }
     }       
     co_noise += (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
 
@@ -707,26 +725,23 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
 
 void ContactEKF::clearAction() {
     for (const auto& cf : contacts_frame_) {
-        contact_position_action_cov_gain_[cf] = Eigen::Vector3d::Zero();
+        contact_position_action_cov_gain_[cf] = Eigen::VectorXd::Zero(6);
         if (!point_feet_) {
-            contact_orientation_action_cov_gain_[cf] = Eigen::Vector3d::Zero();
+            contact_orientation_action_cov_gain_[cf] = Eigen::VectorXd::Zero(6);
         }
     }
 }
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    // Create the action covariance matrix from the action vector first three elements are 
-    // the diagonal of the matrix and the last three elements are the off-diagonal elements
-    // as a lower triangular matrix
-    if (action.size() == 3) {
+    if (action.size() == 6) {
         contact_position_action_cov_gain_.at(cf) = action;
-    } else if (action.size() == 6) {
-        contact_position_action_cov_gain_.at(cf) = action.head(3);
+    } else if (action.size() == 12) {
+        contact_position_action_cov_gain_.at(cf) = action.head(6);
         if (!point_feet_) {
-            contact_orientation_action_cov_gain_.at(cf) = action.tail(3);
+            contact_orientation_action_cov_gain_.at(cf) = action.tail(6);
         }
     } else {
-        throw std::invalid_argument("Action vector must have 3 or 6 elements");
+        throw std::invalid_argument("Action vector must have 6 or 12 elements");
     }
 }
 
@@ -778,7 +793,7 @@ Eigen::VectorXd ContactEKF::getAction(const Eigen::VectorXd& state) {
     #endif
     
     // Default action if ONNX is not enabled or not initialized
-    return Eigen::VectorXd::Ones(1 + 1 * !point_feet_);
+    return Eigen::VectorXd::Ones(6 + 6 * !point_feet_);
 }
 
 }  // namespace serow

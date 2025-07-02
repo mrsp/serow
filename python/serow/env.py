@@ -139,9 +139,16 @@ class SerowEnv:
         # Update the R history buffer
         R = (kin.contacts_position_noise[cf] + kin.position_cov)
         if np.any(action != np.zeros(self.action_dim)):
-            eig_vals, eig_vecs = np.linalg.eig(R)
-            new_eig_vals = eig_vals * action
-            R = eig_vecs @ np.diag(new_eig_vals) @ eig_vecs.T
+            # Do cholesky decomposition
+            L = np.linalg.cholesky(R)
+            L[0,0] *= action[0]
+            L[1,1] *= action[1]
+            L[2,2] *= action[2]
+            L[0,1] *= action[3]
+            L[0,2] *= action[4]
+            L[1,2] *= action[5]
+            # Reconstruct the matrix
+            R = L @ L.T
 
         if self.state_normalizer is not None:
             R = self.state_normalizer.normalize_R_with_action(R)
