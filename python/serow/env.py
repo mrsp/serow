@@ -78,7 +78,7 @@ class SerowEnv:
 
         if (np.linalg.norm(position_error) > 0.35 or np.linalg.norm(orientation_error) > 0.1):
             done = 1.0  
-            reward = 0.0
+            reward = -50.0
             position_reward = 0.0
             orientation_reward = 0.0
         else:
@@ -86,8 +86,8 @@ class SerowEnv:
                 done = 0.0
                 nis = innovation @ np.linalg.inv(covariance) @ innovation.T
                 nis_reward = np.exp(-100.0 * nis)
-                position_reward = np.exp(-5.0 * position_error)
-                orientation_reward = np.exp(-10.0 * orientation_error)
+                position_reward = np.exp(-10.0 * position_error)
+                orientation_reward = np.exp(-50.0 * orientation_error)
                 step_reward = 1.0 * (step + 1) / max_steps
                 
                 reward = nis_reward + position_reward + orientation_reward
