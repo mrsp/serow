@@ -224,7 +224,7 @@ class PPO:
         rewards = np.array(rewards).flatten()
         dones = np.array(dones).flatten()
         values = np.array(values).flatten()
-        old_log_probs = np.array(log_probs).flatten()
+        old_log_probs = np.array(log_probs)
 
         # Convert to tensors
         states = torch.FloatTensor(states).to(self.device)
@@ -238,7 +238,7 @@ class PPO:
         # Compute next state values
         with torch.no_grad():
             next_values = self.critic(next_states).squeeze(-1)  # Keep all values for GAE
-        
+
         # Compute GAE and returns
         advantages, returns = self.compute_gae(rewards, values, dones, next_values)
         
@@ -250,7 +250,7 @@ class PPO:
         # Normalize advantages using running statistics
         # Use a small epsilon for numerical stability
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        
+
         # Training loop
         dataset_size = len(states)
         total_policy_loss = 0
@@ -283,18 +283,18 @@ class PPO:
                 # Calculate policy loss with clipping
                 log_ratio = current_log_probs - batch_old_log_probs
                 ratio = torch.exp(log_ratio)
-                surr1 = -ratio * batch_advantages
-                surr2 = -torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
-                policy_loss = torch.max(surr1, surr2).mean()
+                surr1 = ratio * batch_advantages
+                surr2 = torch.clamp(ratio, 1.0 - self.clip_param, 1.0 + self.clip_param) * batch_advantages
+                policy_loss = -torch.min(surr1, surr2).mean()
 
                 # Calculate value loss with normalized returns and value clipping
-                current_values = self.critic(batch_states)
+                current_values = self.critic(batch_states).squeeze(-1)  # Ensure 1D
 
-                # Value clipping in normalized space
+                # Value clipping:
                 if self.value_clip_param is not None:
                     value_pred_clipped = batch_values + torch.clamp(
-                            current_values - batch_values,
-                            -self.value_clip_param, self.value_clip_param
+                        current_values - batch_values,
+                        -self.value_clip_param, self.value_clip_param
                         )
                     value_loss_unclipped = (current_values - batch_returns) ** 2
                     value_loss_clipped = (value_pred_clipped - batch_returns) ** 2
