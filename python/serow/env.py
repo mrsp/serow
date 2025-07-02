@@ -144,9 +144,9 @@ class SerowEnv:
             L[0,0] *= action[0]
             L[1,1] *= action[1]
             L[2,2] *= action[2]
-            L[0,1] *= action[3]
-            L[0,2] *= action[4]
-            L[1,2] *= action[5]
+            L[1,0] *= action[3]
+            L[2,0] *= action[4]
+            L[2,1] *= action[5]
             # Reconstruct the matrix
             R = L @ L.T
 
