@@ -297,7 +297,7 @@ if __name__ == "__main__":
     train_datasets = [dataset]
     device = 'cpu'
 
-    max_episodes = 100
+    max_episodes = 120
     n_steps = 512
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
