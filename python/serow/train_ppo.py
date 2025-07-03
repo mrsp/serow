@@ -20,26 +20,24 @@ class Actor(nn.Module):
         super(Actor, self).__init__()
         self.state_dim = params['state_dim']
         self.state_fb_dim = params['state_fb_dim']
-        self.state_short_history_dim = params['state_short_history_dim']
-        self.state_long_history_dim = params['state_long_history_dim']
+        self.state_history_dim = params['state_history_dim']
         self.device = params['device']
         self.action_dim = params['action_dim']
         self.min_action = torch.FloatTensor(params['min_action']).to(self.device)
         self.max_action = torch.FloatTensor(params['max_action']).to(self.device)
         
         self.conv1 = nn.Conv1d(1, 1, kernel_size=3, stride=1, padding=1)
-        self.layer1 = nn.Linear(self.state_dim, 512)
-        self.layer2 = nn.Linear(512, 512)
-        self.layer3 = nn.Linear(512, 256)
-        self.layer4 = nn.Linear(256, 128)
+        self.layer1 = nn.Linear(self.state_dim, 256)
+        self.layer2 = nn.Linear(256, 128)
+        self.layer3 = nn.Linear(128, 64)
         
         # Output layers
-        self.mean_layer = nn.Linear(128, self.action_dim)
+        self.mean_layer = nn.Linear(64, self.action_dim)
         self.log_std = nn.Parameter(torch.zeros(self.action_dim))
         self._init_weights()
     
     def _init_weights(self):
-        for layer in [self.conv1, self.layer1, self.layer2, self.layer3, self.layer4]:
+        for layer in [self.conv1, self.layer1, self.layer2, self.layer3]:
             nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
             nn.init.constant_(layer.bias, 0.0)
         
@@ -48,19 +46,21 @@ class Actor(nn.Module):
     
     def forward(self, state):
         state_fb = state[:, :self.state_fb_dim]
-        state_short_history = state[:, self.state_fb_dim:self.state_fb_dim + self.state_short_history_dim]
-        state_long_history = state[:, self.state_fb_dim + self.state_short_history_dim:]
-        state_long_history = state_long_history.unsqueeze(1)
-        input0 = F.relu(self.conv1(state_long_history))
+        state_history = state[:, self.state_fb_dim:]
+        state_history = state_history.unsqueeze(1)
+        input0 = F.relu(self.conv1(state_history))
         input0 = input0.squeeze(1)
-        input1 = torch.cat([state_fb, state_short_history, input0], dim=-1)
+        input1 = torch.cat([state_fb, input0], dim=-1)
         x = F.relu(self.layer1(input1))
         x = F.relu(self.layer2(x))
         x = F.relu(self.layer3(x))  
-        x = F.relu(self.layer4(x))
-        mean = self.mean_layer(x)
-        log_std = self.log_std.clamp(-20, 1)  
-        
+        x = self.mean_layer(x)
+
+        mean = torch.zeros_like(x, dtype=torch.float32)
+        mean[:, :3] = F.softplus(x[:, :3])
+        mean[:, 3:] = x[:, 3:]
+        log_std = self.log_std.clamp(-20, 2)  
+
         return mean, log_std
     
     def get_distribution(self, state):
@@ -69,14 +69,18 @@ class Actor(nn.Module):
         return torch.distributions.Normal(mean, std)
     
     def get_action(self, state, deterministic=False):
-        state = torch.FloatTensor(state).reshape(1, -1).to(self.device)
+        if isinstance(state, np.ndarray):
+            state = torch.FloatTensor(state).to(self.device)
+        if state.ndim == 1:
+            state = state.unsqueeze(0)
+
         dist = self.get_distribution(state)
         
         if deterministic:
             raw_actions = dist.mean
         else:
             raw_actions = dist.sample()
-
+        
         actions = torch.clamp(raw_actions, self.min_action, self.max_action)
         log_probs = dist.log_prob(actions).sum(dim=-1)
         
@@ -85,7 +89,7 @@ class Actor(nn.Module):
     def evaluate_actions(self, states, actions):
         dist = self.get_distribution(states)
         actions = torch.clamp(actions, self.min_action, self.max_action)
-        log_probs = dist.log_prob(actions).sum(dim=-1, keepdim=True)
+        log_probs = dist.log_prob(actions).sum(dim=-1)
         entropy = dist.entropy().sum(dim=-1)  
         return log_probs.squeeze(-1), entropy.squeeze(-1)
     
@@ -95,44 +99,38 @@ class Critic(nn.Module):
         super(Critic, self).__init__()
         self.state_dim = params['state_dim']
         self.state_fb_dim = params['state_fb_dim']
-        self.state_short_history_dim = params['state_short_history_dim']
-        self.state_long_history_dim = params['state_long_history_dim']
+        self.state_history_dim = params['state_history_dim']
         self.device = params['device']
-        self.layer1 = nn.Linear(self.state_dim, 512)
+        self.layer1 = nn.Linear(self.state_dim, 256)
         self.conv1 = nn.Conv1d(1, 1, kernel_size=3, stride=1, padding=1)
-        self.layer2 = nn.Linear(512, 512)
-        self.layer3 = nn.Linear(512, 256)
-        self.layer4 = nn.Linear(256, 128)
+        self.layer2 = nn.Linear(256, 128)
+        self.layer3 = nn.Linear(128, 64)
         
         # Initialize weights with smaller gains for value function
         nn.init.orthogonal_(self.conv1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
         nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer4.weight, gain=np.sqrt(2))
         torch.nn.init.constant_(self.conv1.bias, 0.0)
         torch.nn.init.constant_(self.layer1.bias, 0.0)
         torch.nn.init.constant_(self.layer2.bias, 0.0)
         torch.nn.init.constant_(self.layer3.bias, 0.0)
-        torch.nn.init.constant_(self.layer4.bias, 0.0)
 
-        self.value_layer = nn.Linear(128, 1)
+        self.value_layer = nn.Linear(64, 1)
         # Use smaller gain for value function to prevent initial large predictions
         nn.init.orthogonal_(self.value_layer.weight, gain=0.1)
         torch.nn.init.constant_(self.value_layer.bias, 0.0)
 
     def forward(self, state):
         state_fb = state[:, :self.state_fb_dim]
-        state_short_history = state[:, self.state_fb_dim:self.state_fb_dim + self.state_short_history_dim]
-        state_long_history = state[:, self.state_fb_dim + self.state_short_history_dim:]
-        state_long_history = state_long_history.unsqueeze(1)
-        input0 = F.relu(self.conv1(state_long_history))
+        state_history = state[:, self.state_fb_dim:]
+        state_history = state_history.unsqueeze(1)
+        input0 = F.relu(self.conv1(state_history))
         input0 = input0.squeeze(1)
-        input1 = torch.cat([state_fb, state_short_history, input0], dim=-1)
+        input1 = torch.cat([state_fb, input0], dim=-1)
         x = F.relu(self.layer1(input1))
         x = F.relu(self.layer2(x))
         x = F.relu(self.layer3(x))
-        x = F.relu(self.layer4(x))
         return self.value_layer(x)
 
 def train_ppo(datasets, agent, params):
@@ -162,9 +160,7 @@ def train_ppo(datasets, agent, params):
         max_steps = len(imu_measurements) - 1 
         serow_env = SerowEnv(robot, joint_states[0], base_states[0], contact_states[0],  
                              params['action_dim'], params['state_dim'], 
-                             params['short_history_buffer_size'], 
-                             params['long_history_buffer_size'], 
-                             params['state_normalizer'])
+                             params['history_buffer_size'], params['state_normalizer'])
         for episode in range(max_episodes):
             serow_env.reset()
             # Episode tracking variables
@@ -221,7 +217,7 @@ def train_ppo(datasets, agent, params):
                 # Train policy periodically
                 if collected_steps >= params['n_steps']:
                     actor_loss, critic_loss, entropy, converged = agent.learn()
-                    if actor_loss is not None and critic_loss is not None:
+                    if actor_loss is not None and critic_loss is not None and entropy is not None:
                         print(f"[Episode {episode + 1}/{max_episodes}] Step [{time_step + 1}/{max_steps}] Policy Loss: {actor_loss}, Value Loss: {critic_loss}, Entropy: {entropy}")
                     collected_steps = 0
 
@@ -266,7 +262,8 @@ def train_ppo(datasets, agent, params):
 
 if __name__ == "__main__":
     # Load and preprocess the data
-    dataset = np.load("go2_training_dataset.npz", allow_pickle=True)
+    robot = "go2"
+    dataset = np.load(f"{robot}_training_dataset.npz", allow_pickle=True)
     test_dataset = dataset
     imu_measurements = dataset['imu']
     contact_states = dataset['contact_states']
@@ -275,23 +272,20 @@ if __name__ == "__main__":
 
     # Define the dimensions of your state and action spaces
     normalizer = None
-    short_history_buffer_size = 100
-    long_history_buffer_size = 200
-    print(f"Short history buffer size: {short_history_buffer_size * dt} seconds")
-    print(f"Long history buffer size: {long_history_buffer_size * dt} seconds")
-    state_short_history_dim = 3 * 3 * short_history_buffer_size + 3 * short_history_buffer_size
-    state_long_history_dim = 3 * 3 * long_history_buffer_size + 3 * long_history_buffer_size
-    state_fb_dim = 3 * 3 + 3
-    state_dim = state_fb_dim + state_short_history_dim + state_long_history_dim
+    history_buffer_size = 100
+    print(f"History buffer size: {history_buffer_size * dt} seconds")
+    state_history_dim = 3 * 3 * history_buffer_size + 3 * history_buffer_size
+    state_fb_dim = 3 * 3 + 3 + 2 
+    state_dim = state_fb_dim + state_history_dim  
+    print(f"State dimension: {state_dim}")
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8, 1e-8, 1e-8, 1e-8, 1e-8, 1e-8])
-    max_action = np.array([1e4, 1e4, 1e4, 1e4, 1e4, 1e4])
-    robot = "go2"
+    min_action = np.array([1e-8, 1e-8, 1e-8, -1e2, -1e2, -1e2])
+    max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
 
     # Create the evaluation environment and get the contacts frames
     serow_env = SerowEnv(robot, dataset['joint_states'][0], dataset['base_states'][0], 
                          dataset['contact_states'][0], action_dim, state_dim, 
-                         short_history_buffer_size, long_history_buffer_size, normalizer)
+                         history_buffer_size, normalizer)
     contact_frames = serow_env.contact_frames
     print(f"Contacts frame: {contact_frames}")
     train_datasets = [dataset]
@@ -304,30 +298,28 @@ if __name__ == "__main__":
     print(f"Total training steps: {total_training_steps}")
 
     params = {
-        'short_history_buffer_size': short_history_buffer_size,
-        'long_history_buffer_size': long_history_buffer_size,
+        'history_buffer_size': history_buffer_size,
+        'state_history_dim': state_history_dim,
         'device': device,
         'robot': robot,
         'state_dim': state_dim,
         'state_fb_dim': state_fb_dim,
-        'state_short_history_dim': state_short_history_dim,
-        'state_long_history_dim': state_long_history_dim,
         'action_dim': action_dim,
         'max_action': max_action,
         'min_action': min_action,
         'clip_param': 0.2,  
         'value_clip_param': 0.2,
         'value_loss_coef': 0.5,  
-        'entropy_coef': 0.01,  
+        'entropy_coef': 0.005,  
         'gamma': 0.98,
         'gae_lambda': 0.95,
-        'ppo_epochs': 10,  
-        'batch_size': 128,  
-        'max_grad_norm': 0.35,  
+        'ppo_epochs': 3,  
+        'batch_size': 256,  
+        'max_grad_norm': 0.5,  
         'buffer_size': 10000,  
         'max_episodes': max_episodes,
         'actor_lr': 1e-5,  
-        'critic_lr': 1e-5,  
+        'critic_lr': 5e-5,  
         'target_kl': 0.05,
         'n_steps': n_steps,
         'convergence_threshold': 0.15,

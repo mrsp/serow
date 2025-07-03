@@ -5,7 +5,7 @@ from utils import quaternion_to_rotation_matrix, logMap, sync_and_align_data, pl
 
 class SerowEnv:
     def __init__(self, robot, joint_state, base_state, contact_state, action_dim, state_dim, 
-                 short_history_buffer_size, long_history_buffer_size, state_normalizer = None):
+                 history_buffer_size, state_normalizer = None):
         self.robot = robot
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{robot}_rl.json")
@@ -19,22 +19,15 @@ class SerowEnv:
         self.state_dim = state_dim
         self.R_history_buffer = []
         self.R_initial = np.eye(3, dtype=np.float64)
-        self.R_short_history_buffer_size = short_history_buffer_size
-        self.R_long_history_buffer_size = long_history_buffer_size
+        self.R_history_buffer_size = history_buffer_size
         self.innovation_history_buffer = []
-        self.innovation_short_history_buffer_size = short_history_buffer_size
-        self.innovation_long_history_buffer_size = long_history_buffer_size
+        self.innovation_history_buffer_size = history_buffer_size
         self.innovation_initial = np.zeros(3, dtype=np.float64)
         self.state_normalizer = state_normalizer
 
-    def get_R_history(self, type = 'short'):
-        if type == 'short':
-            max_history_size = self.R_short_history_buffer_size
-        elif type == 'long':
-            max_history_size = self.R_long_history_buffer_size
-        else:
-            raise ValueError(f"Invalid history type: {type}")
-        
+    def get_R_history(self):
+        max_history_size = self.R_history_buffer_size
+
         if len(self.R_history_buffer) == 0:
             # Fill entire history with initial R
             R_history_filled = [self.R_initial] * max_history_size
@@ -47,13 +40,8 @@ class SerowEnv:
         
         return np.stack(R_history_filled).flatten()
 
-    def get_innovation_history(self, type = 'short'):
-        if type == 'short':
-            max_history_size = self.innovation_short_history_buffer_size
-        elif type == 'long':
-            max_history_size = self.innovation_long_history_buffer_size
-        else:
-            raise ValueError(f"Invalid history type: {type}")
+    def get_innovation_history(self):
+        max_history_size = self.innovation_history_buffer_size
         
         if len(self.innovation_history_buffer) == 0:
             innovation_history_filled = [self.innovation_initial] * max_history_size
@@ -70,6 +58,7 @@ class SerowEnv:
 
         # Position error
         position_error = np.linalg.norm(state.get_base_position() - gt.position)
+        
         # Orientation error
         orientation_error = np.linalg.norm(logMap(quaternion_to_rotation_matrix(gt.orientation).transpose() 
                                                    @ quaternion_to_rotation_matrix(state.get_base_orientation())))
@@ -107,13 +96,13 @@ class SerowEnv:
             innovation = self.state_normalizer.normalize_innovation(innovation)
             R = self.state_normalizer.normalize_R(R)
 
-        R_short_history = self.get_R_history(type = 'short')
-        innovation_short_history = self.get_innovation_history(type = 'short')
-        R_long_history = self.get_R_history(type = 'long')
-        innovation_long_history = self.get_innovation_history(type = 'long')
-        return np.concatenate([innovation, R_short_history, R.flatten(), 
-                               innovation_short_history, R_long_history, innovation_long_history], 
-                               axis=0)
+        R_history = self.get_R_history()
+        innovation_history = self.get_innovation_history()
+        P_pos_trace = np.trace(state.get_base_position_cov())
+        P_ori_trace = np.trace(state.get_base_orientation_cov())
+        return np.concatenate([[P_pos_trace], [P_ori_trace],
+                               innovation, R.flatten(),
+                               innovation_history, R_history], axis=0)
     
     def reset(self):
         self.serow_framework = serow.Serow()
@@ -163,28 +152,27 @@ class SerowEnv:
         if self.state_normalizer is not None:
             innovation = self.state_normalizer.normalize_innovation(innovation)
 
-        while len(self.innovation_history_buffer) >= self.innovation_long_history_buffer_size:
+        while len(self.innovation_history_buffer) >= self.innovation_history_buffer_size:
             self.innovation_history_buffer.pop(0)
         self.innovation_history_buffer.append(innovation)
 
         # Update the R history buffer
         R = (kin.contacts_position_noise[cf] + kin.position_cov)
         if np.any(action != np.zeros(self.action_dim)):
-            # Do cholesky decomposition
-            L = np.linalg.cholesky(R)
-            L[0,0] *= action[0]
-            L[1,1] *= action[1]
-            L[2,2] *= action[2]
-            L[1,0] *= action[3]
-            L[2,0] *= action[4]
-            L[2,1] *= action[5]
+            L = np.zeros((3, 3), dtype=np.float64)
+            L[0,0] = action[0]
+            L[1,1] = action[1]
+            L[2,2] = action[2]
+            L[1,0] = action[3]
+            L[2,0] = action[4]
+            L[2,1] = action[5]
             # Reconstruct the matrix
             R = L @ L.T
 
         if self.state_normalizer is not None:
             R = self.state_normalizer.normalize_R_with_action(R)
 
-        while len(self.R_history_buffer) >= self.R_long_history_buffer_size:
+        while len(self.R_history_buffer) >= self.R_history_buffer_size:
             self.R_history_buffer.pop(0)
         self.R_history_buffer.append(R)
 

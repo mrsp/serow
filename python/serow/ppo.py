@@ -121,9 +121,9 @@ class PPO:
         # Linear decay from initial_lr to final_lr
         actor_lr = self.initial_actor_lr - (self.initial_actor_lr - self.initial_actor_lr * self.final_lr_ratio) * progress
         critic_lr = self.initial_critic_lr - (self.initial_critic_lr - self.initial_critic_lr * self.final_lr_ratio) * progress
-        # Decay to 10% of initial value at the end
-        self.entropy_coef = self.initial_entropy_coef * (1.0 - 0.9 * progress)
-        self.entropy_coef = max(self.entropy_coef, 0.001)  # Keep some minimum entropy
+        # Decay to 1% of initial value at the end
+        self.entropy_coef = self.initial_entropy_coef * (1.0 - 0.99 * progress)
+        self.entropy_coef = max(self.entropy_coef, 0.0001)  # Keep very small minimum entropy
 
         # Update optimizer learning rates
         for param_group in self.actor_optimizer.param_groups:

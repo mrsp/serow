@@ -344,20 +344,15 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
         // Check if the action covariance gain matrix is not the zero matrix    
         cp_noise = csd * (cp_noise + position_cov);
         if (contact_position_action_cov_gain_.at(cf) != Eigen::VectorXd::Zero(6)) {
-            // Do cholesky decomposition
-            Eigen::LLT<Eigen::Matrix3d> llt(cp_noise);
-            if (llt.info() == Eigen::Success) {
-                Eigen::Matrix3d L = llt.matrixL();
-                const Eigen::VectorXd& action = contact_position_action_cov_gain_.at(cf);
-                L(0, 0) *= action(0);
-                L(1, 1) *= action(1);
-                L(2, 2) *= action(2);
-                L(1, 0) *= action(3);
-                L(2, 0) *= action(4);
-                L(2, 1) *= action(5);
-                // Reconstruct the matrix
-                cp_noise = L * L.transpose();
-            }
+            Eigen::Matrix3d L = Eigen::Matrix3d::Zero();
+            const Eigen::VectorXd& action = contact_position_action_cov_gain_.at(cf);
+            L(0, 0) = action(0);
+            L(1, 1) = action(1);
+            L(2, 2) = action(2);
+            L(1, 0) = action(3);
+            L(2, 0) = action(4);
+            L(2, 1) = action(5);
+            cp_noise = L * L.transpose();
         }       
         cp_noise += (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
 
@@ -449,18 +444,15 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
     // Check if the action covariance gain matrix is not the zero matrix    
     co_noise = csd * (co_noise + orientation_cov);
     if (contact_orientation_action_cov_gain_.at(cf) != Eigen::VectorXd::Zero(6)) {
-        Eigen::LLT<Eigen::Matrix3d> llt(co_noise);
-        if (llt.info() == Eigen::Success) {
-            Eigen::Matrix3d L = llt.matrixL();
-            const Eigen::VectorXd& action = contact_orientation_action_cov_gain_.at(cf);
-            L(0, 0) *= action(0);
-            L(1, 1) *= action(1);
-            L(2, 2) *= action(2);
-            L(1, 0) *= action(3);
-            L(2, 0) *= action(4);
-            L(2, 1) *= action(5);
-            co_noise = L * L.transpose();
-        }
+        Eigen::Matrix3d L = Eigen::Matrix3d::Zero();
+        const Eigen::VectorXd& action = contact_orientation_action_cov_gain_.at(cf);
+        L(0, 0) = action(0);
+        L(1, 1) = action(1);
+        L(2, 2) = action(2);
+        L(1, 0) = action(3);
+        L(2, 0) = action(4);
+        L(2, 1) = action(5);
+        co_noise = L * L.transpose();
     }       
     co_noise += (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
 
