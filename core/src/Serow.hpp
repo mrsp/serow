@@ -50,7 +50,7 @@ public:
     /// @brief Destructor
     ~Serow();
 
-    /// @brief initializes SEROW's configuration 
+    /// @brief initializes SEROW's configuration
     /// @param config configuration to initialize SEROW with
     /// @return true if SEROW was initialized successfully
     bool initialize(const std::string& config);
@@ -82,7 +82,7 @@ public:
     /// @return SEROW's contact state if available
     std::optional<ContactState> getContactState(bool allow_invalid = false);
 
-    /// @brief fetches SEROW's base state   
+    /// @brief fetches SEROW's base state
     /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
     /// valid estimate
     /// @return SEROW's base state if available
@@ -307,6 +307,8 @@ private:
     std::unique_ptr<ThreadPool> measurement_logger_job_;
     /// @brief Frame transformations
     std::map<std::string, Eigen::Isometry3d> frame_tfs_;
+    /// @brief IMU outlier detection storage
+    std::vector<MovingMedianFilter> imu_outlier_detector_;
 
     /// @brief Logs the measurements
     /// @param imu IMU measurement
@@ -316,7 +318,7 @@ private:
     void logMeasurements(ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
                          std::map<std::string, ForceTorqueMeasurement> ft,
                          std::optional<BasePoseGroundTruth> base_pose_ground_truth = std::nullopt);
-    
+
     /// @brief Runs all the joint estimators to estimate the joint positions and velocities
     /// @param state the state of the robot
     /// @param joints joint measurements
@@ -347,23 +349,23 @@ private:
     /// @param ft force/torque measurements
     /// @param kin kinematic measurements
     /// @param contacts_probability contact probabilities
-    void runContactEstimator(State& state,
-                             std::map<std::string, ForceTorqueMeasurement>& ft,
-                             KinematicMeasurement& kin,
-                             std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
+    void runContactEstimator(
+        State& state, std::map<std::string, ForceTorqueMeasurement>& ft, KinematicMeasurement& kin,
+        std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
 
     /// @brief Runs the base estimator
     /// @param state the state of the robot
     /// @param imu IMU measurement
     /// @param kin kinematic measurements
     /// @param odom exteroceptive odometry measurement
-    void runBaseEstimator(State& state, const ImuMeasurement& imu, const KinematicMeasurement& kin, std::optional<OdometryMeasurement> odom);
+    void runBaseEstimator(State& state, const ImuMeasurement& imu, const KinematicMeasurement& kin,
+                          std::optional<OdometryMeasurement> odom);
 
     /// @brief Runs the CoM estimator
     /// @param state the state of the robot
     /// @param kin kinematic measurements
     /// @param ft force/torque measurements
-    void runCoMEstimator(State& state, KinematicMeasurement& kin, 
+    void runCoMEstimator(State& state, KinematicMeasurement& kin,
                          std::map<std::string, ForceTorqueMeasurement> ft);
 
     /// @brief Computes the frame transformations for all frames in the robot model
@@ -384,6 +386,11 @@ private:
 
     /// @brief Stops SEROW's logging threads
     void stopLogging();
+
+    /// @brief Checks if IMU measurement is an outlier using Median Absolute Deviation (MAD)
+    /// @param imu IMU measurement to check
+    /// @return true if the measurement is an outlier
+    bool isImuMeasurementOutlier(const ImuMeasurement& imu);
 };
 
 }  // namespace serow
