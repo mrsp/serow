@@ -6,7 +6,7 @@
 <robot name="valkyrie" xmlns:xacro="http://www.ros.org/wiki/xacro">
   <gazebo>
     <plugin filename="libval_gazebo.so" name="SharedMemorySimInterfacePlugin">
-      <robotNamespace>/val</robotNamespace>
+      <robot_name_space>/val</robot_name_space>
     </plugin>
   </gazebo>
   <schedule_topic_creator_file package="val_gazebo" relative_file_path="/configuration/valkyrie_sim_shm_topics.yaml"/>

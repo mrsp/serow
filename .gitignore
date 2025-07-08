@@ -11,6 +11,7 @@ serow_layout.json:Zone.Identifier
 /evaluation/mujoco_test/build/
 /evaluation/mujoco_test/mujoco_data/*/est_*.bin
 /evaluation/mujoco_test/mujoco_data/*/serow_predictions.h5
+/serow_hypertuner/build/
 /python/serow/__pycache__/
 /python/build/
 /python/serow.egg-info/

@@ -1,0 +1,27 @@
+{
+  "Experiment": {
+    "robot_name": "go2",
+    "experiment_name": "mujoco_test",
+    "experiment_type": "mujoco_data/flat_gamma"
+  },
+  "Paths": {
+    "base_path": "evaluation/{experiment_name}",
+    "data_file": "{base_path}/{experiment_type}/{robot_name}_data.h5",
+    "elevation_map_file": "{base_path}/{experiment_type}/est_elevation_map.bin"
+  },
+  "Dataset": {
+    "imu_linear_acceleration": "imu/linear_acceleration",
+    "imu_angular_velocity": "imu/angular_velocity",
+    "joint_position": "joint_states/positions",
+    "joint_velocity": "joint_states/velocities",
+    "base_ground_truth_position": "base_ground_truth/position",
+    "base_ground_truth_orientation": "base_ground_truth/orientation",
+    "timestamps": "timestamps",
+    "feet_force": [
+      "feet_force/FL",
+      "feet_force/FR",
+      "feet_force/RL",
+      "feet_force/RR"
+    ]
+  }
+}

@@ -67,9 +67,8 @@ public:
      * @param model_path Path to the ONNX models directory.
      */
     void init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-              double g, double imu_rate, bool outlier_detection = false,
-              bool use_onnx = false, const std::string& robot_name = "",
-              const std::string& model_path = "policy/ddpg");
+              double g, double imu_rate, bool outlier_detection = false, bool use_onnx = false,
+              const std::string& robot_name = "", const std::string& model_path = "policy/ddpg");
 
     /**
      * @brief Predicts the robot's state forward based on IMU and kinematic measurements.
@@ -107,7 +106,7 @@ public:
      * @param covariance Covariance of the contact position.
      * @return True if the contact innovation and covariance are available, false otherwise.
      */
-    bool getContactPositionInnovation(const std::string& contact_frame, 
+    bool getContactPositionInnovation(const std::string& contact_frame,
                                       Eigen::Vector3d& base_position,
                                       Eigen::Quaterniond& base_orientation,
                                       Eigen::Vector3d& innovation,
@@ -122,7 +121,7 @@ public:
      * @param covariance Covariance of the contact orientation.
      * @return True if the contact innovation and covariance are available, false otherwise.
      */
-    bool getContactOrientationInnovation(const std::string& contact_frame, 
+    bool getContactOrientationInnovation(const std::string& contact_frame,
                                          Eigen::Vector3d& base_position,
                                          Eigen::Quaterniond& base_orientation,
                                          Eigen::Vector3d& innovation,
@@ -144,10 +143,10 @@ public:
      * @param cp_noise Covariance of leg contact position measurement.
      * @param position_cov Covariance of position measurements.
      * @param terrain_estimator Terrain elevation estimator.
-     */ 
-    void updateWithContactPosition(BaseState& state, const std::string& cf, const bool cs, 
-                                   const double cp_prob, const Eigen::Vector3d& cp, 
-                                   Eigen::Matrix3d cp_noise, const Eigen::Matrix3d& position_cov, 
+     */
+    void updateWithContactPosition(BaseState& state, const std::string& cf, const bool cs,
+                                   const double cp_prob, const Eigen::Vector3d& cp,
+                                   Eigen::Matrix3d cp_noise, const Eigen::Matrix3d& position_cov,
                                    std::shared_ptr<TerrainElevation> terrain_estimator);
 
 private:
@@ -190,9 +189,10 @@ private:
 
     std::map<std::string, Eigen::VectorXd> contact_position_action_cov_gain_;
     std::map<std::string, Eigen::VectorXd> contact_orientation_action_cov_gain_;
-    
+
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
-    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_orientation_innovation_;
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
+        contact_orientation_innovation_;
     std::map<std::string, Eigen::Vector3d> base_position_per_contact_position_update_;
     std::map<std::string, Eigen::Quaterniond> base_orientation_per_contact_position_update_;
     std::map<std::string, Eigen::Vector3d> base_position_per_contact_orientation_update_;
@@ -200,10 +200,10 @@ private:
 
     // ONNX inference
     bool use_onnx_{};
-    #ifdef USE_ONNX
+#ifdef USE_ONNX
     std::unique_ptr<ONNXInference> onnx_inference_;
-    #endif
-    int onnx_state_dim_{};  ///< Dimension of the state vector for ONNX inference
+#endif
+    int onnx_state_dim_{};   ///< Dimension of the state vector for ONNX inference
     int onnx_action_dim_{};  ///< Dimension of the action vector from ONNX inference
 
     /**
@@ -256,14 +256,15 @@ private:
     void updateWithContacts(
         BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
         std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
-        const std::map<std::string, bool>& contacts_status, 
-        const std::map<std::string, double>& contacts_probability, const Eigen::Matrix3d& position_cov,
+        const std::map<std::string, bool>& contacts_status,
+        const std::map<std::string, double>& contacts_probability,
+        const Eigen::Matrix3d& position_cov,
         std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
         std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
         std::optional<Eigen::Matrix3d> orientation_cov,
         std::shared_ptr<TerrainElevation> terrain_estimator);
 
-    /** 
+    /**
      * @brief Updates the robot's state based on contact orientation measurements.
      * @param state Current state of the robot.
      * @param cf Contact frame name.
@@ -272,9 +273,9 @@ private:
      * @param co_noise Covariance of leg contact orientation measurement.
      * @param orientation_cov Covariance of orientation measurements.
      */
-    void updateWithContactOrientation(BaseState& state, const std::string& cf, const bool cs, 
-                                     const Eigen::Quaterniond& co, Eigen::Matrix3d co_noise, 
-                                     const Eigen::Matrix3d& orientation_cov);
+    void updateWithContactOrientation(BaseState& state, const std::string& cf, const bool cs,
+                                      const Eigen::Quaterniond& co, Eigen::Matrix3d co_noise,
+                                      const Eigen::Matrix3d& orientation_cov);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
@@ -299,7 +300,17 @@ private:
                            std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**
-     * @brief Updates the state of the robot with the provided state change and covariance matrix.
+     * @brief Updates the robot's state based on IMU orientation measurements.
+     * @param state Current state of the robot.
+     * @param imu_orientation Orientation of the IMU.
+     * @param imu_orientation_cov Covariance of the IMU orientation measurements.
+     */
+    void updateWithIMUOrientation(BaseState& state, const Eigen::Quaterniond& imu_orientation,
+                                  const Eigen::Matrix3d& imu_orientation_cov);
+
+    /**
+     * @brief Updates the state of the robot with the provided state change and covariance
+     * matrix.
      * @param state Current state of the robot (will be updated in-place).
      * @param dx State change vector.
      * @param P Covariance matrix of the state change.
