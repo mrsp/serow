@@ -1277,7 +1277,7 @@ void Serow::reset() {
                         params_.force_torque_rate);
 
     // Initialize IMU outlier detection storage
-    const size_t imu_history_size = params_.imu_rate / 2;
+    const size_t imu_history_size = params_.imu_rate < 120 ? 40 : params_.imu_rate / 3;
     for (size_t i = 0; i < 6; i++) {
         imu_outlier_detector_.push_back(MovingMedianFilter(imu_history_size));
     }
@@ -1296,7 +1296,7 @@ bool Serow::isImuMeasurementOutlier(const ImuMeasurement& imu) {
     }
 
     // Need sufficient history for MAD calculation
-    if (imu_outlier_detector_[0].size() < imu_outlier_detector_[0].size() / 2) {
+    if (imu_outlier_detector_[0].size() < imu_outlier_detector_[0].maxSize() / 2) {
         return false;
     }
 

@@ -112,6 +112,14 @@ public:
     }
 
     /**
+     * @brief Gets the maximum window size
+     * @return Maximum window size
+     */
+    size_t maxSize() const {
+        return window_size_;
+    }
+
+    /**
      * @brief Gets the current window buffer for external calculations (e.g., MAD)
      * @return Reference to the current window buffer
      */
