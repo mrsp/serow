@@ -50,20 +50,53 @@ inline Eigen::Vector3d vec(const Eigen::Matrix3d& M) {
     return Eigen::Vector3d(M(2, 1), M(0, 2), M(1, 0));
 }
 
+/// @brief Wraps angle to (-π, π] range
+/// @param angle Input angle in radians
+/// @return Wrapped angle in (-π, π]
+inline double wrapToPi(double angle) {
+    // Use fmod for the basic wrapping
+    angle = std::fmod(angle + M_PI, 2.0 * M_PI);
+    if (angle < 0) {
+        angle += 2.0 * M_PI;
+    }
+    return angle - M_PI;
+}
+
+/// @brief Wraps a 3D twist vector to (-π, π] range
+/// @param omega 3D twist vector
+/// @return Wrapped 3D twist vector
+inline Eigen::Vector3d wrapToSO3(const Eigen::Vector3d& omega) {
+    const double theta_unwrapped2 = omega.dot(omega);
+    const double theta_unwrapped = std::sqrt(theta_unwrapped2);
+
+    // Wrap the entire omega vector to canonical range
+    Eigen::Vector3d omega_wrapped = omega;
+    double theta = theta_unwrapped;
+
+    if (theta_unwrapped > 1e-6) {  // Avoid division by zero
+        theta = wrapToPi(theta_unwrapped);
+        omega_wrapped = omega * (theta / theta_unwrapped);
+    }
+
+    return omega_wrapped;
+}
+
 /// @brief Computes the exponential map according to the Rodriquez Formula for component in SO(3)
 /// @param omega 3D twist in so(3) algebra
 /// @return 3x3 Rotation in SO(3) group
 inline Eigen::Matrix3d expMap(const Eigen::Vector3d& omega) {
     Eigen::Matrix3d res = Eigen::Matrix3d::Identity();
 
-    const double theta2 = omega.dot(omega);
+    const Eigen::Vector3d omega_wrapped = wrapToSO3(omega);
+    const double theta2 = omega_wrapped.dot(omega_wrapped);
     const double theta = std::sqrt(theta2);
-    const Eigen::Matrix3d omega_skew = wedge(omega);
-    const Eigen::Matrix3d omega_skew2 = omega_skew * omega_skew;
-    double alpha;
-    double beta;
 
-    if (theta2 > std::numeric_limits<double>::epsilon()) {
+    const Eigen::Matrix3d omega_skew = wedge(omega_wrapped);  // Use wrapped omega
+    const Eigen::Matrix3d omega_skew2 = omega_skew * omega_skew;
+    double alpha = 0.0;
+    double beta = 0.0;
+
+    if (theta2 > 1e-6) {
         const double sin_theta = std::sin(theta);
         alpha = sin_theta / theta;
         const double s2 = std::sin(theta / 2.0);
@@ -85,7 +118,6 @@ inline Eigen::Matrix3d expMap(const Eigen::Vector3d& omega) {
 /// @return 3D twist in so(3) algebra
 /// @note Transferred from GTSAM
 inline Eigen::Vector3d logMap(const Eigen::Matrix3d& Rt) {
-    // note switch to base 1
     const Eigen::Matrix3d& R = Rt.matrix();
     const double& R11 = R(0, 0);
     const double& R12 = R(0, 1);

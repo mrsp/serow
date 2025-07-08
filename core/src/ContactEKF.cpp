@@ -78,9 +78,11 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
 
     for (const auto& contact_frame : contacts_frame_) {
-        P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) = state.contacts_position_cov.at(contact_frame);
+        P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) =
+            state.contacts_position_cov.at(contact_frame);
         if (!point_feet_) {
-            P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) = state.contacts_orientation_cov.value().at(contact_frame);
+            P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) =
+                state.contacts_orientation_cov.value().at(contact_frame);
         }
     }
 
@@ -132,9 +134,11 @@ void ContactEKF::setState(const BaseState& state) {
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
 
     for (const auto& contact_frame : contacts_frame_) {
-        P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) = state.contacts_position_cov.at(contact_frame);
+        P_(pl_idx_.at(contact_frame), pl_idx_.at(contact_frame)) =
+            state.contacts_position_cov.at(contact_frame);
         if (!point_feet_) {
-            P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) = state.contacts_orientation_cov.value().at(contact_frame);
+            P_(rl_idx_.at(contact_frame), rl_idx_.at(contact_frame)) =
+                state.contacts_orientation_cov.value().at(contact_frame);
         }
     }
 
@@ -634,7 +638,7 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
     const size_t num_actions = 2 + 2 * !point_feet_;
-     if (action.size() != static_cast<Eigen::Index>(num_actions)) {
+    if (action.size() != static_cast<Eigen::Index>(num_actions)) {
         throw std::invalid_argument("Action size must be 2 + 2 if point_feet is false");
     }
 
