@@ -34,3 +34,6 @@ target_link_libraries(go1_test PRIVATE serow pinocchio::pinocchio GTest::gtest_m
 
 add_executable(CheckTerrainElevation CheckTerrainElevation.cpp)
 target_link_libraries(CheckTerrainElevation PRIVATE serow pinocchio::pinocchio GTest::gtest GTest::gtest_main)
+
+add_executable(lie_test lie_test.cpp)
+target_link_libraries(lie_test PRIVATE serow pinocchio::pinocchio GTest::gtest_main)
