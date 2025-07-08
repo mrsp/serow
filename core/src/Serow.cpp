@@ -1276,8 +1276,13 @@ void Serow::reset() {
     com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                         params_.force_torque_rate);
 
+    // Compute a valid history size for the IMU outlier detection
+    size_t imu_history_size = params_.imu_rate < 120 ? 40 : params_.imu_rate / 3;
+    if (imu_history_size > 200) {
+        imu_history_size = 200;
+    }
+
     // Initialize IMU outlier detection storage
-    const size_t imu_history_size = params_.imu_rate < 120 ? 40 : params_.imu_rate / 3;
     for (size_t i = 0; i < 6; i++) {
         imu_outlier_detector_.push_back(MovingMedianFilter(imu_history_size));
     }
