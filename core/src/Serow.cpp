@@ -41,9 +41,7 @@ std::string findFilepath(const std::string& filename) {
     throw std::runtime_error("File '" + filename + "' not found.");
 }
 
-Serow::Serow() {
-
-}
+Serow::Serow() {}
 
 bool Serow::initialize(const std::string& config_file) {
     // Load configuration JSON
@@ -135,7 +133,7 @@ bool Serow::initialize(const std::string& config_file) {
 
     if (!checkConfigParam("attitude_estimator_proportional_gain", params_.Kp))
         return false;
-    
+
     if (!checkConfigParam("attitude_estimator_integral_gain", params_.Ki))
         return false;
 
@@ -208,7 +206,8 @@ bool Serow::initialize(const std::string& config_file) {
             std::filesystem::create_directories(params_.log_dir);
         }
     } catch (const std::exception& e) {
-        std::cerr << RED_COLOR << "Failed to create log directory: " << e.what() << "\n" << WHITE_COLOR;
+        std::cerr << RED_COLOR << "Failed to create log directory: " << e.what() << "\n"
+                  << WHITE_COLOR;
         return false;
     }
 
@@ -217,7 +216,7 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigArray("R_base_to_acc", 9))
         return false;
-    
+
     bool has_ground_truth = !config["T_base_to_ground_truth"].is_null();
     if (has_ground_truth && !checkConfigArray("T_base_to_ground_truth", 16))
         return false;
@@ -416,21 +415,27 @@ void Serow::initializeLogging() {
         measurement_logger_job_ = std::make_unique<ThreadPool>();
     }
     if (!proprioception_logger_) {
-        proprioception_logger_ = std::make_unique<ProprioceptionLogger>(params_.log_dir + "/serow_proprioception.mcap");
+        proprioception_logger_ =
+            std::make_unique<ProprioceptionLogger>(params_.log_dir + "/serow_proprioception.mcap");
     }
     if (!exteroception_logger_) {
-        exteroception_logger_ = std::make_unique<ExteroceptionLogger>(params_.log_dir + "/serow_exteroception.mcap");
+        exteroception_logger_ =
+            std::make_unique<ExteroceptionLogger>(params_.log_dir + "/serow_exteroception.mcap");
     }
     if (!measurement_logger_) {
-        measurement_logger_ = std::make_unique<MeasurementLogger>(params_.log_dir + "/serow_measurements.mcap");
+        measurement_logger_ =
+            std::make_unique<MeasurementLogger>(params_.log_dir + "/serow_measurements.mcap");
     }
 }
 
-void Serow::logMeasurements(ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
+void Serow::logMeasurements(ImuMeasurement imu,
+                            const std::map<std::string, JointMeasurement>& joints,
                             std::map<std::string, ForceTorqueMeasurement> ft,
                             std::optional<BasePoseGroundTruth> base_pose_ground_truth) {
     if (params_.log_measurements && !measurement_logger_job_->isRunning()) {
-        measurement_logger_job_->addJob([this, imu = imu, joints = joints, ft = ft, base_pose_ground_truth = std::move(base_pose_ground_truth)]() {
+        measurement_logger_job_->addJob([this, imu = imu, joints = joints, ft = ft,
+                                         base_pose_ground_truth =
+                                             std::move(base_pose_ground_truth)]() {
             try {
                 if (!measurement_logger_->isInitialized()) {
                     measurement_logger_->setStartTime(imu.timestamp);
@@ -446,7 +451,8 @@ void Serow::logMeasurements(ImuMeasurement imu, const std::map<std::string, Join
                     auto gt = base_pose_ground_truth.value();
                     // Transform the base pose to the ground truth frame
                     gt.position = params_.T_base_to_ground_truth * gt.position;
-                    gt.orientation = Eigen::Quaterniond(params_.T_base_to_ground_truth.linear() * gt.orientation.toRotationMatrix());
+                    gt.orientation = Eigen::Quaterniond(params_.T_base_to_ground_truth.linear() *
+                                                        gt.orientation.toRotationMatrix());
                     measurement_logger_->log(gt);
                 }
             } catch (const std::exception& e) {
@@ -456,7 +462,8 @@ void Serow::logMeasurements(ImuMeasurement imu, const std::map<std::string, Join
     }
 }
 
-void Serow::runJointsEstimator(State& state, const std::map<std::string, JointMeasurement>& joints) {
+void Serow::runJointsEstimator(State& state,
+                               const std::map<std::string, JointMeasurement>& joints) {
     // Estimate joint velocities
     std::map<std::string, double> joints_position;
     std::map<std::string, double> joints_velocity;
@@ -479,12 +486,13 @@ void Serow::runJointsEstimator(State& state, const std::map<std::string, JointMe
                                           DerivativeEstimator(key, params_.joint_rate,
                                                               params_.joint_cutoff_frequency, 1));
                 if (state.isInitialized()) {
-                    joint_estimators_.at(key).setState(Eigen::Matrix<double, 1, 1>(state.joint_state_.joints_position.at(key)), 
-                                                       Eigen::Matrix<double, 1, 1>(state.joint_state_.joints_velocity.at(key)));
+                    joint_estimators_.at(key).setState(
+                        Eigen::Matrix<double, 1, 1>(state.joint_state_.joints_position.at(key)),
+                        Eigen::Matrix<double, 1, 1>(state.joint_state_.joints_velocity.at(key)));
                 } else {
-                    joint_estimators_.at(key).setState(Eigen::Matrix<double, 1, 1>(value.position), 
+                    joint_estimators_.at(key).setState(Eigen::Matrix<double, 1, 1>(value.position),
                                                        Eigen::Matrix<double, 1, 1>(0.0));
-                }   
+                }
             }
             joints_velocity[key] =
                 joint_estimators_.at(key).filter(Eigen::Matrix<double, 1, 1>(value.position))(0);
@@ -496,7 +504,7 @@ void Serow::runJointsEstimator(State& state, const std::map<std::string, JointMe
 }
 
 bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
-     // Transform IMU measurements to base frame
+    // Transform IMU measurements to base frame
     imu.angular_velocity = params_.R_base_to_gyro * imu.angular_velocity;
     imu.linear_acceleration = params_.R_base_to_acc * imu.linear_acceleration;
 
@@ -536,7 +544,8 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
 
                     std::cout << "Calibration finished at " << imu_calibration_cycles_ << std::endl;
                     std::cout << "Gyrometer biases " << params_.bias_gyro.transpose() << std::endl;
-                    std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << std::endl;
+                    std::cout << "Accelerometer biases " << params_.bias_acc.transpose()
+                              << std::endl;
                 }
             }
         }
@@ -551,8 +560,9 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
 }
 
 KinematicMeasurement Serow::runForwardKinematics(State& state) {
-    kinematic_estimator_->updateJointConfig(state.joint_state_.joints_position, state.joint_state_.joints_velocity);
-    
+    kinematic_estimator_->updateJointConfig(state.joint_state_.joints_position,
+                                            state.joint_state_.joints_velocity);
+
     // Preallocate maps for leg end-effector kinematics
     std::map<std::string, Eigen::Vector3d> base_to_foot_positions;
     std::map<std::string, Eigen::Quaterniond> base_to_foot_orientations;
@@ -580,7 +590,7 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
     kin.base_to_foot_linear_velocities = std::move(base_to_foot_linear_velocities);
     kin.base_to_foot_angular_velocities = std::move(base_to_foot_angular_velocities);
     if (!state.isInitialized()) {
-        // Initialize the state        
+        // Initialize the state
         state.base_state_.base_position = Eigen::Vector3d::Zero();
         state.base_state_.base_orientation = Eigen::Quaterniond::Identity();
         state.centroidal_state_.com_position = kinematic_estimator_->comPosition();
@@ -598,32 +608,36 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
 }
 
 void Serow::computeLegOdometry(const State& state, KinematicMeasurement& kin) {
-    // Augment the kinematic measurement with the contact state if a new contact state is not available
-    // use the last contact state from the previous cycle since contact state is not changing rapidly
+    // Augment the kinematic measurement with the contact state if a new contact state is not
+    // available use the last contact state from the previous cycle since contact state is not
+    // changing rapidly
     kin.contacts_status = state.contact_state_.contacts_status;
     kin.contacts_probability = state.contact_state_.contacts_probability;
 
     // Initialize leg odometry if needed
     if (!leg_odometry_) {
         // Create leg odometry
-        leg_odometry_ = std::make_unique<LegOdometry>(state.base_state_.base_position,
-            state.base_state_.feet_position, state.base_state_.feet_orientation, state.getMass(), params_.tau_0,
-            params_.tau_1, params_.joint_rate, params_.g, params_.eps);
+        leg_odometry_ = std::make_unique<LegOdometry>(
+            state.base_state_.base_position, state.base_state_.feet_position,
+            state.base_state_.feet_orientation, state.getMass(), params_.tau_0, params_.tau_1,
+            params_.joint_rate, params_.g, params_.eps);
     }
 
     // Perform leg odometry estimation
     leg_odometry_->estimate(
-        attitude_estimator_->getQ(), attitude_estimator_->getGyro() - (attitude_estimator_->getR() * params_.bias_gyro), 
-        kin.base_to_foot_orientations, kin.base_to_foot_positions, kin.base_to_foot_linear_velocities, 
-        kin.base_to_foot_angular_velocities, state.contact_state_.contacts_force, 
-        state.contact_state_.contacts_probability, state.contact_state_.contacts_torque);
+        attitude_estimator_->getQ(),
+        attitude_estimator_->getGyro() - (attitude_estimator_->getR() * params_.bias_gyro),
+        kin.base_to_foot_orientations, kin.base_to_foot_positions,
+        kin.base_to_foot_linear_velocities, kin.base_to_foot_angular_velocities,
+        state.contact_state_.contacts_force, state.contact_state_.contacts_probability,
+        state.contact_state_.contacts_torque);
 
     kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
     kin.base_linear_velocity_cov = params_.base_linear_velocity_cov.asDiagonal();
     kin.contacts_position = leg_odometry_->getContactPositions();
     kin.position_cov = params_.contact_position_cov.asDiagonal();
     kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
-    
+
     // Handle orientation for non-point feet
     if (!state.isPointFeet()) {
         kin.contacts_orientation = leg_odometry_->getContactOrientations();
@@ -649,7 +663,8 @@ void Serow::computeLegOdometry(const State& state, KinematicMeasurement& kin) {
 }
 
 void Serow::runAngularMomentumEstimator(State& state) {
-    // Get the angular momentum around the CoM in base frame coordinates as compute with rigid-body kinematics
+    // Get the angular momentum around the CoM in base frame coordinates as compute with rigid-body
+    // kinematics
     const Eigen::Vector3d& com_angular_momentum = kinematic_estimator_->comAngularMomentum();
     const Eigen::Matrix3d& R_world_to_base = state.base_state_.base_orientation.toRotationMatrix();
 
@@ -660,10 +675,12 @@ void Serow::runAngularMomentumEstimator(State& state) {
             params_.angular_momentum_cutoff_frequency, 3);
         if (state.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = R_world_to_base.transpose();
-            angular_momentum_derivative_estimator->setState(R_base_to_world * state.centroidal_state_.angular_momentum, 
-                                                            R_base_to_world * state.centroidal_state_.angular_momentum_derivative);
+            angular_momentum_derivative_estimator->setState(
+                R_base_to_world * state.centroidal_state_.angular_momentum,
+                R_base_to_world * state.centroidal_state_.angular_momentum_derivative);
         } else {
-            angular_momentum_derivative_estimator->setState(com_angular_momentum, Eigen::Vector3d::Zero());
+            angular_momentum_derivative_estimator->setState(com_angular_momentum,
+                                                            Eigen::Vector3d::Zero());
         }
     }
 
@@ -673,13 +690,13 @@ void Serow::runAngularMomentumEstimator(State& state) {
 
     // Update the state
     state.centroidal_state_.angular_momentum = R_world_to_base * com_angular_momentum;
-    state.centroidal_state_.angular_momentum_derivative = R_world_to_base * com_angular_momentum_derivative;
+    state.centroidal_state_.angular_momentum_derivative =
+        R_world_to_base * com_angular_momentum_derivative;
 }
 
-void Serow::runContactEstimator(State& state,
-                                std::map<std::string, ForceTorqueMeasurement>& ft,
-                                KinematicMeasurement& kin,
-                                std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
+void Serow::runContactEstimator(
+    State& state, std::map<std::string, ForceTorqueMeasurement>& ft, KinematicMeasurement& kin,
+    std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
     // Estimate the leg end-effector contact state
     if (!ft.empty()) {
         std::map<std::string, Eigen::Vector3d> contacts_force;
@@ -694,19 +711,22 @@ void Serow::runContactEstimator(State& state,
                         frame,
                         ContactDetector(frame, params_.high_threshold, params_.low_threshold,
                                         state.getMass(), params_.g, params_.median_window));
-                    contact_estimators_.at(frame).setState(state.contact_state_.contacts_status.at(frame), 
-                                                           state.contact_state_.contacts_force.at(frame).z());
+                    contact_estimators_.at(frame).setState(
+                        state.contact_state_.contacts_status.at(frame),
+                        state.contact_state_.contacts_force.at(frame).z());
                 }
             }
 
             state.contact_state_.timestamp = ft.at(frame).timestamp;
 
             // Transform F/T to base frame
-            const Eigen::Matrix3d R_foot_to_base = kin.base_to_foot_orientations.at(frame).toRotationMatrix();
+            const Eigen::Matrix3d R_foot_to_base =
+                kin.base_to_foot_orientations.at(frame).toRotationMatrix();
             const Eigen::Vector3d& frame_force = ft.at(frame).force;
             const Eigen::Matrix3d& R_foot_to_force = params_.R_foot_to_force.at(frame);
             const Eigen::Matrix3d& R_world_to_base = kin.base_orientation.toRotationMatrix();
-            contacts_force[frame].noalias() = R_world_to_base * R_foot_to_base * R_foot_to_force * frame_force;
+            contacts_force[frame].noalias() =
+                R_world_to_base * R_foot_to_base * R_foot_to_force * frame_force;
 
             // Process torque if not point feet
             if (!state.isPointFeet() && ft.at(frame).torque.has_value()) {
@@ -766,8 +786,10 @@ void Serow::runContactEstimator(State& state,
     }
 }
 
-void Serow::runBaseEstimator(State& state,const ImuMeasurement& imu, const KinematicMeasurement& kin, std::optional<OdometryMeasurement> odom) {
-     // Initialize terrain estimator if needed
+void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
+                             const KinematicMeasurement& kin,
+                             std::optional<OdometryMeasurement> odom) {
+    // Initialize terrain estimator if needed
     if (params_.enable_terrain_estimation && !terrain_estimator_ && params_.is_contact_ekf) {
         float terrain_height = 0.0;
         int i = 0;
@@ -794,7 +816,7 @@ void Serow::runBaseEstimator(State& state,const ImuMeasurement& imu, const Kinem
         }
         terrain_estimator_->initializeLocalMap(terrain_height, 1e4,
                                                params_.minimum_terrain_height_variance);
-        terrain_estimator_->recenter({static_cast<float>(state.base_state_.base_position.x()), 
+        terrain_estimator_->recenter({static_cast<float>(state.base_state_.base_position.x()),
                                       static_cast<float>(state.base_state_.base_position.y())});
     }
 
@@ -849,21 +871,25 @@ void Serow::runBaseEstimator(State& state,const ImuMeasurement& imu, const Kinem
     }
 
     // Estimate base angular velocity and linear acceleration
-    const Eigen::Vector3d base_angular_velocity = imu.angular_velocity - state.getImuAngularVelocityBias();
-    const Eigen::Vector3d base_linear_acceleration = base_pose.linear() * (imu.linear_acceleration - state.getImuLinearAccelerationBias()) -
+    const Eigen::Vector3d base_angular_velocity =
+        imu.angular_velocity - state.getImuAngularVelocityBias();
+    const Eigen::Vector3d base_linear_acceleration =
+        base_pose.linear() * (imu.linear_acceleration - state.getImuLinearAccelerationBias()) -
         Eigen::Vector3d(0.0, 0.0, params_.g);
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>(
             "Gyro Derivative", params_.imu_rate, params_.gyro_cutoff_frequency, 3);
         if (state.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = base_pose.linear().transpose();
-            gyro_derivative_estimator->setState(R_base_to_world * state.base_state_.base_angular_velocity, 
-                                                R_base_to_world * state.base_state_.base_angular_acceleration);
+            gyro_derivative_estimator->setState(
+                R_base_to_world * state.base_state_.base_angular_velocity,
+                R_base_to_world * state.base_state_.base_angular_acceleration);
         } else {
             gyro_derivative_estimator->setState(base_angular_velocity, Eigen::Vector3d::Zero());
         }
     }
-    const Eigen::Vector3d base_angular_acceleration = gyro_derivative_estimator->filter(base_angular_velocity);
+    const Eigen::Vector3d base_angular_acceleration =
+        gyro_derivative_estimator->filter(base_angular_velocity);
     state.base_state_.base_angular_velocity = base_pose.linear() * base_angular_velocity;
     state.base_state_.base_angular_acceleration = base_pose.linear() * base_angular_acceleration;
     state.base_state_.base_linear_acceleration = base_linear_acceleration;
@@ -889,7 +915,7 @@ void Serow::runBaseEstimator(State& state,const ImuMeasurement& imu, const Kinem
     }
 }
 
-void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin, 
+void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
                             std::map<std::string, ForceTorqueMeasurement> ft) {
     // Prepare CoM estimation measurements
     const Eigen::Vector3d& base_to_com_position = kinematic_estimator_->comPosition();
@@ -898,7 +924,8 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
     const Eigen::Isometry3d& base_pose = state.getBasePose();
     kin.com_position.noalias() = base_pose * base_to_com_position;
     kin.com_position_cov = params_.com_position_cov.asDiagonal();
-    kin.com_angular_momentum_derivative.noalias() = state.centroidal_state_.angular_momentum_derivative;
+    kin.com_angular_momentum_derivative.noalias() =
+        state.centroidal_state_.angular_momentum_derivative;
     kin.com_position_process_cov = params_.com_position_process_cov.asDiagonal();
     kin.com_linear_velocity_process_cov = params_.com_linear_velocity_process_cov.asDiagonal();
     kin.external_forces_process_cov = params_.external_forces_process_cov.asDiagonal();
@@ -911,7 +938,7 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
     kin.com_linear_acceleration.noalias() = base_linear_acceleration +
         base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
         base_angular_acceleration.cross(base_to_com_position);
-    
+
     state.centroidal_state_.com_linear_acceleration.noalias() = kin.com_linear_acceleration;
 
     // Process force-torque measurements if available
@@ -953,8 +980,9 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
 void Serow::logProprioception(const State& state, const ImuMeasurement& imu) {
     if (!proprioception_logger_job_->isRunning()) {
         proprioception_logger_job_->addJob(
-            [this, joints_state = state.joint_state_, base_state = state.base_state_, centroidal_state = state.centroidal_state_,
-             contact_state = state.contact_state_, imu = imu, frame_tfs = frame_tfs_]() {
+            [this, joints_state = state.joint_state_, base_state = state.base_state_,
+             centroidal_state = state.centroidal_state_, contact_state = state.contact_state_,
+             imu = imu, frame_tfs = frame_tfs_]() {
                 try {
                     if (!proprioception_logger_->isInitialized()) {
                         proprioception_logger_->setStartTime(
@@ -1035,8 +1063,13 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // log the incoming measurements
     logMeasurements(imu, joints, ft, base_pose_ground_truth);
 
-    // Update the joint state estimate 
+    // Update the joint state estimate
     runJointsEstimator(state_, joints);
+
+    // Check if the IMU measurements are valid with the Median Absolute Deviation (MAD)
+    if (isImuMeasurementOutlier(imu)) {
+        return;
+    }
 
     // Estimate the base frame attitude and initial IMU biases
     bool calibrated = runImuEstimator(state_, imu);
@@ -1129,7 +1162,7 @@ const std::shared_ptr<TerrainElevation>& Serow::getTerrainEstimator() const {
 }
 
 Serow::~Serow() {
-  stopLogging();
+    stopLogging();
 }
 
 bool Serow::isInitialized() const {
@@ -1187,14 +1220,16 @@ void Serow::reset() {
     leg_odometry_.reset();
     terrain_estimator_.reset();
     frame_tfs_.clear();
+    imu_outlier_detector_.clear();
+
     is_initialized_ = false;
     cycle_ = 0;
     imu_calibration_cycles_ = 0;
-    
-     // Initialize state
+
+    // Initialize state
     State state(params_.contacts_frame, params_.point_feet);
     state_ = std::move(state);
-    
+
     // Load bias values from configuration
     state_.base_state_.imu_angular_velocity_bias = params_.bias_gyro;
     state_.base_state_.imu_linear_acceleration_bias = params_.bias_acc;
@@ -1203,14 +1238,18 @@ void Serow::reset() {
     state_.mass_ = kinematic_estimator_->getTotalMass();
     state_.base_state_.base_position_cov = params_.initial_base_position_cov.asDiagonal();
     state_.base_state_.base_orientation_cov = params_.initial_base_orientation_cov.asDiagonal();
-    state_.base_state_.base_linear_velocity_cov = params_.initial_base_linear_velocity_cov.asDiagonal();
-    state_.base_state_.imu_angular_velocity_bias_cov = params_.initial_imu_angular_velocity_bias_cov.asDiagonal();
-    state_.base_state_.imu_linear_acceleration_bias_cov = params_.initial_imu_linear_acceleration_bias_cov.asDiagonal();
+    state_.base_state_.base_linear_velocity_cov =
+        params_.initial_base_linear_velocity_cov.asDiagonal();
+    state_.base_state_.imu_angular_velocity_bias_cov =
+        params_.initial_imu_angular_velocity_bias_cov.asDiagonal();
+    state_.base_state_.imu_linear_acceleration_bias_cov =
+        params_.initial_imu_linear_acceleration_bias_cov.asDiagonal();
 
     // Initialize contact covariances
     std::map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
     for (const auto& cf : state_.getContactsFrame()) {
-        state_.base_state_.contacts_position_cov[cf] = params_.initial_contact_position_cov.asDiagonal();
+        state_.base_state_.contacts_position_cov[cf] =
+            params_.initial_contact_position_cov.asDiagonal();
         if (!state_.isPointFeet()) {
             contacts_orientation_cov[cf] = params_.initial_contact_orientation_cov.asDiagonal();
         }
@@ -1221,20 +1260,100 @@ void Serow::reset() {
 
     // Initialize centroidal state
     state_.centroidal_state_.com_position_cov = params_.initial_com_position_cov.asDiagonal();
-    state_.centroidal_state_.com_linear_velocity_cov = params_.initial_com_linear_velocity_cov.asDiagonal();
+    state_.centroidal_state_.com_linear_velocity_cov =
+        params_.initial_com_linear_velocity_cov.asDiagonal();
     state_.centroidal_state_.external_forces_cov = params_.initial_external_forces_cov.asDiagonal();
-    
+
     // Initialize the base and CoM estimators
     if (params_.is_contact_ekf) {
-        base_estimator_con_.init(state_.base_state_, state_.getContactsFrame(), state_.isPointFeet(), params_.g, 
-                                params_.imu_rate, params_.outlier_detection);
+        base_estimator_con_.init(state_.base_state_, state_.getContactsFrame(),
+                                 state_.isPointFeet(), params_.g, params_.imu_rate,
+                                 params_.outlier_detection);
     } else {
-        base_estimator_.init(state_.base_state_, params_.g, params_.imu_rate, params_.outlier_detection);
+        base_estimator_.init(state_.base_state_, params_.g, params_.imu_rate,
+                             params_.outlier_detection);
     }
-    com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g, params_.force_torque_rate);
+    com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
+                        params_.force_torque_rate);
+
+    // Compute a valid history size for the IMU outlier detection
+    size_t imu_history_size = params_.imu_rate < 120 ? 40 : params_.imu_rate / 3;
+    if (imu_history_size > 200) {
+        imu_history_size = 200;
+    }
+
+    // Initialize IMU outlier detection storage
+    for (size_t i = 0; i < 6; i++) {
+        imu_outlier_detector_.push_back(MovingMedianFilter(imu_history_size));
+    }
 
     // Terminate logging threads
     stopLogging();
+}
+
+bool Serow::isImuMeasurementOutlier(const ImuMeasurement& imu) {
+    const double MAD_THRESHOLD_MULTIPLIER = 6.0;  // 6-sigma rule
+
+    // Add current measurements to filters
+    for (size_t i = 0; i < 3; i++) {
+        imu_outlier_detector_[i].filter(imu.angular_velocity[i]);
+        imu_outlier_detector_[i + 3].filter(imu.linear_acceleration[i]);
+    }
+
+    // Need sufficient history for MAD calculation
+    if (imu_outlier_detector_[0].size() < imu_outlier_detector_[0].maxSize() / 2) {
+        return false;
+    }
+
+    // Calculate current medians
+    const Eigen::Vector3d av_median(imu_outlier_detector_[0].getMedian(),
+                                    imu_outlier_detector_[1].getMedian(),
+                                    imu_outlier_detector_[2].getMedian());
+    const Eigen::Vector3d la_median(imu_outlier_detector_[3].getMedian(),
+                                    imu_outlier_detector_[4].getMedian(),
+                                    imu_outlier_detector_[5].getMedian());
+
+    // Helper function to calculate rolling MAD for a single axis
+    auto calculateRollingMAD = [](const std::deque<double>& window, double median) -> double {
+        std::vector<double> deviations;
+        deviations.reserve(window.size());
+
+        for (double value : window) {
+            deviations.push_back(std::abs(value - median));
+        }
+
+        // Sort for median calculation
+        std::sort(deviations.begin(), deviations.end());
+        return deviations[deviations.size() / 2];
+    };
+
+    // Calculate MAD for each axis
+    Eigen::Vector3d av_mad = Eigen::Vector3d::Zero();
+    Eigen::Vector3d la_mad = Eigen::Vector3d::Zero();
+
+    for (size_t i = 0; i < 3; i++) {
+        av_mad[i] = calculateRollingMAD(imu_outlier_detector_[i].getWindow(), av_median[i]);
+        la_mad[i] = calculateRollingMAD(imu_outlier_detector_[i + 3].getWindow(), la_median[i]);
+    }
+
+    // Convert MAD to standard deviation approximation (MAD ≈ 0.6745 * σ)
+    const double MAD_TO_STD_FACTOR = 1.4826;  // 1 / 0.6745
+    const Eigen::Vector3d av_std_dev(av_mad * MAD_TO_STD_FACTOR);
+    const Eigen::Vector3d la_std_dev(la_mad * MAD_TO_STD_FACTOR);
+
+    // Calculate z-scores for current measurement
+    const Eigen::Vector3d av_z_scores =
+        (imu.angular_velocity - av_median).cwiseQuotient(av_std_dev);
+    const Eigen::Vector3d la_z_scores =
+        (imu.linear_acceleration - la_median).cwiseQuotient(la_std_dev);
+
+    // Check if any component exceeds the threshold
+    const bool angular_velocity_outlier =
+        (av_z_scores.array().abs() > MAD_THRESHOLD_MULTIPLIER).any();
+    const bool linear_acceleration_outlier =
+        (la_z_scores.array().abs() > MAD_THRESHOLD_MULTIPLIER).any();
+
+    return angular_velocity_outlier || linear_acceleration_outlier;
 }
 
 }  // namespace serow
