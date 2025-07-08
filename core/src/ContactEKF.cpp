@@ -611,6 +611,9 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
         }
     }
 
+    // Update the state with the absolute IMU orientation
+    updateWithIMUOrientation(state, kin.base_orientation, kin.base_orientation_cov);
+
     // Update the state with the relative to base contacts
     updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
                        kin.contacts_status, kin.position_cov, kin.contacts_orientation,
@@ -634,6 +637,28 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
             terrain_estimator->recenter(base_pos_xy);
         }
     }
+}
+
+void ContactEKF::updateWithIMUOrientation(BaseState& state,
+                                          const Eigen::Quaterniond& imu_orientation,
+                                          const Eigen::Matrix3d& imu_orientation_cov) {
+    // Construct the linearized measurement matrix H
+    Eigen::MatrixXd H;
+    H.setZero(3, num_states_);
+    H.block(0, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
+
+    // Construct the innovation vector z
+    const Eigen::Vector3d z = lie::so3::minus(imu_orientation, state.base_orientation);
+
+    // Construct the measurement noise matrix R
+    const Eigen::Matrix3d& R = imu_orientation_cov;
+
+    const Eigen::Matrix3d s = R + H * P_ * H.transpose();
+    const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
+    const Eigen::VectorXd dx = K * z;
+
+    P_ = (I_ - K * H) * P_;
+    updateState(state, dx, P_);
 }
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {

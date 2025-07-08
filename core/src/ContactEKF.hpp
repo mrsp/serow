@@ -99,7 +99,8 @@ public:
      */
     bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
                                       Eigen::Matrix3d& covariance) const;
-    bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+    bool getContactOrientationInnovation(const std::string& contact_frame,
+                                         Eigen::Vector3d& innovation,
                                          Eigen::Matrix3d& covariance) const;
 
     /**
@@ -150,9 +151,10 @@ private:
     std::map<std::string, double> orientation_action_cov_gain_;
     std::map<std::string, double> contact_position_action_cov_gain_;
     std::map<std::string, double> contact_orientation_action_cov_gain_;
-    
+
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
-    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_orientation_innovation_;
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
+        contact_orientation_innovation_;
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.
@@ -225,7 +227,17 @@ private:
                            std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**
-     * @brief Updates the state of the robot with the provided state change and covariance matrix.
+     * @brief Updates the robot's state based on IMU orientation measurements.
+     * @param state Current state of the robot.
+     * @param imu_orientation Orientation of the IMU.
+     * @param imu_orientation_cov Covariance of the IMU orientation measurements.
+     */
+    void updateWithIMUOrientation(BaseState& state, const Eigen::Quaterniond& imu_orientation,
+                                  const Eigen::Matrix3d& imu_orientation_cov);
+
+    /**
+     * @brief Updates the state of the robot with the provided state change and covariance
+     * matrix.
      * @param state Current state of the robot (will be updated in-place).
      * @param dx State change vector.
      * @param P Covariance matrix of the state change.

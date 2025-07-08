@@ -12,7 +12,7 @@
     "joint_rate": 500.0,
     "estimate_joint_velocity": true,
     "joint_cutoff_frequency": 15.0,
-    "joint_position_variance": 0.001,
+    "joint_position_variance": 0.0005,
     "angular_momentum_cutoff_frequency": 5.0,
     "tau_0": 0.1,
     "tau_1": 0.0,
@@ -223,7 +223,7 @@
         1.0
     ],
     "T_base_to_odom": null,
-    "enable_terrain_estimation": false,
+    "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3,
     "T_base_to_ground_truth": [
