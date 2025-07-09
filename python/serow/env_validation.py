@@ -71,7 +71,7 @@ def run_serow1(dataset, robot, start_idx=0):
 class TestSerow(unittest.TestCase):
     def setUp(self):
         self.robot = "go2"
-        self.dataset0 = np.load(f"{self.robot}_unit_test.npz", allow_pickle=True)
+        self.dataset0 = np.load(f"{self.robot}_training_dataset.npz", allow_pickle=True)
         self.dataset1 = copy.copy(self.dataset0)
 
     def test_serow(self):
