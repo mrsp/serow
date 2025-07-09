@@ -89,6 +89,19 @@ class TestSerow(unittest.TestCase):
             orientation_error, np.zeros_like(orientation_error), atol=1e-3
         )
 
+        # Compare to the actual trajectory logged in the dataset
+        actual_base_positions = []
+        actual_base_orientations = []
+        for bs in self.dataset0["base_states"]:
+            actual_base_positions.append(bs.base_position)
+            actual_base_orientations.append(bs.base_orientation)
+
+        actual_base_positions = np.array(actual_base_positions)
+        actual_base_orientations = np.array(actual_base_orientations)
+        position_error = base_positions0[1335:] - actual_base_positions
+        orientation_error = base_orientations0[1335:] - actual_base_orientations
+        print(f"Actual Position error: {position_error.sum()}, {position_error.max()}")
+
         # Plot the base position and orientation
         fig, axs = plt.subplots(2, 1)
         base_positions0 = np.array(base_positions0)
