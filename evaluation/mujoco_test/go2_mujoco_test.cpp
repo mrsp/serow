@@ -130,7 +130,6 @@ void saveElevationMap(std::array<ElevationCell, map_size> data, double timestamp
 
 int main(int argc, char** argv) {
     try {
-
         std::string config_path = "go2.json";  // Default path
 
         // If user provides a custom config path
@@ -267,13 +266,18 @@ int main(int argc, char** argv) {
                            serow::JointMeasurement{.timestamp = timestamp,
                                                    .position = joint_positions[i][11]}});
 
-            // If the ground truth for the base pose is available, pass it to the filter for 
+            // If the ground truth for the base pose is available, pass it to the filter for
             // synchronized logging
             if (base_gt_positions.size() > 0 && base_gt_orientations.size() > 0) {
                 estimator.filter(imu, joints, force_torque, std::nullopt, std::nullopt,
-                    BasePoseGroundTruth{.timestamp = timestamp, 
-                                        .position = Eigen::Vector3d(base_gt_positions[i][0], base_gt_positions[i][1], base_gt_positions[i][2]), 
-                                        .orientation = Eigen::Quaterniond(base_gt_orientations[i][0], base_gt_orientations[i][1], base_gt_orientations[i][2], base_gt_orientations[i][3])});
+                                 BasePoseGroundTruth{
+                                     .timestamp = timestamp,
+                                     .position = Eigen::Vector3d(base_gt_positions[i][0],
+                                                                 base_gt_positions[i][1],
+                                                                 base_gt_positions[i][2]),
+                                     .orientation = Eigen::Quaterniond(
+                                         base_gt_orientations[i][0], base_gt_orientations[i][1],
+                                         base_gt_orientations[i][2], base_gt_orientations[i][3])});
             } else {
                 estimator.filter(imu, joints, force_torque);
             }

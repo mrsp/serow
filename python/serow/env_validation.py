@@ -98,30 +98,52 @@ class TestSerow(unittest.TestCase):
 
         actual_base_positions = np.array(actual_base_positions)
         actual_base_orientations = np.array(actual_base_orientations)
-        position_error = base_positions0[1335:] - actual_base_positions
-        orientation_error = base_orientations0[1335:] - actual_base_orientations
-        print(f"Actual Position error: {position_error.sum()}, {position_error.max()}")
-
-        # Plot the base position and orientation
-        fig, axs = plt.subplots(2, 1)
         base_positions0 = np.array(base_positions0)
         base_positions1 = np.array(base_positions1)
         base_orientations0 = np.array(base_orientations0)
         base_orientations1 = np.array(base_orientations1)
+
+        start_idx = len(base_positions0) - len(actual_base_positions)
+        position_error = base_positions0[start_idx:] - actual_base_positions
+        orientation_error = base_orientations0[start_idx:] - actual_base_orientations
+        print(f"Actual Position error: {position_error.sum()}, {position_error.max()}")
+        print(
+            f"Actual Orientation error: {orientation_error.sum()}, {orientation_error.max()}"
+        )
+
+        fig, axs = plt.subplots(2, 1)
+        axs[0].plot(actual_base_positions[:, 0], label="x Actual")
+        axs[0].plot(actual_base_positions[:, 1], label="y Actual")
+        axs[0].plot(actual_base_positions[:, 2], label="z Actual")
+        axs[1].plot(actual_base_orientations[:, 0], label="qw Actual")
+        axs[1].plot(actual_base_orientations[:, 1], label="qx Actual")
+        axs[1].plot(actual_base_orientations[:, 2], label="qy Actual")
+        axs[1].plot(actual_base_orientations[:, 3], label="qz Actual")
+        axs[0].set_title("Base Position")
+        axs[1].set_title("Base Orientation")
+        axs[0].legend()
+        axs[1].legend()
+
         # Plot the base position and orientation
+        fig, axs = plt.subplots(2, 1)
         axs[0].plot(base_positions0[:, 0], label="x SEROW 0")
         axs[0].plot(base_positions1[:, 0], label="x SEROW 1")
+
         axs[0].plot(base_positions0[:, 1], label="y SEROW 0")
         axs[0].plot(base_positions1[:, 1], label="y SEROW 1")
+
         axs[0].plot(base_positions0[:, 2], label="z SEROW 0")
         axs[0].plot(base_positions1[:, 2], label="z SEROW 1")
 
         axs[1].plot(base_orientations0[:, 0], label="qw SEROW 0")
         axs[1].plot(base_orientations1[:, 0], label="qw SEROW 1")
+
         axs[1].plot(base_orientations0[:, 1], label="qx SEROW 0")
         axs[1].plot(base_orientations1[:, 1], label="qx SEROW 1")
+
         axs[1].plot(base_orientations0[:, 2], label="qy SEROW 0")
         axs[1].plot(base_orientations1[:, 2], label="qy SEROW 1")
+
         axs[1].plot(base_orientations0[:, 3], label="qz SEROW 0")
         axs[1].plot(base_orientations1[:, 3], label="qz SEROW 1")
 
