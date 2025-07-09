@@ -1,0 +1,15 @@
+[flake8]
+max-line-length = 88
+extend-ignore = 
+    E203,  # whitespace before ':'
+    W503,  # line break before binary operator
+    E501,  # line too long (handled by black)
+exclude = 
+    .git,
+    __pycache__,
+    build,
+    dist,
+    *.egg-info
+per-file-ignores =
+    # Ignore unused imports in specific files if needed
+    __init__.py:F401 
