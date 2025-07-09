@@ -14,6 +14,7 @@
 
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include <serow/Measurement.hpp>
 
 using json = nlohmann::json;
 
@@ -500,21 +501,18 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
     // Estimate the base frame attitude
     if (!attitude_estimator_) {
         attitude_estimator_ = std::make_unique<Mahony>(params_.imu_rate, params_.Kp, params_.Ki);
-        if (state.isInitialized()) {
-            attitude_estimator_->setState(state.base_state_.base_orientation);
-        } else {
-            attitude_estimator_->setState(Eigen::Quaterniond::Identity());
-        }
+        attitude_estimator_->setState(state.base_state_.base_orientation);
     }
 
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
-    const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
     imu.orientation = attitude_estimator_->getQ();
+    imu.orientation_cov = params_.base_orientation_cov.asDiagonal();
 
-    // IMU bias calibration
+    // IMU bias calibration - Assuming the IMU is stationary
     if (!state.isInitialized()) {
         if (params_.calibrate_initial_imu_bias) {
             if (imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
+                const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
                 params_.bias_gyro += imu.angular_velocity;
                 params_.bias_acc.noalias() += imu.linear_acceleration +
                     R_world_to_base.transpose() * Eigen::Vector3d(0.0, 0.0, -params_.g);
@@ -531,7 +529,8 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
                     state.base_state_.imu_angular_velocity_bias = params_.bias_gyro;
                     state.base_state_.imu_linear_acceleration_bias = params_.bias_acc;
 
-                    std::cout << "Calibration finished at " << imu_calibration_cycles_ << std::endl;
+                    std::cout << "Calibration for stationary IMU finished at "
+                              << imu_calibration_cycles_ << std::endl;
                     std::cout << "Gyrometer biases " << params_.bias_gyro.transpose() << std::endl;
                     std::cout << "Accelerometer biases " << params_.bias_acc.transpose()
                               << std::endl;
@@ -572,16 +571,12 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
     // Prepare kinematic measurement
     KinematicMeasurement kin;
     kin.timestamp = state.joint_state_.timestamp;
-    kin.base_orientation = attitude_estimator_->getQ();
-    kin.base_orientation_cov = params_.base_orientation_cov.asDiagonal();
     kin.base_to_foot_positions = std::move(base_to_foot_positions);
     kin.base_to_foot_orientations = std::move(base_to_foot_orientations);
     kin.base_to_foot_linear_velocities = std::move(base_to_foot_linear_velocities);
     kin.base_to_foot_angular_velocities = std::move(base_to_foot_angular_velocities);
     if (!state.isInitialized()) {
         // Initialize the state
-        state.base_state_.base_position = Eigen::Vector3d::Zero();
-        state.base_state_.base_orientation = Eigen::Quaterniond::Identity();
         state.centroidal_state_.com_position = kinematic_estimator_->comPosition();
         for (const auto& frame : state.getContactsFrame()) {
             state.base_state_.contacts_position[frame] = kin.base_to_foot_positions.at(frame);
@@ -596,7 +591,8 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
     return kin;
 }
 
-void Serow::computeLegOdometry(const State& state, KinematicMeasurement& kin) {
+void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
+                               KinematicMeasurement& kin) {
     // Augment the kinematic measurement with the contact state if a new contact state is not
     // available use the last contact state from the previous cycle since contact state is not
     // changing rapidly
@@ -614,12 +610,10 @@ void Serow::computeLegOdometry(const State& state, KinematicMeasurement& kin) {
 
     // Perform leg odometry estimation
     leg_odometry_->estimate(
-        attitude_estimator_->getQ(),
-        attitude_estimator_->getGyro() - (attitude_estimator_->getR() * params_.bias_gyro),
-        kin.base_to_foot_orientations, kin.base_to_foot_positions,
-        kin.base_to_foot_linear_velocities, kin.base_to_foot_angular_velocities,
-        state.contact_state_.contacts_force, state.contact_state_.contacts_probability,
-        state.contact_state_.contacts_torque);
+        imu.orientation, imu.angular_velocity, kin.base_to_foot_orientations,
+        kin.base_to_foot_positions, kin.base_to_foot_linear_velocities,
+        kin.base_to_foot_angular_velocities, state.contact_state_.contacts_force,
+        state.contact_state_.contacts_probability, state.contact_state_.contacts_torque);
 
     kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
     kin.base_linear_velocity_cov = params_.base_linear_velocity_cov.asDiagonal();
@@ -713,7 +707,8 @@ void Serow::runContactEstimator(
                 kin.base_to_foot_orientations.at(frame).toRotationMatrix();
             const Eigen::Vector3d& frame_force = ft.at(frame).force;
             const Eigen::Matrix3d& R_foot_to_force = params_.R_foot_to_force.at(frame);
-            const Eigen::Matrix3d& R_world_to_base = kin.base_orientation.toRotationMatrix();
+            const Eigen::Matrix3d& R_world_to_base =
+                state.base_state_.base_orientation.toRotationMatrix();
             contacts_force[frame].noalias() =
                 R_world_to_base * R_foot_to_base * R_foot_to_force * frame_force;
 
@@ -837,9 +832,9 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
     state.base_state_.timestamp = kin.timestamp;
     const Eigen::Isometry3d base_pose = state.getBasePose();
     if (params_.is_contact_ekf) {
-        base_estimator_con_.update(state.base_state_, kin, odom, terrain_estimator_);
+        base_estimator_con_.update(state.base_state_, imu, kin, odom, terrain_estimator_);
     } else {
-        base_estimator_.update(state.base_state_, kin, odom);
+        base_estimator_.update(state.base_state_, imu, kin, odom);
 
         // Compute the contact pose in the world frame
         std::map<std::string, Eigen::Quaterniond> con_orient;
@@ -1075,7 +1070,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     }
 
     // Compute the leg odometry and update the kinematic measurement accordingly
-    computeLegOdometry(state_, kin);
+    computeLegOdometry(state_, imu, kin);
 
     // Run the base estimator
     runBaseEstimator(state_, imu, kin, odom);
@@ -1126,6 +1121,11 @@ Serow::processMeasurements(
     // Update the joint state estimate
     runJointsEstimator(state_, joints);
 
+    // Check if the IMU measurements are valid with the Median Absolute Deviation (MAD)
+    if (isImuMeasurementOutlier(imu)) {
+        return std::nullopt;
+    }
+
     // Estimate the base frame attitude and initial IMU biases
     bool calibrated = runImuEstimator(state_, imu);
     if (!calibrated) {
@@ -1141,7 +1141,7 @@ Serow::processMeasurements(
     }
 
     // Compute the leg odometry and update the kinematic measurement accordingly
-    computeLegOdometry(state_, kin);
+    computeLegOdometry(state_, imu, kin);
 
     // Return the measurements
     return std::make_optional(std::make_tuple(imu, kin, ft));

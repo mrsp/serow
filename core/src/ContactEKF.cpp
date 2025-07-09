@@ -665,8 +665,8 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
     }
 }
 
-void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
-                        std::optional<OdometryMeasurement> odom,
+void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
+                        const KinematicMeasurement& kin, std::optional<OdometryMeasurement> odom,
                         std::shared_ptr<TerrainElevation> terrain_estimator) {
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
@@ -697,7 +697,7 @@ void ContactEKF::update(BaseState& state, const KinematicMeasurement& kin,
     }
 
     // Update the state with the absolute IMU orientation
-    updateWithIMUOrientation(state, kin.base_orientation, kin.base_orientation_cov);
+    updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov);
 
     // Update the state with the relative to base contacts
     updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,

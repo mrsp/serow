@@ -86,7 +86,7 @@ public:
      * @param odom Optional odometry measurements.
      * @param terrain Optional terrain measurements.
      */
-    void update(BaseState& state, const KinematicMeasurement& kin,
+    void update(BaseState& state, const ImuMeasurement& imu, const KinematicMeasurement& kin,
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
 

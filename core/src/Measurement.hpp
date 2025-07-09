@@ -39,13 +39,17 @@ struct ImuMeasurement {
     Eigen::Vector3d angular_velocity{};      ///< Angular velocity measured by IMU (rad/s)
     Eigen::Quaterniond orientation{};        ///< Orientation measured by IMU (quaternion)
     Eigen::Vector3d angular_acceleration{};  ///< Angular acceleration measured by IMU (rad/s^2)
-    Eigen::Matrix3d angular_velocity_cov{};  ///< Covariance matrix of angular velocity (rad^2/s^2)
-    Eigen::Matrix3d
-        linear_acceleration_cov{};  ///< Covariance matrix of linear acceleration (m^2/s^4)
-    Eigen::Matrix3d
-        angular_velocity_bias_cov{};  ///< Covariance matrix of angular velocity bias (rad^2/s^2)
-    Eigen::Matrix3d linear_acceleration_bias_cov{};  ///< Covariance matrix of linear acceleration
-                                                     ///< bias (m^2/s^4)
+
+    Eigen::Matrix3d orientation_cov{
+        Eigen::Matrix3d::Identity()};  ///< Covariance matrix of orientation (rad^2)
+    Eigen::Matrix3d angular_velocity_cov{
+        Eigen::Matrix3d::Identity()};  ///< Covariance matrix of angular velocity (rad^2/s^2)
+    Eigen::Matrix3d linear_acceleration_cov{
+        Eigen::Matrix3d::Identity()};  ///< Covariance matrix of linear acceleration (m^2/s^4)
+    Eigen::Matrix3d angular_velocity_bias_cov{
+        Eigen::Matrix3d::Identity()};  ///< Covariance matrix of angular velocity bias (rad^2/s^2)
+    Eigen::Matrix3d linear_acceleration_bias_cov{
+        Eigen::Matrix3d::Identity()};  ///< Covariance matrix of linear acceleration bias (m^2/s^4)
 };
 
 /**
@@ -80,17 +84,21 @@ struct GroundReactionForceMeasurement {
 struct KinematicMeasurement {
     double timestamp{};  ///< Timestamp of the measurement (s)
     Eigen::Vector3d base_linear_velocity{Eigen::Vector3d::Zero()};  ///< Base linear velocity (m/s)
-    Eigen::Quaterniond base_orientation{
-        Eigen::Quaterniond::Identity()};  ///< Base orientation (quaternion)
     std::map<std::string, bool>
         contacts_status;  ///< Map of contact status for different parts (0 or 1)
     std::map<std::string, double> contacts_probability;  ///< Map of contact probabilities ([0, 1])
     std::map<std::string, Eigen::Vector3d>
         contacts_position;  ///< Map of contact positions relative to base frame (m)
     std::map<std::string, Eigen::Vector3d> base_to_foot_positions;
-    std::map<std::string, Eigen::Quaterniond> base_to_foot_orientations; ///< Map of foot orientations relative to base frame (quaternion)
-    std::map<std::string, Eigen::Vector3d> base_to_foot_linear_velocities; ///< Map of foot linear velocities relative to base frame (m/s)
-    std::map<std::string, Eigen::Vector3d> base_to_foot_angular_velocities; ///< Map of foot angular velocities relative to base frame (rad/s)
+    std::map<std::string, Eigen::Quaterniond>
+        base_to_foot_orientations;  ///< Map of foot orientations relative to base frame
+                                    ///< (quaternion)
+    std::map<std::string, Eigen::Vector3d>
+        base_to_foot_linear_velocities;  ///< Map of foot linear velocities relative to base frame
+                                         ///< (m/s)
+    std::map<std::string, Eigen::Vector3d>
+        base_to_foot_angular_velocities;  ///< Map of foot angular velocities relative to base frame
+                                          ///< (rad/s)
     std::map<std::string, Eigen::Matrix3d>
         contacts_position_noise;  ///< Map of contact position noise covariances relative to base
                                   ///< frame (m^2)
@@ -106,8 +114,6 @@ struct KinematicMeasurement {
         Eigen::Vector3d::Zero()};  ///< Center of mass (COM) linear acceleration (m/s^2)
     Eigen::Matrix3d base_linear_velocity_cov{
         Eigen::Matrix3d::Identity()};  ///< Covariance of base linear velocity (m^2/s^2)
-    Eigen::Matrix3d base_orientation_cov{
-        Eigen::Matrix3d::Identity()};  ///< Covariance of base orientation (rad^2)
     Eigen::Matrix3d position_slip_cov{
         Eigen::Matrix3d::Identity()};  ///< Covariance of position slip (m^2)
     Eigen::Matrix3d orientation_slip_cov{

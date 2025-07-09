@@ -113,17 +113,23 @@ public:
     /// @param base_orientation the base orientation
     /// @param innovation the contact position innovation
     /// @param covariance the contact position covariance
-    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& base_position, Eigen::Quaterniond& base_orientation,
-                                      Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const;
-    
+    bool getContactPositionInnovation(const std::string& contact_frame,
+                                      Eigen::Vector3d& base_position,
+                                      Eigen::Quaterniond& base_orientation,
+                                      Eigen::Vector3d& innovation,
+                                      Eigen::Matrix3d& covariance) const;
+
     /// @brief Returns the contact orientation innovation
     /// @param contact_frame the contact frame name
     /// @param base_position the base position
     /// @param base_orientation the base orientation
     /// @param innovation the contact orientation innovation
     /// @param covariance the contact orientation covariance
-    bool getContactOrientationInnovation(const std::string& contact_frame, Eigen::Vector3d& base_position, Eigen::Quaterniond& base_orientation,
-                                         Eigen::Vector3d& innovation, Eigen::Matrix3d& covariance ) const;
+    bool getContactOrientationInnovation(const std::string& contact_frame,
+                                         Eigen::Vector3d& base_position,
+                                         Eigen::Quaterniond& base_orientation,
+                                         Eigen::Vector3d& innovation,
+                                         Eigen::Matrix3d& covariance) const;
 
     /// @brief Processes the measurements
     /// @param imu IMU measurement
@@ -131,10 +137,12 @@ public:
     /// @param force_torque force/torque measurements
     /// @param contacts_probability contact probabilities
     /// @return a tuple of the measurements
-    std::optional<std::tuple<ImuMeasurement, KinematicMeasurement, std::map<std::string, ForceTorqueMeasurement>>> 
-    processMeasurements(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
-                        std::optional<std::map<std::string, ForceTorqueMeasurement>> force_torque,
-                        std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
+    std::optional<std::tuple<ImuMeasurement, KinematicMeasurement,
+                             std::map<std::string, ForceTorqueMeasurement>>>
+    processMeasurements(
+        ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+        std::optional<std::map<std::string, ForceTorqueMeasurement>> force_torque,
+        std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
 
     /// @brief Runs the base estimator's predict step
     /// @param imu IMU measurement
@@ -144,13 +152,14 @@ public:
     /// @brief Runs the base estimator's update step with contact position
     /// @param cf contact frame name
     /// @param kin kinematic measurements
-    void baseEstimatorUpdateWithContactPosition(const std::string& cf, const KinematicMeasurement& kin);
+    void baseEstimatorUpdateWithContactPosition(const std::string& cf,
+                                                const KinematicMeasurement& kin);
 
     /// @brief Concludes the base estimator's update step with the IMU measurement
     /// @param imu IMU measurement
     /// @param kin kinematic measurements
     void baseEstimatorFinishUpdate(const ImuMeasurement& imu, const KinematicMeasurement& kin);
-    
+
 private:
     struct Params {
         /// @brief name of the robot
@@ -382,8 +391,10 @@ private:
 
     /// @brief Computes the leg odometry and updates the kinematic measurements accordingly
     /// @param state the state of the robot
+    /// @param imu IMU measurement
     /// @param kin kinematic measurements
-    void computeLegOdometry(const State& state, KinematicMeasurement& kin);
+    void computeLegOdometry(const State& state, const ImuMeasurement& imu,
+                            KinematicMeasurement& kin);
 
     /// @brief Runs the angular momentum estimator
     /// @param state the state of the robot
