@@ -149,6 +149,15 @@ public:
                                    Eigen::Matrix3d cp_noise, const Eigen::Matrix3d& position_cov,
                                    std::shared_ptr<TerrainElevation> terrain_estimator);
 
+    /**
+     * @brief Updates the robot's state based on IMU orientation measurements.
+     * @param state Current state of the robot.
+     * @param imu_orientation Orientation of the IMU.
+     * @param imu_orientation_cov Covariance of the IMU orientation measurements.
+     */
+    void updateWithIMUOrientation(BaseState& state, const Eigen::Quaterniond& imu_orientation,
+                                  const Eigen::Matrix3d& imu_orientation_cov);
+
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
@@ -298,15 +307,6 @@ private:
      */
     void updateWithTerrain(BaseState& state, const std::map<std::string, bool>& contacts_status,
                            std::shared_ptr<TerrainElevation> terrain_estimator);
-
-    /**
-     * @brief Updates the robot's state based on IMU orientation measurements.
-     * @param state Current state of the robot.
-     * @param imu_orientation Orientation of the IMU.
-     * @param imu_orientation_cov Covariance of the IMU orientation measurements.
-     */
-    void updateWithIMUOrientation(BaseState& state, const Eigen::Quaterniond& imu_orientation,
-                                  const Eigen::Matrix3d& imu_orientation_cov);
 
     /**
      * @brief Updates the state of the robot with the provided state change and covariance

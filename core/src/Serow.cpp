@@ -1202,6 +1202,14 @@ void Serow::baseEstimatorUpdateWithContactPosition(const std::string& cf,
     }
 }
 
+void Serow::baseEstimatorUpdateWithImuOrientation(const ImuMeasurement& imu) {
+    state_.base_state_.timestamp = imu.timestamp;
+    if (params_.is_contact_ekf) {
+        base_estimator_con_.updateWithIMUOrientation(state_.base_state_, imu.orientation,
+                                                     imu.orientation_cov);
+    }
+}
+
 void Serow::baseEstimatorFinishUpdate(const ImuMeasurement& imu, const KinematicMeasurement& kin) {
     const Eigen::Isometry3d base_pose = state_.getBasePose();
     // Estimate base angular velocity and linear acceleration

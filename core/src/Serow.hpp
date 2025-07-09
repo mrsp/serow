@@ -160,6 +160,10 @@ public:
     /// @param kin kinematic measurements
     void baseEstimatorFinishUpdate(const ImuMeasurement& imu, const KinematicMeasurement& kin);
 
+    /// @brief Runs the base estimator's update step with the IMU orientation
+    /// @param imu IMU measurement
+    void baseEstimatorUpdateWithImuOrientation(const ImuMeasurement& imu);
+
 private:
     struct Params {
         /// @brief name of the robot
