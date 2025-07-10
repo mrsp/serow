@@ -14,7 +14,6 @@
 
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include <serow/Measurement.hpp>
 
 using json = nlohmann::json;
 
