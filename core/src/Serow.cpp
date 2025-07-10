@@ -421,7 +421,7 @@ void Serow::logMeasurements(ImuMeasurement imu,
                             const std::map<std::string, JointMeasurement>& joints,
                             std::map<std::string, ForceTorqueMeasurement> ft,
                             std::optional<BasePoseGroundTruth> base_pose_ground_truth) {
-    if (params_.log_measurements && !measurement_logger_job_->isRunning()) {
+    if (params_.log_measurements) {
         measurement_logger_job_->addJob([this, imu = imu, joints = joints, ft = ft,
                                          base_pose_ground_truth =
                                              std::move(base_pose_ground_truth)]() {
@@ -961,29 +961,26 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
 }
 
 void Serow::logProprioception(const State& state, const ImuMeasurement& imu) {
-    if (!proprioception_logger_job_->isRunning()) {
-        proprioception_logger_job_->addJob(
-            [this, joints_state = state.joint_state_, base_state = state.base_state_,
-             centroidal_state = state.centroidal_state_, contact_state = state.contact_state_,
-             imu = imu, frame_tfs = frame_tfs_]() {
-                try {
-                    if (!proprioception_logger_->isInitialized()) {
-                        proprioception_logger_->setStartTime(
-                            std::min(base_state.timestamp, imu.timestamp));
-                    }
-                    // Log all state data to MCAP file
-                    proprioception_logger_->log(imu);
-                    proprioception_logger_->log(joints_state);
-                    proprioception_logger_->log(contact_state);
-                    proprioception_logger_->log(centroidal_state);
-                    proprioception_logger_->log(base_state);
-                    proprioception_logger_->log(frame_tfs, base_state.timestamp);
-                } catch (const std::exception& e) {
-                    std::cerr << "Error in proprioception logging thread: " << e.what()
-                              << std::endl;
-                }
-            });
-    }
+    proprioception_logger_job_->addJob([this, joints_state = state.joint_state_,
+                                        base_state = state.base_state_,
+                                        centroidal_state = state.centroidal_state_,
+                                        contact_state = state.contact_state_, imu = imu,
+                                        frame_tfs = frame_tfs_]() {
+        try {
+            if (!proprioception_logger_->isInitialized()) {
+                proprioception_logger_->setStartTime(std::min(base_state.timestamp, imu.timestamp));
+            }
+            // Log all state data to MCAP file
+            proprioception_logger_->log(imu);
+            proprioception_logger_->log(joints_state);
+            proprioception_logger_->log(contact_state);
+            proprioception_logger_->log(centroidal_state);
+            proprioception_logger_->log(base_state);
+            proprioception_logger_->log(frame_tfs, base_state.timestamp);
+        } catch (const std::exception& e) {
+            std::cerr << "Error in proprioception logging thread: " << e.what() << std::endl;
+        }
+    });
 }
 
 void Serow::logExteroception(const State& state) {

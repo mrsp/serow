@@ -113,4 +113,4 @@ def generate_training_dataset(robot, mcap_path):
 
 
 if __name__ == "__main__":
-    generate_training_dataset("go2", "/tmp")
+    generate_training_dataset("go2", "/tmp/serow_logs")
