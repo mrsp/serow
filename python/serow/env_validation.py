@@ -14,6 +14,7 @@ def run_serow0(dataset, robot, start_idx=0):
     initial_state.set_contact_state(dataset["contact_states"][start_idx])
     serow_framework.set_state(initial_state)
     contact_frames = initial_state.get_contacts_frame()
+    print(f"Contact frames: {contact_frames}")
 
     base_positions = []
     base_orientations = []
@@ -21,20 +22,17 @@ def run_serow0(dataset, robot, start_idx=0):
     base_positions.append(state.get_base_position())
     base_orientations.append(state.get_base_orientation())
 
-    for imu, joint, ft, _ in zip(
-        dataset["imu"],
-        dataset["joints"],
-        dataset["ft"],
-        dataset["base_pose_ground_truth"],
-    ):
+    for imu, joint, ft in zip(dataset["imu"], dataset["joints"], dataset["ft"]):
         result = serow_framework.process_measurements(imu, joint, ft, None)
         if result is not None:
             imu, kin, ft = result
             serow_framework.base_estimator_predict_step(imu, kin)
             serow_framework.base_estimator_update_with_imu_orientation(imu)
+            # Update with each contact frame individually (equivalent to the loop in ContactEKF::updateWithContacts)
             for cf in contact_frames:
                 serow_framework.base_estimator_update_with_contact_position(cf, kin)
             serow_framework.base_estimator_finish_update(imu, kin)
+
         state = serow_framework.get_state(allow_invalid=True)
         base_positions.append(state.get_base_position())
         base_orientations.append(state.get_base_orientation())
@@ -53,16 +51,10 @@ def run_serow1(dataset, robot, start_idx=0):
 
     base_positions = []
     base_orientations = []
-
     state = serow_framework.get_state(allow_invalid=True)
     base_positions.append(state.get_base_position())
     base_orientations.append(state.get_base_orientation())
-    for imu, joint, ft, _ in zip(
-        dataset["imu"],
-        dataset["joints"],
-        dataset["ft"],
-        dataset["base_pose_ground_truth"],
-    ):
+    for imu, joint, ft in zip(dataset["imu"], dataset["joints"], dataset["ft"]):
         serow_framework.filter(imu, joint, ft, None)
         state = serow_framework.get_state(allow_invalid=True)
         base_positions.append(state.get_base_position())
