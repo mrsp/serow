@@ -149,7 +149,6 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
             "ONNX support is not enabled in this build. Please rebuild with -DUSE_ONNX=ON");
     }
 #endif
-    std::cout << "Contact EKF Initialized Successfully" << std::endl;
 }
 
 void ContactEKF::setState(const BaseState& state) {

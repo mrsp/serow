@@ -30,7 +30,9 @@ DerivativeEstimator::DerivativeEstimator(const std::string& name, double f_sampl
     x_ = Eigen::VectorXd::Zero(dim);
     x_dot_ = Eigen::VectorXd::Zero(dim);
 
-    std::cout << name_ << " estimator initialized successfully" << std::endl;
+    if (verbose) {
+        std::cout << name_ << " estimator initialized successfully" << std::endl;
+    }
 }
 
 void DerivativeEstimator::setState(const Eigen::VectorXd& x, const Eigen::VectorXd& x_dot) {
@@ -44,7 +46,9 @@ void DerivativeEstimator::reset(bool verbose) {
         df_[i].reset(verbose);
     }
 
-    std::cout << name_ << " estimator reset" << std::endl;
+    if (verbose) {
+        std::cout << name_ << " estimator reset" << std::endl;
+    }
 }
 
 Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement) {

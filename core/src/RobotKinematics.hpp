@@ -95,17 +95,18 @@ public:
         }
 
         computeTotalMass();
-
-        // Output model information
-        std::cout << "Joint Names: " << std::endl;
-        printJointNames();
-        std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
-        std::cout << "Model loaded: " << model_name << std::endl;
-        std::cout << "Frame Names: " << std::endl;
-        for (const auto& frame : pmodel_->frames) {
-            if (frame.type == pinocchio::FrameType::BODY) {
-                std::cout << frame.name << std::endl;
-                frame_names_.push_back(frame.name);
+        if (verbose) {
+            // Output model information
+            std::cout << "Joint Names: " << std::endl;
+            printJointNames();
+            std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
+            std::cout << "Model loaded: " << model_name << std::endl;
+            std::cout << "Frame Names: " << std::endl;
+            for (const auto& frame : pmodel_->frames) {
+                if (frame.type == pinocchio::FrameType::BODY) {
+                    std::cout << frame.name << std::endl;
+                    frame_names_.push_back(frame.name);
+                }
             }
         }
     }
@@ -307,7 +308,7 @@ public:
      * transformation.
      */
     Eigen::Isometry3d linkTF(const std::string& frame_name) const {
-        Eigen::Isometry3d lpose = Eigen::Isometry3d::Identity();  
+        Eigen::Isometry3d lpose = Eigen::Isometry3d::Identity();
 
         // Get the frame index from the model based on the frame name
         pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
@@ -378,23 +379,24 @@ public:
             return Eigen::MatrixXd::Zero(3, ndofActuated());
         }
     }
-    
+
     /**
-     * @brief Computes recursively the total mass of the robot based on the urdf description of the robot
+     * @brief Computes recursively the total mass of the robot based on the urdf description of the
+     * robot
      * @note Store the result to the member total_mass_
      */
-    void computeTotalMass(){
+    void computeTotalMass() {
         total_mass_ = 0.0;
         // Start from 1 since index 0 is typically the universe/world frame
         for (int i = 0; i < pmodel_->nbodies; ++i) {
             total_mass_ += pmodel_->inertias[i].mass();
         }
     }
-    
+
     /**
      * @brief Returns the total mass of the robot
      */
-    double getTotalMass() const{
+    double getTotalMass() const {
         return total_mass_;
     }
 

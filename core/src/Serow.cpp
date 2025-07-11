@@ -29,7 +29,40 @@ Serow::Serow() {}
 
 bool Serow::initialize(const std::string& config_file) {
     // Load configuration JSON
-    auto config = json::parse(std::ifstream(findFilepath(config_file)));
+    std::string config_path;
+    try {
+        config_path = findFilepath(config_file);
+        std::ifstream config_file(config_path);
+        if (!config_file.is_open()) {
+            std::cerr << RED_COLOR << "Failed to open config file: " << config_path << "\n"
+                      << WHITE_COLOR;
+            return false;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Exception: " << e.what() << std::endl;
+    }
+
+    auto config_file_stream = std::ifstream(config_path);
+    if (!config_file_stream.is_open()) {
+        std::cerr << RED_COLOR << "Failed to open config file: " << config_path << "\n"
+                  << WHITE_COLOR;
+        return false;
+    }
+
+    json config;
+    try {
+        config = json::parse(config_file_stream);
+    } catch (const json::parse_error& e) {
+        std::cerr << RED_COLOR << "Failed to parse config file: " << e.what() << "\n"
+                  << WHITE_COLOR;
+        return false;
+    }
+
+    // Check if config has any values
+    if (config.empty()) {
+        std::cerr << RED_COLOR << "Config file is empty\n" << WHITE_COLOR;
+        return false;
+    }
 
     // Helper function to check and extract configuration values
     auto checkConfigParam = [&config](const std::string& param_name, auto& param_value) -> bool {
@@ -225,10 +258,21 @@ bool Serow::initialize(const std::string& config_file) {
 
     // Initialize kinematic estimator
     std::string model_path;
-    if (!checkConfigParam("model_path", model_path))
+    if (!checkConfigParam("model_path", model_path)) {
+        std::cerr << RED_COLOR << "Configuration: model_path not found in config" << WHITE_COLOR
+                  << std::endl;
         return false;
-    kinematic_estimator_ = std::make_unique<RobotKinematics>(findFilepath(model_path),
-                                                             params_.joint_position_variance);
+    }
+
+    const std::string model_filepath = findFilepath(model_path);
+    if (model_filepath.empty()) {
+        std::cerr << RED_COLOR << "Cofiguration: Model file '" << model_path << "' not found!"
+                  << WHITE_COLOR << std::endl;
+        return false;
+    }
+
+    kinematic_estimator_ =
+        std::make_unique<RobotKinematics>(model_filepath, params_.joint_position_variance);
 
     // Load matrices
     for (size_t i = 0; i < 3; i++) {
@@ -389,7 +433,6 @@ bool Serow::initialize(const std::string& config_file) {
 
     reset();
 
-    std::cout << "Configuration initialized" << std::endl;
     return true;
 }
 
