@@ -1057,7 +1057,7 @@ void Serow::logExteroception(const State& state) {
     }
 }
 
-void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
                    std::optional<std::map<std::string, ForceTorqueMeasurement>> force_torque,
                    std::optional<OdometryMeasurement> odom,
                    std::optional<std::map<std::string, ContactMeasurement>> contacts_probability,
@@ -1065,7 +1065,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Early return if not initialized and no FT measurement
     if (!is_initialized_) {
         if (!force_torque.has_value())
-            return;
+            return false;
         is_initialized_ = true;
         initializeLogging();
     }
@@ -1091,13 +1091,13 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     // Check if the IMU measurements are valid with the Median Absolute Deviation (MAD)
     if (isImuMeasurementOutlier(imu)) {
-        return;
+        return false;
     }
 
     // Estimate the base frame attitude and initial IMU biases
     bool calibrated = runImuEstimator(state_, imu);
     if (!calibrated) {
-        return;
+        return false;
     }
 
     // Update the kinematic structure
@@ -1128,6 +1128,7 @@ void Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Log the estimated state
     logProprioception(state_, imu);
     logExteroception(state_);
+    return true;
 }
 
 std::optional<

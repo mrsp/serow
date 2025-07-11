@@ -7,21 +7,13 @@ import copy
 
 def run_serow0(dataset, robot, start_idx=0):
     serow_framework = serow.Serow()
-    serow_framework.initialize(f"{robot}_rl.json")
+    serow_framework.initialize(f"{robot}.json")
     initial_state = serow_framework.get_state(allow_invalid=True)
-    initial_state.set_joint_state(dataset["joint_states"][start_idx])
-    initial_state.set_base_state(dataset["base_states"][start_idx])
-    initial_state.set_contact_state(dataset["contact_states"][start_idx])
-    serow_framework.set_state(initial_state)
     contact_frames = initial_state.get_contacts_frame()
     print(f"Contact frames: {contact_frames}")
 
     base_positions = []
     base_orientations = []
-    state = serow_framework.get_state(allow_invalid=True)
-    base_positions.append(state.get_base_position())
-    base_orientations.append(state.get_base_orientation())
-
     for imu, joint, ft in zip(dataset["imu"], dataset["joints"], dataset["ft"]):
         result = serow_framework.process_measurements(imu, joint, ft, None)
         if result is not None:
@@ -32,33 +24,25 @@ def run_serow0(dataset, robot, start_idx=0):
             for cf in contact_frames:
                 serow_framework.base_estimator_update_with_contact_position(cf, kin)
             serow_framework.base_estimator_finish_update(imu, kin)
-
-        state = serow_framework.get_state(allow_invalid=True)
-        base_positions.append(state.get_base_position())
-        base_orientations.append(state.get_base_orientation())
+            state = serow_framework.get_state(allow_invalid=True)
+            base_positions.append(state.get_base_position())
+            base_orientations.append(state.get_base_orientation())
 
     return np.array(base_positions), np.array(base_orientations)
 
 
 def run_serow1(dataset, robot, start_idx=0):
     serow_framework = serow.Serow()
-    serow_framework.initialize(f"{robot}_rl.json")
-    initial_state = serow_framework.get_state(allow_invalid=True)
-    initial_state.set_joint_state(dataset["joint_states"][start_idx])
-    initial_state.set_base_state(dataset["base_states"][start_idx])
-    initial_state.set_contact_state(dataset["contact_states"][start_idx])
-    serow_framework.set_state(initial_state)
+    serow_framework.initialize(f"{robot}.json")
 
     base_positions = []
     base_orientations = []
-    state = serow_framework.get_state(allow_invalid=True)
-    base_positions.append(state.get_base_position())
-    base_orientations.append(state.get_base_orientation())
     for imu, joint, ft in zip(dataset["imu"], dataset["joints"], dataset["ft"]):
-        serow_framework.filter(imu, joint, ft, None)
-        state = serow_framework.get_state(allow_invalid=True)
-        base_positions.append(state.get_base_position())
-        base_orientations.append(state.get_base_orientation())
+        status = serow_framework.filter(imu, joint, ft, None)
+        if status:
+            state = serow_framework.get_state(allow_invalid=True)
+            base_positions.append(state.get_base_position())
+            base_orientations.append(state.get_base_orientation())
 
     return np.array(base_positions), np.array(base_orientations)
 
@@ -93,6 +77,12 @@ class TestSerow(unittest.TestCase):
         actual_base_positions, actual_base_orientations = run_serow_playback(
             self.dataset0
         )
+        print(f"Base positions 0: {len(base_positions0)}")
+        print(f"Base positions 1: {len(base_positions1)}")
+        print(f"Actual base positions: {len(actual_base_positions)}")
+        print(f"Base orientations 0: {len(base_orientations0)}")
+        print(f"Base orientations 1: {len(base_orientations1)}")
+        print(f"Actual base orientations: {len(actual_base_orientations)}")
 
         assert len(base_positions1) == len(actual_base_positions)
         assert len(base_orientations1) == len(actual_base_orientations)

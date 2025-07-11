@@ -739,7 +739,8 @@ PYBIND11_MODULE(serow, m) {
                     ground_truth_opt = base_pose_ground_truth.cast<serow::BasePoseGroundTruth>();
                 }
 
-                self.filter(imu, joints, ft_opt, odom_opt, contact_prob_opt, ground_truth_opt);
+                return self.filter(imu, joints, ft_opt, odom_opt, contact_prob_opt,
+                                   ground_truth_opt);
             },
             py::arg("imu"), py::arg("joints"), py::arg("ft") = py::none(),
             py::arg("odom") = py::none(), py::arg("contact_probabilities") = py::none(),

@@ -63,7 +63,8 @@ public:
     /// @param contact_probabilities optional leg end-effector contact probabilities if not provided
     /// they will be estimated from the corresponding F/T measurement
     /// @param base_pose_ground_truth optional ground truth base pose measurement for logging
-    void filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+    /// @return true if the filter was successful
+    bool filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
                 std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::optional<std::map<std::string, ContactMeasurement>> contact_probabilities =
