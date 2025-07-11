@@ -17,8 +17,7 @@
 namespace serow {
 
 void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-                      double g, double imu_rate, bool outlier_detection, bool use_onnx,
-                      const std::string& robot_name, const std::string& model_path) {
+                      double g, double imu_rate, bool outlier_detection, bool use_onnx) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
@@ -124,13 +123,9 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     use_onnx_ = use_onnx;
 #ifdef USE_ONNX
     if (use_onnx_) {
-        if (robot_name.empty()) {
-            throw std::runtime_error("Robot name must be provided when using ONNX inference");
-        }
-
         try {
             onnx_inference_ = std::make_unique<ONNXInference>();
-            onnx_inference_->init(robot_name);
+            onnx_inference_->init();
             onnx_state_dim_ = onnx_inference_->getStateDim();
             onnx_action_dim_ = onnx_inference_->getActionDim();
 

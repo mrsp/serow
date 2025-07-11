@@ -1470,7 +1470,7 @@ void Serow::reset() {
 #endif
         base_estimator_con_.init(state_.base_state_, state_.getContactsFrame(),
                                  state_.isPointFeet(), params_.g, params_.imu_rate,
-                                 params_.outlier_detection, use_onnx, params_.robot_name);
+                                 params_.outlier_detection, use_onnx);
     } else {
         base_estimator_.init(state_.base_state_, params_.g, params_.imu_rate,
                              params_.outlier_detection);

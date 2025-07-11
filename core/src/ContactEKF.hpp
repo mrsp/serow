@@ -63,13 +63,9 @@ public:
      * @param imu_rate IMU update rate.
      * @param outlier_detection Flag indicating if outlier detection mechanisms should be enabled.
      * @param use_onnx Flag indicating if ONNX inference should be used for action selection.
-     * @param robot_name Name of the robot for ONNX model loading.
-     * @param model_path Path to the ONNX models directory.
      */
     void init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-              double g, double imu_rate, bool outlier_detection = false, bool use_onnx = false,
-              const std::string& robot_name = "", const std::string& model_path = "policy/ddpg");
-
+              double g, double imu_rate, bool outlier_detection = false, bool use_onnx = false);
     /**
      * @brief Predicts the robot's state forward based on IMU and kinematic measurements.
      * @param state Current state of the robot.
