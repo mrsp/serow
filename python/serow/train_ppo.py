@@ -31,15 +31,18 @@ class Actor(nn.Module):
 
         # Output layers
         self.mean_layer = nn.Linear(64, self.action_dim)
-        self.log_std = nn.Parameter(torch.zeros(self.action_dim))
+        # Initialize log_std to a small negative value for small initial std
+        self.log_std = nn.Parameter(torch.full((self.action_dim,), -2.0))
         self._init_weights()
 
     def _init_weights(self):
         for layer in [self.conv1, self.layer1, self.layer2, self.layer3]:
-            nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
-            nn.init.constant_(layer.bias, 0.0)
+            nn.init.orthogonal_(layer.weight, gain=1)
+            if layer.bias is not None:
+                nn.init.constant_(layer.bias, 0.0)
 
-        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)
+        # Initialize mean layer with moderate weights
+        nn.init.orthogonal_(self.mean_layer.weight, gain=1)
         nn.init.constant_(self.mean_layer.bias, 0.0)
 
     def forward(self, state):
@@ -52,18 +55,19 @@ class Actor(nn.Module):
         x = F.relu(self.layer1(input1))
         x = F.relu(self.layer2(x))
         x = F.relu(self.layer3(x))
+        log_std = self.log_std.clamp(-20, 2)
         x = self.mean_layer(x)
-
         mean = torch.zeros_like(x, dtype=torch.float32)
         mean[:, :3] = F.softplus(x[:, :3])
         mean[:, 3:] = x[:, 3:]
-        log_std = self.log_std.clamp(-20, 2)
 
         return mean, log_std
 
     def get_distribution(self, state):
         mean, log_std = self.forward(state)
         std = log_std.exp()
+        # Add minimum standard deviation to prevent numerical issues
+        std = torch.clamp(std, min=1e-8)
         return torch.distributions.Normal(mean, std)
 
     def get_action(self, state, deterministic=False):
@@ -79,8 +83,11 @@ class Actor(nn.Module):
         else:
             raw_actions = dist.sample()
 
+        # Store the unclipped actions and their log probs for training
+        log_probs = dist.log_prob(raw_actions).sum(dim=-1)
+
+        # Only clip for environment interaction
         actions = torch.clamp(raw_actions, self.min_action, self.max_action)
-        log_probs = dist.log_prob(actions).sum(dim=-1)
 
         return (
             actions.squeeze(0).detach().cpu().numpy(),
@@ -89,9 +96,18 @@ class Actor(nn.Module):
 
     def evaluate_actions(self, states, actions):
         dist = self.get_distribution(states)
-        actions = torch.clamp(actions, self.min_action, self.max_action)
-        log_probs = dist.log_prob(actions).sum(dim=-1)
-        entropy = dist.entropy().sum(dim=-1)
+
+        # Add numerical stability for log probability calculation
+        log_probs = dist.log_prob(actions)
+        # Use less aggressive clamping to avoid numerical issues
+        log_probs = torch.clamp(log_probs, min=-50.0, max=10.0)
+        log_probs = log_probs.sum(dim=-1)
+
+        # Add numerical stability for entropy calculation
+        entropy = dist.entropy()
+        entropy = torch.nan_to_num(entropy, nan=0.0, posinf=0.0, neginf=0.0)
+        entropy = entropy.sum(dim=-1)
+
         return log_probs.squeeze(-1), entropy.squeeze(-1)
 
 
@@ -108,18 +124,22 @@ class Critic(nn.Module):
         self.layer3 = nn.Linear(128, 64)
 
         # Initialize weights with smaller gains for value function
-        nn.init.orthogonal_(self.conv1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
-        torch.nn.init.constant_(self.conv1.bias, 0.0)
-        torch.nn.init.constant_(self.layer1.bias, 0.0)
-        torch.nn.init.constant_(self.layer2.bias, 0.0)
-        torch.nn.init.constant_(self.layer3.bias, 0.0)
+        nn.init.orthogonal_(self.conv1.weight, gain=1)
+        nn.init.orthogonal_(self.layer1.weight, gain=1)
+        nn.init.orthogonal_(self.layer2.weight, gain=1)
+        nn.init.orthogonal_(self.layer3.weight, gain=1)
+        if self.conv1.bias is not None:
+            torch.nn.init.constant_(self.conv1.bias, 0.0)
+        if self.layer1.bias is not None:
+            torch.nn.init.constant_(self.layer1.bias, 0.0)
+        if self.layer2.bias is not None:
+            torch.nn.init.constant_(self.layer2.bias, 0.0)
+        if self.layer3.bias is not None:
+            torch.nn.init.constant_(self.layer3.bias, 0.0)
 
         self.value_layer = nn.Linear(64, 1)
         # Use smaller gain for value function to prevent initial large predictions
-        nn.init.orthogonal_(self.value_layer.weight, gain=0.1)
+        nn.init.orthogonal_(self.value_layer.weight, gain=1)
         torch.nn.init.constant_(self.value_layer.bias, 0.0)
 
     def forward(self, state):
@@ -263,8 +283,8 @@ def train_ppo(datasets, agent, params):
             print(
                 f"Episode {episode + 1}/{max_episodes}, Step {time_step + 1}/{max_steps}, "
                 f"Episode return: {episode_return}, Best: {best_return}, "
-                f"in episode {best_return_episode}, "
-                f"Normalization stats: {params['state_normalizer'].get_normalization_stats() if params['state_normalizer'] is not None else 'None'}"
+                f"in episode {best_return_episode}"
+                # f"Normalization stats: {params['state_normalizer'].get_normalization_stats() if params['state_normalizer'] is not None else 'None'}"
             )
 
             # End of episode processing
@@ -313,10 +333,13 @@ if __name__ == "__main__":
     dataset_size = len(imu_measurements) - 1
 
     # Define the dimensions of your state and action spaces
-    normalizer = None
+    normalizer = Normalizer()
     history_buffer_size = 100
     print(f"History buffer size: {history_buffer_size * dt} seconds")
-    state_history_dim = 3 * 3 * history_buffer_size + 3 * history_buffer_size
+    state_history_dim = (
+        9 * history_buffer_size + 3 * history_buffer_size + 6 * history_buffer_size
+    )
+
     state_fb_dim = 3 * 3 + 3 + 2
     state_dim = state_fb_dim + state_history_dim
     print(f"State dimension: {state_dim}")
@@ -340,7 +363,7 @@ if __name__ == "__main__":
     train_datasets = [dataset]
     device = "cpu"
 
-    max_episodes = 120
+    max_episodes = 10000
     n_steps = 512
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
@@ -362,13 +385,13 @@ if __name__ == "__main__":
         "entropy_coef": 0.005,
         "gamma": 0.98,
         "gae_lambda": 0.95,
-        "ppo_epochs": 3,
-        "batch_size": 256,
+        "ppo_epochs": 5,
+        "batch_size": 128,
         "max_grad_norm": 0.5,
         "buffer_size": 10000,
         "max_episodes": max_episodes,
-        "actor_lr": 1e-5,
-        "critic_lr": 5e-5,
+        "actor_lr": 3e-5,
+        "critic_lr": 3e-5,
         "target_kl": 0.05,
         "n_steps": n_steps,
         "convergence_threshold": 0.15,

@@ -5,38 +5,41 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import torch
 import os
-from scipy.linalg import logm
+
 
 class RunningStats:
     """Helper class to compute running mean and standard deviation."""
+
     def __init__(self, dim):
         self.n = 0
         self.mean = np.zeros(dim)
         self.M2 = np.zeros(dim)  # Sum of squares of differences from mean
         self.std = np.ones(dim)
         self.dim = dim
-        
+
     def update(self, x):
         """Update running statistics with new data point(s)."""
         if np.isscalar(x):
             x = np.array([x])
         x = np.asarray(x).flatten()
-        
+
         # Check for NaN values and replace them with zeros
         if np.any(np.isnan(x)):
-            print(f"Warning: NaN detected in RunningStats.update, replacing with zeros. Input: {x}")
+            print(
+                f"Warning: NaN detected in RunningStats.update, replacing with zeros. Input: {x}"
+            )
             x = np.nan_to_num(x, nan=0.0)
-        
+
         # Ensure x matches the expected dimension
         if len(x) != self.dim:
             raise ValueError(f"Expected {self.dim} dimensions, got {len(x)}")
-        
+
         self.n += 1
         delta = x - self.mean
         self.mean += delta / self.n
         delta2 = x - self.mean
         self.M2 += delta * delta2
-        
+
         if self.n >= 2:
             variance = self.M2 / (self.n - 1)  # Sample variance
             self.std = np.sqrt(np.maximum(variance, 1e-8))  # Avoid sqrt of negative
@@ -47,122 +50,98 @@ class RunningStats:
         return self.mean.copy(), std_safe.copy()
 
     def save_stats(self, path, name):
-        np.save(path + name + '.npy', 
-                {'mean': self.mean, 'M2': self.M2, 'n': self.n, 'std': self.std})
+        np.save(
+            path + name + ".npy",
+            {"mean": self.mean, "M2": self.M2, "n": self.n, "std": self.std},
+        )
 
     def load_stats(self, path, name):
-        stats = np.load(path + name + '.npy', allow_pickle=True).item()
-        self.mean = stats['mean']
-        self.M2 = stats['M2']
-        self.n = stats['n']
-        self.std = stats['std']
+        stats = np.load(path + name + ".npy", allow_pickle=True).item()
+        self.mean = stats["mean"]
+        self.M2 = stats["M2"]
+        self.n = stats["n"]
+        self.std = stats["std"]
+
 
 class Normalizer:
     def __init__(self):
         # Running statistics for different components
         self.innovation_stats = RunningStats(dim=3)
-        self.R_history_stats = RunningStats(dim=6)
-        self.R_stats = RunningStats(dim=6)
-
-    def _normalize_covariance_matrix(self, R, mean, std):
-        """
-        Normalize a covariance matrix using log-Euclidean approach.
-        """
-        # Ensure R is positive definite by adding small regularization
-        R_reg = R + 1e-8 * np.eye(R.shape[0])
-        
-        # Compute log of the matrix
-        try:
-            log_R = logm(R_reg)
-            # Handle complex results (shouldn't happen for positive definite matrices)
-            if np.iscomplexobj(log_R):
-                log_R = np.real(log_R)
-        except:
-            # Fallback: use element-wise log (not mathematically correct but stable)
-            log_R = np.log(np.maximum(R_reg, 1e-8))
-        
-        # Extract the unique elements (upper triangular part)
-        upper_tri_indices = np.triu_indices(3)
-        log_R_flat = log_R[upper_tri_indices]  # Shape: (6,)
-        
-        # Normalize using provided mean and std
-        log_R_flat_normalized = (log_R_flat - mean) / std
-        
-        # Reconstruct the symmetric matrix
-        R_normalized = np.zeros_like(R)
-        R_normalized[upper_tri_indices] = log_R_flat_normalized
-        # Make symmetric
-        R_normalized = R_normalized + R_normalized.T - np.diag(np.diag(R_normalized))
-        
-        return R_normalized, log_R_flat
+        self.R_stats = RunningStats(dim=9)
+        self.action_stats = RunningStats(dim=6)
 
     def normalize_innovation(self, innovation):
         """Normalize 3D innovation vector."""
-        # First get current stats
         innovation_mean, innovation_std = self.innovation_stats.get_stats()
-        
+
         # Then normalize using current stats
         innovation_normalized = (innovation - innovation_mean) / innovation_std
-        
+
         # Update stats with the normalized innovation
         self.innovation_stats.update(innovation_normalized)
-        
+
         return innovation_normalized
-    
-    def normalize_R_with_action(self, R):
-        """Normalize 3x3 covariance matrix R using history stats."""
-        R_mean, R_std = self.R_history_stats.get_stats()
-        R_normalized, log_R_flat = self._normalize_covariance_matrix(R, R_mean, R_std)
-        
-        # Update stats with the log-transformed flattened matrix
-        self.R_history_stats.update(log_R_flat)
-        
-        return R_normalized
-    
+
     def normalize_R(self, R):
         """Normalize 3x3 covariance matrix R using R stats."""
         R_mean, R_std = self.R_stats.get_stats()
-        R_normalized, log_R_flat = self._normalize_covariance_matrix(R, R_mean, R_std)
-        
-        # Update stats with the log-transformed flattened matrix
-        self.R_stats.update(log_R_flat)
-        
+
+        # Then normalize using current stats
+        R_normalized = (R - R_mean) / R_std
+
+        # Update stats with the normalized R
+        self.R_stats.update(R_normalized)
+
         return R_normalized
+
+    def normalize_action(self, action):
+        """Normalize 3D action vector."""
+        action_mean, action_std = self.action_stats.get_stats()
+
+        # Then normalize using current stats
+        action_normalized = (action - action_mean) / action_std
+
+        # Update stats with the normalized action
+        self.action_stats.update(action_normalized)
+
+        return action_normalized
 
     def get_normalization_stats(self):
         """Get current normalization statistics for debugging/monitoring."""
         stats = {}
-        stats['innovation_mean'], stats['innovation_std'] = self.innovation_stats.get_stats()
-        stats['R_mean'], stats['R_std'] = self.R_stats.get_stats()
-        stats['R_history_mean'], stats['R_history_std'] = self.R_history_stats.get_stats()
-        stats['n_samples'] = self.innovation_stats.n
+        stats["innovation_mean"], stats["innovation_std"] = (
+            self.innovation_stats.get_stats()
+        )
+        stats["R_mean"], stats["R_std"] = self.R_stats.get_stats()
+        stats["action_mean"], stats["action_std"] = self.action_stats.get_stats()
+        stats["n_samples"] = self.innovation_stats.n
         return stats
-    
+
     def reset_stats(self):
         """Reset all running statistics (useful for retraining)."""
         self.innovation_stats = RunningStats(dim=3)
-        self.R_history_stats = RunningStats(dim=6)
-        self.R_stats = RunningStats(dim=6)
+        self.R_stats = RunningStats(dim=9)
+        self.action_stats = RunningStats(dim=6)
 
     def save_stats(self, path, name):
-        self.innovation_stats.save_stats(path, name + '_innovation')
-        self.R_history_stats.save_stats(path, name + '_R_history')
-        self.R_stats.save_stats(path, name + '_R')
+        self.innovation_stats.save_stats(path, name + "_innovation")
+        self.R_stats.save_stats(path, name + "_R")
+        self.action_stats.save_stats(path, name + "_action")
 
     def load_stats(self, path, name):
-        self.innovation_stats.load_stats(path, name + '_innovation')
-        self.R_history_stats.load_stats(path, name + '_R_history')
-        self.R_stats.load_stats(path, name + '_R')
+        self.innovation_stats.load_stats(path, name + "_innovation")
+        self.R_stats.load_stats(path, name + "_R")
+        self.action_stats.load_stats(path, name + "_action")
 
 
 def rotation_matrix_to_quaternion(R):
     """
     Convert a rotation matrix to a quaternion.
-    
-    Parameters: 
+
+    Parameters:
     R : numpy array with shape (3, 3)
         The rotation matrix
-        
+
     Returns:
     numpy array with shape (4,)
         The corresponding quaternion
@@ -178,7 +157,7 @@ def rotation_matrix_to_quaternion(R):
         qx = (R[2, 1] - R[1, 2]) / S
         qy = (R[0, 2] - R[2, 0]) / S
         qz = (R[1, 0] - R[0, 1]) / S
-        q = np.array([qw, qx, qy, qz])   
+        q = np.array([qw, qx, qy, qz])
     else:
         # Compute the largest diagonal element
         if R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
@@ -188,13 +167,13 @@ def rotation_matrix_to_quaternion(R):
             qz = (R[2, 0] + R[0, 2]) / S
             qw = (R[2, 1] - R[1, 2]) / S
         elif R[1, 1] > R[2, 2]:
-            S = np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2.0  # S=4*qy  
-            qy = 0.25 * S       
+            S = np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2.0  # S=4*qy
+            qy = 0.25 * S
             qx = (R[1, 0] + R[0, 1]) / S
             qz = (R[2, 1] + R[1, 2]) / S
             qw = (R[0, 2] - R[2, 0]) / S
         else:
-            S = np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2.0  # S=4*qz  
+            S = np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2.0  # S=4*qz
             qz = 0.25 * S
             qx = (R[2, 0] + R[0, 2]) / S
             qy = (R[2, 1] + R[1, 2]) / S
@@ -202,41 +181,45 @@ def rotation_matrix_to_quaternion(R):
         q = np.array([qw, qx, qy, qz])
     return q / np.linalg.norm(q)
 
+
 def quaternion_to_rotation_matrix(q):
     """
     Convert a quaternion to a rotation matrix.
-    
+
     Parameters:
     q : numpy array with shape (4,)
         The quaternion in the form [w, x, y, z]
-        
+
     Returns:
     numpy array with shape (3, 3)
         The corresponding rotation matrix
     """
     # Ensure q is normalized
     q = q / np.linalg.norm(q)
-    
+
     # Extract the values from q
     w, x, y, z = q
-    
+
     # Compute the rotation matrix
-    R = np.array([
-        [1 - 2*y*y - 2*z*z,     2*x*y - 2*w*z,     2*x*z + 2*w*y],
-        [    2*x*y + 2*w*z, 1 - 2*x*x - 2*z*z,     2*y*z - 2*w*x],
-        [    2*x*z - 2*w*y,     2*y*z + 2*w*x, 1 - 2*x*x - 2*y*y]
-    ])
-    
+    R = np.array(
+        [
+            [1 - 2 * y * y - 2 * z * z, 2 * x * y - 2 * w * z, 2 * x * z + 2 * w * y],
+            [2 * x * y + 2 * w * z, 1 - 2 * x * x - 2 * z * z, 2 * y * z - 2 * w * x],
+            [2 * x * z - 2 * w * y, 2 * y * z + 2 * w * x, 1 - 2 * x * x - 2 * y * y],
+        ]
+    )
+
     return R
+
 
 def logMap(R):
     """
     Compute the logarithm map of a rotation matrix.
-    
+
     Parameters:
     R : numpy array with shape (3, 3)
         The rotation matrix in SO(3) Lie group.
-    
+
     Returns:
     numpy array with shape (3,)
         The corresponding so(3) Lie algebra element.
@@ -256,8 +239,8 @@ def logMap(R):
     omega = np.zeros(3)
 
     # Special case when trace == -1, i.e., when theta = +-pi, +-3pi, +-5pi, etc.
-    if (trace + 1.0 < 1e-3) :
-        if (R33 > R22 and R33 > R11) :
+    if trace + 1.0 < 1e-3:
+        if R33 > R22 and R33 > R11:
             # R33 is the largest diagonal, a=3, b=1, c=2
             W = R21 - R12
             Q1 = 2.0 + 2.0 * R33
@@ -270,7 +253,7 @@ def logMap(R):
             mag = np.pi - (2 * sgn_w * W) / norm
             scale = 0.5 * one_over_r * mag
             omega = sgn_w * scale * np.array([Q2, Q3, Q1])
-        elif (R22 > R11):
+        elif R22 > R11:
             # R22 is the largest diagonal, a=2, b=3, c=1
             W = R13 - R31
             Q1 = 2.0 + 2.0 * R22
@@ -299,7 +282,7 @@ def logMap(R):
     else:
         magnitude = 0.0
         tr_3 = trace - 3.0  # could be non-negative if the matrix is off orthogonal
-        if (tr_3 < -1e-6):
+        if tr_3 < -1e-6:
             # this is the normal case -1 < trace < 3
             theta = np.arccos((trace - 1.0) / 2.0)
             magnitude = theta / (2.0 * np.sin(theta))
@@ -312,10 +295,11 @@ def logMap(R):
         omega = magnitude * np.array([R32 - R23, R13 - R31, R21 - R12])
     return omega
 
+
 def normalize_quaternion(quaternion):
     """
     Normalize a quaternion to ensure it represents a valid rotation.
-    
+
     Parameters:
         quaternion (list or numpy array): A quaternion [x, y, z, w]
 
@@ -333,14 +317,15 @@ def normalize_quaternion(quaternion):
 
     return quaternion
 
+
 def normalize_vector(vector, min_value, max_value, target_range=(0, 1)):
     """
     Normalize a vector to ensure it is within the specified target range.
-    
+
     Parameters:
         vector (numpy array or list): The vector to normalize
-        min_value (numpy array or list): The minimum value of the input range. 
-        max_value (numpy array or list): The maximum value of the input range. 
+        min_value (numpy array or list): The minimum value of the input range.
+        max_value (numpy array or list): The maximum value of the input range.
         target_range (tuple, optional): The target range (min, max) for normalization. Defaults to (0, 1)
 
     Returns:
@@ -358,15 +343,23 @@ def normalize_vector(vector, min_value, max_value, target_range=(0, 1)):
     # Check if min and max are different to avoid division by zero
     if np.all(min_value == max_value):
         return np.full_like(vector, target_range[0])
-    
+
     # Normalize to [0, 1] first
     normalized = (vector - min_value) / (max_value - min_value)
-    
+
     # Scale to target range
     return normalized * (target_range[1] - target_range[0]) + target_range[0]
 
-def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_timestamps, 
-                        gt_position, gt_orientation, align = False):
+
+def sync_and_align_data(
+    base_timestamps,
+    base_position,
+    base_orientation,
+    gt_timestamps,
+    gt_position,
+    gt_orientation,
+    align=False,
+):
     # Find the common time range
     start_time = max(base_timestamps[0], gt_timestamps[0])
     end_time = min(base_timestamps[-1], gt_timestamps[-1])
@@ -374,26 +367,31 @@ def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_tim
     # Create a common time grid with actual data length
     num_points = min(len(base_timestamps), len(gt_timestamps))
     common_timestamps = np.linspace(start_time, end_time, num_points)
-    
+
     # Interpolate base position
     base_position_interp = np.zeros((len(common_timestamps), 3))
     for i in range(3):  # x, y, z
-        base_position_interp[:, i] = np.interp(common_timestamps, base_timestamps, 
-                                               base_position[:, i])
-    
+        base_position_interp[:, i] = np.interp(
+            common_timestamps, base_timestamps, base_position[:, i]
+        )
+
     # Interpolate ground truth position
     gt_position_interp = np.zeros((len(common_timestamps), 3))
     for i in range(3):  # x, y, z
-        gt_position_interp[:, i] = np.interp(common_timestamps, gt_timestamps, gt_position[:, i])
+        gt_position_interp[:, i] = np.interp(
+            common_timestamps, gt_timestamps, gt_position[:, i]
+        )
 
     # Interpolate orientations
     base_orientation_interp = np.zeros((len(common_timestamps), 4))
     gt_orientation_interp = np.zeros((len(common_timestamps), 4))
     for i in range(4):  # w, x, y, z
-        base_orientation_interp[:, i] = np.interp(common_timestamps, base_timestamps, 
-                                                  base_orientation[:, i])
-        gt_orientation_interp[:, i] = np.interp(common_timestamps, gt_timestamps, 
-                                                gt_orientation[:, i])
+        base_orientation_interp[:, i] = np.interp(
+            common_timestamps, base_timestamps, base_orientation[:, i]
+        )
+        gt_orientation_interp[:, i] = np.interp(
+            common_timestamps, gt_timestamps, gt_orientation[:, i]
+        )
 
     # Exclude entries that are before the first common timestamp
     base_position_interp = base_position_interp[common_timestamps >= start_time]
@@ -411,7 +409,9 @@ def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_tim
         # Apply transformation to base position and orientation
         for i in range(len(common_timestamps)):
             gt_position_interp[i] = R @ gt_position_interp[i] + t
-            gt_orientation_interp[i] = rotation_matrix_to_quaternion(R @ quaternion_to_rotation_matrix(gt_orientation_interp[i]))
+            gt_orientation_interp[i] = rotation_matrix_to_quaternion(
+                R @ quaternion_to_rotation_matrix(gt_orientation_interp[i])
+            )
 
         # Print transformation details
         print("Rotation matrix from gt to base:")
@@ -421,12 +421,20 @@ def sync_and_align_data(base_timestamps, base_position, base_orientation, gt_tim
     else:
         print("Not spatially aligning data")
 
-    return common_timestamps, base_position_interp, base_orientation_interp, gt_position_interp, \
-        gt_orientation_interp
+    return (
+        common_timestamps,
+        base_position_interp,
+        base_orientation_interp,
+        gt_position_interp,
+        gt_orientation_interp,
+    )
 
-def plot_trajectories(timestamps, base_position, base_orientation, gt_position, gt_orientation):
-    
-     # Plot the synchronized and aligned data
+
+def plot_trajectories(
+    timestamps, base_position, base_orientation, gt_position, gt_orientation
+):
+
+    # Plot the synchronized and aligned data
     plt.figure(figsize=(12, 8))
     plt.subplot(2, 1, 1)
     plt.plot(timestamps, gt_position[:, 0], label="gt x")
@@ -435,9 +443,9 @@ def plot_trajectories(timestamps, base_position, base_orientation, gt_position, 
     plt.plot(timestamps, base_position[:, 1], label="base y (aligned)")
     plt.plot(timestamps, gt_position[:, 2], label="gt z")
     plt.plot(timestamps, base_position[:, 2], label="base z (aligned)")
-    plt.xlabel('Time (s)')
-    plt.ylabel('Position (m)')
-    plt.title('Base Position vs Ground Truth (Spatially Aligned)')
+    plt.xlabel("Time (s)")
+    plt.ylabel("Position (m)")
+    plt.title("Base Position vs Ground Truth (Spatially Aligned)")
     plt.legend()
     plt.grid(True)
 
@@ -450,9 +458,9 @@ def plot_trajectories(timestamps, base_position, base_orientation, gt_position, 
     plt.plot(timestamps, base_orientation[:, 2], label="base y")
     plt.plot(timestamps, gt_orientation[:, 3], label="gt z")
     plt.plot(timestamps, base_orientation[:, 3], label="base z")
-    plt.xlabel('Time (s)')
-    plt.ylabel('Quaternion Components')
-    plt.title('Base Orientation vs Ground Truth')
+    plt.xlabel("Time (s)")
+    plt.ylabel("Quaternion Components")
+    plt.title("Base Orientation vs Ground Truth")
     plt.legend()
     plt.grid(True)
 
@@ -461,17 +469,28 @@ def plot_trajectories(timestamps, base_position, base_orientation, gt_position, 
 
     # Plot 3D trajectories
     fig = plt.figure(figsize=(12, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot(gt_position[:, 0], gt_position[:, 1], gt_position[:, 2], 
-            label='Ground Truth', color='blue')
-    ax.plot(base_position[:, 0], base_position[:, 1], base_position[:, 2], 
-            label='Base Position', color='green')
-    ax.set_xlabel('X (m)')
-    ax.set_ylabel('Y (m)')
-    ax.set_zlabel('Z (m)')
-    ax.set_title('3D Trajectories')
+    ax = fig.add_subplot(111, projection="3d")
+    ax.plot(
+        gt_position[:, 0],
+        gt_position[:, 1],
+        gt_position[:, 2],
+        label="Ground Truth",
+        color="blue",
+    )
+    ax.plot(
+        base_position[:, 0],
+        base_position[:, 1],
+        base_position[:, 2],
+        label="Base Position",
+        color="green",
+    )
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Y (m)")
+    ax.set_zlabel("Z (m)")
+    ax.set_title("3D Trajectories")
     ax.legend()
     plt.show()
+
 
 def plot_joint_states(joint_states):
     """Plot joint positions and velocities over time."""
@@ -480,218 +499,237 @@ def plot_joint_states(joint_states):
     if len(joint_states) == 0:
         print("Error: No joint states available")
         return
-        
+
     # Get all unique joint names
     joint_names = list(joint_states[0].joints_position.keys())
     print(f"Joint names: {joint_names}")
     n_joints = len(joint_names)
-    
+
     if n_joints == 0:
         print("Error: No joints found in the first joint state")
         return
-        
+
     print(f"Number of joints: {n_joints}")
-    
+
     # Create figure with subplots for positions
-    fig_pos, axes_pos = plt.subplots(n_joints, 1, figsize=(12, 4*n_joints))
-    fig_pos.suptitle('Joint Positions Over Time')
-    
+    fig_pos, axes_pos = plt.subplots(n_joints, 1, figsize=(12, 4 * n_joints))
+    fig_pos.suptitle("Joint Positions Over Time")
+
     # Create figure with subplots for velocities
-    fig_vel, axes_vel = plt.subplots(n_joints, 1, figsize=(12, 4*n_joints))
-    fig_vel.suptitle('Joint Velocities Over Time')
-    
+    fig_vel, axes_vel = plt.subplots(n_joints, 1, figsize=(12, 4 * n_joints))
+    fig_vel.suptitle("Joint Velocities Over Time")
+
     # Create time array
     times = np.arange(len(joint_states))
-    
+
     # Plot each joint's position and velocity
     for i, joint_name in enumerate(joint_names):
         # Extract position and velocity data for this joint
         positions = [state.joints_position[joint_name] for state in joint_states]
         velocities = [state.joints_velocity[joint_name] for state in joint_states]
-        
+
         # Plot position
         axes_pos[i].plot(times, positions)
-        axes_pos[i].set_ylabel('Position (rad)')
-        axes_pos[i].set_title(f'{joint_name} Position')
+        axes_pos[i].set_ylabel("Position (rad)")
+        axes_pos[i].set_title(f"{joint_name} Position")
         axes_pos[i].grid(True)
-        
+
         # Plot velocity
         axes_vel[i].plot(times, velocities)
-        axes_vel[i].set_ylabel('Velocity (rad/s)')
-        axes_vel[i].set_title(f'{joint_name} Velocity')
+        axes_vel[i].set_ylabel("Velocity (rad/s)")
+        axes_vel[i].set_title(f"{joint_name} Velocity")
         axes_vel[i].grid(True)
-    
+
     # Add x-label to bottom subplot only
-    axes_pos[-1].set_xlabel('Time Steps')
-    axes_vel[-1].set_xlabel('Time Steps')
-    
+    axes_pos[-1].set_xlabel("Time Steps")
+    axes_vel[-1].set_xlabel("Time Steps")
+
     plt.tight_layout()
     plt.show()
 
+
 def plot_contact_states(contact_states):
     """Plot contact states over time.
-    
+
     Args:
         contact_states: List of ContactState objects containing contact information
     """
     if not contact_states:
         print("No contact states to plot")
         return
-        
+
     # Get all unique contact names from the first state
     contact_names = list(contact_states[0].contacts_status.keys())
     n_contacts = len(contact_names)
-    
+
     if n_contacts == 0:
         print("No contacts found in the contact states")
         return
-        
+
     # Create figure with subplots for status and probability
-    fig, axes = plt.subplots(n_contacts, 2, figsize=(15, 4*n_contacts))
-    fig.suptitle('Contact States Over Time')
-    
+    fig, axes = plt.subplots(n_contacts, 2, figsize=(15, 4 * n_contacts))
+    fig.suptitle("Contact States Over Time")
+
     # Create time array
     times = np.arange(len(contact_states))
-    
+
     # Plot each contact's status and probability
     for i, contact_name in enumerate(contact_names):
         # Extract status and probability data for this contact
         statuses = [state.contacts_status[contact_name] for state in contact_states]
-        probabilities = [state.contacts_probability[contact_name] for state in contact_states]
-        
+        probabilities = [
+            state.contacts_probability[contact_name] for state in contact_states
+        ]
+
         # Plot status
         ax_status = axes[i, 0] if n_contacts > 1 else axes[0]
-        ax_status.plot(times, statuses, 'b-', label='Status')
-        ax_status.set_ylabel('Contact Status')
-        ax_status.set_title(f'{contact_name} Status')
+        ax_status.plot(times, statuses, "b-", label="Status")
+        ax_status.set_ylabel("Contact Status")
+        ax_status.set_title(f"{contact_name} Status")
         ax_status.set_ylim(-0.1, 1.1)  # Binary values
         ax_status.grid(True)
-        
+
         # Plot probability
         ax_prob = axes[i, 1] if n_contacts > 1 else axes[1]
-        ax_prob.plot(times, probabilities, 'r-', label='Probability')
-        ax_prob.set_ylabel('Contact Probability')
-        ax_prob.set_title(f'{contact_name} Probability')
+        ax_prob.plot(times, probabilities, "r-", label="Probability")
+        ax_prob.set_ylabel("Contact Probability")
+        ax_prob.set_title(f"{contact_name} Probability")
         ax_prob.set_ylim(-0.1, 1.1)  # Probability range
         ax_prob.grid(True)
-    
+
     # Add x-label to bottom subplots only
     if n_contacts > 1:
-        axes[-1, 0].set_xlabel('Time Steps')
-        axes[-1, 1].set_xlabel('Time Steps')
+        axes[-1, 0].set_xlabel("Time Steps")
+        axes[-1, 1].set_xlabel("Time Steps")
     else:
-        axes[0].set_xlabel('Time Steps')
-        axes[1].set_xlabel('Time Steps')
-    
+        axes[0].set_xlabel("Time Steps")
+        axes[1].set_xlabel("Time Steps")
+
     plt.tight_layout()
     plt.show()
 
+
 def plot_contact_forces_and_torques(contact_states):
     """Plot contact forces and torques over time.
-    
+
     Args:
         contact_states: List of ContactState objects containing contact information
     """
     if not contact_states:
         print("No contact states to plot")
         return
-        
+
     # Get all unique contact names from the first state
     contact_names = list(contact_states[0].contacts_force.keys())
     n_contacts = len(contact_names)
-    
+
     if n_contacts == 0:
         print("No contacts found in the contact states")
         return
-        
+
     # Create figure with subplots for forces and torques
-    fig, axes = plt.subplots(n_contacts, 2, figsize=(15, 4*n_contacts))
-    fig.suptitle('Contact Forces and Torques Over Time')
-    
+    fig, axes = plt.subplots(n_contacts, 2, figsize=(15, 4 * n_contacts))
+    fig.suptitle("Contact Forces and Torques Over Time")
+
     # Create time array
     times = np.arange(len(contact_states))
-    
+
     # Plot each contact's forces and torques
     for i, contact_name in enumerate(contact_names):
         # Extract force and torque data for this contact
         forces_x = [state.contacts_force[contact_name][0] for state in contact_states]
         forces_y = [state.contacts_force[contact_name][1] for state in contact_states]
         forces_z = [state.contacts_force[contact_name][2] for state in contact_states]
-        
+
         # Plot forces
         ax_force = axes[i, 0] if n_contacts > 1 else axes[0]
-        ax_force.plot(times, forces_x, 'r-', label='Fx')
-        ax_force.plot(times, forces_y, 'g-', label='Fy')
-        ax_force.plot(times, forces_z, 'b-', label='Fz')
-        ax_force.set_ylabel('Force (N)')
-        ax_force.set_title(f'{contact_name} Forces')
+        ax_force.plot(times, forces_x, "r-", label="Fx")
+        ax_force.plot(times, forces_y, "g-", label="Fy")
+        ax_force.plot(times, forces_z, "b-", label="Fz")
+        ax_force.set_ylabel("Force (N)")
+        ax_force.set_title(f"{contact_name} Forces")
         ax_force.grid(True)
         ax_force.legend()
-        
+
         # Plot torques if available
         ax_torque = axes[i, 1] if n_contacts > 1 else axes[1]
-        if hasattr(contact_states[0], 'contacts_torque') and contact_states[0].contacts_torque:
-            torques_x = [state.contacts_torque[contact_name][0] for state in contact_states]
-            torques_y = [state.contacts_torque[contact_name][1] for state in contact_states]
-            torques_z = [state.contacts_torque[contact_name][2] for state in contact_states]
-            
-            ax_torque.plot(times, torques_x, 'r-', label='Tx')
-            ax_torque.plot(times, torques_y, 'g-', label='Ty')
-            ax_torque.plot(times, torques_z, 'b-', label='Tz')
-            ax_torque.set_ylabel('Torque (Nm)')
-            ax_torque.set_title(f'{contact_name} Torques')
+        if (
+            hasattr(contact_states[0], "contacts_torque")
+            and contact_states[0].contacts_torque
+        ):
+            torques_x = [
+                state.contacts_torque[contact_name][0] for state in contact_states
+            ]
+            torques_y = [
+                state.contacts_torque[contact_name][1] for state in contact_states
+            ]
+            torques_z = [
+                state.contacts_torque[contact_name][2] for state in contact_states
+            ]
+
+            ax_torque.plot(times, torques_x, "r-", label="Tx")
+            ax_torque.plot(times, torques_y, "g-", label="Ty")
+            ax_torque.plot(times, torques_z, "b-", label="Tz")
+            ax_torque.set_ylabel("Torque (Nm)")
+            ax_torque.set_title(f"{contact_name} Torques")
             ax_torque.grid(True)
             ax_torque.legend()
         else:
-            ax_torque.text(0.5, 0.5, 'No torque data available', 
-                          horizontalalignment='center',
-                          verticalalignment='center',
-                          transform=ax_torque.transAxes)
-            ax_torque.set_title(f'{contact_name} Torques')
-    
+            ax_torque.text(
+                0.5,
+                0.5,
+                "No torque data available",
+                horizontalalignment="center",
+                verticalalignment="center",
+                transform=ax_torque.transAxes,
+            )
+            ax_torque.set_title(f"{contact_name} Torques")
+
     # Add x-label to bottom subplots only
     if n_contacts > 1:
-        axes[-1, 0].set_xlabel('Time Steps')
-        axes[-1, 1].set_xlabel('Time Steps')
+        axes[-1, 0].set_xlabel("Time Steps")
+        axes[-1, 1].set_xlabel("Time Steps")
     else:
-        axes[0].set_xlabel('Time Steps')
-        axes[1].set_xlabel('Time Steps')
-    
+        axes[0].set_xlabel("Time Steps")
+        axes[1].set_xlabel("Time Steps")
+
     plt.tight_layout()
     plt.show()
+
 
 def export_models_to_onnx(agent, robot, params, path):
     """Export the trained models to ONNX format"""
     os.makedirs(path, exist_ok=True)
-    
+
     # Export actor model
-    dummy_input = torch.randn(1, params['state_dim']).to(agent.device)
+    dummy_input = torch.randn(1, params["state_dim"]).to(agent.device)
     torch.onnx.export(
         agent.actor,
         dummy_input,
-        f'{path}/trained_policy_{robot}_actor.onnx',
+        f"{path}/trained_policy_{robot}_actor.onnx",
         export_params=True,
         opset_version=11,
         do_constant_folding=True,
-        input_names=['input'],
-        output_names=['output'],
-        dynamic_axes={'input': {0: 'batch_size'},
-                    'output': {0: 'batch_size'}}
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
     )
-    
+
     # Export critic model
-    dummy_state = torch.randn(1, params['state_dim']).to(agent.device)
-    dummy_action = torch.randn(1, params['action_dim']).to(agent.device)
+    dummy_state = torch.randn(1, params["state_dim"]).to(agent.device)
+    dummy_action = torch.randn(1, params["action_dim"]).to(agent.device)
     torch.onnx.export(
         agent.critic,
         (dummy_state, dummy_action) if agent.name == "DDPG" else dummy_state,
-        f'{path}/trained_policy_{robot}_critic.onnx',
+        f"{path}/trained_policy_{robot}_critic.onnx",
         export_params=True,
         opset_version=11,
         do_constant_folding=True,
-        input_names=['state', 'action'],
-        output_names=['output'],
-        dynamic_axes={'state': {0: 'batch_size'},
-                    'action': {0: 'batch_size'},
-                    'output': {0: 'batch_size'}}
+        input_names=["state", "action"],
+        output_names=["output"],
+        dynamic_axes={
+            "state": {0: "batch_size"},
+            "action": {0: "batch_size"},
+            "output": {0: "batch_size"},
+        },
     )

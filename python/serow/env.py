@@ -34,12 +34,28 @@ class SerowEnv:
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.R_history_buffer = []
-        self.R_initial = np.eye(3, dtype=np.float64)
+        self.R_initial = (np.eye(3, dtype=np.float64)).flatten()
         self.R_history_buffer_size = history_buffer_size
         self.innovation_history_buffer = []
         self.innovation_history_buffer_size = history_buffer_size
         self.innovation_initial = np.zeros(3, dtype=np.float64)
+        self.action_history_buffer = []
+        self.action_history_buffer_size = history_buffer_size
+        self.action_initial = np.zeros(self.action_dim, dtype=np.float64)
         self.state_normalizer = state_normalizer
+
+    def get_action_history(self):
+        max_history_size = self.action_history_buffer_size
+        if len(self.action_history_buffer) == 0:
+            action_history_filled = [self.action_initial] * max_history_size
+        elif len(self.action_history_buffer) < max_history_size:
+            padding_needed = max_history_size - len(self.action_history_buffer)
+            action_history_filled = [
+                self.action_initial
+            ] * padding_needed + self.action_history_buffer
+        else:
+            action_history_filled = self.action_history_buffer[-max_history_size:]
+        return np.stack(action_history_filled).flatten()
 
     def get_R_history(self):
         max_history_size = self.R_history_buffer_size
@@ -91,28 +107,29 @@ class SerowEnv:
             self.serow_framework.get_contact_position_innovation(cf)
         )
 
+        max_position_error = 3.0
+        max_orientation_error = 1.0
         if (
-            np.linalg.norm(position_error) > 0.35
-            or np.linalg.norm(orientation_error) > 0.1
+            position_error > max_position_error
+            or orientation_error > max_orientation_error
         ):
             done = 1.0
-            reward = -50.0
+            reward = -5.0
             position_reward = 0.0
             orientation_reward = 0.0
         else:
             if success:
                 done = 0.0
                 nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-                nis_reward = np.exp(-100.0 * nis)
-                position_reward = np.exp(-10.0 * position_error)
-                orientation_reward = np.exp(-50.0 * orientation_error)
+                nis_reward = -nis / 1e-3
+                position_reward = -position_error / max_position_error
+                orientation_reward = -orientation_error / max_orientation_error
                 step_reward = 1.0 * (step + 1) / max_steps
-
-                reward = nis_reward + position_reward + orientation_reward
-                reward /= 3.0
+                reward = nis_reward + 2.0 * position_reward + 3.0 * orientation_reward
+                reward /= 3.0  # number of terms
                 reward += step_reward
 
-        return reward, done, innovation
+        return reward, done
 
     def compute_state(self, cf, state, kin):
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
@@ -120,25 +137,38 @@ class SerowEnv:
             state.get_contact_position(cf) - state.get_base_position()
         )
         local_kin_pos = kin.contacts_position[cf]
-        R = kin.contacts_position_noise[cf] + kin.position_cov
         innovation = local_kin_pos - local_pos
-
+        R = (kin.contacts_position_noise[cf] + kin.position_cov).flatten()
         if self.state_normalizer is not None:
             innovation = self.state_normalizer.normalize_innovation(innovation)
             R = self.state_normalizer.normalize_R(R)
 
         R_history = self.get_R_history()
         innovation_history = self.get_innovation_history()
+        action_history = self.get_action_history()
+
         P_pos_trace = np.trace(state.get_base_position_cov())
         P_ori_trace = np.trace(state.get_base_orientation_cov())
+
+        while (
+            len(self.innovation_history_buffer) >= self.innovation_history_buffer_size
+        ):
+            self.innovation_history_buffer.pop(0)
+            self.innovation_history_buffer.append(innovation)
+
+        while len(self.R_history_buffer) >= self.R_history_buffer_size:
+            self.R_history_buffer.pop(0)
+            self.R_history_buffer.append(R)
+
         return np.concatenate(
             [
                 [P_pos_trace],
                 [P_ori_trace],
                 innovation,
-                R.flatten(),
+                R,
                 innovation_history,
                 R_history,
+                action_history,
             ],
             axis=0,
         )
@@ -154,14 +184,23 @@ class SerowEnv:
                 self.innovation_initial += self.innovation_history_buffer[i]
             self.innovation_initial /= len(self.innovation_history_buffer)
 
-        self.R_initial = np.eye(3, dtype=np.float64)
+        self.R_initial = (np.eye(3, dtype=np.float64)).flatten()
         if len(self.R_history_buffer) > 0:
-            self.R_initial = np.zeros((3, 3), dtype=np.float64)
+            self.R_initial = np.zeros((3, 3), dtype=np.float64).flatten()
             for i in range(0, len(self.R_history_buffer)):
                 self.R_initial += self.R_history_buffer[i]
             self.R_initial /= len(self.R_history_buffer)
+
+        self.action_initial = np.zeros(self.action_dim, dtype=np.float64)
+        if len(self.action_history_buffer) > 0:
+            self.action_initial = np.zeros(self.action_dim, dtype=np.float64)
+            for i in range(0, len(self.action_history_buffer)):
+                self.action_initial += self.action_history_buffer[i]
+            self.action_initial /= len(self.action_history_buffer)
+
         self.R_history_buffer = []
         self.innovation_history_buffer = []
+        self.action_history_buffer = []
         return self.initial_state
 
     def predict_step(self, imu, joint, ft):
@@ -190,38 +229,11 @@ class SerowEnv:
         post_state = self.serow_framework.get_state(allow_invalid=True)
 
         # Compute the reward
-        reward, done, innovation = self.compute_reward(
-            cf, post_state, gt, step, max_steps
-        )
+        reward, done = self.compute_reward(cf, post_state, gt, step, max_steps)
 
-        if self.state_normalizer is not None:
-            innovation = self.state_normalizer.normalize_innovation(innovation)
-
-        while (
-            len(self.innovation_history_buffer) >= self.innovation_history_buffer_size
-        ):
-            self.innovation_history_buffer.pop(0)
-        self.innovation_history_buffer.append(innovation)
-
-        # Update the R history buffer
-        R = kin.contacts_position_noise[cf] + kin.position_cov
-        if np.any(action != np.zeros(self.action_dim)):
-            L = np.zeros((3, 3), dtype=np.float64)
-            L[0, 0] = action[0]
-            L[1, 1] = action[1]
-            L[2, 2] = action[2]
-            L[1, 0] = action[3]
-            L[2, 0] = action[4]
-            L[2, 1] = action[5]
-            # Reconstruct the matrix
-            R = L @ L.T
-
-        if self.state_normalizer is not None:
-            R = self.state_normalizer.normalize_R_with_action(R)
-
-        while len(self.R_history_buffer) >= self.R_history_buffer_size:
-            self.R_history_buffer.pop(0)
-        self.R_history_buffer.append(R)
+        while len(self.action_history_buffer) >= self.action_history_buffer_size:
+            self.action_history_buffer.pop(0)
+            self.action_history_buffer.append(action)
 
         return post_state, reward, done
 

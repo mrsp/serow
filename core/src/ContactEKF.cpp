@@ -321,10 +321,9 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
                                            Eigen::Matrix3d cp_noise,
                                            const Eigen::Matrix3d& position_cov,
                                            std::shared_ptr<TerrainElevation> terrain_estimator) {
-    if (!cs)
+    if (!cs) {
         return;
-
-    const double csd = cs ? 1.0 : 0.0;
+    }
 
     if (use_onnx_) {
         Eigen::VectorXd onnx_state = Eigen::VectorXd::Zero(onnx_state_dim_);
@@ -341,8 +340,7 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
         setAction(cf, onnx_action);
     }
 
-    // Check if the action covariance gain matrix is not the zero matrix
-    cp_noise = csd * (cp_noise + position_cov);
+    cp_noise += position_cov;
     if (contact_position_action_cov_gain_.at(cf) != Eigen::VectorXd::Zero(6)) {
         Eigen::Matrix3d L = Eigen::Matrix3d::Zero();
         const Eigen::VectorXd& action = contact_position_action_cov_gain_.at(cf);
@@ -354,8 +352,6 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
         L(2, 1) = action(5);
         cp_noise = L * L.transpose();
     }
-    cp_noise += (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
-
     // If the terrain estimator is in the loop reduce the effect that kinematics has in the
     // contact height update
     if (terrain_estimator) {
@@ -427,22 +423,22 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
         }
         P_ = std::move(P_i);
         state = std::move(updated_state_i);
-        if (cs) {
-            contact_position_innovation_[cf] = {z, s + 1e-6 * Eigen::Matrix3d::Identity()};
-            base_position_per_contact_position_update_[cf] = state.base_position;
-            base_orientation_per_contact_position_update_[cf] = state.base_orientation;
-        }
     }
+    contact_position_innovation_[cf] = {z, s + 1e-6 * Eigen::Matrix3d::Identity()};
+    base_position_per_contact_position_update_[cf] = state.base_position;
+    base_orientation_per_contact_position_update_[cf] = state.base_orientation;
 }
 
 void ContactEKF::updateWithContactOrientation(BaseState& state, const std::string& cf,
                                               const bool cs, const Eigen::Quaterniond& co,
                                               Eigen::Matrix3d co_noise,
                                               const Eigen::Matrix3d& orientation_cov) {
-    const double csd = cs ? 1.0 : 0.0;
+    if (!cs) {
+        return;
+    }
 
+    co_noise += orientation_cov;
     // Check if the action covariance gain matrix is not the zero matrix
-    co_noise = csd * (co_noise + orientation_cov);
     if (contact_orientation_action_cov_gain_.at(cf) != Eigen::VectorXd::Zero(6)) {
         Eigen::Matrix3d L = Eigen::Matrix3d::Zero();
         const Eigen::VectorXd& action = contact_orientation_action_cov_gain_.at(cf);
@@ -454,7 +450,6 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
         L(2, 1) = action(5);
         co_noise = L * L.transpose();
     }
-    co_noise += (1.0 - csd) * Eigen::Matrix3d::Identity() * 1e4;
 
     const int num_iter = 5;
     Eigen::MatrixXd H(3, num_states_);
@@ -484,11 +479,9 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
         P_ = (I_ - K * H) * P_;
     }
 
-    if (cs) {
-        contact_orientation_innovation_[cf] = {z, s + 1e-6 * Eigen::Matrix3d::Identity()};
-        base_position_per_contact_orientation_update_[cf] = state.base_position;
-        base_orientation_per_contact_orientation_update_[cf] = state.base_orientation;
-    }
+    contact_orientation_innovation_[cf] = {z, s + 1e-6 * Eigen::Matrix3d::Identity()};
+    base_position_per_contact_orientation_update_[cf] = state.base_position;
+    base_orientation_per_contact_orientation_update_[cf] = state.base_orientation;
 }
 
 void ContactEKF::updateWithContacts(
