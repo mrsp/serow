@@ -341,16 +341,8 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
     }
 
     cp_noise += position_cov;
-    if (contact_position_action_cov_gain_.at(cf) != Eigen::VectorXd::Zero(6)) {
-        Eigen::Matrix3d L = Eigen::Matrix3d::Zero();
-        const Eigen::VectorXd& action = contact_position_action_cov_gain_.at(cf);
-        L(0, 0) = action(0);
-        L(1, 1) = action(1);
-        L(2, 2) = action(2);
-        L(1, 0) = action(3);
-        L(2, 0) = action(4);
-        L(2, 1) = action(5);
-        cp_noise = L * L.transpose();
+    if (contact_position_action_cov_gain_.at(cf) > 0.0) {
+        cp_noise = contact_position_action_cov_gain_.at(cf) * cp_noise;
     }
     // If the terrain estimator is in the loop reduce the effect that kinematics has in the
     // contact height update
@@ -439,16 +431,8 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
 
     co_noise += orientation_cov;
     // Check if the action covariance gain matrix is not the zero matrix
-    if (contact_orientation_action_cov_gain_.at(cf) != Eigen::VectorXd::Zero(6)) {
-        Eigen::Matrix3d L = Eigen::Matrix3d::Zero();
-        const Eigen::VectorXd& action = contact_orientation_action_cov_gain_.at(cf);
-        L(0, 0) = action(0);
-        L(1, 1) = action(1);
-        L(2, 2) = action(2);
-        L(1, 0) = action(3);
-        L(2, 0) = action(4);
-        L(2, 1) = action(5);
-        co_noise = L * L.transpose();
+    if (contact_orientation_action_cov_gain_.at(cf) > 0.0) {
+        co_noise = contact_orientation_action_cov_gain_.at(cf) * co_noise;
     }
 
     const int num_iter = 5;
@@ -714,9 +698,9 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
 
 void ContactEKF::clearAction() {
     for (const auto& cf : contacts_frame_) {
-        contact_position_action_cov_gain_[cf] = Eigen::VectorXd::Zero(6);
+        contact_position_action_cov_gain_[cf] = 0.0;
         if (!point_feet_) {
-            contact_orientation_action_cov_gain_[cf] = Eigen::VectorXd::Zero(6);
+            contact_orientation_action_cov_gain_[cf] = 0.0;
         }
     }
 }
@@ -744,15 +728,15 @@ void ContactEKF::updateWithIMUOrientation(BaseState& state,
 }
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    if (action.size() == 6) {
-        contact_position_action_cov_gain_.at(cf) = action;
-    } else if (action.size() == 12) {
-        contact_position_action_cov_gain_.at(cf) = action.head(6);
+    if (action.size() == 1) {
+        contact_position_action_cov_gain_.at(cf) = action(0);
+    } else if (action.size() == 2) {
+        contact_position_action_cov_gain_.at(cf) = action(0);
         if (!point_feet_) {
-            contact_orientation_action_cov_gain_.at(cf) = action.tail(6);
+            contact_orientation_action_cov_gain_.at(cf) = action(1);
         }
     } else {
-        throw std::invalid_argument("Action vector must have 6 or 12 elements");
+        throw std::invalid_argument("Action vector must have 1 or 2 elements");
     }
 }
 

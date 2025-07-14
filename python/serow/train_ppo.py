@@ -32,7 +32,7 @@ class Actor(nn.Module):
         # Output layers
         self.mean_layer = nn.Linear(64, self.action_dim)
         # Initialize log_std to a small negative value for small initial std
-        self.log_std = nn.Parameter(torch.full((self.action_dim,), -2.0))
+        self.log_std = nn.Parameter(torch.full((self.action_dim,), 0.0))
         self._init_weights()
 
     def _init_weights(self):
@@ -56,11 +56,8 @@ class Actor(nn.Module):
         x = F.relu(self.layer2(x))
         x = F.relu(self.layer3(x))
         log_std = self.log_std.clamp(-20, 2)
-        x = self.mean_layer(x)
-        mean = torch.zeros_like(x, dtype=torch.float32)
-        mean[:, :3] = F.softplus(x[:, :3])
-        mean[:, 3:] = x[:, 3:]
-
+        mean = F.softplus(self.mean_layer(x))
+        mean = torch.clamp(mean, min=self.min_action, max=self.max_action)
         return mean, log_std
 
     def get_distribution(self, state):
@@ -83,11 +80,9 @@ class Actor(nn.Module):
         else:
             raw_actions = dist.sample()
 
-        # Store the unclipped actions and their log probs for training
-        log_probs = dist.log_prob(raw_actions).sum(dim=-1)
-
         # Only clip for environment interaction
         actions = torch.clamp(raw_actions, self.min_action, self.max_action)
+        log_probs = dist.log_prob(actions).sum(dim=-1)
 
         return (
             actions.squeeze(0).detach().cpu().numpy(),
@@ -138,7 +133,6 @@ class Critic(nn.Module):
             torch.nn.init.constant_(self.layer3.bias, 0.0)
 
         self.value_layer = nn.Linear(64, 1)
-        # Use smaller gain for value function to prevent initial large predictions
         nn.init.orthogonal_(self.value_layer.weight, gain=1)
         torch.nn.init.constant_(self.value_layer.bias, 0.0)
 
@@ -337,15 +331,15 @@ if __name__ == "__main__":
     history_buffer_size = 100
     print(f"History buffer size: {history_buffer_size * dt} seconds")
     state_history_dim = (
-        9 * history_buffer_size + 3 * history_buffer_size + 6 * history_buffer_size
+        9 * history_buffer_size + 3 * history_buffer_size + history_buffer_size
     )
 
     state_fb_dim = 3 * 3 + 3 + 2
     state_dim = state_fb_dim + state_history_dim
     print(f"State dimension: {state_dim}")
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8, 1e-8, 1e-8, -1e2, -1e2, -1e2])
-    max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    min_action = np.array([1e-8])
+    max_action = np.array([1e4])
 
     # Create the evaluation environment and get the contacts frames
     serow_env = SerowEnv(
@@ -382,7 +376,7 @@ if __name__ == "__main__":
         "clip_param": 0.2,
         "value_clip_param": 0.2,
         "value_loss_coef": 0.5,
-        "entropy_coef": 0.005,
+        "entropy_coef": -0.005,
         "gamma": 0.98,
         "gae_lambda": 0.95,
         "ppo_epochs": 5,
@@ -391,7 +385,7 @@ if __name__ == "__main__":
         "buffer_size": 10000,
         "max_episodes": max_episodes,
         "actor_lr": 3e-5,
-        "critic_lr": 3e-5,
+        "critic_lr": 1e-4,
         "target_kl": 0.05,
         "n_steps": n_steps,
         "convergence_threshold": 0.15,

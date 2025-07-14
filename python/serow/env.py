@@ -121,14 +121,13 @@ class SerowEnv:
             if success:
                 done = 0.0
                 nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-                nis_reward = -nis / 1e-3
+                nis_reward = -nis * 50
                 position_reward = -position_error / max_position_error
                 orientation_reward = -orientation_error / max_orientation_error
                 step_reward = 1.0 * (step + 1) / max_steps
                 reward = nis_reward + 2.0 * position_reward + 3.0 * orientation_reward
                 reward /= 3.0  # number of terms
                 reward += step_reward
-
         return reward, done
 
     def compute_state(self, cf, state, kin):

@@ -68,7 +68,7 @@ class Normalizer:
         # Running statistics for different components
         self.innovation_stats = RunningStats(dim=3)
         self.R_stats = RunningStats(dim=9)
-        self.action_stats = RunningStats(dim=6)
+        self.action_stats = RunningStats(dim=1)
 
     def normalize_innovation(self, innovation):
         """Normalize 3D innovation vector."""
@@ -121,7 +121,7 @@ class Normalizer:
         """Reset all running statistics (useful for retraining)."""
         self.innovation_stats = RunningStats(dim=3)
         self.R_stats = RunningStats(dim=9)
-        self.action_stats = RunningStats(dim=6)
+        self.action_stats = RunningStats(dim=1)
 
     def save_stats(self, path, name):
         self.innovation_stats.save_stats(path, name + "_innovation")
