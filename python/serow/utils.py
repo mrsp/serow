@@ -69,6 +69,19 @@ class Normalizer:
         self.innovation_stats = RunningStats(dim=3)
         self.R_stats = RunningStats(dim=9)
         self.action_stats = RunningStats(dim=1)
+        self.nis_stats = RunningStats(dim=3)
+
+    def normalize_nis(self, nis):
+        """Normalize 3D innovation vector."""
+        nis_mean, nis_std = self.nis_stats.get_stats()
+
+        # Then normalize using current stats
+        nis_normalized = (nis - nis_mean) / nis_std
+
+        # Update stats with the normalized innovation
+        self.nis_stats.update(nis_normalized)
+
+        return nis_normalized
 
     def normalize_innovation(self, innovation):
         """Normalize 3D innovation vector."""
@@ -115,6 +128,7 @@ class Normalizer:
         stats["R_mean"], stats["R_std"] = self.R_stats.get_stats()
         stats["action_mean"], stats["action_std"] = self.action_stats.get_stats()
         stats["n_samples"] = self.innovation_stats.n
+        stats["nis_mean"], stats["nis_std"] = self.nis_stats.get_stats()
         return stats
 
     def reset_stats(self):
@@ -122,16 +136,19 @@ class Normalizer:
         self.innovation_stats = RunningStats(dim=3)
         self.R_stats = RunningStats(dim=9)
         self.action_stats = RunningStats(dim=1)
+        self.nis_stats = RunningStats(dim=3)
 
     def save_stats(self, path, name):
         self.innovation_stats.save_stats(path, name + "_innovation")
         self.R_stats.save_stats(path, name + "_R")
         self.action_stats.save_stats(path, name + "_action")
+        self.nis_stats.save_stats(path, name + "_nis")
 
     def load_stats(self, path, name):
         self.innovation_stats.load_stats(path, name + "_innovation")
         self.R_stats.load_stats(path, name + "_R")
         self.action_stats.load_stats(path, name + "_action")
+        self.nis_stats.load_stats(path, name + "_nis")
 
 
 def rotation_matrix_to_quaternion(R):

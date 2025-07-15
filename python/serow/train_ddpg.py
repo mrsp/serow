@@ -58,10 +58,10 @@ class Actor(nn.Module):
 
     def _init_weights(self):
         for layer in [self.conv1, self.layer1, self.layer2, self.layer3]:
-            nn.init.orthogonal_(layer.weight, gain=np.sqrt(2))
+            nn.init.uniform_(layer.weight, -3e-3, 3e-3)
             nn.init.constant_(layer.bias, 0.0)
 
-        nn.init.orthogonal_(self.mean_layer.weight, gain=0.01)
+        nn.init.uniform_(self.mean_layer.weight, -3e-3, 3e-3)
         nn.init.constant_(self.mean_layer.bias, 0.0)
 
     def forward(self, state):
@@ -80,11 +80,11 @@ class Actor(nn.Module):
         x = F.relu(self.layer1(input1))
         x = F.relu(self.layer2(x))
         x = F.relu(self.layer3(x))
-        x = self.mean_layer(x)
-
-        mean = torch.zeros_like(x, dtype=torch.float32)
-        mean[:, :3] = F.softplus(x[:, :3])
-        mean[:, 3:] = x[:, 3:]
+        mean = torch.tanh(self.mean_layer(x))
+        # Scale tanh output to action range
+        mean = self.min_action + (mean + 1.0) * 0.5 * (
+            self.max_action - self.min_action
+        )
         return mean
 
     def get_action(self, state, deterministic=False):
@@ -117,12 +117,12 @@ class Critic(nn.Module):
         self.layer2 = nn.Linear(512, 256)
         self.layer3 = nn.Linear(256, 128)
         self.layer4 = nn.Linear(128, 1)
-        nn.init.orthogonal_(self.state_layer.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.conv1.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.action_layer.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer2.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer3.weight, gain=np.sqrt(2))
-        nn.init.orthogonal_(self.layer4.weight, gain=np.sqrt(2))
+        nn.init.uniform_(self.state_layer.weight, -3e-3, 3e-3)
+        nn.init.uniform_(self.conv1.weight, -3e-3, 3e-3)
+        nn.init.uniform_(self.action_layer.weight, -3e-3, 3e-3)
+        nn.init.uniform_(self.layer2.weight, -3e-3, 3e-3)
+        nn.init.uniform_(self.layer3.weight, -3e-3, 3e-3)
+        nn.init.uniform_(self.layer4.weight, -3e-3, 3e-3)
         torch.nn.init.constant_(self.state_layer.bias, 0.0)
         torch.nn.init.constant_(self.action_layer.bias, 0.0)
         torch.nn.init.constant_(self.layer2.bias, 0.0)
@@ -183,7 +183,7 @@ def train_ddpg(datasets, agent, params):
         max_steps = len(imu_measurements) - 1
 
         # Warm-up phase: collect initial experiences without training
-        warmup_episodes = 1
+        warmup_episodes = 0
         serow_env = SerowEnv(
             robot,
             joint_states[0],
@@ -334,16 +334,19 @@ if __name__ == "__main__":
     dataset_size = len(imu_measurements) - 1
 
     # Define the dimensions of your state and action spaces
-    normalizer = None
+    normalizer = Normalizer()
     history_buffer_size = 100
     print(f"History buffer size: {history_buffer_size * dt} seconds")
-    state_history_dim = 3 * 3 * history_buffer_size + 3 * history_buffer_size
+    state_history_dim = (
+        9 * history_buffer_size + 3 * history_buffer_size + history_buffer_size
+    )
+
     state_fb_dim = 3 * 3 + 3 + 2
     state_dim = state_fb_dim + state_history_dim
     print(f"State dimension: {state_dim}")
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8, 1e-8, 1e-8, -1e2, -1e2, -1e2])
-    max_action = np.array([1e2, 1e2, 1e2, 1e2, 1e2, 1e2])
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    min_action = np.array([1e-8])
+    max_action = np.array([1e4])
 
     # Create the evaluation environment and get the contacts frames
     serow_env = SerowEnv(
@@ -361,7 +364,7 @@ if __name__ == "__main__":
     train_datasets = [dataset]
     device = "cpu"
 
-    max_episodes = 120
+    max_episodes = 200
     n_steps = 1024
     total_steps = max_episodes * dataset_size * len(contact_frames)
     total_training_steps = total_steps // n_steps
@@ -386,7 +389,7 @@ if __name__ == "__main__":
         "actor_lr": 1e-4,
         "critic_lr": 1e-4,
         "noise_scale": 0.5,
-        "noise_decay": 0.9999,
+        "noise_decay": 0.99995,
         "n_steps": n_steps,
         "train_for_batches": 5,
         "convergence_threshold": 0.25,

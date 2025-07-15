@@ -91,7 +91,7 @@ class SerowEnv:
     def compute_reward(self, cf, state, gt, step, max_steps):
         reward = 0.0
         done = 0.0
-
+        innovation = None
         # Position error
         position_error = np.linalg.norm(state.get_base_position() - gt.position)
 
@@ -128,7 +128,7 @@ class SerowEnv:
                 reward = nis_reward + 2.0 * position_reward + 3.0 * orientation_reward
                 reward /= 3.0  # number of terms
                 reward += step_reward
-        return reward, done
+        return reward, done, innovation
 
     def compute_state(self, cf, state, kin):
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
@@ -148,16 +148,6 @@ class SerowEnv:
 
         P_pos_trace = np.trace(state.get_base_position_cov())
         P_ori_trace = np.trace(state.get_base_orientation_cov())
-
-        while (
-            len(self.innovation_history_buffer) >= self.innovation_history_buffer_size
-        ):
-            self.innovation_history_buffer.pop(0)
-            self.innovation_history_buffer.append(innovation)
-
-        while len(self.R_history_buffer) >= self.R_history_buffer_size:
-            self.R_history_buffer.pop(0)
-            self.R_history_buffer.append(R)
 
         return np.concatenate(
             [
@@ -228,10 +218,35 @@ class SerowEnv:
         post_state = self.serow_framework.get_state(allow_invalid=True)
 
         # Compute the reward
-        reward, done = self.compute_reward(cf, post_state, gt, step, max_steps)
+        reward, done, innovation = self.compute_reward(
+            cf, post_state, gt, step, max_steps
+        )
 
-        while len(self.action_history_buffer) >= self.action_history_buffer_size:
-            self.action_history_buffer.pop(0)
+        if innovation is not None and action > 0.0:
+            if self.state_normalizer is not None:
+                innovation = self.state_normalizer.normalize_innovation(innovation)
+
+            while (
+                len(self.innovation_history_buffer)
+                >= self.innovation_history_buffer_size
+            ):
+                self.innovation_history_buffer.pop(0)
+            self.innovation_history_buffer.append(innovation)
+
+            R = kin.contacts_position_noise[cf] + kin.position_cov
+            R = R.flatten()
+            if self.state_normalizer is not None:
+                R = self.state_normalizer.normalize_R(R)
+
+            while len(self.R_history_buffer) >= self.R_history_buffer_size:
+                self.R_history_buffer.pop(0)
+            self.R_history_buffer.append(R)
+
+            # if self.state_normalizer is not None:
+            #     action = self.state_normalizer.normalize_action(action)
+
+            while len(self.action_history_buffer) >= self.action_history_buffer_size:
+                self.action_history_buffer.pop(0)
             self.action_history_buffer.append(action)
 
         return post_state, reward, done

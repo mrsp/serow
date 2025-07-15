@@ -31,8 +31,7 @@ class Actor(nn.Module):
 
         # Output layers
         self.mean_layer = nn.Linear(64, self.action_dim)
-        # Initialize log_std to a small negative value for small initial std
-        self.log_std = nn.Parameter(torch.full((self.action_dim,), 0.0))
+        self.log_std = nn.Parameter(torch.full((self.action_dim,), -1.0))
         self._init_weights()
 
     def _init_weights(self):
@@ -278,7 +277,7 @@ def train_ppo(datasets, agent, params):
                 f"Episode {episode + 1}/{max_episodes}, Step {time_step + 1}/{max_steps}, "
                 f"Episode return: {episode_return}, Best: {best_return}, "
                 f"in episode {best_return_episode}"
-                # f"Normalization stats: {params['state_normalizer'].get_normalization_stats() if params['state_normalizer'] is not None else 'None'}"
+                f"Normalization stats: {params['state_normalizer'].get_normalization_stats() if params['state_normalizer'] is not None else 'None'}"
             )
 
             # End of episode processing
@@ -375,8 +374,8 @@ if __name__ == "__main__":
         "min_action": min_action,
         "clip_param": 0.2,
         "value_clip_param": 0.2,
-        "value_loss_coef": 0.5,
-        "entropy_coef": -0.005,
+        "value_loss_coef": 0.35,
+        "entropy_coef": -0.01,
         "gamma": 0.98,
         "gae_lambda": 0.95,
         "ppo_epochs": 5,
@@ -384,8 +383,8 @@ if __name__ == "__main__":
         "max_grad_norm": 0.5,
         "buffer_size": 10000,
         "max_episodes": max_episodes,
-        "actor_lr": 3e-5,
-        "critic_lr": 1e-4,
+        "actor_lr": 1e-4,
+        "critic_lr": 3e-4,
         "target_kl": 0.05,
         "n_steps": n_steps,
         "convergence_threshold": 0.15,
