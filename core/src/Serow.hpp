@@ -12,7 +12,6 @@
  **/
 #pragma once
 
-#include <filesystem>
 #include <map>
 #include <string>
 
@@ -64,7 +63,8 @@ public:
     /// @param contact_probabilities optional leg end-effector contact probabilities if not provided
     /// they will be estimated from the corresponding F/T measurement
     /// @param base_pose_ground_truth optional ground truth base pose measurement for logging
-    void filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+    /// @return true if the filter was successful
+    bool filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
                 std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::optional<std::map<std::string, ContactMeasurement>> contact_probabilities =
@@ -88,12 +88,6 @@ public:
     /// @return SEROW's base state if available
     std::optional<BaseState> getBaseState(bool allow_invalid = false);
 
-    /// @brief Sets the action for a given contact frame
-    /// @param cf the contact frame name
-    /// @param action the action to set
-    /// @return true if the action was set successfully
-    bool setAction(const std::string& cf, const Eigen::VectorXd& action);
-
     /// @brief Returns the terrain_estimator_ object
     const std::shared_ptr<TerrainElevation>& getTerrainEstimator() const;
 
@@ -110,6 +104,8 @@ public:
 
 private:
     struct Params {
+        /// @brief name of the robot
+        std::string robot_name{};
         /// @brief base frame name
         std::string base_frame{};
         /// @brief gravity constant (m/s^2)
@@ -337,8 +333,10 @@ private:
 
     /// @brief Computes the leg odometry and updates the kinematic measurements accordingly
     /// @param state the state of the robot
+    /// @param imu IMU measurement
     /// @param kin kinematic measurements
-    void computeLegOdometry(const State& state, KinematicMeasurement& kin);
+    void computeLegOdometry(const State& state, const ImuMeasurement& imu,
+                            KinematicMeasurement& kin);
 
     /// @brief Runs the angular momentum estimator
     /// @param state the state of the robot
