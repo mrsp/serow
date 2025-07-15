@@ -1,4 +1,5 @@
 {
+    "robot_name": "go2",
     "base_frame": "base",
     "point_feet": true,
     "foot_frames": {

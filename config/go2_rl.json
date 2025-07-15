@@ -1,4 +1,5 @@
 {
+    "robot_name": "go2",
     "base_frame": "base",
     "point_feet": true,
     "foot_frames": {
@@ -106,7 +107,7 @@
     "high_threshold": 4.0,
     "low_threshold": 2.0,
     "median_window": 13,
-    "outlier_detection": true,
+    "outlier_detection": false,
     "convergence_cycles": 100,
     "imu_angular_velocity_covariance": [
         5e-5,

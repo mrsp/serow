@@ -130,7 +130,6 @@ void saveElevationMap(std::array<ElevationCell, map_size> data, double timestamp
 
 int main(int argc, char** argv) {
     try {
-
         std::string config_path = "go2.json";  // Default path
 
         // If user provides a custom config path
@@ -192,7 +191,7 @@ int main(int argc, char** argv) {
         std::vector<Eigen::Vector3d> FR_contact_position, FL_contact_position, RL_contact_position,
             RR_contact_position;
         double log_timestamp = timestamps[0][0];
-
+        auto start = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < timestamps.size(); ++i) {
             double timestamp = timestamps[i][0];
 
@@ -267,13 +266,18 @@ int main(int argc, char** argv) {
                            serow::JointMeasurement{.timestamp = timestamp,
                                                    .position = joint_positions[i][11]}});
 
-            // If the ground truth for the base pose is available, pass it to the filter for 
+            // If the ground truth for the base pose is available, pass it to the filter for
             // synchronized logging
             if (base_gt_positions.size() > 0 && base_gt_orientations.size() > 0) {
                 estimator.filter(imu, joints, force_torque, std::nullopt, std::nullopt,
-                    BasePoseGroundTruth{.timestamp = timestamp, 
-                                        .position = Eigen::Vector3d(base_gt_positions[i][0], base_gt_positions[i][1], base_gt_positions[i][2]), 
-                                        .orientation = Eigen::Quaterniond(base_gt_orientations[i][0], base_gt_orientations[i][1], base_gt_orientations[i][2], base_gt_orientations[i][3])});
+                                 BasePoseGroundTruth{
+                                     .timestamp = timestamp,
+                                     .position = Eigen::Vector3d(base_gt_positions[i][0],
+                                                                 base_gt_positions[i][1],
+                                                                 base_gt_positions[i][2]),
+                                     .orientation = Eigen::Quaterniond(
+                                         base_gt_orientations[i][0], base_gt_orientations[i][1],
+                                         base_gt_orientations[i][2], base_gt_orientations[i][3])});
             } else {
                 estimator.filter(imu, joints, force_torque);
             }
@@ -345,6 +349,10 @@ int main(int argc, char** argv) {
             b_wy.push_back(angVelBias.y());
             b_wz.push_back(angVelBias.z());
         }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        std::cout << "Time taken by for loop: " << duration.count() << " microseconds" << std::endl;
+
         // Write structured data to HDF5
         H5::H5File outputFile(OUTPUT_FILE, H5F_ACC_TRUNC);  // Create the output file
 
