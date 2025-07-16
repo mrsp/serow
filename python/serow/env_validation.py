@@ -2,7 +2,6 @@ import numpy as np
 import serow
 import matplotlib.pyplot as plt
 import unittest
-import copy
 
 
 def run_serow(dataset, robot, start_idx=0):
@@ -38,17 +37,16 @@ def run_serow_playback(dataset, start_idx=0):
 class TestSerow(unittest.TestCase):
     def setUp(self):
         self.robot = "go2"
-        self.dataset0 = np.load(f"{self.robot}_log.npz", allow_pickle=True)
-        self.dataset1 = copy.copy(self.dataset0)
-        print(f"Length of dataset base states: {len(self.dataset0['base_states'])}")
-        print(f"Length of dataset joint states: {len(self.dataset0['joints'])}")
-        print(f"Length of dataset imu: {len(self.dataset0['imu'])}")
-        print(f"Length of dataset ft: {len(self.dataset0['ft'])}")
+        self.dataset = np.load(f"{self.robot}_log.npz", allow_pickle=True)
+        print(f"Length of dataset base states: {len(self.dataset['base_states'])}")
+        print(f"Length of dataset joint states: {len(self.dataset['joints'])}")
+        print(f"Length of dataset imu: {len(self.dataset['imu'])}")
+        print(f"Length of dataset ft: {len(self.dataset['ft'])}")
 
     def test_serow(self):
-        base_positions, base_orientations = run_serow(self.dataset0, self.robot)
+        base_positions, base_orientations = run_serow(self.dataset, self.robot)
         actual_base_positions, actual_base_orientations = run_serow_playback(
-            self.dataset0
+            self.dataset
         )
         print(f"Base positions: {len(base_positions)}")
         print(f"Actual base positions: {len(actual_base_positions)}")
