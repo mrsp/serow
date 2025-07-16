@@ -95,6 +95,13 @@ public:
         }
 
         computeTotalMass();
+
+        for (const auto& frame : pmodel_->frames) {
+            if (frame.type == pinocchio::FrameType::BODY) {
+                frame_names_.push_back(frame.name);
+            }
+        }
+
         if (verbose) {
             // Output model information
             std::cout << "Joint Names: " << std::endl;
@@ -102,11 +109,8 @@ public:
             std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
             std::cout << "Model loaded: " << model_name << std::endl;
             std::cout << "Frame Names: " << std::endl;
-            for (const auto& frame : pmodel_->frames) {
-                if (frame.type == pinocchio::FrameType::BODY) {
-                    std::cout << frame.name << std::endl;
-                    frame_names_.push_back(frame.name);
-                }
+            for (const auto& frame : frame_names_) {
+                std::cout << frame << std::endl;
             }
         }
     }
