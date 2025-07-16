@@ -1,4 +1,5 @@
 {
+    "robot_name": "h1",
     "base_frame": "torso_link",
     "point_feet": false,
     "foot_frames": {

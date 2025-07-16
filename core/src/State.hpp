@@ -66,17 +66,17 @@ struct BaseState {
     std::map<std::string, Eigen::Vector3d> feet_angular_velocity;
 
     /// Base position covariance in world frame coordinates (m^2)
-    Eigen::Matrix3d base_position_cov{Eigen::Matrix3d::Zero()};
+    Eigen::Matrix3d base_position_cov{Eigen::Matrix3d::Identity()};
     /// Base orientation covariance in world frame coordinates (rad^2)
-    Eigen::Matrix3d base_orientation_cov{Eigen::Matrix3d::Zero()};
+    Eigen::Matrix3d base_orientation_cov{Eigen::Matrix3d::Identity()};
     /// Base linear velocity covariance in world frame coordinates (m^2/s^2)
-    Eigen::Matrix3d base_linear_velocity_cov{Eigen::Matrix3d::Zero()};
+    Eigen::Matrix3d base_linear_velocity_cov{Eigen::Matrix3d::Identity()};
     /// Base angular velocity covariance in world frame coordinates (rad^2/s^2)
-    Eigen::Matrix3d base_angular_velocity_cov{Eigen::Matrix3d::Zero()};
+    Eigen::Matrix3d base_angular_velocity_cov{Eigen::Matrix3d::Identity()};
     /// Imu acceleration bias covariance in local imu frame coordinates (m^2/s^4)
-    Eigen::Matrix3d imu_linear_acceleration_bias_cov{Eigen::Matrix3d::Zero()};
+    Eigen::Matrix3d imu_linear_acceleration_bias_cov{Eigen::Matrix3d::Identity()};
     /// Imu gyro rate bias covariance in local imu frame coordinates (rad^2/s^2)
-    Eigen::Matrix3d imu_angular_velocity_bias_cov{Eigen::Matrix3d::Zero()};
+    Eigen::Matrix3d imu_angular_velocity_bias_cov{Eigen::Matrix3d::Identity()};
     /// Holds contact frame name to 3D contact position covariance in world frame coordinates (m^2)
     std::map<std::string, Eigen::Matrix3d> contacts_position_cov;
     /// Holds contact frame name to 3D contact orientation covariance in world frame coordinates,
@@ -260,10 +260,17 @@ public:
     State(std::set<std::string> contacts_frame, bool point_feet);
 
     void setBaseState(const BaseState& base_state);
+    BaseState getBaseState() const;
+
     void setContactState(const ContactState& contact_state);
+    ContactState getContactState() const;
+
     void setCentroidalState(const CentroidalState& centroidal_state);
+    CentroidalState getCentroidalState() const;
+
     void setJointState(const JointState& joint_state);
-    
+    JointState getJointState() const;
+
 private:
     /// Flag to indicate if the robot has point feet. False indicates flat feet contacts
     bool point_feet_{};

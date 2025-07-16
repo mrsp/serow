@@ -113,8 +113,7 @@ void BaseEKF::predict(BaseState& state, const ImuMeasurement& imu) {
     last_imu_timestamp_ = imu.timestamp;
 }
 
-void BaseEKF::computeDiscreteDynamics(BaseState& state, double dt,
-                                      Eigen::Vector3d angular_velocity,
+void BaseEKF::computeDiscreteDynamics(BaseState& state, double dt, Eigen::Vector3d angular_velocity,
                                       Eigen::Vector3d linear_acceleration) {
     angular_velocity -= state.imu_angular_velocity_bias;
     linear_acceleration -= state.imu_linear_acceleration_bias;
@@ -123,10 +122,11 @@ void BaseEKF::computeDiscreteDynamics(BaseState& state, double dt,
     const Eigen::Vector3d v = state.base_linear_velocity;
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
     const Eigen::Vector3d r = state.base_position;
-    
+
     // Linear velocity
-    state.base_linear_velocity.noalias() = (v.cross(angular_velocity) +  R.transpose() * g_ + linear_acceleration) * dt + v;
-    
+    state.base_linear_velocity.noalias() =
+        (v.cross(angular_velocity) + R.transpose() * g_ + linear_acceleration) * dt + v;
+
     // Position
     state.base_position.noalias() = (R * v) * dt + r;
 
@@ -167,8 +167,7 @@ void BaseEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& base_p
     updateState(state, dx, P_);
 }
 
-void BaseEKF::updateWithTwist(BaseState& state,
-                              const Eigen::Vector3d& base_linear_velocity,
+void BaseEKF::updateWithTwist(BaseState& state, const Eigen::Vector3d& base_linear_velocity,
                               const Eigen::Matrix3d& base_linear_velocity_cov,
                               const Eigen::Quaterniond& base_orientation,
                               const Eigen::Matrix3d& base_orientation_cov) {
@@ -177,7 +176,8 @@ void BaseEKF::updateWithTwist(BaseState& state,
     Eigen::MatrixXd H;
     H.setZero(6, num_states_);
     H.block(0, v_idx_[0], 3, 3) = R_world_to_base;
-    H.block(0, r_idx_[0], 3, 3).noalias() = -R_world_to_base * lie::so3::wedge(state.base_linear_velocity);
+    H.block(0, r_idx_[0], 3, 3).noalias() =
+        -R_world_to_base * lie::so3::wedge(state.base_linear_velocity);
     H.block(3, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
     // Construct the innovation vector z
@@ -198,7 +198,8 @@ void BaseEKF::updateWithTwist(BaseState& state,
     updateState(state, dx, P_);
 }
 
-BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const {
+BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
+                                   const Eigen::MatrixXd& P) const {
     BaseState updated_state = state;
     updated_state.base_position += dx(p_idx_);
     updated_state.base_position_cov = P(p_idx_, p_idx_);
@@ -215,7 +216,8 @@ BaseState BaseEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd
     return updated_state;
 }
 
-void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const {
+void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
+                          const Eigen::MatrixXd& P) const {
     state.base_position += dx(p_idx_);
     state.base_position_cov = P(p_idx_, p_idx_);
     state.base_linear_velocity += dx(v_idx_);
@@ -230,12 +232,13 @@ void BaseEKF::updateState(BaseState& state, const Eigen::VectorXd& dx, const Eig
     state.imu_linear_acceleration_bias_cov = P(ba_idx_, ba_idx_);
 }
 
-void BaseEKF::update(BaseState& state, const KinematicMeasurement& kin, std::optional<OdometryMeasurement> odom) {
-    updateWithTwist(state, kin.base_linear_velocity, kin.base_linear_velocity_cov, 
-                    kin.base_orientation, kin.base_orientation_cov);
+void BaseEKF::update(BaseState& state, const ImuMeasurement& imu, const KinematicMeasurement& kin,
+                     std::optional<OdometryMeasurement> odom) {
+    updateWithTwist(state, kin.base_linear_velocity, kin.base_linear_velocity_cov, imu.orientation,
+                    imu.orientation_cov);
 
     if (odom.has_value()) {
-        updateWithOdometry(state, odom->base_position, odom->base_orientation, 
+        updateWithOdometry(state, odom->base_position, odom->base_orientation,
                            odom->base_position_cov, odom->base_orientation_cov);
     }
 }

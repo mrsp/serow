@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <functional>
 #include <future>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -33,6 +34,12 @@ public:
             if (stop_) {
                 throw std::runtime_error("enqueue on stopped ThreadPool");
             }
+
+            if (tasks_.size() >= max_queue_size_) {
+                std::cout << "Removing oldest task from threadpool queue" << std::endl;
+                tasks_.pop();  // remove the oldest task
+            }
+
             tasks_.emplace([task, this]() {
                 try {
                     active_jobs_++;
@@ -40,7 +47,7 @@ public:
                 } catch (...) {
                     // Ensure we decrement even if task throws
                     active_jobs_--;
-                    throw; // Re-throw the exception
+                    throw;  // Re-throw the exception
                 }
                 active_jobs_--;
             });
@@ -67,6 +74,7 @@ private:
     std::condition_variable condition_;
     std::atomic<bool> stop_;
     std::atomic<size_t> active_jobs_;
+    size_t max_queue_size_{1000};
 };
 
 }  // namespace serow

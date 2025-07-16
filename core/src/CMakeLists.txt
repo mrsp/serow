@@ -103,6 +103,7 @@ set(serow_headers ${serow_headers}
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_include_directories(serow PRIVATE ${CMAKE_BINARY_DIR}/generated)
+
 target_link_libraries(serow PUBLIC mcap 
                             PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
 set_target_properties(serow PROPERTIES LINKER_LANGUAGE CXX)

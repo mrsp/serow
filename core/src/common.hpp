@@ -1,10 +1,56 @@
 #pragma once
 #include <array>
+#include <filesystem>
+#include <functional>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace serow {
+
+inline std::string findFilepath(const std::string& filename) {
+    const char* serow_path_env = std::getenv("SEROW_PATH");
+    if (serow_path_env == nullptr) {
+        throw std::runtime_error("Environmental variable SEROW_PATH is not set.");
+    }
+
+    std::function<std::string(const std::filesystem::path&)> searchRecursive =
+        [&](const std::filesystem::path& dir) -> std::string {
+        std::error_code ec;
+
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (ec) {
+                continue;
+            }
+
+            if (std::filesystem::is_regular_file(entry, ec) && !ec) {
+                if (entry.path().filename() == filename) {
+                    return entry.path().string();
+                }
+            } else if (std::filesystem::is_directory(entry, ec) && !ec) {
+                try {
+                    std::string result = searchRecursive(entry.path());
+                    if (!result.empty()) {
+                        return result;
+                    }
+                } catch (const std::exception& e) {
+                    std::cout << "Skipping subdirectory: " << entry.path()
+                              << " due to: " << e.what() << std::endl;
+                }
+            }
+        }
+
+        return "";
+    };
+
+    std::string result = searchRecursive(serow_path_env);
+    if (result.empty()) {
+        throw std::runtime_error("File '" + filename + "' not found.");
+    }
+
+    return result;
+}
 
 constexpr float resolution = 0.01;
 constexpr float resolution_inv = 1.0 / resolution;

@@ -66,10 +66,11 @@ public:
      * @brief Updates the robot's state based on kinematic measurements and optionally odometry
      *        measurements.
      * @param state Current state of the robot.
+     * @param imu IMU measurements.
      * @param kin Kinematic measurements.
      * @param odom Optional odometry measurements.
      */
-    void update(BaseState& state, const KinematicMeasurement& kin,
+    void update(BaseState& state, const ImuMeasurement& imu, const KinematicMeasurement& kin,
                 std::optional<OdometryMeasurement> odom = std::nullopt);
 
     /**
