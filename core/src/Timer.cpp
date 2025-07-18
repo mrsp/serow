@@ -6,6 +6,8 @@
 
 void Timer::updateStats(double duration) {
     count++;
+
+    // Update sum
     double current_sum = sum.load();
     while (!sum.compare_exchange_weak(current_sum, current_sum + duration))
         ;
@@ -32,7 +34,7 @@ void Timer::reset() {
 void Timer::start() {
     if (is_running.exchange(true)) {
         throw std::logic_error(
-            "FastTimer::start() called while timer is already running. Call stop() first.");
+            "Timer::start() called while timer is already running. Call stop() first.");
     }
     start_time = std::chrono::high_resolution_clock::now();
 }
@@ -40,10 +42,10 @@ void Timer::start() {
 void Timer::stop() {
     if (!is_running.exchange(false)) {
         throw std::logic_error(
-            "FastTimer::stop() called while timer is not running. Call start() first.");
+            "Timer::stop() called while timer is not running. Call start() first.");
     }
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration =
+    const auto end_time = std::chrono::high_resolution_clock::now();
+    const auto duration =
         std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count() / 1e6;
     updateStats(duration);
 }

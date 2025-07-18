@@ -310,7 +310,7 @@ private:
     /// @brief IMU outlier detection storage
     std::vector<MovingMedianFilter> imu_outlier_detector_;
 
-    /// @brief Timer for the filter function
+    /// @brief Timers for the filter functions
     std::unordered_map<std::string, Timer> timers_;
     /// @brief Last time the timings were logged
     std::optional<std::chrono::high_resolution_clock::time_point> last_log_time_;

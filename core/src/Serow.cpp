@@ -1300,6 +1300,10 @@ void Serow::stopLogging() {
     proprioception_logger_job_.reset();
     exteroception_logger_job_.reset();
     measurement_logger_job_.reset();
+    last_log_time_.reset();
+    for (auto& [name, timer] : timers_) {
+        timer.reset();
+    }
 }
 
 void Serow::reset() {
