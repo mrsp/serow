@@ -322,6 +322,10 @@
     // array: rigid body transformation from base frame to ground truth frame. Can be null if no 
     // ground truth is provided
     "T_base_to_ground_truth": null,
+    // boolean: whether or not to log the estimation data
+    "log_data": true,
+    // boolean: whether or not to log the measurement data
+    "log_measurements": true,
     // string: directory to save the log files
     "log_dir": "/tmp/"
 }

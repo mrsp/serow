@@ -31,6 +31,7 @@
 #include "RobotKinematics.hpp"
 #include "State.hpp"
 #include "ThreadPool.hpp"
+#include "Timer.hpp"
 #include "common.hpp"
 
 namespace serow {
@@ -243,7 +244,8 @@ private:
         Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
         std::string terrain_estimator_type{};
-        bool log_measurements{true};
+        bool log_data{true};
+        bool log_measurements{false};
         /// @brief directory where log files will be stored
         std::string log_dir{"/tmp"};
         /// @brief offset between the base frame and the ground truth base frame
@@ -301,11 +303,17 @@ private:
     std::unique_ptr<ThreadPool> exteroception_logger_job_;
     /// @brief Threadpool job for measurement logging
     std::unique_ptr<ThreadPool> measurement_logger_job_;
+    /// @brief Threadpool job for logging the filter timings
+    std::unique_ptr<ThreadPool> timings_logger_job_;
     /// @brief Frame transformations
     std::map<std::string, Eigen::Isometry3d> frame_tfs_;
     /// @brief IMU outlier detection storage
     std::vector<MovingMedianFilter> imu_outlier_detector_;
 
+    /// @brief Timer for the filter function
+    std::unordered_map<std::string, Timer> timers_;
+    /// @brief Last time the timings were logged
+    std::optional<std::chrono::high_resolution_clock::time_point> last_log_time_;
     /// @brief Logs the measurements
     /// @param imu IMU measurement
     /// @param joints joint measurements
@@ -389,6 +397,9 @@ private:
     /// @param imu IMU measurement to check
     /// @return true if the measurement is an outlier
     bool isImuMeasurementOutlier(const ImuMeasurement& imu);
+
+    /// @brief Logs the filter timings
+    void logTimings();
 };
 
 }  // namespace serow
