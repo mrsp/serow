@@ -245,5 +245,7 @@
         0.0,
         1.0
     ],
+    "log_data": true,
+    "log_measurements": true,
     "log_dir": "/tmp/"
 }

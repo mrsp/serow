@@ -124,6 +124,15 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
 
+    // Whether or not to log proprioception, exteroception, and measurement data
+    if (!checkConfigParam("log_data", params_.log_data)) {
+        return false;
+    }
+
+    if (!checkConfigParam("log_measurements", params_.log_measurements)) {
+        return false;
+    }
+
     // Initialize base frame
     if (!checkConfigParam("base_frame", params_.base_frame)) {
         return false;
@@ -226,6 +235,10 @@ bool Serow::initialize(const std::string& config_file) {
     try {
         if (!std::filesystem::exists(params_.log_dir)) {
             std::filesystem::create_directories(params_.log_dir);
+            // If serow-timings.txt exists, delete it
+            if (std::filesystem::exists(params_.log_dir + "/serow-timings.txt")) {
+                std::filesystem::remove(params_.log_dir + "/serow-timings.txt");
+            }
         }
     } catch (const std::exception& e) {
         std::cerr << RED_COLOR << "Failed to create log directory: " << e.what() << "\n"
@@ -433,6 +446,20 @@ bool Serow::initialize(const std::string& config_file) {
 
     reset();
 
+    // Create timers
+    timers_.clear();
+    timers_.try_emplace("imu-outlier-detection");
+    timers_.try_emplace("imu-estimation");
+    timers_.try_emplace("joint-estimation");
+    timers_.try_emplace("forward-kinematics");
+    timers_.try_emplace("leg-odometry");
+    timers_.try_emplace("base-estimator-predict");
+    timers_.try_emplace("base-estimator-update");
+    timers_.try_emplace("com-estimator-predict");
+    timers_.try_emplace("com-estimator-update");
+    timers_.try_emplace("contact-estimation");
+    timers_.try_emplace("frame-tree-update");
+    timers_.try_emplace("total-time");
     return true;
 }
 
@@ -458,40 +485,43 @@ void Serow::initializeLogging() {
         measurement_logger_ =
             std::make_unique<MeasurementLogger>(params_.log_dir + "/serow_measurements.mcap");
     }
+    if (!timings_logger_job_) {
+        timings_logger_job_ = std::make_unique<ThreadPool>();
+    }
 }
 
 void Serow::logMeasurements(ImuMeasurement imu,
                             const std::map<std::string, JointMeasurement>& joints,
                             std::map<std::string, ForceTorqueMeasurement> ft,
                             std::optional<BasePoseGroundTruth> base_pose_ground_truth) {
-    if (params_.log_measurements) {
-        measurement_logger_job_->addJob([this, imu = imu, joints = joints, ft = ft,
-                                         base_pose_ground_truth =
-                                             std::move(base_pose_ground_truth)]() {
-            try {
-                if (!measurement_logger_->isInitialized()) {
-                    measurement_logger_->setStartTime(imu.timestamp);
-                }
-                // Log all measurement data to MCAP file
-                measurement_logger_->log(imu);
-                measurement_logger_->log(joints);
-                if (!ft.empty()) {
-                    measurement_logger_->log(ft);
-                }
-                if (base_pose_ground_truth.has_value()) {
-                    // Make a copy of the ground truth value
-                    auto gt = base_pose_ground_truth.value();
-                    // Transform the base pose to the ground truth frame
-                    gt.position = params_.T_base_to_ground_truth * gt.position;
-                    gt.orientation = Eigen::Quaterniond(params_.T_base_to_ground_truth.linear() *
-                                                        gt.orientation.toRotationMatrix());
-                    measurement_logger_->log(gt);
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Error in measurement logging thread: " << e.what() << std::endl;
-            }
-        });
+    if (!params_.log_measurements) {
+        return;
     }
+    measurement_logger_job_->addJob([this, imu = imu, joints = joints, ft = ft,
+                                     base_pose_ground_truth = std::move(base_pose_ground_truth)]() {
+        try {
+            if (!measurement_logger_->isInitialized()) {
+                measurement_logger_->setStartTime(imu.timestamp);
+            }
+            // Log all measurement data to MCAP file
+            measurement_logger_->log(imu);
+            measurement_logger_->log(joints);
+            if (!ft.empty()) {
+                measurement_logger_->log(ft);
+            }
+            if (base_pose_ground_truth.has_value()) {
+                // Make a copy of the ground truth value
+                auto gt = base_pose_ground_truth.value();
+                // Transform the base pose to the ground truth frame
+                gt.position = params_.T_base_to_ground_truth * gt.position;
+                gt.orientation = Eigen::Quaterniond(params_.T_base_to_ground_truth.linear() *
+                                                    gt.orientation.toRotationMatrix());
+                measurement_logger_->log(gt);
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error in measurement logging thread: " << e.what() << std::endl;
+        }
+    });
 }
 
 void Serow::runJointsEstimator(State& state,
@@ -815,6 +845,7 @@ void Serow::runContactEstimator(
 void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
                              const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom) {
+    timers_["base-estimator-predict"].start();
     // Initialize terrain estimator if needed
     if (params_.enable_terrain_estimation && !terrain_estimator_ && params_.is_contact_ekf) {
         float terrain_height = 0.0;
@@ -853,8 +884,10 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
     } else {
         base_estimator_.predict(state.base_state_, imu);
     }
+    timers_["base-estimator-predict"].stop();
 
     // Transform odometry measurements if available
+    timers_["base-estimator-update"].start();
     if (odom.has_value()) {
         odom->base_position = params_.T_base_to_odom * odom->base_position;
 
@@ -939,6 +972,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
             state.base_state_.base_angular_velocity +
             base_pose.linear() * kin.base_to_foot_angular_velocities.at(frame);
     }
+    timers_["base-estimator-update"].stop();
 }
 
 void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
@@ -991,19 +1025,28 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
         state.centroidal_state_.timestamp = grf.timestamp;
         // Update CoM state if in contact
         if (den > 0.0) {
+            timers_["com-estimator-predict"].start();
             com_estimator_.predict(state.centroidal_state_, kin, grf);
+            timers_["com-estimator-predict"].stop();
         }
 
         // Update CoM state with IMU measurements
+        timers_["com-estimator-update"].start();
         com_estimator_.updateWithImu(state.centroidal_state_, kin, grf);
+    } else {
+        timers_["com-estimator-update"].start();
     }
 
     // Update CoM state with kinematic measurements
     state.centroidal_state_.timestamp = kin.timestamp;
     com_estimator_.updateWithKinematics(state.centroidal_state_, kin);
+    timers_["com-estimator-update"].stop();
 }
 
 void Serow::logProprioception(const State& state, const ImuMeasurement& imu) {
+    if (!params_.log_data) {
+        return;
+    }
     proprioception_logger_job_->addJob([this, joints_state = state.joint_state_,
                                         base_state = state.base_state_,
                                         centroidal_state = state.centroidal_state_,
@@ -1027,6 +1070,9 @@ void Serow::logProprioception(const State& state, const ImuMeasurement& imu) {
 }
 
 void Serow::logExteroception(const State& state) {
+    if (!params_.log_data) {
+        return;
+    }
     if (terrain_estimator_ && !exteroception_logger_job_->isRunning() && exteroception_logger_ &&
         ((state.base_state_.timestamp - exteroception_logger_->getLastTimestamp()) > 0.5)) {
         exteroception_logger_job_->addJob([this, ts = state.base_state_.timestamp]() {
@@ -1062,10 +1108,14 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                    std::optional<OdometryMeasurement> odom,
                    std::optional<std::map<std::string, ContactMeasurement>> contacts_probability,
                    std::optional<BasePoseGroundTruth> base_pose_ground_truth) {
+    timers_["total-time"].start();
+
     // Early return if not initialized and no FT measurement
     if (!is_initialized_) {
-        if (!force_torque.has_value())
+        if (!force_torque.has_value()) {
+            timers_["total-time"].stop();
             return false;
+        }
         is_initialized_ = true;
         initializeLogging();
     }
@@ -1087,29 +1137,44 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     logMeasurements(imu, joints, ft, base_pose_ground_truth);
 
     // Update the joint state estimate
+    timers_["joint-estimation"].start();
     runJointsEstimator(state_, joints);
+    timers_["joint-estimation"].stop();
 
     // Check if the IMU measurements are valid with the Median Absolute Deviation (MAD)
-    if (isImuMeasurementOutlier(imu)) {
+    timers_["imu-outlier-detection"].start();
+    bool is_imu_outlier = isImuMeasurementOutlier(imu);
+    timers_["imu-outlier-detection"].stop();
+    if (is_imu_outlier) {
+        timers_["total-time"].stop();
         return false;
     }
 
     // Estimate the base frame attitude and initial IMU biases
+    timers_["imu-estimation"].start();
     bool calibrated = runImuEstimator(state_, imu);
+    timers_["imu-estimation"].stop();
     if (!calibrated) {
+        timers_["total-time"].stop();
         return false;
     }
 
     // Update the kinematic structure
+    timers_["forward-kinematics"].start();
     KinematicMeasurement kin = runForwardKinematics(state_);
+    timers_["forward-kinematics"].stop();
 
     // Estimate the contact state
     if (!ft.empty()) {
+        timers_["contact-estimation"].start();
         runContactEstimator(state_, ft, kin, contacts_probability);
+        timers_["contact-estimation"].stop();
     }
 
     // Compute the leg odometry and update the kinematic measurement accordingly
+    timers_["leg-odometry"].start();
     computeLegOdometry(state_, imu, kin);
+    timers_["leg-odometry"].stop();
 
     // Run the base estimator
     runBaseEstimator(state_, imu, kin, odom);
@@ -1118,7 +1183,9 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     runCoMEstimator(state_, kin, ft);
 
     // Update all frame transformations
+    timers_["frame-tree-update"].start();
     updateFrameTree(state_);
+    timers_["frame-tree-update"].stop();
 
     // Check if state has converged
     if (!state_.is_valid_ && cycle_++ > params_.convergence_cycles) {
@@ -1128,6 +1195,8 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Log the estimated state
     logProprioception(state_, imu);
     logExteroception(state_);
+    timers_["total-time"].stop();
+    logTimings();
     return true;
 }
 
@@ -1218,12 +1287,23 @@ void Serow::stopLogging() {
         }
     }
 
+    if (timings_logger_job_) {
+        // Wait for all jobs to finish
+        while (timings_logger_job_->isRunning()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+
     proprioception_logger_.reset();
     exteroception_logger_.reset();
     measurement_logger_.reset();
     proprioception_logger_job_.reset();
     exteroception_logger_job_.reset();
     measurement_logger_job_.reset();
+    last_log_time_.reset();
+    for (auto& [name, timer] : timers_) {
+        timer.reset();
+    }
 }
 
 void Serow::reset() {
@@ -1369,6 +1449,33 @@ bool Serow::isImuMeasurementOutlier(const ImuMeasurement& imu) {
         (la_z_scores.array().abs() > MAD_THRESHOLD_MULTIPLIER).any();
 
     return angular_velocity_outlier || linear_acceleration_outlier;
+}
+
+void Serow::logTimings() {
+    // Log to txt file on a seperate thread pool job every 0.5s
+    if (!last_log_time_.has_value()) {
+        last_log_time_ = std::chrono::high_resolution_clock::now();
+    }
+    if (std::chrono::high_resolution_clock::now() - last_log_time_.value() <
+        std::chrono::milliseconds(500)) {
+        return;
+    }
+
+    last_log_time_ = std::chrono::high_resolution_clock::now();
+    timings_logger_job_->addJob([this]() {
+        try {
+            std::ofstream file(params_.log_dir + "/serow-timings.txt");
+            for (const auto& [name, timer] : timers_) {
+                file << "[" << std::chrono::high_resolution_clock::now().time_since_epoch().count()
+                     << "] " << name << ": mean=" << timer.getMean() << "ms, min=" << timer.getMin()
+                     << "ms, max=" << timer.getMax() << "ms"
+                     << " count=" << timer.getCount() << std::endl;
+            }
+            file.close();
+        } catch (const std::exception& e) {
+            std::cerr << "Error logging timings: " << e.what() << std::endl;
+        }
+    });
 }
 
 }  // namespace serow

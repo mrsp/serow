@@ -73,7 +73,8 @@ set(serow_src ${serow_src}
     ProprioceptionLogger.cpp
     ExteroceptionLogger.cpp
     ThreadPool.cpp
-    MeasurementLogger.cpp)
+    MeasurementLogger.cpp
+    Timer.cpp)
 
 set(serow_headers ${serow_headers} 
     common.hpp
@@ -99,7 +100,8 @@ set(serow_headers ${serow_headers}
     ExteroceptionLogger.hpp
     ThreadPool.hpp
     Schemas.hpp
-    MeasurementLogger.hpp)
+    MeasurementLogger.hpp
+    Timer.hpp)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_include_directories(serow PRIVATE ${CMAKE_BINARY_DIR}/generated)

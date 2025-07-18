@@ -159,8 +159,10 @@ void BaseEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& base_p
     R.topLeftCorner<3, 3>() = base_position_cov;
     R.bottomRightCorner<3, 3>() = base_orientation_cov;
 
-    const Eigen::Matrix<double, 6, 6> s = R + H * P_ * H.transpose();
-    const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
+    Eigen::MatrixXd PH_transpose(num_states_, 6);
+    PH_transpose.noalias() = P_ * H.transpose();
+    const Eigen::Matrix<double, 6, 6> s = R + H * PH_transpose;
+    const Eigen::MatrixXd K = PH_transpose * s.inverse();
     const Eigen::VectorXd dx = K * z;
 
     P_ = (I_ - K * H) * P_;
@@ -190,8 +192,10 @@ void BaseEKF::updateWithTwist(BaseState& state, const Eigen::Vector3d& base_line
     R.topLeftCorner<3, 3>() = base_linear_velocity_cov;
     R.bottomRightCorner<3, 3>() = base_orientation_cov;
 
-    const Eigen::Matrix<double, 6, 6> s = R + H * P_ * H.transpose();
-    const Eigen::MatrixXd K = P_ * H.transpose() * s.inverse();
+    Eigen::MatrixXd PH_transpose(num_states_, 6);
+    PH_transpose.noalias() = P_ * H.transpose();
+    const Eigen::Matrix<double, 6, 6> s = R + H * PH_transpose;
+    const Eigen::MatrixXd K = PH_transpose * s.inverse();
     const Eigen::VectorXd dx = K * z;
 
     P_ = (I_ - K * H) * P_;
