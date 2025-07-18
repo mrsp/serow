@@ -1,26 +1,27 @@
 #include <BayesOptimizer.hpp>
 
-BayesOptimizer::BayesOptimizer(DataManager& data_manager, 
-  size_t dim, 
-  const bayesopt::Parameters& params,
-  const double ate_position_weight,
-  const double ate_orientation_weight,
-  const std::vector<std::string>& params_to_optimize)
-: data_(data_manager), foot_frames_(data_.getFootFrames()), joint_names_(data_.getJointNames()), 
-  serow_path_(data_.getSerowPath()), ContinuousModel(dim,params), params_to_optimize_(params_to_optimize),
-  ate_position_weight_(ate_position_weight),
-  ate_orientation_weight_(ate_orientation_weight)
-{   
+BayesOptimizer::BayesOptimizer(DataManager& data_manager, size_t dim,
+                               const bayesopt::Parameters& params, const double ate_position_weight,
+                               const double ate_orientation_weight,
+                               const std::vector<std::string>& params_to_optimize)
+    : data_(data_manager),
+      foot_frames_(data_.getFootFrames()),
+      joint_names_(data_.getJointNames()),
+      serow_path_(data_.getSerowPath()),
+      ContinuousModel(dim, params),
+      params_to_optimize_(params_to_optimize),
+      ate_position_weight_(ate_position_weight),
+      ate_orientation_weight_(ate_orientation_weight) {
     std::cout << serow_path_ << std::endl;
     original_config_ = serow_path_ + "config/" + data_.getRobotName() + ".json";
-    temp_config_ = serow_path_ + "config/" + data_.getRobotName() +"_temp.json";
-    
+    temp_config_ = serow_path_ + "config/" + data_.getRobotName() + "_temp.json";
+
     printRobotInfo();
 
     // Load the ground truth data
     gt_position_ = data_.getBasePositionData();
     gt_orientation_ = data_.getBaseOrientationData();
-    
+
     timestamps_ = data_.getTimestamps();
     ft_measurements_ = data_.getForceTorqueData();
     joint_positions_ = data_.getJointStatesData();
@@ -39,8 +40,7 @@ BayesOptimizer::BayesOptimizer(DataManager& data_manager,
     std::cout << "Loaded " << foot_frames_.size() << " foot frames." << std::endl;
 }
 
-void BayesOptimizer::writeJSONConfig(const json& j, const std::string& path)
-{
+void BayesOptimizer::writeJSONConfig(const json& j, const std::string& path) {
     std::ofstream out(path);
     if (!out) {
         throw std::runtime_error("Failed to write temporary config file.");
@@ -48,8 +48,7 @@ void BayesOptimizer::writeJSONConfig(const json& j, const std::string& path)
     out << std::setw(2) << j << std::endl;
 }
 
-json BayesOptimizer::loadDefaultJson(const std::string& path)
-{
+json BayesOptimizer::loadDefaultJson(const std::string& path) {
     std::ifstream in(path);
     if (!in) {
         throw std::runtime_error("Failed to open default config file.");
@@ -59,8 +58,9 @@ json BayesOptimizer::loadDefaultJson(const std::string& path)
     return j;
 }
 
-void BayesOptimizer::saveBestConfig(const vectord& result){
-    std::string best_config_file = serow_path_ + "config/" + data_.getRobotName() + "_best_config.json";
+void BayesOptimizer::saveBestConfig(const vectord& result) {
+    std::string best_config_file =
+        serow_path_ + "config/" + data_.getRobotName() + "_best_config.json";
     std::cout << "Saving best config to: " << best_config_file << std::endl;
 
     json best_config = loadDefaultJson(original_config_);
@@ -68,16 +68,18 @@ void BayesOptimizer::saveBestConfig(const vectord& result){
     // Save best config using params_to_optimize_
     for (size_t i = 0; i < params_to_optimize_.size(); ++i) {
         const std::string& param = params_to_optimize_[i];
-        
+
         size_t open_bracket = param.find('[');
         size_t close_bracket = param.find(']');
 
-        if (open_bracket != std::string::npos && close_bracket != std::string::npos && close_bracket > open_bracket) {
+        if (open_bracket != std::string::npos && close_bracket != std::string::npos &&
+            close_bracket > open_bracket) {
             // It's an array element like "imu_covariance[2]"
             std::string base_name = param.substr(0, open_bracket);
             int index = std::stoi(param.substr(open_bracket + 1, close_bracket - open_bracket - 1));
 
-            if (best_config.contains(base_name) && best_config[base_name].is_array() && index < best_config[base_name].size()) {
+            if (best_config.contains(base_name) && best_config[base_name].is_array() &&
+                index < best_config[base_name].size()) {
                 best_config[base_name][index] = result(i);
             } else {
                 std::cerr << "Warning: Invalid array parameter '" << param << "' in config.\n";
@@ -91,7 +93,7 @@ void BayesOptimizer::saveBestConfig(const vectord& result){
             }
         }
     }
-        
+
     // Save best config to file (optional: different path like "best_config.json")
     writeJSONConfig(best_config, best_config_file);
 
@@ -105,47 +107,48 @@ void BayesOptimizer::printRobotInfo() {
     std::cout << "Robot Name: " << data_.getRobotName() << std::endl;
     std::cout << "Joint names: \n";
     for (const auto& joint_name : joint_names_) {
-       std::cout << joint_name << std::endl;
+        std::cout << joint_name << std::endl;
     }
     std::cout << "Foot frames: \n";
     for (const auto& foot_frame : foot_frames_) {
-       std::cout << foot_frame << std::endl;
+        std::cout << foot_frame << std::endl;
     }
 }
 
 double BayesOptimizer::computeATE() {
     // Ensure we have data to compare
-    if (gt_position_.empty() || est_positions_.empty() || gt_orientation_.empty() || est_orientations_.empty()) {
+    if (gt_position_.empty() || est_positions_.empty() || gt_orientation_.empty() ||
+        est_orientations_.empty()) {
         std::cerr << "Error: Empty position data" << std::endl;
         return std::numeric_limits<double>::max();
     }
-    
+
     // Use the minimum size in case they differ
     size_t count = std::min(gt_position_.size(), est_positions_.size());
     // Sum of squared position errors and orientation errors
     double position_error_sum = 0.0;
     double orientation_error_sum = 0.0;
-    
+
     for (size_t i = 0; i < count; ++i) {
         // Calculate squared Euclidean distance for position
         double squared_position_distance = 0.0;
         size_t dims = std::min(gt_position_[i].size(), est_positions_[i].size());
-        
+
         for (size_t j = 0; j < dims; ++j) {
             double diff = gt_position_[i][j] - est_positions_[i][j];
             squared_position_distance += diff * diff;
         }
-        position_error_sum += std::sqrt(squared_position_distance); // L2 norm of position error
-        
+        position_error_sum += std::sqrt(squared_position_distance);  // L2 norm of position error
+
         // Calculate orientation error using the logMap function
-        const Eigen::Quaterniond gt_quat(gt_orientation_[i][3], gt_orientation_[i][0], 
-                                gt_orientation_[i][1], gt_orientation_[i][2]);
-        const Eigen::Quaterniond est_quat(est_orientations_[i][3], est_orientations_[i][0], 
-                                    est_orientations_[i][1], est_orientations_[i][2]);
-        
+        const Eigen::Quaterniond gt_quat(gt_orientation_[i][3], gt_orientation_[i][0],
+                                         gt_orientation_[i][1], gt_orientation_[i][2]);
+        const Eigen::Quaterniond est_quat(est_orientations_[i][3], est_orientations_[i][0],
+                                          est_orientations_[i][1], est_orientations_[i][2]);
+
         const Eigen::Matrix3d gt_R = gt_quat.toRotationMatrix();
         const Eigen::Matrix3d est_R = est_quat.toRotationMatrix();
-        
+
         // Apply logMap to calculate orientation error (similar to the reward function)
         const Eigen::Matrix3d rel_R = est_R.transpose() * gt_R;
         const Eigen::Vector3d omega = lie::so3::logMap(rel_R);
@@ -154,9 +157,9 @@ double BayesOptimizer::computeATE() {
 
     const double avg_position_error = position_error_sum / count;
     const double avg_orientation_error = orientation_error_sum / count;
-    const double combined_ate = ate_position_weight_ * avg_position_error + 
-                                ate_orientation_weight_ * avg_orientation_error;
-    
+    const double combined_ate =
+        ate_position_weight_ * avg_position_error + ate_orientation_weight_ * avg_orientation_error;
+
     std::cout << "Position ATE: " << avg_position_error << std::endl;
     std::cout << "Orientation ATE: " << avg_orientation_error << std::endl;
     std::cout << "Combined ATE: " << combined_ate << std::endl;
@@ -164,11 +167,10 @@ double BayesOptimizer::computeATE() {
     return combined_ate;
 }
 
-
 double BayesOptimizer::evaluateSample(const vectord& x) {
-    n_iterations_ ++;
-    std::cout << "\033[32m \nOptimization iteration:\033[0m" << n_iterations_  << std::endl;
-    
+    n_iterations_++;
+    std::cout << "\033[32m \nOptimization iteration:\033[0m" << n_iterations_ << std::endl;
+
     // Reinitialize estimations in each iteration
     est_positions_.clear();
     est_orientations_.clear();
@@ -201,9 +203,9 @@ double BayesOptimizer::evaluateSample(const vectord& x) {
     }
 
     writeJSONConfig(temp_json_, temp_config_);
-    
+
     // Initialize Serow with the modified config
-    if (!estimator_.initialize(data_.getRobotName()+"_temp.json")) {
+    if (!estimator_.initialize(data_.getRobotName() + "_temp.json")) {
         throw std::runtime_error("Failed to initialize Serow with config: " + temp_config_);
     }
 
@@ -212,17 +214,25 @@ double BayesOptimizer::evaluateSample(const vectord& x) {
         std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
 
         for (const auto& foot_frame : foot_frames_) {
-            force_torque.insert({foot_frame, serow::ForceTorqueMeasurement{.timestamp = timestamp, .force = ft_measurements_.force.data[foot_frame][i]}});
+            force_torque.insert(
+                {foot_frame,
+                 serow::ForceTorqueMeasurement{
+                     .timestamp = timestamp, .force = ft_measurements_.force.data[foot_frame][i]}});
         }
-       
+
         serow::ImuMeasurement imu;
         imu.timestamp = timestamp;
-        imu.linear_acceleration = Eigen::Vector3d(linear_acceleration_[i].x(), linear_acceleration_[i].y(), linear_acceleration_[i].z());
-        imu.angular_velocity = Eigen::Vector3d(angular_velocity_[i].x(), angular_velocity_[i].y(), angular_velocity_[i].z());
+        imu.linear_acceleration = Eigen::Vector3d(
+            linear_acceleration_[i].x(), linear_acceleration_[i].y(), linear_acceleration_[i].z());
+        imu.angular_velocity = Eigen::Vector3d(angular_velocity_[i].x(), angular_velocity_[i].y(),
+                                               angular_velocity_[i].z());
 
         std::map<std::string, serow::JointMeasurement> joints;
         for (int j = 0; j < joint_names_.size(); ++j) {
-            joints.insert({joint_names_[j], serow::JointMeasurement{.timestamp = timestamp, .position = joint_positions_[i][j], .velocity = joint_velocities_[i][j]}});
+            joints.insert({joint_names_[j],
+                           serow::JointMeasurement{.timestamp = timestamp,
+                                                   .position = joint_positions_[i][j],
+                                                   .velocity = joint_velocities_[i][j]}});
         }
 
         estimator_.filter(imu, joints, force_torque);
@@ -232,9 +242,10 @@ double BayesOptimizer::evaluateSample(const vectord& x) {
             continue;
         }
         const Eigen::Vector3d base_position = state->getBasePosition();
-        const Eigen::Quaterniond  base_quaternion = state->getBaseOrientation();
+        const Eigen::Quaterniond base_quaternion = state->getBaseOrientation();
         est_positions_.push_back({base_position.x(), base_position.y(), base_position.z()});
-        est_orientations_.push_back({base_quaternion.x(), base_quaternion.y(), base_quaternion.z(), base_quaternion.w()});
+        est_orientations_.push_back(
+            {base_quaternion.x(), base_quaternion.y(), base_quaternion.z(), base_quaternion.w()});
     }
     std::cout << "Estimation size: " << est_positions_.size() << std::endl;
     std::cout << "Ground truth size: " << gt_position_.size() << std::endl;

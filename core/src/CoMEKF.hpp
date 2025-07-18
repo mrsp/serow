@@ -84,11 +84,12 @@ private:
      * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world
      * coordinates.
      */
-    void updateWithCoMAcceleration(
-        CentroidalState& state, const Eigen::Vector3d& com_linear_acceleration,
-        const Eigen::Vector3d& cop_position, const Eigen::Vector3d& ground_reaction_force,
-        const Eigen::Matrix3d& com_linear_acceleration_cov,
-        const Eigen::Vector3d& com_angular_momentum_derivative);
+    void updateWithCoMAcceleration(CentroidalState& state,
+                                   const Eigen::Vector3d& com_linear_acceleration,
+                                   const Eigen::Vector3d& cop_position,
+                                   const Eigen::Vector3d& ground_reaction_force,
+                                   const Eigen::Matrix3d& com_linear_acceleration_cov,
+                                   const Eigen::Vector3d& com_angular_momentum_derivative);
 
     /**
      * @brief Performs the EKF update step with a CoM position measurement.
@@ -96,8 +97,7 @@ private:
      * @param com_position The CoM position in world coordinates.
      * @param com_position_cov The CoM position covariance in world coordinates.
      */
-    void updateWithCoMPosition(CentroidalState& state,
-                               const Eigen::Vector3d& com_position,
+    void updateWithCoMPosition(CentroidalState& state, const Eigen::Vector3d& com_position,
                                const Eigen::Matrix3d& com_position_cov);
 
     /**
@@ -128,7 +128,8 @@ public:
      * @param kin The KinematicMeasurement used in the computation.
      * @param grf The GroundReactionForceMeasurement used in the computation.
      */
-    void predict(CentroidalState& state, const KinematicMeasurement& kin, const GroundReactionForceMeasurement& grf);
+    void predict(CentroidalState& state, const KinematicMeasurement& kin,
+                 const GroundReactionForceMeasurement& grf);
 
     /**
      * @brief Realizes the EKF update step with a CoM position measurement.
@@ -143,7 +144,7 @@ public:
      * @param kin The KinematicMeasurement used in the computation.
      * @param grf The GroundReactionForceMeasurement used in the computation.
      */
-    void updateWithImu(CentroidalState& state, const KinematicMeasurement& kin, 
+    void updateWithImu(CentroidalState& state, const KinematicMeasurement& kin,
                        const GroundReactionForceMeasurement& grf);
 
     /**

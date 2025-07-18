@@ -110,7 +110,7 @@ private:
             for (unsigned int i = 0; i < joint_state_data.name.size(); i++) {
                 serow::JointMeasurement joint{};
                 joint.timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
-                                  static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
+                    static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
                 joint.position = joint_state_data.position[i];
                 if (!joint_state_data.velocity.empty()) {
                     joint.velocity = joint_state_data.velocity[i];
@@ -122,7 +122,7 @@ private:
             const auto& imu_data = base_imu_data_.value();
             serow::ImuMeasurement imu_measurement{};
             imu_measurement.timestamp = static_cast<double>(imu_data.header.stamp.sec) +
-                                        static_cast<double>(imu_data.header.stamp.nanosec) * 1e-9;
+                static_cast<double>(imu_data.header.stamp.nanosec) * 1e-9;
             imu_measurement.linear_acceleration =
                 Eigen::Vector3d(imu_data.linear_acceleration.x, imu_data.linear_acceleration.y,
                                 imu_data.linear_acceleration.z);
@@ -137,7 +137,7 @@ private:
                     serow::ForceTorqueMeasurement ft{};
                     const auto& ft_data = value;
                     ft.timestamp = static_cast<double>(ft_data.header.stamp.sec) +
-                                   static_cast<double>(ft_data.header.stamp.nanosec) * 1e-9;
+                        static_cast<double>(ft_data.header.stamp.nanosec) * 1e-9;
                     ft.force = Eigen::Vector3d(ft_data.wrench.force.x, ft_data.wrench.force.y,
                                                ft_data.wrench.force.z);
                     ft.torque.emplace(Eigen::Vector3d(
@@ -167,7 +167,9 @@ private:
         this->joint_state_data_ = msg;
     }
 
-    void baseImuCallback(const sensor_msgs::msg::Imu& msg) { this->base_imu_data_ = msg; }
+    void baseImuCallback(const sensor_msgs::msg::Imu& msg) {
+        this->base_imu_data_ = msg;
+    }
 
     serow::Serow serow_;
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscription_;

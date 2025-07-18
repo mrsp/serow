@@ -237,14 +237,14 @@ std::optional<ElevationCell> LocalTerrainMapper::getElevation(const std::array<f
     if (!inside(loc)) {
         return std::nullopt;
     }
-    
+
     const int hash_id = locationToHashId(loc);
-    
+
     // Add bounds check!
     if (hash_id < 0 || hash_id >= static_cast<int>(elevation_.size())) {
         return std::nullopt;
     }
-    
+
     return elevation_[hash_id];
 }
 
@@ -280,18 +280,17 @@ bool LocalTerrainMapper::isHashIdValid(const int id) const {
 
 bool LocalTerrainMapper::setElevation(const std::array<float, 2>& loc,
                                       const ElevationCell& elevation) {
-
     std::lock_guard<std::mutex> lock(mutex_);
     if (!inside(loc)) {
         return false;
     }
     const int idx = locationToHashId(loc);
-        
+
     // Add bounds check!
     if (idx < 0 || idx >= static_cast<int>(elevation_.size())) {
         return false;
     }
-    
+
     elevation_[idx] = elevation;
     return true;
 }

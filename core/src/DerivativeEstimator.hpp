@@ -37,13 +37,13 @@ namespace serow {
  * order Low Pass Butterworth Filter.
  */
 class DerivativeEstimator {
-   private:
+private:
     /// 2nd order butterworth filter to smooth the signal
     std::vector<ButterworthLPF> bw_;
     /// linear differentiator filter to compute the derivative
     std::vector<Differentiator> df_;
 
-   public:
+public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /// name of the estimator e.g. "com-angular-momentum"

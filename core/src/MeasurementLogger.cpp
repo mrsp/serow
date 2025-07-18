@@ -17,10 +17,10 @@
 #include <iostream>
 #include <mutex>
 
-#include "ImuMeasurement_generated.h"
-#include "JointMeasurements_generated.h"
 #include "ForceTorqueMeasurements_generated.h"
 #include "FrameTransform_generated.h"
+#include "ImuMeasurement_generated.h"
+#include "JointMeasurements_generated.h"
 
 namespace serow {
 
@@ -196,8 +196,8 @@ public:
             }
 
             // Write the message
-            writeMessage(1, imu_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(1, imu_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
+                         size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
         }
@@ -246,7 +246,8 @@ public:
     //             kinematic_measurement.com_position.y(), kinematic_measurement.com_position.z());
 
     //         auto com_linear_acceleration =
-    //             foxglove::CreateVector3(builder, kinematic_measurement.com_linear_acceleration.x(),
+    //             foxglove::CreateVector3(builder,
+    //             kinematic_measurement.com_linear_acceleration.x(),
     //                                     kinematic_measurement.com_linear_acceleration.y(),
     //                                     kinematic_measurement.com_linear_acceleration.z());
 
@@ -263,7 +264,8 @@ public:
     //             kinematic_measurement.base_linear_velocity_cov(2, 2));
 
     //         auto base_orientation_cov =
-    //             foxglove::CreateMatrix3(builder, kinematic_measurement.base_orientation_cov(0, 0),
+    //             foxglove::CreateMatrix3(builder, kinematic_measurement.base_orientation_cov(0,
+    //             0),
     //                                     kinematic_measurement.base_orientation_cov(0, 1),
     //                                     kinematic_measurement.base_orientation_cov(0, 2),
     //                                     kinematic_measurement.base_orientation_cov(1, 0),
@@ -285,7 +287,8 @@ public:
     //                                     kinematic_measurement.position_slip_cov(2, 2));
 
     //         auto orientation_slip_cov =
-    //             foxglove::CreateMatrix3(builder, kinematic_measurement.orientation_slip_cov(0, 0),
+    //             foxglove::CreateMatrix3(builder, kinematic_measurement.orientation_slip_cov(0,
+    //             0),
     //                                     kinematic_measurement.orientation_slip_cov(0, 1),
     //                                     kinematic_measurement.orientation_slip_cov(0, 2),
     //                                     kinematic_measurement.orientation_slip_cov(1, 0),
@@ -297,10 +300,12 @@ public:
 
     //         auto position_cov = foxglove::CreateMatrix3(
     //             builder, kinematic_measurement.position_cov(0, 0),
-    //             kinematic_measurement.position_cov(0, 1), kinematic_measurement.position_cov(0, 2),
-    //             kinematic_measurement.position_cov(1, 0), kinematic_measurement.position_cov(1, 1),
-    //             kinematic_measurement.position_cov(1, 2), kinematic_measurement.position_cov(2, 0),
-    //             kinematic_measurement.position_cov(2, 1), kinematic_measurement.position_cov(2, 2));
+    //             kinematic_measurement.position_cov(0, 1), kinematic_measurement.position_cov(0,
+    //             2), kinematic_measurement.position_cov(1, 0),
+    //             kinematic_measurement.position_cov(1, 1), kinematic_measurement.position_cov(1,
+    //             2), kinematic_measurement.position_cov(2, 0),
+    //             kinematic_measurement.position_cov(2, 1), kinematic_measurement.position_cov(2,
+    //             2));
 
     //         auto orientation_cov =
     //             foxglove::CreateMatrix3(builder, kinematic_measurement.orientation_cov(0, 0),
@@ -419,7 +424,8 @@ public:
     //             contacts_orientation;
     //         if (kinematic_measurement.contacts_orientation) {
     //             std::vector<flatbuffers::Offset<foxglove::Quaternion>> contacts_orientation_vec;
-    //             for (const auto& [_, orientation] : *kinematic_measurement.contacts_orientation) {
+    //             for (const auto& [_, orientation] : *kinematic_measurement.contacts_orientation)
+    //             {
     //                 contacts_orientation_vec.push_back(
     //                     foxglove::CreateQuaternion(builder, orientation.w(), orientation.x(),
     //                                                orientation.y(), orientation.z()));
@@ -431,13 +437,15 @@ public:
     //         flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<foxglove::Matrix3>>>
     //             contacts_orientation_noise;
     //         if (kinematic_measurement.contacts_orientation_noise) {
-    //             std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_orientation_noise_vec;
-    //             for (const auto& [_, noise] : *kinematic_measurement.contacts_orientation_noise) {
+    //             std::vector<flatbuffers::Offset<foxglove::Matrix3>>
+    //             contacts_orientation_noise_vec; for (const auto& [_, noise] :
+    //             *kinematic_measurement.contacts_orientation_noise) {
     //                 contacts_orientation_noise_vec.push_back(foxglove::CreateMatrix3(
     //                     builder, noise(0, 0), noise(0, 1), noise(0, 2), noise(1, 0), noise(1, 1),
     //                     noise(1, 2), noise(2, 0), noise(2, 1), noise(2, 2)));
     //             }
-    //             contacts_orientation_noise = builder.CreateVector(contacts_orientation_noise_vec);
+    //             contacts_orientation_noise =
+    //             builder.CreateVector(contacts_orientation_noise_vec);
     //         }
 
     //         // Create the KinematicMeasurement message
@@ -493,9 +501,9 @@ public:
             auto child_frame = builder.CreateString("base");
 
             // Create translation
-            auto translation = foxglove::CreateVector3(
-                builder, base_pose_ground_truth.position.x(), base_pose_ground_truth.position.y(),
-                base_pose_ground_truth.position.z());
+            auto translation = foxglove::CreateVector3(builder, base_pose_ground_truth.position.x(),
+                                                       base_pose_ground_truth.position.y(),
+                                                       base_pose_ground_truth.position.z());
 
             // Create rotation
             const auto& quaternion = base_pose_ground_truth.orientation;
@@ -503,8 +511,8 @@ public:
                                                        quaternion.z(), quaternion.w());
 
             // Create transform
-            auto transform = foxglove::CreateFrameTransform(
-                builder, &time, parent_frame, child_frame, translation, rotation);
+            auto transform = foxglove::CreateFrameTransform(builder, &time, parent_frame,
+                                                            child_frame, translation, rotation);
 
             // Finish the buffer
             builder.Finish(transform);
@@ -569,8 +577,8 @@ public:
             auto joint_velocities = builder.CreateVector(joint_velocities_vec);
 
             // Create the joint measurement message
-            auto measurement = foxglove::CreateJointMeasurements(
-                builder, &time, joint_names, joint_positions, joint_velocities);
+            auto measurement = foxglove::CreateJointMeasurements(builder, &time, joint_names,
+                                                                 joint_positions, joint_velocities);
 
             builder.Finish(measurement);
 
@@ -637,8 +645,8 @@ public:
             auto torques = builder.CreateVector(torques_vec);
 
             // Create the force torque measurement message
-            auto measurement = foxglove::CreateForceTorqueMeasurements(
-                builder, &time, frame_names, forces, torques);
+            auto measurement = foxglove::CreateForceTorqueMeasurements(builder, &time, frame_names,
+                                                                       forces, torques);
 
             builder.Finish(measurement);
 
@@ -647,8 +655,8 @@ public:
             size_t size = builder.GetSize();
 
             // Get the serialized data
-            writeMessage(3, ft_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(3, ft_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
+                         size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging force torque measurement: " << e.what() << std::endl;
         }
@@ -704,7 +712,7 @@ private:
         schemas.push_back(createSchema("JointMeasurements"));
         schemas.push_back(createSchema("ForceTorqueMeasurements"));
         schemas.push_back(createSchema("FrameTransform"));
-        
+
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
         }

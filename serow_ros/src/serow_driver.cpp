@@ -12,7 +12,7 @@
 #include "pinocchio/fwd.hpp"  // Always first include to avoid boost related compilation errors
 
 class SerowDriver {
-   public:
+public:
     SerowDriver(const ros::NodeHandle& nh) : nh_(nh) {
         std::string joint_state_topic, base_imu_topic, config_file_path;
         std::vector<std::string> force_torque_state_topics;
@@ -102,13 +102,15 @@ class SerowDriver {
         joint_state_data_ = *msg;
     }
 
-    void base_imu_topic_callback(const sensor_msgs::Imu::ConstPtr& msg) { base_imu_data_ = *msg; }
+    void base_imu_topic_callback(const sensor_msgs::Imu::ConstPtr& msg) {
+        base_imu_data_ = *msg;
+    }
 
     void force_torque_state_topic_callback(const geometry_msgs::WrenchStamped::ConstPtr& msg) {
         ft_data_[msg->header.frame_id] = *msg;
     }
 
-   private:
+private:
     void run() {
         ros::Rate loop_rate(loop_rate_);
         while (ros::ok()) {
@@ -122,8 +124,7 @@ class SerowDriver {
                 std::map<std::string, serow::JointMeasurement> joint_measurements;
                 for (size_t i = 0; i < joint_state_data.name.size(); i++) {
                     serow::JointMeasurement joint{};
-                    joint.timestamp =
-                        static_cast<double>(joint_state_data.header.stamp.sec) +
+                    joint.timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
                         static_cast<double>(joint_state_data.header.stamp.nsec) * 1e-9;
                     joint.position = joint_state_data.position[i];
                     if (joint_state_data.position.size() == joint_state_data.velocity.size()) {
@@ -149,7 +150,7 @@ class SerowDriver {
                     for (auto& [key, value] : ft_data_) {
                         serow::ForceTorqueMeasurement ft{};
                         ft.timestamp = static_cast<double>(value.header.stamp.sec) +
-                                       static_cast<double>(value.header.stamp.nsec) * 1e-9;
+                            static_cast<double>(value.header.stamp.nsec) * 1e-9;
                         ft.force = Eigen::Vector3d(value.wrench.force.x, value.wrench.force.y,
                                                    value.wrench.force.z);
                         ft.torque = Eigen::Vector3d(value.wrench.torque.x, value.wrench.torque.y,

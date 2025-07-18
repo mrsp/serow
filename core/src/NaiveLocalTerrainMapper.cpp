@@ -25,12 +25,14 @@ std::array<float, 2> NaiveLocalTerrainMapper::globalIndexToLocation(
 
 std::array<int, 2> NaiveLocalTerrainMapper::globalIndexToLocalIndex(
     const std::array<int, 2>& id_g) const {
-    return {id_g[0] + half_map_dim - local_map_origin_i_[0], id_g[1] + half_map_dim - local_map_origin_i_[1]};
+    return {id_g[0] + half_map_dim - local_map_origin_i_[0],
+            id_g[1] + half_map_dim - local_map_origin_i_[1]};
 }
 
 std::array<int, 2> NaiveLocalTerrainMapper::localIndexToGlobalIndex(
     const std::array<int, 2>& id_l) const {
-    return {id_l[0] + local_map_origin_i_[0] - half_map_dim, id_l[1] + local_map_origin_i_[1] - half_map_dim};
+    return {id_l[0] + local_map_origin_i_[0] - half_map_dim,
+            id_l[1] + local_map_origin_i_[1] - half_map_dim};
 }
 
 std::array<int, 2> NaiveLocalTerrainMapper::locationToLocalIndex(

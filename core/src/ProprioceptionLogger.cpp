@@ -143,8 +143,8 @@ public:
             }
 
             // Write the message
-            writeMessage(1, imu_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(1, imu_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
+                         size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
         }
@@ -283,9 +283,8 @@ public:
                                         centroidal_state.angular_momentum_derivative.z());
 
             auto centroidal_state_fb = foxglove::CreateCentroidalState(
-                builder, &time, com_position, com_linear_velocity, external_forces,
-                cop_position, com_linear_acceleration, angular_momentum,
-                angular_momentum_derivative);
+                builder, &time, com_position, com_linear_velocity, external_forces, cop_position,
+                com_linear_acceleration, angular_momentum, angular_momentum_derivative);
 
             builder.Finish(centroidal_state_fb);
 
@@ -471,9 +470,8 @@ public:
             // Create feet orientation vectors
             std::vector<flatbuffers::Offset<foxglove::Quaternion>> feet_orientation_vec;
             for (const auto& [_, orientation] : base_state.feet_orientation) {
-                feet_orientation_vec.push_back(
-                    foxglove::CreateQuaternion(builder, orientation.x(), orientation.y(),
-                                               orientation.z(), orientation.w()));
+                feet_orientation_vec.push_back(foxglove::CreateQuaternion(
+                    builder, orientation.x(), orientation.y(), orientation.z(), orientation.w()));
             }
             auto feet_orientation = builder.CreateVector(feet_orientation_vec);
 
@@ -528,8 +526,8 @@ public:
             const uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
 
-            writeMessage(4, base_sequence_++, timestamp,
-                         reinterpret_cast<const std::byte*>(buffer), size);
+            writeMessage(4, base_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
+                         size);
         } catch (const std::exception& e) {
             std::cerr << "Error logging Base State: " << e.what() << std::endl;
         }
@@ -578,8 +576,8 @@ public:
                                                            quaternion.z(), quaternion.w());
 
                 // Create transform
-                auto transform = foxglove::CreateFrameTransform(
-                    builder, &time, parent_frame, child_frame, translation, rotation);
+                auto transform = foxglove::CreateFrameTransform(builder, &time, parent_frame,
+                                                                child_frame, translation, rotation);
 
                 transforms_vector.push_back(transform);
             }
@@ -624,7 +622,7 @@ public:
             // Convert timestamp to sec and nsec
             int64_t sec;
             int32_t nsec;
-            splitTimestamp(timestamp, sec, nsec);   
+            splitTimestamp(timestamp, sec, nsec);
 
             auto time = foxglove::Time(sec, nsec);
 
@@ -644,7 +642,7 @@ public:
                 joint_positions_vec.push_back(position);
                 joint_velocities_vec.push_back(joint_state.joints_velocity.at(name));
             }
-          
+
             // Create the vectors in the builder
             auto names_offset = builder.CreateVector(joint_names_vec);
             auto positions_offset = builder.CreateVector(joint_positions_vec);
@@ -672,7 +670,7 @@ public:
             std::cerr << "Error logging joint state: " << e.what() << std::endl;
         }
     }
-            
+
     bool isInitialized() const {
         return start_time_.has_value();
     }

@@ -8,14 +8,16 @@ import json
 
 # === Configuration ===
 
-with open('test_config.json', 'r') as f:
+with open("test_config.json", "r") as f:
     config = json.load(f)
-    
-serow_path = os.getenv('SEROW_PATH')
-experiment_type =  config["Experiment"]["type"]
+
+serow_path = os.getenv("SEROW_PATH")
+experiment_type = config["Experiment"]["type"]
 base_path = config["Paths"]["base_path"]
 
-elevation_map_file = serow_path +  config["Paths"]["elevation_map_file"].replace("{base_path}", base_path).replace("{type}", experiment_type)
+elevation_map_file = serow_path + config["Paths"]["elevation_map_file"].replace(
+    "{base_path}", base_path
+).replace("{type}", experiment_type)
 
 
 MAP_SIZE = 1024  # 128 x 128
@@ -25,36 +27,42 @@ TIMESTAMP_DTYPE = np.float64
 
 contact_timestamps = None
 contact_positions = {}
+
+
 def read_next_measurement(file):
     """Reads one measurement (timestamp + height map) from file."""
     timestamp_data = file.read(8)
     if not timestamp_data:
         return None, None  # End of file
 
-    timestamp = struct.unpack('d', timestamp_data)[0]
+    timestamp = struct.unpack("d", timestamp_data)[0]
     height_data = file.read(CELL_COUNT * 4)
 
     if len(height_data) != CELL_COUNT * 4:
         print("Incomplete record or end of file.")
         return None, None
 
-    heights = np.frombuffer(height_data, dtype=HEIGHT_DTYPE).reshape((MAP_SIZE, MAP_SIZE))
+    heights = np.frombuffer(height_data, dtype=HEIGHT_DTYPE).reshape(
+        (MAP_SIZE, MAP_SIZE)
+    )
     return timestamp, heights
+
 
 def load_contact_positions(h5_file):
     global contact_timestamps, contact_positions
 
-    with h5py.File(h5_file, 'r') as f:
+    with h5py.File(h5_file, "r") as f:
         print("Available keys in HDF5 file:", list(f.keys()))  # Debugging step
-        contact_timestamps = np.array(f[f'/timestamp/t'])
-        if 'contact_positions' not in f:
+        contact_timestamps = np.array(f[f"/timestamp/t"])
+        if "contact_positions" not in f:
             raise KeyError("Missing '/contact_positions' group in HDF5 file.")
 
-        for foot in ['FL_foot', 'FR_foot', 'RL_foot', 'RR_foot']:
-            x = np.array(f[f'/contact_positions/{foot}/x'])
-            y = np.array(f[f'/contact_positions/{foot}/y'])
-            z = np.array(f[f'/contact_positions/{foot}/z'])
+        for foot in ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]:
+            x = np.array(f[f"/contact_positions/{foot}/x"])
+            y = np.array(f[f"/contact_positions/{foot}/y"])
+            z = np.array(f[f"/contact_positions/{foot}/z"])
             contact_positions[foot] = np.stack((x, y, z), axis=1)  # shape: (N, 3)
+
 
 def visualize_elevation_map_live(file):
     """Continuously updates the 3D elevation map in real-time along with contact positions."""
@@ -65,11 +73,11 @@ def visualize_elevation_map_live(file):
     X, Y = np.meshgrid(x, y)
 
     fig = plt.figure(figsize=(10, 7))
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
 
     # Initialize an empty surface
     heights = np.zeros((MAP_SIZE, MAP_SIZE))
-    surf = ax.plot_surface(X, Y, heights, cmap='terrain', edgecolor='none')
+    surf = ax.plot_surface(X, Y, heights, cmap="terrain", edgecolor="none")
 
     # Placeholder scatter plots for contacts
     # scatter_plots = {}
@@ -99,7 +107,7 @@ def visualize_elevation_map_live(file):
 
         # Update surface
         surf.remove()
-        surf = ax.plot_surface(X, Y, heights, cmap='terrain', edgecolor='none')
+        surf = ax.plot_surface(X, Y, heights, cmap="terrain", edgecolor="none")
 
         # Match contact timestamp
         # if measurement_idx < contact_timestamps.shape[0]:
@@ -120,12 +128,13 @@ def visualize_elevation_map_live(file):
     plt.ioff()
     plt.show()
 
+
 def visualize_contact_positions_live():
     """Continuously updates the 3D contact positions in real-time."""
     global contact_timestamps, contact_positions  # Assuming these are global variables
 
     fig = plt.figure(figsize=(10, 7))
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
 
     # Placeholder scatter plots for contacts (initialize with empty data)
     scatter_plots = {}
@@ -158,7 +167,7 @@ def visualize_contact_positions_live():
                 scatter_plots[foot]._offsets3d = ([pos[0]], [pos[1]], [pos[2]])
 
         ax.set_title(f"Contact Positions at timestamp {timestamp:.3f}")
-        
+
         # Reduce the pause time to speed up the visualization
         plt.pause(0.01)  # Reduced pause time for faster updates
         measurement_idx += 1
@@ -167,10 +176,10 @@ def visualize_contact_positions_live():
     plt.show()
 
 
-    
 def main():
-    with open(elevation_map_file, 'rb') as file:
+    with open(elevation_map_file, "rb") as file:
         visualize_elevation_map_live(file)
+
 
 if __name__ == "__main__":
     main()

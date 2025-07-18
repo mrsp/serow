@@ -118,10 +118,14 @@ public:
 private:
     std::unique_ptr<MovingMedianFilter> mdf_; /**< Rolling median filter. */
     int contact_status_{};                    /**< Estimated contact status (0 or 1). */
-    double contact_force_{}; /**< Filtered vertical ground reaction force in world coordinates (N). */
-    std::string contact_frame_; /**< Contact frame name where detection is done e.g., "l_foot_frame". */
-    double high_threshold_{}; /**< Vertical ground reaction high force threshold of the ST detector in Newtons (N). */
-    double low_threshold_{}; /**< Vertical ground reaction low force threshold of the ST detector in Newtons (N). */
+    double
+        contact_force_{}; /**< Filtered vertical ground reaction force in world coordinates (N). */
+    std::string
+        contact_frame_; /**< Contact frame name where detection is done e.g., "l_foot_frame". */
+    double high_threshold_{}; /**< Vertical ground reaction high force threshold of the ST detector
+                                 in Newtons (N). */
+    double low_threshold_{}; /**< Vertical ground reaction low force threshold of the ST detector in
+                                Newtons (N). */
     double mass_{};          /**< Mass of the robot in kilograms (kg). */
     double g_{};             /**< Gravity constant in meters per second squared (m/s^2). */
 };

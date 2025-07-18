@@ -109,8 +109,7 @@ public:
      * @param force_torque_offset Force/Torque sensor offsets from the contact frames (optional)
      */
     LegOdometry(
-        const Eigen::Vector3d& base_position,
-        std::map<std::string, Eigen::Vector3d> feet_position,
+        const Eigen::Vector3d& base_position, std::map<std::string, Eigen::Vector3d> feet_position,
         std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass, double alpha1,
         double alpha3, double freq, double g, double eps,
         std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset = std::nullopt);
