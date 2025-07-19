@@ -1091,7 +1091,10 @@ void Serow::logExteroception(const State& state) {
                 exteroception_logger_->setGridParameters(res, width, height, origin[0], origin[1]);
 
                 // Pre-allocate grid with exact size
-                std::vector<float> grid(width * height, std::numeric_limits<float>::quiet_NaN());
+                std::vector<float> elevation(width * height,
+                                             std::numeric_limits<float>::quiet_NaN());
+                std::vector<float> variance(width * height,
+                                            std::numeric_limits<float>::quiet_NaN());
 
                 // Use integer-based iteration for consistency
                 for (uint32_t row = 0; row < height; ++row) {
@@ -1101,19 +1104,20 @@ void Serow::logExteroception(const State& state) {
                         float y = bound_min[1] + row * res;
                         const auto& cell = terrain_estimator_->getElevation({x, y});
                         if (cell.has_value()) {
-                            grid[row * width + col] = cell.value().height;
+                            elevation[row * width + col] = cell.value().height;
+                            variance[row * width + col] = cell.value().variance;
                         }
                     }
                 }
 
                 // Verify size
-                if (grid.size() != width * height) {
+                if (elevation.size() != width * height) {
                     std::cerr << "Grid size mismatch: expected " << (width * height) << ", got "
-                              << grid.size() << std::endl;
+                              << elevation.size() << std::endl;
                     return;  // Don't log invalid data
                 }
 
-                exteroception_logger_->log(grid, ts);
+                exteroception_logger_->log(elevation, variance, ts);
             } catch (const std::exception& e) {
                 std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
             }

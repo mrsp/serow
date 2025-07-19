@@ -47,7 +47,8 @@ public:
     ExteroceptionLogger(ExteroceptionLogger&&) noexcept = default;
     ExteroceptionLogger& operator=(ExteroceptionLogger&&) noexcept = default;
 
-    void log(const std::vector<float>& grid, double timestamp);
+    void log(const std::vector<float>& elevation, const std::vector<float>& variance,
+             double timestamp);
     double getLastTimestamp() const;
     bool isInitialized() const;
     void setStartTime(double timestamp);

@@ -81,7 +81,8 @@ public:
         start_time_ = timestamp;
     }
 
-    void log(const std::vector<float>& grid_data, double timestamp) {
+    void log(const std::vector<float>& elevation, const std::vector<float>& variance,
+             double timestamp) {
         try {
             if (!start_time_.has_value()) {
                 start_time_ = timestamp;
@@ -94,6 +95,12 @@ public:
             }
 
             if (timestamp <= last_timestamp_) {
+                return;
+            }
+
+            // Ensure both vectors have the same size
+            if (elevation.size() != variance.size()) {
+                std::cerr << "Elevation and variance data size mismatch" << std::endl;
                 return;
             }
 
@@ -116,23 +123,42 @@ public:
             // Create the frame_id string
             auto frame_id = builder.CreateString("world");
 
-            // Create fields for the data
+            // Create fields for the data (elevation and variance)
             std::vector<flatbuffers::Offset<foxglove::PackedElementField>> field_offsets;
-            auto field_name = builder.CreateString("elevation");
-            auto elevation_field =
-                foxglove::CreatePackedElementField(builder, field_name,
-                                                   0,  // offset
-                                                   foxglove::NumericType_FLOAT32);
+            // Elevation field at offset 0
+            auto elevation_field_name = builder.CreateString("elevation");
+            auto elevation_field = foxglove::CreatePackedElementField(
+                builder, elevation_field_name, 0, foxglove::NumericType_FLOAT32);
             field_offsets.push_back(elevation_field);
+
+            // Variance field at offset 4 (after the 4-byte elevation float)
+            auto variance_field_name = builder.CreateString("variance");
+            auto variance_field = foxglove::CreatePackedElementField(
+                builder, variance_field_name, 4, foxglove::NumericType_FLOAT32);
+            field_offsets.push_back(variance_field);
+
             auto fields = builder.CreateVector(field_offsets);
 
-            // More efficient byte conversion
-            const uint8_t* float_bytes = reinterpret_cast<const uint8_t*>(grid_data.data());
-            size_t byte_size = grid_data.size() * sizeof(float);
-            auto data_vec = builder.CreateVector(float_bytes, byte_size);
+            // Interleave elevation and variance data
+            std::vector<uint8_t> interleaved_data;
+            interleaved_data.reserve(elevation.size() * 2 * sizeof(float));
 
-            // Calculate strides
-            uint32_t cell_stride = 4;  // 4 bytes per cell (float32)
+            for (size_t i = 0; i < elevation.size(); ++i) {
+                // Add elevation bytes
+                const uint8_t* elev_bytes = reinterpret_cast<const uint8_t*>(&elevation[i]);
+                interleaved_data.insert(interleaved_data.end(), elev_bytes,
+                                        elev_bytes + sizeof(float));
+
+                // Add variance bytes
+                const uint8_t* var_bytes = reinterpret_cast<const uint8_t*>(&variance[i]);
+                interleaved_data.insert(interleaved_data.end(), var_bytes,
+                                        var_bytes + sizeof(float));
+            }
+
+            auto data_vec = builder.CreateVector(interleaved_data);
+
+            // Calculate strides - now each cell has 8 bytes (elevation + variance)
+            uint32_t cell_stride = 8;  // 8 bytes per cell (2 float32s)
             uint32_t column_count = grid_width_;
             uint32_t row_stride = column_count * cell_stride;
 
@@ -249,8 +275,9 @@ ExteroceptionLogger::ExteroceptionLogger(const std::string& filename)
 
 ExteroceptionLogger::~ExteroceptionLogger() = default;
 
-void ExteroceptionLogger::log(const std::vector<float>& grid_data, double timestamp) {
-    pimpl_->log(grid_data, timestamp);
+void ExteroceptionLogger::log(const std::vector<float>& elevation,
+                              const std::vector<float>& variance, double timestamp) {
+    pimpl_->log(elevation, variance, timestamp);
 }
 
 double ExteroceptionLogger::getLastTimestamp() const {
