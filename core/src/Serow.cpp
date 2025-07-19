@@ -1074,28 +1074,46 @@ void Serow::logExteroception(const State& state) {
         return;
     }
     if (terrain_estimator_ && !exteroception_logger_job_->isRunning() && exteroception_logger_ &&
-        ((state.base_state_.timestamp - exteroception_logger_->getLastTimestamp()) > 0.5)) {
+        ((state.base_state_.timestamp - exteroception_logger_->getLastTimestamp()) > 0.1)) {
         exteroception_logger_job_->addJob([this, ts = state.base_state_.timestamp]() {
             try {
                 if (!exteroception_logger_->isInitialized()) {
                     exteroception_logger_->setStartTime(ts);
                 }
-                LocalMapState local_map;
-                local_map.timestamp = ts;
-                const size_t downsample_factor = 2;
-                const size_t sample_size_per_dim = map_dim / downsample_factor;
-                local_map.data.reserve(sample_size_per_dim * sample_size_per_dim);
-                const auto terrain_map = terrain_estimator_->getElevationMap();
+                const size_t downsample_factor = 4;
+                const auto [origin, bound_max, bound_min] = terrain_estimator_->getLocalMapInfo();
+                const double res = resolution * downsample_factor;
 
-                for (int i = 0; i < map_dim; i += downsample_factor) {
-                    for (int j = 0; j < map_dim; j += downsample_factor) {
-                        const int id = i * map_dim + j;
-                        const auto& cell = terrain_map[id];
-                        const std::array<float, 2> loc = terrain_estimator_->hashIdToLocation(id);
-                        local_map.data.push_back({loc[0], loc[1], cell.height});
+                // Calculate actual downsampled dimensions
+                const uint32_t width = std::ceil((bound_max[0] - bound_min[0]) / res);
+                const uint32_t height = std::ceil((bound_max[1] - bound_min[1]) / res);
+
+                exteroception_logger_->setGridParameters(res, width, height, origin[0], origin[1]);
+
+                // Pre-allocate grid with exact size
+                std::vector<float> grid(width * height, std::numeric_limits<float>::quiet_NaN());
+
+                // Use integer-based iteration for consistency
+                for (uint32_t row = 0; row < height; ++row) {
+                    for (uint32_t col = 0; col < width; ++col) {
+                        // Calculate world coordinates from grid indices
+                        float x = bound_min[0] + col * res;
+                        float y = bound_min[1] + row * res;
+                        const auto& cell = terrain_estimator_->getElevation({x, y});
+                        if (cell.has_value()) {
+                            grid[row * width + col] = cell.value().height;
+                        }
                     }
                 }
-                exteroception_logger_->log(local_map);
+
+                // Verify size
+                if (grid.size() != width * height) {
+                    std::cerr << "Grid size mismatch: expected " << (width * height) << ", got "
+                              << grid.size() << std::endl;
+                    return;  // Don't log invalid data
+                }
+
+                exteroception_logger_->log(grid, ts);
             } catch (const std::exception& e) {
                 std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
             }

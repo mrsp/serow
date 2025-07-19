@@ -47,10 +47,12 @@ public:
     ExteroceptionLogger(ExteroceptionLogger&&) noexcept = default;
     ExteroceptionLogger& operator=(ExteroceptionLogger&&) noexcept = default;
 
-    void log(const LocalMapState& local_map_state);
+    void log(const std::vector<float>& grid, double timestamp);
     double getLastTimestamp() const;
     bool isInitialized() const;
     void setStartTime(double timestamp);
+    void setGridParameters(double resolution, uint32_t width, uint32_t height, double origin_x,
+                           double origin_y);
 
 private:
     class Impl;  // Forward declaration of the implementation class

@@ -118,6 +118,9 @@ public:
 
     virtual std::array<ElevationCell, map_size> getElevationMap() = 0;
 
+    virtual std::tuple<std::array<float, 2>, std::array<float, 2>, std::array<float, 2>>
+    getLocalMapInfo() = 0;
+
 protected:
     virtual void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
                                               const std::array<int, 2>& new_origin_i) = 0;
