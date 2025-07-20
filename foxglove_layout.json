@@ -23,17 +23,37 @@
             0
           ],
           "order": 1
+        },
+        "fc47a559-c92f-49ee-85bb-f6cc32d121df": {
+          "displayMode": "auto",
+          "fallbackColor": "#ffffff",
+          "showAxis": false,
+          "axisScale": 1,
+          "showOutlines": true,
+          "opacity": 1,
+          "visible": false,
+          "frameLocked": true,
+          "instanceId": "fc47a559-c92f-49ee-85bb-f6cc32d121df",
+          "label": "URDF",
+          "layerId": "foxglove.Urdf",
+          "sourceType": "url",
+          "url": "",
+          "filePath": "",
+          "parameter": "",
+          "topic": "",
+          "framePrefix": "",
+          "order": 2
         }
       },
       "cameraState": {
         "perspective": true,
-        "distance": 8.362406704355655,
-        "phi": 77.20531967571308,
-        "thetaOffset": 151.71961667926664,
+        "distance": 6.811232525738748,
+        "phi": 77.54948793575261,
+        "thetaOffset": 151.3754484192284,
         "targetOffset": [
-          1.8566916405940272,
-          -3.5572740811900068,
-          6.388596301614617e-17
+          6.575278797438589,
+          -3.385674470104411,
+          -1.7725670981762727e-17
         ],
         "target": [
           0,
@@ -56,9 +76,17 @@
       "topics": {
         "/elevation-map": {
           "visible": true,
-          "colorField": "z",
-          "colorMode": "colormap",
-          "colorMap": "turbo"
+          "colorField": "variance",
+          "colorMode": "gradient",
+          "colorMap": "rainbow",
+          "elevationField": "elevation",
+          "showLines": true,
+          "minValue": 54.9103,
+          "useLighting": true,
+          "gradient": [
+            "#2f695eff",
+            "rgba(227, 177, 135, 1)"
+          ]
         }
       },
       "publish": {

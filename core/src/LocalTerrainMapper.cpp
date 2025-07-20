@@ -266,6 +266,7 @@ void LocalTerrainMapper::resetLocalMap() {
     for (size_t i = 0; i < map_size; i++) {
         elevation_[i] = default_elevation_;
     }
+    clearContactPoints();
 }
 
 bool LocalTerrainMapper::isHashIdValid(const int id) const {

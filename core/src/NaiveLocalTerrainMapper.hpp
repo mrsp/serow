@@ -36,6 +36,12 @@ public:
         return elevation_;
     }
 
+    std::tuple<std::array<float, 2>, std::array<float, 2>, std::array<float, 2>> getLocalMapInfo()
+        override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return {local_map_origin_d_, local_map_bound_max_d_, local_map_bound_min_d_};
+    }
+
     int locationToHashId(const std::array<float, 2>& loc) const override;
 
     std::array<float, 2> hashIdToLocation(const int hash_id) const override;

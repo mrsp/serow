@@ -1,5 +1,7 @@
 #pragma once
 #include <array>
+#include <cmath>
+#include <deque>
 #include <filesystem>
 #include <functional>
 #include <iostream>
@@ -118,6 +120,111 @@ public:
 
     virtual std::array<ElevationCell, map_size> getElevationMap() = 0;
 
+    virtual std::tuple<std::array<float, 2>, std::array<float, 2>, std::array<float, 2>>
+    getLocalMapInfo() = 0;
+
+    void addContactPoint(const std::array<float, 2>& point) {
+        contact_points_.push_front(point);
+        while (contact_points_.size() > 4) {
+            contact_points_.pop_back();
+        }
+    }
+
+    void clearContactPoints() {
+        contact_points_.clear();
+    }
+
+    void interpolateContactPoints() {
+        if (contact_points_.size() < 4) {
+            return;
+        }
+
+        // Compute the bounding box of the contact points
+        float min_x = std::numeric_limits<float>::infinity();
+        float max_x = -std::numeric_limits<float>::infinity();
+        float min_y = std::numeric_limits<float>::infinity();
+        float max_y = -std::numeric_limits<float>::infinity();
+
+        for (const auto& point : contact_points_) {
+            min_x = std::min(min_x, point[0]);
+            max_x = std::max(max_x, point[0]);
+            min_y = std::min(min_y, point[1]);
+            max_y = std::max(max_y, point[1]);
+        }
+
+        // Check if the bounding box is a valid one
+        if (min_x > max_x || min_y > max_y) {
+            std::cout << "Invalid bounding box, clearing contact points" << std::endl;
+            clearContactPoints();
+            return;
+        }
+
+        // Interpolate using inverse distance weighting
+        const float step = resolution;
+        const float power = 2.0f;  // Power parameter for IDW
+
+        for (float x = min_x; x <= max_x; x += step) {
+            for (float y = min_y; y <= max_y; y += step) {
+                std::array<float, 2> point{x, y};
+                auto cell = getElevation(point);
+
+                // Skip if cell doesn't exist or already has contact
+                if (!cell || cell->contact) {
+                    continue;
+                }
+
+                float sum_weights = 0.0f;
+                float weighted_height = 0.0f;
+                float weighted_variance = 0.0f;
+
+                // Calculate weighted sum from all contact points
+                for (const auto& contact_point : contact_points_) {
+                    auto contact_cell = getElevation(contact_point);
+                    if (!contact_cell) {
+                        continue;
+                    }
+
+                    // Calculate distance
+                    float dx = point[0] - contact_point[0];
+                    float dy = point[1] - contact_point[1];
+                    float distance = std::sqrt(dx * dx + dy * dy);
+
+                    // Avoid division by zero
+                    if (distance < resolution) {
+                        weighted_height = contact_cell->height;
+                        weighted_variance = contact_cell->variance;
+                        sum_weights = 1.0f;
+                        break;
+                    }
+
+                    // Calculate weight using inverse distance
+                    float weight = 1.0f / std::pow(distance, power);
+                    sum_weights += weight;
+                    weighted_height += weight * contact_cell->height;
+                    weighted_variance += weight * contact_cell->variance;
+                }
+
+                if (sum_weights > 0.0f) {
+                    // Normalize the weighted sums
+                    weighted_height /= sum_weights;
+                    weighted_variance /= sum_weights;
+
+                    // Update the cell
+                    ElevationCell new_cell;
+                    new_cell.height = weighted_height;
+                    new_cell.variance = weighted_variance;
+                    new_cell.contact = false;
+                    new_cell.updated = true;
+                    setElevation(point, new_cell);
+                }
+            }
+        }
+
+        // Remove the oldest two contact points
+        contact_points_.pop_back();
+        contact_points_.pop_back();
+    }
+
 protected:
     virtual void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
                                               const std::array<int, 2>& new_origin_i) = 0;
@@ -126,6 +233,7 @@ protected:
 
     ElevationCell default_elevation_;
     float min_terrain_height_variance_{};
+    std::deque<std::array<float, 2>> contact_points_{};
 
     std::array<int, 2> local_map_origin_i_{0, 0};
     std::array<int, 2> local_map_bound_max_i_{};

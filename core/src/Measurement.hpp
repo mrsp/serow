@@ -87,6 +87,9 @@ struct KinematicMeasurement {
     std::map<std::string, bool>
         contacts_status;  ///< Map of contact status for different parts (0 or 1)
     std::map<std::string, double> contacts_probability;  ///< Map of contact probabilities ([0, 1])
+    std::map<std::string, bool> is_new_contact;  ///< Holds contact frame name to flag to indicate
+                                                 ///< if a new contact has been detected
+
     std::map<std::string, Eigen::Vector3d>
         contacts_position;  ///< Map of contact positions relative to base frame (m)
     std::map<std::string, Eigen::Vector3d> base_to_foot_positions;

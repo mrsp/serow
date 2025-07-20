@@ -597,6 +597,10 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                               << " is not inside the terrain elevation map and thus height is not "
                                  "updated "
                               << std::endl;
+                } else {
+                    if (kin.is_new_contact.at(cf)) {
+                        terrain_estimator->addContactPoint(con_pos_xy);
+                    }
                 }
             }
         }
@@ -627,6 +631,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
             (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.35)) {
             terrain_estimator->recenter(base_pos_xy);
         }
+        terrain_estimator->interpolateContactPoints();
     }
 }
 

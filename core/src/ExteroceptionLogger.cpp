@@ -10,12 +10,20 @@
  * You should have received a copy of the GNU General Public License along with Serow. If not,
  * see <https://www.gnu.org/licenses/>.
  **/
+#include "ExteroceptionLogger.hpp"
 #include <chrono>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
+#include "Schemas.hpp"
 
-#include "ExteroceptionLogger.hpp"
-#include "PointCloud_generated.h"
+#include "Grid_generated.h"
+#include "PackedElementField_generated.h"
+#include "Pose_generated.h"
+#include "Quaternion_generated.h"
+#include "Time_generated.h"
+#include "Vector2_generated.h"
+#include "Vector3_generated.h"
 
 namespace serow {
 
@@ -73,12 +81,13 @@ public:
         start_time_ = timestamp;
     }
 
-    void log(const LocalMapState& local_map_state) {
+    void log(const std::vector<float>& elevation, const std::vector<float>& variance,
+             double timestamp) {
         try {
             if (!start_time_.has_value()) {
-                start_time_ = local_map_state.timestamp;
+                start_time_ = timestamp;
             }
-            const double timestamp = local_map_state.timestamp - start_time_.value();
+            timestamp = timestamp - start_time_.value();
 
             if (timestamp < 0) {
                 std::cerr << "Timestamp is negative: " << timestamp << std::endl;
@@ -89,62 +98,76 @@ public:
                 return;
             }
 
-            const auto& local_map = local_map_state.data;
+            // Ensure both vectors have the same size
+            if (elevation.size() != variance.size()) {
+                std::cerr << "Elevation and variance data size mismatch" << std::endl;
+                return;
+            }
 
             // Create a FlatBuffer builder
             flatbuffers::FlatBufferBuilder builder;
-
-            std::vector<float> point_data;
-            point_data.reserve(local_map.size() * 3);
-
-            for (size_t i = 0; i < local_map.size(); i++) {
-                const auto& point = local_map[i];
-                point_data.push_back(point[0]);
-                point_data.push_back(point[1]);
-                point_data.push_back(point[2]);
-            }
 
             // Create the timestamp
             auto time = foxglove::Time(
                 static_cast<int64_t>(timestamp),
                 static_cast<int32_t>((timestamp - static_cast<int64_t>(timestamp)) * 1e9));
 
-            // Create the pose (identity transform)
-            auto position = foxglove::CreateVector3(builder, 0.0, 0.0, 0.0);
+            // Create the pose (grid origin)
+            const double origin_x = grid_origin_x_ - (grid_width_ * grid_resolution_ / 2.0);
+            const double origin_y = grid_origin_y_ - (grid_height_ * grid_resolution_ / 2.0);
+            auto position = foxglove::CreateVector3(builder, origin_x, origin_y, 0.0);
             auto orientation = foxglove::CreateQuaternion(builder, 0.0, 0.0, 0.0, 1.0);
             auto pose = foxglove::CreatePose(builder, position, orientation);
+            auto cell_size = foxglove::CreateVector2(builder, grid_resolution_, grid_resolution_);
 
             // Create the frame_id string
             auto frame_id = builder.CreateString("world");
 
-            // Create fields for point data
-            std::vector<flatbuffers::Offset<foxglove::PackedElementField>> fields;
-            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("x"),
-                                                                0, foxglove::NumericType_FLOAT32));
-            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("y"),
-                                                                4, foxglove::NumericType_FLOAT32));
-            fields.push_back(foxglove::CreatePackedElementField(builder, builder.CreateString("z"),
-                                                                8, foxglove::NumericType_FLOAT32));
-            auto fields_vec = builder.CreateVector(fields);
+            // Create fields for the data (elevation and variance)
+            std::vector<flatbuffers::Offset<foxglove::PackedElementField>> field_offsets;
+            // Elevation field at offset 0
+            auto elevation_field_name = builder.CreateString("elevation");
+            auto elevation_field = foxglove::CreatePackedElementField(
+                builder, elevation_field_name, 0, foxglove::NumericType_FLOAT32);
+            field_offsets.push_back(elevation_field);
 
-            // Convert float data to uint8_t for the data field
-            std::vector<uint8_t> binary_data;
-            binary_data.resize(point_data.size() * sizeof(float));
-            std::memcpy(binary_data.data(), point_data.data(), binary_data.size());
-            auto data_vec = builder.CreateVector(binary_data);
+            // Variance field at offset 4 (after the 4-byte elevation float)
+            auto variance_field_name = builder.CreateString("variance");
+            auto variance_field = foxglove::CreatePackedElementField(
+                builder, variance_field_name, 4, foxglove::NumericType_FLOAT32);
+            field_offsets.push_back(variance_field);
 
-            // Create the PointCloud
-            foxglove::PointCloudBuilder pc_builder(builder);
-            pc_builder.add_timestamp(&time);
-            pc_builder.add_frame_id(frame_id);
-            pc_builder.add_pose(pose);
-            pc_builder.add_point_stride(12);  // 3 floats * 4 bytes
-            pc_builder.add_fields(fields_vec);
-            pc_builder.add_data(data_vec);
-            auto pointcloud = pc_builder.Finish();
+            auto fields = builder.CreateVector(field_offsets);
+
+            // Interleave elevation and variance data
+            std::vector<uint8_t> interleaved_data;
+            interleaved_data.reserve(elevation.size() * 2 * sizeof(float));
+
+            for (size_t i = 0; i < elevation.size(); ++i) {
+                // Add elevation bytes
+                const uint8_t* elev_bytes = reinterpret_cast<const uint8_t*>(&elevation[i]);
+                interleaved_data.insert(interleaved_data.end(), elev_bytes,
+                                        elev_bytes + sizeof(float));
+
+                // Add variance bytes
+                const uint8_t* var_bytes = reinterpret_cast<const uint8_t*>(&variance[i]);
+                interleaved_data.insert(interleaved_data.end(), var_bytes,
+                                        var_bytes + sizeof(float));
+            }
+
+            auto data_vec = builder.CreateVector(interleaved_data);
+
+            // Calculate strides - now each cell has 8 bytes (elevation + variance)
+            uint32_t cell_stride = 8;  // 8 bytes per cell (2 float32s)
+            uint32_t column_count = grid_width_;
+            uint32_t row_stride = column_count * cell_stride;
+
+            // Create the Grid
+            auto grid = foxglove::CreateGrid(builder, &time, frame_id, pose, column_count,
+                                             cell_size, row_stride, cell_stride, fields, data_vec);
 
             // Finish the buffer
-            builder.Finish(pointcloud);
+            builder.Finish(grid);
 
             // Get the serialized data
             uint8_t* buffer = builder.GetBufferPointer();
@@ -165,7 +188,23 @@ public:
         return start_time_.has_value();
     }
 
+    void setGridParameters(double resolution, uint32_t width, uint32_t height, double origin_x,
+                           double origin_y) {
+        grid_resolution_ = resolution;
+        grid_width_ = width;
+        grid_height_ = height;
+        grid_origin_x_ = origin_x;
+        grid_origin_y_ = origin_y;
+    }
+
 private:
+    // Grid parameters
+    double grid_resolution_{0.01};  // 1cm resolution by default
+    uint32_t grid_width_{1000};
+    uint32_t grid_height_{1000};
+    double grid_origin_x_{0.0};
+    double grid_origin_y_{0.0};
+
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) {
         try {
@@ -194,10 +233,9 @@ private:
         }
     }
 
-    // Reuse the original schema and channel initialization methods
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
-        schemas.push_back(createSchema("PointCloud"));
+        schemas.push_back(createSchema("Grid"));
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -237,8 +275,9 @@ ExteroceptionLogger::ExteroceptionLogger(const std::string& filename)
 
 ExteroceptionLogger::~ExteroceptionLogger() = default;
 
-void ExteroceptionLogger::log(const LocalMapState& local_map_state) {
-    pimpl_->log(local_map_state);
+void ExteroceptionLogger::log(const std::vector<float>& elevation,
+                              const std::vector<float>& variance, double timestamp) {
+    pimpl_->log(elevation, variance, timestamp);
 }
 
 double ExteroceptionLogger::getLastTimestamp() const {
@@ -251,6 +290,11 @@ void ExteroceptionLogger::setStartTime(double timestamp) {
 
 bool ExteroceptionLogger::isInitialized() const {
     return pimpl_->isInitialized();
+}
+
+void ExteroceptionLogger::setGridParameters(double resolution, uint32_t width, uint32_t height,
+                                            double origin_x, double origin_y) {
+    pimpl_->setGridParameters(resolution, width, height, origin_x, origin_y);
 }
 
 }  // namespace serow
