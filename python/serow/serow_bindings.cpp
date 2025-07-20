@@ -385,6 +385,8 @@ PYBIND11_MODULE(serow, m) {
                        "Map of contact statuses (string to bool)")
         .def_readwrite("contacts_probability", &serow::KinematicMeasurement::contacts_probability,
                        "Map of contact probabilities (string to double)")
+        .def_readwrite("is_new_contact", &serow::KinematicMeasurement::is_new_contact,
+                       "Map of new contact statuses (string to bool)")
         .def_readwrite("contacts_position", &serow::KinematicMeasurement::contacts_position,
                        "Map of contact positions (string to 3D vector)")
         .def_readwrite("base_to_foot_positions",
@@ -492,19 +494,19 @@ PYBIND11_MODULE(serow, m) {
 
                 return py::make_tuple(
                     kin.timestamp, kin.base_linear_velocity, kin.contacts_status,
-                    kin.contacts_probability, kin.contacts_position, kin.base_to_foot_positions,
-                    base_to_foot_orientations_serialized, kin.base_to_foot_linear_velocities,
-                    kin.base_to_foot_angular_velocities, kin.contacts_position_noise,
-                    contacts_orientation_serialized, kin.contacts_orientation_noise,
-                    kin.com_angular_momentum_derivative, kin.com_position,
-                    kin.com_linear_acceleration, kin.base_linear_velocity_cov,
+                    kin.contacts_probability, kin.is_new_contact, kin.contacts_position,
+                    kin.base_to_foot_positions, base_to_foot_orientations_serialized,
+                    kin.base_to_foot_linear_velocities, kin.base_to_foot_angular_velocities,
+                    kin.contacts_position_noise, contacts_orientation_serialized,
+                    kin.contacts_orientation_noise, kin.com_angular_momentum_derivative,
+                    kin.com_position, kin.com_linear_acceleration, kin.base_linear_velocity_cov,
                     kin.position_slip_cov, kin.orientation_slip_cov, kin.position_cov,
                     kin.orientation_cov, kin.com_position_process_cov,
                     kin.com_linear_velocity_process_cov, kin.external_forces_process_cov,
                     kin.com_position_cov, kin.com_linear_acceleration_cov);
             },
             [](py::tuple t) {  // __setstate__
-                if (t.size() != 25)
+                if (t.size() != 26)
                     throw std::runtime_error("Invalid state for KinematicMeasurement!");
 
                 serow::KinematicMeasurement kin;
@@ -512,25 +514,26 @@ PYBIND11_MODULE(serow, m) {
                 kin.base_linear_velocity = t[1].cast<decltype(kin.base_linear_velocity)>();
                 kin.contacts_status = t[2].cast<decltype(kin.contacts_status)>();
                 kin.contacts_probability = t[3].cast<decltype(kin.contacts_probability)>();
-                kin.contacts_position = t[4].cast<decltype(kin.contacts_position)>();
-                kin.base_to_foot_positions = t[5].cast<decltype(kin.base_to_foot_positions)>();
+                kin.is_new_contact = t[4].cast<decltype(kin.is_new_contact)>();
+                kin.contacts_position = t[5].cast<decltype(kin.contacts_position)>();
+                kin.base_to_foot_positions = t[6].cast<decltype(kin.base_to_foot_positions)>();
 
                 // Convert base_to_foot_orientations from numpy arrays
                 auto base_to_foot_orientations_serialized =
-                    t[6].cast<std::map<std::string, py::array_t<double>>>();
+                    t[7].cast<std::map<std::string, py::array_t<double>>>();
                 for (const auto& [name, arr] : base_to_foot_orientations_serialized) {
                     kin.base_to_foot_orientations[name] = numpy_to_quaternion(arr);
                 }
 
                 kin.base_to_foot_linear_velocities =
-                    t[7].cast<decltype(kin.base_to_foot_linear_velocities)>();
+                    t[8].cast<decltype(kin.base_to_foot_linear_velocities)>();
                 kin.base_to_foot_angular_velocities =
-                    t[8].cast<decltype(kin.base_to_foot_angular_velocities)>();
-                kin.contacts_position_noise = t[9].cast<decltype(kin.contacts_position_noise)>();
+                    t[9].cast<decltype(kin.base_to_foot_angular_velocities)>();
+                kin.contacts_position_noise = t[10].cast<decltype(kin.contacts_position_noise)>();
 
                 // Handle optional contacts_orientation
                 auto contacts_orientation_serialized =
-                    t[10].cast<std::map<std::string, py::array_t<double>>>();
+                    t[11].cast<std::map<std::string, py::array_t<double>>>();
                 if (!contacts_orientation_serialized.empty()) {
                     std::map<std::string, Eigen::Quaterniond> contacts_orientation;
                     for (const auto& [name, arr] : contacts_orientation_serialized) {
@@ -540,24 +543,24 @@ PYBIND11_MODULE(serow, m) {
                 }
 
                 kin.contacts_orientation_noise =
-                    t[11].cast<decltype(kin.contacts_orientation_noise)>();
+                    t[12].cast<decltype(kin.contacts_orientation_noise)>();
                 kin.com_angular_momentum_derivative =
-                    t[12].cast<decltype(kin.com_angular_momentum_derivative)>();
-                kin.com_position = t[13].cast<decltype(kin.com_position)>();
-                kin.com_linear_acceleration = t[14].cast<decltype(kin.com_linear_acceleration)>();
-                kin.base_linear_velocity_cov = t[15].cast<decltype(kin.base_linear_velocity_cov)>();
-                kin.position_slip_cov = t[16].cast<decltype(kin.position_slip_cov)>();
-                kin.orientation_slip_cov = t[17].cast<decltype(kin.orientation_slip_cov)>();
-                kin.position_cov = t[18].cast<decltype(kin.position_cov)>();
-                kin.orientation_cov = t[19].cast<decltype(kin.orientation_cov)>();
-                kin.com_position_process_cov = t[20].cast<decltype(kin.com_position_process_cov)>();
+                    t[13].cast<decltype(kin.com_angular_momentum_derivative)>();
+                kin.com_position = t[14].cast<decltype(kin.com_position)>();
+                kin.com_linear_acceleration = t[15].cast<decltype(kin.com_linear_acceleration)>();
+                kin.base_linear_velocity_cov = t[16].cast<decltype(kin.base_linear_velocity_cov)>();
+                kin.position_slip_cov = t[17].cast<decltype(kin.position_slip_cov)>();
+                kin.orientation_slip_cov = t[18].cast<decltype(kin.orientation_slip_cov)>();
+                kin.position_cov = t[19].cast<decltype(kin.position_cov)>();
+                kin.orientation_cov = t[20].cast<decltype(kin.orientation_cov)>();
+                kin.com_position_process_cov = t[21].cast<decltype(kin.com_position_process_cov)>();
                 kin.com_linear_velocity_process_cov =
-                    t[21].cast<decltype(kin.com_linear_velocity_process_cov)>();
+                    t[22].cast<decltype(kin.com_linear_velocity_process_cov)>();
                 kin.external_forces_process_cov =
-                    t[22].cast<decltype(kin.external_forces_process_cov)>();
-                kin.com_position_cov = t[23].cast<decltype(kin.com_position_cov)>();
+                    t[23].cast<decltype(kin.external_forces_process_cov)>();
+                kin.com_position_cov = t[24].cast<decltype(kin.com_position_cov)>();
                 kin.com_linear_acceleration_cov =
-                    t[24].cast<decltype(kin.com_linear_acceleration_cov)>();
+                    t[25].cast<decltype(kin.com_linear_acceleration_cov)>();
 
                 return kin;
             }));

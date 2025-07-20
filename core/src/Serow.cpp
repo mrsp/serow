@@ -752,6 +752,9 @@ void Serow::runAngularMomentumEstimator(State& state) {
 void Serow::runContactEstimator(
     State& state, std::map<std::string, ForceTorqueMeasurement>& ft, KinematicMeasurement& kin,
     std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
+    // Current contact status
+    std::map<std::string, bool> current_contact_status = state.contact_state_.contacts_status;
+
     // Estimate the leg end-effector contact state
     if (!ft.empty()) {
         std::map<std::string, Eigen::Vector3d> contacts_force;
@@ -820,6 +823,12 @@ void Serow::runContactEstimator(
 
         // Estimate the COP in the local foot frame
         for (const auto& frame : state.getContactsFrame()) {
+            kin.is_new_contact[frame] = false;
+            if (!current_contact_status.at(frame) &&
+                state.contact_state_.contacts_status.at(frame)) {
+                kin.is_new_contact[frame] = true;
+            }
+
             ft.at(frame).cop = Eigen::Vector3d::Zero();
 
             // Calculate COP
