@@ -111,6 +111,37 @@ public:
     void updateWithIMUOrientation(BaseState& state, const Eigen::Quaterniond& imu_orientation,
                                   const Eigen::Matrix3d& imu_orientation_cov);
 
+    /**
+     * @brief Sets the action for the contact estimator
+     * @param cf Contact frame name
+     * @param action Action
+     */
+    void setAction(const std::string& cf, const Eigen::VectorXd& action);
+
+    /**
+     * @brief Clears the action covariance gain matrix
+     */
+    void clearAction();
+
+    /**
+     * @brief Gets the contact position innovation
+     * @param contact_frame Contact frame name
+     * @param innovation Contact position innovation
+     * @param covariance Contact position covariance
+     */
+    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+                                      Eigen::Matrix3d& covariance) const;
+
+    /**
+     * @brief Gets the contact orientation innovation
+     * @param contact_frame Contact frame name
+     * @param innovation Contact orientation innovation
+     * @param covariance Contact orientation covariance
+     */
+    bool getContactOrientationInnovation(const std::string& contact_frame,
+                                         Eigen::Vector3d& innovation,
+                                         Eigen::Matrix3d& covariance) const;
+
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
@@ -148,6 +179,13 @@ private:
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
+
+    std::map<std::string, double> contact_position_action_cov_gain_;
+    std::map<std::string, double> contact_orientation_action_cov_gain_;
+
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
+        contact_orientation_innovation_;
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.
