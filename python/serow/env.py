@@ -43,6 +43,7 @@ class SerowEnv(gym.Env):
         self.contact_frames = [
             cf for cf in contact_state.contacts_status.keys() if cf != self.cf
         ]
+        self.all_contact_frames = [cf for cf in contact_state.contacts_status.keys()]
         self.action_dim = action_dim
         self.state_dim = state_dim
         # Action space
@@ -96,12 +97,11 @@ class SerowEnv(gym.Env):
         else:
             if success:
                 nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-                position_reward = 2.0 * np.exp(-3.0 * position_error)
+                position_reward = 2.5 * np.exp(-2.0 * position_error)
                 innovation_reward = 1.0 * np.exp(-3.0 * nis)
-                orientation_reward = 3.0 * np.exp(-3.0 * orientation_error)
+                orientation_reward = 5.0 * np.exp(-2.0 * orientation_error)
                 step_reward = 1.0 * (step + 1) / max_steps
                 reward = innovation_reward + position_reward + orientation_reward
-                reward /= 3.0  # number of terms
                 reward += step_reward
 
         if self.step_count == self.max_steps - 1:
@@ -147,8 +147,11 @@ class SerowEnv(gym.Env):
         obs = self._get_observation(self.cf, self.initial_state, self.kin)
         return obs, {}
 
-    def get_observation_for_action(self):
+    def get_observation_for_action(self, cf=None):
         """Get the observation that should be used for action computation."""
+        if cf is None:
+            cf = self.cf
+
         # Run prediction step with current control input
         self.imu = copy.copy(self.imu_data[self.step_count])
         joint = copy.copy(self.joint_data[self.step_count])
@@ -156,11 +159,10 @@ class SerowEnv(gym.Env):
         prior_state, self.kin = self.predict_step(self.imu, joint, ft)
 
         # Get the observation that the policy should use
-        obs = self._get_observation(self.cf, prior_state, self.kin)
+        obs = self._get_observation(cf, prior_state, self.kin)
         return obs
 
     def step(self, action):
-        gt = self.gt_data[self.step_count]
         reward = 0.0
         done = False
         truncated = False
@@ -170,11 +172,7 @@ class SerowEnv(gym.Env):
         if self.kin.contacts_status[self.cf]:
             post_state, reward, done, truncated = self.update_step(
                 self.cf,
-                self.kin,
                 action,
-                gt,
-                self.step_count,
-                self.max_steps,
             )
 
             obs = self._get_observation(self.cf, post_state, self.kin)
@@ -182,22 +180,13 @@ class SerowEnv(gym.Env):
         if not np.all(obs == np.zeros((self.state_dim,))):
             valid = True
 
-        info = {"step_count": self.step_count, "reward": reward, "valid": valid}
+        info = {"step_count": self.step_count, "rewards": reward, "valid": valid}
 
         for cf in self.contact_frames:
-            if self.kin.contacts_status[cf]:
-                post_state, _, _, _ = self.update_step(
-                    cf,
-                    self.kin,
-                    np.zeros((self.action_dim, 1), dtype=np.float64),
-                    gt,
-                    self.step_count,
-                    self.max_steps,
-                )
+            self.update_step(cf, np.zeros((self.action_dim, 1), dtype=np.float32))
 
         self.finish_update(self.imu, self.kin)
         self.step_count += 1
-
         return obs, reward, done, truncated, info
 
     def predict_step(self, imu, joint, ft):
@@ -215,19 +204,23 @@ class SerowEnv(gym.Env):
         state = self.serow_framework.get_state(allow_invalid=True)
         return state, kin
 
-    def update_step(self, cf, kin, action, gt, step, max_steps):
+    def update_step(self, cf, action):
         # Set the action
         self.serow_framework.set_action(cf, action)
 
         # Run the update step with the contact position
-        self.serow_framework.base_estimator_update_with_contact_position(cf, kin)
+        self.serow_framework.base_estimator_update_with_contact_position(cf, self.kin)
 
         # Get the post state
         post_state = self.serow_framework.get_state(allow_invalid=True)
 
         # Compute the reward
         reward, done, truncated = self._compute_reward(
-            cf, post_state, gt, step, max_steps
+            cf,
+            post_state,
+            self.gt_data[self.step_count],
+            self.step_count,
+            self.max_steps,
         )
 
         return post_state, reward, done, truncated
@@ -248,33 +241,33 @@ class SerowEnv(gym.Env):
         timestamps = []
         base_positions = []
         base_orientations = []
-        cumulative_rewards = []
-        immediate_rewards = []
         gt_positions = []
         gt_orientations = []
         gt_timestamps = []
 
         for _ in range(self.max_steps):
-            action = np.zeros((self.action_dim, 1), dtype=np.float64)
-            if model is not None:
-                obs = self.get_observation_for_action()
-                action, _ = model.predict(obs, deterministic=True)
+            # Run prediction step with current control input
+            self.imu = copy.copy(self.imu_data[self.step_count])
+            joint = copy.copy(self.joint_data[self.step_count])
+            ft = copy.copy(self.ft_data[self.step_count])
+            prior_state, self.kin = self.predict_step(self.imu, joint, ft)
+            post_state = prior_state
+            for cf in self.all_contact_frames:
+                action = np.zeros((self.action_dim, 1), dtype=np.float64)
+                if model is not None:
+                    obs = self._get_observation(cf, post_state, self.kin)
+                    action, _ = model.predict(obs, deterministic=True)
+                post_state, _, _, _ = self.update_step(cf, action)
 
-            _, reward, _, _, _ = self.step(action)
-            post_state = self.serow_framework.get_state(allow_invalid=True)
-
-            # Store the data
-            immediate_rewards.append(reward)
-            if len(cumulative_rewards) == 0:
-                cumulative_rewards.append(reward)
-            else:
-                cumulative_rewards.append(cumulative_rewards[-1] + reward)
-            timestamps.append(self.imu_data[self.step_count - 1].timestamp)
-            gt_positions.append(self.gt_data[self.step_count - 1].position)
-            gt_orientations.append(self.gt_data[self.step_count - 1].orientation)
-            gt_timestamps.append(self.gt_data[self.step_count - 1].timestamp)
-            base_positions.append(post_state.get_base_position())
-            base_orientations.append(post_state.get_base_orientation())
+            self.finish_update(self.imu, self.kin)
+            self.step_count += 1
+            if self.step_count < self.max_steps:
+                timestamps.append(self.imu_data[self.step_count - 1].timestamp)
+                gt_positions.append(self.gt_data[self.step_count - 1].position)
+                gt_orientations.append(self.gt_data[self.step_count - 1].orientation)
+                gt_timestamps.append(self.gt_data[self.step_count - 1].timestamp)
+                base_positions.append(post_state.get_base_position())
+                base_orientations.append(post_state.get_base_orientation())
 
         # Convert to numpy arrays
         timestamps = np.array(timestamps)
@@ -314,5 +307,4 @@ class SerowEnv(gym.Env):
             base_orientations,
             gt_positions,
             gt_orientations,
-            cumulative_rewards,
         )

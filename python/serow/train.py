@@ -1,6 +1,8 @@
-from env import SerowEnv
 import numpy as np
 import gymnasium as gym
+import matplotlib.pyplot as plt
+
+from env import SerowEnv
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -214,7 +216,7 @@ if __name__ == "__main__":
 
     test_dataset = dataset
     contact_states = dataset["contact_states"]
-    contact_frame = list(contact_states[0].contacts_status.keys())[0]
+    contact_frame = list(contact_states[0].contacts_status.keys())
 
     state_dim = 2 + 3 + 9 + 3 + 4
     print(f"State dimension: {state_dim}")
@@ -223,12 +225,12 @@ if __name__ == "__main__":
     max_action = np.array([1e2], dtype=np.float32)
 
     # Create vectorized environment
-    def make_env(dataset_idx):
+    def make_env(i):
         """Helper function to create a single environment with specific dataset"""
-        ds = datasets[dataset_idx]
+        ds = datasets[0]
         base_env = SerowEnv(
             robot,
-            contact_frame,
+            contact_frame[i],
             ds["joint_states"][0],
             ds["base_states"][0],
             ds["contact_states"][0],
@@ -245,7 +247,7 @@ if __name__ == "__main__":
         return AutoPreStepWrapper(base_env)
 
     # Create vectorized environment with different datasets for each environment
-    n_envs = 1
+    n_envs = 4
     env = DummyVecEnv([lambda i=i: make_env(i) for i in range(n_envs)])
 
     model = PreStepPPO(
@@ -260,7 +262,7 @@ if __name__ == "__main__":
         gamma=0.995,
         gae_lambda=0.95,
         clip_range=0.2,
-        policy_kwargs=dict(action_min=1e-8, action_max=1e2),
+        policy_kwargs=dict(action_min=min_action, action_max=max_action),
     )
 
     # Create callbacks
@@ -270,7 +272,36 @@ if __name__ == "__main__":
     # Train the model
     print(f"Training with {n_envs} parallel environments")
     print("Starting training...")
-    model.learn(total_timesteps=100000, callback=callback)
+    model.learn(total_timesteps=50000, callback=callback)
+    # model.save("serow_ppo")
+
+    # Debug information
+    print("Training callback stats:")
+    print(f"  Episode rewards collected: {len(training_callback.episode_rewards)}")
+    print(f"  Step rewards collected: {len(training_callback.step_rewards)}")
+    print(
+        f"  Valid sample ratio: {valid_sample_callback.valid_samples_count}/{valid_sample_callback.total_samples_count} "
+        f"({valid_sample_callback.valid_samples_count/valid_sample_callback.total_samples_count:.2%})"
+    )
+
+    # Plot training progress - use episode rewards if available, otherwise step rewards
+    if len(training_callback.episode_rewards) > 0:
+        plt.plot(training_callback.episode_rewards, label="Episode Rewards")
+        plt.xlabel("Episode")
+        plt.ylabel("Episode Reward")
+        plt.title("Training Progress (Episode Rewards)")
+    else:
+        # Use step rewards as fallback
+        plt.plot(training_callback.step_rewards, label="Step Rewards", alpha=0.7)
+        plt.xlabel("Training Step")
+        plt.ylabel("Average Step Reward")
+        plt.title("Training Progress (Step Rewards)")
+        print("Warning: No episode rewards found, using step rewards instead")
+
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
     test_env = make_env(0)
     test_env.env.evaluate(model)
