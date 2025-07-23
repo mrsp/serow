@@ -327,7 +327,7 @@ if __name__ == "__main__":
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
 
     # Create vectorized environment
-    def make_env(i):
+    def make_env(i, j):
         """Helper function to create a single environment with specific dataset"""
         ds = datasets[i]
         base_env = SerowEnv(

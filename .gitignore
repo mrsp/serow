@@ -26,3 +26,5 @@ serow_layout.json:Zone.Identifier
 /serow_ros2/build/
 /serow_ros2/install/
 /serow_ros2/log/
+/python/datasets/*
+/python/models/*
