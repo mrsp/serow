@@ -73,6 +73,20 @@ class CustomActorCritic(ActorCriticPolicy):
             nn.Linear(64, 1),
         )
 
+        # Initialize weights and biases
+        for layer in self.shared_net:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+                nn.init.zeros_(layer.bias)
+        for layer in self.policy_net:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+                nn.init.zeros_(layer.bias)
+        for layer in self.value_net:
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+                nn.init.zeros_(layer.bias)
+
         # Create a custom MLP extractor that matches the expected interface
         class CustomMLPExtractor(nn.Module):
             def __init__(self, shared_net, policy_net, value_net):

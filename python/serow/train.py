@@ -5,10 +5,18 @@ import matplotlib.pyplot as plt
 from env import SerowEnv
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
 from ac import CustomActorCritic
+
+
+def linear_schedule(initial_value, final_value):
+    """Linear learning rate schedule."""
+
+    def schedule(progress_remaining):
+        return final_value + progress_remaining * (initial_value - final_value)
+
+    return schedule
 
 
 class AutoPreStepWrapper(gym.Wrapper):
@@ -79,43 +87,135 @@ class TrainingCallback(BaseCallback):
         self.episode_reward_sum = 0
         self.episode_length = 0
         self.last_dones = None
+        self.total_steps = 0
 
     def _on_step(self) -> bool:
-        # Get dones to detect episode completions
+        self.total_steps += 1
+
+        # Get dones and truncated to detect episode completions
         dones = self.locals.get("dones", [False] * len(self.locals.get("infos", [])))
+        truncated = self.locals.get(
+            "truncated", [False] * len(self.locals.get("infos", []))
+        )
 
-        # Track episode rewards manually
-        if "rewards" in self.locals:
-            rewards = self.locals["rewards"]
-            avg_reward = np.mean(rewards)
-            self.step_rewards.append(avg_reward)
+        # Only accumulate episode rewards for valid steps
+        valid_steps = 0
+        total_reward = 0.0
+        episode_completed = False
+        if len(self.locals["infos"]) > 0:
+            for i, info in enumerate(self.locals["infos"]):
+                if info["valid"]:
+                    reward = info["reward"]
+                    valid_steps += 1
+                    total_reward += reward
 
-            # Add to current episode
-            self.episode_reward_sum += avg_reward
+        # Only add to episode if there were valid steps
+        if valid_steps > 0:
+            avg_valid_reward = total_reward / valid_steps
+            self.episode_reward_sum += avg_valid_reward
             self.episode_length += 1
 
-            # Check if any episode completed
-            for i, done in enumerate(dones):
-                if done and self.episode_length > 0:
-                    self.episode_rewards.append(self.episode_reward_sum)
-                    self.episode_lengths.append(self.episode_length)
+        # Check if any episode completed (either done or truncated)
+        for _, (done, trunc) in enumerate(zip(dones, truncated)):
+            if done or trunc:
+                episode_completed = True
+                break
 
-                    # Reset for next episode
-                    self.episode_reward_sum = 0
-                    self.episode_length = 0
+        if episode_completed and self.episode_length > 0:
+            self.episode_rewards.append(self.episode_reward_sum)
+            self.episode_lengths.append(self.episode_length)
+            if self.verbose > 0:
+                print(
+                    f"Episode completed: reward={self.episode_reward_sum:.3f}, "
+                    f"length={self.episode_length}"
+                )
 
-        # Also try the original method
-        if len(self.locals["infos"]) > 0:
-            info = self.locals["infos"][0]
-            if "episode" in info:
-                # Use the framework's episode info if available
-                self.episode_rewards.append(info["episode"]["r"])
-                self.episode_lengths.append(info["episode"]["l"])
+            # Reset for next episode
+            self.episode_reward_sum = 0
+            self.episode_length = 0
+
+        return True
+
+
+class KLDivergenceCallback(BaseCallback):
+    """Callback to monitor KL divergence and stop training if it gets too high."""
+
+    def __init__(self, max_kl=0.015, verbose=0):
+        super(KLDivergenceCallback, self).__init__(verbose)
+        self.max_kl = max_kl
+
+    def _on_step(self) -> bool:
+        # Check if we have KL divergence info
+        if hasattr(self.model, "logger") and self.model.logger.name_to_value:
+            approx_kl = self.model.logger.name_to_value.get("train/approx_kl", 0)
+            if approx_kl > self.max_kl:
                 if self.verbose > 0:
                     print(
-                        f"Framework episode: reward={info['episode']['r']:.3f}, "
-                        f"length={info['episode']['l']}"
+                        f"KL divergence {approx_kl:.6f} exceeds threshold "
+                        f"{self.max_kl:.6f}. Stopping training."
                     )
+                return False
+        return True
+
+
+class ExplainedVarianceCallback(BaseCallback):
+    """Callback to monitor explained variance and warn if it's too negative."""
+
+    def __init__(self, min_explained_var=-1.0, verbose=0):
+        super(ExplainedVarianceCallback, self).__init__(verbose)
+        self.min_explained_var = min_explained_var
+
+    def _on_step(self) -> bool:
+        # Check if we have explained variance info
+        if hasattr(self.model, "logger") and self.model.logger.name_to_value:
+            explained_var = self.model.logger.name_to_value.get(
+                "train/explained_variance", 0
+            )
+            if explained_var < self.min_explained_var:
+                if self.verbose > 0:
+                    print(
+                        f"Warning: Explained variance {explained_var:.3f} is very "
+                        f"negative (below {self.min_explained_var:.3f}). "
+                        f"Value function may be learning poorly."
+                    )
+        return True
+
+
+class PerformanceDegradationCallback(BaseCallback):
+    """Callback to detect performance degradation and stop training."""
+
+    def __init__(self, window_size=10, degradation_threshold=0.1, verbose=0):
+        super(PerformanceDegradationCallback, self).__init__(verbose)
+        self.window_size = window_size
+        self.degradation_threshold = degradation_threshold
+        self.recent_rewards = []
+
+    def _on_step(self) -> bool:
+        # This callback will be called by the training callback
+        return True
+
+    def on_episode_end(self, episode_reward):
+        """Called when an episode ends with the episode reward."""
+        self.recent_rewards.append(episode_reward)
+
+        # Keep only recent rewards
+        if len(self.recent_rewards) > self.window_size:
+            self.recent_rewards.pop(0)
+
+        # Check for degradation if we have enough data
+        if len(self.recent_rewards) >= self.window_size:
+            recent_avg = np.mean(self.recent_rewards[-self.window_size // 2 :])
+            earlier_avg = np.mean(self.recent_rewards[: self.window_size // 2])
+
+            if earlier_avg > 0 and recent_avg < earlier_avg * (
+                1 - self.degradation_threshold
+            ):
+                if self.verbose > 0:
+                    print(
+                        f"Performance degradation detected: "
+                        f"recent avg {recent_avg:.0f} vs earlier avg {earlier_avg:.0f}"
+                    )
+                return False
 
         return True
 
@@ -221,8 +321,9 @@ if __name__ == "__main__":
     state_dim = 2 + 3 + 9 + 3 + 4
     print(f"State dimension: {state_dim}")
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8], dtype=np.float32)
-    max_action = np.array([1e2], dtype=np.float32)
+    # Reduce action space range to prevent extreme values
+    min_action = np.array([1e-6], dtype=np.float32)
+    max_action = np.array([1e1], dtype=np.float32)
 
     # Create vectorized environment
     def make_env(i):
@@ -248,41 +349,79 @@ if __name__ == "__main__":
 
     # Create vectorized environment with different datasets for each environment
     n_envs = 4
+    total_samples = 500000
     env = DummyVecEnv([lambda i=i: make_env(i) for i in range(n_envs)])
 
+    # Add normalization for observations and rewards
+    env = VecNormalize(env, norm_obs=True, norm_reward=True)
+
+    lr_schedule = linear_schedule(1e-4, 5e-5)
     model = PreStepPPO(
         CustomActorCritic,
         env,
         device="cuda",
         verbose=1,
-        learning_rate=5e-5,
+        learning_rate=lr_schedule,
         n_steps=512,
         batch_size=128,
-        n_epochs=5,
-        gamma=0.995,
+        n_epochs=4,
+        gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
+        max_grad_norm=0.5,
+        target_kl=0.05,
+        vf_coef=0.5,
+        ent_coef=0.001,
         policy_kwargs=dict(action_min=min_action, action_max=max_action),
     )
 
     # Create callbacks
     training_callback = TrainingCallback(verbose=1)
-    valid_sample_callback = ValidSampleCallback(verbose=1)
-    callback = CallbackList([training_callback, valid_sample_callback])
+    valid_sample_callback = ValidSampleCallback(verbose=0)
+    explained_var_callback = ExplainedVarianceCallback(
+        min_explained_var=-1.0, verbose=1
+    )
+    performance_degradation_callback = PerformanceDegradationCallback(
+        window_size=10, degradation_threshold=0.1, verbose=1
+    )
+    callback = CallbackList(
+        [
+            training_callback,
+            valid_sample_callback,
+            explained_var_callback,
+            performance_degradation_callback,
+        ]
+    )
+
     # Train the model
     print(f"Training with {n_envs} parallel environments")
     print("Starting training...")
-    model.learn(total_timesteps=50000, callback=callback)
+    model.learn(total_timesteps=total_samples, callback=callback)
+
+    # Extract the observation normalization statistics
+    obs_mean = env.obs_rms.mean
+    obs_var = env.obs_rms.var
+    obs_count = env.obs_rms.count
+    stats = {
+        "obs_mean": obs_mean,
+        "obs_var": obs_var,
+        "obs_count": obs_count,
+    }
+
+    print("Observation normalization stats:")
+    print(f"  Mean: {stats['obs_mean']}")
+    print(f"  Variance: {stats['obs_var']}")
+    print(f"  Count: {stats['obs_count']}")
     # model.save("serow_ppo")
 
     # Debug information
     print("Training callback stats:")
-    print(f"  Episode rewards collected: {len(training_callback.episode_rewards)}")
-    print(f"  Step rewards collected: {len(training_callback.step_rewards)}")
-    print(
-        f"  Valid sample ratio: {valid_sample_callback.valid_samples_count}/{valid_sample_callback.total_samples_count} "
-        f"({valid_sample_callback.valid_samples_count/valid_sample_callback.total_samples_count:.2%})"
-    )
+    print(f"Episode rewards collected: {len(training_callback.episode_rewards)}")
+    print(f"Step rewards collected: {len(training_callback.step_rewards)}")
+    valid_count = valid_sample_callback.valid_samples_count
+    total_count = valid_sample_callback.total_samples_count
+    valid_ratio = valid_count / total_count
+    print(f"Valid sample ratio: {valid_count}/{total_count} ({valid_ratio:.2%})")
 
     # Plot training progress - use episode rewards if available, otherwise step rewards
     if len(training_callback.episode_rewards) > 0:
@@ -304,4 +443,4 @@ if __name__ == "__main__":
     plt.show()
 
     test_env = make_env(0)
-    test_env.env.evaluate(model)
+    test_env.env.evaluate(model, stats)

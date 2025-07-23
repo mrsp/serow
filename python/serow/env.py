@@ -71,6 +71,7 @@ class SerowEnv(gym.Env):
         reward = 0.0
         done = False
         truncated = False
+
         # Position error
         position_error = np.linalg.norm(state.get_base_position() - gt.position)
 
@@ -94,15 +95,18 @@ class SerowEnv(gym.Env):
             or orientation_error > max_orientation_error
         ):
             done = True
+            reward = -10.0
         else:
             if success:
                 nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-                position_reward = 2.5 * np.exp(-2.0 * position_error)
-                innovation_reward = 1.0 * np.exp(-3.0 * nis)
-                orientation_reward = 5.0 * np.exp(-2.0 * orientation_error)
+                position_reward = 5.0 * np.exp(-1.0 * position_error)
+                innovation_reward = 1.0 * np.exp(-1.0 * nis)
+                orientation_reward = 10.0 * np.exp(-1.0 * orientation_error)
                 step_reward = 1.0 * (step + 1) / max_steps
                 reward = innovation_reward + position_reward + orientation_reward
                 reward += step_reward
+                # Scale down the reward to prevent value function issues
+                reward = reward * 0.001
 
         if self.step_count == self.max_steps - 1:
             truncated = True
@@ -140,10 +144,8 @@ class SerowEnv(gym.Env):
         super().reset(seed=seed)
 
         self.serow_framework.reset()
-        self.serow_framework.initialize(f"{self.robot}_rl.json")
         self.serow_framework.set_state(self.initial_state)
         self.step_count = 0
-        self.reward = 0.0
         obs = self._get_observation(self.cf, self.initial_state, self.kin)
         return obs, {}
 
@@ -174,13 +176,12 @@ class SerowEnv(gym.Env):
                 self.cf,
                 action,
             )
-
             obs = self._get_observation(self.cf, post_state, self.kin)
 
         if not np.all(obs == np.zeros((self.state_dim,))):
             valid = True
 
-        info = {"step_count": self.step_count, "rewards": reward, "valid": valid}
+        info = {"step_count": self.step_count, "reward": reward, "valid": valid}
 
         for cf in self.contact_frames:
             self.update_step(cf, np.zeros((self.action_dim, 1), dtype=np.float32))
@@ -232,10 +233,9 @@ class SerowEnv(gym.Env):
         if mode == "human":
             print(f"Step: {self.step_count}")
 
-    def evaluate(self, model=None):
-        self.reset()
-
+    def evaluate(self, model=None, stats=None):
         # After training, evaluate the policy
+        self.reset()
 
         # Run SEROW
         timestamps = []
@@ -251,23 +251,32 @@ class SerowEnv(gym.Env):
             joint = copy.copy(self.joint_data[self.step_count])
             ft = copy.copy(self.ft_data[self.step_count])
             prior_state, self.kin = self.predict_step(self.imu, joint, ft)
+
+            # Run the update step with the contact positions
             post_state = prior_state
             for cf in self.all_contact_frames:
                 action = np.zeros((self.action_dim, 1), dtype=np.float64)
                 if model is not None:
                     obs = self._get_observation(cf, post_state, self.kin)
+                    if stats is not None:
+                        obs = (obs - stats["obs_mean"]) / np.sqrt(
+                            stats["obs_var"] + 5e-9
+                        )
                     action, _ = model.predict(obs, deterministic=True)
                 post_state, _, _, _ = self.update_step(cf, action)
 
             self.finish_update(self.imu, self.kin)
+
+            # Save the data
+            timestamps.append(self.imu_data[self.step_count].timestamp)
+            gt_positions.append(self.gt_data[self.step_count].position)
+            gt_orientations.append(self.gt_data[self.step_count].orientation)
+            gt_timestamps.append(self.gt_data[self.step_count].timestamp)
+            base_positions.append(post_state.get_base_position())
+            base_orientations.append(post_state.get_base_orientation())
+
+            # Progress to the next sample
             self.step_count += 1
-            if self.step_count < self.max_steps:
-                timestamps.append(self.imu_data[self.step_count - 1].timestamp)
-                gt_positions.append(self.gt_data[self.step_count - 1].position)
-                gt_orientations.append(self.gt_data[self.step_count - 1].orientation)
-                gt_timestamps.append(self.gt_data[self.step_count - 1].timestamp)
-                base_positions.append(post_state.get_base_position())
-                base_orientations.append(post_state.get_base_orientation())
 
         # Convert to numpy arrays
         timestamps = np.array(timestamps)

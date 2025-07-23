@@ -375,6 +375,7 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
         P_ = std::move(P_i);
         state = std::move(updated_state_i);
     }
+    contact_position_innovation_[cf] = std::make_pair(z, s + 1e-8 * Eigen::Matrix3d::Identity());
 }
 
 void ContactEKF::updateWithContactOrientation(BaseState& state, const std::string& cf,
@@ -419,6 +420,7 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
         }
         P_ = (I_ - K * H) * P_;
     }
+    contact_orientation_innovation_[cf] = std::make_pair(z, s + 1e-8 * Eigen::Matrix3d::Identity());
 }
 
 void ContactEKF::updateWithContacts(
