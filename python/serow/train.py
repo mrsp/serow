@@ -1,6 +1,8 @@
 import numpy as np
 import gymnasium as gym
 import matplotlib.pyplot as plt
+import json
+import os
 
 from env import SerowEnv
 from stable_baselines3.common.callbacks import BaseCallback
@@ -310,28 +312,32 @@ class PreStepPPO(PPO):
 if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
-    dataset = np.load(f"{robot}_log.npz", allow_pickle=True)
-    datasets = []
-    datasets.append(dataset)
+    n_envs = 3
+    total_samples = 1000000
 
-    test_dataset = dataset
-    contact_states = dataset["contact_states"]
+    datasets = []
+    for i in range(n_envs):
+        dataset = np.load(f"datasets/{robot}_log_{i}.npz", allow_pickle=True)
+        datasets.append(dataset)
+
+    test_dataset = np.load(f"{robot}_log.npz", allow_pickle=True)
+    contact_states = test_dataset["contact_states"]
     contact_frame = list(contact_states[0].contacts_status.keys())
+    print(f"Contact frames: {contact_frame}")
 
     state_dim = 2 + 3 + 9 + 3 + 4
     print(f"State dimension: {state_dim}")
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    # Reduce action space range to prevent extreme values
-    min_action = np.array([1e-6], dtype=np.float32)
-    max_action = np.array([1e1], dtype=np.float32)
+    min_action = np.array([1e-4], dtype=np.float32)
+    max_action = np.array([5e1], dtype=np.float32)
 
     # Create vectorized environment
-    def make_env(i):
+    def make_env(i, j):
         """Helper function to create a single environment with specific dataset"""
-        ds = datasets[0]
+        ds = datasets[i]
         base_env = SerowEnv(
             robot,
-            contact_frame[i],
+            contact_frame[j],
             ds["joint_states"][0],
             ds["base_states"][0],
             ds["contact_states"][0],
@@ -347,10 +353,32 @@ if __name__ == "__main__":
         # Wrap with AutoPreStepWrapper to automatically use pre-step logic
         return AutoPreStepWrapper(base_env)
 
+    test_env = AutoPreStepWrapper(
+        SerowEnv(
+            robot,
+            contact_frame[0],
+            test_dataset["joint_states"][0],
+            test_dataset["base_states"][0],
+            test_dataset["contact_states"][0],
+            action_dim,
+            state_dim,
+            min_action,
+            max_action,
+            test_dataset["imu"],
+            test_dataset["joints"],
+            test_dataset["ft"],
+            test_dataset["base_pose_ground_truth"],
+        )
+    )
+
     # Create vectorized environment with different datasets for each environment
-    n_envs = 4
-    total_samples = 500000
-    env = DummyVecEnv([lambda i=i: make_env(i) for i in range(n_envs)])
+    env = DummyVecEnv(
+        [
+            lambda i=i, j=j: make_env(i, j)
+            for i in range(n_envs)
+            for j in range(len(contact_frame))
+        ]
+    )
 
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=True)
@@ -412,7 +440,21 @@ if __name__ == "__main__":
     print(f"  Mean: {stats['obs_mean']}")
     print(f"  Variance: {stats['obs_var']}")
     print(f"  Count: {stats['obs_count']}")
-    # model.save("serow_ppo")
+
+    # Check if the models directory exists, if not create it
+    if not os.path.exists("models"):
+        os.makedirs("models")
+    model.save(f"models/{robot}_ppo")
+
+    # Convert numpy arrays to lists for JSON serialization
+    json_stats = {
+        "obs_mean": stats["obs_mean"].tolist(),
+        "obs_var": stats["obs_var"].tolist(),
+        "obs_count": int(stats["obs_count"]),
+    }
+    stats_file = f"models/{robot}_stats.json"
+    with open(stats_file, "w") as f:
+        json.dump(json_stats, f, indent=2)
 
     # Debug information
     print("Training callback stats:")
@@ -442,5 +484,4 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    test_env = make_env(0)
     test_env.env.evaluate(model, stats)

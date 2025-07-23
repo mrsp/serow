@@ -70,7 +70,6 @@ class SerowEnv(gym.Env):
     def _compute_reward(self, cf, state, gt, step, max_steps):
         reward = 0.0
         done = False
-        truncated = False
 
         # Position error
         position_error = np.linalg.norm(state.get_base_position() - gt.position)
@@ -108,14 +107,14 @@ class SerowEnv(gym.Env):
                 # Scale down the reward to prevent value function issues
                 reward = reward * 0.001
 
-        if self.step_count == self.max_steps - 1:
-            truncated = True
-            done = False
-
-        return reward, done, truncated
+        return reward, done
 
     def _get_observation(self, cf, state, kin):
-        if kin is None or not kin.contacts_status[cf]:
+        if (
+            kin is None
+            or not kin.contacts_status[cf]
+            or state.get_contact_position(cf) is None
+        ):
             return np.zeros((self.state_dim,), dtype=np.float32)
 
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
@@ -134,7 +133,7 @@ class SerowEnv(gym.Env):
                 [P_ori_trace],
                 innovation,
                 R,
-                state.get_base_position(),
+                state.get_base_linear_velocity(),
                 state.get_base_orientation(),
             ],
             axis=0,
@@ -172,7 +171,7 @@ class SerowEnv(gym.Env):
         obs = np.zeros((self.state_dim,))
 
         if self.kin.contacts_status[self.cf]:
-            post_state, reward, done, truncated = self.update_step(
+            post_state, reward, done = self.update_step(
                 self.cf,
                 action,
             )
@@ -188,6 +187,11 @@ class SerowEnv(gym.Env):
 
         self.finish_update(self.imu, self.kin)
         self.step_count += 1
+
+        if self.step_count >= self.max_steps:
+            done = False
+            truncated = True
+
         return obs, reward, done, truncated, info
 
     def predict_step(self, imu, joint, ft):
@@ -216,7 +220,7 @@ class SerowEnv(gym.Env):
         post_state = self.serow_framework.get_state(allow_invalid=True)
 
         # Compute the reward
-        reward, done, truncated = self._compute_reward(
+        reward, done = self._compute_reward(
             cf,
             post_state,
             self.gt_data[self.step_count],
@@ -224,7 +228,7 @@ class SerowEnv(gym.Env):
             self.max_steps,
         )
 
-        return post_state, reward, done, truncated
+        return post_state, reward, done
 
     def finish_update(self, imu, kin):
         self.serow_framework.base_estimator_finish_update(imu, kin)
@@ -263,7 +267,7 @@ class SerowEnv(gym.Env):
                             stats["obs_var"] + 5e-9
                         )
                     action, _ = model.predict(obs, deterministic=True)
-                post_state, _, _, _ = self.update_step(cf, action)
+                post_state, _, _ = self.update_step(cf, action)
 
             self.finish_update(self.imu, self.kin)
 
