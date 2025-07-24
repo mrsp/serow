@@ -333,7 +333,7 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 1000
+    total_samples = 10000
 
     datasets = []
     for i in range(n_envs):
