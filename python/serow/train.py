@@ -3,6 +3,7 @@ import gymnasium as gym
 import matplotlib.pyplot as plt
 import json
 import os
+import torch.nn as nn
 
 from env import SerowEnv
 from stable_baselines3.common.callbacks import BaseCallback
@@ -10,6 +11,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
 from ac import CustomActorCritic
+from utils import export_models_to_onnx
 
 
 def linear_schedule(initial_value, final_value):
@@ -309,11 +311,29 @@ class PreStepPPO(PPO):
         return super().forward(obs, deterministic)
 
 
+class ActorONNX(nn.Module):
+    def __init__(self, mlp_extractor):
+        super().__init__()
+        self.mlp_extractor = mlp_extractor
+
+    def forward(self, x):
+        return self.mlp_extractor.forward_actor(x)
+
+
+class CriticONNX(nn.Module):
+    def __init__(self, mlp_extractor):
+        super().__init__()
+        self.mlp_extractor = mlp_extractor
+
+    def forward(self, x):
+        return self.mlp_extractor.forward_critic(x)
+
+
 if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 1000000
+    total_samples = 1000
 
     datasets = []
     for i in range(n_envs):
@@ -445,6 +465,27 @@ if __name__ == "__main__":
     if not os.path.exists("models"):
         os.makedirs("models")
     model.save(f"models/{robot}_ppo")
+
+    # Create a wrapper class to match the expected interface for export_models_to_onnx
+    class PPOModelWrapper:
+        def __init__(self, ppo_model, device):
+            self.ppo_model = ppo_model
+            self.device = device
+            self.actor = ActorONNX(ppo_model.policy.mlp_extractor)
+            self.critic = CriticONNX(ppo_model.policy.mlp_extractor)
+            self.name = "PPO"
+
+    # Create the wrapper
+    model_wrapper = PPOModelWrapper(model, "cuda")
+
+    # Define parameters for ONNX export
+    export_params = {
+        "state_dim": state_dim,
+        "action_dim": action_dim,
+    }
+
+    # Export to ONNX
+    export_models_to_onnx(model_wrapper, robot, export_params, "models")
 
     # Convert numpy arrays to lists for JSON serialization
     json_stats = {

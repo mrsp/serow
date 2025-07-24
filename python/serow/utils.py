@@ -2,8 +2,9 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import os
+import torch
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def rotation_matrix_to_quaternion(R):
@@ -512,3 +513,41 @@ def plot_contact_forces_and_torques(contact_states):
 
     plt.tight_layout()
     plt.show()
+
+
+def export_models_to_onnx(agent, robot, params, path):
+    """Export the trained models to ONNX format"""
+    os.makedirs(path, exist_ok=True)
+
+    # Export actor model
+    dummy_state = torch.randn(1, params["state_dim"]).to(agent.device)
+    torch.onnx.export(
+        agent.actor,
+        dummy_state,
+        f"{path}/{robot}_ppo_actor.onnx",
+        export_params=True,
+        opset_version=11,
+        do_constant_folding=True,
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes={
+            "input": {0: "batch_size"},
+            "output": {0: "batch_size"},
+        },
+    )
+
+    # Export critic model
+    torch.onnx.export(
+        agent.critic,
+        dummy_state,
+        f"{path}/{robot}_ppo_critic.onnx",
+        export_params=True,
+        opset_version=11,
+        do_constant_folding=True,
+        input_names=["state"],
+        output_names=["output"],
+        dynamic_axes={
+            "state": {0: "batch_size"},
+            "output": {0: "batch_size"},
+        },
+    )
