@@ -204,17 +204,13 @@ class ONNXInference:
 
         # Run actor inference
         actor_output = self.actor_session.run(None, {self.actor_input_name: state})[0]
-
-        # Get actions from actor output (already scaled and clipped in ONNX model)
-        actions = actor_output[0]
-
-        return actions
+        return actor_output[0]
 
     def predict(self, observation, deterministic=True):
         """
         Predict action given observation.
         Matches the interface expected by SerowEnv.evaluate().
-        Returns (action, state) tuple.
+        Returns (action, value) tuple.
         """
         action = self.get_action(observation, deterministic=deterministic)
         value = self.get_value(observation)

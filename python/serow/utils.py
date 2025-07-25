@@ -523,7 +523,7 @@ def export_models_to_onnx(agent, robot, params, path):
     agent.actor.eval()
     agent.critic.eval()
 
-    # Export actor model
+    # Export actor model with explicit tracing
     dummy_state = torch.randn(1, params["state_dim"]).to(agent.device)
     torch.onnx.export(
         agent.actor,
@@ -538,6 +538,7 @@ def export_models_to_onnx(agent, robot, params, path):
             "input": {0: "batch_size"},
             "output": {0: "batch_size"},
         },
+        verbose=True,  # Add verbose output to see what's being exported
     )
 
     # Export critic model
