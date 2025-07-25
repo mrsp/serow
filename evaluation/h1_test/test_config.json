@@ -1,0 +1,11 @@
+{
+  "Experiment": {
+    "type": "walk"
+  },
+  "Paths": {
+    "base_path": "/evaluation/h1_test/h1_data",
+    "data_file": "{base_path}/{type}/h1_data.h5",
+    "prediction_file": "{base_path}/{type}/serow_predictions.h5",
+    "elevation_map_file": "{base_path}/{type}/est_elevation_map.bin"
+  }
+}

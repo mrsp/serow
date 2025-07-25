@@ -190,7 +190,6 @@ int main(int argc, char** argv) {
         std::vector<double> b_ax, b_ay, b_az, b_wx, b_wy, b_wz;  // IMU Biases
         std::vector<Eigen::Vector3d> FR_contact_position, FL_contact_position, RL_contact_position,
             RR_contact_position;
-        double log_timestamp = timestamps[0][0];
         auto start = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < timestamps.size(); ++i) {
             double timestamp = timestamps[i][0];
