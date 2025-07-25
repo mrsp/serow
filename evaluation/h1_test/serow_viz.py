@@ -35,7 +35,6 @@ def load_gt_data(h5_file):
     with h5py.File(h5_file, "r") as f:
         positions = np.array(f["/h1_ground_truth_odometry/_pose/_pose/_position"])
         orientations = np.array(f["/h1_ground_truth_odometry/_pose/_pose/_orientation"])
-        timestamps = np.array(f["/h1_ground_truth_odometry/timestamp"])
         L_forces = np.array(f["/h1_left_ankle_force_torque_states/_wrench/_force"])
         R_forces = np.array(f["/h1_right_ankle_force_torque_states/_wrench/_force"])
 
@@ -45,7 +44,6 @@ def load_gt_data(h5_file):
         positions,
         orientations,
         imu,
-        timestamps,
         L_forces,
         R_forces
     )
@@ -84,7 +82,9 @@ def load_serow_preds(h5_file):
         b_wy = np.array(f["imu_bias/angVel/y"])
         b_wz = np.array(f["imu_bias/angVel/z"])
 
+        timestamps = np.array(f["timestamp/t"])
     return (
+        timestamps,
         pos_x,
         pos_y,
         pos_z,
@@ -188,12 +188,12 @@ if __name__ == "__main__":
         gt_pos,
         gt_rot,
         imu,
-        timestamps,
         L_forces,
         R_forces
     ) = load_gt_data(measurement_file)
-    
+   
     (
+        timestamps,
         est_pos_x,
         est_pos_y,
         est_pos_z,
@@ -215,200 +215,96 @@ if __name__ == "__main__":
         b_wz,
     ) = load_serow_preds(prediction_file)
 
-    # Because estimates and ground truth is not the same size
-    size_diff = gt_pos.shape[0] - est_pos_x.shape[0]
-
-    est_pos_x = est_pos_x[:(-10)]
-    est_pos_y = est_pos_y[:(-10)]
-    est_pos_z = est_pos_z[:(-10)]
-    est_rot_x = est_rot_x[:(-10)]
-    est_rot_y = est_rot_y[:(-10)]
-    est_rot_z = est_rot_z[:(-10)]
-    est_rot_w = est_rot_w[:(-10)]
-
-    com_pos_x = com_pos_x[:(-10)]
-    com_pos_y = com_pos_y[:(-10)]
-    com_pos_z = com_pos_z[:(-10)]
-    com_vel_x = com_vel_x[:(-10)]
-    com_vel_y = com_vel_y[:(-10)]
-    com_vel_z = com_vel_z[:(-10)]
-
-    b_ax = b_ax[:(-10)]
-    b_ay = b_ay[:(-10)]
-    b_az = b_az[:(-10)]
-    b_wx = b_wx[:(-10)]
-    b_wy = b_wy[:(-10)]
-    b_wz = b_wz[:(-10)]
-
-    gt_pos = gt_pos[(size_diff):(-10)]
-    gt_rot = gt_rot[(size_diff):(-10)]
+    gt_pos = gt_pos[:(-1)]
+    gt_rot = gt_rot[:(-1)]
+    R_forces = R_forces[:(-1)]
+    L_forces = L_forces[:(-1)]
 
     gt_pos, gt_rot = remove_gt_bias(gt_pos, gt_rot)
-    L_forces = L_forces[(size_diff):(-10)]
-    R_forces = R_forces[(size_diff):(-10)]
 
-    imu = imu[(size_diff):(-10)]
-
-    print(
-        "Base position ATE: ", compute_ATE_pos(gt_pos, est_pos_x, est_pos_y, est_pos_z)
-    )
-    print(
-        "Base rotation ATE: ",
-        compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z),
-    )
-
-    # com_vel = compute_com_vel(com_pos,timestamps)
-
-    timestamps = timestamps[(size_diff):(-10)]
+    print("Base position ATE: ", compute_ATE_pos(gt_pos, est_pos_x, est_pos_y, est_pos_z))
+    print("Base rotation ATE: ", compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z))
 
     # Plotting Ground Truth and Estimated Position (x, y, z)
-    fig1, axs1 = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
-    fig1.suptitle("Base position")
+    figPos_GT, axsPos_GT = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+    figPos_GT.suptitle("Base position")
 
-    axs1[0].plot(timestamps, gt_pos[:, 0], label="Ground Truth", color="blue")
-    axs1[0].plot(
-        timestamps, est_pos_x, label="Estimated", color="orange", linestyle="--"
-    )
-    axs1[0].set_ylabel("base_pos_x")
-    axs1[0].legend()
+    axsPos_GT[0].plot(timestamps, gt_pos[:, 0], label="Ground Truth", color="blue")
+    axsPos_GT[0].plot(timestamps, est_pos_x, label="Estimated", color="orange", linestyle="--")
+    axsPos_GT[0].set_ylabel("base_pos_x")
+    axsPos_GT[0].legend()
 
-    axs1[1].plot(timestamps, gt_pos[:, 1], label="Ground Truth", color="blue")
-    axs1[1].plot(
-        timestamps, est_pos_y, label="Estimated", color="orange", linestyle="--"
-    )
-    axs1[1].set_ylabel("base_pos_y")
-    axs1[1].legend()
+    axsPos_GT[1].plot(timestamps, gt_pos[:, 1], label="Ground Truth", color="blue")
+    axsPos_GT[1].plot(timestamps, est_pos_y, label="Estimated", color="orange", linestyle="--")
+    axsPos_GT[1].set_ylabel("base_pos_y")
+    axsPos_GT[1].legend()
 
-    axs1[2].plot(timestamps, gt_pos[:, 2], label="Ground Truth", color="blue")
-    axs1[2].plot(
-        timestamps, est_pos_z, label="Estimated", color="orange", linestyle="--"
-    )
-    axs1[2].set_ylabel("base_pos_z")
-    axs1[2].set_xlabel("Timestamp")
-    axs1[2].legend()
+    axsPos_GT[2].plot(timestamps, gt_pos[:, 2], label="Ground Truth", color="blue")
+    axsPos_GT[2].plot(timestamps, est_pos_z, label="Estimated", color="orange", linestyle="--")
+    axsPos_GT[2].set_ylabel("base_pos_z")
+    axsPos_GT[2].set_xlabel("Timestamp")
+    axsPos_GT[2].legend()
 
     # Plotting Ground Truth and Estimated Orientation
-    fig2, axs2 = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
-    fig2.suptitle("Base Orientation")
+    figRot_GT, axsRot_GT = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
+    figRot_GT.suptitle("Base Orientation")
 
-    axs2[0].plot(timestamps, gt_rot[:, 0], label="Ground Truth", color="blue")
-    axs2[0].plot(
-        timestamps, est_rot_w, label="Estimated", color="orange", linestyle="--"
-    )
-    axs2[0].set_ylabel("Orientation W")
-    axs2[0].legend()
+    axsRot_GT[0].plot(timestamps, gt_rot[:, 0], label="Ground Truth", color="blue")
+    axsRot_GT[0].plot(timestamps, est_rot_w, label="Estimated", color="orange", linestyle="--")
+    axsRot_GT[0].set_ylabel("Orientation W")
+    axsRot_GT[0].legend()
 
-    axs2[1].plot(timestamps, gt_rot[:, 1], label="Ground Truth", color="blue")
-    axs2[1].plot(
-        timestamps, est_rot_x, label="Estimated", color="orange", linestyle="--"
-    )
-    axs2[1].set_ylabel("Orientation X")
-    axs2[1].legend()
+    axsRot_GT[1].plot(timestamps, gt_rot[:, 1], label="Ground Truth", color="blue")
+    axsRot_GT[1].plot(timestamps, est_rot_x, label="Estimated", color="orange", linestyle="--")
+    axsRot_GT[1].set_ylabel("Orientation X")
+    axsRot_GT[1].legend()
 
-    axs2[2].plot(timestamps, gt_rot[:, 2], label="Ground Truth", color="blue")
-    axs2[2].plot(
-        timestamps, est_rot_y, label="Estimated", color="orange", linestyle="--"
-    )
-    axs2[2].set_ylabel("Orientation Y")
-    axs2[2].legend()
+    axsRot_GT[2].plot(timestamps, gt_rot[:, 2], label="Ground Truth", color="blue")
+    axsRot_GT[2].plot(timestamps, est_rot_y, label="Estimated", color="orange", linestyle="--")
+    axsRot_GT[2].set_ylabel("Orientation Y")
+    axsRot_GT[2].legend()
 
-    axs2[3].plot(timestamps, gt_rot[:, 3], label="Ground Truth", color="blue")
-    axs2[3].plot(
-        timestamps, est_rot_z, label="Estimated", color="orange", linestyle="--"
-    )
-    axs2[3].set_ylabel("Orientation Z")
-    axs2[3].set_xlabel("Timestamp")
-    axs2[3].legend()
+    axsRot_GT[3].plot(timestamps, gt_rot[:, 3], label="Ground Truth", color="blue")
+    axsRot_GT[3].plot(timestamps, est_rot_z, label="Estimated", color="orange", linestyle="--")
+    axsRot_GT[3].set_ylabel("Orientation Z")
+    axsRot_GT[3].set_xlabel("Timestamp")
+    axsRot_GT[3].legend()
 
-    # # Plotting Ground Truth and Estimated Orientation (x, y, z, w)
-    # fig3, axs3 = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
-    # fig3.suptitle("CoM position")
 
-    # axs3[0].plot(timestamps, com_pos[:, 0], label="Ground Truth", color="blue")
-    # axs3[0].plot(
-    #     timestamps, com_pos_x, label="Estimated", color="orange", linestyle="--"
-    # )
 
-    # axs3[0].set_ylabel("com_pos_x")
-    # axs3[0].legend()
+    # Plotting Ground Truth and Estimated Position (x, y, z)
+    figForce, axsForce = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+    figForce.suptitle("Feet forces (z-axis only)")
 
-    # axs3[1].plot(timestamps, com_pos[:, 1], label="Ground Truth", color="blue")
-    # axs3[1].plot(
-    #     timestamps, com_pos_y, label="Estimated", color="orange", linestyle="--"
-    # )
+    axsForce[0].plot(timestamps, R_forces[:, 2], label="Ground Truth", color="blue")
+    axsForce[0].set_ylabel("Right Foot Force")
 
-    # axs3[1].set_ylabel("com_pos_y")
-    # axs3[1].legend()
+    axsForce[1].plot(timestamps, L_forces[:, 2], label="Ground Truth", color="blue")
+    axsForce[1].set_ylabel("Left Foot Force")
+    axsForce[1].set_xlabel("Timestamp")
 
-    # axs3[2].plot(timestamps, com_pos[:, 2], label="Ground Truth", color="blue")
-    # axs3[2].plot(
-    #     timestamps, com_pos_z, label="Estimated", color="orange", linestyle="--"
-    # )
+    # Plotting Ground Truth and Estimated Position (x, y, z)
+    figIMU_b, axsIMU_b = plt.subplots(6, 1, figsize=(10, 8), sharex=True)
+    figIMU_b.suptitle("IMU estimated biases")
 
-    # axs3[2].set_ylabel("com_pos_z")
-    # axs3[2].legend()
+    axsIMU_b[0].plot(timestamps, b_ax, label="Ground Truth", color="blue")
+    axsIMU_b[0].set_ylabel("bias ax")
 
-    # # Plotting Ground Truth and Estimated Orientation (x, y, z, w)
-    # # fig6, axs6= plt.subplots(3, 1, figsize=(10, 10), sharex=True)
-    # # fig6.suptitle("CoM Velocity")
+    axsIMU_b[1].plot(timestamps, b_ay, color="blue")
+    axsIMU_b[1].set_ylabel("bias ay")
 
-    # # axs6[0].plot(timestamps, com_vel[:,0], label='Ground Truth', color='blue')
-    # # axs6[0].plot(timestamps, com_vel_x, label='Estimated', color='orange', linestyle='--')
+    axsIMU_b[2].plot(timestamps, b_az, color="blue")
+    axsIMU_b[2].set_ylabel("bias az")
 
-    # # axs6[0].set_ylabel('com_vel_x')
-    # # axs6[0].legend()
+    axsIMU_b[3].plot(timestamps, b_wx, color="blue")
+    axsIMU_b[3].set_ylabel("bias wx")
 
-    # # axs6[1].plot(timestamps, com_vel[:,1], label='Ground Truth', color='blue')
-    # # axs6[1].plot(timestamps, com_vel_y, label='Estimated', color='orange', linestyle='--')
-    # # axs6[1].set_ylabel('com_vel_y')
-    # # axs6[1].legend()
+    axsIMU_b[4].plot(timestamps, b_wy, color="blue")
+    axsIMU_b[4].set_ylabel("bias wy")
 
-    # # axs6[2].plot(timestamps, com_vel[:,2], label='Ground Truth', color='blue')
-    # # axs6[2].plot(timestamps, com_vel_z, label='Estimated', color='orange', linestyle='--')
-
-    # # axs6[2].set_ylabel('com_vel_z')
-    # # axs6[2].legend()
-
-    # # Plotting Ground Truth and Estimated Position (x, y, z)
-    # fig4, axs4 = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
-    # fig4.suptitle("Feet forces (z-axis only)")
-
-    # axs4[0].plot(timestamps, FL_forces[:, 2], label="Ground Truth", color="blue")
-    # axs4[0].set_ylabel("FORCE FL")
-
-    # axs4[1].plot(timestamps, FR_forces[:, 2], label="Ground Truth", color="blue")
-    # axs4[1].set_ylabel("FORCE FR")
-
-    # axs4[2].plot(timestamps, RL_forces[:, 2], label="Ground Truth", color="blue")
-    # axs4[2].set_ylabel("FORCE RL")
-
-    # axs4[3].plot(timestamps, RR_forces[:, 2], label="Ground Truth", color="blue")
-    # axs4[3].set_ylabel("FORCE RR")
-    # axs4[3].set_xlabel("Timestamp")
-
-    # # Plotting Ground Truth and Estimated Position (x, y, z)
-    # fig5, axs5 = plt.subplots(6, 1, figsize=(10, 8), sharex=True)
-    # fig5.suptitle("IMU estimated biases")
-
-    # axs5[0].plot(timestamps, b_ax, label="Ground Truth", color="blue")
-    # axs5[0].set_ylabel("bias ax")
-
-    # axs5[1].plot(timestamps, b_ay, color="blue")
-    # axs5[1].set_ylabel("bias ay")
-
-    # axs5[2].plot(timestamps, b_az, color="blue")
-    # axs5[2].set_ylabel("bias az")
-
-    # axs5[3].plot(timestamps, b_wx, color="blue")
-    # axs5[3].set_ylabel("bias wx")
-
-    # axs5[4].plot(timestamps, b_wy, color="blue")
-    # axs5[4].set_ylabel("bias wy")
-
-    # axs5[5].plot(timestamps, b_wz, color="blue")
-    # axs5[5].set_ylabel("bias wz")
-
-    # axs5[3].set_xlabel("Timestamp")
+    axsIMU_b[5].plot(timestamps, b_wz, color="blue")
+    axsIMU_b[5].set_ylabel("bias wz")
+    axsIMU_b[3].set_xlabel("Timestamp")
 
     plt.tight_layout()
 
