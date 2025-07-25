@@ -12,7 +12,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
 from ac import CustomActorCritic
-from utils import export_models_to_onnx
+from utils import export_model_to_onnx
 
 
 def linear_schedule(initial_value, final_value):
@@ -142,27 +142,6 @@ class TrainingCallback(BaseCallback):
         return True
 
 
-class KLDivergenceCallback(BaseCallback):
-    """Callback to monitor KL divergence and stop training if it gets too high."""
-
-    def __init__(self, max_kl=0.015, verbose=0):
-        super(KLDivergenceCallback, self).__init__(verbose)
-        self.max_kl = max_kl
-
-    def _on_step(self) -> bool:
-        # Check if we have KL divergence info
-        if hasattr(self.model, "logger") and self.model.logger.name_to_value:
-            approx_kl = self.model.logger.name_to_value.get("train/approx_kl", 0)
-            if approx_kl > self.max_kl:
-                if self.verbose > 0:
-                    print(
-                        f"KL divergence {approx_kl:.6f} exceeds threshold "
-                        f"{self.max_kl:.6f}. Stopping training."
-                    )
-                return False
-        return True
-
-
 class ExplainedVarianceCallback(BaseCallback):
     """Callback to monitor explained variance and warn if it's too negative."""
 
@@ -229,8 +208,8 @@ class PerformanceDegradationCallback(BaseCallback):
 class PreStepPPO(PPO):
     """Custom PPO model that handles pre-step logic during training and evaluation."""
 
-    def predict(self, observation, state=None, deterministic=False):
-        return super().predict(observation, state, deterministic)
+    def predict(self, observation, deterministic=False):
+        return self.policy.predict(observation, deterministic)
 
     def eval(self):
         """Set the model to evaluation mode."""
@@ -297,28 +276,10 @@ class PreStepPPO(PPO):
         return result
 
     def forward(self, obs, deterministic=False):
-        """Override forward to use get_observation_for_action if available"""
-        # This method is called by the policy during training
-        # We need to ensure the environment has run its pre-step logic
-        if hasattr(self.env, "envs"):
-            # Vectorized environment - ensure each env has run pre-step
-            for env in self.env.envs:
-                # The observation should already be from
-                # get_observation_for_action since we modified the step
-                # method in collect_rollouts
-                pass
-        else:
-            # Single environment
-            # The observation should already be from
-            # get_observation_for_action since we modified the step
-            # method in collect_rollouts
-            pass
-
-        # Call the parent forward method
         return super().forward(obs, deterministic)
 
 
-class ActorONNX(nn.Module):
+class ActorCriticONNX(nn.Module):
     def __init__(self, policy_model):
         super().__init__()
         self.policy = policy_model
@@ -326,51 +287,17 @@ class ActorONNX(nn.Module):
         self.action_min = policy_model.action_min
         self.action_max = policy_model.action_max
 
-    def _scale_actions(self, raw_actions):
-        """Scale actions from [0, 1] (sigmoid output) to [action_min, action_max]"""
-        if self.action_min is not None and self.action_max is not None:
-            # Move tensors to same device as raw_actions
-            action_min = self.action_min.to(raw_actions.device)
-            action_max = self.action_max.to(raw_actions.device)
-            # Scale from [0, 1] to [action_min, action_max]
-            scaled_actions = action_min + raw_actions * (action_max - action_min)
-            return scaled_actions
-        return raw_actions
-
-    def _clip_actions(self, actions):
-        """Clip actions to be within bounds"""
-        if self.action_min is not None and self.action_max is not None:
-            action_min = self.action_min.to(actions.device)
-            action_max = self.action_max.to(actions.device)
-            return torch.clamp(actions, action_min, action_max)
-        return actions
-
     def forward(self, x):
         with torch.no_grad():
-            features = self.policy.extract_features(x)
-            raw_actions = self.policy.mlp_extractor.forward_actor(features)
-            # Apply the same scaling and clipping as the original model
-            actions = self._scale_actions(raw_actions)
-            actions = self._clip_actions(actions)
-            return actions
-
-
-class CriticONNX(nn.Module):
-    def __init__(self, policy_model):
-        super().__init__()
-        self.policy = policy_model
-
-    def forward(self, x):
-        with torch.no_grad():
-            features = self.policy.extract_features(x)
-            return self.policy.mlp_extractor.forward_critic(features)
+            # Always use deterministic=True for ONNX export
+            return self.policy.forward(x, deterministic=True)
 
 
 if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 10000
+    total_samples = 250000
 
     datasets = []
     for i in range(n_envs):
@@ -500,13 +427,12 @@ if __name__ == "__main__":
         os.makedirs("models")
     model.save(f"models/{robot}_ppo")
 
-    # Create a wrapper class to match the expected interface for export_models_to_onnx
+    # Create a wrapper class to match the expected interface for export_model_to_onnx
     class PPOModelWrapper:
         def __init__(self, ppo_model, device):
             self.ppo_model = ppo_model
             self.device = device
-            self.actor = ActorONNX(ppo_model)
-            self.critic = CriticONNX(ppo_model)
+            self.policy = ActorCriticONNX(ppo_model)
             self.name = "PPO"
 
     # Create the wrapper
@@ -519,7 +445,7 @@ if __name__ == "__main__":
     }
 
     # Export to ONNX
-    export_models_to_onnx(model_wrapper, robot, export_params, "models")
+    export_model_to_onnx(model_wrapper, robot, export_params, "models")
 
     # Convert numpy arrays to lists for JSON serialization
     json_stats = {

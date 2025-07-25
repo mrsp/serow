@@ -2,7 +2,7 @@ import serow
 import numpy as np
 import gymnasium as gym
 import copy
-
+import torch
 from utils import (
     quaternion_to_rotation_matrix,
     logMap,
@@ -237,7 +237,7 @@ class SerowEnv(gym.Env):
         if mode == "human":
             print(f"Step: {self.step_count}")
 
-    def evaluate(self, model=None, stats=None):
+    def evaluate(self, model=None, stats=None, plot=True):
         # After training, evaluate the policy
         self.reset()
 
@@ -259,12 +259,14 @@ class SerowEnv(gym.Env):
             # Run the update step with the contact positions
             post_state = prior_state
             for cf in self.all_contact_frames:
-                action = np.zeros((self.action_dim, 1), dtype=np.float64)
+                action = np.zeros((self.action_dim, 1), dtype=np.float32)
                 if model is not None:
                     obs = self._get_observation(cf, post_state, self.kin)
                     if stats is not None:
-                        obs = (obs - np.array(stats["obs_mean"])) / np.sqrt(
-                            np.array(stats["obs_var"])
+                        obs = np.array(
+                            (obs - np.array(stats["obs_mean"]))
+                            / np.sqrt(np.array(stats["obs_var"])),
+                            dtype=np.float32,
                         )
                     action, _ = model.predict(obs, deterministic=True)
                 post_state, _, _ = self.update_step(cf, action)
@@ -307,13 +309,14 @@ class SerowEnv(gym.Env):
         )
 
         # Plot the trajectories
-        plot_trajectories(
-            timestamps,
-            base_positions,
-            base_orientations,
-            gt_positions,
-            gt_orientations,
-        )
+        if plot:
+            plot_trajectories(
+                timestamps,
+                base_positions,
+                base_orientations,
+                gt_positions,
+                gt_orientations,
+            )
         return (
             timestamps,
             base_positions,

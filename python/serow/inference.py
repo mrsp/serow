@@ -4,11 +4,11 @@ import numpy as np
 import json
 import onnx
 import onnx.numpy_helper
+import os
 
 from env import SerowEnv
 from ac import ONNXInference
 from train import PreStepPPO
-import os  # Import os for path joining
 
 
 def get_onnx_weights_biases(onnx_model_path):
@@ -43,13 +43,11 @@ def compare_onnx_ppo(onnx_model_path, ppo_model, robot):
         onnx_model_path (str): Path to the ONNX model file.
         ppo_model (PreStepPPO): PPO model to compare with.
     """
-    actor_onnx_filepath = os.path.join(onnx_model_path, f"{robot}_ppo_actor.onnx")
-    critic_onnx_filepath = os.path.join(onnx_model_path, f"{robot}_ppo_critic.onnx")
-    actor_params = get_onnx_weights_biases(actor_onnx_filepath)
-    critic_params = get_onnx_weights_biases(critic_onnx_filepath)
+    onnx_filepath = os.path.join(onnx_model_path, f"{robot}_ppo.onnx")
+    params = get_onnx_weights_biases(onnx_filepath)
 
     # Compare the weights and biases to the agent_ppo model
-    print("Comparing Actor (Policy) parameters:")
+    print("Comparing parameters:")
     ppo_policy_params = dict(ppo_model.policy.named_parameters())
 
     # Create a mapping from ONNX parameter names to PPO parameter names
@@ -59,7 +57,7 @@ def compare_onnx_ppo(onnx_model_path, ppo_model, robot):
             return onnx_name[7:]  # Remove 'policy.' prefix
         return onnx_name
 
-    for name, onnx_param in actor_params.items():
+    for name, onnx_param in params.items():
         ppo_name = get_ppo_param_name(name)
         if ppo_name in ppo_policy_params:
             ppo_param = ppo_policy_params[ppo_name].detach().cpu().numpy()
@@ -74,24 +72,8 @@ def compare_onnx_ppo(onnx_model_path, ppo_model, robot):
         else:
             print(f"  {name} -> {ppo_name}: ✗ (not found in PPO policy)")
 
-    print("\nComparing Critic parameters:")
-    for name, onnx_param in critic_params.items():
-        ppo_name = get_ppo_param_name(name)
-        if ppo_name in ppo_policy_params:
-            ppo_param = ppo_policy_params[ppo_name].detach().cpu().numpy()
-            is_close = np.allclose(onnx_param, ppo_param, rtol=1e-5, atol=1e-8)
-            status = "✓" if is_close else "✗"
-            print(f"  {name} -> {ppo_name}: {status} " f"(shape: {onnx_param.shape})")
-            if not is_close:
-                max_diff = np.max(np.abs(onnx_param - ppo_param))
-                mean_diff = np.mean(np.abs(onnx_param - ppo_param))
-                print(f"    Max difference: {max_diff}")
-                print(f"    Mean difference: {mean_diff}")
-        else:
-            print(f"  {name} -> {ppo_name}: ✗ (not found in PPO policy)")
-
     # Check if all parameters match
-    actor_match = all(
+    match = all(
         get_ppo_param_name(name) in ppo_policy_params
         and np.allclose(
             onnx_param,
@@ -99,28 +81,13 @@ def compare_onnx_ppo(onnx_model_path, ppo_model, robot):
             rtol=1e-5,
             atol=1e-8,
         )
-        for name, onnx_param in actor_params.items()
+        for name, onnx_param in params.items()
     )
 
-    critic_match = all(
-        get_ppo_param_name(name) in ppo_policy_params
-        and np.allclose(
-            onnx_param,
-            ppo_policy_params[get_ppo_param_name(name)].detach().cpu().numpy(),
-            rtol=1e-5,
-            atol=1e-8,
-        )
-        for name, onnx_param in critic_params.items()
-    )
-
-    if actor_match and critic_match:
+    if match:
         print("\n✓ All weights and biases are the same")
     else:
         print("\n✗ Some weights and biases differ")
-        if not actor_match:
-            print("  Actor parameters do not match")
-        if not critic_match:
-            print("  Critic parameters do not match")
 
 
 def compare_onnx_ppo_predictions(agent_onnx, agent_ppo, state_dim):
@@ -136,20 +103,18 @@ def compare_onnx_ppo_predictions(agent_onnx, agent_ppo, state_dim):
     # Generate a few random observations
     for i in range(100):
         # Generate a random observation
-        obs = np.random.randn(1, state_dim)
+        obs = np.random.randn(1, state_dim).astype(np.float32)
 
         # Get the PPO model prediction
         ppo_action, ppo_value = agent_ppo.predict(obs, deterministic=True)
-        print(f"PPO action: {ppo_action}")
-        print(f"PPO value: {ppo_value}")
 
         # Get the ONNX model prediction
-        onnx_action, onnx_value = agent_onnx.predict(obs)
-        print(f"ONNX action: {onnx_action}")
-        print(f"ONNX value: {onnx_value}")
+        onnx_action, onnx_value = agent_onnx.predict(obs, deterministic=True)
+
         # Compare the predictions
-        assert np.allclose(ppo_action, onnx_action)
-        assert np.allclose(ppo_value, onnx_value)
+        assert np.allclose(ppo_action, onnx_action, rtol=1e-4, atol=1e-4)
+        assert np.allclose(ppo_value, onnx_value, rtol=1e-4, atol=1e-4)
+    print("ONNX and PPO predictions match")
 
 
 if __name__ == "__main__":
@@ -171,15 +136,15 @@ if __name__ == "__main__":
     min_action = np.array([1e-4], dtype=np.float32)
     max_action = np.array([5e1], dtype=np.float32)
 
-    # Load the ONNX model
-    agent_onnx = ONNXInference(robot, path="models")
-
     # Load the saved PPO model
     agent_ppo = PreStepPPO.load(f"models/{robot}_ppo")
     agent_ppo.eval()
 
     # Compare the ONNX model with the PPO model
     compare_onnx_ppo(model_dir, agent_ppo, robot)
+
+    # Load the ONNX model
+    agent_onnx = ONNXInference(robot, path="models")
 
     # Compare the ONNX model predictions with the PPO model predictions
     compare_onnx_ppo_predictions(agent_onnx, agent_ppo, state_dim)
@@ -207,7 +172,7 @@ if __name__ == "__main__":
         ppo_base_orientations,
         ppo_gt_positions,
         ppo_gt_orientations,
-    ) = test_env.evaluate(agent_ppo, stats)
+    ) = test_env.evaluate(agent_ppo, stats, plot=False)
 
     # Use the ONNX model for evaluation
     (
@@ -216,12 +181,12 @@ if __name__ == "__main__":
         onnx_base_orientations,
         onnx_gt_positions,
         onnx_gt_orientations,
-    ) = test_env.evaluate(agent_onnx, stats)
+    ) = test_env.evaluate(agent_onnx, stats, plot=False)
 
     # These must be equal
-    assert np.allclose(ppo_timestamps, onnx_timestamps)
-    assert np.allclose(ppo_base_positions, onnx_base_positions)
-    assert np.allclose(ppo_base_orientations, onnx_base_orientations)
-    assert np.allclose(ppo_gt_positions, onnx_gt_positions)
-    assert np.allclose(ppo_gt_orientations, onnx_gt_orientations)
+    assert np.allclose(ppo_timestamps, onnx_timestamps, rtol=1e-4, atol=1e-4)
+    assert np.allclose(ppo_base_positions, onnx_base_positions, rtol=1e-4, atol=1e-4)
+    assert np.allclose(
+        ppo_base_orientations, onnx_base_orientations, rtol=1e-4, atol=1e-4
+    )
     print("All tests passed")

@@ -163,48 +163,52 @@ class CustomActorCritic(ActorCriticPolicy):
 
         return actions, values, log_prob
 
+    def predict(
+        self, obs: np.ndarray, deterministic: bool = False
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Get the policy action from an observation.
+        """
+        self.set_training_mode(False)
+
+        obs_tensor, _ = self.obs_to_tensor(obs)
+
+        actions, values, _ = self.forward(obs_tensor, deterministic)
+        return actions.detach().cpu().numpy()[0], values.detach().cpu().numpy()[0]
+
     def predict_values(self, obs: torch.Tensor) -> torch.Tensor:
         """
         Get the estimated values according to the current policy given the
         observations.
         """
-        _, latent_vf = self.mlp_extractor.forward(obs)
-        return latent_vf
+        return self.mlp_extractor.forward_critic(obs)
 
 
 class ONNXInference:
     def __init__(self, robot, path):
         # Initialize ONNX Runtime sessions
-        self.actor_session = ort.InferenceSession(
-            f"{path}/{robot}_ppo_actor.onnx",
-            providers=["CPUExecutionProvider"],
-        )
-        self.critic_session = ort.InferenceSession(
-            f"{path}/{robot}_ppo_critic.onnx",
+        self.session = ort.InferenceSession(
+            f"{path}/{robot}_ppo.onnx",
             providers=["CPUExecutionProvider"],
         )
 
         # Get input names
-        self.actor_input_name = self.actor_session.get_inputs()[0].name
-        self.critic_input_name = self.critic_session.get_inputs()[0].name
-        print(f"Actor input names: {self.actor_input_name}")
-        print(f"Critic input names: {self.critic_input_name}")
+        self.input_name = self.session.get_inputs()[0].name
+        print(f"Input names: {self.input_name}")
 
         # Get input shapes
-        self.state_dim = self.actor_session.get_inputs()[0].shape[1]
-        self.action_dim = self.actor_session.get_outputs()[0].shape[1]
+        self.state_dim = self.session.get_inputs()[0].shape[1]
+        self.action_dim = self.session.get_outputs()[0].shape[1]
 
         print(f"Initialized ONNX inference for {robot}")
         print(f"State dimension: {self.state_dim}")
         print(f"Action dimension: {self.action_dim}")
 
-    def get_action(self, state, deterministic=True):
+    def forward(self, observation, deterministic=True):
         # Prepare input
-        state = np.array(state, dtype=np.float32).reshape(1, -1)
-
-        # Run actor inference
-        actor_output = self.actor_session.run(None, {self.actor_input_name: state})[0]
-        return actor_output[0]
+        observation = np.array(observation, dtype=np.float32).reshape(1, -1)
+        output = self.session.run(None, {self.input_name: observation})
+        return output[0], output[1], output[2]
 
     def predict(self, observation, deterministic=True):
         """
@@ -212,17 +216,5 @@ class ONNXInference:
         Matches the interface expected by SerowEnv.evaluate().
         Returns (action, value) tuple.
         """
-        action = self.get_action(observation, deterministic=deterministic)
-        value = self.get_value(observation)
+        action, value, _ = self.forward(observation, deterministic=deterministic)
         return action, value
-
-    def get_value(self, state):
-        # Prepare inputs
-        state = np.array(state, dtype=np.float32).reshape(1, -1)
-
-        # Run critic inference
-        critic_output = self.critic_session.run(
-            None,
-            {self.critic_input_name: state},
-        )[0]
-        return critic_output[0]

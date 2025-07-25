@@ -515,48 +515,32 @@ def plot_contact_forces_and_torques(contact_states):
     plt.show()
 
 
-def export_models_to_onnx(agent, robot, params, path):
+def export_model_to_onnx(agent, robot, params, path):
     """Export the trained models to ONNX format"""
     os.makedirs(path, exist_ok=True)
 
     # Set models to evaluation mode to disable dropout
-    agent.actor.eval()
-    agent.critic.eval()
+    agent.policy.eval()
 
-    # Export actor model with explicit tracing
+    # Export model with explicit tracing
     dummy_state = torch.randn(1, params["state_dim"]).to(agent.device)
     torch.onnx.export(
-        agent.actor,
+        agent.policy,
         dummy_state,
-        f"{path}/{robot}_ppo_actor.onnx",
+        f"{path}/{robot}_ppo.onnx",
         export_params=True,
         opset_version=11,
         do_constant_folding=True,
-        input_names=["input"],
-        output_names=["output"],
+        input_names=["observation"],
+        output_names=["action", "value", "log_prob"],
         dynamic_axes={
-            "input": {0: "batch_size"},
-            "output": {0: "batch_size"},
+            "observation": {0: "batch_size"},
+            "action": {0: "batch_size"},  # action
+            "value": {0: "batch_size"},  # value
+            "log_prob": {0: "batch_size"},  # log_prob
         },
         verbose=True,  # Add verbose output to see what's being exported
     )
 
-    # Export critic model
-    torch.onnx.export(
-        agent.critic,
-        dummy_state,
-        f"{path}/{robot}_ppo_critic.onnx",
-        export_params=True,
-        opset_version=11,
-        do_constant_folding=True,
-        input_names=["state"],
-        output_names=["output"],
-        dynamic_axes={
-            "state": {0: "batch_size"},
-            "output": {0: "batch_size"},
-        },
-    )
-
     # Set models back to training mode
-    agent.actor.train()
-    agent.critic.train()
+    agent.policy.train()
