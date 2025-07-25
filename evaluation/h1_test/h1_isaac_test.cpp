@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
         auto base_gt_orientations = readHDF5(INPUT_FILE, "h1_ground_truth_odometry/_pose/_pose/_orientation");
         std::cout << "Opened Base Pose Ground Truth from " << INPUT_FILE << std::endl;
         // Read Timestamps
-        auto imu_timestamps = readHDF5(INPUT_FILE, "h1_imu/_header/_timestamp");
+        auto imu_timestamps = readHDF5(INPUT_FILE, "h1_imu/timestamp");
         auto joint_timestamps = readHDF5(INPUT_FILE, "h1_joint_states/timestamp");
         auto feet_force_timestamps = readHDF5(INPUT_FILE, "h1_left_ankle_force_torque_states/timestamp");
         auto base_gt_timestamp = readHDF5(INPUT_FILE, "h1_ground_truth_odometry/timestamp");
@@ -355,7 +355,7 @@ int main(int argc, char** argv) {
             }
 
 
-            EstTimestamp.push_back(joint_timestamps[i][0] * 1e-9);  // Convert to seconds
+            EstTimestamp.push_back(joint_timestamps[i][0]);  // Convert to seconds
             base_pos_x.push_back(basePos.x());
             base_pos_y.push_back(basePos.y());
             base_pos_z.push_back(basePos.z());
