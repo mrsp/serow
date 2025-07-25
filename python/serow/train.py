@@ -218,7 +218,8 @@ class PerformanceDegradationCallback(BaseCallback):
                 if self.verbose > 0:
                     print(
                         f"Performance degradation detected: "
-                        f"recent avg {recent_avg:.0f} vs earlier avg {earlier_avg:.0f}"
+                        f"recent avg {recent_avg:.0f} vs earlier avg "
+                        f"{earlier_avg:.0f}"
                     )
                 return False
 
@@ -230,6 +231,11 @@ class PreStepPPO(PPO):
 
     def predict(self, observation, state=None, deterministic=False):
         return super().predict(observation, state, deterministic)
+
+    def eval(self):
+        """Set the model to evaluation mode."""
+        self.policy.eval()
+        return self
 
     def collect_rollouts(
         self,
@@ -553,4 +559,6 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
+    # Set model to evaluation mode
+    model.eval()
     test_env.evaluate(model, stats)

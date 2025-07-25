@@ -2,6 +2,7 @@
 
 import numpy as np
 import json
+
 from env import SerowEnv
 from ac import ONNXInference
 from train import PreStepPPO
@@ -16,26 +17,24 @@ if __name__ == "__main__":
     stats = json.load(open(f"models/{robot}_stats.json"))
     print(stats)
 
-    contact_states = test_dataset["contact_states"]
-    contact_frame = list(contact_states[0].contacts_status.keys())
-
-    # Define action bounds (matching the environment setup)
-    min_action = np.array([1e-4], dtype=np.float32)
-    max_action = np.array([5e1], dtype=np.float32)
-
     # Load the ONNX model
     agent_onnx = ONNXInference(robot, path="models")
 
     # Load the saved PPO model
     agent_ppo = PreStepPPO.load(f"models/{robot}_ppo")
+    agent_ppo.eval()
 
     # Get contacts frame from the first measurement
-    contacts_frame = set(contact_states[0].contacts_status.keys())
+    contact_states = test_dataset["contact_states"]
+    contacts_frame = list(contact_states[0].contacts_status.keys())
     state_dim = 2 + 3 + 9 + 3 + 4
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
+    min_action = np.array([1e-4], dtype=np.float32)
+    max_action = np.array([5e1], dtype=np.float32)
+
     test_env = SerowEnv(
         robot,
-        contact_frame[0],
+        contacts_frame[0],
         test_dataset["joint_states"][0],
         test_dataset["base_states"][0],
         test_dataset["contact_states"][0],

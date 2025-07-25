@@ -519,6 +519,10 @@ def export_models_to_onnx(agent, robot, params, path):
     """Export the trained models to ONNX format"""
     os.makedirs(path, exist_ok=True)
 
+    # Set models to evaluation mode to disable dropout
+    agent.actor.eval()
+    agent.critic.eval()
+
     # Export actor model
     dummy_state = torch.randn(1, params["state_dim"]).to(agent.device)
     torch.onnx.export(
@@ -551,3 +555,7 @@ def export_models_to_onnx(agent, robot, params, path):
             "output": {0: "batch_size"},
         },
     )
+
+    # Set models back to training mode
+    agent.actor.train()
+    agent.critic.train()
