@@ -539,7 +539,7 @@ def export_model_to_onnx(agent, robot, params, path):
             "value": {0: "batch_size"},  # value
             "log_prob": {0: "batch_size"},  # log_prob
         },
-        verbose=True,  # Add verbose output to see what's being exported
+        verbose=False,
     )
 
     # Set models back to training mode

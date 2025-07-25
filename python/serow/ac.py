@@ -59,9 +59,9 @@ class CustomActorCritic(ActorCriticPolicy):
         # Actor network (policy)
         self.policy_net = nn.Sequential(
             nn.Linear(256, 128),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(128, 64),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(64, 1),
             nn.Sigmoid(),
         )
@@ -69,24 +69,24 @@ class CustomActorCritic(ActorCriticPolicy):
         # Critic network (value function)
         self.value_net = nn.Sequential(
             nn.Linear(256, 128),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(128, 64),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(64, 1),
         )
 
         # Initialize weights and biases
         for layer in self.shared_net:
             if isinstance(layer, nn.Linear):
-                nn.init.xavier_uniform_(layer.weight)
+                nn.init.orthogonal_(layer.weight, gain=0.5)
                 nn.init.zeros_(layer.bias)
         for layer in self.policy_net:
             if isinstance(layer, nn.Linear):
-                nn.init.xavier_uniform_(layer.weight)
+                nn.init.orthogonal_(layer.weight, gain=0.5)
                 nn.init.zeros_(layer.bias)
         for layer in self.value_net:
             if isinstance(layer, nn.Linear):
-                nn.init.xavier_uniform_(layer.weight)
+                nn.init.orthogonal_(layer.weight, gain=0.5)
                 nn.init.zeros_(layer.bias)
 
         # Create a custom MLP extractor that matches the expected interface

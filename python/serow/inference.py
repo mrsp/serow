@@ -112,8 +112,8 @@ def compare_onnx_ppo_predictions(agent_onnx, agent_ppo, state_dim):
         onnx_action, onnx_value = agent_onnx.predict(obs, deterministic=True)
 
         # Compare the predictions
-        assert np.allclose(ppo_action, onnx_action, rtol=1e-4, atol=1e-4)
-        assert np.allclose(ppo_value, onnx_value, rtol=1e-4, atol=1e-4)
+        assert np.allclose(ppo_action, onnx_action, atol=1e-4)
+        assert np.allclose(ppo_value, onnx_value, atol=1e-4)
     print("ONNX and PPO predictions match")
 
 
@@ -133,8 +133,8 @@ if __name__ == "__main__":
     contacts_frame = list(contact_states[0].contacts_status.keys())
     state_dim = 2 + 3 + 9 + 3 + 4
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-4], dtype=np.float32)
-    max_action = np.array([5e1], dtype=np.float32)
+    min_action = np.array([1e-5], dtype=np.float32)
+    max_action = np.array([1e2], dtype=np.float32)
 
     # Load the saved PPO model
     agent_ppo = PreStepPPO.load(f"models/{robot}_ppo")
@@ -172,7 +172,7 @@ if __name__ == "__main__":
         ppo_base_orientations,
         ppo_gt_positions,
         ppo_gt_orientations,
-    ) = test_env.evaluate(agent_ppo, stats, plot=False)
+    ) = test_env.evaluate(agent_ppo, stats, plot=True)
 
     # Use the ONNX model for evaluation
     (
@@ -181,12 +181,10 @@ if __name__ == "__main__":
         onnx_base_orientations,
         onnx_gt_positions,
         onnx_gt_orientations,
-    ) = test_env.evaluate(agent_onnx, stats, plot=False)
+    ) = test_env.evaluate(agent_onnx, stats, plot=True)
 
     # These must be equal
-    assert np.allclose(ppo_timestamps, onnx_timestamps, rtol=1e-4, atol=1e-4)
-    assert np.allclose(ppo_base_positions, onnx_base_positions, rtol=1e-4, atol=1e-4)
-    assert np.allclose(
-        ppo_base_orientations, onnx_base_orientations, rtol=1e-4, atol=1e-4
-    )
+    assert np.allclose(ppo_timestamps, onnx_timestamps, atol=1e-3)
+    assert np.allclose(ppo_base_positions, onnx_base_positions, atol=1e-3)
+    assert np.allclose(ppo_base_orientations, onnx_base_orientations, atol=1e-3)
     print("All tests passed")

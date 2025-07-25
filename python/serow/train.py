@@ -312,8 +312,8 @@ if __name__ == "__main__":
     state_dim = 2 + 3 + 9 + 3 + 4
     print(f"State dimension: {state_dim}")
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-4], dtype=np.float32)
-    max_action = np.array([5e1], dtype=np.float32)
+    min_action = np.array([1e-5], dtype=np.float32)
+    max_action = np.array([1e2], dtype=np.float32)
 
     # Create vectorized environment
     def make_env(i, j):
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=True)
 
-    lr_schedule = linear_schedule(1e-4, 5e-5)
+    lr_schedule = linear_schedule(1e-4, 1e-6)
     model = PreStepPPO(
         CustomActorCritic,
         env,
