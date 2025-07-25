@@ -3,6 +3,7 @@ import gymnasium as gym
 import matplotlib.pyplot as plt
 import json
 import os
+import torch
 import torch.nn as nn
 
 from env import SerowEnv
@@ -312,21 +313,51 @@ class PreStepPPO(PPO):
 
 
 class ActorONNX(nn.Module):
-    def __init__(self, mlp_extractor):
+    def __init__(self, policy_model):
         super().__init__()
-        self.mlp_extractor = mlp_extractor
+        self.policy = policy_model
+        # Get action bounds from the policy
+        self.action_min = policy_model.action_min
+        self.action_max = policy_model.action_max
+
+    def _scale_actions(self, raw_actions):
+        """Scale actions from [0, 1] (sigmoid output) to [action_min, action_max]"""
+        if self.action_min is not None and self.action_max is not None:
+            # Move tensors to same device as raw_actions
+            action_min = self.action_min.to(raw_actions.device)
+            action_max = self.action_max.to(raw_actions.device)
+            # Scale from [0, 1] to [action_min, action_max]
+            scaled_actions = action_min + raw_actions * (action_max - action_min)
+            return scaled_actions
+        return raw_actions
+
+    def _clip_actions(self, actions):
+        """Clip actions to be within bounds"""
+        if self.action_min is not None and self.action_max is not None:
+            action_min = self.action_min.to(actions.device)
+            action_max = self.action_max.to(actions.device)
+            return torch.clamp(actions, action_min, action_max)
+        return actions
 
     def forward(self, x):
-        return self.mlp_extractor.forward_actor(x)
+        with torch.no_grad():
+            features = self.policy.extract_features(x)
+            raw_actions = self.policy.mlp_extractor.forward_actor(features)
+            # Apply the same scaling and clipping as the original model
+            actions = self._scale_actions(raw_actions)
+            actions = self._clip_actions(actions)
+            return actions
 
 
 class CriticONNX(nn.Module):
-    def __init__(self, mlp_extractor):
+    def __init__(self, policy_model):
         super().__init__()
-        self.mlp_extractor = mlp_extractor
+        self.policy = policy_model
 
     def forward(self, x):
-        return self.mlp_extractor.forward_critic(x)
+        with torch.no_grad():
+            features = self.policy.extract_features(x)
+            return self.policy.mlp_extractor.forward_critic(features)
 
 
 if __name__ == "__main__":
@@ -373,22 +404,20 @@ if __name__ == "__main__":
         # Wrap with AutoPreStepWrapper to automatically use pre-step logic
         return AutoPreStepWrapper(base_env)
 
-    test_env = AutoPreStepWrapper(
-        SerowEnv(
-            robot,
-            contact_frame[0],
-            test_dataset["joint_states"][0],
-            test_dataset["base_states"][0],
-            test_dataset["contact_states"][0],
-            action_dim,
-            state_dim,
-            min_action,
-            max_action,
-            test_dataset["imu"],
-            test_dataset["joints"],
-            test_dataset["ft"],
-            test_dataset["base_pose_ground_truth"],
-        )
+    test_env = SerowEnv(
+        robot,
+        contact_frame[0],
+        test_dataset["joint_states"][0],
+        test_dataset["base_states"][0],
+        test_dataset["contact_states"][0],
+        action_dim,
+        state_dim,
+        min_action,
+        max_action,
+        test_dataset["imu"],
+        test_dataset["joints"],
+        test_dataset["ft"],
+        test_dataset["base_pose_ground_truth"],
     )
 
     # Create vectorized environment with different datasets for each environment
@@ -455,7 +484,6 @@ if __name__ == "__main__":
         "obs_var": obs_var,
         "obs_count": obs_count,
     }
-
     print("Observation normalization stats:")
     print(f"  Mean: {stats['obs_mean']}")
     print(f"  Variance: {stats['obs_var']}")
@@ -471,12 +499,12 @@ if __name__ == "__main__":
         def __init__(self, ppo_model, device):
             self.ppo_model = ppo_model
             self.device = device
-            self.actor = ActorONNX(ppo_model.policy.mlp_extractor)
-            self.critic = CriticONNX(ppo_model.policy.mlp_extractor)
+            self.actor = ActorONNX(ppo_model)
+            self.critic = CriticONNX(ppo_model)
             self.name = "PPO"
 
     # Create the wrapper
-    model_wrapper = PPOModelWrapper(model, "cuda")
+    model_wrapper = PPOModelWrapper(model.policy, "cuda")
 
     # Define parameters for ONNX export
     export_params = {
@@ -525,4 +553,4 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    test_env.env.evaluate(model, stats)
+    test_env.evaluate(model, stats)

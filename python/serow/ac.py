@@ -3,6 +3,8 @@ from stable_baselines3.common.policies import ActorCriticPolicy
 import torch
 import torch.nn as nn
 import gymnasium as gym
+import onnxruntime as ort
+import numpy as np
 
 
 class CustomActorCritic(ActorCriticPolicy):
@@ -168,3 +170,63 @@ class CustomActorCritic(ActorCriticPolicy):
         """
         _, latent_vf = self.mlp_extractor.forward(obs)
         return latent_vf
+
+
+class ONNXInference:
+    def __init__(self, robot, path):
+        # Initialize ONNX Runtime sessions
+        self.actor_session = ort.InferenceSession(
+            f"{path}/{robot}_ppo_actor.onnx",
+            providers=["CPUExecutionProvider"],
+        )
+        self.critic_session = ort.InferenceSession(
+            f"{path}/{robot}_ppo_critic.onnx",
+            providers=["CPUExecutionProvider"],
+        )
+
+        # Get input names
+        self.actor_input_name = self.actor_session.get_inputs()[0].name
+        self.critic_input_name = self.critic_session.get_inputs()[0].name
+        print(f"Actor input names: {self.actor_input_name}")
+        print(f"Critic input names: {self.critic_input_name}")
+
+        # Get input shapes
+        self.state_dim = self.actor_session.get_inputs()[0].shape[1]
+        self.action_dim = self.actor_session.get_outputs()[0].shape[1]
+
+        print(f"Initialized ONNX inference for {robot}")
+        print(f"State dimension: {self.state_dim}")
+        print(f"Action dimension: {self.action_dim}")
+
+    def get_action(self, state, deterministic=True):
+        # Prepare input
+        state = np.array(state, dtype=np.float32).reshape(1, -1)
+
+        # Run actor inference
+        actor_output = self.actor_session.run(None, {self.actor_input_name: state})[0]
+
+        # Get actions from actor output (already scaled and clipped in ONNX model)
+        actions = actor_output[0]
+
+        return actions
+
+    def predict(self, observation, deterministic=True):
+        """
+        Predict action given observation.
+        Matches the interface expected by SerowEnv.evaluate().
+        Returns (action, state) tuple.
+        """
+        action = self.get_action(observation, deterministic=deterministic)
+        value = self.get_value(observation)
+        return action, value
+
+    def get_value(self, state):
+        # Prepare inputs
+        state = np.array(state, dtype=np.float32).reshape(1, -1)
+
+        # Run critic inference
+        critic_output = self.critic_session.run(
+            None,
+            {self.critic_input_name: state},
+        )[0]
+        return critic_output[0]

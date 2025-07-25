@@ -264,7 +264,7 @@ class SerowEnv(gym.Env):
                     obs = self._get_observation(cf, post_state, self.kin)
                     if stats is not None:
                         obs = (obs - np.array(stats["obs_mean"])) / np.sqrt(
-                            np.array(stats["obs_var"]) + 5e-9
+                            np.array(stats["obs_var"])
                         )
                     action, _ = model.predict(obs, deterministic=True)
                 post_state, _, _ = self.update_step(cf, action)
