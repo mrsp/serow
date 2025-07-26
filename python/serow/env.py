@@ -2,7 +2,6 @@ import serow
 import numpy as np
 import gymnasium as gym
 import copy
-import torch
 from utils import (
     quaternion_to_rotation_matrix,
     logMap,
@@ -98,14 +97,14 @@ class SerowEnv(gym.Env):
         else:
             if success:
                 nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-                position_reward = 5.0 * np.exp(-1.0 * position_error)
-                innovation_reward = 1.0 * np.exp(-1.0 * nis)
-                orientation_reward = 10.0 * np.exp(-1.0 * orientation_error)
+                position_reward = 5.0 * np.exp(-2.0 * position_error)
+                innovation_reward = 1.0 * np.exp(-2.0 * nis)
+                orientation_reward = 10.0 * np.exp(-2.0 * orientation_error)
                 step_reward = 1.0 * (step + 1) / max_steps
                 reward = innovation_reward + position_reward + orientation_reward
                 reward += step_reward
                 # Scale down the reward to prevent value function issues
-                reward = reward * 0.001
+                reward = reward * 0.005
 
         return reward, done
 
@@ -115,7 +114,21 @@ class SerowEnv(gym.Env):
             or not kin.contacts_status[cf]
             or state.get_contact_position(cf) is None
         ):
-            return np.zeros((self.state_dim,), dtype=np.float32)
+            # Return a more informative observation instead of all zeros
+            # Include base state information even when contact is not available
+            P_pos_trace = np.trace(state.get_base_position_cov())
+            P_ori_trace = np.trace(state.get_base_orientation_cov())
+            return np.concatenate(
+                [
+                    [P_pos_trace],
+                    [P_ori_trace],
+                    np.zeros(3),  # innovation (3D)
+                    np.zeros(9),  # R covariance (3x3 flattened)
+                    state.get_base_linear_velocity(),
+                    state.get_base_orientation(),
+                ],
+                axis=0,
+            ).astype(np.float32)
 
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
         local_pos = R_base @ (
