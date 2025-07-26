@@ -544,3 +544,10 @@ def export_model_to_onnx(agent, robot, params, path):
 
     # Set models back to training mode
     agent.policy.train()
+
+
+class BaseVelocityGroundTruth:
+    def __init__(self, timestamp, linear_velocity, angular_velocity):
+        self.timestamp = timestamp
+        self.linear_velocity = linear_velocity
+        self.angular_velocity = angular_velocity
