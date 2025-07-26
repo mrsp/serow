@@ -65,6 +65,7 @@ class SerowEnv(gym.Env):
         self.gt_data = gt_data[:max_steps]
         self.kin = None
         self.imu = None
+        self.valid_prediction = False
 
     def _compute_reward(self, cf, state, gt, step, max_steps):
         reward = 0.0
@@ -103,9 +104,9 @@ class SerowEnv(gym.Env):
                 step_reward = 1.0 * (step + 1) / max_steps
                 reward = innovation_reward + position_reward + orientation_reward
                 reward += step_reward
-                # Scale down the reward to prevent value function issues
-                reward = reward * 0.005
 
+        # Scale down the reward to prevent value function issues
+        reward = reward * 0.005
         return reward, done
 
     def _get_observation(self, cf, state, kin):
@@ -114,21 +115,7 @@ class SerowEnv(gym.Env):
             or not kin.contacts_status[cf]
             or state.get_contact_position(cf) is None
         ):
-            # Return a more informative observation instead of all zeros
-            # Include base state information even when contact is not available
-            P_pos_trace = np.trace(state.get_base_position_cov())
-            P_ori_trace = np.trace(state.get_base_orientation_cov())
-            return np.concatenate(
-                [
-                    [P_pos_trace],
-                    [P_ori_trace],
-                    np.zeros(3),  # innovation (3D)
-                    np.zeros(9),  # R covariance (3x3 flattened)
-                    state.get_base_linear_velocity(),
-                    state.get_base_orientation(),
-                ],
-                axis=0,
-            ).astype(np.float32)
+            return np.zeros((self.state_dim,))
 
         R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
         local_pos = R_base @ (
@@ -158,6 +145,7 @@ class SerowEnv(gym.Env):
         self.serow_framework.reset()
         self.serow_framework.set_state(self.initial_state)
         self.step_count = 0
+        self.valid_prediction = False
         obs = self._get_observation(self.cf, self.initial_state, self.kin)
         return obs, {}
 
@@ -174,6 +162,11 @@ class SerowEnv(gym.Env):
 
         # Get the observation that the policy should use
         obs = self._get_observation(cf, prior_state, self.kin)
+
+        self.valid_prediction = False
+        if not np.all(obs == np.zeros((self.state_dim,))):
+            self.valid_prediction = True
+
         return obs
 
     def step(self, action):
@@ -190,19 +183,18 @@ class SerowEnv(gym.Env):
             )
             obs = self._get_observation(self.cf, post_state, self.kin)
 
-        if not np.all(obs == np.zeros((self.state_dim,))):
+        if self.valid_prediction and not np.all(obs == np.zeros((self.state_dim,))):
             valid = True
 
         info = {"step_count": self.step_count, "reward": reward, "valid": valid}
 
         for cf in self.contact_frames:
-            self.update_step(cf, np.zeros((self.action_dim, 1), dtype=np.float32))
+            self.update_step(cf, np.zeros((self.action_dim,), dtype=np.float32))
 
         self.finish_update(self.imu, self.kin)
         self.step_count += 1
 
-        if self.step_count >= self.max_steps:
-            done = False
+        if self.step_count >= self.max_steps and not done:
             truncated = True
 
         return obs, reward, done, truncated, info
@@ -272,16 +264,17 @@ class SerowEnv(gym.Env):
             # Run the update step with the contact positions
             post_state = prior_state
             for cf in self.all_contact_frames:
-                action = np.zeros((self.action_dim, 1), dtype=np.float32)
+                action = np.zeros((self.action_dim,), dtype=np.float32)
                 if model is not None:
                     obs = self._get_observation(cf, post_state, self.kin)
-                    if stats is not None:
-                        obs = np.array(
-                            (obs - np.array(stats["obs_mean"]))
-                            / np.sqrt(np.array(stats["obs_var"])),
-                            dtype=np.float32,
-                        )
-                    action, _ = model.predict(obs, deterministic=True)
+                    if not np.all(obs == np.zeros((self.state_dim,))):
+                        if stats is not None:
+                            obs = np.array(
+                                (obs - np.array(stats["obs_mean"]))
+                                / np.sqrt(np.array(stats["obs_var"])),
+                                dtype=np.float32,
+                            )
+                        action, _ = model.predict(obs, deterministic=True)
                 post_state, _, _ = self.update_step(cf, action)
 
             self.finish_update(self.imu, self.kin)

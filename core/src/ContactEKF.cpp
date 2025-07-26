@@ -17,7 +17,7 @@
 namespace serow {
 
 void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-                      double g, double imu_rate, bool outlier_detection) {
+                      double g, double imu_rate, bool outlier_detection, bool verbose) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
@@ -118,6 +118,11 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
 
     // Clear the action covariance gain matrix
     clearAction();
+
+    verbose_ = verbose;
+    if (verbose) {
+        std::cout << "[SEROW/ContactEKF]: Initialized successfully" << std::endl;
+    }
 }
 
 void ContactEKF::setState(const BaseState& state) {
@@ -188,9 +193,11 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
         dt = imu.timestamp - last_imu_timestamp_.value();
     }
     if (dt < nominal_dt_ / 2) {
-        std::cout << "[SEROW/ContactEKF]: Predict step sample time is abnormal " << dt
-                  << " while the nominal sample time is " << nominal_dt_ << " setting to nominal"
-                  << std::endl;
+        if (verbose_) {
+            std::cout << "[SEROW/ContactEKF]: Predict step sample time is abnormal " << dt
+                      << " while the nominal sample time is " << nominal_dt_
+                      << " setting to nominal" << std::endl;
+        }
         dt = nominal_dt_;
     }
 

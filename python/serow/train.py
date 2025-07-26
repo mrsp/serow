@@ -5,6 +5,7 @@ import json
 import os
 import torch
 import torch.nn as nn
+import pandas as pd
 
 from env import SerowEnv
 from stable_baselines3.common.callbacks import BaseCallback
@@ -13,6 +14,16 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
 from ac import CustomActorCritic
 from utils import export_model_to_onnx
+
+
+def compute_rolling_average(data, window_size):
+    """Helper to compute rolling average, padding the start."""
+    if data.size == 0:
+        return []
+    series = pd.Series(data)
+    # Use .rolling().mean() with min_periods to start from the first data point
+    rolling_avg = series.rolling(window=window_size, min_periods=1).mean()
+    return rolling_avg.tolist()
 
 
 def linear_schedule(initial_value, final_value):
@@ -113,7 +124,7 @@ class TrainingCallback(BaseCallback):
                     reward = info["reward"]
                     valid_steps += 1
                     total_reward += reward
-
+                    self.step_rewards.append(reward)
         # Only add to episode if there were valid steps
         if valid_steps > 0:
             avg_valid_reward = total_reward / valid_steps
@@ -365,7 +376,7 @@ if __name__ == "__main__":
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=True)
 
-    lr_schedule = linear_schedule(1e-4, 1e-6)
+    lr_schedule = linear_schedule(1e-5, 1e-6)
     model = PreStepPPO(
         CustomActorCritic,
         env,
@@ -382,7 +393,9 @@ if __name__ == "__main__":
         target_kl=0.05,
         vf_coef=0.5,
         ent_coef=0.001,
+        normalize_advantage=True,
         policy_kwargs=dict(action_min=min_action, action_max=max_action),
+        seed=42,
     )
 
     # Create callbacks
@@ -404,9 +417,10 @@ if __name__ == "__main__":
     )
 
     # Train the model
-    print(f"Training with {n_envs} parallel environments")
+    print(f"Training with {n_envs * len(contact_frame)} parallel environments")
     print("Starting training...")
     model.learn(total_timesteps=total_samples, callback=callback)
+    print("Training completed")
 
     # Extract the observation normalization statistics
     obs_mean = env.obs_rms.mean
@@ -445,6 +459,7 @@ if __name__ == "__main__":
     }
 
     # Export to ONNX
+    print("Exporting model to ONNX...")
     export_model_to_onnx(model_wrapper, robot, export_params, "models")
 
     # Convert numpy arrays to lists for JSON serialization
@@ -466,20 +481,23 @@ if __name__ == "__main__":
     valid_ratio = valid_count / total_count
     print(f"Valid sample ratio: {valid_count}/{total_count} ({valid_ratio:.2%})")
 
-    # Plot training progress - use episode rewards if available, otherwise step rewards
-    if len(training_callback.episode_rewards) > 0:
-        plt.plot(training_callback.episode_rewards, label="Episode Rewards")
-        plt.xlabel("Episode")
-        plt.ylabel("Episode Reward")
-        plt.title("Training Progress (Episode Rewards)")
-    else:
-        # Use step rewards as fallback
-        plt.plot(training_callback.step_rewards, label="Step Rewards", alpha=0.7)
-        plt.xlabel("Training Step")
-        plt.ylabel("Average Step Reward")
-        plt.title("Training Progress (Step Rewards)")
-        print("Warning: No episode rewards found, using step rewards instead")
-
+    # Plot the step rewards
+    step_rewards = np.array(training_callback.step_rewards)
+    # Normalize step rewards to 0-1
+    step_rewards_norm = (step_rewards - np.min(step_rewards)) / (
+        np.max(step_rewards) - np.min(step_rewards)
+    ).tolist()
+    step_rewards_avg = compute_rolling_average(step_rewards_norm, 100)
+    plt.plot(step_rewards_avg, label="Average Rewards", alpha=1.0, color="blue")
+    plt.plot(
+        step_rewards_norm,
+        label="Rewards",
+        alpha=0.35,
+        color="lightblue",
+    )
+    plt.xlabel("Samples")
+    plt.ylabel("Normalized Rewards")
+    plt.title("Training Progress")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()

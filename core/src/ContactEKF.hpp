@@ -58,9 +58,10 @@ public:
      * @param g Acceleration due to gravity.
      * @param imu_rate IMU update rate.
      * @param outlier_detection Flag indicating if outlier detection mechanisms should be enabled.
+     * @param verbose Flag indicating if verbose output should be enabled.
      */
     void init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-              double g, double imu_rate, bool outlier_detection = false);
+              double g, double imu_rate, bool outlier_detection = false, bool verbose = false);
     /**
      * @brief Predicts the robot's state forward based on IMU and kinematic measurements.
      * @param state Current state of the robot.
@@ -186,6 +187,8 @@ private:
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
         contact_orientation_innovation_;
+
+    bool verbose_{};  ///< Flag indicating if verbose output is enabled.
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.
