@@ -411,7 +411,7 @@ if __name__ == "__main__":
     )
 
     # Train the model
-    print(f"Training with {n_envs} parallel environments")
+    print(f"Training with {n_envs * len(contact_frame)} parallel environments")
     print("Starting training...")
     model.learn(total_timesteps=total_samples, callback=callback)
     print("Training completed")
