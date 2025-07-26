@@ -1,3 +1,4 @@
+from tkinter import FALSE
 import numpy as np
 import gymnasium as gym
 import matplotlib.pyplot as plt
@@ -308,7 +309,7 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 250000
+    total_samples = 2500000
 
     datasets = []
     for i in range(n_envs):
@@ -374,7 +375,7 @@ if __name__ == "__main__":
     )
 
     # Add normalization for observations and rewards
-    env = VecNormalize(env, norm_obs=True, norm_reward=True)
+    env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
     lr_schedule = linear_schedule(1e-5, 1e-6)
     model = PreStepPPO(
