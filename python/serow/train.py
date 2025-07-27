@@ -309,7 +309,7 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 2500000
+    total_samples = 1000000
 
     datasets = []
     for i in range(n_envs):
@@ -377,7 +377,7 @@ if __name__ == "__main__":
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
-    lr_schedule = linear_schedule(1e-5, 1e-6)
+    lr_schedule = linear_schedule(5e-6, 1e-6)
     model = PreStepPPO(
         CustomActorCritic,
         env,
@@ -393,7 +393,7 @@ if __name__ == "__main__":
         max_grad_norm=0.5,
         target_kl=0.05,
         vf_coef=0.5,
-        ent_coef=0.001,
+        ent_coef=0.005,
         normalize_advantage=True,
         policy_kwargs=dict(action_min=min_action, action_max=max_action),
         seed=42,

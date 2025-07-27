@@ -172,6 +172,7 @@ if __name__ == "__main__":
         ppo_base_orientations,
         ppo_gt_positions,
         ppo_gt_orientations,
+        ppo_rewards,
     ) = test_env.evaluate(agent_ppo, stats, plot=True)
 
     # Use the ONNX model for evaluation
@@ -181,6 +182,7 @@ if __name__ == "__main__":
         onnx_base_orientations,
         onnx_gt_positions,
         onnx_gt_orientations,
+        onnx_rewards,
     ) = test_env.evaluate(agent_onnx, stats, plot=True)
 
     # These must be equal

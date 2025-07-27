@@ -67,6 +67,15 @@ class SerowEnv(gym.Env):
         self.imu = None
         self.valid_prediction = False
 
+        # Compute the baseline rewards
+        # self.baseline_rewards = self.evaluate(
+        #     model=None,
+        #     stats=None,
+        #     plot=False,
+        #     sync=False,
+        # )[5]
+        # self.reset()
+
     def _compute_reward(self, cf, state, gt, step, max_steps):
         reward = 0.0
         done = False
@@ -98,12 +107,14 @@ class SerowEnv(gym.Env):
         else:
             if success:
                 nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-                position_reward = 5.0 * np.exp(-2.0 * position_error)
-                innovation_reward = 1.0 * np.exp(-2.0 * nis)
-                orientation_reward = 10.0 * np.exp(-2.0 * orientation_error)
+                position_reward = 15.0 * np.exp(-2.0 * position_error)
+                innovation_reward = 2.0 * np.exp(-2.0 * nis)
+                orientation_reward = 5.0 * np.exp(-2.0 * orientation_error)
                 step_reward = 1.0 * (step + 1) / max_steps
                 reward = innovation_reward + position_reward + orientation_reward
                 reward += step_reward
+                # if hasattr(self, "baseline_rewards"):
+                #     reward = reward - self.baseline_rewards[step][cf]
 
         # Scale down the reward to prevent value function issues
         reward = reward * 0.005
@@ -146,6 +157,7 @@ class SerowEnv(gym.Env):
         self.serow_framework.set_state(self.initial_state)
         self.step_count = 0
         self.valid_prediction = False
+
         obs = self._get_observation(self.cf, self.initial_state, self.kin)
         return obs, {}
 
@@ -242,7 +254,7 @@ class SerowEnv(gym.Env):
         if mode == "human":
             print(f"Step: {self.step_count}")
 
-    def evaluate(self, model=None, stats=None, plot=True):
+    def evaluate(self, model=None, stats=None, plot=True, sync=True):
         # After training, evaluate the policy
         self.reset()
 
@@ -253,6 +265,7 @@ class SerowEnv(gym.Env):
         gt_positions = []
         gt_orientations = []
         gt_timestamps = []
+        rewards = []
 
         for _ in range(self.max_steps):
             # Run prediction step with current control input
@@ -263,6 +276,7 @@ class SerowEnv(gym.Env):
 
             # Run the update step with the contact positions
             post_state = prior_state
+            reward = {cf: 0.0 for cf in self.all_contact_frames}
             for cf in self.all_contact_frames:
                 action = np.zeros((self.action_dim,), dtype=np.float32)
                 if model is not None:
@@ -275,9 +289,10 @@ class SerowEnv(gym.Env):
                                 dtype=np.float32,
                             )
                         action, _ = model.predict(obs, deterministic=True)
-                post_state, _, _ = self.update_step(cf, action)
+                post_state, reward[cf], _ = self.update_step(cf, action)
 
             self.finish_update(self.imu, self.kin)
+            rewards.append(reward)
 
             # Save the data
             timestamps.append(self.imu_data[self.step_count].timestamp)
@@ -298,21 +313,22 @@ class SerowEnv(gym.Env):
         gt_orientations = np.array(gt_orientations)
 
         # Sync and align the data
-        (
-            timestamps,
-            base_positions,
-            base_orientations,
-            gt_positions,
-            gt_orientations,
-        ) = sync_and_align_data(
-            timestamps,
-            base_positions,
-            base_orientations,
-            gt_timestamps,
-            gt_positions,
-            gt_orientations,
-            align=True,
-        )
+        if sync:
+            (
+                timestamps,
+                base_positions,
+                base_orientations,
+                gt_positions,
+                gt_orientations,
+            ) = sync_and_align_data(
+                timestamps,
+                base_positions,
+                base_orientations,
+                gt_timestamps,
+                gt_positions,
+                gt_orientations,
+                align=True,
+            )
 
         # Plot the trajectories
         if plot:
@@ -329,4 +345,5 @@ class SerowEnv(gym.Env):
             base_orientations,
             gt_positions,
             gt_orientations,
+            rewards,
         )
