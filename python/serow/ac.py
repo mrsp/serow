@@ -49,45 +49,40 @@ class CustomActorCritic(ActorCriticPolicy):
         """
         # Custom shared layers
         self.shared_net = nn.Sequential(
-            nn.Linear(self.observation_space.shape[0], 256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, 256),
-            nn.ReLU(),
+            nn.Linear(self.observation_space.shape[0], 128),
+            nn.GELU(),
+            nn.Linear(128, 128),
+            nn.GELU(),
         )
 
         # Actor network (policy)
         self.policy_net = nn.Sequential(
-            nn.Linear(256, 128),
-            nn.Tanh(),
             nn.Linear(128, 64),
-            nn.Tanh(),
-            nn.Linear(64, 1),
-            nn.Sigmoid(),
+            nn.GELU(),
+            nn.Linear(64, self.action_space.shape[0]),
+            nn.GELU(),
         )
 
         # Critic network (value function)
         self.value_net = nn.Sequential(
-            nn.Linear(256, 128),
-            nn.Tanh(),
             nn.Linear(128, 64),
-            nn.Tanh(),
+            nn.GELU(),
             nn.Linear(64, 1),
         )
 
         # Initialize weights and biases
-        for layer in self.shared_net:
-            if isinstance(layer, nn.Linear):
-                nn.init.orthogonal_(layer.weight, gain=0.5)
-                nn.init.zeros_(layer.bias)
-        for layer in self.policy_net:
-            if isinstance(layer, nn.Linear):
-                nn.init.orthogonal_(layer.weight, gain=0.5)
-                nn.init.zeros_(layer.bias)
-        for layer in self.value_net:
-            if isinstance(layer, nn.Linear):
-                nn.init.orthogonal_(layer.weight, gain=0.5)
-                nn.init.zeros_(layer.bias)
+        # for layer in self.shared_net:
+        #     if isinstance(layer, nn.Linear):
+        #         nn.init.orthogonal_(layer.weight, gain=0.5)
+        #         nn.init.zeros_(layer.bias)
+        # for layer in self.policy_net:
+        #     if isinstance(layer, nn.Linear):
+        #         nn.init.orthogonal_(layer.weight, gain=0.5)
+        #         nn.init.zeros_(layer.bias)
+        # for layer in self.value_net:
+        #     if isinstance(layer, nn.Linear):
+        #         nn.init.orthogonal_(layer.weight, gain=0.5)
+        #         nn.init.zeros_(layer.bias)
 
         # Create a custom MLP extractor that matches the expected interface
         class CustomMLPExtractor(nn.Module):
@@ -154,10 +149,10 @@ class CustomActorCritic(ActorCriticPolicy):
         distribution = self._get_action_dist_from_latent(latent_pi)
         raw_actions = distribution.get_actions(deterministic=deterministic)
 
-        actions = self._scale_actions(raw_actions)
-        actions = self._clip_actions(actions)
+        # actions = self._scale_actions(raw_actions)
+        actions = self._clip_actions(raw_actions)
 
-        log_prob = distribution.log_prob(actions)
+        log_prob = distribution.log_prob(raw_actions)
         # The framework expects latent_vf to be the final value
         values = latent_vf
 

@@ -131,9 +131,9 @@ if __name__ == "__main__":
     # Get contacts frame from the first measurement
     contact_states = test_dataset["contact_states"]
     contacts_frame = list(contact_states[0].contacts_status.keys())
-    state_dim = 2 + 3 + 9 + 3 + 4
+    state_dim = 3 + 9 + 3 + 4
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-5], dtype=np.float32)
+    min_action = np.array([1e-8], dtype=np.float32)
     max_action = np.array([1e2], dtype=np.float32)
 
     # Load the saved PPO model

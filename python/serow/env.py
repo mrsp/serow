@@ -107,9 +107,9 @@ class SerowEnv(gym.Env):
         else:
             if success:
                 nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-                position_reward = 15.0 * np.exp(-2.0 * position_error)
-                innovation_reward = 2.0 * np.exp(-2.0 * nis)
-                orientation_reward = 5.0 * np.exp(-2.0 * orientation_error)
+                position_reward = 2.0 * np.exp(-5.0 * position_error)
+                innovation_reward = 1.0 * np.exp(-5.0 * nis)
+                orientation_reward = 5.0 * np.exp(-5.0 * orientation_error)
                 step_reward = 1.0 * (step + 1) / max_steps
                 reward = innovation_reward + position_reward + orientation_reward
                 reward += step_reward
@@ -117,7 +117,7 @@ class SerowEnv(gym.Env):
                 #     reward = reward - self.baseline_rewards[step][cf]
 
         # Scale down the reward to prevent value function issues
-        reward = reward * 0.005
+        reward = reward * 0.05
         return reward, done
 
     def _get_observation(self, cf, state, kin):
@@ -135,13 +135,9 @@ class SerowEnv(gym.Env):
         local_kin_pos = kin.contacts_position[cf]
         innovation = local_kin_pos - local_pos
         R = (kin.contacts_position_noise[cf] + kin.position_cov).flatten()
-        P_pos_trace = np.trace(state.get_base_position_cov())
-        P_ori_trace = np.trace(state.get_base_orientation_cov())
 
         return np.concatenate(
             [
-                [P_pos_trace],
-                [P_ori_trace],
                 innovation,
                 R,
                 state.get_base_linear_velocity(),

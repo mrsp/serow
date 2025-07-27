@@ -309,7 +309,7 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 1000000
+    total_samples = 5000000
 
     datasets = []
     for i in range(n_envs):
@@ -321,10 +321,10 @@ if __name__ == "__main__":
     contact_frame = list(contact_states[0].contacts_status.keys())
     print(f"Contact frames: {contact_frame}")
 
-    state_dim = 2 + 3 + 9 + 3 + 4
+    state_dim = 3 + 9 + 3 + 4
     print(f"State dimension: {state_dim}")
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-5], dtype=np.float32)
+    min_action = np.array([1e-8], dtype=np.float32)
     max_action = np.array([1e2], dtype=np.float32)
 
     # Create vectorized environment
@@ -377,17 +377,17 @@ if __name__ == "__main__":
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
-    lr_schedule = linear_schedule(5e-6, 1e-6)
+    lr_schedule = linear_schedule(5e-4, 1e-4)
     model = PreStepPPO(
         CustomActorCritic,
         env,
         device="cuda",
         verbose=1,
         learning_rate=lr_schedule,
-        n_steps=512,
-        batch_size=128,
-        n_epochs=4,
-        gamma=0.99,
+        n_steps=256,
+        batch_size=64,
+        n_epochs=5,
+        gamma=0.995,
         gae_lambda=0.95,
         clip_range=0.2,
         max_grad_norm=0.5,
