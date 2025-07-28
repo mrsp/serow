@@ -4,12 +4,12 @@
 #include <DataManager.hpp>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
-#include <bayesopt/bayesopt.hpp>
-#include <bayesopt/parameters.hpp>
 #include <cstdio>
 #include <iostream>
 #include "serow/Serow.hpp"
 #include "serow/lie.hpp"
+#include <bayesopt/parameters.hpp>
+#include <bayesopt/bayesopt.hpp>
 
 using vectord = bayesopt::vectord;
 using json = nlohmann::ordered_json;
