@@ -8,6 +8,7 @@
 #include <iostream>
 #include "serow/Serow.hpp"
 #include "serow/lie.hpp"
+// Don't change the order of these includes, they break boost
 #include <bayesopt/parameters.hpp>
 #include <bayesopt/bayesopt.hpp>
 
