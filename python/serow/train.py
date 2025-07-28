@@ -1,4 +1,3 @@
-from tkinter import FALSE
 import numpy as np
 import gymnasium as gym
 import matplotlib.pyplot as plt
@@ -13,7 +12,6 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
-from ac import CustomActorCritic
 from utils import export_model_to_onnx
 
 
@@ -221,7 +219,12 @@ class PreStepPPO(PPO):
     """Custom PPO model that handles pre-step logic during training and evaluation."""
 
     def predict(self, observation, deterministic=False):
-        return self.policy.predict(observation, deterministic)
+        obs_tensor = torch.tensor(observation, dtype=torch.float32, device=self.device)
+        # Add batch dimension if not present
+        if obs_tensor.dim() == 1:
+            obs_tensor = obs_tensor.unsqueeze(0)
+        action, value, _ = self.policy.forward(obs_tensor, deterministic)
+        return action.detach().cpu().numpy()[0], value.detach().cpu().numpy()
 
     def eval(self):
         """Set the model to evaluation mode."""
@@ -292,24 +295,33 @@ class PreStepPPO(PPO):
 
 
 class ActorCriticONNX(nn.Module):
-    def __init__(self, policy_model):
+    def __init__(self, policy_model, min_action, max_action):
         super().__init__()
         self.policy = policy_model
-        # Get action bounds from the policy
-        self.action_min = policy_model.action_min
-        self.action_max = policy_model.action_max
+        # Convert numpy arrays to torch tensors for clamping
+        self.action_min = torch.tensor(min_action, dtype=torch.float32)
+        self.action_max = torch.tensor(max_action, dtype=torch.float32)
 
     def forward(self, x):
         with torch.no_grad():
+            # Add batch dimension if not present
+            if x.dim() == 1:
+                x = x.unsqueeze(0)
             # Always use deterministic=True for ONNX export
-            return self.policy.forward(x, deterministic=True)
+            action, value, log_prob = self.policy.forward(x, deterministic=True)
+            return (
+                torch.clamp(action, self.action_min, self.action_max),
+                value,
+                log_prob,
+            )
 
 
 if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 5000000
+    total_samples = 200000
+    device = "cpu"
 
     datasets = []
     for i in range(n_envs):
@@ -379,9 +391,9 @@ if __name__ == "__main__":
 
     lr_schedule = linear_schedule(5e-4, 1e-4)
     model = PreStepPPO(
-        CustomActorCritic,
+        "MlpPolicy",
         env,
-        device="cuda",
+        device=device,
         verbose=1,
         learning_rate=lr_schedule,
         n_steps=256,
@@ -395,7 +407,11 @@ if __name__ == "__main__":
         vf_coef=0.5,
         ent_coef=0.005,
         normalize_advantage=True,
-        policy_kwargs=dict(action_min=min_action, action_max=max_action),
+        # policy_kwargs=dict(action_min=min_action, action_max=max_action),
+        policy_kwargs=dict(
+            net_arch=dict(pi=[64, 64, 32], vf=[64, 64, 32]),
+            activation_fn=nn.ReLU,
+        ),
         seed=42,
     )
 
@@ -444,14 +460,14 @@ if __name__ == "__main__":
 
     # Create a wrapper class to match the expected interface for export_model_to_onnx
     class PPOModelWrapper:
-        def __init__(self, ppo_model, device):
+        def __init__(self, ppo_model, min_action, max_action, device):
             self.ppo_model = ppo_model
             self.device = device
-            self.policy = ActorCriticONNX(ppo_model)
+            self.policy = ActorCriticONNX(ppo_model, min_action, max_action)
             self.name = "PPO"
 
     # Create the wrapper
-    model_wrapper = PPOModelWrapper(model.policy, "cuda")
+    model_wrapper = PPOModelWrapper(model.policy, min_action, max_action, device)
 
     # Define parameters for ONNX export
     export_params = {
