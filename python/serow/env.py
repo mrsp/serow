@@ -96,7 +96,9 @@ class SerowEnv(gym.Env):
         max_orientation_error = 1.0
         if success:
             # Clipped position error to prevent explosion
-            position_error = np.clip(position_error, 0, 5.0)
+            position_error = np.clip(position_error, 0, max_position_error)
+            orientation_error = np.clip(orientation_error, 0, max_orientation_error)
+
             # Simple quadratic reward (more stable than exponential)
             position_reward = 1.0 / (1.0 + 2.0 * position_error**2)
             orientation_reward = 1.0 / (1.0 + 2.0 * orientation_error**2)
