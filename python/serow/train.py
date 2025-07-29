@@ -140,10 +140,9 @@ class TrainingCallback(BaseCallback):
             self.episode_rewards.append(self.episode_reward_sum)
             self.episode_lengths.append(self.episode_length)
             if self.verbose > 0:
-                print(
-                    f"Episode completed: reward={self.episode_reward_sum:.3f}, "
-                    f"length={self.episode_length}"
-                )
+                reward_str = f"reward={self.episode_reward_sum:.3f}"
+                length_str = f"length={self.episode_length}"
+                print(f"Episode completed: {reward_str}, {length_str}")
 
             # Reset for next episode
             self.episode_reward_sum = 0
@@ -219,12 +218,12 @@ class PreStepPPO(PPO):
     """Custom PPO model that handles pre-step logic during training and evaluation."""
 
     def predict(self, observation, deterministic=False):
-        obs_tensor = torch.tensor(observation, dtype=torch.float32, device=self.device)
-        # Add batch dimension if not present
-        if obs_tensor.dim() == 1:
-            obs_tensor = obs_tensor.unsqueeze(0)
-        action, value, _ = self.policy.forward(obs_tensor, deterministic)
-        return action.detach().cpu().numpy()[0], value.detach().cpu().numpy()
+        self.policy.set_training_mode(False)
+        obs_tensor, _ = self.policy.obs_to_tensor(observation)
+        with torch.no_grad():
+            action, value, _ = self.policy.forward(obs_tensor, deterministic)
+        return action.detach().cpu().numpy()[0], value.detach().cpu().numpy()[0]
+        # return super().predict(observation, state=None, deterministic=deterministic)
 
     def eval(self):
         """Set the model to evaluation mode."""
@@ -291,36 +290,25 @@ class PreStepPPO(PPO):
         return result
 
     def forward(self, obs, deterministic=False):
-        return super().forward(obs, deterministic)
+        return self.policy.forward(obs, deterministic)
 
 
 class ActorCriticONNX(nn.Module):
-    def __init__(self, policy_model, min_action, max_action):
+    def __init__(self, policy_model):
         super().__init__()
         self.policy = policy_model
-        # Convert numpy arrays to torch tensors for clamping
-        self.action_min = torch.tensor(min_action, dtype=torch.float32)
-        self.action_max = torch.tensor(max_action, dtype=torch.float32)
 
     def forward(self, x):
-        with torch.no_grad():
-            # Add batch dimension if not present
-            if x.dim() == 1:
-                x = x.unsqueeze(0)
-            # Always use deterministic=True for ONNX export
-            action, value, log_prob = self.policy.forward(x, deterministic=True)
-            return (
-                torch.clamp(action, self.action_min, self.action_max),
-                value,
-                log_prob,
-            )
+        # Ensure we're in eval mode and detach gradients
+        action, value, _ = self.policy.forward(x, deterministic=True)
+        return action, value
 
 
 if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 200000
+    total_samples = 50000
     device = "cpu"
 
     datasets = []
@@ -340,12 +328,11 @@ if __name__ == "__main__":
     max_action = np.array([1e2], dtype=np.float32)
 
     # Create vectorized environment
-    def make_env(i, j):
+    def make_env(i):
         """Helper function to create a single environment with specific dataset"""
         ds = datasets[i]
         base_env = SerowEnv(
             robot,
-            contact_frame[j],
             ds["joint_states"][0],
             ds["base_states"][0],
             ds["contact_states"][0],
@@ -363,7 +350,6 @@ if __name__ == "__main__":
 
     test_env = SerowEnv(
         robot,
-        contact_frame[0],
         test_dataset["joint_states"][0],
         test_dataset["base_states"][0],
         test_dataset["contact_states"][0],
@@ -378,18 +364,12 @@ if __name__ == "__main__":
     )
 
     # Create vectorized environment with different datasets for each environment
-    env = DummyVecEnv(
-        [
-            lambda i=i, j=j: make_env(i, j)
-            for i in range(n_envs)
-            for j in range(len(contact_frame))
-        ]
-    )
+    env = DummyVecEnv([lambda i=i: make_env(i) for i in range(n_envs)])
 
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
-    lr_schedule = linear_schedule(5e-4, 1e-4)
+    lr_schedule = linear_schedule(1e-3, 1e-4)
     model = PreStepPPO(
         "MlpPolicy",
         env,
@@ -405,11 +385,13 @@ if __name__ == "__main__":
         max_grad_norm=0.5,
         target_kl=0.05,
         vf_coef=0.5,
+        clip_range_vf=0.2,
         ent_coef=0.005,
         normalize_advantage=True,
-        # policy_kwargs=dict(action_min=min_action, action_max=max_action),
         policy_kwargs=dict(
-            net_arch=dict(pi=[64, 64, 32], vf=[64, 64, 32]),
+            net_arch=dict(
+                pi=[64, 64, 32], vf=[64, 64, 32]
+            ),  # Smaller value function network
             activation_fn=nn.ReLU,
         ),
         seed=42,
@@ -417,7 +399,7 @@ if __name__ == "__main__":
 
     # Create callbacks
     training_callback = TrainingCallback(verbose=1)
-    valid_sample_callback = ValidSampleCallback(verbose=0)
+    valid_sample_callback = ValidSampleCallback(verbose=1)
     explained_var_callback = ExplainedVarianceCallback(
         min_explained_var=-1.0, verbose=1
     )
@@ -434,7 +416,7 @@ if __name__ == "__main__":
     )
 
     # Train the model
-    print(f"Training with {n_envs * len(contact_frame)} parallel environments")
+    print(f"Training with {n_envs} parallel environments")
     print("Starting training...")
     model.learn(total_timesteps=total_samples, callback=callback)
     print("Training completed")
@@ -453,6 +435,16 @@ if __name__ == "__main__":
     print(f"  Variance: {stats['obs_var']}")
     print(f"  Count: {stats['obs_count']}")
 
+    # Convert numpy arrays to lists for JSON serialization
+    json_stats = {
+        "obs_mean": stats["obs_mean"].tolist(),
+        "obs_var": stats["obs_var"].tolist(),
+        "obs_count": int(stats["obs_count"]),
+    }
+    stats_file = f"models/{robot}_stats.json"
+    with open(stats_file, "w") as f:
+        json.dump(json_stats, f, indent=2)
+
     # Check if the models directory exists, if not create it
     if not os.path.exists("models"):
         os.makedirs("models")
@@ -460,14 +452,14 @@ if __name__ == "__main__":
 
     # Create a wrapper class to match the expected interface for export_model_to_onnx
     class PPOModelWrapper:
-        def __init__(self, ppo_model, min_action, max_action, device):
+        def __init__(self, ppo_model, device):
             self.ppo_model = ppo_model
             self.device = device
-            self.policy = ActorCriticONNX(ppo_model, min_action, max_action)
+            self.policy = ActorCriticONNX(ppo_model)
             self.name = "PPO"
 
     # Create the wrapper
-    model_wrapper = PPOModelWrapper(model.policy, min_action, max_action, device)
+    model_wrapper = PPOModelWrapper(model.policy, device)
 
     # Define parameters for ONNX export
     export_params = {
@@ -479,24 +471,16 @@ if __name__ == "__main__":
     print("Exporting model to ONNX...")
     export_model_to_onnx(model_wrapper, robot, export_params, "models")
 
-    # Convert numpy arrays to lists for JSON serialization
-    json_stats = {
-        "obs_mean": stats["obs_mean"].tolist(),
-        "obs_var": stats["obs_var"].tolist(),
-        "obs_count": int(stats["obs_count"]),
-    }
-    stats_file = f"models/{robot}_stats.json"
-    with open(stats_file, "w") as f:
-        json.dump(json_stats, f, indent=2)
-
     # Debug information
     print("Training callback stats:")
-    print(f"Episode rewards collected: {len(training_callback.episode_rewards)}")
+    episode_count = len(training_callback.episode_rewards)
+    print(f"Episode rewards collected: {episode_count}")
     print(f"Step rewards collected: {len(training_callback.step_rewards)}")
     valid_count = valid_sample_callback.valid_samples_count
     total_count = valid_sample_callback.total_samples_count
     valid_ratio = valid_count / total_count
-    print(f"Valid sample ratio: {valid_count}/{total_count} ({valid_ratio:.2%})")
+    ratio_str = f"Valid sample ratio: {valid_count}/{total_count} ({valid_ratio:.2%})"
+    print(ratio_str)
 
     # Plot the step rewards
     step_rewards = np.array(training_callback.step_rewards)
@@ -520,6 +504,5 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    # Set model to evaluation mode
     model.eval()
     test_env.evaluate(model, stats)

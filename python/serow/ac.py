@@ -203,13 +203,12 @@ class ONNXInference:
         # Prepare input
         observation = np.array(observation, dtype=np.float32).reshape(1, -1)
         output = self.session.run(None, {self.input_name: observation})
-        return output[0], output[1], output[2]
+        return output[0], output[1]
 
     def predict(self, observation, deterministic=True):
         """
         Predict action given observation.
         Matches the interface expected by SerowEnv.evaluate().
-        Returns (action, value) tuple.
+        Returns action and value
         """
-        action, value, _ = self.forward(observation, deterministic=deterministic)
-        return action, value
+        return self.forward(observation, deterministic=deterministic)

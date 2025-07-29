@@ -125,8 +125,10 @@ if __name__ == "__main__":
 
     # Read the data
     test_dataset = np.load(f"{robot}_log.npz", allow_pickle=True)
-    stats = json.load(open(f"{model_dir}/{robot}_stats.json"))
-    print(stats)
+    try:
+        stats = json.load(open(f"{model_dir}/{robot}_stats.json"))
+    except FileNotFoundError:
+        stats = None
 
     # Get contacts frame from the first measurement
     contact_states = test_dataset["contact_states"]
@@ -151,7 +153,6 @@ if __name__ == "__main__":
 
     test_env = SerowEnv(
         robot,
-        contacts_frame[0],
         test_dataset["joint_states"][0],
         test_dataset["base_states"][0],
         test_dataset["contact_states"][0],

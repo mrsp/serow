@@ -14,7 +14,6 @@ class SerowEnv(gym.Env):
     def __init__(
         self,
         robot,
-        contact_frame,
         joint_state,
         base_state,
         contact_state,
@@ -38,11 +37,7 @@ class SerowEnv(gym.Env):
         self.initial_state.set_base_state(base_state)
         self.initial_state.set_contact_state(contact_state)
         self.serow_framework.set_state(self.initial_state)
-        self.cf = contact_frame  # contact frame to control
-        self.contact_frames = [
-            cf for cf in contact_state.contacts_status.keys() if cf != self.cf
-        ]
-        self.all_contact_frames = [cf for cf in contact_state.contacts_status.keys()]
+        self.contact_frames = [cf for cf in contact_state.contacts_status.keys()]
         self.action_dim = action_dim
         self.state_dim = state_dim
         # Action space
@@ -76,19 +71,20 @@ class SerowEnv(gym.Env):
         # )[5]
         # self.reset()
 
-    def _compute_reward(self, cf, state, gt, step, max_steps):
+    def _compute_reward(self, cf, state, gt):
         reward = 0.0
         done = False
 
         # Position error
-        position_error = np.linalg.norm(state.get_base_position() - gt.position)
+        position_error = np.linalg.norm(state.get_base_position() - gt.position, 1)
 
         # Orientation error
         orientation_error = np.linalg.norm(
             logMap(
                 quaternion_to_rotation_matrix(gt.orientation).transpose()
-                @ quaternion_to_rotation_matrix(state.get_base_orientation())
-            )
+                @ quaternion_to_rotation_matrix(state.get_base_orientation()),
+            ),
+            1,
         )
 
         # Compute innovation and S
@@ -98,26 +94,30 @@ class SerowEnv(gym.Env):
 
         max_position_error = 3.0
         max_orientation_error = 1.0
-        if (
-            position_error > max_position_error
-            or orientation_error > max_orientation_error
-        ):
-            done = True
-            reward = -10.0
-        else:
-            if success:
-                nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-                position_reward = 2.0 * np.exp(-5.0 * position_error)
-                innovation_reward = 1.0 * np.exp(-5.0 * nis)
-                orientation_reward = 5.0 * np.exp(-5.0 * orientation_error)
-                step_reward = 1.0 * (step + 1) / max_steps
-                reward = innovation_reward + position_reward + orientation_reward
-                reward += step_reward
-                # if hasattr(self, "baseline_rewards"):
-                #     reward = reward - self.baseline_rewards[step][cf]
+        if success:
+            # Clipped position error to prevent explosion
+            position_error = np.clip(position_error, 0, 5.0)
+            # Simple quadratic reward (more stable than exponential)
+            position_reward = 1.0 / (1.0 + 2.0 * position_error**2)
+            orientation_reward = 1.0 / (1.0 + 2.0 * orientation_error**2)
+            nis = float(innovation @ np.linalg.inv(covariance) @ innovation.T)
+            nis = np.clip(nis, 0, 10.0)  # Prevent explosion
+            innovation_reward = 1.0 / (1.0 + 0.1 * nis)
+
+            reward = (
+                0.1 * innovation_reward + position_reward + 2.0 * orientation_reward
+            )
+            reward = np.clip(reward, -2.0, 5.0)  # Bound reward
+            reward *= 0.05
+            # reward += step_reward
+            # if hasattr(self, "baseline_rewards"):
+            #     reward = reward - self.baseline_rewards[step][cf]
 
         # Scale down the reward to prevent value function issues
-        reward = reward * 0.05
+        done = (
+            position_error > max_position_error
+            or orientation_error > max_orientation_error
+        )
         return reward, done
 
     def _get_observation(self, cf, state, kin):
@@ -142,6 +142,8 @@ class SerowEnv(gym.Env):
                 R,
                 state.get_base_linear_velocity(),
                 state.get_base_orientation(),
+                # state.get_base_position_cov().diagonal(),
+                # state.get_base_orientation_cov().diagonal(),
             ],
             axis=0,
         ).astype(np.float32)
@@ -153,14 +155,11 @@ class SerowEnv(gym.Env):
         self.serow_framework.set_state(self.initial_state)
         self.step_count = 0
         self.valid_prediction = False
-
-        obs = self._get_observation(self.cf, self.initial_state, self.kin)
+        obs = np.zeros((self.state_dim,))
         return obs, {}
 
-    def get_observation_for_action(self, cf=None):
+    def get_observation_for_action(self):
         """Get the observation that should be used for action computation."""
-        if cf is None:
-            cf = self.cf
 
         # Run prediction step with current control input
         self.imu = copy.copy(self.imu_data[self.step_count])
@@ -168,8 +167,23 @@ class SerowEnv(gym.Env):
         ft = copy.copy(self.ft_data[self.step_count])
         prior_state, self.kin = self.predict_step(self.imu, joint, ft)
 
+        # Find all the frames that have contact with the ground
+        contact_frames = []
+        for cf in self.contact_frames:
+            if (
+                self.kin.contacts_status[cf]
+                and prior_state.get_contact_position(cf) is not None
+            ):
+                contact_frames.append(cf)
+
+        # Pick a random frame in contact for this step
+        if len(contact_frames) > 0:
+            self.cf = np.random.choice(contact_frames)
+        else:
+            self.cf = np.random.choice(self.contact_frames)
+
         # Get the observation that the policy should use
-        obs = self._get_observation(cf, prior_state, self.kin)
+        obs = self._get_observation(self.cf, prior_state, self.kin)
 
         self.valid_prediction = False
         if not np.all(obs == np.zeros((self.state_dim,))):
@@ -197,6 +211,8 @@ class SerowEnv(gym.Env):
         info = {"step_count": self.step_count, "reward": reward, "valid": valid}
 
         for cf in self.contact_frames:
+            if cf == self.cf:
+                continue
             self.update_step(cf, np.zeros((self.action_dim,), dtype=np.float32))
 
         self.finish_update(self.imu, self.kin)
@@ -237,8 +253,6 @@ class SerowEnv(gym.Env):
             cf,
             post_state,
             self.gt_data[self.step_count],
-            self.step_count,
-            self.max_steps,
         )
 
         return post_state, reward, done
@@ -272,8 +286,8 @@ class SerowEnv(gym.Env):
 
             # Run the update step with the contact positions
             post_state = prior_state
-            reward = {cf: 0.0 for cf in self.all_contact_frames}
-            for cf in self.all_contact_frames:
+            reward = {cf: 0.0 for cf in self.contact_frames}
+            for cf in self.contact_frames:
                 action = np.zeros((self.action_dim,), dtype=np.float32)
                 if model is not None:
                     obs = self._get_observation(cf, post_state, self.kin)

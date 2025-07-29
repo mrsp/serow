@@ -522,28 +522,26 @@ def export_model_to_onnx(agent, robot, params, path):
     # Set models to evaluation mode to disable dropout
     agent.policy.eval()
 
-    # Export model with explicit tracing
-    dummy_state = torch.randn(1, params["state_dim"]).to(agent.device)
-    torch.onnx.export(
-        agent.policy,
-        dummy_state,
-        f"{path}/{robot}_ppo.onnx",
-        export_params=True,
-        opset_version=11,
-        do_constant_folding=True,
-        input_names=["observation"],
-        output_names=["action", "value", "log_prob"],
-        dynamic_axes={
-            "observation": {0: "batch_size"},
-            "action": {0: "batch_size"},  # action
-            "value": {0: "batch_size"},  # value
-            "log_prob": {0: "batch_size"},  # log_prob
-        },
-        verbose=False,
-    )
+    # Create dummy input and ensure no gradients
+    dummy_observation = torch.randn(1, params["state_dim"]).to(agent.device)
 
-    # Set models back to training mode
-    agent.policy.train()
+    with torch.no_grad():
+        torch.onnx.export(
+            agent.policy,
+            dummy_observation,
+            f"{path}/{robot}_ppo.onnx",
+            export_params=True,
+            opset_version=11,
+            do_constant_folding=True,
+            input_names=["observation"],
+            output_names=["action", "value"],
+            dynamic_axes={
+                "observation": {0: "batch_size"},
+                "action": {0: "batch_size"},
+                "value": {0: "batch_size"},
+            },
+            verbose=False,
+        )
 
 
 class BaseVelocityGroundTruth:
