@@ -217,14 +217,6 @@ class PerformanceDegradationCallback(BaseCallback):
 class PreStepPPO(PPO):
     """Custom PPO model that handles pre-step logic during training and evaluation."""
 
-    def predict(self, observation, deterministic=False):
-        self.policy.set_training_mode(False)
-        obs_tensor, _ = self.policy.obs_to_tensor(observation)
-        with torch.no_grad():
-            action, value, _ = self.policy.forward(obs_tensor, deterministic)
-        return action.detach().cpu().numpy()[0], value.detach().cpu().numpy()[0]
-        # return super().predict(observation, state=None, deterministic=deterministic)
-
     def eval(self):
         """Set the model to evaluation mode."""
         self.policy.eval()
@@ -289,9 +281,6 @@ class PreStepPPO(PPO):
 
         return result
 
-    def forward(self, obs, deterministic=False):
-        return self.policy.forward(obs, deterministic)
-
 
 class ActorCriticONNX(nn.Module):
     def __init__(self, policy_model):
@@ -308,7 +297,7 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 50000
+    total_samples = 250000
     device = "cpu"
 
     datasets = []
@@ -393,6 +382,10 @@ if __name__ == "__main__":
                 pi=[64, 64, 32], vf=[64, 64, 32]
             ),  # Smaller value function network
             activation_fn=nn.ReLU,
+            # Add weight initialization to prevent NaN
+            ortho_init=True,
+            # Add log_std initialization to prevent extreme values
+            log_std_init=-1.0,
         ),
         seed=42,
     )

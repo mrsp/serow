@@ -95,21 +95,12 @@ class SerowEnv(gym.Env):
         max_position_error = 3.0
         max_orientation_error = 1.0
         if success:
-            # Clipped position error to prevent explosion
-            position_error = np.clip(position_error, 0, max_position_error)
-            orientation_error = np.clip(orientation_error, 0, max_orientation_error)
+            nis = innovation @ np.linalg.inv(covariance) @ innovation.T
+            position_reward = 2.0 * np.exp(-5.0 * position_error)
+            innovation_reward = 1.0 * np.exp(-5.0 * nis)
+            orientation_reward = 5.0 * np.exp(-5.0 * orientation_error)
 
-            # Simple quadratic reward (more stable than exponential)
-            position_reward = 1.0 / (1.0 + 2.0 * position_error**2)
-            orientation_reward = 1.0 / (1.0 + 2.0 * orientation_error**2)
-            nis = float(innovation @ np.linalg.inv(covariance) @ innovation.T)
-            nis = np.clip(nis, 0, 10.0)  # Prevent explosion
-            innovation_reward = 1.0 / (1.0 + 0.1 * nis)
-
-            reward = (
-                0.1 * innovation_reward + position_reward + 2.0 * orientation_reward
-            )
-            reward = np.clip(reward, -2.0, 5.0)  # Bound reward
+            reward = innovation_reward + position_reward + orientation_reward
             reward *= 0.05
             # reward += step_reward
             # if hasattr(self, "baseline_rewards"):
@@ -137,15 +128,12 @@ class SerowEnv(gym.Env):
         local_kin_pos = kin.contacts_position[cf]
         innovation = local_kin_pos - local_pos
         R = (kin.contacts_position_noise[cf] + kin.position_cov).flatten()
-
         return np.concatenate(
             [
                 innovation,
                 R,
                 state.get_base_linear_velocity(),
                 state.get_base_orientation(),
-                # state.get_base_position_cov().diagonal(),
-                # state.get_base_orientation_cov().diagonal(),
             ],
             axis=0,
         ).astype(np.float32)
