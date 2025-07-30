@@ -96,12 +96,14 @@ class SerowEnv(gym.Env):
         max_orientation_error = 1.0
         if success:
             nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-            position_reward = 2.0 * np.exp(-5.0 * position_error)
-            innovation_reward = 1.0 * np.exp(-5.0 * nis)
-            orientation_reward = 5.0 * np.exp(-5.0 * orientation_error)
+            nis = np.clip(nis, 0, 10)
+            position_reward = -position_error
+            innovation_reward = -nis
+            orientation_reward = -orientation_error
 
-            reward = innovation_reward + position_reward + orientation_reward
-            reward *= 0.05
+            reward = (
+                0.1 * innovation_reward + 2.0 * position_reward + orientation_reward
+            )
             # reward += step_reward
             # if hasattr(self, "baseline_rewards"):
             #     reward = reward - self.baseline_rewards[step][cf]

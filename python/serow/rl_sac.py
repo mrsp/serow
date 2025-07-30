@@ -1,14 +1,17 @@
 import numpy as np
 import gymnasium as gym
+import matplotlib.pyplot as plt
+import torch.nn as nn
 import pandas as pd
 
 from gymnasium import spaces
-from stable_baselines3 import PPO
+from stable_baselines3 import SAC
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
-import matplotlib.pyplot as plt
-import torch.nn as nn
+from stable_baselines3.common.noise import NormalActionNoise
+from stable_baselines3.common.callbacks import CallbackList
+from typing import Optional
 
 
 def compute_rolling_average(data, window_size):
@@ -78,20 +81,82 @@ class ValidSampleCallback(BaseCallback):
         return True
 
 
-class PreStepPPO(PPO):
-    """Custom PPO model that handles pre-step logic during training and evaluation."""
+class TrainingCallback(BaseCallback):
+    """Custom callback for monitoring training progress"""
 
-    def predict(self, observation, state=None, deterministic=False):
-        return self.policy.predict(observation, state, deterministic)
+    def __init__(self, verbose=0):
+        super(TrainingCallback, self).__init__(verbose)
+        self.episode_rewards = []
+        self.episode_lengths = []
+        self.step_rewards = []  # Track rewards per step as fallback
+        self.episode_reward_sum = 0
+        self.episode_length = 0
+        self.last_dones = None
+        self.total_steps = 0
+
+    def _on_step(self) -> bool:
+        self.total_steps += 1
+
+        # Get dones and truncated to detect episode completions
+        dones = self.locals.get("dones", [False] * len(self.locals.get("infos", [])))
+        truncated = self.locals.get(
+            "truncated", [False] * len(self.locals.get("infos", []))
+        )
+
+        # Only accumulate episode rewards for valid steps
+        valid_steps = 0
+        total_reward = 0.0
+        episode_completed = False
+        if len(self.locals["infos"]) > 0:
+            for i, info in enumerate(self.locals["infos"]):
+                if info["valid"]:
+                    reward = info["reward"]
+                    valid_steps += 1
+                    total_reward += reward
+                    self.step_rewards.append(reward)
+        # Only add to episode if there were valid steps
+        if valid_steps > 0:
+            avg_valid_reward = total_reward / valid_steps
+            self.episode_reward_sum += avg_valid_reward
+            self.episode_length += 1
+
+        # Check if any episode completed (either done or truncated)
+        for _, (done, trunc) in enumerate(zip(dones, truncated)):
+            if done or trunc:
+                episode_completed = True
+                break
+
+        if episode_completed and self.episode_length > 0:
+            self.episode_rewards.append(self.episode_reward_sum)
+            self.episode_lengths.append(self.episode_length)
+            if self.verbose > 0:
+                print(
+                    f"Episode completed: reward={self.episode_reward_sum:.3f}, "
+                    f"length={self.episode_length}"
+                )
+
+            # Reset for next episode
+            self.episode_reward_sum = 0
+            self.episode_length = 0
+
+        return True
+
+
+class PreStepSAC(SAC):
+    """Custom SAC model that handles pre-step logic during training and evaluation."""
 
     def collect_rollouts(
         self,
         env,
         callback,
-        rollout_buffer,
-        n_rollout_steps: int,
+        train_freq,
+        replay_buffer,
+        action_noise: Optional[NormalActionNoise] = None,
+        learning_starts: int = 100,
+        log_interval: Optional[int] = None,
     ):
-        """Override collect_rollouts to use get_observation_for_action during training"""
+        """Override collect_rollouts to use get_observation_for_action
+        during training"""
         # Store original step method to restore later
         original_step_methods = []
 
@@ -128,7 +193,13 @@ class PreStepPPO(PPO):
         try:
             # Call the parent collect_rollouts method
             result = super().collect_rollouts(
-                env, callback, rollout_buffer, n_rollout_steps
+                env,
+                callback,
+                train_freq,
+                replay_buffer,
+                action_noise,
+                learning_starts,
+                log_interval,
             )
 
         finally:
@@ -143,9 +214,6 @@ class PreStepPPO(PPO):
 
         return result
 
-    def forward(self, obs, deterministic=False):
-        return self.policy.forward(obs, deterministic)
-
 
 class KalmanFilterEnv(gym.Env):
     """Custom Gym environment integrating a Kalman filter."""
@@ -155,8 +223,8 @@ class KalmanFilterEnv(gym.Env):
         measurement,
         u,
         gt,
-        min_action,
-        max_action,
+        action_min,
+        action_max,
         process_noise=0.1,
         measurement_noise=0.1,
     ):
@@ -169,7 +237,6 @@ class KalmanFilterEnv(gym.Env):
         self.process_noise = process_noise
         self.measurement_noise = measurement_noise
         self.max_steps = len(measurement) - 1
-
         # Kalman filter parameters
         self.dt = 0.001  # time step
 
@@ -193,12 +260,12 @@ class KalmanFilterEnv(gym.Env):
 
         self.R = np.array([[self.measurement_noise**2]])  # Measurement noise
 
-        # Action space
+        # Action space - SAC works well with continuous actions
         self.action_space = spaces.Box(
-            low=min_action, high=max_action, shape=(1,), dtype=np.float32
+            low=action_min, high=action_max, shape=(1,), dtype=np.float32
         )
 
-        # Observation space: [position, velocity]
+        # Observation space: [position, velocity,  position_covariance, velocity_covariance,  measurement_noise, innovation]
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32
         )
@@ -324,67 +391,6 @@ class KalmanFilterEnv(gym.Env):
             )
 
 
-class TrainingCallback(BaseCallback):
-    """Custom callback for monitoring training progress"""
-
-    def __init__(self, verbose=0):
-        super(TrainingCallback, self).__init__(verbose)
-        self.episode_rewards = []
-        self.episode_lengths = []
-        self.step_rewards = []  # Track rewards per step as fallback
-        self.episode_reward_sum = 0
-        self.episode_length = 0
-        self.last_dones = None
-        self.total_steps = 0
-
-    def _on_step(self) -> bool:
-        self.total_steps += 1
-
-        # Get dones and truncated to detect episode completions
-        dones = self.locals.get("dones", [False] * len(self.locals.get("infos", [])))
-        truncated = self.locals.get(
-            "truncated", [False] * len(self.locals.get("infos", []))
-        )
-
-        # Only accumulate episode rewards for valid steps
-        valid_steps = 0
-        total_reward = 0.0
-        episode_completed = False
-        if len(self.locals["infos"]) > 0:
-            for i, info in enumerate(self.locals["infos"]):
-                if info["valid"]:
-                    reward = info["reward"]
-                    valid_steps += 1
-                    total_reward += reward
-                    self.step_rewards.append(reward)
-        # Only add to episode if there were valid steps
-        if valid_steps > 0:
-            avg_valid_reward = total_reward / valid_steps
-            self.episode_reward_sum += avg_valid_reward
-            self.episode_length += 1
-
-        # Check if any episode completed (either done or truncated)
-        for _, (done, trunc) in enumerate(zip(dones, truncated)):
-            if done or trunc:
-                episode_completed = True
-                break
-
-        if episode_completed and self.episode_length > 0:
-            self.episode_rewards.append(self.episode_reward_sum)
-            self.episode_lengths.append(self.episode_length)
-            if self.verbose > 0:
-                print(
-                    f"Episode completed: reward={self.episode_reward_sum:.3f}, "
-                    f"length={self.episode_length}"
-                )
-
-            # Reset for next episode
-            self.episode_reward_sum = 0
-            self.episode_length = 0
-
-        return True
-
-
 def generate_dataset(
     n_points=1000,
     t_max=1.0,
@@ -485,9 +491,9 @@ def visualize_dataset(measurement, control, ground_truth, save_plot=False):
 
 def main():
     # Number of parallel environments
-    n_envs = 8  # You can adjust this based on your CPU cores
-    min_action = 1e-8
-    max_action = 1
+    n_envs = 8
+    action_min = 1e-8
+    action_max = 1
 
     # Generate random datasets
     datasets = []
@@ -512,9 +518,6 @@ def main():
             f"{position_signal.max():.3f}], GT std: {position_signal.std():.3f}"
         )
 
-        # Only visualize the first dataset to avoid too many plots
-        # visualize_dataset(measurement_signal, acceleration_signal, position_signal)
-
     # Create vectorized environment
     def make_env(dataset_idx):
         """Helper function to create a single environment with specific dataset"""
@@ -523,8 +526,8 @@ def main():
             measurement=dataset["measurement"],
             u=dataset["control"],
             gt=dataset["ground_truth"],
-            min_action=min_action,
-            max_action=max_action,
+            action_min=action_min,
+            action_max=action_max,
         )
         # Wrap with AutoPreStepWrapper to automatically use pre-step logic
         return AutoPreStepWrapper(base_env)
@@ -539,40 +542,51 @@ def main():
             measurement=datasets[-1]["measurement"],
             u=datasets[-1]["control"],
             gt=datasets[-1]["ground_truth"],
-            min_action=min_action,
-            max_action=max_action,
+            action_min=action_min,
+            action_max=action_max,
         )
     )
     baseline_env = KalmanFilterEnv(
         measurement=datasets[-1]["measurement"],
         u=datasets[-1]["control"],
         gt=datasets[-1]["ground_truth"],
-        min_action=min_action,
-        max_action=max_action,
+        action_min=action_min,
+        action_max=action_max,
     )
 
     # Check environment
     check_env(test_env)
     print("Environment check passed!")
-    print(f"Training with {n_envs} parallel environments")
+    print(f"Training with {n_envs} parallel environments using SAC")
 
-    model = PreStepPPO(
+    # Add action noise for exploration (optional but often helpful for SAC)
+    n_actions = env.action_space.shape[-1]
+    action_noise = NormalActionNoise(
+        mean=np.zeros(n_actions), sigma=0.001 * np.ones(n_actions)
+    )
+
+    # Create SAC model with custom policy
+    model = PreStepSAC(
         "MlpPolicy",
         env,
-        device="cpu",
+        device="cuda",
         verbose=1,
-        learning_rate=3e-4,
-        n_steps=512,
-        batch_size=128,
-        n_epochs=10,
-        gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
+        learning_rate=3e-4,  # Reduced learning rate
+        buffer_size=20000,  # Replay buffer size
+        learning_starts=1000,  # Start training after this many steps
+        batch_size=128,  # Reduced batch size
+        tau=0.005,  # Soft update coefficient
+        gamma=0.95,  # Discount factor
+        train_freq=(1, "step"),  # Train every step
+        gradient_steps=1,  # Reduced gradient steps
+        action_noise=action_noise,  # Exploration noise
+        ent_coef="auto",
+        use_sde=False,  # Don't use state-dependent exploration
+        sde_sample_freq=-1,
+        use_sde_at_warmup=False,
         policy_kwargs=dict(
-            net_arch=dict(pi=[128, 128, 64], vf=[128, 128, 64]),
+            net_arch=dict(pi=[128, 128, 64], qf=[256, 256, 128, 64]),
             activation_fn=nn.ReLU,
-            ortho_init=True,
-            log_std_init=-1.0,
         ),
     )
 
@@ -581,12 +595,11 @@ def main():
     valid_sample_callback = ValidSampleCallback(verbose=0)
 
     # Combine callbacks
-    from stable_baselines3.common.callbacks import CallbackList
 
     callback = CallbackList([training_callback, valid_sample_callback])
 
     # Train the model
-    print("Starting training...")
+    print("Starting SAC training...")
     model.learn(total_timesteps=300000, callback=callback)
 
     stats = None
@@ -605,17 +618,17 @@ def main():
         print(f"Error extracting observation normalization stats: {e}")
 
     # Save the model
-    model.save("kalman_ppo_model")
-    print("Model saved!")
+    model.save("kalman_sac_model")
+    print("SAC model saved!")
 
     # Test the trained model
-    print("\nTesting trained model...")
+    print("\nTesting trained SAC model...")
     obs, _ = test_env.reset()
     episode_rewards = []
     positions = []
     positions_baseline = []
 
-    for step in range(len(test_env.env.gt)):
+    for step in range(len(test_env.env.gt) - 1):
         # The model will automatically use get_observation_for_action
         obs = test_env.get_observation_for_action()
         if stats is not None:
@@ -633,20 +646,17 @@ def main():
         if step % 20 == 0:
             test_env.render()
 
-        if terminated or truncated:
-            break
-
-    print(f"\nTest episode reward: {episode_rewards[-1]:.2f}")
+    print(f"\nTest episode reward: {episode_rewards[-1]}")
 
     # Plot results
     plt.figure(figsize=(12, 4))
     plt.subplot(1, 2, 1)
-    plt.plot(positions, color="b", label="agent")
+    plt.plot(positions, color="b", label="SAC agent")
     plt.plot(test_env.env.gt, color="r", linestyle="--", label="gt")
     plt.plot(positions_baseline, color="g", linestyle="--", label="baseline")
     plt.xlabel("Time Step")
     plt.ylabel("Position")
-    plt.title("Agent Position Over Time")
+    plt.title("SAC Agent Position Over Time")
     plt.legend()
     plt.grid(True)
     plt.subplot(1, 2, 2)
