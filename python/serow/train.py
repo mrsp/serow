@@ -14,6 +14,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.policies import BaseFeaturesExtractor
 from utils import export_model_to_onnx
+from ac import CustomActorCritic
 
 
 def compute_rolling_average(data, window_size):
@@ -219,6 +220,7 @@ class PreStepPPO(PPO):
 
     def predict(self, observation, deterministic=False):
         """Override predict to use get_observation_for_action during training"""
+        self.policy.set_training_mode(False)
         if isinstance(observation, np.ndarray):
             observation = torch.tensor(observation, device=self.device)
 
@@ -230,8 +232,8 @@ class PreStepPPO(PPO):
 
     def eval(self):
         """Set the model to evaluation mode."""
-        self.policy.eval()
-        return self
+        self.policy.set_training_mode(False)
+        return
 
     def collect_rollouts(
         self,
@@ -320,7 +322,7 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 250000
+    total_samples = 200000
     device = "cpu"
 
     datasets = []
@@ -383,7 +385,7 @@ if __name__ == "__main__":
 
     lr_schedule = linear_schedule(1e-3, 1e-4)
     model = PreStepPPO(
-        "MlpPolicy",
+        CustomActorCritic,
         env,
         device=device,
         verbose=1,
@@ -401,10 +403,6 @@ if __name__ == "__main__":
         ent_coef=0.005,
         normalize_advantage=True,
         policy_kwargs=dict(
-            net_arch=dict(
-                pi=[64, 64, 32], vf=[64, 64, 32]
-            ),  # Smaller value function network
-            activation_fn=nn.ReLU,
             # Add weight initialization to prevent NaN
             ortho_init=True,
             # Add log_std initialization to prevent extreme values

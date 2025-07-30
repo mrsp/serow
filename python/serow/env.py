@@ -110,9 +110,8 @@ class SerowEnv(gym.Env):
             reward = (
                 0.1 * innovation_reward + 2.0 * position_reward + orientation_reward
             )
-            # reward += step_reward
-            # if hasattr(self, "baseline_rewards"):
-            #     reward = reward - self.baseline_rewards[step][cf]
+            if hasattr(self, "baseline_rewards"):
+                reward = reward - self.baseline_rewards[self.step_count][cf]
 
         done = position_error > max_position_error
         truncated = self.step_count == self.max_steps - 2
@@ -149,6 +148,8 @@ class SerowEnv(gym.Env):
         self.serow_framework.set_state(self.initial_state)
         self.step_count = 0
         self.valid_prediction = False
+        self.cf = None
+
         obs = np.zeros((self.state_dim,))
         return obs, {}
 
