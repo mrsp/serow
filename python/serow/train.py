@@ -12,6 +12,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
+from stable_baselines3.common.policies import BaseFeaturesExtractor
 from utils import export_model_to_onnx
 
 
@@ -108,10 +109,9 @@ class TrainingCallback(BaseCallback):
         self.total_steps += 1
 
         # Get dones and truncated to detect episode completions
-        dones = self.locals.get("dones", [False] * len(self.locals.get("infos", [])))
-        truncated = self.locals.get(
-            "truncated", [False] * len(self.locals.get("infos", []))
-        )
+        infos = self.locals.get("infos", [])
+        dones = self.locals.get("dones", [False] * len(infos))
+        truncated = self.locals.get("truncated", [False] * len(infos))
 
         # Only accumulate episode rewards for valid steps
         valid_steps = 0
@@ -217,6 +217,17 @@ class PerformanceDegradationCallback(BaseCallback):
 class PreStepPPO(PPO):
     """Custom PPO model that handles pre-step logic during training and evaluation."""
 
+    def predict(self, observation, deterministic=False):
+        """Override predict to use get_observation_for_action during training"""
+        if isinstance(observation, np.ndarray):
+            observation = torch.tensor(observation, device=self.device)
+
+        action, value, _ = self.policy.forward(observation, deterministic)
+        return (
+            action.detach().cpu().numpy().reshape((-1, *self.action_space.shape)),
+            value.detach().cpu().numpy(),
+        )
+
     def eval(self):
         """Set the model to evaluation mode."""
         self.policy.eval()
@@ -229,7 +240,8 @@ class PreStepPPO(PPO):
         rollout_buffer,
         n_rollout_steps: int,
     ):
-        """Override collect_rollouts to use get_observation_for_action during training"""
+        """Override collect_rollouts to use get_observation_for_action
+        during training"""
         # Store original step method to restore later
         original_step_methods = []
 
@@ -291,6 +303,17 @@ class ActorCriticONNX(nn.Module):
         # Ensure we're in eval mode and detach gradients
         action, value, _ = self.policy.forward(x, deterministic=True)
         return action, value
+
+
+class PassThroughFeaturesExtractor(BaseFeaturesExtractor):
+    """Feature extractor that simply passes through the observation."""
+
+    def __init__(self, observation_space: gym.Space, features_dim: int = None):
+        super().__init__(observation_space, features_dim or observation_space.shape[0])
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        """Simply return the observations as features."""
+        return observations
 
 
 if __name__ == "__main__":
@@ -372,7 +395,7 @@ if __name__ == "__main__":
         gae_lambda=0.95,
         clip_range=0.2,
         max_grad_norm=0.5,
-        target_kl=0.05,
+        target_kl=0.03,
         vf_coef=0.5,
         clip_range_vf=0.2,
         ent_coef=0.005,
@@ -386,6 +409,7 @@ if __name__ == "__main__":
             ortho_init=True,
             # Add log_std initialization to prevent extreme values
             log_std_init=-1.0,
+            features_extractor_class=PassThroughFeaturesExtractor,
         ),
         seed=42,
     )
