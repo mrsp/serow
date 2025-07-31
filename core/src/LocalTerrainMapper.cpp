@@ -257,6 +257,7 @@ void LocalTerrainMapper::initializeLocalMap(const float height, const float vari
     min_terrain_height_variance_ = min_variance;
     max_contact_points_ = max_contact_points;
     max_recenter_distance_ = max_recenter_distance;
+    min_contact_probability_ = min_contact_probability;
 
     // Make sure the max recenter distance is within the map bounds
     const float max_recenter_distance_bound = 0.5f * half_map_dim * resolution;
@@ -267,7 +268,7 @@ void LocalTerrainMapper::initializeLocalMap(const float height, const float vari
     }
 
     // Make sure the min contact probability is within the range [0, 1]
-    if (min_contact_probability < 0.0f || min_contact_probability > 1.0f) {
+    if (min_contact_probability_ < 0.0f || min_contact_probability_ > 1.0f) {
         min_contact_probability_ = 0.15f;
         std::cout << "Min contact probability is out of range, setting to "
                   << min_contact_probability_ << std::endl;
