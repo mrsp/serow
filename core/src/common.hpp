@@ -102,7 +102,10 @@ public:
     virtual void recenter(const std::array<float, 2>& location) = 0;
 
     virtual void initializeLocalMap(const float height, const float variance,
-                                    const float min_variance = 1e-6) = 0;
+                                    const float min_variance = 1e-6,
+                                    const float max_recenter_distance = 0.35,
+                                    const size_t max_contact_points = 4,
+                                    const float min_contact_probability = 0.15) = 0;
 
     virtual bool update(const std::array<float, 2>& loc, float height, float variance) = 0;
 
@@ -124,10 +127,32 @@ public:
     getLocalMapInfo() = 0;
 
     void addContactPoint(const std::array<float, 2>& point) {
+        // Check if the point is inside the local map
+        if (!inside(point)) {
+            return;
+        }
+
+        // Check if the point is already in the contact points
+        constexpr float eps = 1e-6f;
+        for (const auto& contact_point : contact_points_) {
+            if (std::abs(contact_point[0] - point[0]) < eps &&
+                std::abs(contact_point[1] - point[1]) < eps) {
+                return;
+            }
+        }
+
         contact_points_.push_front(point);
-        while (contact_points_.size() > 4) {
+        while (contact_points_.size() > max_contact_points_) {
             contact_points_.pop_back();
         }
+    }
+
+    float getMaxRecenterDistance() const {
+        return max_recenter_distance_;
+    }
+
+    float getMinContactProbability() const {
+        return min_contact_probability_;
     }
 
     void clearContactPoints() {
@@ -135,6 +160,23 @@ public:
     }
 
     void interpolateContactPoints() {
+        // Minimum number of contact points to compute a valid BBox else nothing to do here
+        if (contact_points_.size() < 4) {
+            return;
+        }
+
+        // Check that all contact points are inside the local map
+        for (const auto& point : contact_points_) {
+            if (!inside(point)) {
+                // Remove the point from the contact points
+                contact_points_.erase(
+                    std::remove(contact_points_.begin(), contact_points_.end(), point),
+                    contact_points_.end());
+            }
+        }
+
+        // If we removed some contact points and we can't compute a valid BBox, nothing to do
+        // here. This is faster to first check that all the points are inside the local map
         if (contact_points_.size() < 4) {
             return;
         }
@@ -233,6 +275,9 @@ protected:
 
     ElevationCell default_elevation_;
     float min_terrain_height_variance_{};
+    size_t max_contact_points_{4};
+    float max_recenter_distance_{0.35};
+    float min_contact_probability_{0.15};
     std::deque<std::array<float, 2>> contact_points_{};
 
     std::array<int, 2> local_map_origin_i_{0, 0};

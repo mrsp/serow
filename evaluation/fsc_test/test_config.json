@@ -3,7 +3,7 @@
     "type": "anymal_fsc"
   },
   "Paths": {
-    "base_path": "evaluation/fsc_test",
+    "base_path": "/evaluation/fsc_test",
     "data_file": "{base_path}/{type}/anymal_b_data.h5",
     "prediction_file": "{base_path}/{type}/serow_predictions.h5",
     "elevation_map_file": "{base_path}/{type}/est_elevation_map.bin"
