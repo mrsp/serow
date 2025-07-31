@@ -133,14 +133,14 @@ if __name__ == "__main__":
     # Get contacts frame from the first measurement
     contact_states = test_dataset["contact_states"]
     contacts_frame = list(contact_states[0].contacts_status.keys())
-    state_dim = 3 + 9 + 3 + 4
+    history_size = 20
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
     min_action = np.array([1e-8], dtype=np.float32)
     max_action = np.array([1e2], dtype=np.float32)
 
     # Load the saved PPO model
     agent_ppo = PreStepPPO.load(f"models/{robot}_ppo")
-    agent_ppo.eval()
 
     # Compare the ONNX model with the PPO model
     compare_onnx_ppo(model_dir, agent_ppo, robot)
@@ -164,6 +164,7 @@ if __name__ == "__main__":
         test_dataset["joints"],
         test_dataset["ft"],
         test_dataset["base_pose_ground_truth"],
+        history_size,
     )
 
     # Use the loaded PPO model for evaluation

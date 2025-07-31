@@ -4,7 +4,6 @@ import gymnasium as gym
 import matplotlib.pyplot as plt
 import json
 import os
-import torch
 import torch.nn as nn
 import pandas as pd
 
@@ -298,7 +297,7 @@ class ActorCriticONNX(nn.Module):
 
     def forward(self, x):
         # Ensure we're in eval mode and detach gradients
-        action, value, _ = self.policy.forward(x, deterministic=True)
+        action, value = self.policy.forward(x, deterministic=True)
         return action, value
 
 
@@ -306,7 +305,7 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 2500
+    total_samples = 100000
     device = "cpu"
 
     datasets = []
@@ -319,7 +318,8 @@ if __name__ == "__main__":
     contact_frame = list(contact_states[0].contacts_status.keys())
     print(f"Contact frames: {contact_frame}")
 
-    state_dim = 3 + 9 + 3 + 4
+    history_size = 20
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size
     print(f"State dimension: {state_dim}")
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
     min_action = np.array([1e-8], dtype=np.float32)
@@ -342,6 +342,7 @@ if __name__ == "__main__":
             ds["joints"],
             ds["ft"],
             ds["base_pose_ground_truth"],
+            history_size,
         )
         # Wrap with AutoPreStepWrapper to automatically use pre-step logic
         return AutoPreStepWrapper(base_env)
@@ -359,21 +360,22 @@ if __name__ == "__main__":
         test_dataset["joints"],
         test_dataset["ft"],
         test_dataset["base_pose_ground_truth"],
+        history_size,
     )
 
     # Create vectorized environment with different datasets for each environment
     env = DummyVecEnv([lambda i=i: make_env(i) for i in range(n_envs)])
 
     # Add normalization for observations and rewards
-    # env = VecNormalize(env, norm_obs=True, norm_reward=False)
+    env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
     # Add action noise for exploration (optional but often helpful for SAC)
     n_actions = env.action_space.shape[-1]
     action_noise = NormalActionNoise(
-        mean=np.zeros(n_actions), sigma=0.0000 * np.ones(n_actions)
+        mean=np.zeros(n_actions), sigma=0.001 * np.ones(n_actions)
     )
 
-    lr_schedule = linear_schedule(1e-3, 1e-4)
+    lr_schedule = linear_schedule(3e-4, 1e-5)
     # Create SAC model with custom policy
     model = PreStepSAC(
         "MlpPolicy",
@@ -383,18 +385,18 @@ if __name__ == "__main__":
         learning_rate=lr_schedule,  # Reduced learning rate
         buffer_size=10000,  # Replay buffer size
         learning_starts=1,  # Start training after this many steps
-        batch_size=64,  # Reduced batch size
+        batch_size=128,  # Reduced batch size
         tau=0.01,  # Soft update coefficient
         gamma=0.95,  # Discount factor
         train_freq=1,  # Train every step
         gradient_steps=1,  # Reduced gradient steps
         action_noise=action_noise,  # Exploration noise
-        ent_coef=0.01,
+        ent_coef="auto",
         use_sde=False,  # Don't use state-dependent exploration
         sde_sample_freq=-1,
         use_sde_at_warmup=False,
         policy_kwargs=dict(
-            net_arch=[64, 64, 32],
+            net_arch=[64, 64],
             activation_fn=nn.ReLU,
         ),
     )
@@ -427,56 +429,62 @@ if __name__ == "__main__":
     print(f"Learning starts at: {model.learning_starts}")
     print(f"Current timestep: {model.num_timesteps}")
 
-    # # Extract the observation normalization statistics
-    # obs_mean = env.obs_rms.mean
-    # obs_var = env.obs_rms.var
-    # obs_count = env.obs_rms.count
-    # stats = {
-    #     "obs_mean": obs_mean,
-    #     "obs_var": obs_var,
-    #     "obs_count": obs_count,
-    # }
-    # print("Observation normalization stats:")
-    # print(f"  Mean: {stats['obs_mean']}")
-    # print(f"  Variance: {stats['obs_var']}")
-    # print(f"  Count: {stats['obs_count']}")
-
-    # # Convert numpy arrays to lists for JSON serialization
-    # json_stats = {
-    #     "obs_mean": stats["obs_mean"].tolist(),
-    #     "obs_var": stats["obs_var"].tolist(),
-    #     "obs_count": int(stats["obs_count"]),
-    # }
-    # stats_file = f"models/{robot}_stats.json"
-    # with open(stats_file, "w") as f:
-    #     json.dump(json_stats, f, indent=2)
     stats = None
+    try:
+        # Extract the observation normalization statistics
+        obs_mean = env.obs_rms.mean
+        obs_var = env.obs_rms.var
+        obs_count = env.obs_rms.count
+        stats = {
+            "obs_mean": obs_mean,
+            "obs_var": obs_var,
+            "obs_count": obs_count,
+        }
+        print("Observation normalization stats:")
+        print(f"  Mean: {stats['obs_mean']}")
+        print(f"  Variance: {stats['obs_var']}")
+        print(f"  Count: {stats['obs_count']}")
+
+        # Convert numpy arrays to lists for JSON serialization
+        json_stats = {
+            "obs_mean": stats["obs_mean"].tolist(),
+            "obs_var": stats["obs_var"].tolist(),
+            "obs_count": int(stats["obs_count"]),
+        }
+        stats_file = f"models/{robot}_stats.json"
+        with open(stats_file, "w") as f:
+            json.dump(json_stats, f, indent=2)
+    except Exception as e:
+        print(f"Error extracting observation normalization statistics: {e}")
 
     # Check if the models directory exists, if not create it
     if not os.path.exists("models"):
         os.makedirs("models")
     model.save(f"models/{robot}_sac")
 
-    # Create a wrapper class to match the expected interface for export_model_to_onnx
-    class SACModelWrapper:
-        def __init__(self, sac_model, device):
-            self.sac_model = sac_model
-            self.device = device
-            self.policy = ActorCriticONNX(sac_model)
-            self.name = "SAC"
+    try:
+        # Create a wrapper class to match the expected interface for export_model_to_onnx
+        class SACModelWrapper:
+            def __init__(self, sac_model, device):
+                self.sac_model = sac_model
+                self.device = device
+                self.policy = ActorCriticONNX(sac_model)
+                self.name = "SAC"
 
-    # Create the wrapper
-    model_wrapper = SACModelWrapper(model.policy, device)
+        # Create the wrapper
+        model_wrapper = SACModelWrapper(model.policy, device)
 
-    # Define parameters for ONNX export
-    export_params = {
-        "state_dim": state_dim,
-        "action_dim": action_dim,
-    }
+        # Define parameters for ONNX export
+        export_params = {
+            "state_dim": state_dim,
+            "action_dim": action_dim,
+        }
 
-    # Export to ONNX
-    # print("Exporting model to ONNX...")
-    # export_model_to_onnx(model_wrapper, robot, export_params, "models")
+        # Export to ONNX
+        print("Exporting model to ONNX...")
+        export_model_to_onnx(model_wrapper, robot, export_params, "models")
+    except Exception as e:
+        print(f"Error exporting model to ONNX: {e}")
 
     # Debug information
     print("Training callback stats:")

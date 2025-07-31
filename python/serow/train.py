@@ -14,7 +14,6 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.policies import BaseFeaturesExtractor
 from utils import export_model_to_onnx
-from ac import CustomActorCritic
 
 
 def compute_rolling_average(data, window_size):
@@ -322,9 +321,9 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 200000
+    total_samples = 100000
     device = "cpu"
-
+    history_size = 20
     datasets = []
     for i in range(n_envs):
         dataset = np.load(f"datasets/{robot}_log_{i}.npz", allow_pickle=True)
@@ -335,7 +334,7 @@ if __name__ == "__main__":
     contact_frame = list(contact_states[0].contacts_status.keys())
     print(f"Contact frames: {contact_frame}")
 
-    state_dim = 3 + 9 + 3 + 4
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size
     print(f"State dimension: {state_dim}")
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
     min_action = np.array([1e-8], dtype=np.float32)
@@ -358,6 +357,7 @@ if __name__ == "__main__":
             ds["joints"],
             ds["ft"],
             ds["base_pose_ground_truth"],
+            history_size,
         )
         # Wrap with AutoPreStepWrapper to automatically use pre-step logic
         return AutoPreStepWrapper(base_env)
@@ -375,6 +375,7 @@ if __name__ == "__main__":
         test_dataset["joints"],
         test_dataset["ft"],
         test_dataset["base_pose_ground_truth"],
+        history_size,
     )
 
     # Create vectorized environment with different datasets for each environment
@@ -383,9 +384,9 @@ if __name__ == "__main__":
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
-    lr_schedule = linear_schedule(1e-3, 1e-4)
+    lr_schedule = linear_schedule(3e-4, 1e-5)
     model = PreStepPPO(
-        CustomActorCritic,
+        "MlpPolicy",
         env,
         device=device,
         verbose=1,
@@ -403,11 +404,11 @@ if __name__ == "__main__":
         ent_coef=0.005,
         normalize_advantage=True,
         policy_kwargs=dict(
-            # Add weight initialization to prevent NaN
             ortho_init=True,
-            # Add log_std initialization to prevent extreme values
             log_std_init=-1.0,
             features_extractor_class=PassThroughFeaturesExtractor,
+            net_arch=[dict(pi=[64, 64], vf=[64, 64])],
+            activation_fn=nn.Tanh,
         ),
         seed=42,
     )
@@ -436,55 +437,62 @@ if __name__ == "__main__":
     model.learn(total_timesteps=total_samples, callback=callback)
     print("Training completed")
 
-    # Extract the observation normalization statistics
-    obs_mean = env.obs_rms.mean
-    obs_var = env.obs_rms.var
-    obs_count = env.obs_rms.count
-    stats = {
-        "obs_mean": obs_mean,
-        "obs_var": obs_var,
-        "obs_count": obs_count,
-    }
-    print("Observation normalization stats:")
-    print(f"  Mean: {stats['obs_mean']}")
-    print(f"  Variance: {stats['obs_var']}")
-    print(f"  Count: {stats['obs_count']}")
+    stats = None
+    try:
+        # Extract the observation normalization statistics
+        obs_mean = env.obs_rms.mean
+        obs_var = env.obs_rms.var
+        obs_count = env.obs_rms.count
+        stats = {
+            "obs_mean": obs_mean,
+            "obs_var": obs_var,
+            "obs_count": obs_count,
+        }
+        print("Observation normalization stats:")
+        print(f"  Mean: {stats['obs_mean']}")
+        print(f"  Variance: {stats['obs_var']}")
+        print(f"  Count: {stats['obs_count']}")
 
-    # Convert numpy arrays to lists for JSON serialization
-    json_stats = {
-        "obs_mean": stats["obs_mean"].tolist(),
-        "obs_var": stats["obs_var"].tolist(),
-        "obs_count": int(stats["obs_count"]),
-    }
-    stats_file = f"models/{robot}_stats.json"
-    with open(stats_file, "w") as f:
-        json.dump(json_stats, f, indent=2)
+        # Convert numpy arrays to lists for JSON serialization
+        json_stats = {
+            "obs_mean": stats["obs_mean"].tolist(),
+            "obs_var": stats["obs_var"].tolist(),
+            "obs_count": int(stats["obs_count"]),
+        }
+        stats_file = f"models/{robot}_stats.json"
+        with open(stats_file, "w") as f:
+            json.dump(json_stats, f, indent=2)
+    except Exception as e:
+        print(f"Error saving stats: {e}")
 
     # Check if the models directory exists, if not create it
     if not os.path.exists("models"):
         os.makedirs("models")
     model.save(f"models/{robot}_ppo")
 
-    # Create a wrapper class to match the expected interface for export_model_to_onnx
-    class PPOModelWrapper:
-        def __init__(self, ppo_model, device):
-            self.ppo_model = ppo_model
-            self.device = device
-            self.policy = ActorCriticONNX(ppo_model)
-            self.name = "PPO"
+    try:
+        # Create a wrapper class to match the expected interface for export_model_to_onnx
+        class PPOModelWrapper:
+            def __init__(self, ppo_model, device):
+                self.ppo_model = ppo_model
+                self.device = device
+                self.policy = ActorCriticONNX(ppo_model)
+                self.name = "PPO"
 
-    # Create the wrapper
-    model_wrapper = PPOModelWrapper(model.policy, device)
+        # Create the wrapper
+        model_wrapper = PPOModelWrapper(model.policy, device)
 
-    # Define parameters for ONNX export
-    export_params = {
-        "state_dim": state_dim,
-        "action_dim": action_dim,
-    }
+        # Define parameters for ONNX export
+        export_params = {
+            "state_dim": state_dim,
+            "action_dim": action_dim,
+        }
 
-    # Export to ONNX
-    print("Exporting model to ONNX...")
-    export_model_to_onnx(model_wrapper, robot, export_params, "models")
+        # Export to ONNX
+        print("Exporting model to ONNX...")
+        export_model_to_onnx(model_wrapper, robot, export_params, "models")
+    except Exception as e:
+        print(f"Error exporting model to ONNX: {e}")
 
     # Debug information
     print("Training callback stats:")
@@ -519,5 +527,4 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    model.eval()
     test_env.evaluate(model, stats)

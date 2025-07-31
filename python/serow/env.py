@@ -25,6 +25,7 @@ class SerowEnv(gym.Env):
         joint_data,
         ft_data,
         gt_data,
+        history_size=20,
     ):
         super(SerowEnv, self).__init__()
 
@@ -59,6 +60,8 @@ class SerowEnv(gym.Env):
         self.gt_data = gt_data[:max_steps]
         self.valid_prediction = False
         self.max_steps = max_steps
+        self.history_size = history_size
+        self.nis_history = [np.zeros(3) for _ in range(self.history_size)]
 
         # Compute the baseline rewards, imu data, and kinematics
         (
@@ -102,13 +105,17 @@ class SerowEnv(gym.Env):
         max_position_error = 10.0
         if success:
             nis = innovation @ np.linalg.inv(covariance) @ innovation.T
+            self.nis_history.append(np.linalg.inv(covariance) @ innovation)
+            while len(self.nis_history) > self.history_size:
+                self.nis_history.pop(0)
+
             nis = np.clip(nis, 0, 10)
             position_reward = -position_error
             innovation_reward = -nis
             orientation_reward = -orientation_error
 
             reward = (
-                0.1 * innovation_reward + 2.0 * position_reward + orientation_reward
+                innovation_reward + 10.0 * position_reward + 5.0 * orientation_reward
             )
             if hasattr(self, "baseline_rewards"):
                 reward = reward - self.baseline_rewards[self.step_count][cf]
@@ -131,12 +138,14 @@ class SerowEnv(gym.Env):
         local_kin_pos = kin.contacts_position[cf]
         innovation = local_kin_pos - local_pos
         R = (kin.contacts_position_noise[cf] + kin.position_cov).flatten()
+        nis_flat = np.array(self.nis_history).flatten()
         return np.concatenate(
             [
                 innovation,
                 R,
                 state.get_base_linear_velocity(),
                 state.get_base_orientation(),
+                nis_flat,
             ],
             axis=0,
         ).astype(np.float32)
@@ -149,6 +158,7 @@ class SerowEnv(gym.Env):
         self.step_count = 0
         self.valid_prediction = False
         self.cf = None
+        self.nis_history = [np.zeros(3) for _ in range(self.history_size)]
 
         obs = np.zeros((self.state_dim,))
         return obs, {}
@@ -193,8 +203,9 @@ class SerowEnv(gym.Env):
         obs = np.zeros((self.state_dim,))
         imu = self.imu_data[self.step_count]
         kin = self.kinematics[self.step_count]
+        next_kin = self.kinematics[self.step_count + 1]
 
-        if kin.contacts_status[self.cf]:
+        if kin.contacts_status[self.cf] and next_kin.contacts_status[self.cf]:
             post_state = self.update_step(
                 self.cf,
                 kin,
@@ -207,8 +218,6 @@ class SerowEnv(gym.Env):
                 post_state,
                 self.gt_data[self.step_count],
             )
-
-            next_kin = self.kinematics[self.step_count + 1]
             obs = self._get_observation(self.cf, post_state, next_kin)
 
         if not np.all(obs == np.zeros((self.state_dim,))):
@@ -217,7 +226,7 @@ class SerowEnv(gym.Env):
         info = {"step_count": self.step_count, "reward": reward, "valid": valid}
 
         for cf in self.contact_frames:
-            if cf == self.cf:
+            if cf == self.cf and valid:
                 continue
             self.update_step(cf, kin, np.zeros((self.action_dim,), dtype=np.float32))
 
