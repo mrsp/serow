@@ -255,6 +255,8 @@
     "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3,
+    "maximum_contact_points": 4,
+    "maximum_recenter_distance": 0.35,
     "T_base_to_ground_truth": null,
     "log_data": true,
     "log_measurements": true,

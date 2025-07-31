@@ -240,6 +240,11 @@ private:
         /// @brief minimum terrain measurement uncertainty (m^2), only applies if
         /// enable_terrain_estimation = true
         double minimum_terrain_height_variance{};
+        /// @brief maximum number of contact points to store in the terrain elevation mapper, used
+        /// to smooth out the terrain elevation after each update
+        size_t maximum_contact_points{4};
+        /// @brief maximum distance to recenter the terrain elevation mapper
+        double maximum_recenter_distance{0.35};
         bool is_contact_ekf{};
         Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
