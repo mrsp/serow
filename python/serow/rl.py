@@ -1,14 +1,14 @@
 import numpy as np
 import gymnasium as gym
 import pandas as pd
+import matplotlib.pyplot as plt
+import torch.nn as nn
 
 from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
-import matplotlib.pyplot as plt
-import torch.nn as nn
 
 
 def compute_rolling_average(data, window_size):
@@ -80,9 +80,6 @@ class ValidSampleCallback(BaseCallback):
 
 class PreStepPPO(PPO):
     """Custom PPO model that handles pre-step logic during training and evaluation."""
-
-    def predict(self, observation, state=None, deterministic=False):
-        return self.policy.predict(observation, state, deterministic)
 
     def collect_rollouts(
         self,
@@ -198,7 +195,7 @@ class KalmanFilterEnv(gym.Env):
             low=min_action, high=max_action, shape=(1,), dtype=np.float32
         )
 
-        # Observation space: [position, velocity]
+        # Observation space: [position, velocity, position covariance, velocity covariance, measurement noise, innovation]
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32
         )
@@ -256,8 +253,8 @@ class KalmanFilterEnv(gym.Env):
             "nis": nis,
             "position_error": position_error,
             "step_count": self.step_count,
-            "reward": self.reward,  # Store original reward in info
-            "valid": True,  # Remove random invalidation
+            "reward": self.reward,
+            "valid": True,
         }
 
         self.step_count += 1
@@ -543,6 +540,7 @@ def main():
             max_action=max_action,
         )
     )
+
     baseline_env = KalmanFilterEnv(
         measurement=datasets[-1]["measurement"],
         u=datasets[-1]["control"],
@@ -581,13 +579,11 @@ def main():
     valid_sample_callback = ValidSampleCallback(verbose=0)
 
     # Combine callbacks
-    from stable_baselines3.common.callbacks import CallbackList
-
     callback = CallbackList([training_callback, valid_sample_callback])
 
     # Train the model
     print("Starting training...")
-    model.learn(total_timesteps=300000, callback=callback)
+    model.learn(total_timesteps=100000, callback=callback)
 
     stats = None
     try:
