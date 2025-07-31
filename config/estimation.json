@@ -319,6 +319,14 @@
     // double: minimum terrain measurement uncertainty (m^2)
     // Only applies if enable_terrain_estimation = true
     "minimum_terrain_height_variance": 1e-3,
+    // integer: maximum number of contact points to store in the terrain elevation mapper, used
+    // to smooth out the terrain elevation after each update
+    "maximum_contact_points": 4,
+    // double: maximum distance to recenter the terrain elevation mapper
+    "maximum_recenter_distance": 0.35,
+    // double: minimum contact probability to consider a contact point for terrain elevation
+    // estimation
+    "minimum_contact_probability": 0.15,
     // array: rigid body transformation from base frame to ground truth frame. Can be null if no 
     // ground truth is provided
     "T_base_to_ground_truth": null,

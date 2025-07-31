@@ -577,7 +577,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
         for (const auto& [cf, cp] : kin.contacts_probability) {
-            if (cp > 0.15) {
+            if (cp > terrain_estimator->getMinContactProbability()) {
                 Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
                 T_world_to_base.translation() = state.base_position;
                 T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
@@ -627,8 +627,10 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
         const std::array<float, 2> base_pos_xy = {static_cast<float>(state.base_position.x()),
                                                   static_cast<float>(state.base_position.y())};
         const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
-        if ((abs(base_pos_xy[0] - map_origin_xy[0]) > 0.35) ||
-            (abs(base_pos_xy[1] - map_origin_xy[1]) > 0.35)) {
+        if ((abs(base_pos_xy[0] - map_origin_xy[0]) >
+             terrain_estimator->getMaxRecenterDistance()) ||
+            (abs(base_pos_xy[1] - map_origin_xy[1]) >
+             terrain_estimator->getMaxRecenterDistance())) {
             terrain_estimator->recenter(base_pos_xy);
         }
         terrain_estimator->interpolateContactPoints();
