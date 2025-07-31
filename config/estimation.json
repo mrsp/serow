@@ -324,6 +324,9 @@
     "maximum_contact_points": 4,
     // double: maximum distance to recenter the terrain elevation mapper
     "maximum_recenter_distance": 0.35,
+    // double: minimum contact probability to consider a contact point for terrain elevation
+    // estimation
+    "minimum_contact_probability": 0.15,
     // array: rigid body transformation from base frame to ground truth frame. Can be null if no 
     // ground truth is provided
     "T_base_to_ground_truth": null,

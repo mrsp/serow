@@ -230,6 +230,8 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("maximum_recenter_distance", params_.maximum_recenter_distance))
         return false;
+    if (!checkConfigParam("minimum_contact_probability", params_.minimum_contact_probability))
+        return false;
 
     // Read log directory parameter
     if (!checkConfigParam("log_dir", params_.log_dir))
@@ -886,7 +888,8 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
         }
         terrain_estimator_->initializeLocalMap(
             terrain_height, 1e4, params_.minimum_terrain_height_variance,
-            params_.maximum_recenter_distance, params_.maximum_contact_points);
+            params_.maximum_recenter_distance, params_.maximum_contact_points,
+            params_.minimum_contact_probability);
 
         terrain_estimator_->recenter({static_cast<float>(state.base_state_.base_position.x()),
                                       static_cast<float>(state.base_state_.base_position.y())});

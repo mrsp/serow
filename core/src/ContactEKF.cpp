@@ -577,7 +577,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
         for (const auto& [cf, cp] : kin.contacts_probability) {
-            if (cp > 0.15) {
+            if (cp > terrain_estimator->getMinContactProbability()) {
                 Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
                 T_world_to_base.translation() = state.base_position;
                 T_world_to_base.linear() = state.base_orientation.toRotationMatrix();

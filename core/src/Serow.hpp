@@ -245,6 +245,9 @@ private:
         size_t maximum_contact_points{4};
         /// @brief maximum distance to recenter the terrain elevation mapper
         double maximum_recenter_distance{0.35};
+        /// @brief minimum contact probability to consider a contact point for terrain elevation
+        /// estimation
+        double minimum_contact_probability{0.15};
         bool is_contact_ekf{};
         Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};

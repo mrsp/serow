@@ -104,7 +104,8 @@ public:
     virtual void initializeLocalMap(const float height, const float variance,
                                     const float min_variance = 1e-6,
                                     const float max_recenter_distance = 0.35,
-                                    const size_t max_contact_points = 4) = 0;
+                                    const size_t max_contact_points = 4,
+                                    const float min_contact_probability = 0.15) = 0;
 
     virtual bool update(const std::array<float, 2>& loc, float height, float variance) = 0;
 
@@ -148,6 +149,10 @@ public:
 
     float getMaxRecenterDistance() const {
         return max_recenter_distance_;
+    }
+
+    float getMinContactProbability() const {
+        return min_contact_probability_;
     }
 
     void clearContactPoints() {
@@ -272,6 +277,7 @@ protected:
     float min_terrain_height_variance_{};
     size_t max_contact_points_{4};
     float max_recenter_distance_{0.35};
+    float min_contact_probability_{0.15};
     std::deque<std::array<float, 2>> contact_points_{};
 
     std::array<int, 2> local_map_origin_i_{0, 0};

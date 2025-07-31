@@ -257,6 +257,7 @@
     "minimum_terrain_height_variance": 1e-3,
     "maximum_contact_points": 4,
     "maximum_recenter_distance": 0.35,
+    "minimum_contact_probability": 0.15,
     "T_base_to_ground_truth": null,
     "log_data": true,
     "log_measurements": true,

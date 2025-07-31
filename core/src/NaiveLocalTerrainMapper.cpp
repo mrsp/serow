@@ -69,7 +69,8 @@ void NaiveLocalTerrainMapper::resetLocalMap() {
 void NaiveLocalTerrainMapper::initializeLocalMap(const float height, const float variance,
                                                  const float min_variance,
                                                  const float max_recenter_distance,
-                                                 const size_t max_contact_points) {
+                                                 const size_t max_contact_points,
+                                                 const float min_contact_probability) {
     default_elevation_ = ElevationCell(height, variance);
     min_terrain_height_variance_ = min_variance;
     max_contact_points_ = max_contact_points;
@@ -81,6 +82,13 @@ void NaiveLocalTerrainMapper::initializeLocalMap(const float height, const float
         max_recenter_distance_ = max_recenter_distance_bound;
         std::cout << "Max recenter distance is too large, setting to " << max_recenter_distance_
                   << std::endl;
+    }
+
+    // Make sure the min contact probability is within the range [0, 1]
+    if (min_contact_probability < 0.0f || min_contact_probability > 1.0f) {
+        min_contact_probability_ = 0.15f;
+        std::cout << "Min contact probability is out of range, setting to "
+                  << min_contact_probability_ << std::endl;
     }
 
     for (int i = 0; i < map_size; ++i) {
