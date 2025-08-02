@@ -190,17 +190,9 @@ class KalmanFilterEnv(gym.Env):
         # Initialize Kalman filter matrices
         self.F = np.array([[1, self.dt], [0, 1]])  # State transition matrix
         self.H = np.array([[1, 0]])  # Measurement matrix
+        self.B = np.array([0.0, self.dt])
 
-        self.Q = (
-            np.array(
-                [
-                    [0.25 * self.dt**4, 0.5 * self.dt**3],  # Process noise
-                    [0.5 * self.dt**3, self.dt**2],
-                ]
-            )
-            * self.process_noise**2
-        )
-
+        self.Q = np.array([[self.process_noise**2]])
         self.R = np.array([[self.measurement_noise**2]])  # Measurement noise
 
         # Action space
@@ -223,12 +215,14 @@ class KalmanFilterEnv(gym.Env):
 
         # Reset Kalman filter state
         self.x = np.array([0.0, 0.0])  # Initial state [position, velocity]
-        self.P = np.eye(self.state_dim) * 1.0  # Initial covariance
+        self.P = np.eye(self.state_dim) * np.random.uniform(
+            0.1, 5.0
+        )  # Initial covariance
         self.step_count = 0
         self.reward = 0
 
         self.measurement_history = [0.0] * self.history_length
-        self.measurement_noise_history = [1.0] * self.history_length
+        self.measurement_noise_history = [float(self.R[0, 0])] * self.history_length
         self.prev_action = 0.0
 
         # Get initial observation
@@ -260,7 +254,7 @@ class KalmanFilterEnv(gym.Env):
         action_penalty = abs(action[0] - self.prev_action)
 
         self.reward = (
-            2.0 * position_reward + 0.5 * innovation_reward - 0.001 * action_penalty
+            4.0 * position_reward + 0.5 * innovation_reward - 0.005 * action_penalty
         )
 
         # Check termination conditions
@@ -285,11 +279,10 @@ class KalmanFilterEnv(gym.Env):
     def predict(self, control_input):
         """Kalman filter prediction step"""
         # Control input matrix (acceleration affects position and velocity)
-        B = np.array([[0.5 * self.dt**2], [self.dt]])
         u = np.array([control_input])
 
         # Predict state
-        self.x = self.F @ self.x + B.flatten() * u
+        self.x = self.F @ self.x + self.B * u
 
         # Predict covariance
         self.P = self.F @ self.P @ self.F.T + self.Q
@@ -515,6 +508,10 @@ def main():
     n_envs = 8  # You can adjust this based on your CPU cores
     min_action = 1e-3
     max_action = 1e3
+    measurement_noise_std = 0.1
+    control_noise_std = 0.25
+    scale = max_action
+    gen_scale = min_action
 
     # Generate random datasets
     datasets = []
@@ -522,8 +519,8 @@ def main():
         measurement_signal, acceleration_signal, position_signal = generate_dataset(
             n_points=1000,
             t_max=1.0,
-            measurement_noise_std=0.1,
-            control_noise_std=0.25,
+            measurement_noise_std=gen_scale * measurement_noise_std,
+            control_noise_std=control_noise_std,
             seed=42 + i,  # Different seed for each dataset
         )
         dataset = {
@@ -552,6 +549,8 @@ def main():
             gt=dataset["ground_truth"],
             min_action=min_action,
             max_action=max_action,
+            measurement_noise=scale * measurement_noise_std,
+            process_noise=control_noise_std,
         )
         # Wrap with AutoPreStepWrapper to automatically use pre-step logic
         return AutoPreStepWrapper(base_env)
@@ -568,6 +567,8 @@ def main():
             gt=datasets[-1]["ground_truth"],
             min_action=min_action,
             max_action=max_action,
+            measurement_noise=scale * measurement_noise_std,
+            process_noise=control_noise_std,
         )
     )
 
@@ -577,6 +578,8 @@ def main():
         gt=datasets[-1]["ground_truth"],
         min_action=min_action,
         max_action=max_action,
+        measurement_noise=scale * measurement_noise_std,
+        process_noise=control_noise_std,
     )
 
     # Check environment
@@ -589,7 +592,7 @@ def main():
         env,
         device="cpu",
         verbose=1,
-        learning_rate=linear_schedule(3e-4, 5e-5),
+        learning_rate=linear_schedule(3e-4, 1e-5),
         n_steps=512,
         batch_size=128,
         n_epochs=5,
@@ -599,7 +602,7 @@ def main():
         clip_range=0.2,
         policy_kwargs=dict(
             net_arch=dict(pi=[512, 512, 256, 128], vf=[512, 512, 256, 128]),
-            activation_fn=nn.ReLU,
+            activation_fn=nn.Tanh,
             ortho_init=True,
             log_std_init=-1.0,
         ),
@@ -614,7 +617,7 @@ def main():
 
     # Train the model
     print("Starting training...")
-    model.learn(total_timesteps=1000000, callback=callback)
+    model.learn(total_timesteps=50000, callback=callback)
 
     stats = None
     try:
@@ -638,6 +641,8 @@ def main():
     # Test the trained model
     print("\nTesting trained model...")
     obs, _ = test_env.reset()
+    baseline_env.reset()
+
     episode_rewards = []
     positions = []
     positions_baseline = []
@@ -649,8 +654,11 @@ def main():
             obs = (obs - stats["obs_mean"]) / np.sqrt(stats["obs_var"])
         action, _ = model.predict(obs, deterministic=True)
         print(f"step {step} action: {action}")
-        obs, reward, terminated, truncated, info = test_env.step(action)
-        baseline_env.step(baseline_env.R)
+        obs, reward, terminated, truncated, _ = test_env.step(action)
+
+        # Run the baseline
+        baseline_env.get_observation_for_action()
+        baseline_env.step(baseline_env.R.flatten())
         if len(episode_rewards) == 0:
             episode_rewards.append(reward)
         else:
