@@ -11,6 +11,15 @@ from stable_baselines3.common.callbacks import BaseCallback, CallbackList
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 
+def linear_schedule(initial_value, final_value):
+    """Linear learning rate schedule."""
+
+    def schedule(progress_remaining):
+        return final_value + progress_remaining * (initial_value - final_value)
+
+    return schedule
+
+
 def compute_rolling_average(data, window_size):
     """Helper to compute rolling average, padding the start."""
     if len(data) == 0:
@@ -173,6 +182,10 @@ class KalmanFilterEnv(gym.Env):
         # State: [position, velocity]
         self.state_dim = 2
         self.measurement_dim = 1  # we only measure position
+        self.history_length = 100
+        self.measurement_history = []
+        self.measurement_noise_history = []
+        self.prev_action = 0.0
 
         # Initialize Kalman filter matrices
         self.F = np.array([[1, self.dt], [0, 1]])  # State transition matrix
@@ -197,7 +210,10 @@ class KalmanFilterEnv(gym.Env):
 
         # Observation space: [position, velocity, position covariance, velocity covariance, measurement noise, innovation]
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32
+            low=-np.inf,
+            high=np.inf,
+            shape=(5 + self.history_length * 2,),
+            dtype=np.float32,
         )
 
         self.reset()
@@ -211,9 +227,12 @@ class KalmanFilterEnv(gym.Env):
         self.step_count = 0
         self.reward = 0
 
+        self.measurement_history = [0.0] * self.history_length
+        self.measurement_noise_history = [1.0] * self.history_length
+        self.prev_action = 0.0
+
         # Get initial observation
         obs = self._get_observation()
-
         return obs, {}
 
     def get_observation_for_action(self):
@@ -230,24 +249,23 @@ class KalmanFilterEnv(gym.Env):
         next_state, y, S = self.update(self.measurement[self.step_count], action)
 
         position_error = abs(next_state[0] - self.gt[self.step_count])
-        position_reward = -position_error
+        position_reward = -position_error / 10.0
 
         # Innovation consistency reward (clipped)
         nis = float(y @ np.linalg.inv(S) @ y.T)
         nis = np.clip(nis, 0, 10.0)
-        innovation_reward = -nis
+        innovation_reward = -nis / 10.0
 
         # Small action penalty to encourage smoothness
-        action_penalty = 0.01 * action[0] ** 2
+        action_penalty = abs(action[0] - self.prev_action)
 
-        # Total reward (bounded)
-        self.reward = position_reward + 0.1 * innovation_reward - action_penalty
+        self.reward = (
+            2.0 * position_reward + 0.5 * innovation_reward - 0.001 * action_penalty
+        )
 
         # Check termination conditions
         terminated = position_error > 10.0
         truncated = self.step_count == self.max_steps - 1
-        if truncated and not terminated:
-            self.reward = 1.0
 
         info = {
             "nis": nis,
@@ -258,6 +276,7 @@ class KalmanFilterEnv(gym.Env):
         }
 
         self.step_count += 1
+        self.prev_action = action[0]
 
         # Get the final observation for the next step
         obs = self._get_observation()
@@ -278,7 +297,7 @@ class KalmanFilterEnv(gym.Env):
     def update(self, measurement, action):
         """Kalman filter update step"""
         # Update step
-        R = self.R * float(action[0])
+        R = float(action[0])
 
         # Innovation
         y = measurement - self.H @ self.x
@@ -295,19 +314,30 @@ class KalmanFilterEnv(gym.Env):
         # Updated covariance
         self.P = self.P - K @ self.H @ self.P
 
+        self.measurement_history.append(measurement)
+        self.measurement_noise_history.append(self.R[0, 0])
+        while len(self.measurement_history) > self.history_length:
+            self.measurement_history.pop(0)
+            self.measurement_noise_history.pop(0)
+
         return self.x, y, S
 
     def _get_observation(self):
         """Get current observation for the agent"""
-        obs = np.array(
+
+        measurement_history = np.array(self.measurement_history).flatten()
+        measurement_noise_history = np.array(self.measurement_noise_history).flatten()
+        obs = np.concatenate(
             [
-                self.x[0],  # current position
-                self.x[1],  # current velocity
-                self.P[0, 0],  # position covariance
-                self.P[1, 1],  # velocity covariance
-                self.R[0, 0],  # measurement noise
-                self.measurement[self.step_count] - self.x[0],  # innovation
+                [self.x[1]],  # current velocity
+                [self.P[0, 0]],  # position covariance
+                [self.P[1, 1]],  # velocity covariance
+                [self.R[0, 0]],  # measurement noise
+                measurement_history,
+                measurement_noise_history,
+                [self.measurement[self.step_count] - self.x[0]],  # innovation
             ],
+            axis=0,
             dtype=np.float32,
         )
 
@@ -483,14 +513,14 @@ def visualize_dataset(measurement, control, ground_truth, save_plot=False):
 def main():
     # Number of parallel environments
     n_envs = 8  # You can adjust this based on your CPU cores
-    min_action = 1e-8
-    max_action = 1
+    min_action = 1e-3
+    max_action = 1e3
 
     # Generate random datasets
     datasets = []
     for i in range(n_envs + 1):
         measurement_signal, acceleration_signal, position_signal = generate_dataset(
-            n_points=500,
+            n_points=1000,
             t_max=1.0,
             measurement_noise_std=0.1,
             control_noise_std=0.25,
@@ -559,15 +589,16 @@ def main():
         env,
         device="cpu",
         verbose=1,
-        learning_rate=3e-4,
+        learning_rate=linear_schedule(3e-4, 5e-5),
         n_steps=512,
         batch_size=128,
-        n_epochs=10,
+        n_epochs=5,
         gamma=0.99,
         gae_lambda=0.95,
+        target_kl=0.035,
         clip_range=0.2,
         policy_kwargs=dict(
-            net_arch=dict(pi=[128, 128, 64], vf=[128, 128, 64]),
+            net_arch=dict(pi=[512, 512, 256, 128], vf=[512, 512, 256, 128]),
             activation_fn=nn.ReLU,
             ortho_init=True,
             log_std_init=-1.0,
@@ -583,7 +614,7 @@ def main():
 
     # Train the model
     print("Starting training...")
-    model.learn(total_timesteps=100000, callback=callback)
+    model.learn(total_timesteps=1000000, callback=callback)
 
     stats = None
     try:
@@ -619,7 +650,7 @@ def main():
         action, _ = model.predict(obs, deterministic=True)
         print(f"step {step} action: {action}")
         obs, reward, terminated, truncated, info = test_env.step(action)
-        baseline_env.step(np.array([1.0]))
+        baseline_env.step(baseline_env.R)
         if len(episode_rewards) == 0:
             episode_rewards.append(reward)
         else:

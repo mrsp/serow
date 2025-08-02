@@ -371,10 +371,12 @@ def main():
         gae_lambda=0.95,
         clip_range=0.2,
         target_kl=0.035,
+        ent_coef=0.05,
         policy_kwargs=dict(
             net_arch=dict(pi=[256, 256], vf=[256, 256]),
             activation_fn=nn.Tanh,
             ortho_init=True,
+            log_std_init=-2.0,
         ),
     )
 
