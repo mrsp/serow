@@ -304,11 +304,28 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
     const Eigen::Matrix3d R_base = state.base_orientation.toRotationMatrix();
     const Eigen::Matrix3d R_base_transpose = R_base.transpose();
 
-    cp_noise += position_cov;
-    if (contact_position_action_cov_gain_.at(cf) > 0.0) {
-        cp_noise = contact_position_action_cov_gain_.at(cf) * cp_noise;
-    }
+    // cp_noise += position_cov; // @MM Is this correct?
+    if (cs){
+        for (const auto& [cf, act] : contact_position_action_cov_gain_) {
+            // std::cerr << "Diagonal elements not all positive for contact: " << cf << " diag 1 " << act(0) << " diag 2 " << act(1) << " diag 3 " << act(2)<< std::endl;
 
+            // Check positivity of diagonal
+            if (act(0) > 0.0 && act(1) > 0.0 && act(2) > 0.0) {
+                // Construct lower-triangular matrix C manually
+                Eigen::Matrix3d C = Eigen::Matrix3d::Zero();
+                C(0, 0) = act(0); // d1
+                C(1, 1) = act(1); // d2
+                C(2, 2) = act(2); // d3
+
+                C(1, 0) = act(3); // a1
+                C(2, 0) = act(4); // a2
+                C(2, 1) = act(5); // a3
+
+                // Compute covariance: R = C * C^T
+                cp_noise = C * C.transpose();
+            } 
+        }
+    }
     // If the terrain estimator is in the loop reduce the effect that kinematics has in the
     // contact height update
     if (terrain_estimator) {
@@ -688,16 +705,17 @@ void ContactEKF::updateWithIMUOrientation(BaseState& state,
 }
 
 void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    if (action.size() == 1) {
-        contact_position_action_cov_gain_.at(cf) = action(0);
-    } else if (action.size() == 2) {
-        contact_position_action_cov_gain_.at(cf) = action(0);
-        if (!point_feet_) {
-            contact_orientation_action_cov_gain_.at(cf) = action(1);
-        }
-    } else {
-        throw std::invalid_argument("Action vector must have 1 or 2 elements");
-    }
+    contact_position_action_cov_gain_[cf] = action;
+    // if (action.size() == 1) {
+    //     contact_position_action_cov_gain_.at(cf) = action(0);
+    // } else if (action.size() == 2) {
+    //     contact_position_action_cov_gain_.at(cf) = action(0);
+    //     if (!point_feet_) {
+    //         contact_orientation_action_cov_gain_.at(cf) = action(1);
+    //     }
+    // } else {
+    //     throw std::invalid_argument("Action vector must have 1 or 2 elements");
+    // }
 }
 
 bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame,
@@ -729,7 +747,7 @@ bool ContactEKF::getContactOrientationInnovation(const std::string& contact_fram
 
 void ContactEKF::clearAction() {
     for (const auto& cf : contacts_frame_) {
-        contact_position_action_cov_gain_[cf] = 0.0;
+        contact_position_action_cov_gain_[cf] = Eigen::VectorXd::Zero(6);
         if (!point_feet_) {
             contact_orientation_action_cov_gain_[cf] = 0.0;
         }
