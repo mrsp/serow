@@ -321,7 +321,7 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
             C(2, 1) = act(5); // a3
 
             // Compute covariance: R = C * C^T
-            cp_noise = C * C.transpose();
+            cp_noise = C * C.transpose() * cp_noise;
         } 
     }
     
