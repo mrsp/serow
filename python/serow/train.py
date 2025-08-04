@@ -1,5 +1,7 @@
 import numpy as np
 import gymnasium as gym
+import matplotlib
+matplotlib.use("TkAgg")  # Use Agg backend for non-GUI environments
 import matplotlib.pyplot as plt
 import json
 import os
@@ -107,7 +109,6 @@ class TrainingCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         self.total_steps += 1
-
         # Get dones and truncated to detect episode completions
         infos = self.locals.get("infos", [])
         dones = self.locals.get("dones", [False] * len(infos))
@@ -224,8 +225,10 @@ class PreStepPPO(PPO):
             observation = torch.tensor(observation, device=self.device)
 
         action, value, _ = self.policy.forward(observation, deterministic)
+        action_np = action.detach().cpu().numpy().reshape((-1, *self.action_space.shape))
+    
         return (
-            action.detach().cpu().numpy().reshape((-1, *self.action_space.shape)),
+            action_np,
             value.detach().cpu().numpy(),
         )
 
@@ -303,6 +306,7 @@ class ActorCriticONNX(nn.Module):
     def forward(self, x):
         # Ensure we're in eval mode and detach gradients
         action, value, _ = self.policy.forward(x, deterministic=True)
+
         return action, value
 
 
@@ -321,7 +325,7 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 100000
+    total_samples = 300000
     device = "cpu"
     history_size = 20
     datasets = []
@@ -336,9 +340,16 @@ if __name__ == "__main__":
 
     state_dim = 3 + 9 + 3 + 4 + 3 * history_size
     print(f"State dimension: {state_dim}")
-    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8], dtype=np.float32)
-    max_action = np.array([1e2], dtype=np.float32)
+    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
+    diag_low = np.array([1e-8, 1e-4, 1e-4], dtype=np.float32)
+    diag_high = np.array([10.0, 10.0, 10.0], dtype=np.float32)
+
+    # Lower triangle bounds: unconstrained or symmetric
+    lower_low = np.array([-1.0, -1.0, -1.0], dtype=np.float32)
+    lower_high = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+    
+    min_action = np.concatenate([diag_low, lower_low])
+    max_action = np.concatenate([diag_high, lower_high])
 
     # Create vectorized environment
     def make_env(i):
