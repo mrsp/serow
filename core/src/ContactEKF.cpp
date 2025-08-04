@@ -304,7 +304,7 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
     const Eigen::Matrix3d R_base = state.base_orientation.toRotationMatrix();
     const Eigen::Matrix3d R_base_transpose = R_base.transpose();
 
-    cp_noise += position_cov; // @MM Is this correct?
+    // cp_noise += position_cov; // @MM Is this correct?
     for (const auto& [cf, act] : contact_position_action_cov_gain_) {
         // std::cerr << "Diagonal elements not all positive for contact: " << cf << " diag 1 " << act(0) << " diag 2 " << act(1) << " diag 3 " << act(2)<< std::endl;
 
@@ -321,7 +321,7 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
             C(2, 1) = act(5); // a3
 
             // Compute covariance: R = C * C^T
-            cp_noise = C * C.transpose() * cp_noise;
+            cp_noise = C * C.transpose() ;
         } 
     }
     
