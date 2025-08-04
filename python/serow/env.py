@@ -204,8 +204,8 @@ class SerowEnv(gym.Env):
         imu = self.imu_data[self.step_count]
         kin = self.kinematics[self.step_count]
         next_kin = self.kinematics[self.step_count + 1]
-
         if kin.contacts_status[self.cf] and next_kin.contacts_status[self.cf]:
+
             post_state = self.update_step(
                 self.cf,
                 kin,
@@ -300,6 +300,7 @@ class SerowEnv(gym.Env):
                                 dtype=np.float32,
                             )
                         action, _ = model.predict(obs, deterministic=True)
+                        action = np.asarray(action).flatten().reshape((self.action_dim,1)).astype(np.float32)
                 post_state = self.update_step(cf, kin, action)
                 reward[cf] = self._compute_reward(
                     cf, post_state, self.gt_data[self.step_count]
