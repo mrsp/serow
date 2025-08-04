@@ -14,8 +14,10 @@
 
 namespace serow {
 
-State::State(std::set<std::string> contacts_frame, bool point_feet) {
-    contacts_frame_ = std::move(contacts_frame);
+State::State(const std::set<std::string>& contacts_frame, bool point_feet,
+             const std::string& base_frame) {
+    contacts_frame_ = contacts_frame;
+    base_frame_ = base_frame;
     num_leg_ee_ = contacts_frame_.size();
     point_feet_ = point_feet;
     is_valid_ = false;
@@ -348,6 +350,10 @@ CentroidalState State::getCentroidalState() const {
 
 JointState State::getJointState() const {
     return joint_state_;
+}
+
+std::string State::getBaseFrame() const {
+    return base_frame_;
 }
 
 }  // namespace serow

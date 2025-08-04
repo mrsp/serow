@@ -174,7 +174,7 @@ private:
 
         odom_msg.header.stamp = rclcpp::Time(timestamp);
         odom_msg.header.frame_id = "odom";
-        odom_msg.child_frame_id = "base_link";
+        odom_msg.child_frame_id = state.getBaseFrame();
         odom_msg.pose.pose.position.x = base_position.x();
         odom_msg.pose.pose.position.y = base_position.y();
         odom_msg.pose.pose.position.z = base_position.z();

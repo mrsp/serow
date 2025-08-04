@@ -259,7 +259,8 @@ public:
     void setInitialized(bool initialized);
 
     State() = default;
-    State(std::set<std::string> contacts_frame, bool point_feet);
+    State(const std::set<std::string>& contacts_frame, bool point_feet,
+          const std::string& base_frame);
 
     void setBaseState(const BaseState& base_state);
     BaseState getBaseState() const;
@@ -272,6 +273,8 @@ public:
 
     void setJointState(const JointState& joint_state);
     JointState getJointState() const;
+
+    std::string getBaseFrame() const;
 
 private:
     /// Flag to indicate if the robot has point feet. False indicates flat feet contacts
@@ -286,6 +289,9 @@ private:
     double mass_{};
     /// Flag to indicate if the state is filled with valid data
     bool is_initialized_{};
+
+    /// Base frame name
+    std::string base_frame_{"base_link"};
 
     /// Individual states
     JointState joint_state_;
