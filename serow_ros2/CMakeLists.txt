@@ -13,6 +13,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -42,6 +43,7 @@ target_link_libraries(serow_ros2
 
 ament_target_dependencies(serow_ros2
   rclcpp
+  nav_msgs
   sensor_msgs
   geometry_msgs
   ament_index_cpp
@@ -67,6 +69,7 @@ install(DIRECTORY
 # Export dependencies
 ament_export_dependencies(
   rclcpp
+  nav_msgs
   sensor_msgs
   geometry_msgs
   ament_index_cpp

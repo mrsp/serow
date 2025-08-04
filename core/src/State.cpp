@@ -48,6 +48,10 @@ State::State(std::set<std::string> contacts_frame, bool point_feet) {
     }
 }
 
+double State::getBaseTimestamp() const {
+    return base_state_.timestamp;
+}
+
 Eigen::Isometry3d State::getBasePose() const {
     Eigen::Isometry3d base_pose = Eigen::Isometry3d::Identity();
     base_pose.linear() = base_state_.base_orientation.toRotationMatrix();

@@ -150,6 +150,8 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /// State getters
+    /// Returns the latest base estimate timestamp
+    double getBaseTimestamp() const;
     /// Returns the 3D base pose as a rigid transformation in world frame coordinates
     Eigen::Isometry3d getBasePose() const;
     /// Returns the 3D base position in world frame coordinates

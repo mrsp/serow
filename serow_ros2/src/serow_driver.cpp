@@ -4,6 +4,7 @@
 #include <map>
 #include <serow/Serow.hpp>
 
+#include <nav_msgs/msg/odometry.hpp>
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "geometry_msgs/msg/wrench_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -98,6 +99,7 @@ public:
         timer_ = this->create_wall_timer(std::chrono::milliseconds(10),  // 100Hz processing rate
                                          std::bind(&SerowDriver::run, this));
 
+        odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/serow/odom", 10);
         RCLCPP_INFO(this->get_logger(), "SERoW was initialized successfully");
     }
 
@@ -154,13 +156,48 @@ private:
 
             const auto& state = serow_.getState();
             if (state) {
-                RCLCPP_INFO(this->get_logger(), "State: [%f, %f, %f]", state->getBasePosition().x(),
-                            state->getBasePosition().y(), state->getBasePosition().z());
+                publishOdometry(state.value());
             }
-
-            joint_state_data_.reset();
-            base_imu_data_.reset();
         }
+    }
+
+    void publishOdometry(const serow::State& state) {
+        auto odom_msg = nav_msgs::msg::Odometry();
+        const double timestamp = state.getBaseTimestamp();
+        const Eigen::Vector3d& base_position = state.getBasePosition();
+        const Eigen::Quaterniond& base_orientation = state.getBaseOrientation();
+        const Eigen::Vector3d& base_linear_velocity = state.getBaseLinearVelocity();
+        const Eigen::Vector3d& base_angular_velocity = state.getBaseAngularVelocity();
+
+        const Eigen::Matrix<double, 6, 6> base_pose_cov = state.getBasePoseCov();
+        const Eigen::Matrix<double, 6, 6> base_velocity_cov = state.getBaseVelocityCov();
+
+        odom_msg.header.stamp = rclcpp::Time(timestamp);
+        odom_msg.header.frame_id = "odom";
+        odom_msg.child_frame_id = "base_link";
+        odom_msg.pose.pose.position.x = base_position.x();
+        odom_msg.pose.pose.position.y = base_position.y();
+        odom_msg.pose.pose.position.z = base_position.z();
+        odom_msg.pose.pose.orientation.x = base_orientation.x();
+        odom_msg.pose.pose.orientation.y = base_orientation.y();
+        odom_msg.pose.pose.orientation.z = base_orientation.z();
+        odom_msg.pose.pose.orientation.w = base_orientation.w();
+
+        odom_msg.twist.twist.linear.x = base_linear_velocity.x();
+        odom_msg.twist.twist.linear.y = base_linear_velocity.y();
+        odom_msg.twist.twist.linear.z = base_linear_velocity.z();
+        odom_msg.twist.twist.angular.x = base_angular_velocity.x();
+        odom_msg.twist.twist.angular.y = base_angular_velocity.y();
+        odom_msg.twist.twist.angular.z = base_angular_velocity.z();
+
+        for (size_t i = 0; i < 6; i++) {
+            for (size_t j = 0; j < 6; j++) {
+                odom_msg.pose.covariance[i * 6 + j] = base_pose_cov(i, j);
+                odom_msg.twist.covariance[i * 6 + j] = base_velocity_cov(i, j);
+            }
+        }
+
+        odom_publisher_->publish(odom_msg);
     }
 
     void jointStateCallback(const sensor_msgs::msg::JointState& msg) {
@@ -172,6 +209,7 @@ private:
     }
 
     serow::Serow serow_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscription_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr base_imu_subscription_;
     std::vector<rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr>
