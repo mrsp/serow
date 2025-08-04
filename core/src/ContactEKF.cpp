@@ -304,28 +304,27 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
     const Eigen::Matrix3d R_base = state.base_orientation.toRotationMatrix();
     const Eigen::Matrix3d R_base_transpose = R_base.transpose();
 
-    // cp_noise += position_cov; // @MM Is this correct?
-    if (cs){
-        for (const auto& [cf, act] : contact_position_action_cov_gain_) {
-            // std::cerr << "Diagonal elements not all positive for contact: " << cf << " diag 1 " << act(0) << " diag 2 " << act(1) << " diag 3 " << act(2)<< std::endl;
+    cp_noise += position_cov; // @MM Is this correct?
+    for (const auto& [cf, act] : contact_position_action_cov_gain_) {
+        // std::cerr << "Diagonal elements not all positive for contact: " << cf << " diag 1 " << act(0) << " diag 2 " << act(1) << " diag 3 " << act(2)<< std::endl;
 
-            // Check positivity of diagonal
-            if (act(0) > 0.0 && act(1) > 0.0 && act(2) > 0.0) {
-                // Construct lower-triangular matrix C manually
-                Eigen::Matrix3d C = Eigen::Matrix3d::Zero();
-                C(0, 0) = act(0); // d1
-                C(1, 1) = act(1); // d2
-                C(2, 2) = act(2); // d3
+        // Check positivity of diagonal
+        if (act(0) > 0.0 && act(1) > 0.0 && act(2) > 0.0) {
+            // Construct lower-triangular matrix C manually
+            Eigen::Matrix3d C = Eigen::Matrix3d::Zero();
+            C(0, 0) = act(0); // d1
+            C(1, 1) = act(1); // d2
+            C(2, 2) = act(2); // d3
 
-                C(1, 0) = act(3); // a1
-                C(2, 0) = act(4); // a2
-                C(2, 1) = act(5); // a3
+            C(1, 0) = act(3); // a1
+            C(2, 0) = act(4); // a2
+            C(2, 1) = act(5); // a3
 
-                // Compute covariance: R = C * C^T
-                cp_noise = C * C.transpose();
-            } 
-        }
+            // Compute covariance: R = C * C^T
+            cp_noise = C * C.transpose();
+        } 
     }
+    
     // If the terrain estimator is in the loop reduce the effect that kinematics has in the
     // contact height update
     if (terrain_estimator) {
