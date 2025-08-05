@@ -8,14 +8,14 @@
     },
     "model_path": "h1.urdf",
     "g": 9.81,
-    "joint_rate": 150.0,
+    "joint_rate": 100.0,
     "estimate_joint_velocity": false,
     "joint_cutoff_frequency": 10.0,
     "joint_position_variance": 0.1,
     "angular_momentum_cutoff_frequency": 5.0,
     "tau_0": 1.0,
     "tau_1": 0.1,
-    "imu_rate": 150.0,
+    "imu_rate": 100.0,
     "R_base_to_gyro": [
         1.0,
         0.0,
@@ -51,7 +51,7 @@
         0.0
     ],
     "gyro_cutoff_frequency": 5.0,
-    "force_torque_rate": 150.0,
+    "force_torque_rate": 100.0,
     "R_foot_to_force": {
         "0": [
             1.0,
@@ -100,7 +100,7 @@
             1.0
         ]
     },
-    "attitude_estimator_proportional_gain": 0.02,
+    "attitude_estimator_proportional_gain": 0.1,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
     "high_threshold": 175.0,
