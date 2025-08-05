@@ -304,6 +304,25 @@ class SerowEnv(gym.Env):
             )
             imu_data.append(imu)
             kinematics.append(kin)
+
+            if model is None:
+                # Compute min-max of the action
+                min_action = np.ones((self.action_dim,), dtype=np.float32) * 1e8
+                max_action = np.ones((self.action_dim,), dtype=np.float32) * -1e8
+                for cf in self.contact_frames:
+                    if (
+                        kin.contacts_status[cf]
+                        and kin.contacts_position[cf] is not None
+                    ):
+                        R = kin.contacts_position_noise[cf] + kin.position_cov
+                        # Cholesky decomposition
+                        L = np.linalg.cholesky(R)
+                        a = np.array(
+                            [L[0, 0], L[1, 1], L[2, 2], L[1, 0], L[2, 0], L[2, 1]]
+                        )
+                        min_action = np.minimum(min_action, a)
+                        max_action = np.maximum(max_action, a)
+
             self.serow_framework.base_estimator_predict_step(imu, kin)
 
             # Run the update step with the contact positions
@@ -345,6 +364,12 @@ class SerowEnv(gym.Env):
 
             # Progress to the next sample
             self.step_count += 1
+
+        if model is None:
+            # Print the min-max of the action
+            print(f"Min action: {min_action}")
+            print(f"Max action: {max_action}")
+            print("---------------------------")
 
         # Convert to numpy arrays
         timestamps = np.array(timestamps)

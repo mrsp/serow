@@ -266,7 +266,9 @@ class KalmanFilterEnv(gym.Env):
             "position_error": position_error,
             "step_count": self.step_count,
             "reward": self.reward,
-            "valid": True,
+            "valid": (
+                True if np.random.rand() > 0.1 else False
+            ),  # Make 10% of samples invalid
         }
 
         self.step_count += 1
@@ -610,7 +612,7 @@ def main():
 
     # Create callbacks
     training_callback = TrainingCallback(verbose=1)
-    valid_sample_callback = ValidSampleCallback(verbose=0)
+    valid_sample_callback = ValidSampleCallback(verbose=1)
 
     # Combine callbacks
     callback = CallbackList([training_callback, valid_sample_callback])
