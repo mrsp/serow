@@ -23,22 +23,22 @@
     0.0,
     0.0,
     0.0,
-    1.0,
+    -1.0,
     0.0,
     0.0,
     0.0,
-    1.0
+    -1.0
   ],
   "R_base_to_acc": [
     1.0,
     0.0,
     0.0,
     0.0,
-    1.0,
+    -1.0,
     0.0,
     0.0,
     0.0,
-    1.0
+    -1.0
   ],
   "calibrate_initial_imu_bias": false,
   "max_imu_calibration_cycles": 1000,
