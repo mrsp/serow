@@ -31,7 +31,6 @@ void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
     if (datasetPath.empty() || datasetPath[0] != '/') {
         throw std::invalid_argument("Dataset path must be non-empty and start with '/'");
     }
-    std::cout << fileName << '\n';
 
     // Open or create the file
     H5::H5File file;
@@ -319,8 +318,8 @@ int main(int argc, char** argv) {
                                                                  base_gt_positions[i][1],
                                                                  base_gt_positions[i][2]),
                                      .orientation = Eigen::Quaterniond(
-                                         base_gt_orientations[i][0], base_gt_orientations[i][1],
-                                         base_gt_orientations[i][2], base_gt_orientations[i][3])});
+                                         base_gt_orientations[i][3], base_gt_orientations[i][0],
+                                         base_gt_orientations[i][1], base_gt_orientations[i][2])});
             } else {
                 estimator.filter(imu, joints, force_torque);
             }
