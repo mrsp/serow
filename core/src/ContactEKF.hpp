@@ -183,7 +183,7 @@ private:
 
     std::map<std::string, Eigen::VectorXd> contact_position_action_cov_gain_;
 
-    std::map<std::string, double> contact_orientation_action_cov_gain_;
+    std::map<std::string, Eigen::VectorXd> contact_orientation_action_cov_gain_;
 
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
     std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
