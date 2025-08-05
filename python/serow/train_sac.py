@@ -108,12 +108,10 @@ class TrainingCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         self.total_steps += 1
-
         # Get dones and truncated to detect episode completions
-        dones = self.locals.get("dones", [False] * len(self.locals.get("infos", [])))
-        truncated = self.locals.get(
-            "truncated", [False] * len(self.locals.get("infos", []))
-        )
+        infos = self.locals.get("infos", [])
+        dones = self.locals.get("dones", [False] * len(infos))
+        truncated = self.locals.get("truncated", [False] * len(infos))
 
         # Only accumulate episode rewards for valid steps
         valid_steps = 0
@@ -142,10 +140,9 @@ class TrainingCallback(BaseCallback):
             self.episode_rewards.append(self.episode_reward_sum)
             self.episode_lengths.append(self.episode_length)
             if self.verbose > 0:
-                print(
-                    f"Episode completed: reward={self.episode_reward_sum:.3f}, "
-                    f"length={self.episode_length}"
-                )
+                reward_str = f"reward={self.episode_reward_sum:.3f}"
+                length_str = f"length={self.episode_length}"
+                print(f"Episode completed: {reward_str}, {length_str}")
 
             # Reset for next episode
             self.episode_reward_sum = 0
@@ -297,7 +294,8 @@ class ActorCriticONNX(nn.Module):
 
     def forward(self, x):
         # Ensure we're in eval mode and detach gradients
-        action, value = self.policy.forward(x, deterministic=True)
+        action, value, _ = self.policy.forward(x, deterministic=True)
+
         return action, value
 
 
@@ -306,6 +304,7 @@ if __name__ == "__main__":
     robot = "go2"
     n_envs = 3
     total_samples = 100000
+    history_size = 100
     device = "cpu"
 
     datasets = []
@@ -318,12 +317,18 @@ if __name__ == "__main__":
     contact_frame = list(contact_states[0].contacts_status.keys())
     print(f"Contact frames: {contact_frame}")
 
-    history_size = 20
-    state_dim = 3 + 9 + 3 + 4 + 3 * history_size
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 9 * history_size
     print(f"State dimension: {state_dim}")
-    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8], dtype=np.float32)
-    max_action = np.array([1e2], dtype=np.float32)
+    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
+    diag_low = np.array([1e-6, 1e-6, 1e-6], dtype=np.float32)
+    diag_high = np.array([1e2, 1e2, 1e2], dtype=np.float32)
+
+    # Lower triangle bounds: unconstrained or symmetric
+    lower_low = np.array([-1e2, -1e2, -1e2], dtype=np.float32)
+    lower_high = np.array([1e2, 1e2, 1e2], dtype=np.float32)
+
+    min_action = np.concatenate([diag_low, lower_low])
+    max_action = np.concatenate([diag_high, lower_high])
 
     # Create vectorized environment
     def make_env(i):
@@ -369,13 +374,14 @@ if __name__ == "__main__":
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
+    lr_schedule = linear_schedule(3e-4, 1e-5)
+
     # Add action noise for exploration (optional but often helpful for SAC)
     n_actions = env.action_space.shape[-1]
     action_noise = NormalActionNoise(
         mean=np.zeros(n_actions), sigma=0.001 * np.ones(n_actions)
     )
 
-    lr_schedule = linear_schedule(3e-4, 1e-5)
     # Create SAC model with custom policy
     model = PreStepSAC(
         "MlpPolicy",
@@ -385,19 +391,19 @@ if __name__ == "__main__":
         learning_rate=lr_schedule,  # Reduced learning rate
         buffer_size=10000,  # Replay buffer size
         learning_starts=1,  # Start training after this many steps
-        batch_size=128,  # Reduced batch size
+        batch_size=128,
         tau=0.01,  # Soft update coefficient
         gamma=0.95,  # Discount factor
-        train_freq=1,  # Train every step
-        gradient_steps=1,  # Reduced gradient steps
+        train_freq=1000,  # Train every X steps
+        gradient_steps=1,
         action_noise=action_noise,  # Exploration noise
         ent_coef="auto",
         use_sde=False,  # Don't use state-dependent exploration
         sde_sample_freq=-1,
         use_sde_at_warmup=False,
         policy_kwargs=dict(
-            net_arch=[64, 64],
-            activation_fn=nn.ReLU,
+            net_arch=[1024, 1024, 512, 256, 128],
+            activation_fn=nn.Tanh,
         ),
     )
 
