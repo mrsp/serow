@@ -61,9 +61,9 @@ class SerowEnv(gym.Env):
         self.valid_prediction = False
         self.max_steps = max_steps
         self.history_size = history_size
-        self.measurement_history = [np.zeros(3)] * self.history_size
+        self.measurement_history = [np.zeros(3, dtype=np.float32)] * self.history_size
         self.action_history = [
-            np.zeros((self.action_dim,), dtype=np.float32)
+            np.zeros((self.action_dim + 3,), dtype=np.float32)
         ] * self.history_size
 
         # Compute the baseline rewards, imu data, and kinematics
@@ -170,7 +170,7 @@ class SerowEnv(gym.Env):
         self.cf = None
         self.measurement_history = [np.zeros(3)] * self.history_size
         self.action_history = [
-            np.zeros((self.action_dim,), dtype=np.float32)
+            np.zeros((self.action_dim + 3,), dtype=np.float32)
         ] * self.history_size
         obs = np.zeros((self.state_dim,))
         return obs, {}
@@ -232,7 +232,15 @@ class SerowEnv(gym.Env):
             )
 
             # Save the action and measurement
-            self.action_history.append(action)
+            C = np.zeros([3, 3], dtype=np.float32)
+            C[0, 0] = action[0]
+            C[1, 1] = action[1]
+            C[2, 2] = action[2]
+            C[1, 0] = action[3]
+            C[2, 0] = action[4]
+            C[2, 1] = action[5]
+            R = C @ C.T
+            self.action_history.append(R.flatten())
             self.measurement_history.append(abs(kin.contacts_position[self.cf]))
 
             # Get the observation

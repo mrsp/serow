@@ -134,7 +134,7 @@ if __name__ == "__main__":
     contact_states = test_dataset["contact_states"]
     contacts_frame = list(contact_states[0].contacts_status.keys())
     history_size = 100
-    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 6 * history_size
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 9 * history_size
 
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
     diag_low = np.array([1e-4, 1e-4, 1e-4], dtype=np.float32)

@@ -341,7 +341,7 @@ if __name__ == "__main__":
     contact_frame = list(contact_states[0].contacts_status.keys())
     print(f"Contact frames: {contact_frame}")
 
-    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 6 * history_size
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 9 * history_size
     print(f"State dimension: {state_dim}")
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
     diag_low = np.array([1e-4, 1e-4, 1e-4], dtype=np.float32)
@@ -419,7 +419,9 @@ if __name__ == "__main__":
         normalize_advantage=True,
         policy_kwargs=dict(
             features_extractor_class=PassThroughFeaturesExtractor,
-            net_arch=[dict(pi=[512, 512, 256, 128], vf=[512, 512, 256, 128])],
+            net_arch=dict(
+                pi=[1024, 1024, 512, 256, 128], vf=[1024, 1024, 512, 256, 128]
+            ),
             activation_fn=nn.Tanh,
             ortho_init=True,
             log_std_init=-1.0,
