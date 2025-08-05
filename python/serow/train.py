@@ -1,6 +1,7 @@
 import numpy as np
 import gymnasium as gym
 import matplotlib
+
 matplotlib.use("TkAgg")  # Use Agg backend for non-GUI environments
 import matplotlib.pyplot as plt
 import json
@@ -225,8 +226,10 @@ class PreStepPPO(PPO):
             observation = torch.tensor(observation, device=self.device)
 
         action, value, _ = self.policy.forward(observation, deterministic)
-        action_np = action.detach().cpu().numpy().reshape((-1, *self.action_space.shape))
-    
+        action_np = (
+            action.detach().cpu().numpy().reshape((-1, *self.action_space.shape))
+        )
+
         return (
             action_np,
             value.detach().cpu().numpy(),
@@ -325,9 +328,9 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 300000
+    total_samples = 100000
     device = "cpu"
-    history_size = 20
+    history_size = 100
     datasets = []
     for i in range(n_envs):
         dataset = np.load(f"datasets/{robot}_log_{i}.npz", allow_pickle=True)
@@ -338,16 +341,16 @@ if __name__ == "__main__":
     contact_frame = list(contact_states[0].contacts_status.keys())
     print(f"Contact frames: {contact_frame}")
 
-    state_dim = 3 + 9 + 3 + 4 + 3 * history_size
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 6 * history_size
     print(f"State dimension: {state_dim}")
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    diag_low = np.array([1e-8, 1e-4, 1e-4], dtype=np.float32)
+    diag_low = np.array([1e-4, 1e-4, 1e-4], dtype=np.float32)
     diag_high = np.array([10.0, 10.0, 10.0], dtype=np.float32)
 
     # Lower triangle bounds: unconstrained or symmetric
     lower_low = np.array([-1.0, -1.0, -1.0], dtype=np.float32)
     lower_high = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-    
+
     min_action = np.concatenate([diag_low, lower_low])
     max_action = np.concatenate([diag_high, lower_high])
 
@@ -402,24 +405,24 @@ if __name__ == "__main__":
         device=device,
         verbose=1,
         learning_rate=lr_schedule,
-        n_steps=256,
-        batch_size=64,
+        n_steps=512,
+        batch_size=128,
         n_epochs=5,
-        gamma=0.995,
+        gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
         max_grad_norm=0.5,
-        target_kl=0.03,
+        target_kl=0.035,
         vf_coef=0.5,
         clip_range_vf=0.2,
-        ent_coef=0.005,
+        ent_coef=0.01,
         normalize_advantage=True,
         policy_kwargs=dict(
+            features_extractor_class=PassThroughFeaturesExtractor,
+            net_arch=[dict(pi=[512, 512, 256, 128], vf=[512, 512, 256, 128])],
+            activation_fn=nn.Tanh,
             ortho_init=True,
             log_std_init=-1.0,
-            features_extractor_class=PassThroughFeaturesExtractor,
-            net_arch=[dict(pi=[64, 64], vf=[64, 64])],
-            activation_fn=nn.Tanh,
         ),
         seed=42,
     )

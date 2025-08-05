@@ -133,20 +133,19 @@ if __name__ == "__main__":
     # Get contacts frame from the first measurement
     contact_states = test_dataset["contact_states"]
     contacts_frame = list(contact_states[0].contacts_status.keys())
-    history_size = 20
-    state_dim = 3 + 9 + 3 + 4 + 3 * history_size
-    
+    history_size = 100
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 6 * history_size
+
     action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    diag_low = np.array([1e-8, 1e-4, 1e-4], dtype=np.float32)
+    diag_low = np.array([1e-4, 1e-4, 1e-4], dtype=np.float32)
     diag_high = np.array([10.0, 10.0, 10.0], dtype=np.float32)
 
     # Lower triangle bounds: unconstrained or symmetric
     lower_low = np.array([-1.0, -1.0, -1.0], dtype=np.float32)
     lower_high = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-    
+
     min_action = np.concatenate([diag_low, lower_low])
     max_action = np.concatenate([diag_high, lower_high])
-
 
     # Load the saved PPO model
     agent_ppo = PreStepPPO.load(f"models/{robot}_ppo")
