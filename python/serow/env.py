@@ -177,10 +177,12 @@ class SerowEnv(gym.Env):
 
     def get_observation_for_action(self):
         """Get the observation that should be used for action computation."""
-
+        self.valid_prediction = False
+        obs = np.zeros((self.state_dim,))
         # Run prediction step with current control input
         imu = self.imu_data[self.step_count]
         kin = self.kinematics[self.step_count]
+        next_kin = self.kinematics[self.step_count + 1]
         prior_state = self.predict_step(imu, kin)
 
         # Find all the frames that have contact with the ground
@@ -188,6 +190,7 @@ class SerowEnv(gym.Env):
         for cf in self.contact_frames:
             if (
                 kin.contacts_status[cf]
+                and next_kin.contacts_status[cf]
                 and prior_state.get_contact_position(cf) is not None
             ):
                 contact_frames.append(cf)
@@ -195,15 +198,11 @@ class SerowEnv(gym.Env):
         # Pick a random frame in contact for this step
         if len(contact_frames) > 0:
             self.cf = np.random.choice(contact_frames)
+            self.valid_prediction = True
+            # Get the observation that the policy should use
+            obs = self._get_observation(self.cf, prior_state, kin)
         else:
             self.cf = np.random.choice(self.contact_frames)
-
-        # Get the observation that the policy should use
-        obs = self._get_observation(self.cf, prior_state, kin)
-
-        self.valid_prediction = False
-        if not np.all(obs == np.zeros((self.state_dim,))):
-            self.valid_prediction = True
 
         return obs
 
@@ -211,13 +210,12 @@ class SerowEnv(gym.Env):
         reward = 0.0
         done = False
         truncated = False
-        valid = False
+        valid = self.valid_prediction
         obs = np.zeros((self.state_dim,))
         imu = self.imu_data[self.step_count]
         kin = self.kinematics[self.step_count]
         next_kin = self.kinematics[self.step_count + 1]
-        if kin.contacts_status[self.cf] and next_kin.contacts_status[self.cf]:
-
+        if valid:
             post_state = self.update_step(
                 self.cf,
                 kin,
@@ -245,9 +243,6 @@ class SerowEnv(gym.Env):
 
             # Get the observation
             obs = self._get_observation(self.cf, post_state, next_kin)
-
-        if not np.all(obs == np.zeros((self.state_dim,))):
-            valid = True
 
         info = {"step_count": self.step_count, "reward": reward, "valid": valid}
 
