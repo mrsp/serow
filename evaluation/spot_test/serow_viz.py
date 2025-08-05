@@ -231,16 +231,16 @@ if __name__ == "__main__":
     imu = imu[size_diff:(-1)]
     gt_pos = gt_pos[size_diff:]
     gt_rot = gt_rot[size_diff:]
-    gt_pos, gt_rot = remove_gt_bias(gt_pos, gt_rot)
+    # gt_pos, gt_rot = remove_gt_bias(gt_pos, gt_rot)
 
     
-    print(
-        "Base position ATE: ", compute_ATE_pos(gt_pos, est_pos_x, est_pos_y, est_pos_z)
-    )
-    print(
-        "Base rotation ATE: ",
-        compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z),
-    )
+    # print(
+    #     "Base position ATE: ", compute_ATE_pos(gt_pos, est_pos_x, est_pos_y, est_pos_z)
+    # )
+    # print(
+    #     "Base rotation ATE: ",
+    #     compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z),
+    # )
 
      # Plotting Ground Truth and Estimated Position (x, y, z)
     figPos_GT, axsPos_GT = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
@@ -266,22 +266,22 @@ if __name__ == "__main__":
     figRot_GT, axsRot_GT = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
     figRot_GT.suptitle("Base Orientation")
 
-    axsRot_GT[0].plot(timestamps, gt_rot[:, 0], label="Ground Truth", color="blue")
+    axsRot_GT[0].plot(timestamps, gt_rot[:, 3], label="Ground Truth", color="blue")
     axsRot_GT[0].plot(timestamps, est_rot_w, label="Estimated", color="orange", linestyle="--")
     axsRot_GT[0].set_ylabel("Orientation W")
     axsRot_GT[0].legend()
 
-    axsRot_GT[1].plot(timestamps, gt_rot[:, 1], label="Ground Truth", color="blue")
+    axsRot_GT[1].plot(timestamps, gt_rot[:, 0], label="Ground Truth", color="blue")
     axsRot_GT[1].plot(timestamps, est_rot_x, label="Estimated", color="orange", linestyle="--")
     axsRot_GT[1].set_ylabel("Orientation X")
     axsRot_GT[1].legend()
 
-    axsRot_GT[2].plot(timestamps, gt_rot[:, 2], label="Ground Truth", color="blue")
+    axsRot_GT[2].plot(timestamps, gt_rot[:, 1], label="Ground Truth", color="blue")
     axsRot_GT[2].plot(timestamps, est_rot_y, label="Estimated", color="orange", linestyle="--")
     axsRot_GT[2].set_ylabel("Orientation Y")
     axsRot_GT[2].legend()
 
-    axsRot_GT[3].plot(timestamps, gt_rot[:, 3], label="Ground Truth", color="blue")
+    axsRot_GT[3].plot(timestamps, gt_rot[:, 2], label="Ground Truth", color="blue")
     axsRot_GT[3].plot(timestamps, est_rot_z, label="Estimated", color="orange", linestyle="--")
     axsRot_GT[3].set_ylabel("Orientation Z")
     axsRot_GT[3].set_xlabel("Timestamp")

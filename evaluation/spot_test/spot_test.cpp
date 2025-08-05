@@ -305,8 +305,8 @@ int main(int argc, char** argv) {
                                                                  base_gt_positions[i][1],
                                                                  base_gt_positions[i][2]),
                                      .orientation = Eigen::Quaterniond(
-                                         base_gt_orientations[i][0], base_gt_orientations[i][1],
-                                         base_gt_orientations[i][2], base_gt_orientations[i][3])});
+                                         base_gt_orientations[i][3], base_gt_orientations[i][0],
+                                         base_gt_orientations[i][1], base_gt_orientations[i][2])});
             } else {
                 estimator.filter(imu, joints, force_torque);
             }
@@ -318,7 +318,8 @@ int main(int argc, char** argv) {
 
             // Store the Estimates
             auto basePos = state->getBasePosition();
-            auto baseOrient = state->getBaseOrientation();
+            // auto baseOrient = state->getBaseOrientation();
+            auto baseOrient = estimator.attitude_estimator_->getQ();
             auto ExternalForces = state->getCoMExternalForces();
             auto CoMPosition = state->getCoMPosition();
             auto CoMVelocity = state->getCoMLinearVelocity();
