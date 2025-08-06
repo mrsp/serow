@@ -150,6 +150,10 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /// State getters
+    /// Returns the joint positions
+    const std::map<std::string, double>& getJointPositions() const;
+    /// Returns the joint velocities
+    const std::map<std::string, double>& getJointVelocities() const;
     /// Returns the latest base estimate timestamp
     double getBaseTimestamp() const;
     /// Returns the 3D base pose as a rigid transformation in world frame coordinates
@@ -179,9 +183,12 @@ public:
     /// Returns the contact frame binary contact status if the frame is in contact. Only applies if
     /// the robot has flat feet
     std::optional<bool> getContactStatus(const std::string& frame_name) const;
-    /// Returns the contact forces in world frame.
+    /// Returns the contact forces in world frame
     std::optional<Eigen::Vector3d> getContactForce(const std::string& frame_name) const;
-
+    /// Returns the contact torques in world frame
+    std::optional<Eigen::Vector3d> getContactTorque(const std::string& frame_name) const;
+    /// Returns the contact continuous contact probability ([0, 1])
+    std::optional<double> getContactProbability(const std::string& frame_name) const;
     /// Returns the foot frame 3D position in world frame coordinates
     const Eigen::Vector3d& getFootPosition(const std::string& frame_name) const;
     /// Returns the foot frame 3D orientation in world frame coordinates

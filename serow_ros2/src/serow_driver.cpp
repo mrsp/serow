@@ -7,6 +7,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
+#include <std_msgs/msg/float64.hpp>
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "geometry_msgs/msg/wrench_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -115,8 +116,13 @@ public:
         for (const auto& contact_frame : state->getContactsFrame()) {
             foot_odom_publishers_[contact_frame] = this->create_publisher<nav_msgs::msg::Odometry>(
                 "/serow/" + contact_frame + "/odom", 10);
+            foot_wrench_publishers_[contact_frame] = this->create_publisher<geometry_msgs::msg::WrenchStamped>(
+                "/serow/" + contact_frame + "/contact/wrench", 10);
+            foot_contact_probability_publishers_[contact_frame] = this->create_publisher<std_msgs::msg::Float64>(
+                "/serow/" + contact_frame + "/contact/probability", 10);
         }
         odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/serow/" + state->getBaseFrame() + "/odom", 10);
+        joint_state_publisher_ = this->create_publisher<sensor_msgs::msg::JointState>("/serow/joint_states", 10);
 
         RCLCPP_INFO(this->get_logger(), "SERoW was initialized successfully");
     }
@@ -174,13 +180,39 @@ private:
 
             const auto& state = serow_.getState();
             if (state) {
-                publishOdometry(state.value());
+                publishJointState(state.value());
+                publishBaseState(state.value());
                 publishCentroidState(state.value());
+                publishContactState(state.value());
             }
         }
     }
 
-    void publishOdometry(const serow::State& state) {
+    void publishJointState(const serow::State& state) {
+        auto joint_state_msg = sensor_msgs::msg::JointState();
+        const auto& joint_positions = state.getJointPositions();
+        const auto& joint_velocities = state.getJointVelocities();
+
+        joint_state_msg.header.stamp = rclcpp::Time(state.getBaseTimestamp());
+        joint_state_msg.header.frame_id = "";
+
+        // resize the joint state message to the number of joints
+        joint_state_msg.name.resize(joint_positions.size());
+        joint_state_msg.position.resize(joint_positions.size());
+        joint_state_msg.velocity.resize(joint_velocities.size());
+
+        // fill the joint state message
+        size_t i = 0;
+        for (const auto& [name, position] : joint_positions) {
+            joint_state_msg.name[i] = name;
+            joint_state_msg.position[i] = position;
+            joint_state_msg.velocity[i] = joint_velocities.at(name);
+            i++;
+        }
+        joint_state_publisher_->publish(joint_state_msg);
+    }
+
+    void publishBaseState(const serow::State& state) {
         auto odom_msg = nav_msgs::msg::Odometry();
         const double timestamp = state.getBaseTimestamp();
         const Eigen::Vector3d& base_position = state.getBasePosition();
@@ -200,7 +232,6 @@ private:
         odom_msg.pose.pose.orientation.y = base_orientation.y();
         odom_msg.pose.pose.orientation.z = base_orientation.z();
         odom_msg.pose.pose.orientation.w = base_orientation.w();
-
         odom_msg.twist.twist.linear.x = base_linear_velocity.x();
         odom_msg.twist.twist.linear.y = base_linear_velocity.y();
         odom_msg.twist.twist.linear.z = base_linear_velocity.z();
@@ -300,6 +331,34 @@ private:
         com_external_wrench_publisher_->publish(wrench_msg);
     }
 
+    void publishContactState(const serow::State& state) {
+        auto timestamp = state.getBaseTimestamp();
+        for (const auto& contact_frame : state.getContactsFrame()) {
+            auto float_msg = std_msgs::msg::Float64();
+            auto wrench_msg = geometry_msgs::msg::WrenchStamped();
+            const auto& contact_probability = state.getContactProbability(contact_frame);
+            const auto& contact_force = state.getContactForce(contact_frame);
+            wrench_msg.header.stamp = rclcpp::Time(timestamp); 
+            wrench_msg.header.frame_id = "world";
+            if (contact_force) {
+                wrench_msg.wrench.force.x = contact_force->x();
+                wrench_msg.wrench.force.y = contact_force->y();
+                wrench_msg.wrench.force.z = contact_force->z();
+                const auto& contact_torque = state.getContactTorque(contact_frame);
+                if (contact_torque) {
+                    wrench_msg.wrench.torque.x = contact_torque->x();
+                    wrench_msg.wrench.torque.y = contact_torque->y();
+                    wrench_msg.wrench.torque.z = contact_torque->z();
+                }
+            }
+            foot_wrench_publishers_[contact_frame]->publish(wrench_msg);
+            if (contact_probability) {
+                float_msg.data = contact_probability.value();
+            }
+            foot_contact_probability_publishers_[contact_frame]->publish(float_msg);
+        }
+    }
+
     void jointStateCallback(const sensor_msgs::msg::JointState& msg) {
         this->joint_state_data_ = msg;
     }
@@ -316,7 +375,10 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr com_momentum_rate_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::WrenchStamped>::SharedPtr com_external_wrench_publisher_;
     std::map<std::string, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr> foot_odom_publishers_;
-    
+    std::map<std::string, rclcpp::Publisher<geometry_msgs::msg::WrenchStamped>::SharedPtr> foot_wrench_publishers_;
+    std::map<std::string, rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr> foot_contact_probability_publishers_;
+    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
+
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscription_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr base_imu_subscription_;
     std::vector<rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr>

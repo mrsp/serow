@@ -147,6 +147,21 @@ std::optional<Eigen::Vector3d> State::getContactForce(const std::string& frame_n
     return std::nullopt;
 }
 
+std::optional<Eigen::Vector3d> State::getContactTorque(const std::string& frame_name) const {
+    if (contact_state_.contacts_torque.has_value() &&
+        contact_state_.contacts_torque.value().count(frame_name)) {
+        return contact_state_.contacts_torque.value().at(frame_name);
+    }
+    return std::nullopt;
+}
+
+std::optional<double> State::getContactProbability(const std::string& frame_name) const {
+    if (contact_state_.contacts_probability.count(frame_name)) {
+        return contact_state_.contacts_probability.at(frame_name);
+    }
+    return std::nullopt;
+}
+
 const Eigen::Vector3d& State::getFootPosition(const std::string& frame_name) const {
     return base_state_.feet_position.at(frame_name);
 }
@@ -354,6 +369,14 @@ JointState State::getJointState() const {
 
 std::string State::getBaseFrame() const {
     return base_frame_;
+}
+
+const std::map<std::string, double>& State::getJointPositions() const {
+    return joint_state_.joints_position;
+}
+
+const std::map<std::string, double>& State::getJointVelocities() const {
+    return joint_state_.joints_velocity;
 }
 
 }  // namespace serow
