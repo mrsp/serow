@@ -5,6 +5,8 @@
 #include <serow/Serow.hpp>
 
 #include <nav_msgs/msg/odometry.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "geometry_msgs/msg/wrench_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -99,7 +101,23 @@ public:
         timer_ = this->create_wall_timer(std::chrono::milliseconds(10),  // 100Hz processing rate
                                          std::bind(&SerowDriver::run, this));
 
-        odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/serow/odom", 10);
+        const auto& state = serow_.getState(true);
+        if (!state) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to get state during initialization");
+            throw std::runtime_error("Failed to get state during initialization");
+        }
+
+        com_position_publisher_ = this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/com/position", 10);
+        cop_position_publisher_ = this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/cop/position", 10);
+        com_momentum_publisher_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum", 10);
+        com_momentum_rate_publisher_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum_rate", 10);
+        com_external_wrench_publisher_ = this->create_publisher<geometry_msgs::msg::WrenchStamped>("/serow/com/external_wrench", 10);
+        for (const auto& contact_frame : state->getContactsFrame()) {
+            foot_odom_publishers_[contact_frame] = this->create_publisher<nav_msgs::msg::Odometry>(
+                "/serow/" + contact_frame + "/odom", 10);
+        }
+        odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>("/serow/" + state->getBaseFrame() + "/odom", 10);
+
         RCLCPP_INFO(this->get_logger(), "SERoW was initialized successfully");
     }
 
@@ -157,6 +175,7 @@ private:
             const auto& state = serow_.getState();
             if (state) {
                 publishOdometry(state.value());
+                publishCentroidState(state.value());
             }
         }
     }
@@ -168,12 +187,11 @@ private:
         const Eigen::Quaterniond& base_orientation = state.getBaseOrientation();
         const Eigen::Vector3d& base_linear_velocity = state.getBaseLinearVelocity();
         const Eigen::Vector3d& base_angular_velocity = state.getBaseAngularVelocity();
-
         const Eigen::Matrix<double, 6, 6> base_pose_cov = state.getBasePoseCov();
         const Eigen::Matrix<double, 6, 6> base_velocity_cov = state.getBaseVelocityCov();
 
         odom_msg.header.stamp = rclcpp::Time(timestamp);
-        odom_msg.header.frame_id = "odom";
+        odom_msg.header.frame_id = "world";
         odom_msg.child_frame_id = state.getBaseFrame();
         odom_msg.pose.pose.position.x = base_position.x();
         odom_msg.pose.pose.position.y = base_position.y();
@@ -196,8 +214,90 @@ private:
                 odom_msg.twist.covariance[i * 6 + j] = base_velocity_cov(i, j);
             }
         }
-
         odom_publisher_->publish(odom_msg);
+
+        const auto contact_frames = state.getContactsFrame();
+        for (const auto& contact_frame : contact_frames) {
+            const Eigen::Vector3d& foot_position = state.getFootPosition(contact_frame);
+            const Eigen::Quaterniond& foot_orientation = state.getFootOrientation(contact_frame);
+            const Eigen::Vector3d& foot_linear_velocity = state.getFootLinearVelocity(contact_frame);
+            const Eigen::Vector3d& foot_angular_velocity = state.getFootAngularVelocity(contact_frame);
+
+            odom_msg.header.stamp = rclcpp::Time(timestamp);
+            odom_msg.header.frame_id = "world";
+            odom_msg.pose.pose.position.x = foot_position.x();
+            odom_msg.pose.pose.position.y = foot_position.y();
+            odom_msg.pose.pose.position.z = foot_position.z();
+            odom_msg.pose.pose.orientation.x = foot_orientation.x();
+            odom_msg.pose.pose.orientation.y = foot_orientation.y();
+            odom_msg.pose.pose.orientation.z = foot_orientation.z();
+            odom_msg.pose.pose.orientation.w = foot_orientation.w();
+
+            odom_msg.twist.twist.linear.x = foot_linear_velocity.x();
+            odom_msg.twist.twist.linear.y = foot_linear_velocity.y();
+            odom_msg.twist.twist.linear.z = foot_linear_velocity.z();
+            odom_msg.twist.twist.angular.x = foot_angular_velocity.x();
+            odom_msg.twist.twist.angular.y = foot_angular_velocity.y();
+            odom_msg.twist.twist.angular.z = foot_angular_velocity.z();
+            foot_odom_publishers_[contact_frame]->publish(odom_msg);
+        }
+    }
+
+    void publishCentroidState(const serow::State& state) {
+        auto timestamp = state.getBaseTimestamp();
+        const double mass = state.getMass();
+        auto point_msg = geometry_msgs::msg::PointStamped();
+        auto twist_msg = geometry_msgs::msg::TwistStamped();
+        auto wrench_msg = geometry_msgs::msg::WrenchStamped();
+        
+        const Eigen::Vector3d& com_position = state.getCoMPosition();
+        const Eigen::Vector3d& com_linear_velocity = state.getCoMLinearVelocity();
+        const Eigen::Vector3d& com_linear_acceleration = state.getCoMLinearAcceleration();
+        const Eigen::Vector3d& com_external_forces = state.getCoMExternalForces();
+        const Eigen::Vector3d& com_angular_momentum = state.getCoMAngularMomentum();
+        const Eigen::Vector3d& com_angular_momentum_rate = state.getCoMAngularMomentumRate();
+        const Eigen::Vector3d& cop_position = state.getCOPPosition();
+
+        point_msg.header.stamp = rclcpp::Time(timestamp);
+        point_msg.header.frame_id = "world";
+        point_msg.point.x = com_position.x();
+        point_msg.point.y = com_position.y();
+        point_msg.point.z = com_position.z();
+        com_position_publisher_->publish(point_msg);
+
+        point_msg.point.x = cop_position.x();
+        point_msg.point.y = cop_position.y();
+        point_msg.point.z = cop_position.z();
+        cop_position_publisher_->publish(point_msg);
+
+        twist_msg.header.stamp = rclcpp::Time(timestamp);
+        twist_msg.header.frame_id = "world";
+        twist_msg.twist.linear.x = mass * com_linear_velocity.x();
+        twist_msg.twist.linear.y = mass * com_linear_velocity.y();
+        twist_msg.twist.linear.z = mass * com_linear_velocity.z();
+        twist_msg.twist.angular.x = com_angular_momentum.x();
+        twist_msg.twist.angular.y = com_angular_momentum.y();
+        twist_msg.twist.angular.z = com_angular_momentum.z();
+        com_momentum_publisher_->publish(twist_msg);
+    
+        twist_msg.twist.linear.x = mass * com_linear_acceleration.x();
+        twist_msg.twist.linear.y = mass * com_linear_acceleration.y();
+        twist_msg.twist.linear.z = mass * com_linear_acceleration.z();
+        twist_msg.twist.angular.x = com_angular_momentum_rate.x();
+        twist_msg.twist.angular.y = com_angular_momentum_rate.y();
+        twist_msg.twist.angular.z = com_angular_momentum_rate.z();
+        com_momentum_rate_publisher_->publish(twist_msg);
+
+        const Eigen::Vector3d com_external_torque = com_position.cross(com_external_forces);
+        wrench_msg.header.stamp = rclcpp::Time(timestamp);
+        wrench_msg.header.frame_id = "world";
+        wrench_msg.wrench.force.x = com_external_forces.x();
+        wrench_msg.wrench.force.y = com_external_forces.y();
+        wrench_msg.wrench.force.z = com_external_forces.z();
+        wrench_msg.wrench.torque.x = com_external_torque.x();
+        wrench_msg.wrench.torque.y = com_external_torque.y();
+        wrench_msg.wrench.torque.z = com_external_torque.z();
+        com_external_wrench_publisher_->publish(wrench_msg);
     }
 
     void jointStateCallback(const sensor_msgs::msg::JointState& msg) {
@@ -210,6 +310,13 @@ private:
 
     serow::Serow serow_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr com_position_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr cop_position_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr com_momentum_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr com_momentum_rate_publisher_;
+    rclcpp::Publisher<geometry_msgs::msg::WrenchStamped>::SharedPtr com_external_wrench_publisher_;
+    std::map<std::string, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr> foot_odom_publishers_;
+    
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscription_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr base_imu_subscription_;
     std::vector<rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr>
