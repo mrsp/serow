@@ -11,8 +11,10 @@ serow_layout.json:Zone.Identifier
 /evaluation/h1_test/build/
 /evaluation/fsc_test/build/
 /evaluation/mujoco_test/build/
-/evaluation/mujoco_test/mujoco_data/*/est_*.bin
-/evaluation/mujoco_test/mujoco_data/*/serow_predictions.h5
+/evaluation/spot_test/build/
+evaluation/**/est_elevation_map.bin
+evaluation/**/serow_predictions.h5
+config/*_best_config.json
 /serow_hypertuner/build/
 /python/serow/__pycache__/
 /python/build/
