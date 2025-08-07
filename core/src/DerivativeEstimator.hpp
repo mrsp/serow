@@ -29,6 +29,8 @@
 #include <Eigen/Dense>
 #endif
 
+#include <optional>
+
 namespace serow {
 
 /**
@@ -57,18 +59,27 @@ public:
     /// Signal derivative
     Eigen::VectorXd x_dot_;
 
+    /// Nominal sample time
+    double nominal_dt_{};
+
+    /// Timestamp of the last measurement
+    std::optional<double> timestamp_ = std::nullopt;
+
+    /// Flag to check if verbose is enabled
+    bool verbose_{false};
+
     /**
      * @brief Estimates the derivative of a measurement.
      * @param measurement The signal to estimate the derivative of.
+     * @param timestamp The timestamp of the measurement.
      * @return The signal's derivative.
      */
-    Eigen::VectorXd filter(const Eigen::VectorXd& measurement);
+    Eigen::VectorXd filter(const Eigen::VectorXd& measurement, double timestamp);
 
     /**
      * @brief Resets the estimator.
-     * @param verbose Whether or not to print debug messages.
      */
-    void reset(bool verbose = false);
+    void reset();
 
     /**
      * @brief Initializes the derivative estimator.
