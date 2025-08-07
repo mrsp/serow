@@ -150,6 +150,12 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /// State getters
+    /// Returns the joint positions
+    const std::map<std::string, double>& getJointPositions() const;
+    /// Returns the joint velocities
+    const std::map<std::string, double>& getJointVelocities() const;
+    /// Returns the latest state estimate timestamp
+    double getTimestamp(const std::string& state_type = "base") const;
     /// Returns the 3D base pose as a rigid transformation in world frame coordinates
     Eigen::Isometry3d getBasePose() const;
     /// Returns the 3D base position in world frame coordinates
@@ -177,9 +183,12 @@ public:
     /// Returns the contact frame binary contact status if the frame is in contact. Only applies if
     /// the robot has flat feet
     std::optional<bool> getContactStatus(const std::string& frame_name) const;
-    /// Returns the contact forces in world frame.
+    /// Returns the contact forces in world frame
     std::optional<Eigen::Vector3d> getContactForce(const std::string& frame_name) const;
-
+    /// Returns the contact torques in world frame
+    std::optional<Eigen::Vector3d> getContactTorque(const std::string& frame_name) const;
+    /// Returns the contact continuous contact probability ([0, 1])
+    std::optional<double> getContactProbability(const std::string& frame_name) const;
     /// Returns the foot frame 3D position in world frame coordinates
     const Eigen::Vector3d& getFootPosition(const std::string& frame_name) const;
     /// Returns the foot frame 3D orientation in world frame coordinates
@@ -257,7 +266,8 @@ public:
     void setInitialized(bool initialized);
 
     State() = default;
-    State(std::set<std::string> contacts_frame, bool point_feet);
+    State(const std::set<std::string>& contacts_frame, bool point_feet,
+          const std::string& base_frame);
 
     void setBaseState(const BaseState& base_state);
     BaseState getBaseState() const;
@@ -270,6 +280,8 @@ public:
 
     void setJointState(const JointState& joint_state);
     JointState getJointState() const;
+
+    const std::string& getBaseFrame() const;
 
 private:
     /// Flag to indicate if the robot has point feet. False indicates flat feet contacts
@@ -284,6 +296,9 @@ private:
     double mass_{};
     /// Flag to indicate if the state is filled with valid data
     bool is_initialized_{};
+
+    /// Base frame name
+    std::string base_frame_{"base_link"};
 
     /// Individual states
     JointState joint_state_;

@@ -1362,7 +1362,7 @@ void Serow::reset() {
     imu_calibration_cycles_ = 0;
 
     // Initialize state
-    State state(params_.contacts_frame, params_.point_feet);
+    State state(params_.contacts_frame, params_.point_feet, params_.base_frame);
     state_ = std::move(state);
 
     // Load bias values from configuration

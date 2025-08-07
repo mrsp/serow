@@ -842,8 +842,9 @@ PYBIND11_MODULE(serow, m) {
     // Binding for State
     py::class_<serow::State>(m, "State", "Represents the overall state of the robot")
         .def(py::init<>(), "Default constructor")
-        .def(py::init<std::set<std::string>, bool>(), py::arg("contacts_frame"),
-             py::arg("point_feet"), "Constructor with contact frames and point feet flag")
+        .def(py::init<std::set<std::string>, bool, std::string>(), py::arg("contacts_frame"),
+             py::arg("point_feet"), py::arg("base_frame") = "base_link",
+             "Constructor with contact frames, point feet flag, and base frame")
         .def("get_base_pose", &serow::State::getBasePose,
              "Returns the base pose as a rigid transformation")
         .def("get_base_position", &serow::State::getBasePosition, "Returns the base position")

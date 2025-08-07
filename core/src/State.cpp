@@ -14,8 +14,10 @@
 
 namespace serow {
 
-State::State(std::set<std::string> contacts_frame, bool point_feet) {
-    contacts_frame_ = std::move(contacts_frame);
+State::State(const std::set<std::string>& contacts_frame, bool point_feet,
+             const std::string& base_frame) {
+    contacts_frame_ = contacts_frame;
+    base_frame_ = base_frame;
     num_leg_ee_ = contacts_frame_.size();
     point_feet_ = point_feet;
     is_valid_ = false;
@@ -45,6 +47,20 @@ State::State(std::set<std::string> contacts_frame, bool point_feet) {
         base_state_.contacts_orientation = std::move(contacts_orientation);
         base_state_.contacts_orientation_cov = std::move(contacts_orientation_cov);
         contact_state_.contacts_torque = std::move(contacts_torque);
+    }
+}
+
+double State::getTimestamp(const std::string& state_type) const {
+    if (state_type == "base") {
+        return base_state_.timestamp;
+    } else if (state_type == "joint") {
+        return joint_state_.timestamp;
+    } else if (state_type == "centroidal") {
+        return centroidal_state_.timestamp;
+    } else if (state_type == "contact") {
+        return contact_state_.timestamp;
+    } else {
+        throw std::invalid_argument("Invalid state type");
     }
 }
 
@@ -137,6 +153,21 @@ std::optional<bool> State::getContactStatus(const std::string& frame_name) const
 std::optional<Eigen::Vector3d> State::getContactForce(const std::string& frame_name) const {
     if (contact_state_.contacts_force.count(frame_name) > 0) {
         return contact_state_.contacts_force.at(frame_name);
+    }
+    return std::nullopt;
+}
+
+std::optional<Eigen::Vector3d> State::getContactTorque(const std::string& frame_name) const {
+    if (contact_state_.contacts_torque.has_value() &&
+        contact_state_.contacts_torque.value().count(frame_name)) {
+        return contact_state_.contacts_torque.value().at(frame_name);
+    }
+    return std::nullopt;
+}
+
+std::optional<double> State::getContactProbability(const std::string& frame_name) const {
+    if (contact_state_.contacts_probability.count(frame_name)) {
+        return contact_state_.contacts_probability.at(frame_name);
     }
     return std::nullopt;
 }
@@ -344,6 +375,18 @@ CentroidalState State::getCentroidalState() const {
 
 JointState State::getJointState() const {
     return joint_state_;
+}
+
+const std::string& State::getBaseFrame() const {
+    return base_frame_;
+}
+
+const std::map<std::string, double>& State::getJointPositions() const {
+    return joint_state_.joints_position;
+}
+
+const std::map<std::string, double>& State::getJointVelocities() const {
+    return joint_state_.joints_velocity;
 }
 
 }  // namespace serow
