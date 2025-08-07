@@ -20,3 +20,7 @@ serow_layout.json:Zone.Identifier
 /python/serow.egg-info/
 /python/serow/serow.*.so
 /python/*_log.npz
+/python/models
+/serow_ros2/build/
+/serow_ros2/install/
+/serow_ros2/log/

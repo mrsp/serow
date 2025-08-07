@@ -1,0 +1,10 @@
+robot_name: "go2"
+topics:
+  joint_states: "/go2/joint_states"
+  imu: "/go2/imu"
+  force_torque_states:
+    - "/go2/LF/force_torque_states"
+    - "/go2/LR/force_torque_states"
+    - "/go2/RR/force_torque_states"
+    - "/go2/RF/force_torque_states"
+serow_config: "go2.json" 
