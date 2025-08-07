@@ -281,7 +281,7 @@ public:
     void setJointState(const JointState& joint_state);
     JointState getJointState() const;
 
-    std::string getBaseFrame() const;
+    const std::string& getBaseFrame() const;
 
 private:
     /// Flag to indicate if the robot has point feet. False indicates flat feet contacts

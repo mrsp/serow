@@ -377,7 +377,7 @@ JointState State::getJointState() const {
     return joint_state_;
 }
 
-std::string State::getBaseFrame() const {
+const std::string& State::getBaseFrame() const {
     return base_frame_;
 }
 

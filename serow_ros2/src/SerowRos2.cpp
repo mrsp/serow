@@ -45,16 +45,16 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     } catch (const YAML::BadFile& e) {
         RCLCPP_ERROR(this->get_logger(), "Failed to load YAML file: %s", e.what());
         RCLCPP_ERROR(this->get_logger(), "File path: %s", config_file_param.c_str());
-        throw;
+        throw std::runtime_error("Failed to load YAML file: " + std::string(e.what()));
     } catch (const YAML::Exception& e) {
         RCLCPP_ERROR(this->get_logger(), "Error parsing YAML file: %s", e.what());
-        throw;
+        throw std::runtime_error("Error parsing YAML file: " + std::string(e.what()));
     }
 
     // Extract configuration values
-    const std::string robot_name = config["robot_name"].as<std::string>();
-    const std::string joint_state_topic = config["topics"]["joint_states"].as<std::string>();
-    const std::string base_imu_topic = config["topics"]["imu"].as<std::string>();
+    const std::string& robot_name = config["robot_name"].as<std::string>();
+    const std::string& joint_state_topic = config["topics"]["joint_states"].as<std::string>();
+    const std::string& base_imu_topic = config["topics"]["imu"].as<std::string>();
     std::vector<std::string> force_torque_state_topics;
     for (const auto& topic : config["topics"]["force_torque_states"]) {
         force_torque_state_topics.push_back(topic.as<std::string>());
@@ -69,7 +69,7 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
         serow_.initialize(serow_config);
     } catch (const std::exception& e) {
         RCLCPP_ERROR(this->get_logger(), "Failed to initialize SERoW: %s", e.what());
-        throw;
+        throw std::runtime_error("Failed to initialize SERoW: " + std::string(e.what()));
     }
 
     // Create subscribers
@@ -83,7 +83,7 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     base_imu_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>(
         base_imu_topic, 10, std::bind(&SerowRos2::baseImuCallback, this, _1));
 
-    // Dynamically create a wrench callback one for each limb
+    // Dynamically create a wrench callback, one for each force torque state topic
     for (const auto& ft_topic : force_torque_state_topics) {
         auto force_torque_state_topic_callback =
             [this](const geometry_msgs::msg::WrenchStamped& msg) {
@@ -135,7 +135,6 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
 
     // Start the publishing thread
     publishing_thread_ = std::thread(&SerowRos2::publish, this);
-
     RCLCPP_INFO(this->get_logger(), "SERoW was initialized successfully");
 }
 
@@ -151,6 +150,7 @@ SerowRos2::~SerowRos2() {
     if (publishing_thread_.joinable()) {
         publishing_thread_.join();
     }
+    RCLCPP_INFO(this->get_logger(), "SERoW was shut down successfully");
 }
 
 void SerowRos2::run() {
@@ -158,7 +158,7 @@ void SerowRos2::run() {
         // Create the joint measurements
         const auto& joint_state_data = joint_state_data_.value();
         std::map<std::string, serow::JointMeasurement> joint_measurements;
-        for (unsigned int i = 0; i < joint_state_data.name.size(); i++) {
+        for (size_t i = 0; i < joint_state_data.name.size(); i++) {
             serow::JointMeasurement joint{};
             joint.timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
                 static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
@@ -179,7 +179,8 @@ void SerowRos2::run() {
                             imu_data.linear_acceleration.z);
         imu_measurement.angular_velocity = Eigen::Vector3d(
             imu_data.angular_velocity.x, imu_data.angular_velocity.y, imu_data.angular_velocity.z);
-        // Clear the joint and imu measurements
+
+        // Clear the used joint and imu measurements
         joint_state_data_.reset();
         base_imu_data_.reset();
 
@@ -198,6 +199,7 @@ void SerowRos2::run() {
                                                   ft_data.wrench.torque.z));
                 ft_measurements[key] = std::move(ft);
             }
+            // Clear the used force torque measurements
             ft_data_.clear();
         }
 
@@ -208,7 +210,8 @@ void SerowRos2::run() {
 
         const auto& state = serow_.getState();
         if (state) {
-            // Queue the state for publishing instead of publishing directly
+            // Queue the state for publishing instead of publishing directly to not block the
+            // main thread
             {
                 std::lock_guard<std::mutex> lock(publish_queue_mutex_);
                 publish_queue_.push(state.value());
@@ -319,15 +322,16 @@ void SerowRos2::publishBaseState(const serow::State& state) {
     }
     odom_publisher_->publish(odom_msg);
 
-    const auto contact_frames = state.getContactsFrame();
+    const auto& contact_frames = state.getContactsFrame();
     for (const auto& contact_frame : contact_frames) {
         const Eigen::Vector3d& foot_position = state.getFootPosition(contact_frame);
         const Eigen::Quaterniond& foot_orientation = state.getFootOrientation(contact_frame);
         const Eigen::Vector3d& foot_linear_velocity = state.getFootLinearVelocity(contact_frame);
         const Eigen::Vector3d& foot_angular_velocity = state.getFootAngularVelocity(contact_frame);
 
-        odom_msg.header.stamp = rclcpp::Time(timestamp);
+        odom_msg.header.stamp = rclcpp::Time(seconds, nanoseconds);
         odom_msg.header.frame_id = "world";
+        odom_msg.child_frame_id = contact_frame;
         odom_msg.pose.pose.position.x = foot_position.x();
         odom_msg.pose.pose.position.y = foot_position.y();
         odom_msg.pose.pose.position.z = foot_position.z();
@@ -378,7 +382,7 @@ void SerowRos2::publishCentroidState(const serow::State& state) {
     point_msg.point.z = cop_position.z();
     cop_position_publisher_->publish(point_msg);
 
-    twist_msg.header.stamp = rclcpp::Time(timestamp);
+    twist_msg.header.stamp = rclcpp::Time(seconds, nanoseconds);
     twist_msg.header.frame_id = "world";
     twist_msg.twist.linear.x = mass * com_linear_velocity.x();
     twist_msg.twist.linear.y = mass * com_linear_velocity.y();
@@ -397,7 +401,7 @@ void SerowRos2::publishCentroidState(const serow::State& state) {
     com_momentum_rate_publisher_->publish(twist_msg);
 
     const Eigen::Vector3d com_external_torque = com_position.cross(com_external_forces);
-    wrench_msg.header.stamp = rclcpp::Time(timestamp);
+    wrench_msg.header.stamp = rclcpp::Time(seconds, nanoseconds);
     wrench_msg.header.frame_id = "world";
     wrench_msg.wrench.force.x = com_external_forces.x();
     wrench_msg.wrench.force.y = com_external_forces.y();
