@@ -44,13 +44,13 @@ private:
     int i_{};
 
     std::string name_{}; /**< The name of the filter, e.g., "LHipPitch" */
+    bool verbose_{false};
 
 public:
     /**
      * @brief Resets the 2nd order Low Pass Butterworth filter state.
-     * @param verbose If true, prints a reset message to the console.
      */
-    void reset(bool verbose = true);
+    void reset();
 
     /**
      * @brief Recursively filters a measurement with a 2nd order Low Pass Butterworth filter.

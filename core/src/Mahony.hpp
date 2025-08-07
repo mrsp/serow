@@ -28,6 +28,7 @@
 #endif
 
 #include <iostream>
+#include <optional>
 
 namespace serow {
 
@@ -42,7 +43,7 @@ public:
      *  @param ki Integral gain
      */
     Mahony(double freq, double kp, double ki = 0.0) {
-        freq_ = freq;
+        nominal_dt_ = 1.0 / freq;
         twoKp_ = 2.0 * kp;
         twoKi_ = 2.0 * ki;
         integralFBx_ = 0.0;
@@ -90,8 +91,24 @@ public:
      *  @brief Computes the IMU orientation w.r.t the world frame of reference
      *  @param gyro angular velocity as measured by the IMU
      *  @param acc linea acceleration as measured by the IMU
+     *  @param timestamp timestamp of the measurement
      */
-    void filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc) {
+    void filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc, double timestamp) {
+        double dt = nominal_dt_;
+        if (timestamp_) {
+            dt = timestamp - timestamp_.value();
+
+            if (dt < nominal_dt_ / 2.0) {
+                std::cout << "[SEROW/Mahony]: Sample time is abnormal " << dt
+                          << " while the nominal sample time is " << nominal_dt_
+                          << " setting to nominal" << std::endl;
+                dt = nominal_dt_;
+            }
+            timestamp_ = timestamp;
+        } else {
+            timestamp_ = timestamp;
+        }
+
         double recipNorm;
         double halfvx, halfvy, halfvz;
         double halfex, halfey, halfez;
@@ -126,9 +143,9 @@ public:
             // Compute and apply integral feedback if enabled
             if (twoKi_ > 0.0f) {
                 // integral error scaled by Ki
-                integralFBx_ += twoKi_ * halfex * (1.0f / freq_);
-                integralFBy_ += twoKi_ * halfey * (1.0f / freq_);
-                integralFBz_ += twoKi_ * halfez * (1.0f / freq_);
+                integralFBx_ += twoKi_ * halfex * dt;
+                integralFBy_ += twoKi_ * halfey * dt;
+                integralFBz_ += twoKi_ * halfez * dt;
                 // apply integral feedback
                 gx += integralFBx_;
                 gy += integralFBy_;
@@ -147,9 +164,9 @@ public:
         }
 
         // Integrate rate of change of quaternion
-        gx *= (0.5f * (1.0f / freq_));  // pre-multiply common factors
-        gy *= (0.5f * (1.0f / freq_));
-        gz *= (0.5f * (1.0f / freq_));
+        gx *= (0.5f * dt);  // pre-multiply common factors
+        gy *= (0.5f * dt);
+        gz *= (0.5f * dt);
         qa = q0_;
         qb = q1_;
         qc = q2_;
@@ -195,8 +212,10 @@ private:
     double q0_ = 1, q1_ = 0, q2_ = 0, q3_ = 0;
     /// Integral of angular velocity in x,y,z
     double integralFBx_ = 0, integralFBy_ = 0, integralFBz_ = 0;
-    /// Sampling frequency
-    double freq_ = 0;
+    /// Nominal sample time
+    double nominal_dt_ = 0;
+    /// Timestamp of the last measurement
+    std::optional<double> timestamp_ = std::nullopt;
 };
 
 }  // namespace serow

@@ -562,8 +562,8 @@ void Serow::runJointsEstimator(State& state,
                                                        Eigen::Matrix<double, 1, 1>(0.0));
                 }
             }
-            joints_velocity[key] =
-                joint_estimators_.at(key).filter(Eigen::Matrix<double, 1, 1>(value.position))(0);
+            joints_velocity[key] = joint_estimators_.at(key).filter(
+                Eigen::Matrix<double, 1, 1>(value.position), value.timestamp)(0);
         }
     }
     state.joint_state_.timestamp = joint_timestamp;
@@ -582,7 +582,7 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
         attitude_estimator_->setState(state.base_state_.base_orientation);
     }
 
-    attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration);
+    attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration, imu.timestamp);
     imu.orientation = attitude_estimator_->getQ();
     imu.orientation_cov = params_.base_orientation_cov.asDiagonal();
 
@@ -747,7 +747,8 @@ void Serow::runAngularMomentumEstimator(State& state) {
 
     // Estimate the angular momentum derivative around the CoM in base frame
     const Eigen::Vector3d& com_angular_momentum_derivative =
-        angular_momentum_derivative_estimator->filter(com_angular_momentum);
+        angular_momentum_derivative_estimator->filter(com_angular_momentum,
+                                                      state.joint_state_.timestamp);
 
     // Update the state
     state.centroidal_state_.angular_momentum = R_world_to_base * com_angular_momentum;
@@ -966,7 +967,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
         }
     }
     const Eigen::Vector3d base_angular_acceleration =
-        gyro_derivative_estimator->filter(base_angular_velocity);
+        gyro_derivative_estimator->filter(base_angular_velocity, imu.timestamp);
     state.base_state_.base_angular_velocity = base_pose.linear() * base_angular_velocity;
     state.base_state_.base_angular_acceleration = base_pose.linear() * base_angular_acceleration;
     state.base_state_.base_linear_acceleration = base_linear_acceleration;

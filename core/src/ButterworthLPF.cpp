@@ -18,7 +18,7 @@
 
 namespace serow {
 
-void ButterworthLPF::reset(bool verbose) {
+void ButterworthLPF::reset() {
     a1_ = 0;
     a2_ = 0;
     b0_ = 0;
@@ -30,7 +30,7 @@ void ButterworthLPF::reset(bool verbose) {
     x_p_ = 0;
     x_pp_ = 0;
 
-    if (verbose) {
+    if (verbose_) {
         std::cout << name_ << " Low-pass Butterworth filter reset" << std::endl;
     }
 }
@@ -46,8 +46,9 @@ ButterworthLPF::ButterworthLPF(std::string name, double f_sampling, double f_cut
     a2_ = -(1.0 - q * ita + ita * ita) * b0_;
     name_ = name;
     a_ = (2.0 * 3.14159265359 * ff) / (2.0 * 3.14159265359 * ff + 1.0);
+    verbose_ = verbose;
 
-    if (verbose) {
+    if (verbose_) {
         std::cout << name << " Low-pass Butterworth filter initialized" << std::endl;
     }
 }
