@@ -25,7 +25,7 @@ find_package(yaml-cpp REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 
 # Add executable
-add_executable(serow_ros2 src/serow_driver.cpp)
+add_executable(serow_ros2 src/serow_driver.cpp src/SerowRos2.cpp)
 target_include_directories(serow_ros2 PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>

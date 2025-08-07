@@ -50,8 +50,18 @@ State::State(const std::set<std::string>& contacts_frame, bool point_feet,
     }
 }
 
-double State::getBaseTimestamp() const {
-    return base_state_.timestamp;
+double State::getTimestamp(const std::string& state_type) const {
+    if (state_type == "base") {
+        return base_state_.timestamp;
+    } else if (state_type == "joint") {
+        return joint_state_.timestamp;
+    } else if (state_type == "centroidal") {
+        return centroidal_state_.timestamp;
+    } else if (state_type == "contact") {
+        return contact_state_.timestamp;
+    } else {
+        throw std::invalid_argument("Invalid state type");
+    }
 }
 
 Eigen::Isometry3d State::getBasePose() const {

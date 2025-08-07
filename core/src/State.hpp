@@ -154,8 +154,8 @@ public:
     const std::map<std::string, double>& getJointPositions() const;
     /// Returns the joint velocities
     const std::map<std::string, double>& getJointVelocities() const;
-    /// Returns the latest base estimate timestamp
-    double getBaseTimestamp() const;
+    /// Returns the latest state estimate timestamp
+    double getTimestamp(const std::string& state_type = "base") const;
     /// Returns the 3D base pose as a rigid transformation in world frame coordinates
     Eigen::Isometry3d getBasePose() const;
     /// Returns the 3D base position in world frame coordinates
