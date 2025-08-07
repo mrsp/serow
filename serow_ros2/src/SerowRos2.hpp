@@ -32,11 +32,12 @@
 class SerowRos2 : public rclcpp::Node {
 public:
     SerowRos2();
+
     ~SerowRos2();
 
-private:
     void run();
 
+private:
     void publish();
 
     void publishJointState(const serow::State& state);
@@ -52,6 +53,7 @@ private:
     void baseImuCallback(const sensor_msgs::msg::Imu& msg);
 
     serow::Serow serow_;
+    // Publishers
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr com_position_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr cop_position_publisher_;
@@ -66,6 +68,7 @@ private:
         foot_contact_probability_publishers_;
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
 
+    // Subscribers
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscription_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr base_imu_subscription_;
     std::vector<rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr>

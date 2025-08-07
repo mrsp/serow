@@ -59,7 +59,7 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     for (const auto& topic : config["topics"]["force_torque_states"]) {
         force_torque_state_topics.push_back(topic.as<std::string>());
     }
-    const std::string serow_config = config["serow_config"].as<std::string>();
+    const std::string& serow_config = config["serow_config"].as<std::string>();
 
     RCLCPP_INFO(this->get_logger(), "Robot name: %s", robot_name.c_str());
     RCLCPP_INFO(this->get_logger(), "Serow config file: %s", serow_config.c_str());
