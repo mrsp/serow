@@ -77,7 +77,7 @@ private:
     /// Flag to check if it's the first run
     bool firstrun_{true};
     /// Flag to check if verbose is enabled
-    bool verbose_{false};
+    bool verbose_{};
 };
 
 }  // namespace serow

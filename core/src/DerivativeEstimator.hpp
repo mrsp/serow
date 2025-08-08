@@ -66,7 +66,7 @@ public:
     std::optional<double> timestamp_ = std::nullopt;
 
     /// Flag to check if verbose is enabled
-    bool verbose_{false};
+    bool verbose_{};
 
     /**
      * @brief Estimates the derivative of a measurement.

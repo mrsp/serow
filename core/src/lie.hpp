@@ -210,6 +210,14 @@ inline Eigen::Matrix3d plus(const Eigen::Matrix3d& R, const Eigen::Vector3d& tau
     return R * expMap(tau);
 }
 
+/// @brief Performs the SO(3) group plus operation
+/// @param q quaternion in SO(3) group
+/// @param tau 3D twist in so(3) algebra
+/// @return A quaternion in SO(3) group
+inline Eigen::Quaterniond plus(const Eigen::Quaterniond& q, const Eigen::Vector3d& tau) {
+    return Eigen::Quaterniond(q.toRotationMatrix() * expMap(tau));
+}
+
 /// @brief Performs the SO(3) group minus operation
 /// @param R0 3x3 Rotation in SO(3) group
 /// @param R1 3x3 Rotation in SO(3) group

@@ -44,7 +44,7 @@ private:
     int i_{};
 
     std::string name_{}; /**< The name of the filter, e.g., "LHipPitch" */
-    bool verbose_{false};
+    bool verbose_{};
 
 public:
     /**

@@ -47,7 +47,7 @@ void DerivativeEstimator::reset() {
         bw_[i].reset();
         df_[i].reset();
     }
-    timestamp_ = std::nullopt;
+    timestamp_.reset();
 
     if (verbose_) {
         std::cout << name_ << " estimator reset" << std::endl;
@@ -70,10 +70,8 @@ Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement, 
                       << " setting to nominal" << std::endl;
             dt = nominal_dt_;
         }
-        timestamp_ = timestamp;
-    } else {
-        timestamp_ = timestamp;
     }
+    timestamp_ = timestamp;
 
     for (size_t i = 0; i < dim_; i++) {
         x_(i) = bw_[i].filter(measurement(i));
