@@ -64,6 +64,12 @@ Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement, 
     double dt = nominal_dt_;
     if (timestamp_) {
         dt = timestamp - timestamp_.value();
+        if (dt < 0.0) {
+            std::cout << "[SEROW/DerivativeEstimator] " << name_ << ": Sample time is negative "
+                      << dt << " while the nominal sample time is " << nominal_dt_
+                      << " returning the previous estimate" << std::endl;
+            return x_dot_;
+        }
         if (dt < nominal_dt_ / 2.0) {
             std::cout << "[SEROW/DerivativeEstimator] " << name_ << ": Sample time is abnormal "
                       << dt << " while the nominal sample time is " << nominal_dt_

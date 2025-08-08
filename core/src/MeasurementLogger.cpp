@@ -91,7 +91,8 @@ public:
             const double timestamp = imu_measurement.timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/MeasurementLogger]: IMU Timestamp is negative " << timestamp
+                          << " returning without logging" << std::endl;
                 return;
             }
 
@@ -482,7 +483,9 @@ public:
             const double timestamp = base_pose_ground_truth.timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout
+                    << "[SEROW/MeasurementLogger]: Base Pose Ground Truth Timestamp is negative "
+                    << timestamp << " returning without logging" << std::endl;
                 return;
             }
 
@@ -539,7 +542,8 @@ public:
             const double timestamp = joints.begin()->second.timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/MeasurementLogger]: Joint Measurements Timestamp is negative "
+                          << timestamp << " returning without logging" << std::endl;
                 return;
             }
 
@@ -604,7 +608,8 @@ public:
             const double timestamp = ft.begin()->second.timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/MeasurementLogger]: Force Torque Timestamp is negative "
+                          << timestamp << " returning without logging" << std::endl;
                 return;
             }
 
