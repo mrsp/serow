@@ -79,6 +79,7 @@ set(serow_src
     ThreadPool.cpp
     MeasurementLogger.cpp
     Timer.cpp
+    Buffer.cpp
 )
 
 # Header files
@@ -108,6 +109,7 @@ set(serow_headers
     Schemas.hpp
     MeasurementLogger.hpp
     Timer.hpp
+    Buffer.hpp
 )
 
 add_library(serow SHARED ${serow_headers} ${serow_src})

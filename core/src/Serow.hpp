@@ -16,6 +16,7 @@
 #include <string>
 
 #include "BaseEKF.hpp"
+#include "Buffer.hpp"
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
 #include "ContactEKF.hpp"
