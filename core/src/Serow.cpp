@@ -290,8 +290,18 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
 
-    kinematic_estimator_ =
-        std::make_unique<RobotKinematics>(model_filepath, params_.joint_position_variance);
+    try {
+        kinematic_estimator_ =
+            std::make_unique<RobotKinematics>(model_filepath, params_.joint_position_variance);
+    } catch (const std::exception& e) {
+        std::cerr << RED_COLOR << "Failed to create kinematic estimator: " << e.what()
+                  << WHITE_COLOR << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << RED_COLOR << "Unknown error occurred while creating kinematic estimator"
+                  << WHITE_COLOR << std::endl;
+        return false;
+    }
 
     // Load matrices
     for (size_t i = 0; i < 3; i++) {
@@ -1242,20 +1252,22 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 }
 
 void Serow::updateFrameTree(const State& state) {
-    std::map<std::string, Eigen::Isometry3d> frame_tfs;
+    frame_tfs_.clear();
     const Eigen::Isometry3d& base_pose = state.getBasePose();
-    frame_tfs[params_.base_frame] = base_pose;
-    for (const auto& frame : kinematic_estimator_->frameNames()) {
+    frame_tfs_[params_.base_frame] = base_pose;
+
+    // Cache the kinematic estimator frame names to avoid repeated calls
+    const auto& frame_names = kinematic_estimator_->frameNames();
+    for (const auto& frame : frame_names) {
         if (frame != params_.base_frame) {
             try {
-                frame_tfs[frame] = base_pose * kinematic_estimator_->linkTF(frame);
+                frame_tfs_[frame] = base_pose * kinematic_estimator_->linkTF(frame);
             } catch (const std::exception& e) {
                 std::cerr << "Error in frame " << frame << " TF computation: " << e.what()
                           << std::endl;
             }
         }
     }
-    frame_tfs_ = std::move(frame_tfs);
 }
 
 std::optional<State> Serow::getState(bool allow_invalid) {
@@ -1288,6 +1300,44 @@ const std::shared_ptr<TerrainElevation>& Serow::getTerrainEstimator() const {
 
 Serow::~Serow() {
     stopLogging();
+    try {
+        // Reset the kinematic estimator explicitly to ensure proper Pinocchio cleanup
+        if (kinematic_estimator_) {
+            kinematic_estimator_.reset();
+        }
+
+        // Reset other estimators
+        if (attitude_estimator_) {
+            attitude_estimator_.reset();
+        }
+
+        if (leg_odometry_) {
+            leg_odometry_.reset();
+        }
+
+        if (terrain_estimator_) {
+            terrain_estimator_.reset();
+        }
+
+        // Clear containers
+        joint_estimators_.clear();
+        if (angular_momentum_derivative_estimator) {
+            angular_momentum_derivative_estimator.reset();
+        }
+        if (gyro_derivative_estimator) {
+            gyro_derivative_estimator.reset();
+        }
+        contact_estimators_.clear();
+
+        // Clear other containers
+        frame_tfs_.clear();
+        imu_outlier_detector_.clear();
+        timers_.clear();
+    } catch (...) {
+        // If anything goes wrong during destruction, just continue
+        // This prevents crashes during cleanup
+        std::cerr << "Warning: Exception during Serow destruction" << std::endl;
+    }
 }
 
 bool Serow::isInitialized() const {
@@ -1428,7 +1478,8 @@ void Serow::reset() {
 }
 
 bool Serow::isImuMeasurementOutlier(const ImuMeasurement& imu) {
-    const double MAD_THRESHOLD_MULTIPLIER = 6.0;  // 6-sigma rule
+    const double MAD_THRESHOLD_MULTIPLIER = 6.0;
+    const double MAD_TO_STD_FACTOR = 1.4826;
 
     // Add current measurements to filters
     for (size_t i = 0; i < 3; i++) {
@@ -1449,31 +1500,39 @@ bool Serow::isImuMeasurementOutlier(const ImuMeasurement& imu) {
                                     imu_outlier_detector_[4].getMedian(),
                                     imu_outlier_detector_[5].getMedian());
 
-    // Helper function to calculate rolling MAD for a single axis
-    auto calculateRollingMAD = [](const std::deque<double>& window, double median) -> double {
-        std::vector<double> deviations;
-        deviations.reserve(window.size());
+    // Pre-allocate vector to avoid repeated allocations
+    static thread_local std::vector<double> deviations;
+    deviations.clear();
+    deviations.reserve(200);  // Reserve maximum expected size
 
-        for (double value : window) {
-            deviations.push_back(std::abs(value - median));
-        }
-
-        // Sort for median calculation
-        std::sort(deviations.begin(), deviations.end());
-        return deviations[deviations.size() / 2];
-    };
-
-    // Calculate MAD for each axis
+    // Calculate MAD for each axis more efficiently
     Eigen::Vector3d av_mad = Eigen::Vector3d::Zero();
     Eigen::Vector3d la_mad = Eigen::Vector3d::Zero();
 
     for (size_t i = 0; i < 3; i++) {
-        av_mad[i] = calculateRollingMAD(imu_outlier_detector_[i].getWindow(), av_median[i]);
-        la_mad[i] = calculateRollingMAD(imu_outlier_detector_[i + 3].getWindow(), la_median[i]);
+        const auto& av_window = imu_outlier_detector_[i].getWindow();
+        const auto& la_window = imu_outlier_detector_[i + 3].getWindow();
+
+        // Calculate MAD for angular velocity
+        deviations.clear();
+        for (double value : av_window) {
+            deviations.push_back(std::abs(value - av_median[i]));
+        }
+        std::nth_element(deviations.begin(), deviations.begin() + deviations.size() / 2,
+                         deviations.end());
+        av_mad[i] = deviations[deviations.size() / 2];
+
+        // Calculate MAD for linear acceleration
+        deviations.clear();
+        for (double value : la_window) {
+            deviations.push_back(std::abs(value - la_median[i]));
+        }
+        std::nth_element(deviations.begin(), deviations.begin() + deviations.size() / 2,
+                         deviations.end());
+        la_mad[i] = deviations[deviations.size() / 2];
     }
 
-    // Convert MAD to standard deviation approximation (MAD ≈ 0.6745 * σ)
-    const double MAD_TO_STD_FACTOR = 1.4826;  // 1 / 0.6745
+    // Convert MAD to standard deviation approximation
     const Eigen::Vector3d av_std_dev(av_mad * MAD_TO_STD_FACTOR);
     const Eigen::Vector3d la_std_dev(la_mad * MAD_TO_STD_FACTOR);
 
@@ -1483,13 +1542,9 @@ bool Serow::isImuMeasurementOutlier(const ImuMeasurement& imu) {
     const Eigen::Vector3d la_z_scores =
         (imu.linear_acceleration - la_median).cwiseQuotient(la_std_dev);
 
-    // Check if any component exceeds the threshold
-    const bool angular_velocity_outlier =
-        (av_z_scores.array().abs() > MAD_THRESHOLD_MULTIPLIER).any();
-    const bool linear_acceleration_outlier =
+    // Check if any component exceeds the threshold using SIMD-friendly operations
+    return (av_z_scores.array().abs() > MAD_THRESHOLD_MULTIPLIER).any() ||
         (la_z_scores.array().abs() > MAD_THRESHOLD_MULTIPLIER).any();
-
-    return angular_velocity_outlier || linear_acceleration_outlier;
 }
 
 void Serow::logTimings() {

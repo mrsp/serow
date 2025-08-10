@@ -1,6 +1,11 @@
+cmake_minimum_required(VERSION 3.15)
+project(serow LANGUAGES CXX)
+
+# Dependencies
 find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(pinocchio REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(FlatBuffers REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -13,11 +18,9 @@ FetchContent_Declare(
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 FetchContent_MakeAvailable(mcap_builder)
 
-# Find FlatBuffers
-find_package(FlatBuffers REQUIRED)
 include_directories(${FLATBUFFERS_INCLUDE_DIRS})
 
-# Option for Python code generation
+# Option for Python code generation 
 option(GENERATE_PYTHON_SCHEMAS "Generate Python code from FlatBuffers schemas" OFF)
 
 # Create the generated directory if it doesn't exist
@@ -57,7 +60,8 @@ message(STATUS "Generated code from Flatbuffers schema: ${FLATC_OUTPUT}")
 # Pass the source directory as a preprocessor definition
 add_definitions(-DSCHEMAS_DIR="${CMAKE_BINARY_DIR}/generated/")
 
-set(serow_src ${serow_src} 
+# Source files
+set(serow_src
     Serow.cpp 
     State.cpp 
     BaseEKF.cpp
@@ -74,9 +78,11 @@ set(serow_src ${serow_src}
     ExteroceptionLogger.cpp
     ThreadPool.cpp
     MeasurementLogger.cpp
-    Timer.cpp)
+    Timer.cpp
+)
 
-set(serow_headers ${serow_headers} 
+# Header files
+set(serow_headers
     common.hpp
     Serow.hpp 
     State.hpp 
@@ -101,62 +107,46 @@ set(serow_headers ${serow_headers}
     ThreadPool.hpp
     Schemas.hpp
     MeasurementLogger.hpp
-    Timer.hpp)
+    Timer.hpp
+)
 
 add_library(serow SHARED ${serow_headers} ${serow_src})
 target_include_directories(serow PRIVATE ${CMAKE_BINARY_DIR}/generated)
 
-target_link_libraries(serow PUBLIC mcap 
-                            PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json)
+target_link_libraries(serow
+    PUBLIC mcap
+    PRIVATE Eigen3::Eigen pinocchio::pinocchio nlohmann_json::nlohmann_json
+)
+
 set_target_properties(serow PROPERTIES LINKER_LANGUAGE CXX)
 
+# Safe, portable release optimization
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_options(serow PRIVATE
+        -O3
+        -DNDEBUG
+        -DEIGEN_VECTORIZE_SSE4_2
+        -DEIGEN_UNALIGNED_VECTORIZE
+        -DEIGEN_FAST_MATH
+        -DEIGEN_NO_DEBUG
+        -fno-strict-aliasing
+        -fno-omit-frame-pointer
+    )
+endif()
+
+# Install
 install(FILES ${serow_headers} DESTINATION include/serow)
 install(TARGETS serow DESTINATION lib/)
 install(FILES serowConfig.cmake DESTINATION lib/cmake/serow)
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # Eigen-specific optimizations
-    add_compile_options(-DEIGEN_VECTORIZE_SSE4_2)
-    add_compile_options(-DEIGEN_UNALIGNED_VECTORIZE)
-    add_compile_options(-DEIGEN_FAST_MATH)
-    add_compile_options(-DEIGEN_MAX_ALIGN_BYTES=64)
-    add_compile_options(-DEIGEN_MAX_STATIC_ALIGN_BYTES=64)
-    
-    # Matrix operation optimizations
-    add_compile_options(-ffast-math)
-    add_compile_options(-mavx2)
-    add_compile_options(-mfma)
-    add_compile_options(-funroll-loops)
-    add_compile_options(-funroll-all-loops)
-    
-    # Memory and cache optimizations
-    add_compile_options(-fprefetch-loop-arrays)
-    add_compile_options(-foptimize-sibling-calls)
-    add_compile_options(-foptimize-strlen)
-    
-    # Function inlining
-    add_compile_options(-finline-functions)
-    add_compile_options(-finline-limit=1000)
-    
-    # Link-time optimization
-    add_compile_options(-flto)
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -flto")
-    
-    # Thread pool optimizations
-    add_compile_options(-pthread)
-    add_compile_options(-fopenmp)
-endif()
-
 # Profile-guided optimization option
 option(ENABLE_PGO "Enable Profile Guided Optimization" OFF)
 if(ENABLE_PGO)
-    if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        if(PGO_TRAINING)
-            add_compile_options(-fprofile-generate)
-            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-generate")
-        else()
-            add_compile_options(-fprofile-use)
-            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-use")
-        endif()
+    if(PGO_TRAINING)
+        target_compile_options(serow PRIVATE -fprofile-generate)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-generate")
+    else()
+        target_compile_options(serow PRIVATE -fprofile-use)
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fprofile-use")
     endif()
 endif()
