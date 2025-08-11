@@ -15,8 +15,6 @@
 #include <map>
 #include <string>
 
-#include "BaseEKF.hpp"
-#include "Buffer.hpp"
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
 #include "ContactEKF.hpp"
@@ -249,8 +247,6 @@ private:
         /// @brief minimum contact probability to consider a contact point for terrain elevation
         /// estimation
         double minimum_contact_probability{0.15};
-        bool is_contact_ekf{};
-        Eigen::Vector3d base_linear_velocity_cov{Eigen::Vector3d::Zero()};
         Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
         std::string terrain_estimator_type{};
         bool log_data{true};
@@ -283,8 +279,7 @@ private:
     State state_;
     /// @brief base estimator that fuses base IMU, leg end-effector contact and relative to the base
     /// leg kinematic measurements
-    ContactEKF base_estimator_con_;
-    BaseEKF base_estimator_;
+    ContactEKF base_estimator_;
     /// @brief coM estimator that fuses ground reaction force, base IMU, and CoM kinematic
     /// measurements
     CoMEKF com_estimator_;

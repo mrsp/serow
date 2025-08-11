@@ -64,7 +64,6 @@ add_definitions(-DSCHEMAS_DIR="${CMAKE_BINARY_DIR}/generated/")
 set(serow_src
     Serow.cpp 
     State.cpp 
-    BaseEKF.cpp
     ContactEKF.cpp 
     CoMEKF.cpp 
     LegOdometry.cpp 
@@ -79,7 +78,6 @@ set(serow_src
     ThreadPool.cpp
     MeasurementLogger.cpp
     Timer.cpp
-    Buffer.cpp
 )
 
 # Header files
@@ -87,7 +85,6 @@ set(serow_headers
     common.hpp
     Serow.hpp 
     State.hpp 
-    BaseEKF.hpp
     ContactEKF.hpp 
     CoMEKF.hpp 
     LegOdometry.hpp 
@@ -109,7 +106,6 @@ set(serow_headers
     Schemas.hpp
     MeasurementLogger.hpp
     Timer.hpp
-    Buffer.hpp
 )
 
 add_library(serow SHARED ${serow_headers} ${serow_src})

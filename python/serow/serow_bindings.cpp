@@ -450,9 +450,6 @@ PYBIND11_MODULE(serow, m) {
         .def_readwrite("com_linear_acceleration",
                        &serow::KinematicMeasurement::com_linear_acceleration,
                        "Center of mass linear acceleration (3D vector)")
-        .def_readwrite("base_linear_velocity_cov",
-                       &serow::KinematicMeasurement::base_linear_velocity_cov,
-                       "Base linear velocity covariance (3x3 matrix)")
         .def_readwrite("position_slip_cov", &serow::KinematicMeasurement::position_slip_cov,
                        "Position slip covariance (3x3 matrix)")
         .def_readwrite("orientation_slip_cov", &serow::KinematicMeasurement::orientation_slip_cov,
