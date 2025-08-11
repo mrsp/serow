@@ -517,7 +517,14 @@ void Serow::logMeasurements(ImuMeasurement imu,
                                      base_pose_ground_truth = std::move(base_pose_ground_truth)]() {
         try {
             if (!measurement_logger_->isInitialized()) {
-                measurement_logger_->setStartTime(imu.timestamp);
+                double start_time = std::min(imu.timestamp, joints.begin()->second.timestamp);
+                if (!ft.empty()) {
+                    start_time = std::min(start_time, ft.begin()->second.timestamp);
+                }
+                if (base_pose_ground_truth.has_value()) {
+                    start_time = std::min(start_time, base_pose_ground_truth.value().timestamp);
+                }
+                measurement_logger_->setStartTime(start_time);
             }
             // Log all measurement data to MCAP file
             measurement_logger_->log(imu);
@@ -658,7 +665,7 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
 
     // Prepare kinematic measurement
     KinematicMeasurement kin;
-    kin.timestamp = state.joint_state_.timestamp;
+    kin.timestamp = timestamp_;
     kin.base_to_foot_positions = std::move(base_to_foot_positions);
     kin.base_to_foot_orientations = std::move(base_to_foot_orientations);
     kin.base_to_foot_linear_velocities = std::move(base_to_foot_linear_velocities);
@@ -907,7 +914,6 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
     }
 
     // Call the base estimator predict step
-    state.base_state_.timestamp = imu.timestamp;
     if (params_.is_contact_ekf) {
         base_estimator_con_.predict(state.base_state_, imu, kin);
     } else {
@@ -933,7 +939,6 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
     }
 
     // Update base state with relative to base contacts
-    state.base_state_.timestamp = kin.timestamp;
     const Eigen::Isometry3d base_pose = state.getBasePose();
     if (params_.is_contact_ekf) {
         base_estimator_con_.update(state.base_state_, imu, kin, odom, terrain_estimator_);
@@ -1001,6 +1006,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
             state.base_state_.base_angular_velocity +
             base_pose.linear() * kin.base_to_foot_angular_velocities.at(frame);
     }
+    state.base_state_.timestamp = timestamp_;
     timers_["base-estimator-update"].stop();
 }
 
@@ -1051,7 +1057,6 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
             grf.cop /= den;
         }
         state.centroidal_state_.cop_position = grf.cop;
-        state.centroidal_state_.timestamp = grf.timestamp;
         // Update CoM state if in contact
         if (den > 0.0) {
             timers_["com-estimator-predict"].start();
@@ -1067,8 +1072,8 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
     }
 
     // Update CoM state with kinematic measurements
-    state.centroidal_state_.timestamp = kin.timestamp;
     com_estimator_.updateWithKinematics(state.centroidal_state_, kin);
+    state.centroidal_state_.timestamp = timestamp_;
     timers_["com-estimator-update"].stop();
 }
 
@@ -1160,6 +1165,57 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                    std::optional<std::map<std::string, ContactMeasurement>> contacts_probability,
                    std::optional<BasePoseGroundTruth> base_pose_ground_truth) {
     timers_["total-time"].start();
+    const double imu_timestamp = imu.timestamp;
+    const double joint_timestamp = joints.begin()->second.timestamp;
+
+    if (imu_timestamp < last_imu_timestamp_ || abs(imu_timestamp - last_imu_timestamp_) < 1e-6) {
+        std::cerr << "IMU measurements are out of order, skipping filtering" << std::endl;
+        timers_["total-time"].stop();
+        return false;
+    }
+
+    if (joint_timestamp < last_joint_timestamp_ ||
+        abs(joint_timestamp - last_joint_timestamp_) < 1e-6) {
+        std::cerr << "Joint measurements are out of order, skipping filtering" << std::endl;
+        timers_["total-time"].stop();
+        return false;
+    }
+
+    if (abs(imu_timestamp - joint_timestamp) > 1e-3) {
+        std::cerr << "IMU and joint timestamps are not synchronized, skipping filtering"
+                  << std::endl;
+        timers_["total-time"].stop();
+        return false;
+    }
+
+    timestamp_ = std::min(imu_timestamp, joint_timestamp);
+    last_imu_timestamp_ = imu_timestamp;
+    last_joint_timestamp_ = joint_timestamp;
+
+    auto ft_timestamp = force_torque.has_value()
+        ? std::optional<double>(force_torque.value().begin()->second.timestamp)
+        : std::nullopt;
+
+    if (ft_timestamp.has_value() &&
+        (ft_timestamp.value() < last_ft_timestamp_ ||
+         abs(force_torque.value().begin()->second.timestamp - last_ft_timestamp_) < 1e-6)) {
+        std::cerr << "Force-torque measurement given is the same, clearing it" << std::endl;
+        force_torque.reset();
+    } else if (ft_timestamp.has_value()) {
+        last_ft_timestamp_ = ft_timestamp.value();
+    }
+
+    auto odom_timestamp =
+        odom.has_value() ? std::optional<double>(odom.value().timestamp) : std::nullopt;
+
+    if (odom_timestamp.has_value() &&
+        (odom_timestamp.value() < last_odom_timestamp_ ||
+         abs(odom_timestamp.value() - last_odom_timestamp_) < 1e-6)) {
+        std::cerr << "Odometry measurement given is the same, clearing it" << std::endl;
+        odom.reset();
+    } else if (odom_timestamp.has_value()) {
+        last_odom_timestamp_ = odom_timestamp.value();
+    }
 
     // Early return if not initialized and no FT measurement
     if (!is_initialized_) {

@@ -318,11 +318,21 @@ private:
     std::map<std::string, Eigen::Isometry3d> frame_tfs_;
     /// @brief IMU outlier detection storage
     std::vector<MovingMedianFilter> imu_outlier_detector_;
-
     /// @brief Timers for the filter functions
     std::unordered_map<std::string, Timer> timers_;
     /// @brief Last time the timings were logged
     std::optional<std::chrono::high_resolution_clock::time_point> last_log_time_;
+    /// @brief Timestamp of the last estimated state
+    double timestamp_{};
+    /// @brief Timestamp of the last IMU measurement
+    double last_imu_timestamp_{};
+    /// @brief Timestamp of the last joint measurement
+    double last_joint_timestamp_{};
+    /// @brief Timestamp of the last force/torque measurement
+    double last_ft_timestamp_{};
+    /// @brief Timestamp of the last odometry measurement
+    double last_odom_timestamp_{};
+
     /// @brief Logs the measurements
     /// @param imu IMU measurement
     /// @param joints joint measurements
