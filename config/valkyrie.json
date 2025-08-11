@@ -128,12 +128,6 @@
         1e-5,
         1e-5
     ],
-    "use_contacts_in_base_estimation": false,
-    "base_linear_velocity_covariance": [
-        1e-1,
-        1e-1,
-        1e-1
-    ],
     "contact_position_covariance": [
         1e-6,
         1e-6,

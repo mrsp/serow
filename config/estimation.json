@@ -175,6 +175,13 @@
         1e-5,
         1e-5
     ],
+    // array: base orientation uncertainty (rad^2). Can be used in the base estimator to correct the
+    // base orientation estimate with the IMU orientation measurement
+    "base_orientation_covariance": [
+        1e-3,
+        1e-3,
+        1e-3
+    ],
     // array: minimum leg end-effector contact relative to base frame position uncertainty (m^2)
     "contact_position_covariance": [
         1e-6,

@@ -34,6 +34,7 @@
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/parsers/urdf.hpp>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -58,7 +59,28 @@ public:
         pmodel_ = std::make_unique<pinocchio::Model>();
 
         // Build the kinematic model from URDF file
-        pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
+        try {
+            std::cout << "Building URDF model " << model_name << std::endl;
+            pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
+        } catch (const std::exception& e) {
+            throw std::runtime_error("Failed to load URDF model from '" + model_name +
+                                     "': " + e.what());
+        }
+
+        // Verify the model was loaded successfully
+        if (pmodel_->nq == 0) {
+            throw std::runtime_error(
+                "URDF model loaded but has 0 degrees of freedom. Check if the file is valid: " +
+                model_name);
+        }
+
+        // Additional safety checks
+        if (pmodel_->lowerPositionLimit.size() == 0 || pmodel_->upperPositionLimit.size() == 0 ||
+            pmodel_->velocityLimit.size() == 0) {
+            throw std::runtime_error(
+                "URDF model loaded but joint limits are empty. Check if the file is valid: " +
+                model_name);
+        }
 
         // Create the data associated with the model
         data_ = std::make_unique<pinocchio::Data>(*pmodel_);
@@ -73,16 +95,31 @@ public:
             }
         }
 
-        // Initialize joint limits
+        // Initialize the vectors with proper sizes before assignment
         qmin_.resize(jnames_.size());
         qmax_.resize(jnames_.size());
         dqmax_.resize(jnames_.size());
-        qn_.resize(jnames_.size());
-        qmin_ = pmodel_->lowerPositionLimit;
-        qmax_ = pmodel_->upperPositionLimit;
-        dqmax_ = pmodel_->velocityLimit;
-        qn_.setOnes();
-        qn_ *= std::sqrt(joint_position_variance);
+
+        // Use explicit copying instead of direct assignment
+        for (size_t i = 0; i < jnames_.size(); i++) {
+            qmin_[i] = pmodel_->lowerPositionLimit[i];
+        }
+
+        for (size_t i = 0; i < jnames_.size(); i++) {
+            qmax_[i] = pmodel_->upperPositionLimit[i];
+        }
+
+        for (size_t i = 0; i < jnames_.size(); i++) {
+            dqmax_[i] = pmodel_->velocityLimit[i];
+        }
+
+        qn_ = Eigen::VectorXd::Ones(jnames_.size()) * std::sqrt(joint_position_variance);
+
+        // Initialize state vectors
+        q_.resize(jnames_.size());
+        qdot_.resize(jnames_.size());
+        q_.setZero();
+        qdot_.setZero();
 
         // Set default values for continuous joints if limits are invalid
         for (int i = 0; i < qmin_.size(); i++) {
@@ -112,6 +149,30 @@ public:
             for (const auto& frame : frame_names_) {
                 std::cout << frame << std::endl;
             }
+        }
+    }
+
+    /**
+     * @brief Destructor to ensure proper cleanup of Pinocchio objects
+     */
+    ~RobotKinematics() {
+        try {
+            // Check if pointers are valid before attempting to reset them
+            if (data_ && data_.get() != nullptr) {
+                // Try to access a simple member to check if the object is still valid
+                if (pmodel_ && pmodel_.get() != nullptr) {
+                    // Explicitly clear data before model to avoid destruction order issues
+                    data_.reset();
+                }
+            }
+
+            if (pmodel_ && pmodel_.get() != nullptr) {
+                pmodel_.reset();
+            }
+        } catch (...) {
+            // If anything goes wrong during destruction, just continue
+            // This prevents crashes during cleanup
+            std::cerr << "Warning: Exception during RobotKinematics destruction" << std::endl;
         }
     }
 

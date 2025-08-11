@@ -97,7 +97,8 @@ public:
             const double timestamp = imu_measurement.timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/ProprioceptionLogger]: IMU Timestamp is negative " << timestamp
+                          << " returning without logging" << std::endl;
                 return;
             }
 
@@ -160,7 +161,8 @@ public:
             const double timestamp = contact_state.timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/ProprioceptionLogger]: Contact State Timestamp is negative "
+                          << timestamp << " returning without logging" << std::endl;
                 return;
             }
 
@@ -248,7 +250,8 @@ public:
             const double timestamp = centroidal_state.timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/ProprioceptionLogger]: Centroidal State Timestamp is negative "
+                          << timestamp << " returning without logging" << std::endl;
                 return;
             }
 
@@ -309,7 +312,8 @@ public:
             const double timestamp = base_state.timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/ProprioceptionLogger]: Base State Timestamp is negative "
+                          << timestamp << " returning without logging" << std::endl;
                 return;
             }
 
@@ -543,7 +547,8 @@ public:
             const double timestamp = ts - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/ProprioceptionLogger]: Frame Transforms Timestamp is negative "
+                          << timestamp << " returning without logging" << std::endl;
                 return;
             }
 
@@ -615,7 +620,8 @@ public:
             const double timestamp = joint_state.timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/ProprioceptionLogger]: Joint State Timestamp is negative "
+                          << timestamp << " returning without logging" << std::endl;
                 return;
             }
 

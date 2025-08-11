@@ -192,6 +192,14 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
     if (last_imu_timestamp_.has_value()) {
         dt = imu.timestamp - last_imu_timestamp_.value();
     }
+
+    // Check if the sample time is abnormal
+    if (dt < 0.0) {
+        std::cout << "[SEROW/ContactEKF]: Predict step sample time is negative " << dt
+                  << " while the nominal sample time is " << nominal_dt_
+                  << " returning without updating the state" << std::endl;
+        return;
+    }
     if (dt < nominal_dt_ / 2) {
         if (verbose_) {
             std::cout << "[SEROW/ContactEKF]: Predict step sample time is abnormal " << dt

@@ -28,6 +28,7 @@
 #endif
 
 #include <iostream>
+#include <optional>
 
 namespace serow {
 
@@ -40,14 +41,16 @@ public:
      *  @param freq sampling frequency
      *  @param kp Proportional gain
      *  @param ki Integral gain
+     *  @param verbose whether to print verbose output
      */
-    Mahony(double freq, double kp, double ki = 0.0) {
-        freq_ = freq;
+    Mahony(double freq, double kp, double ki = 0.0, bool verbose = false) {
+        nominal_dt_ = 1.0 / freq;
         twoKp_ = 2.0 * kp;
         twoKi_ = 2.0 * ki;
         integralFBx_ = 0.0;
         integralFBy_ = 0.0;
         integralFBz_ = 0.0;
+        verbose_ = verbose;
     }
 
     /** @fn Eigen::Quaterniond getQ()
@@ -89,81 +92,76 @@ public:
     /** @fn filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc)
      *  @brief Computes the IMU orientation w.r.t the world frame of reference
      *  @param gyro angular velocity as measured by the IMU
-     *  @param acc linea acceleration as measured by the IMU
+     *  @param acc linear acceleration as measured by the IMU
+     *  @param timestamp timestamp of the measurement
      */
-    void filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc) {
-        double recipNorm;
-        double halfvx, halfvy, halfvz;
-        double halfex, halfey, halfez;
-        double qa, qb, qc;
-        double ax, ay, az, gx, gy, gz;
+    void filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc, double timestamp) {
+        double dt = nominal_dt_;
+        double gx = gyro(0);
+        double gy = gyro(1);
+        double gz = gyro(2);
+        double ax = acc(0);
+        double ay = acc(1);
+        double az = acc(2);
 
-        gx = gyro(0);
-        gy = gyro(1);
-        gz = gyro(2);
-        ax = acc(0);
-        ay = acc(1);
-        az = acc(2);
-        // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer
-        // normalization)
+        // Valid accelerometer check
         if (!(std::abs(ax) < 1e-6 && std::abs(ay) < 1e-6 && std::abs(az) < 1e-6)) {
-            // Normalize accelerometer measurement
-            recipNorm = 1.0 / std::sqrt(ax * ax + ay * ay + az * az);
+            // Normalize accelerometer
+            const double recipNorm = 1.0 / std::sqrt(ax * ax + ay * ay + az * az);
             ax *= recipNorm;
             ay *= recipNorm;
             az *= recipNorm;
 
-            // Estimated direction of gravity and vector perpendicular to magnetic flux
-            halfvx = q1_ * q3_ - q0_ * q2_;
-            halfvy = q0_ * q1_ + q2_ * q3_;
-            halfvz = q0_ * q0_ - 0.5f + q3_ * q3_;
+            // Estimated gravity direction
+            const double halfvx = q1_ * q3_ - q0_ * q2_;
+            const double halfvy = q0_ * q1_ + q2_ * q3_;
+            const double halfvz = q0_ * q0_ - 0.5 + q3_ * q3_;
 
-            // Error is sum of cross product between estimated and measured direction of gravity
-            halfex = (ay * halfvz - az * halfvy);
-            halfey = (az * halfvx - ax * halfvz);
-            halfez = (ax * halfvy - ay * halfvx);
+            // Error between measured and estimated gravity
+            const double halfex = ay * halfvz - az * halfvy;
+            const double halfey = az * halfvx - ax * halfvz;
+            const double halfez = ax * halfvy - ay * halfvx;
 
-            // Compute and apply integral feedback if enabled
-            if (twoKi_ > 0.0f) {
-                // integral error scaled by Ki
-                integralFBx_ += twoKi_ * halfex * (1.0f / freq_);
-                integralFBy_ += twoKi_ * halfey * (1.0f / freq_);
-                integralFBz_ += twoKi_ * halfez * (1.0f / freq_);
-                // apply integral feedback
+            // Integral feedback with anti-windup decay
+            if (twoKi_ > 0.0) {
+                integralFBx_ = 0.98 * integralFBx_ + twoKi_ * halfex * dt;
+                integralFBy_ = 0.98 * integralFBy_ + twoKi_ * halfey * dt;
+                integralFBz_ = 0.98 * integralFBz_ + twoKi_ * halfez * dt;
                 gx += integralFBx_;
                 gy += integralFBy_;
                 gz += integralFBz_;
             } else {
-                // prevent integral windup
-                integralFBx_ = 0.0f;
-                integralFBy_ = 0.0f;
-                integralFBz_ = 0.0f;
+                integralFBx_ = 0.0;
+                integralFBy_ = 0.0;
+                integralFBz_ = 0.0;
             }
 
-            // Apply proportional feedback
+            // Proportional feedback
             gx += twoKp_ * halfex;
             gy += twoKp_ * halfey;
             gz += twoKp_ * halfez;
         }
 
         // Integrate rate of change of quaternion
-        gx *= (0.5f * (1.0f / freq_));  // pre-multiply common factors
-        gy *= (0.5f * (1.0f / freq_));
-        gz *= (0.5f * (1.0f / freq_));
-        qa = q0_;
-        qb = q1_;
-        qc = q2_;
+        const double qa = q0_;
+        const double qb = q1_;
+        const double qc = q2_;
+        gx *= 0.5 * dt;
+        gy *= 0.5 * dt;
+        gz *= 0.5 * dt;
         q0_ += (-qb * gx - qc * gy - q3_ * gz);
         q1_ += (qa * gx + qc * gz - q3_ * gy);
         q2_ += (qa * gy - qb * gz + q3_ * gx);
         q3_ += (qa * gz + qb * gy - qc * gx);
 
         // Normalize quaternion
-        recipNorm = 1.0 / sqrt(q0_ * q0_ + q1_ * q1_ + q2_ * q2_ + q3_ * q3_);
+        const double recipNorm = 1.0 / std::sqrt(q0_ * q0_ + q1_ * q1_ + q2_ * q2_ + q3_ * q3_);
         q0_ *= recipNorm;
         q1_ *= recipNorm;
         q2_ *= recipNorm;
         q3_ *= recipNorm;
+
+        // Update state variables
         q_.x() = q1_;
         q_.y() = q2_;
         q_.z() = q3_;
@@ -171,12 +169,39 @@ public:
         R_ = q_.toRotationMatrix();
         acc_ = R_ * acc;
         gyro_ = R_ * gyro;
+        timestamp_ = timestamp;
     }
 
     /// Set the state of the Mahony filter
     void setState(const Eigen::Quaterniond& q) {
         q_ = q;
+        q0_ = q.w();
+        q1_ = q.x();
+        q2_ = q.y();
+        q3_ = q.z();
+        acc_ = Eigen::Vector3d::Zero();
+        gyro_ = Eigen::Vector3d::Zero();
         R_ = q_.toRotationMatrix();
+        integralFBx_ = 0.0;
+        integralFBy_ = 0.0;
+        integralFBz_ = 0.0;
+        timestamp_.reset();
+    }
+
+    /// Reset the filter
+    void reset() {
+        q_ = Eigen::Quaterniond::Identity();
+        q0_ = 1.0;
+        q1_ = 0.0;
+        q2_ = 0.0;
+        q3_ = 0.0;
+        acc_ = Eigen::Vector3d::Zero();
+        gyro_ = Eigen::Vector3d::Zero();
+        R_ = Eigen::Matrix3d::Identity();
+        integralFBx_ = 0.0;
+        integralFBy_ = 0.0;
+        integralFBz_ = 0.0;
+        timestamp_.reset();
     }
 
 private:
@@ -188,15 +213,24 @@ private:
     Eigen::Vector3d acc_ = Eigen::Vector3d::Zero();
     Eigen::Vector3d gyro_ = Eigen::Vector3d::Zero();
     /// Algorithm propotional gain
-    double twoKp_ = 0;
+    double twoKp_ = 0.0;
     /// Algorithm Integral gain
-    double twoKi_ = 0;
+    double twoKi_ = 0.0;
     /// Quaternion of sensor frame relative to auxiliary frame
-    double q0_ = 1, q1_ = 0, q2_ = 0, q3_ = 0;
+    double q0_ = 1.0;
+    double q1_ = 0.0;
+    double q2_ = 0.0;
+    double q3_ = 0.0;
     /// Integral of angular velocity in x,y,z
-    double integralFBx_ = 0, integralFBy_ = 0, integralFBz_ = 0;
-    /// Sampling frequency
-    double freq_ = 0;
+    double integralFBx_ = 0.0;
+    double integralFBy_ = 0.0;
+    double integralFBz_ = 0.0;
+    /// Nominal sample time
+    double nominal_dt_ = 0.0;
+    /// Timestamp of the last measurement
+    std::optional<double> timestamp_ = std::nullopt;
+    /// Whether to print verbose output
+    bool verbose_{};
 };
 
 }  // namespace serow

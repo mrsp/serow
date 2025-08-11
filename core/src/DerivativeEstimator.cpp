@@ -29,8 +29,10 @@ DerivativeEstimator::DerivativeEstimator(const std::string& name, double f_sampl
 
     x_ = Eigen::VectorXd::Zero(dim);
     x_dot_ = Eigen::VectorXd::Zero(dim);
+    nominal_dt_ = 1.0 / f_sampling;
+    verbose_ = verbose;
 
-    if (verbose) {
+    if (verbose_) {
         std::cout << name_ << " estimator initialized successfully" << std::endl;
     }
 }
@@ -40,27 +42,46 @@ void DerivativeEstimator::setState(const Eigen::VectorXd& x, const Eigen::Vector
     x_dot_ = x_dot;
 }
 
-void DerivativeEstimator::reset(bool verbose) {
+void DerivativeEstimator::reset() {
     for (size_t i = 0; i < dim_; i++) {
-        bw_[i].reset(verbose);
-        df_[i].reset(verbose);
+        bw_[i].reset();
+        df_[i].reset();
     }
+    timestamp_.reset();
 
-    if (verbose) {
+    if (verbose_) {
         std::cout << name_ << " estimator reset" << std::endl;
     }
 }
 
-Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement) {
+Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement, double timestamp) {
     if (measurement.size() != static_cast<int>(dim_)) {
         throw std::runtime_error(
             "Derivative estimator created with wrong signal dimensions, returning the measurement");
         return measurement;
     }
 
+    double dt = nominal_dt_;
+    if (timestamp_) {
+        dt = timestamp - timestamp_.value();
+        if (dt < 0.0) {
+            std::cout << "[SEROW/DerivativeEstimator] " << name_ << ": Sample time is negative "
+                      << dt << " while the nominal sample time is " << nominal_dt_
+                      << " returning the previous estimate" << std::endl;
+            return x_dot_;
+        }
+        if (dt < nominal_dt_ / 2.0) {
+            std::cout << "[SEROW/DerivativeEstimator] " << name_ << ": Sample time is abnormal "
+                      << dt << " while the nominal sample time is " << nominal_dt_
+                      << " setting to nominal" << std::endl;
+            dt = nominal_dt_;
+        }
+    }
+    timestamp_ = timestamp;
+
     for (size_t i = 0; i < dim_; i++) {
         x_(i) = bw_[i].filter(measurement(i));
-        x_dot_(i) = df_[i].filter(x_(i));
+        x_dot_(i) = df_[i].filter(x_(i), dt);
     }
     return x_dot_;
 }
