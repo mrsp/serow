@@ -130,6 +130,10 @@ public:
                 gx += integralFBx_;
                 gy += integralFBy_;
                 gz += integralFBz_;
+            } else {
+                integralFBx_ = 0.0;
+                integralFBy_ = 0.0;
+                integralFBz_ = 0.0;
             }
 
             // Proportional feedback
@@ -138,7 +142,7 @@ public:
             gz += twoKp_ * halfez;
         }
 
-        // Integrate quaternion using measured dt
+        // Integrate rate of change of quaternion
         const double qa = q0_;
         const double qb = q1_;
         const double qc = q2_;

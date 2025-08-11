@@ -317,7 +317,7 @@ private:
     std::unordered_map<std::string, Timer> timers_;
     /// @brief Last time the timings were logged
     std::optional<std::chrono::high_resolution_clock::time_point> last_log_time_;
-    /// @brief Timestamp of the last estimated state
+    /// @brief Timestamp of the estimated state
     double timestamp_{};
     /// @brief Timestamp of the last IMU measurement
     double last_imu_timestamp_{};

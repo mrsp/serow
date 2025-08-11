@@ -61,7 +61,6 @@ public:
 
     /**
      * @brief Resets the filter.
-     * @param verbose Whether or not to print debug messages.
      */
     void reset();
 

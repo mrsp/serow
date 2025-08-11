@@ -96,28 +96,28 @@ public:
         }
 
         // Initialize the vectors with proper sizes before assignment
-        qmin_.resize(pmodel_->nq);
-        qmax_.resize(pmodel_->nq);
-        dqmax_.resize(pmodel_->nq);
+        qmin_.resize(jnames_.size());
+        qmax_.resize(jnames_.size());
+        dqmax_.resize(jnames_.size());
 
         // Use explicit copying instead of direct assignment
-        for (int i = 0; i < pmodel_->nq; i++) {
+        for (size_t i = 0; i < jnames_.size(); i++) {
             qmin_[i] = pmodel_->lowerPositionLimit[i];
         }
 
-        for (int i = 0; i < pmodel_->nq; i++) {
+        for (size_t i = 0; i < jnames_.size(); i++) {
             qmax_[i] = pmodel_->upperPositionLimit[i];
         }
 
-        for (int i = 0; i < pmodel_->nq; i++) {
+        for (size_t i = 0; i < jnames_.size(); i++) {
             dqmax_[i] = pmodel_->velocityLimit[i];
         }
 
         qn_ = Eigen::VectorXd::Ones(jnames_.size()) * std::sqrt(joint_position_variance);
 
         // Initialize state vectors
-        q_.resize(pmodel_->nq);
-        qdot_.resize(pmodel_->nq);
+        q_.resize(jnames_.size());
+        qdot_.resize(jnames_.size());
         q_.setZero();
         qdot_.setZero();
 
