@@ -129,12 +129,6 @@
     1e-8,
     1e-8
   ],
-  "use_contacts_in_base_estimation": true,
-  "base_linear_velocity_covariance": [
-    5e-3,
-    5e-3,
-    5e-3
-  ],
   "base_orientation_covariance": [
     1e-3,
     1e-3,

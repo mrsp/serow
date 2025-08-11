@@ -54,15 +54,15 @@ public:
     /**
      * @brief Differentiates the measurement with finite differences.
      * @param x Measurement to be differentiated.
+     * @param dt Sampling time in seconds.
      * @return The measurement's derivative.
      */
-    double filter(double x);
+    double filter(double x, double dt);
 
     /**
      * @brief Resets the filter.
-     * @param verbose Whether or not to print debug messages.
      */
-    void reset(bool verbose = true);
+    void reset();
 
 private:
     /// Previous measurement
@@ -75,6 +75,8 @@ private:
     std::string name_{};
     /// Flag to check if it's the first run
     bool firstrun_{true};
+    /// Flag to check if verbose is enabled
+    bool verbose_{};
 };
 
 }  // namespace serow

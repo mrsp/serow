@@ -115,8 +115,6 @@ struct KinematicMeasurement {
     Eigen::Vector3d com_position{Eigen::Vector3d::Zero()};  ///< Center of mass (COM) position (m)
     Eigen::Vector3d com_linear_acceleration{
         Eigen::Vector3d::Zero()};  ///< Center of mass (COM) linear acceleration (m/s^2)
-    Eigen::Matrix3d base_linear_velocity_cov{
-        Eigen::Matrix3d::Identity()};  ///< Covariance of base linear velocity (m^2/s^2)
     Eigen::Matrix3d position_slip_cov{
         Eigen::Matrix3d::Identity()};  ///< Covariance of position slip (m^2)
     Eigen::Matrix3d orientation_slip_cov{

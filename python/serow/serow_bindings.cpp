@@ -450,9 +450,6 @@ PYBIND11_MODULE(serow, m) {
         .def_readwrite("com_linear_acceleration",
                        &serow::KinematicMeasurement::com_linear_acceleration,
                        "Center of mass linear acceleration (3D vector)")
-        .def_readwrite("base_linear_velocity_cov",
-                       &serow::KinematicMeasurement::base_linear_velocity_cov,
-                       "Base linear velocity covariance (3x3 matrix)")
         .def_readwrite("position_slip_cov", &serow::KinematicMeasurement::position_slip_cov,
                        "Position slip covariance (3x3 matrix)")
         .def_readwrite("orientation_slip_cov", &serow::KinematicMeasurement::orientation_slip_cov,
@@ -499,14 +496,14 @@ PYBIND11_MODULE(serow, m) {
                     kin.base_to_foot_linear_velocities, kin.base_to_foot_angular_velocities,
                     kin.contacts_position_noise, contacts_orientation_serialized,
                     kin.contacts_orientation_noise, kin.com_angular_momentum_derivative,
-                    kin.com_position, kin.com_linear_acceleration, kin.base_linear_velocity_cov,
-                    kin.position_slip_cov, kin.orientation_slip_cov, kin.position_cov,
-                    kin.orientation_cov, kin.com_position_process_cov,
-                    kin.com_linear_velocity_process_cov, kin.external_forces_process_cov,
-                    kin.com_position_cov, kin.com_linear_acceleration_cov);
+                    kin.com_position, kin.com_linear_acceleration, kin.position_slip_cov,
+                    kin.orientation_slip_cov, kin.position_cov, kin.orientation_cov,
+                    kin.com_position_process_cov, kin.com_linear_velocity_process_cov,
+                    kin.external_forces_process_cov, kin.com_position_cov,
+                    kin.com_linear_acceleration_cov);
             },
             [](py::tuple t) {  // __setstate__
-                if (t.size() != 26)
+                if (t.size() != 25)
                     throw std::runtime_error("Invalid state for KinematicMeasurement!");
 
                 serow::KinematicMeasurement kin;
@@ -548,19 +545,18 @@ PYBIND11_MODULE(serow, m) {
                     t[13].cast<decltype(kin.com_angular_momentum_derivative)>();
                 kin.com_position = t[14].cast<decltype(kin.com_position)>();
                 kin.com_linear_acceleration = t[15].cast<decltype(kin.com_linear_acceleration)>();
-                kin.base_linear_velocity_cov = t[16].cast<decltype(kin.base_linear_velocity_cov)>();
-                kin.position_slip_cov = t[17].cast<decltype(kin.position_slip_cov)>();
-                kin.orientation_slip_cov = t[18].cast<decltype(kin.orientation_slip_cov)>();
-                kin.position_cov = t[19].cast<decltype(kin.position_cov)>();
-                kin.orientation_cov = t[20].cast<decltype(kin.orientation_cov)>();
-                kin.com_position_process_cov = t[21].cast<decltype(kin.com_position_process_cov)>();
+                kin.position_slip_cov = t[16].cast<decltype(kin.position_slip_cov)>();
+                kin.orientation_slip_cov = t[17].cast<decltype(kin.orientation_slip_cov)>();
+                kin.position_cov = t[18].cast<decltype(kin.position_cov)>();
+                kin.orientation_cov = t[19].cast<decltype(kin.orientation_cov)>();
+                kin.com_position_process_cov = t[20].cast<decltype(kin.com_position_process_cov)>();
                 kin.com_linear_velocity_process_cov =
-                    t[22].cast<decltype(kin.com_linear_velocity_process_cov)>();
+                    t[21].cast<decltype(kin.com_linear_velocity_process_cov)>();
                 kin.external_forces_process_cov =
-                    t[23].cast<decltype(kin.external_forces_process_cov)>();
-                kin.com_position_cov = t[24].cast<decltype(kin.com_position_cov)>();
+                    t[22].cast<decltype(kin.external_forces_process_cov)>();
+                kin.com_position_cov = t[23].cast<decltype(kin.com_position_cov)>();
                 kin.com_linear_acceleration_cov =
-                    t[25].cast<decltype(kin.com_linear_acceleration_cov)>();
+                    t[24].cast<decltype(kin.com_linear_acceleration_cov)>();
 
                 return kin;
             }));

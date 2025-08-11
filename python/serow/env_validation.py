@@ -25,7 +25,7 @@ def run_serow_playback(dataset, start_idx=0):
     base_orientations = []
     i = 0
     for bs in dataset["base_states"]:
-        if i < start_idx:
+        if i <= start_idx:
             i += 1
             continue
         base_positions.append(bs.base_position)

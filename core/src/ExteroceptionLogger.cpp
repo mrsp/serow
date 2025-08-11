@@ -90,7 +90,8 @@ public:
             timestamp = timestamp - start_time_.value();
 
             if (timestamp < 0) {
-                std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+                std::cout << "[SEROW/ExteroceptionLogger]: Local Map Timestamp is negative "
+                          << timestamp << " returning without logging" << std::endl;
                 return;
             }
 
