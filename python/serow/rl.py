@@ -464,12 +464,15 @@ def generate_dataset(
         * np.cos(2 * np.pi * freq3 * t + phase3)  # Second derivative of cosine
     )
 
-    # Add measurement noise (zero-mean Gaussian)
-    measurement_noise = np.random.normal(0, measurement_noise_std, n_points)
+    # Add varying measurement noise (zero-mean Gaussian with varying std)
+    time_varying_std = measurement_noise_std * (1 + 0.5 * t / t_max)
+    measurement_noise = np.random.normal(0, time_varying_std, n_points)
     measurement = ground_truth + measurement_noise
 
-    # Add control noise (zero-mean Gaussian)
-    control_noise = np.random.normal(0, control_noise_std, n_points)
+    # Add varying control noise (zero-mean Gaussian with varying std)
+    control_varying_std = control_noise_std * (1 + 0.2 * np.abs(true_acceleration) / np.max(np.abs(true_acceleration)))
+    
+    control_noise = np.random.normal(0, control_varying_std, n_points)
     control = true_acceleration + control_noise
 
     return measurement, control, ground_truth
