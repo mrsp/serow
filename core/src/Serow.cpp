@@ -1633,7 +1633,7 @@ Serow::processMeasurements(
 // RL-specific functions
 void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicMeasurement& kin) {
     // Initialize terrain estimator if needed
-    if (params_.enable_terrain_estimation && !terrain_estimator_ && params_.is_contact_ekf) {
+    if (params_.enable_terrain_estimation && !terrain_estimator_) {
         float terrain_height = 0.0;
         int i = 0;
 
@@ -1664,33 +1664,25 @@ void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicM
     }
 
     // Call the base estimator predict step
-    state_.base_state_.timestamp = imu.timestamp;
-    if (params_.is_contact_ekf) {
-        base_estimator_con_.predict(state_.base_state_, imu, kin);
-    } else {
-        base_estimator_.predict(state_.base_state_, imu);
-    }
+    state_.base_state_.timestamp = timestamp_;
+    base_estimator_.predict(state_.base_state_, imu, kin);
 }
 
 void Serow::baseEstimatorUpdateWithContactPosition(const std::string& cf,
                                                    const KinematicMeasurement& kin) {
-    state_.base_state_.timestamp = kin.timestamp;
-    if (params_.is_contact_ekf) {
-        const bool cs = kin.contacts_status.at(cf);
-        const Eigen::Vector3d& cp = kin.contacts_position.at(cf);
-        const Eigen::Matrix3d& cp_noise = kin.contacts_position_noise.at(cf);
-        const Eigen::Matrix3d& position_cov = state_.base_state_.contacts_position_cov.at(cf);
-        base_estimator_con_.updateWithContactPosition(state_.base_state_, cf, cs, cp, cp_noise,
-                                                      position_cov, terrain_estimator_);
-    }
+    state_.base_state_.timestamp = timestamp_;
+    const bool cs = kin.contacts_status.at(cf);
+    const Eigen::Vector3d& cp = kin.contacts_position.at(cf);
+    const Eigen::Matrix3d& cp_noise = kin.contacts_position_noise.at(cf);
+    const Eigen::Matrix3d& position_cov = state_.base_state_.contacts_position_cov.at(cf);
+    base_estimator_.updateWithContactPosition(state_.base_state_, cf, cs, cp, cp_noise,
+                                              position_cov, terrain_estimator_);
 }
 
 void Serow::baseEstimatorUpdateWithImuOrientation(const ImuMeasurement& imu) {
-    state_.base_state_.timestamp = imu.timestamp;
-    if (params_.is_contact_ekf) {
-        base_estimator_con_.updateWithIMUOrientation(state_.base_state_, imu.orientation,
-                                                     imu.orientation_cov);
-    }
+    state_.base_state_.timestamp = timestamp_;
+    base_estimator_.updateWithIMUOrientation(state_.base_state_, imu.orientation,
+                                             imu.orientation_cov);
 }
 
 void Serow::baseEstimatorFinishUpdate(const ImuMeasurement& imu, const KinematicMeasurement& kin) {
@@ -1714,7 +1706,7 @@ void Serow::baseEstimatorFinishUpdate(const ImuMeasurement& imu, const Kinematic
         }
     }
     const Eigen::Vector3d base_angular_acceleration =
-        gyro_derivative_estimator->filter(base_angular_velocity);
+        gyro_derivative_estimator->filter(base_angular_velocity, imu.timestamp);
     state_.base_state_.base_angular_velocity = base_pose.linear() * base_angular_velocity;
     state_.base_state_.base_angular_acceleration = base_pose.linear() * base_angular_acceleration;
     state_.base_state_.base_linear_acceleration = base_linear_acceleration;
@@ -1749,34 +1741,20 @@ void Serow::baseEstimatorFinishUpdate(const ImuMeasurement& imu, const Kinematic
 }
 
 bool Serow::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    if (params_.is_contact_ekf) {
-        base_estimator_con_.setAction(cf, action);
-    } else {
-        return false;
-    }
+    base_estimator_.setAction(cf, action);
     return true;
 }
 
 bool Serow::getContactPositionInnovation(const std::string& contact_frame,
                                          Eigen::Vector3d& innovation,
                                          Eigen::Matrix3d& covariance) const {
-    if (params_.is_contact_ekf) {
-        return base_estimator_con_.getContactPositionInnovation(contact_frame, innovation,
-                                                                covariance);
-    } else {
-        return false;
-    }
+    return base_estimator_.getContactPositionInnovation(contact_frame, innovation, covariance);
 }
 
 bool Serow::getContactOrientationInnovation(const std::string& contact_frame,
                                             Eigen::Vector3d& innovation,
                                             Eigen::Matrix3d& covariance) const {
-    if (params_.is_contact_ekf) {
-        return base_estimator_con_.getContactOrientationInnovation(contact_frame, innovation,
-                                                                   covariance);
-    } else {
-        return false;
-    }
+    return base_estimator_.getContactOrientationInnovation(contact_frame, innovation, covariance);
 }
 
 }  // namespace serow
