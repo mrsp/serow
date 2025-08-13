@@ -305,8 +305,9 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
     const Eigen::Matrix3d R_base_transpose = R_base.transpose();
 
     cp_noise += position_cov;
-    if (contact_position_action_cov_gain_.at(cf) > 0.0) {
-        cp_noise = contact_position_action_cov_gain_.at(cf) * cp_noise;
+    const double action = contact_position_action_cov_gain_.at(cf);
+    if (action > 0.0) {
+        cp_noise *= action;
     }
 
     // If the terrain estimator is in the loop reduce the effect that kinematics has in the
@@ -394,8 +395,9 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
     }
     co_noise += orientation_cov;
     // Check if the action covariance gain matrix is not the zero matrix
-    if (contact_orientation_action_cov_gain_.at(cf) > 0.0) {
-        co_noise = contact_orientation_action_cov_gain_.at(cf) * co_noise;
+    const double action = contact_orientation_action_cov_gain_.at(cf);
+    if (action > 0.0) {
+        co_noise *= action;
     }
 
     const int num_iter = 5;

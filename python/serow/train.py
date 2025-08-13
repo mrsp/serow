@@ -1,5 +1,8 @@
 import numpy as np
 import gymnasium as gym
+import matplotlib
+
+matplotlib.use("TkAgg")  # Use Agg backend for non-GUI environments
 import matplotlib.pyplot as plt
 import json
 import os
@@ -107,7 +110,6 @@ class TrainingCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         self.total_steps += 1
-
         # Get dones and truncated to detect episode completions
         infos = self.locals.get("infos", [])
         dones = self.locals.get("dones", [False] * len(infos))
@@ -217,23 +219,6 @@ class PerformanceDegradationCallback(BaseCallback):
 class PreStepPPO(PPO):
     """Custom PPO model that handles pre-step logic during training and evaluation."""
 
-    def predict(self, observation, deterministic=False):
-        """Override predict to use get_observation_for_action during training"""
-        self.policy.set_training_mode(False)
-        if isinstance(observation, np.ndarray):
-            observation = torch.tensor(observation, device=self.device)
-
-        action, value, _ = self.policy.forward(observation, deterministic)
-        return (
-            action.detach().cpu().numpy().reshape((-1, *self.action_space.shape)),
-            value.detach().cpu().numpy(),
-        )
-
-    def eval(self):
-        """Set the model to evaluation mode."""
-        self.policy.set_training_mode(False)
-        return
-
     def collect_rollouts(
         self,
         env,
@@ -241,8 +226,7 @@ class PreStepPPO(PPO):
         rollout_buffer,
         n_rollout_steps: int,
     ):
-        """Override collect_rollouts to use get_observation_for_action
-        during training"""
+        """Override collect_rollouts to use get_observation_for_action during training"""
         # Store original step method to restore later
         original_step_methods = []
 
@@ -294,6 +278,9 @@ class PreStepPPO(PPO):
 
         return result
 
+    def forward(self, obs, deterministic=False):
+        return self.policy.forward(obs, deterministic)
+
 
 class ActorCriticONNX(nn.Module):
     def __init__(self, policy_model):
@@ -303,6 +290,7 @@ class ActorCriticONNX(nn.Module):
     def forward(self, x):
         # Ensure we're in eval mode and detach gradients
         action, value, _ = self.policy.forward(x, deterministic=True)
+
         return action, value
 
 
@@ -321,9 +309,9 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 100000
+    total_samples = 1000
     device = "cpu"
-    history_size = 20
+    history_size = 200
     datasets = []
     for i in range(n_envs):
         dataset = np.load(f"datasets/{robot}_log_{i}.npz", allow_pickle=True)
@@ -334,11 +322,9 @@ if __name__ == "__main__":
     contact_frame = list(contact_states[0].contacts_status.keys())
     print(f"Contact frames: {contact_frame}")
 
-    state_dim = 3 + 9 + 3 + 4 + 3 * history_size
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 1 * history_size
     print(f"State dimension: {state_dim}")
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
-    min_action = np.array([1e-8], dtype=np.float32)
-    max_action = np.array([1e2], dtype=np.float32)
 
     # Create vectorized environment
     def make_env(i):
@@ -351,8 +337,6 @@ if __name__ == "__main__":
             ds["contact_states"][0],
             action_dim,
             state_dim,
-            min_action,
-            max_action,
             ds["imu"],
             ds["joints"],
             ds["ft"],
@@ -369,8 +353,6 @@ if __name__ == "__main__":
         test_dataset["contact_states"][0],
         action_dim,
         state_dim,
-        min_action,
-        max_action,
         test_dataset["imu"],
         test_dataset["joints"],
         test_dataset["ft"],
@@ -391,26 +373,23 @@ if __name__ == "__main__":
         device=device,
         verbose=1,
         learning_rate=lr_schedule,
-        n_steps=256,
-        batch_size=64,
+        n_steps=512,
+        batch_size=128,
         n_epochs=5,
-        gamma=0.995,
+        gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
         max_grad_norm=0.5,
-        target_kl=0.03,
+        target_kl=0.035,
         vf_coef=0.5,
-        clip_range_vf=0.2,
         ent_coef=0.005,
-        normalize_advantage=True,
         policy_kwargs=dict(
+            net_arch=dict(
+                pi=[1024, 1024, 512, 256, 128], vf=[1024, 1024, 512, 256, 128]
+            ),
+            activation_fn=nn.ReLU,
             ortho_init=True,
-            log_std_init=-1.0,
-            features_extractor_class=PassThroughFeaturesExtractor,
-            net_arch=[dict(pi=[64, 64], vf=[64, 64])],
-            activation_fn=nn.Tanh,
         ),
-        seed=42,
     )
 
     # Create callbacks

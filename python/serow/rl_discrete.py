@@ -161,8 +161,6 @@ class KalmanFilterEnv(gym.Env):
         measurement,
         u,
         gt,
-        min_action,
-        max_action,
         process_noise=0.1,
         measurement_noise=0.1,
     ):
@@ -195,10 +193,9 @@ class KalmanFilterEnv(gym.Env):
         self.Q = np.array([[self.process_noise**2]])
         self.R = np.array([[self.measurement_noise**2]])  # Measurement noise
 
-        # Action space
-        self.action_space = spaces.Box(
-            low=min_action, high=max_action, shape=(1,), dtype=np.float32
-        )
+        # Action space - discrete choices for measurement noise scaling
+        self.discrete_actions = np.array([1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100])
+        self.action_space = spaces.Discrete(len(self.discrete_actions))
 
         # Observation space: [position, velocity, position covariance, velocity covariance, measurement noise, innovation]
         self.observation_space = spaces.Box(
@@ -209,6 +206,10 @@ class KalmanFilterEnv(gym.Env):
         )
 
         self.reset()
+
+    def get_available_actions(self):
+        """Return the available discrete action values."""
+        return self.discrete_actions.copy()
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -251,7 +252,8 @@ class KalmanFilterEnv(gym.Env):
         innovation_reward = -nis / 10.0
 
         # Small action penalty to encourage smoothness
-        action_penalty = abs(action[0] - self.prev_action)
+        current_action_value = self.discrete_actions[action]
+        action_penalty = abs(current_action_value - self.prev_action)
 
         self.reward = (
             4.0 * position_reward + 0.5 * innovation_reward - 0.005 * action_penalty
@@ -272,7 +274,7 @@ class KalmanFilterEnv(gym.Env):
         }
 
         self.step_count += 1
-        self.prev_action = action[0]
+        self.prev_action = current_action_value
 
         # Get the final observation for the next step
         obs = self._get_observation()
@@ -291,8 +293,9 @@ class KalmanFilterEnv(gym.Env):
 
     def update(self, measurement, action):
         """Kalman filter update step"""
-        # Update step
-        R = float(action[0])
+        # Update step - convert discrete action index to actual scaling value
+        action_scaling = self.discrete_actions[action]
+        R = self.R * action_scaling
 
         # Innovation
         y = measurement - self.H @ self.x
@@ -470,8 +473,10 @@ def generate_dataset(
     measurement = ground_truth + measurement_noise
 
     # Add varying control noise (zero-mean Gaussian with varying std)
-    control_varying_std = control_noise_std * (1 + 0.2 * np.abs(true_acceleration) / np.max(np.abs(true_acceleration)))
-    
+    control_varying_std = control_noise_std * (
+        1 + 0.2 * np.abs(true_acceleration) / np.max(np.abs(true_acceleration))
+    )
+
     control_noise = np.random.normal(0, control_varying_std, n_points)
     control = true_acceleration + control_noise
 
@@ -511,12 +516,10 @@ def visualize_dataset(measurement, control, ground_truth, save_plot=False):
 def main():
     # Number of parallel environments
     n_envs = 8  # You can adjust this based on your CPU cores
-    min_action = 1e-3
-    max_action = 1e3
     measurement_noise_std = 0.1
     control_noise_std = 0.25
-    scale = max_action
-    gen_scale = min_action
+    scale = 1e3
+    gen_scale = 1e-3
 
     # Generate random datasets
     datasets = []
@@ -552,8 +555,6 @@ def main():
             measurement=dataset["measurement"],
             u=dataset["control"],
             gt=dataset["ground_truth"],
-            min_action=min_action,
-            max_action=max_action,
             measurement_noise=scale * measurement_noise_std,
             process_noise=control_noise_std,
         )
@@ -570,8 +571,6 @@ def main():
             measurement=datasets[-1]["measurement"],
             u=datasets[-1]["control"],
             gt=datasets[-1]["ground_truth"],
-            min_action=min_action,
-            max_action=max_action,
             measurement_noise=scale * measurement_noise_std,
             process_noise=control_noise_std,
         )
@@ -581,8 +580,6 @@ def main():
         measurement=datasets[-1]["measurement"],
         u=datasets[-1]["control"],
         gt=datasets[-1]["ground_truth"],
-        min_action=min_action,
-        max_action=max_action,
         measurement_noise=scale * measurement_noise_std,
         process_noise=control_noise_std,
     )
@@ -607,7 +604,7 @@ def main():
         clip_range=0.2,
         policy_kwargs=dict(
             net_arch=dict(pi=[512, 512, 256, 128], vf=[512, 512, 256, 128]),
-            activation_fn=nn.Tanh,
+            activation_fn=nn.ReLU,
             ortho_init=True,
             log_std_init=-1.0,
         ),
@@ -622,7 +619,7 @@ def main():
 
     # Train the model
     print("Starting training...")
-    model.learn(total_timesteps=50000, callback=callback)
+    model.learn(total_timesteps=100000, callback=callback)
 
     stats = None
     try:
@@ -658,12 +655,12 @@ def main():
         if stats is not None:
             obs = (obs - stats["obs_mean"]) / np.sqrt(stats["obs_var"])
         action, _ = model.predict(obs, deterministic=True)
-        print(f"step {step} action: {action}")
+        print(f"step {step} action: {test_env.env.discrete_actions[action]}")
         obs, reward, terminated, truncated, _ = test_env.step(action)
 
         # Run the baseline
         baseline_env.get_observation_for_action()
-        baseline_env.step(baseline_env.R.flatten())
+        baseline_env.step(np.where(test_env.env.discrete_actions == 1.0)[0][0])
         if len(episode_rewards) == 0:
             episode_rewards.append(reward)
         else:
