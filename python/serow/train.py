@@ -308,8 +308,8 @@ class PassThroughFeaturesExtractor(BaseFeaturesExtractor):
 if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
-    n_envs = 3
-    total_samples = 1000
+    n_envs = 4
+    total_samples = 10000
     device = "cpu"
     history_size = 200
     datasets = []
@@ -327,7 +327,7 @@ if __name__ == "__main__":
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
 
     # Create vectorized environment
-    def make_env(i, j):
+    def make_env(i):
         """Helper function to create a single environment with specific dataset"""
         ds = datasets[i]
         base_env = SerowEnv(
