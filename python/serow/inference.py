@@ -200,7 +200,7 @@ if __name__ == "__main__":
     # Get contacts frame from the first measurement
     contact_states = test_dataset["contact_states"]
     contacts_frame = list(contact_states[0].contacts_status.keys())
-    history_size = 200
+    history_size = 100
     state_dim = 3 + 9 + 3 + 4 + 3 * history_size + history_size
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
 
@@ -217,6 +217,7 @@ if __name__ == "__main__":
     compare_onnx_ppo_predictions(agent_onnx, agent_ppo, state_dim)
 
     test_env = SerowEnv(
+        contacts_frame[0],
         robot,
         test_dataset["joint_states"][0],
         test_dataset["base_states"][0],

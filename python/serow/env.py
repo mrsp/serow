@@ -66,7 +66,7 @@ class SerowEnv(gym.Env):
         self.action_history = [
             np.zeros((self.action_dim,), dtype=np.float32)
         ] * self.history_size
-
+        self.previous_action = None
         # Compute the baseline rewards, imu data, and kinematics
         (
             _,
@@ -85,7 +85,7 @@ class SerowEnv(gym.Env):
         )
         self.reset()
 
-    def _compute_reward(self, cf, state, gt):
+    def _compute_reward(self, cf, state, gt, action):
         reward = 0.0
         done = False
 
@@ -114,10 +114,14 @@ class SerowEnv(gym.Env):
             position_reward = -position_error / max_position_error
             innovation_reward = -nis / max_nis
             orientation_reward = -orientation_error
+            action_penalty = 0.0
+            if self.previous_action is not None:
+                action_penalty = abs(action.item() - self.previous_action.item())
+
             reward = (
-                50.0 * innovation_reward
-                + 1.0 * position_reward
-                + 5.0 * orientation_reward
+                50.0 * innovation_reward.item()
+                + 1.0 * position_reward.item()
+                + 5.0 * orientation_reward.item()
             )
             if hasattr(self, "baseline_rewards"):
                 reward = reward - self.baseline_rewards[self.step_count][cf]
@@ -171,6 +175,7 @@ class SerowEnv(gym.Env):
         self.action_history = [
             np.zeros((self.action_dim,), dtype=np.float32)
         ] * self.history_size
+        self.previous_action = None
         obs = np.zeros((self.state_dim,))
         return obs, {}
 
@@ -221,9 +226,11 @@ class SerowEnv(gym.Env):
                 self.contact_frame,
                 post_state,
                 self.gt_data[self.step_count],
+                action,
             )
 
             # Save the action and measurement
+            self.previous_action = action
             self.action_history.append(action)
             self.measurement_history.append(
                 abs(kin.contacts_position[self.contact_frame])
@@ -319,7 +326,7 @@ class SerowEnv(gym.Env):
                         )
                 post_state = self.update_step(cf, kin, action)
                 reward[cf] = self._compute_reward(
-                    cf, post_state, self.gt_data[self.step_count]
+                    cf, post_state, self.gt_data[self.step_count], action
                 )[0]
 
             self.serow_framework.base_estimator_finish_update(imu, kin)

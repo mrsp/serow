@@ -15,7 +15,6 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
-from stable_baselines3.common.policies import BaseFeaturesExtractor
 from utils import export_model_to_onnx
 
 
@@ -298,7 +297,8 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 4
-    total_samples = 150000
+    n_contacts = 2
+    total_samples = 300000
     device = "cpu"
     history_size = 100
     datasets = []
@@ -316,11 +316,13 @@ if __name__ == "__main__":
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
 
     # Create vectorized environment
-    def make_env(i):
+    def make_env(i, j):
         """Helper function to create a single environment with specific dataset"""
         ds = datasets[i]
         base_env = SerowEnv(
-            contact_frame[i],
+            contact_frame[
+                np.random.randint(0, len(contact_frame))
+            ],  # random choice of contact frame
             robot,
             ds["joint_states"][0],
             ds["base_states"][0],
@@ -352,7 +354,13 @@ if __name__ == "__main__":
     )
 
     # Create vectorized environment with different datasets for each environment
-    env = DummyVecEnv([lambda i=i: make_env(i) for i in range(n_envs)])
+    env = DummyVecEnv(
+        [
+            lambda i=i, j=j: make_env(i, j)
+            for i in range(n_envs)
+            for j in range(n_contacts)
+        ]
+    )
 
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
