@@ -105,24 +105,23 @@ class SerowEnv(gym.Env):
         )
 
         max_position_error = 3.0
+        max_nis = 10.0
         if success:
             nis = innovation @ np.linalg.inv(covariance) @ innovation.T
-            nis = np.clip(nis, 0, 10)
+            nis = np.clip(nis, 0, max_nis)
             position_reward = -position_error / max_position_error
-            innovation_reward = -nis / 10.0
+            innovation_reward = -nis / max_nis
             orientation_reward = -orientation_error
-
             reward = (
-                0.5 * innovation_reward
-                + 4.0 * position_reward
-                + 10.0 * orientation_reward
+                50.0 * innovation_reward
+                + 1.0 * position_reward
+                + 5.0 * orientation_reward
             )
             if hasattr(self, "baseline_rewards"):
                 reward = reward - self.baseline_rewards[self.step_count][cf]
 
         done = position_error > max_position_error
-        truncated = self.step_count == self.max_steps - 2
-        return reward, done, truncated
+        return reward, done
 
     def _get_observation(self, cf, state, kin):
         if not kin.contacts_status[cf] or state.get_contact_position(cf) is None:
@@ -225,7 +224,7 @@ class SerowEnv(gym.Env):
             )
 
             # Compute the reward
-            reward, done, truncated = self._compute_reward(
+            reward, done = self._compute_reward(
                 self.cf,
                 post_state,
                 self.gt_data[self.step_count],
@@ -247,6 +246,10 @@ class SerowEnv(gym.Env):
 
         self.serow_framework.base_estimator_finish_update(imu, kin)
         self.step_count += 1
+
+        truncated = self.step_count == self.max_steps - 1
+        if truncated:
+            done = False
 
         return obs, reward, done, truncated, info
 

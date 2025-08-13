@@ -294,22 +294,11 @@ class ActorCriticONNX(nn.Module):
         return action, value
 
 
-class PassThroughFeaturesExtractor(BaseFeaturesExtractor):
-    """Feature extractor that simply passes through the observation."""
-
-    def __init__(self, observation_space: gym.Space, features_dim: int = None):
-        super().__init__(observation_space, features_dim or observation_space.shape[0])
-
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        """Simply return the observations as features."""
-        return observations
-
-
 if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 4
-    total_samples = 10000
+    total_samples = 150000
     device = "cpu"
     history_size = 200
     datasets = []
