@@ -19,8 +19,6 @@ class SerowEnv(gym.Env):
         contact_state,
         action_dim,
         state_dim,
-        action_low,
-        action_high,
         imu_data,
         joint_data,
         ft_data,
@@ -42,10 +40,11 @@ class SerowEnv(gym.Env):
         self.action_dim = action_dim
         self.state_dim = state_dim
 
-        # Action space
-        self.action_space = gym.spaces.Box(
-            low=action_low, high=action_high, shape=(action_dim,), dtype=np.float32
+        # Action space - discrete choices for measurement noise scaling
+        self.discrete_actions = np.array(
+            [1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0, 100.0, 1000.0]
         )
+        self.action_space = gym.spaces.Discrete(len(self.discrete_actions))
 
         # Observation space
         self.observation_space = gym.spaces.Box(
@@ -63,7 +62,7 @@ class SerowEnv(gym.Env):
         self.history_size = history_size
         self.measurement_history = [np.zeros(3, dtype=np.float32)] * self.history_size
         self.action_history = [
-            np.zeros((self.action_dim + 3,), dtype=np.float32)
+            np.zeros((self.action_dim,), dtype=np.float32)
         ] * self.history_size
 
         # Compute the baseline rewards, imu data, and kinematics
@@ -105,7 +104,7 @@ class SerowEnv(gym.Env):
             self.serow_framework.get_contact_position_innovation(cf)
         )
 
-        max_position_error = 10.0
+        max_position_error = 3.0
         if success:
             nis = innovation @ np.linalg.inv(covariance) @ innovation.T
             nis = np.clip(nis, 0, 10)
@@ -170,7 +169,7 @@ class SerowEnv(gym.Env):
         self.cf = None
         self.measurement_history = [np.zeros(3)] * self.history_size
         self.action_history = [
-            np.zeros((self.action_dim + 3,), dtype=np.float32)
+            np.zeros((self.action_dim,), dtype=np.float32)
         ] * self.history_size
         obs = np.zeros((self.state_dim,))
         return obs, {}
@@ -215,6 +214,9 @@ class SerowEnv(gym.Env):
         imu = self.imu_data[self.step_count]
         kin = self.kinematics[self.step_count]
         next_kin = self.kinematics[self.step_count + 1]
+        # Map the action to the discrete action
+        action = np.array([self.discrete_actions[action]], dtype=np.float32)
+
         if valid:
             post_state = self.update_step(
                 self.cf,
@@ -230,15 +232,7 @@ class SerowEnv(gym.Env):
             )
 
             # Save the action and measurement
-            C = np.zeros([3, 3], dtype=np.float32)
-            C[0, 0] = action[0]
-            C[1, 1] = action[1]
-            C[2, 2] = action[2]
-            C[1, 0] = action[3]
-            C[2, 0] = action[4]
-            C[2, 1] = action[5]
-            R = C @ C.T
-            self.action_history.append(R.flatten())
+            self.action_history.append(action)
             self.measurement_history.append(abs(kin.contacts_position[self.cf]))
 
             # Get the observation
@@ -249,7 +243,7 @@ class SerowEnv(gym.Env):
         for cf in self.contact_frames:
             if cf == self.cf and valid:
                 continue
-            self.update_step(cf, kin, np.zeros((self.action_dim,), dtype=np.float32))
+            self.update_step(cf, kin, np.array([0.0], dtype=np.float32))
 
         self.serow_framework.base_estimator_finish_update(imu, kin)
         self.step_count += 1
@@ -305,31 +299,13 @@ class SerowEnv(gym.Env):
             imu_data.append(imu)
             kinematics.append(kin)
 
-            if model is None:
-                # Compute min-max of the action
-                min_action = np.ones((self.action_dim,), dtype=np.float32) * 1e8
-                max_action = np.ones((self.action_dim,), dtype=np.float32) * -1e8
-                for cf in self.contact_frames:
-                    if (
-                        kin.contacts_status[cf]
-                        and kin.contacts_position[cf] is not None
-                    ):
-                        R = kin.contacts_position_noise[cf] + kin.position_cov
-                        # Cholesky decomposition
-                        L = np.linalg.cholesky(R)
-                        a = np.array(
-                            [L[0, 0], L[1, 1], L[2, 2], L[1, 0], L[2, 0], L[2, 1]]
-                        )
-                        min_action = np.minimum(min_action, a)
-                        max_action = np.maximum(max_action, a)
-
             self.serow_framework.base_estimator_predict_step(imu, kin)
 
             # Run the update step with the contact positions
             post_state = self.serow_framework.get_state(allow_invalid=True)
             reward = {cf: 0.0 for cf in self.contact_frames}
             for cf in self.contact_frames:
-                action = np.zeros((self.action_dim,), dtype=np.float32)
+                action = np.array([0.0], dtype=np.float32)
                 if model is not None:
                     obs = self._get_observation(cf, post_state, kin)
                     if not np.all(obs == np.zeros((self.state_dim,))):
@@ -340,11 +316,8 @@ class SerowEnv(gym.Env):
                                 dtype=np.float32,
                             )
                         action, _ = model.predict(obs, deterministic=True)
-                        action = (
-                            np.asarray(action)
-                            .flatten()
-                            .reshape((self.action_dim, 1))
-                            .astype(np.float32)
+                        action = np.array(
+                            [self.discrete_actions[action]], dtype=np.float32
                         )
                 post_state = self.update_step(cf, kin, action)
                 reward[cf] = self._compute_reward(
@@ -364,12 +337,6 @@ class SerowEnv(gym.Env):
 
             # Progress to the next sample
             self.step_count += 1
-
-        if model is None:
-            # Print the min-max of the action
-            print(f"Min action: {min_action}")
-            print(f"Max action: {max_action}")
-            print("---------------------------")
 
         # Convert to numpy arrays
         timestamps = np.array(timestamps)

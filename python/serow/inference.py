@@ -5,10 +5,79 @@ import json
 import onnx
 import onnx.numpy_helper
 import os
+import onnxruntime as ort
 
 from env import SerowEnv
-from ac import ONNXInference
 from train import PreStepPPO
+
+
+class ONNXInference:
+    def __init__(self, robot, path):
+        # Initialize ONNX Runtime sessions
+        model_path = f"{path}/{robot}_ppo.onnx"
+        print(f"Loading ONNX model from: {model_path}")
+        print(f"File exists: {os.path.exists(model_path)}")
+
+        self.session = ort.InferenceSession(
+            model_path,
+            providers=["CPUExecutionProvider"],
+        )
+
+        print("Session created successfully")
+        print(f"Session providers: {self.session.get_providers()}")
+        print(f"Available providers: {ort.get_available_providers()}")
+
+        # Get input names
+        inputs = self.session.get_inputs()
+        outputs = self.session.get_outputs()
+
+        print(f"Number of inputs: {len(inputs)}")
+        print(f"Number of outputs: {len(outputs)}")
+
+        if len(inputs) > 0:
+            self.input_name = inputs[0].name
+            print(f"Input names: {self.input_name}")
+            self.state_dim = inputs[0].shape[1]
+        else:
+            raise ValueError("No inputs found in ONNX model")
+
+        if len(outputs) > 0:
+            print(f"Output 0 shape: {outputs[0].shape}")
+            print(f"Output 0 name: {outputs[0].name}")
+
+            # Handle dynamic shapes - if shape is a list with only one element,
+            # it means the output dimension is dynamic and we need to infer it
+            if len(outputs[0].shape) == 1 and outputs[0].shape[0] == "batch_size":
+                # This is a dynamic shape, we'll need to infer the actual
+                # dimension. For now, let's use a default value or try to get
+                # it from the model
+                print(
+                    "Warning: Dynamic output shape detected, "
+                    "using default action dimension"
+                )
+                self.action_dim = 1  # Default action dimension
+            else:
+                self.action_dim = outputs[0].shape[1]
+        else:
+            raise ValueError("No outputs found in ONNX model")
+
+        print(f"Initialized ONNX inference for {robot}")
+        print(f"State dimension: {self.state_dim}")
+        print(f"Action dimension: {self.action_dim}")
+
+    def forward(self, observation, deterministic=True):
+        # Prepare input
+        observation = np.array(observation, dtype=np.float32).reshape(1, -1)
+        output = self.session.run(None, {self.input_name: observation})
+        return output[0], output[1]
+
+    def predict(self, observation, deterministic=True):
+        """
+        Predict action given observation.
+        Matches the interface expected by SerowEnv.evaluate().
+        Returns action and value
+        """
+        return self.forward(observation, deterministic=deterministic)
 
 
 def get_onnx_weights_biases(onnx_model_path):
@@ -106,15 +175,13 @@ def compare_onnx_ppo_predictions(agent_onnx, agent_ppo, state_dim):
         obs = np.random.randn(1, state_dim).astype(np.float32)
 
         # Get the PPO model prediction
-        ppo_action, ppo_value = agent_ppo.predict(obs, deterministic=True)
-
+        ppo_action, _ = agent_ppo.predict(obs, deterministic=True)
         # Get the ONNX model prediction
-        onnx_action, onnx_value = agent_onnx.predict(obs, deterministic=True)
+        onnx_action, _ = agent_onnx.predict(obs, deterministic=True)
 
-        # Compare the predictions
+        # Compare the actions
         assert np.allclose(ppo_action, onnx_action, atol=1e-4)
-        assert np.allclose(ppo_value, onnx_value, atol=1e-4)
-    print("ONNX and PPO predictions match")
+    print("ONNX and PPO action predictions match")
 
 
 if __name__ == "__main__":
@@ -133,19 +200,9 @@ if __name__ == "__main__":
     # Get contacts frame from the first measurement
     contact_states = test_dataset["contact_states"]
     contacts_frame = list(contact_states[0].contacts_status.keys())
-    history_size = 100
-    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 9 * history_size
-
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    diag_low = np.array([1e-4, 1e-4, 1e-4], dtype=np.float32)
-    diag_high = np.array([10.0, 10.0, 10.0], dtype=np.float32)
-
-    # Lower triangle bounds: unconstrained or symmetric
-    lower_low = np.array([-1.0, -1.0, -1.0], dtype=np.float32)
-    lower_high = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-
-    min_action = np.concatenate([diag_low, lower_low])
-    max_action = np.concatenate([diag_high, lower_high])
+    history_size = 200
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + history_size
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
 
     # Load the saved PPO model
     agent_ppo = PreStepPPO.load(f"models/{robot}_ppo")
@@ -166,8 +223,6 @@ if __name__ == "__main__":
         test_dataset["contact_states"][0],
         action_dim,
         state_dim,
-        min_action,
-        max_action,
         test_dataset["imu"],
         test_dataset["joints"],
         test_dataset["ft"],

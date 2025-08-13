@@ -219,27 +219,6 @@ class PerformanceDegradationCallback(BaseCallback):
 class PreStepPPO(PPO):
     """Custom PPO model that handles pre-step logic during training and evaluation."""
 
-    def predict(self, observation, deterministic=False):
-        """Override predict to use get_observation_for_action during training"""
-        self.policy.set_training_mode(False)
-        if isinstance(observation, np.ndarray):
-            observation = torch.tensor(observation, device=self.device)
-
-        action, value, _ = self.policy.forward(observation, deterministic)
-        action_np = (
-            action.detach().cpu().numpy().reshape((-1, *self.action_space.shape))
-        )
-
-        return (
-            action_np,
-            value.detach().cpu().numpy(),
-        )
-
-    def eval(self):
-        """Set the model to evaluation mode."""
-        self.policy.set_training_mode(False)
-        return
-
     def collect_rollouts(
         self,
         env,
@@ -247,8 +226,7 @@ class PreStepPPO(PPO):
         rollout_buffer,
         n_rollout_steps: int,
     ):
-        """Override collect_rollouts to use get_observation_for_action
-        during training"""
+        """Override collect_rollouts to use get_observation_for_action during training"""
         # Store original step method to restore later
         original_step_methods = []
 
@@ -331,9 +309,9 @@ if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 3
-    total_samples = 10000000
+    total_samples = 1000
     device = "cpu"
-    history_size = 100
+    history_size = 200
     datasets = []
     for i in range(n_envs):
         dataset = np.load(f"datasets/{robot}_log_{i}.npz", allow_pickle=True)
@@ -344,18 +322,9 @@ if __name__ == "__main__":
     contact_frame = list(contact_states[0].contacts_status.keys())
     print(f"Contact frames: {contact_frame}")
 
-    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 9 * history_size
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 1 * history_size
     print(f"State dimension: {state_dim}")
-    action_dim = 6  # Based on the action vector used in ContactEKF.setAction()
-    diag_low = np.array([1e-4, 1e-4, 1e-4], dtype=np.float32)
-    diag_high = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-
-    # Lower triangle bounds: unconstrained or symmetric
-    lower_low = np.array([-1.0, -1.0, -1.0], dtype=np.float32)
-    lower_high = np.array([1.0, 1.0, 1.0], dtype=np.float32)
-
-    min_action = np.concatenate([diag_low, lower_low])
-    max_action = np.concatenate([diag_high, lower_high])
+    action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
 
     # Create vectorized environment
     def make_env(i):
@@ -368,8 +337,6 @@ if __name__ == "__main__":
             ds["contact_states"][0],
             action_dim,
             state_dim,
-            min_action,
-            max_action,
             ds["imu"],
             ds["joints"],
             ds["ft"],
@@ -386,8 +353,6 @@ if __name__ == "__main__":
         test_dataset["contact_states"][0],
         action_dim,
         state_dim,
-        min_action,
-        max_action,
         test_dataset["imu"],
         test_dataset["joints"],
         test_dataset["ft"],
@@ -418,11 +383,11 @@ if __name__ == "__main__":
         target_kl=0.035,
         vf_coef=0.5,
         ent_coef=0.005,
-        normalize_advantage=True,
         policy_kwargs=dict(
-            features_extractor_class=PassThroughFeaturesExtractor,
-            net_arch=dict(pi=[1024, 512, 256, 128], vf=[1024, 512, 256, 128]),
-            activation_fn=nn.Tanh,
+            net_arch=dict(
+                pi=[1024, 1024, 512, 256, 128], vf=[1024, 1024, 512, 256, 128]
+            ),
+            activation_fn=nn.ReLU,
             ortho_init=True,
         ),
     )
