@@ -1591,6 +1591,7 @@ void Serow::logTimings() {
     });
 }
 
+// RL-specific functions
 std::tuple<ImuMeasurement, KinematicMeasurement, std::map<std::string, ForceTorqueMeasurement>>
 Serow::processMeasurements(
     ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
@@ -1617,6 +1618,8 @@ Serow::processMeasurements(
 
     // Update the kinematic structure
     KinematicMeasurement kin = runForwardKinematics(state_);
+    // filter() uses timestamp_ instead which is not set here
+    kin.timestamp = joints.begin()->second.timestamp;
 
     // Estimate the contact state
     if (!ft.empty()) {
@@ -1630,7 +1633,6 @@ Serow::processMeasurements(
     return std::make_tuple(imu, kin, ft);
 }
 
-// RL-specific functions
 void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicMeasurement& kin) {
     // Initialize terrain estimator if needed
     if (params_.enable_terrain_estimation && !terrain_estimator_) {
@@ -1664,13 +1666,13 @@ void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicM
     }
 
     // Call the base estimator predict step
-    state_.base_state_.timestamp = timestamp_;
+    state_.base_state_.timestamp = imu.timestamp;
     base_estimator_.predict(state_.base_state_, imu, kin);
 }
 
 void Serow::baseEstimatorUpdateWithContactPosition(const std::string& cf,
                                                    const KinematicMeasurement& kin) {
-    state_.base_state_.timestamp = timestamp_;
+    state_.base_state_.timestamp = kin.timestamp;
     const bool cs = kin.contacts_status.at(cf);
     const Eigen::Vector3d& cp = kin.contacts_position.at(cf);
     const Eigen::Matrix3d& cp_noise = kin.contacts_position_noise.at(cf);
@@ -1680,7 +1682,7 @@ void Serow::baseEstimatorUpdateWithContactPosition(const std::string& cf,
 }
 
 void Serow::baseEstimatorUpdateWithImuOrientation(const ImuMeasurement& imu) {
-    state_.base_state_.timestamp = timestamp_;
+    state_.base_state_.timestamp = imu.timestamp;
     base_estimator_.updateWithIMUOrientation(state_.base_state_, imu.orientation,
                                              imu.orientation_cov);
 }
