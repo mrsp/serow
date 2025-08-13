@@ -13,6 +13,7 @@ from utils import (
 class SerowEnv(gym.Env):
     def __init__(
         self,
+        contact_frame,
         robot,
         joint_state,
         base_state,
@@ -29,6 +30,7 @@ class SerowEnv(gym.Env):
 
         # Environment parameters
         self.robot = robot
+        self.contact_frame = contact_frame
         self.serow_framework = serow.Serow()
         self.serow_framework.initialize(f"{robot}_rl.json")
         self.initial_state = self.serow_framework.get_state(allow_invalid=True)
@@ -165,7 +167,6 @@ class SerowEnv(gym.Env):
         self.serow_framework.set_state(self.initial_state)
         self.step_count = 0
         self.valid_prediction = False
-        self.cf = None
         self.measurement_history = [np.zeros(3)] * self.history_size
         self.action_history = [
             np.zeros((self.action_dim,), dtype=np.float32)
@@ -183,24 +184,16 @@ class SerowEnv(gym.Env):
         next_kin = self.kinematics[self.step_count + 1]
         prior_state = self.predict_step(imu, kin)
 
-        # Find all the frames that have contact with the ground
-        contact_frames = []
-        for cf in self.contact_frames:
-            if (
-                kin.contacts_status[cf]
-                and next_kin.contacts_status[cf]
-                and prior_state.get_contact_position(cf) is not None
-            ):
-                contact_frames.append(cf)
-
-        # Pick a random frame in contact for this step
-        if len(contact_frames) > 0:
-            self.cf = np.random.choice(contact_frames)
+        if (
+            kin.contacts_status[self.contact_frame]
+            and next_kin.contacts_status[self.contact_frame]
+            and prior_state.get_contact_position(self.contact_frame) is not None
+        ):
             self.valid_prediction = True
             # Get the observation that the policy should use
-            obs = self._get_observation(self.cf, prior_state, kin)
+            obs = self._get_observation(self.contact_frame, prior_state, kin)
         else:
-            self.cf = np.random.choice(self.contact_frames)
+            self.valid_prediction = False
 
         return obs
 
@@ -218,29 +211,31 @@ class SerowEnv(gym.Env):
 
         if valid:
             post_state = self.update_step(
-                self.cf,
+                self.contact_frame,
                 kin,
                 action,
             )
 
             # Compute the reward
             reward, done = self._compute_reward(
-                self.cf,
+                self.contact_frame,
                 post_state,
                 self.gt_data[self.step_count],
             )
 
             # Save the action and measurement
             self.action_history.append(action)
-            self.measurement_history.append(abs(kin.contacts_position[self.cf]))
+            self.measurement_history.append(
+                abs(kin.contacts_position[self.contact_frame])
+            )
 
             # Get the observation
-            obs = self._get_observation(self.cf, post_state, next_kin)
+            obs = self._get_observation(self.contact_frame, post_state, next_kin)
 
         info = {"step_count": self.step_count, "reward": reward, "valid": valid}
 
         for cf in self.contact_frames:
-            if cf == self.cf and valid:
+            if cf == self.contact_frame and valid:
                 continue
             self.update_step(cf, kin, np.array([0.0], dtype=np.float32))
 

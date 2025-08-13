@@ -300,7 +300,7 @@ if __name__ == "__main__":
     n_envs = 4
     total_samples = 150000
     device = "cpu"
-    history_size = 200
+    history_size = 100
     datasets = []
     for i in range(n_envs):
         dataset = np.load(f"datasets/{robot}_log_{i}.npz", allow_pickle=True)
@@ -320,6 +320,7 @@ if __name__ == "__main__":
         """Helper function to create a single environment with specific dataset"""
         ds = datasets[i]
         base_env = SerowEnv(
+            contact_frame[i],
             robot,
             ds["joint_states"][0],
             ds["base_states"][0],
@@ -336,6 +337,7 @@ if __name__ == "__main__":
         return AutoPreStepWrapper(base_env)
 
     test_env = SerowEnv(
+        contact_frame[0],
         robot,
         test_dataset["joint_states"][0],
         test_dataset["base_states"][0],
@@ -368,13 +370,13 @@ if __name__ == "__main__":
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        max_grad_norm=0.5,
         target_kl=0.035,
-        vf_coef=0.5,
+        vf_coef=0.35,
         ent_coef=0.005,
         policy_kwargs=dict(
             net_arch=dict(
-                pi=[1024, 1024, 512, 256, 128], vf=[1024, 1024, 512, 256, 128]
+                pi=[1024, 1024, 1024, 512, 256, 128],
+                vf=[1024, 1024, 1024, 512, 256, 128],
             ),
             activation_fn=nn.ReLU,
             ortho_init=True,
