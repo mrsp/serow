@@ -161,8 +161,6 @@ class KalmanFilterEnv(gym.Env):
         measurement,
         u,
         gt,
-        min_action,
-        max_action,
         process_noise=0.1,
         measurement_noise=0.1,
     ):
@@ -475,8 +473,10 @@ def generate_dataset(
     measurement = ground_truth + measurement_noise
 
     # Add varying control noise (zero-mean Gaussian with varying std)
-    control_varying_std = control_noise_std * (1 + 0.2 * np.abs(true_acceleration) / np.max(np.abs(true_acceleration)))
-    
+    control_varying_std = control_noise_std * (
+        1 + 0.2 * np.abs(true_acceleration) / np.max(np.abs(true_acceleration))
+    )
+
     control_noise = np.random.normal(0, control_varying_std, n_points)
     control = true_acceleration + control_noise
 
@@ -516,12 +516,10 @@ def visualize_dataset(measurement, control, ground_truth, save_plot=False):
 def main():
     # Number of parallel environments
     n_envs = 8  # You can adjust this based on your CPU cores
-    min_action = 1e-3
-    max_action = 1e3
     measurement_noise_std = 0.1
     control_noise_std = 0.25
-    scale = max_action
-    gen_scale = min_action
+    scale = 1e3
+    gen_scale = 1e-3
 
     # Generate random datasets
     datasets = []
@@ -557,8 +555,6 @@ def main():
             measurement=dataset["measurement"],
             u=dataset["control"],
             gt=dataset["ground_truth"],
-            min_action=min_action,
-            max_action=max_action,
             measurement_noise=scale * measurement_noise_std,
             process_noise=control_noise_std,
         )
@@ -575,8 +571,6 @@ def main():
             measurement=datasets[-1]["measurement"],
             u=datasets[-1]["control"],
             gt=datasets[-1]["ground_truth"],
-            min_action=min_action,
-            max_action=max_action,
             measurement_noise=scale * measurement_noise_std,
             process_noise=control_noise_std,
         )
@@ -586,8 +580,6 @@ def main():
         measurement=datasets[-1]["measurement"],
         u=datasets[-1]["control"],
         gt=datasets[-1]["ground_truth"],
-        min_action=min_action,
-        max_action=max_action,
         measurement_noise=scale * measurement_noise_std,
         process_noise=control_noise_std,
     )
@@ -627,7 +619,7 @@ def main():
 
     # Train the model
     print("Starting training...")
-    model.learn(total_timesteps=50000, callback=callback)
+    model.learn(total_timesteps=100000, callback=callback)
 
     stats = None
     try:
