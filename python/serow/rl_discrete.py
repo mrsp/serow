@@ -3,12 +3,15 @@ import gymnasium as gym
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch.nn as nn
+import torch
 
 from gymnasium import spaces
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN
 from stable_baselines3.common.env_checker import check_env
-from stable_baselines3.common.callbacks import BaseCallback, CallbackList
+from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from stable_baselines3.common.buffers import ReplayBuffer
+from stable_baselines3.common.type_aliases import RolloutReturn
 
 
 def linear_schedule(initial_value, final_value):
@@ -30,124 +33,99 @@ def compute_rolling_average(data, window_size):
     return rolling_avg.tolist()
 
 
-class AutoPreStepWrapper(gym.Wrapper):
-    """A wrapper that automatically handles pre-step logic."""
-
-    def __init__(self, env):
-        super().__init__(env)
-        self.env = env
-
-    def get_observation_for_action(self):
-        """Delegate to the wrapped environment's get_observation_for_action method"""
-        return self.env.get_observation_for_action()
-
-    def _get_observation(self):
-        """Override to automatically call get_observation_for_action"""
-        return self.env.get_observation_for_action()
-
-    def step(self, action):
-        return self.env.step(action)
-
-    def reset(self, **kwargs):
-        return self.env.reset(**kwargs)
-
-
-class ValidSampleCallback(BaseCallback):
-    """Callback to track and handle valid/invalid samples during training."""
-
-    def __init__(self, verbose=0):
-        super(ValidSampleCallback, self).__init__(verbose)
-        self.valid_samples_count = 0
-        self.total_samples_count = 0
-        self.invalid_samples_count = 0
-
-    def _on_step(self) -> bool:
-        # Count valid vs invalid samples
-        infos = self.locals.get("infos", [])
-        for info in infos:
-            self.total_samples_count += 1
-            if info.get("valid", True):
-                self.valid_samples_count += 1
-            else:
-                self.invalid_samples_count += 1
-
-        # Log statistics periodically
-        if self.total_samples_count % 100 == 0:
-            valid_ratio = (
-                self.valid_samples_count / self.total_samples_count
-                if self.total_samples_count > 0
-                else 0.0
-            )
-            if self.verbose > 0:
-                print(
-                    f"Sample validity: {valid_ratio:.2%} valid "
-                    f"({self.valid_samples_count}/{self.total_samples_count})"
-                )
-
-        return True
-
-
-class PreStepPPO(PPO):
-    """Custom PPO model that handles pre-step logic during training and evaluation."""
-
+class PreStepDQN(DQN):
     def collect_rollouts(
         self,
         env,
         callback,
-        rollout_buffer,
-        n_rollout_steps: int,
-    ):
-        """Override collect_rollouts to use get_observation_for_action during training"""
-        # Store original step method to restore later
-        original_step_methods = []
+        train_freq,
+        replay_buffer: ReplayBuffer,
+        action_noise=None,
+        learning_starts: int = 0,
+        log_interval=None,
+    ) -> RolloutReturn:
+        """
+        Custom rollout collection:
+        - Always get observation from env.get_observation_for_action()
+        - Only store transitions where info['valid'] == True
+        """
+        # Switch to eval mode to avoid dropout/batchnorm training
+        self.policy.set_training_mode(False)
+        n_steps = 0
+        total_rewards = []
+        completed_episodes = 0
 
-        # Create wrapper environments that use get_observation_for_action
-        if hasattr(env, "envs"):
-            # Vectorized environment
-            for i, single_env in enumerate(env.envs):
-                # Store original step method
-                original_step_methods.append(single_env.step)
+        assert self._last_obs is not None, "No previous observation was set"
 
-                # Create a wrapper that intercepts step calls
-                def make_step_wrapper(env, original_step):
-                    def step_wrapper(action):
-                        # Call get_observation_for_action before the step
-                        env.get_observation_for_action()
-                        return original_step(action)
+        # Reset buffer for new rollout
+        callback.on_rollout_start()
 
-                    return step_wrapper
+        while n_steps < train_freq[0]:
+            # 1. Get obs for action selection
+            obs_for_action = []
+            if hasattr(env, "envs"):
+                # Vectorized env
+                for e in env.envs:
+                    obs_for_action.append(e.get_observation_for_action())
+                obs_for_action = np.array(obs_for_action)
+            else:
+                obs_for_action = np.array([env.get_observation_for_action()])
 
-                single_env.step = make_step_wrapper(
-                    single_env, original_step_methods[-1]
-                )
-        else:
-            # Single environment
-            original_step_methods.append(env.step)
-
-            def step_wrapper(action):
-                # Call get_observation_for_action before the step
-                env.get_observation_for_action()
-                return original_step_methods[0](action)
-
-            env.step = step_wrapper
-
-        try:
-            # Call the parent collect_rollouts method
-            result = super().collect_rollouts(
-                env, callback, rollout_buffer, n_rollout_steps
+            self._last_obs = obs_for_action
+            # 2. Predict action
+            actions, buffer_actions = self._sample_action(
+                learning_starts, action_noise, env.num_envs
             )
 
-        finally:
-            # Restore original step methods
-            if hasattr(env, "envs"):
-                for i, single_env in enumerate(env.envs):
-                    if i < len(original_step_methods):
-                        single_env.step = original_step_methods[i]
-            else:
-                if len(original_step_methods) > 0:
-                    env.step = original_step_methods[0]
+            # 3. Step environment
+            new_obs, rewards, dones, infos = env.step(actions)
 
-        return result
+            # 4. Store only valid samples
+            # for idx, info in enumerate(infos):
+            #     if not info.get("valid", True):
+            #         print(f"Invalid sample at index {idx}")
+            #         print(f"info: {info}")
+            #         print(f"obs_for_action: {obs_for_action[idx]}")
+            #         print(f"new_obs: {new_obs[idx]}")
+            #         print(f"buffer_actions: {buffer_actions[idx]}")
+            #         print(f"rewards: {rewards[idx]}")
+            #         print(f"dones: {dones[idx]}")
+
+            replay_buffer.add(
+                obs_for_action,
+                new_obs,
+                buffer_actions,
+                rewards,
+                dones,
+                infos,
+            )
+            self._update_info_buffer(infos, dones)
+
+            # 5. Update counters
+            n_steps += 1
+            self.num_timesteps += env.num_envs
+            total_rewards.extend(rewards)
+
+            # Count completed episodes
+            completed_episodes += sum(dones)
+
+            # 6. Handle episode ends
+            callback.update_locals(locals())
+            if not callback.on_step():
+                return RolloutReturn(
+                    episode_timesteps=n_steps,
+                    n_episodes=completed_episodes,
+                    continue_training=False,
+                )
+
+            self._last_obs = new_obs
+
+        callback.on_rollout_end()
+        return RolloutReturn(
+            episode_timesteps=n_steps,
+            n_episodes=completed_episodes,
+            continue_training=True,
+        )
 
     def forward(self, obs, deterministic=False):
         return self.policy.forward(obs, deterministic)
@@ -197,7 +175,8 @@ class KalmanFilterEnv(gym.Env):
         self.discrete_actions = np.array([1e-4, 1e-3, 1e-2, 1e-1, 1, 10, 100])
         self.action_space = spaces.Discrete(len(self.discrete_actions))
 
-        # Observation space: [position, velocity, position covariance, velocity covariance, measurement noise, innovation]
+        # Observation space: [position, velocity, position covariance,
+        # velocity covariance, measurement noise, innovation]
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -260,8 +239,8 @@ class KalmanFilterEnv(gym.Env):
         )
 
         # Check termination conditions
-        terminated = position_error > 10.0
-        truncated = self.step_count == self.max_steps - 1
+        terminated = position_error > 10.0 or self.step_count == self.max_steps - 1
+        truncated = False
 
         info = {
             "nis": nis,
@@ -371,24 +350,16 @@ class TrainingCallback(BaseCallback):
             "truncated", [False] * len(self.locals.get("infos", []))
         )
 
-        # Only accumulate episode rewards for valid steps
-        valid_steps = 0
-        total_reward = 0.0
-        episode_completed = False
+        # Since invalid samples are now filtered out, all samples are valid
         if len(self.locals["infos"]) > 0:
             for i, info in enumerate(self.locals["infos"]):
-                if info["valid"]:
-                    reward = info["reward"]
-                    valid_steps += 1
-                    total_reward += reward
-                    self.step_rewards.append(reward)
-        # Only add to episode if there were valid steps
-        if valid_steps > 0:
-            avg_valid_reward = total_reward / valid_steps
-            self.episode_reward_sum += avg_valid_reward
-            self.episode_length += 1
+                reward = info["reward"]
+                self.step_rewards.append(reward)
+                self.episode_reward_sum += reward
+                self.episode_length += 1
 
         # Check if any episode completed (either done or truncated)
+        episode_completed = False
         for _, (done, trunc) in enumerate(zip(dones, truncated)):
             if done or trunc:
                 episode_completed = True
@@ -515,7 +486,7 @@ def visualize_dataset(measurement, control, ground_truth, save_plot=False):
 
 def main():
     # Number of parallel environments
-    n_envs = 8  # You can adjust this based on your CPU cores
+    n_envs = 8
     measurement_noise_std = 0.1
     control_noise_std = 0.25
     scale = 1e3
@@ -558,22 +529,19 @@ def main():
             measurement_noise=scale * measurement_noise_std,
             process_noise=control_noise_std,
         )
-        # Wrap with AutoPreStepWrapper to automatically use pre-step logic
-        return AutoPreStepWrapper(base_env)
+        return base_env
 
     # Create vectorized environment with different datasets for each environment
     env = DummyVecEnv([lambda i=i: make_env(i) for i in range(n_envs)])
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
     # For testing, create a single environment using the last dataset
-    test_env = AutoPreStepWrapper(
-        KalmanFilterEnv(
-            measurement=datasets[-1]["measurement"],
-            u=datasets[-1]["control"],
-            gt=datasets[-1]["ground_truth"],
-            measurement_noise=scale * measurement_noise_std,
-            process_noise=control_noise_std,
-        )
+    test_env = KalmanFilterEnv(
+        measurement=datasets[-1]["measurement"],
+        u=datasets[-1]["control"],
+        gt=datasets[-1]["ground_truth"],
+        measurement_noise=scale * measurement_noise_std,
+        process_noise=control_noise_std,
     )
 
     baseline_env = KalmanFilterEnv(
@@ -589,37 +557,32 @@ def main():
     print("Environment check passed!")
     print(f"Training with {n_envs} parallel environments")
 
-    model = PreStepPPO(
+    model = PreStepDQN(
         "MlpPolicy",
         env,
         device="cpu",
         verbose=1,
         learning_rate=linear_schedule(3e-4, 1e-5),
-        n_steps=512,
-        batch_size=128,
-        n_epochs=5,
+        buffer_size=1000000,
+        learning_starts=1000,
+        batch_size=64,
         gamma=0.99,
-        gae_lambda=0.95,
-        target_kl=0.035,
-        clip_range=0.2,
+        train_freq=(4, "step"),
+        gradient_steps=1,
+        target_update_interval=1000,
+        exploration_fraction=0.1,
+        exploration_initial_eps=1.0,
+        exploration_final_eps=0.05,
         policy_kwargs=dict(
-            net_arch=dict(pi=[512, 512, 256, 128], vf=[512, 512, 256, 128]),
+            net_arch=[512, 512, 256, 128],
             activation_fn=nn.ReLU,
-            ortho_init=True,
-            log_std_init=-1.0,
         ),
     )
 
-    # Create callbacks
-    training_callback = TrainingCallback(verbose=1)
-    valid_sample_callback = ValidSampleCallback(verbose=1)
-
-    # Combine callbacks
-    callback = CallbackList([training_callback, valid_sample_callback])
-
     # Train the model
-    print("Starting training...")
-    model.learn(total_timesteps=100000, callback=callback)
+    print("Starting DQN training...")
+    training_callback = TrainingCallback()
+    model.learn(total_timesteps=150000, callback=training_callback)
 
     stats = None
     try:
@@ -637,7 +600,7 @@ def main():
         print(f"Error extracting observation normalization stats: {e}")
 
     # Save the model
-    model.save("kalman_ppo_model")
+    model.save("kalman_dqn_model")
     print("Model saved!")
 
     # Test the trained model
@@ -649,23 +612,23 @@ def main():
     positions = []
     positions_baseline = []
 
-    for step in range(len(test_env.env.gt)):
-        # The model will automatically use get_observation_for_action
+    for step in range(len(test_env.gt)):
+        # Call get_observation_for_action manually for testing
         obs = test_env.get_observation_for_action()
         if stats is not None:
             obs = (obs - stats["obs_mean"]) / np.sqrt(stats["obs_var"])
         action, _ = model.predict(obs, deterministic=True)
-        print(f"step {step} action: {test_env.env.discrete_actions[action]}")
+        print(f"step {step} action: {test_env.discrete_actions[action]}")
         obs, reward, terminated, truncated, _ = test_env.step(action)
 
         # Run the baseline
         baseline_env.get_observation_for_action()
-        baseline_env.step(np.where(test_env.env.discrete_actions == 1.0)[0][0])
+        baseline_env.step(np.where(test_env.discrete_actions == 1.0)[0][0])
         if len(episode_rewards) == 0:
             episode_rewards.append(reward)
         else:
             episode_rewards.append(episode_rewards[-1] + reward)
-        positions.append(test_env.env.x[0])
+        positions.append(test_env.x[0])
         positions_baseline.append(baseline_env.x[0])
         if step % 20 == 0:
             test_env.render()
@@ -679,7 +642,7 @@ def main():
     plt.figure(figsize=(12, 4))
     plt.subplot(1, 2, 1)
     plt.plot(positions, color="b", label="agent")
-    plt.plot(test_env.env.gt, color="r", linestyle="--", label="gt")
+    plt.plot(test_env.gt, color="r", linestyle="--", label="gt")
     plt.plot(positions_baseline, color="g", linestyle="--", label="baseline")
     plt.xlabel("Time Step")
     plt.ylabel("Position")
@@ -692,10 +655,6 @@ def main():
     print("Training callback stats:")
     print(f"Episode rewards collected: {len(training_callback.episode_rewards)}")
     print(f"Step rewards collected: {len(training_callback.step_rewards)}")
-    valid_count = valid_sample_callback.valid_samples_count
-    total_count = valid_sample_callback.total_samples_count
-    valid_ratio = valid_count / total_count
-    print(f"Valid sample ratio: {valid_count}/{total_count} ({valid_ratio:.2%})")
 
     # Plot the step rewards
     step_rewards = training_callback.step_rewards
