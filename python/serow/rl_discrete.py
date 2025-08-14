@@ -80,19 +80,16 @@ class PreStepDQN(DQN):
             # 3. Step environment
             new_obs, rewards, dones, infos = env.step(actions)
 
-            # 4. Store only valid samples
-            # for idx, info in enumerate(infos):
-            #     if not info.get("valid", True):
-            #         print(f"Invalid sample at index {idx}")
-            #         print(f"info: {info}")
-            #         print(f"obs_for_action: {obs_for_action[idx]}")
-            #         print(f"new_obs: {new_obs[idx]}")
-            #         print(f"buffer_actions: {buffer_actions[idx]}")
-            #         print(f"rewards: {rewards[idx]}")
-            #         print(f"dones: {dones[idx]}")
+            # 4. Nullify invalid samples
+            for idx, info in enumerate(infos):
+                if not info.get("valid", True):
+                    rewards[idx] = 0.0
+                    new_obs[idx] = np.zeros_like(new_obs[idx])
+                    self._last_obs[idx] = np.zeros_like(self._last_obs[idx])
+                    buffer_actions[idx] = np.zeros_like(buffer_actions[idx])
 
             replay_buffer.add(
-                obs_for_action,
+                self._last_obs,
                 new_obs,
                 buffer_actions,
                 rewards,
@@ -248,8 +245,8 @@ class KalmanFilterEnv(gym.Env):
             "step_count": self.step_count,
             "reward": self.reward,
             "valid": (
-                True if np.random.rand() > 0.1 else False
-            ),  # Make 10% of samples invalid
+                True if np.random.rand() > 0.5 else False
+            ),  # Make 50% of samples invalid
         }
 
         self.step_count += 1
@@ -582,7 +579,7 @@ def main():
     # Train the model
     print("Starting DQN training...")
     training_callback = TrainingCallback()
-    model.learn(total_timesteps=150000, callback=training_callback)
+    model.learn(total_timesteps=1000000, callback=training_callback)
 
     stats = None
     try:
