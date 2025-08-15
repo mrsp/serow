@@ -12,10 +12,12 @@ import pandas as pd
 
 from env import SerowEnv
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
-from utils import export_model_to_onnx
+from utils import export_dqn_to_onnx
+from stable_baselines3.common.buffers import ReplayBuffer
+from stable_baselines3.common.type_aliases import RolloutReturn
 
 
 def compute_rolling_average(data, window_size):
@@ -35,28 +37,6 @@ def linear_schedule(initial_value, final_value):
         return final_value + progress_remaining * (initial_value - final_value)
 
     return schedule
-
-
-class AutoPreStepWrapper(gym.Wrapper):
-    """A wrapper that automatically handles pre-step logic."""
-
-    def __init__(self, env):
-        super().__init__(env)
-        self.env = env
-
-    def get_observation_for_action(self):
-        """Delegate to the wrapped environment's get_observation_for_action method"""
-        return self.env.get_observation_for_action()
-
-    def _get_observation(self):
-        """Override to automatically call get_observation_for_action"""
-        return self.env.get_observation_for_action()
-
-    def step(self, action):
-        return self.env.step(action)
-
-    def reset(self, **kwargs):
-        return self.env.reset(**kwargs)
 
 
 class ValidSampleCallback(BaseCallback):
@@ -125,6 +105,7 @@ class TrainingCallback(BaseCallback):
                     valid_steps += 1
                     total_reward += reward
                     self.step_rewards.append(reward)
+
         # Only add to episode if there were valid steps
         if valid_steps > 0:
             avg_valid_reward = total_reward / valid_steps
@@ -152,153 +133,182 @@ class TrainingCallback(BaseCallback):
         return True
 
 
-class ExplainedVarianceCallback(BaseCallback):
-    """Callback to monitor explained variance and warn if it's too negative."""
-
-    def __init__(self, min_explained_var=-1.0, verbose=0):
-        super(ExplainedVarianceCallback, self).__init__(verbose)
-        self.min_explained_var = min_explained_var
-
-    def _on_step(self) -> bool:
-        # Check if we have explained variance info
-        if hasattr(self.model, "logger") and self.model.logger.name_to_value:
-            explained_var = self.model.logger.name_to_value.get(
-                "train/explained_variance", 0
-            )
-            if explained_var < self.min_explained_var:
-                if self.verbose > 0:
-                    print(
-                        f"Warning: Explained variance {explained_var:.3f} is very "
-                        f"negative (below {self.min_explained_var:.3f}). "
-                        f"Value function may be learning poorly."
-                    )
-        return True
-
-
-class PerformanceDegradationCallback(BaseCallback):
-    """Callback to detect performance degradation and stop training."""
-
-    def __init__(self, window_size=10, degradation_threshold=0.1, verbose=0):
-        super(PerformanceDegradationCallback, self).__init__(verbose)
-        self.window_size = window_size
-        self.degradation_threshold = degradation_threshold
-        self.recent_rewards = []
-
-    def _on_step(self) -> bool:
-        # This callback will be called by the training callback
-        return True
-
-    def on_episode_end(self, episode_reward):
-        """Called when an episode ends with the episode reward."""
-        self.recent_rewards.append(episode_reward)
-
-        # Keep only recent rewards
-        if len(self.recent_rewards) > self.window_size:
-            self.recent_rewards.pop(0)
-
-        # Check for degradation if we have enough data
-        if len(self.recent_rewards) >= self.window_size:
-            recent_avg = np.mean(self.recent_rewards[-self.window_size // 2 :])
-            earlier_avg = np.mean(self.recent_rewards[: self.window_size // 2])
-
-            if earlier_avg > 0 and recent_avg < earlier_avg * (
-                1 - self.degradation_threshold
-            ):
-                if self.verbose > 0:
-                    print(
-                        f"Performance degradation detected: "
-                        f"recent avg {recent_avg:.0f} vs earlier avg "
-                        f"{earlier_avg:.0f}"
-                    )
-                return False
-
-        return True
-
-
-class PreStepPPO(PPO):
-    """Custom PPO model that handles pre-step logic during training and evaluation."""
-
+class PreStepDQN(DQN):
     def collect_rollouts(
         self,
         env,
         callback,
-        rollout_buffer,
-        n_rollout_steps: int,
-    ):
-        """Override collect_rollouts to use get_observation_for_action during training"""
-        # Store original step method to restore later
-        original_step_methods = []
+        train_freq,
+        replay_buffer: ReplayBuffer,
+        action_noise=None,
+        learning_starts: int = 0,
+        log_interval=None,
+    ) -> RolloutReturn:
+        """
+        Custom rollout collection:
+        - Always get observation from env.get_observation_for_action()
+        - Only use valid transitions where info['valid'] == True
+        """
+        # Switch to eval mode to avoid dropout/batchnorm training
+        self.policy.set_training_mode(False)
+        n_steps = 0
+        total_rewards = []
+        completed_episodes = 0
 
-        # Create wrapper environments that use get_observation_for_action
-        if hasattr(env, "envs"):
-            # Vectorized environment
-            for i, single_env in enumerate(env.envs):
-                # Store original step method
-                original_step_methods.append(single_env.step)
+        # Reset buffer for new rollout
+        callback.on_rollout_start()
 
-                # Create a wrapper that intercepts step calls
-                def make_step_wrapper(env, original_step):
-                    def step_wrapper(action):
-                        # Call get_observation_for_action before the step
-                        env.get_observation_for_action()
-                        return original_step(action)
+        while n_steps < train_freq[0]:
+            # 1. Get obs for action selection
+            obs_for_action = []
+            if hasattr(env, "envs"):
+                # Vectorized env
+                for e in env.envs:
+                    obs_for_action.append(e.get_observation_for_action())
+                obs_for_action = np.array(obs_for_action)
+            else:
+                obs_for_action = np.array([env.get_observation_for_action()])
 
-                    return step_wrapper
+            self._last_obs = obs_for_action
 
-                single_env.step = make_step_wrapper(
-                    single_env, original_step_methods[-1]
-                )
-        else:
-            # Single environment
-            original_step_methods.append(env.step)
-
-            def step_wrapper(action):
-                # Call get_observation_for_action before the step
-                env.get_observation_for_action()
-                return original_step_methods[0](action)
-
-            env.step = step_wrapper
-
-        try:
-            # Call the parent collect_rollouts method
-            result = super().collect_rollouts(
-                env, callback, rollout_buffer, n_rollout_steps
+            # 2. Predict action
+            actions, buffer_actions = self._sample_action(
+                learning_starts, action_noise, env.num_envs
             )
 
-        finally:
-            # Restore original step methods
-            if hasattr(env, "envs"):
-                for i, single_env in enumerate(env.envs):
-                    if i < len(original_step_methods):
-                        single_env.step = original_step_methods[i]
-            else:
-                if len(original_step_methods) > 0:
-                    env.step = original_step_methods[0]
+            # 3. Step environment
+            new_obs, rewards, dones, infos = env.step(actions)
 
-        return result
+            # 4. Nullify invalid samples - Set rewards to nan so we can filter them out in train()
+            for idx, info in enumerate(infos):
+                if not info.get("valid", True):
+                    rewards[idx] = np.nan
+                    new_obs[idx] = np.zeros_like(new_obs[idx])
+                    self._last_obs[idx] = np.zeros_like(self._last_obs[idx])
+                    buffer_actions[idx] = np.zeros_like(buffer_actions[idx])
+
+            replay_buffer.add(
+                self._last_obs,
+                new_obs,
+                buffer_actions,
+                rewards,
+                dones,
+                infos,
+            )
+            self._update_info_buffer(infos, dones)
+
+            # 5. Update counters
+            n_steps += 1
+            self.num_timesteps += env.num_envs
+            total_rewards.extend(rewards)
+
+            # Count completed episodes
+            completed_episodes += sum(dones)
+
+            # 6. Handle episode ends
+            callback.update_locals(locals())
+            if not callback.on_step():
+                return RolloutReturn(
+                    episode_timesteps=n_steps,
+                    n_episodes=completed_episodes,
+                    continue_training=False,
+                )
+
+        callback.on_rollout_end()
+
+        return RolloutReturn(
+            episode_timesteps=n_steps,
+            n_episodes=completed_episodes,
+            continue_training=True,
+        )
+
+    def train(self, gradient_steps: int, batch_size: int = 100) -> None:
+        # Switch to train mode (this affects batch norm / dropout)
+        self.policy.set_training_mode(True)
+
+        # Update learning rate according to schedule
+        self._update_learning_rate(self.policy.optimizer)
+
+        losses = []
+        for _ in range(gradient_steps):
+            # Sample replay buffer
+            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
+            # Filter out invalid samples
+            valid_mask = ~torch.isnan(replay_data.rewards.flatten())
+            num_valid = valid_mask.sum()
+
+            # Skip if too few valid samples (less than 25% of batch)
+            min_valid_samples = max(1, batch_size // 4)
+            if num_valid < min_valid_samples:
+                self.logger.record("train/skipped_batches", 1, exclude="tensorboard")
+                continue
+
+            # Create filtered data instead of modifying the original object
+            filtered_observations = replay_data.observations[valid_mask]
+            filtered_next_observations = replay_data.next_observations[valid_mask]
+            filtered_actions = replay_data.actions[valid_mask]
+            filtered_rewards = replay_data.rewards[valid_mask]
+            filtered_dones = replay_data.dones[valid_mask]
+            filtered_discounts = (
+                replay_data.discounts[valid_mask]
+                if replay_data.discounts is not None
+                else None
+            )
+
+            # For n-step replay, discount factor is gamma**n_steps (when no early termination)
+            discounts = (
+                filtered_discounts if filtered_discounts is not None else self.gamma
+            )
+
+            with torch.no_grad():
+                # Compute the next Q-values using the target network
+                next_q_values = self.q_net_target(filtered_next_observations)
+                # Follow greedy policy: use the one with the highest value
+                next_q_values, _ = next_q_values.max(dim=1)
+                # Avoid potential broadcast issue
+                next_q_values = next_q_values.reshape(-1, 1)
+                # 1-step TD target
+                target_q_values = (
+                    filtered_rewards + (1 - filtered_dones) * discounts * next_q_values
+                )
+
+            # Get current Q-values estimates
+            current_q_values = self.q_net(filtered_observations)
+
+            # Retrieve the q-values for the actions from the replay buffer
+            current_q_values = torch.gather(
+                current_q_values, dim=1, index=filtered_actions.long()
+            )
+
+            # Compute Huber loss (less sensitive to outliers)
+            loss = torch.nn.functional.smooth_l1_loss(current_q_values, target_q_values)
+            losses.append(loss.item())
+
+            # Optimize the policy
+            self.policy.optimizer.zero_grad()
+            loss.backward()
+
+            # Clip gradient norm
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+            self.policy.optimizer.step()
+
+        # Increase update counter
+        self._n_updates += gradient_steps
+
+        self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
+        self.logger.record("train/loss", np.mean(losses))
+        self.logger.dump(step=self.num_timesteps)
 
     def forward(self, obs, deterministic=False):
         return self.policy.forward(obs, deterministic)
-
-
-class ActorCriticONNX(nn.Module):
-    def __init__(self, policy_model):
-        super().__init__()
-        self.policy = policy_model
-
-    def forward(self, x):
-        # Ensure we're in eval mode and detach gradients
-        action, value, _ = self.policy.forward(x, deterministic=True)
-
-        return action, value
 
 
 if __name__ == "__main__":
     # Load and preprocess the data
     robot = "go2"
     n_envs = 4
-    n_contacts = 2
-    total_samples = 300000
+    n_contacts = 3
+    total_samples = 100000
     device = "cpu"
     history_size = 100
     datasets = []
@@ -335,8 +345,7 @@ if __name__ == "__main__":
             ds["base_pose_ground_truth"],
             history_size,
         )
-        # Wrap with AutoPreStepWrapper to automatically use pre-step logic
-        return AutoPreStepWrapper(base_env)
+        return base_env
 
     test_env = SerowEnv(
         contact_frame[0],
@@ -365,52 +374,43 @@ if __name__ == "__main__":
     # Add normalization for observations and rewards
     env = VecNormalize(env, norm_obs=True, norm_reward=False)
 
-    lr_schedule = linear_schedule(3e-4, 1e-5)
-    model = PreStepPPO(
+    lr_schedule = linear_schedule(5e-4, 1e-5)
+    model = PreStepDQN(
         "MlpPolicy",
         env,
-        device=device,
+        device="cpu",
         verbose=1,
         learning_rate=lr_schedule,
-        n_steps=512,
+        buffer_size=1000000,
+        learning_starts=5000,
         batch_size=128,
-        n_epochs=5,
         gamma=0.99,
-        gae_lambda=0.95,
-        clip_range=0.2,
-        target_kl=0.035,
-        vf_coef=0.35,
-        ent_coef=0.005,
+        train_freq=(8, "step"),
+        gradient_steps=4,
+        target_update_interval=2000,
+        exploration_fraction=0.2,
+        exploration_initial_eps=0.9,
+        exploration_final_eps=0.02,
         policy_kwargs=dict(
-            net_arch=dict(
-                pi=[1024, 1024, 1024, 512, 256, 128],
-                vf=[1024, 1024, 1024, 512, 256, 128],
-            ),
+            net_arch=[512, 512, 256, 128],
             activation_fn=nn.ReLU,
-            ortho_init=True,
         ),
+        max_grad_norm=10.0,
+        tau=0.005,
     )
 
     # Create callbacks
     training_callback = TrainingCallback(verbose=1)
     valid_sample_callback = ValidSampleCallback(verbose=1)
-    explained_var_callback = ExplainedVarianceCallback(
-        min_explained_var=-1.0, verbose=1
-    )
-    performance_degradation_callback = PerformanceDegradationCallback(
-        window_size=10, degradation_threshold=0.1, verbose=1
-    )
     callback = CallbackList(
         [
             training_callback,
             valid_sample_callback,
-            explained_var_callback,
-            performance_degradation_callback,
         ]
     )
 
     # Train the model
-    print(f"Training with {n_envs * len(contact_frame)} parallel environments")
+    print(f"Training with {n_envs * n_contacts} parallel environments")
     print("Starting training...")
     model.learn(total_timesteps=total_samples, callback=callback)
     print("Training completed")
@@ -446,19 +446,36 @@ if __name__ == "__main__":
     # Check if the models directory exists, if not create it
     if not os.path.exists("models"):
         os.makedirs("models")
-    model.save(f"models/{robot}_ppo")
+    model.save(f"models/{robot}_dqn")
 
     try:
-        # Create a wrapper class to match the expected interface for export_model_to_onnx
-        class PPOModelWrapper:
-            def __init__(self, ppo_model, device):
-                self.ppo_model = ppo_model
+        # Create a wrapper class to match the expected interface for export_dqn_to_onnx
+        class DQNModelWrapper:
+            def __init__(self, dqn_model, device):
                 self.device = device
-                self.policy = ActorCriticONNX(ppo_model)
-                self.name = "PPO"
+                # For DQN, the policy is accessed via model.policy
+                self.policy = dqn_model.policy
+                self.name = "DQN"
 
-        # Create the wrapper
-        model_wrapper = PPOModelWrapper(model.policy, device)
+                # Validate that the policy has the expected structure
+                if not hasattr(self.policy, "q_net"):
+                    raise AttributeError("DQN policy must have a 'q_net' attribute")
+
+                # Check if we have the expected policy type
+                policy_type = type(self.policy).__name__
+                if "DQNPolicy" not in policy_type:
+                    print(f"Warning: Expected DQNPolicy, got {policy_type}")
+
+                # Validate the q_net structure
+                q_net_type = type(self.policy.q_net).__name__
+                print(f"Q-network type: {q_net_type}")
+
+                # Check if q_net has the expected forward method
+                if not hasattr(self.policy.q_net, "forward"):
+                    raise AttributeError("Q-network must have a 'forward' method")
+
+        # Create the wrapper - pass the entire model, not just model.policy
+        model_wrapper = DQNModelWrapper(model, device)
 
         # Define parameters for ONNX export
         export_params = {
@@ -468,9 +485,16 @@ if __name__ == "__main__":
 
         # Export to ONNX
         print("Exporting model to ONNX...")
-        export_model_to_onnx(model_wrapper, robot, export_params, "models")
+        print(f"Policy type: {type(model_wrapper.policy)}")
+        print(f"Q-net type: {type(model_wrapper.policy.q_net)}")
+        export_dqn_to_onnx(model_wrapper, robot, export_params, "models")
+        print("ONNX export completed successfully!")
+
     except Exception as e:
         print(f"Error exporting model to ONNX: {e}")
+        import traceback
+
+        traceback.print_exc()
 
     # Debug information
     print("Training callback stats:")

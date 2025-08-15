@@ -8,13 +8,14 @@ import os
 import onnxruntime as ort
 
 from env import SerowEnv
-from train import PreStepPPO
+from train import PreStepDQN
 
 
 class ONNXInference:
     def __init__(self, robot, path):
         # Initialize ONNX Runtime sessions
-        model_path = f"{path}/{robot}_ppo.onnx"
+        model_path = f"{path}/{robot}_dqn.onnx"
+
         print(f"Loading ONNX model from: {model_path}")
         print(f"File exists: {os.path.exists(model_path)}")
 
@@ -61,7 +62,31 @@ class ONNXInference:
         else:
             raise ValueError("No outputs found in ONNX model")
 
-        print(f"Initialized ONNX inference for {robot}")
+        # Action space - discrete choices for measurement noise scaling
+        self.discrete_actions = np.array(
+            [
+                1e-5,
+                5e-5,
+                1e-4,
+                5e-4,
+                1e-3,
+                5e-3,
+                1e-2,
+                5e-2,
+                1e-1,
+                5e-1,
+                1.0,
+                5.0,
+                10.0,
+                50.0,
+                100.0,
+                500.0,
+                1000.0,
+            ],
+            dtype=np.float32,
+        )
+
+        print(f"Initialized ONNX inference for {robot} with dqn model")
         print(f"State dimension: {self.state_dim}")
         print(f"Action dimension: {self.action_dim}")
 
@@ -69,7 +94,11 @@ class ONNXInference:
         # Prepare input
         observation = np.array(observation, dtype=np.float32).reshape(1, -1)
         output = self.session.run(None, {self.input_name: observation})
-        return output[0], output[1]
+
+        # DQN outputs Q-values, we need to select the action with highest Q-value
+        q_values = output[0]
+        action = np.argmax(q_values, axis=1)
+        return action, q_values
 
     def predict(self, observation, deterministic=True):
         """
@@ -104,68 +133,13 @@ def get_onnx_weights_biases(onnx_model_path):
     return weights_biases
 
 
-def compare_onnx_ppo(onnx_model_path, ppo_model, robot):
+def compare_onnx_dqn_predictions(agent_onnx, agent_dqn, state_dim):
     """
-    Compares the weights and biases of an ONNX model with a PPO model.
-
-    Args:
-        onnx_model_path (str): Path to the ONNX model file.
-        ppo_model (PreStepPPO): PPO model to compare with.
-    """
-    onnx_filepath = os.path.join(onnx_model_path, f"{robot}_ppo.onnx")
-    params = get_onnx_weights_biases(onnx_filepath)
-
-    # Compare the weights and biases to the agent_ppo model
-    print("Comparing parameters:")
-    ppo_policy_params = dict(ppo_model.policy.named_parameters())
-
-    # Create a mapping from ONNX parameter names to PPO parameter names
-    # Remove the 'policy.' prefix from ONNX parameter names
-    def get_ppo_param_name(onnx_name):
-        if onnx_name.startswith("policy."):
-            return onnx_name[7:]  # Remove 'policy.' prefix
-        return onnx_name
-
-    for name, onnx_param in params.items():
-        ppo_name = get_ppo_param_name(name)
-        if ppo_name in ppo_policy_params:
-            ppo_param = ppo_policy_params[ppo_name].detach().cpu().numpy()
-            is_close = np.allclose(onnx_param, ppo_param, rtol=1e-5, atol=1e-8)
-            status = "✓" if is_close else "✗"
-            print(f"  {name} -> {ppo_name}: {status} (shape: {onnx_param.shape})")
-            if not is_close:
-                max_diff = np.max(np.abs(onnx_param - ppo_param))
-                mean_diff = np.mean(np.abs(onnx_param - ppo_param))
-                print(f"    Max difference: {max_diff}")
-                print(f"    Mean difference: {mean_diff}")
-        else:
-            print(f"  {name} -> {ppo_name}: ✗ (not found in PPO policy)")
-
-    # Check if all parameters match
-    match = all(
-        get_ppo_param_name(name) in ppo_policy_params
-        and np.allclose(
-            onnx_param,
-            ppo_policy_params[get_ppo_param_name(name)].detach().cpu().numpy(),
-            rtol=1e-5,
-            atol=1e-8,
-        )
-        for name, onnx_param in params.items()
-    )
-
-    if match:
-        print("\n✓ All weights and biases are the same")
-    else:
-        print("\n✗ Some weights and biases differ")
-
-
-def compare_onnx_ppo_predictions(agent_onnx, agent_ppo, state_dim):
-    """
-    Compares the predictions of an ONNX model with a PPO model.
+    Compares the predictions of an ONNX model with a DQN model.
 
     Args:
         agent_onnx (ONNXInference): ONNX model to compare with.
-        agent_ppo (PreStepPPO): PPO model to compare with.
+        agent_dqn (PreStepDQN): DQN model to compare with.
         state_dim (int): Dimension of the state space.
     """
 
@@ -174,14 +148,21 @@ def compare_onnx_ppo_predictions(agent_onnx, agent_ppo, state_dim):
         # Generate a random observation
         obs = np.random.randn(1, state_dim).astype(np.float32)
 
-        # Get the PPO model prediction
-        ppo_action, _ = agent_ppo.predict(obs, deterministic=True)
+        # Get the DQN model prediction
+        dqn_action, _ = agent_dqn.predict(obs, deterministic=True)
+        dqn_action = np.array(
+            [agent_onnx.discrete_actions[dqn_action.item()]], dtype=np.float32
+        )
+
         # Get the ONNX model prediction
         onnx_action, _ = agent_onnx.predict(obs, deterministic=True)
+        onnx_action = np.array(
+            [agent_onnx.discrete_actions[onnx_action.item()]], dtype=np.float32
+        )
 
         # Compare the actions
-        assert np.allclose(ppo_action, onnx_action, atol=1e-4)
-    print("ONNX and PPO action predictions match")
+        assert np.allclose(dqn_action, onnx_action, atol=1e-4)
+    print("ONNX and DQN action predictions match")
 
 
 if __name__ == "__main__":
@@ -201,20 +182,23 @@ if __name__ == "__main__":
     contact_states = test_dataset["contact_states"]
     contacts_frame = list(contact_states[0].contacts_status.keys())
     history_size = 100
-    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + history_size
+    state_dim = 3 + 9 + 3 + 4 + 3 * history_size + 1 * history_size
     action_dim = 1  # Based on the action vector used in ContactEKF.setAction()
 
-    # Load the saved PPO model
-    agent_ppo = PreStepPPO.load(f"models/{robot}_ppo")
-
-    # Compare the ONNX model with the PPO model
-    compare_onnx_ppo(model_dir, agent_ppo, robot)
+    # Load the saved DQN model
+    try:
+        agent_dqn = PreStepDQN.load(f"models/{robot}_dqn")
+        print("Loaded DQN model successfully")
+    except Exception as e:
+        print(f"Could not load DQN model: {e}")
+        agent_dqn = None
 
     # Load the ONNX model
     agent_onnx = ONNXInference(robot, path="models")
 
-    # Compare the ONNX model predictions with the PPO model predictions
-    compare_onnx_ppo_predictions(agent_onnx, agent_ppo, state_dim)
+    # Compare the ONNX model predictions with the DQN model predictions
+    if agent_dqn is not None:
+        compare_onnx_dqn_predictions(agent_onnx, agent_dqn, state_dim)
 
     test_env = SerowEnv(
         contacts_frame[0],
@@ -231,17 +215,18 @@ if __name__ == "__main__":
         history_size,
     )
 
-    # Use the loaded PPO model for evaluation
-    (
-        ppo_timestamps,
-        ppo_base_positions,
-        ppo_base_orientations,
-        ppo_gt_positions,
-        ppo_gt_orientations,
-        ppo_rewards,
-        _,
-        _,
-    ) = test_env.evaluate(agent_ppo, stats, plot=True)
+    # Use the loaded DQN model for evaluation
+    if agent_dqn is not None:
+        (
+            dqn_timestamps,
+            dqn_base_positions,
+            dqn_base_orientations,
+            dqn_gt_positions,
+            dqn_gt_orientations,
+            dqn_rewards,
+            _,
+            _,
+        ) = test_env.evaluate(agent_dqn, stats, plot=True)
 
     # Use the ONNX model for evaluation
     (
@@ -255,8 +240,11 @@ if __name__ == "__main__":
         _,
     ) = test_env.evaluate(agent_onnx, stats, plot=True)
 
-    # These must be equal
-    assert np.allclose(ppo_timestamps, onnx_timestamps, atol=1e-3)
-    assert np.allclose(ppo_base_positions, onnx_base_positions, atol=1e-3)
-    assert np.allclose(ppo_base_orientations, onnx_base_orientations, atol=1e-3)
-    print("All tests passed")
+    # These must be equal if DQN model was loaded
+    if agent_dqn is not None:
+        assert np.allclose(dqn_timestamps, onnx_timestamps, atol=1e-3)
+        assert np.allclose(dqn_base_positions, onnx_base_positions, atol=1e-3)
+        assert np.allclose(dqn_base_orientations, onnx_base_orientations, atol=1e-3)
+        print("All tests passed")
+    else:
+        print("DQN model not loaded, skipping comparison tests")

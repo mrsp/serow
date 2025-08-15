@@ -544,6 +544,39 @@ def export_model_to_onnx(agent, robot, params, path):
         )
 
 
+def export_dqn_to_onnx(agent, robot, params, path):
+    """Export the trained DQN model to ONNX format"""
+    os.makedirs(path, exist_ok=True)
+
+    # For DQN, we need to export the q_net (the actual neural network)
+    # Set the q_net to evaluation mode to disable dropout
+    agent.policy.q_net.eval()
+
+    # Create dummy input and ensure no gradients
+    # Use the same device as the model
+    device = next(agent.policy.q_net.parameters()).device
+    dummy_observation = torch.randn(1, params["state_dim"]).to(device)
+
+    with torch.no_grad():
+        torch.onnx.export(
+            agent.policy.q_net,  # Export the q_net, not the policy wrapper
+            dummy_observation,
+            f"{path}/{robot}_dqn.onnx",
+            export_params=True,
+            opset_version=11,
+            do_constant_folding=True,
+            input_names=["observation"],
+            output_names=["q_values"],  # DQN outputs Q-values, not actions
+            dynamic_axes={
+                "observation": {0: "batch_size"},
+                "q_values": {0: "batch_size"},
+            },
+            verbose=False,
+        )
+
+    print(f"ONNX model exported to: {path}/{robot}_dqn.onnx")
+
+
 class BaseVelocityGroundTruth:
     def __init__(self, timestamp, linear_velocity, angular_velocity):
         self.timestamp = timestamp

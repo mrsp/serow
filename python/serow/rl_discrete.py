@@ -55,8 +55,6 @@ class PreStepDQN(DQN):
         total_rewards = []
         completed_episodes = 0
 
-        assert self._last_obs is not None, "No previous observation was set"
-
         # Reset buffer for new rollout
         callback.on_rollout_start()
 
@@ -83,7 +81,7 @@ class PreStepDQN(DQN):
             # 4. Nullify invalid samples
             for idx, info in enumerate(infos):
                 if not info.get("valid", True):
-                    rewards[idx] = 0.0
+                    rewards[idx] = np.nan
                     new_obs[idx] = np.zeros_like(new_obs[idx])
                     self._last_obs[idx] = np.zeros_like(self._last_obs[idx])
                     buffer_actions[idx] = np.zeros_like(buffer_actions[idx])
@@ -115,14 +113,87 @@ class PreStepDQN(DQN):
                     continue_training=False,
                 )
 
-            self._last_obs = new_obs
-
         callback.on_rollout_end()
+
         return RolloutReturn(
             episode_timesteps=n_steps,
             n_episodes=completed_episodes,
             continue_training=True,
         )
+
+    def train(self, gradient_steps: int, batch_size: int = 100) -> None:
+        # Switch to train mode (this affects batch norm / dropout)
+        self.policy.set_training_mode(True)
+        # Update learning rate according to schedule
+        self._update_learning_rate(self.policy.optimizer)
+        losses = []
+        for _ in range(gradient_steps):
+            # Sample replay buffer
+            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
+            # Filter out invalid samples
+            valid_mask = ~torch.isnan(replay_data.rewards.flatten())
+            num_valid = valid_mask.sum()
+
+            # Skip if too few valid samples (less than 25% of batch)
+            min_valid_samples = max(1, batch_size // 4)
+            if num_valid < min_valid_samples:
+                self.logger.record("train/skipped_batches", 1, exclude="tensorboard")
+                continue
+
+            # Create filtered data instead of modifying the original object
+            filtered_observations = replay_data.observations[valid_mask]
+            filtered_next_observations = replay_data.next_observations[valid_mask]
+            filtered_actions = replay_data.actions[valid_mask]
+            filtered_rewards = replay_data.rewards[valid_mask]
+            filtered_dones = replay_data.dones[valid_mask]
+            filtered_discounts = (
+                replay_data.discounts[valid_mask]
+                if replay_data.discounts is not None
+                else None
+            )
+
+            # For n-step replay, discount factor is gamma**n_steps (when no early termination)
+            discounts = (
+                filtered_discounts if filtered_discounts is not None else self.gamma
+            )
+
+            with torch.no_grad():
+                # Compute the next Q-values using the target network
+                next_q_values = self.q_net_target(filtered_next_observations)
+                # Follow greedy policy: use the one with the highest value
+                next_q_values, _ = next_q_values.max(dim=1)
+                # Avoid potential broadcast issue
+                next_q_values = next_q_values.reshape(-1, 1)
+                # 1-step TD target
+                target_q_values = (
+                    filtered_rewards + (1 - filtered_dones) * discounts * next_q_values
+                )
+
+            # Get current Q-values estimates
+            current_q_values = self.q_net(filtered_observations)
+
+            # Retrieve the q-values for the actions from the replay buffer
+            current_q_values = torch.gather(
+                current_q_values, dim=1, index=filtered_actions.long()
+            )
+
+            # Compute Huber loss (less sensitive to outliers)
+            loss = torch.nn.functional.smooth_l1_loss(current_q_values, target_q_values)
+            losses.append(loss.item())
+
+            # Optimize the policy
+            self.policy.optimizer.zero_grad()
+            loss.backward()
+            # Clip gradient norm
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+            self.policy.optimizer.step()
+
+        # Increase update counter
+        self._n_updates += gradient_steps
+
+        self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
+        self.logger.record("train/loss", np.mean(losses))
+        self.logger.dump(step=self.num_timesteps)
 
     def forward(self, obs, deterministic=False):
         return self.policy.forward(obs, deterministic)
@@ -579,7 +650,7 @@ def main():
     # Train the model
     print("Starting DQN training...")
     training_callback = TrainingCallback()
-    model.learn(total_timesteps=1000000, callback=training_callback)
+    model.learn(total_timesteps=100000, callback=training_callback)
 
     stats = None
     try:
@@ -597,8 +668,8 @@ def main():
         print(f"Error extracting observation normalization stats: {e}")
 
     # Save the model
-    model.save("kalman_dqn_model")
-    print("Model saved!")
+    # model.save("kalman_dqn_model")
+    # print("Model saved!")
 
     # Test the trained model
     print("\nTesting trained model...")
