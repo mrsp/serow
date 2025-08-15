@@ -392,7 +392,7 @@ if __name__ == "__main__":
         exploration_initial_eps=0.9,
         exploration_final_eps=0.02,
         policy_kwargs=dict(
-            net_arch=[512, 512, 256, 128],
+            net_arch=[1024, 1024, 512, 256, 128],
             activation_fn=nn.ReLU,
         ),
         max_grad_norm=10.0,

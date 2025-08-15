@@ -46,24 +46,18 @@ class SerowEnv(gym.Env):
         self.discrete_actions = np.array(
             [
                 1e-5,
-                5e-5,
                 1e-4,
-                5e-4,
                 1e-3,
-                5e-3,
                 1e-2,
-                5e-2,
                 1e-1,
-                5e-1,
                 1.0,
                 5.0,
                 10.0,
-                50.0,
-                100.0,
-                500.0,
                 1000.0,
-            ]
+            ],
+            dtype=np.float32,
         )
+
         self.action_space = gym.spaces.Discrete(len(self.discrete_actions))
 
         # Observation space
@@ -138,8 +132,8 @@ class SerowEnv(gym.Env):
         if success:
             nis = innovation @ np.linalg.inv(covariance) @ innovation.T
             nis = np.clip(nis, 0, max_nis)
-            position_reward = np.exp(-position_error)
-            innovation_reward = np.exp(-50.0 * nis)
+            position_reward = np.exp(-5.0 * position_error)
+            innovation_reward = np.exp(-500.0 * nis)
             orientation_reward = np.exp(-10.0 * orientation_error)
             action_penalty = 0.0
             if self.previous_action[cf] is not None:
@@ -149,7 +143,7 @@ class SerowEnv(gym.Env):
                 0.1 * innovation_reward.item()
                 + 0.5 * position_reward.item()
                 + 0.4 * orientation_reward.item()
-                - 0.05 * action_penalty
+                - 0.01 * action_penalty
             )
             if hasattr(self, "baseline_rewards"):
                 reward = reward - self.baseline_rewards[self.step_count][cf]
