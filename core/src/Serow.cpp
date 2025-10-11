@@ -159,6 +159,12 @@ bool Serow::initialize(const std::string& config_file) {
     if (!checkConfigParam("point_feet", params_.point_feet))
         return false;
 
+    if (!checkConfigParam("use_imu_orientation", params_.use_imu_orientation))
+        return false;
+
+    if (!checkConfigParam("imu_outlier_detection", params_.imu_outlier_detection))
+        return false;
+
     if (!checkConfigParam("imu_rate", params_.imu_rate))
         return false;
 
@@ -1219,12 +1225,14 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     timers_["joint-estimation"].stop();
 
     // Check if the IMU measurements are valid with the Median Absolute Deviation (MAD)
-    timers_["imu-outlier-detection"].start();
-    bool is_imu_outlier = isImuMeasurementOutlier(imu);
-    timers_["imu-outlier-detection"].stop();
-    if (is_imu_outlier) {
-        timers_["total-time"].stop();
-        return false;
+    if (params_.imu_outlier_detection) {
+        timers_["imu-outlier-detection"].start();
+        bool is_imu_outlier = isImuMeasurementOutlier(imu);
+        timers_["imu-outlier-detection"].stop();
+        if (is_imu_outlier) {
+            timers_["total-time"].stop();
+            return false;
+        }
     }
 
     // Estimate the base frame attitude and initial IMU biases
@@ -1474,7 +1482,7 @@ void Serow::reset() {
 
     // Initialize the base and CoM estimators
     base_estimator_.init(state_.base_state_, state_.getContactsFrame(), state_.isPointFeet(),
-                         params_.g, params_.imu_rate, params_.outlier_detection);
+                         params_.g, params_.imu_rate, params_.outlier_detection, params_.use_imu_orientation);
 
     com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                         params_.force_torque_rate);
@@ -1676,7 +1684,7 @@ void Serow::baseEstimatorUpdateWithContactPosition(const std::string& cf,
     const bool cs = kin.contacts_status.at(cf);
     const Eigen::Vector3d& cp = kin.contacts_position.at(cf);
     const Eigen::Matrix3d& cp_noise = kin.contacts_position_noise.at(cf);
-    const Eigen::Matrix3d& position_cov = state_.base_state_.contacts_position_cov.at(cf);
+    const Eigen::Matrix3d& position_cov = kin.position_cov;
     base_estimator_.updateWithContactPosition(state_.base_state_, cf, cs, cp, cp_noise,
                                               position_cov, terrain_estimator_);
 }

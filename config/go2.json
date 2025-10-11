@@ -40,6 +40,8 @@
         0.0,
         -1.0
     ],
+    "imu_outlier_detection": true,
+    "use_imu_orientation": true,
     "calibrate_initial_imu_bias": true,
     "max_imu_calibration_cycles": 1000,
     "bias_gyro": [

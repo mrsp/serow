@@ -316,6 +316,10 @@ private:
         std::set<std::string> contacts_frame{};
         /// @brief whether or not the robot has point feet
         bool point_feet{false};
+        /// @brief whether or not to use the IMU orientation during the ContactEKF update step
+        bool use_imu_orientation{false};
+        /// @brief whether or not to use the IMU outlier detection during the filter step
+        bool imu_outlier_detection{false};
     };
 
     /// @brief SEROW's configuration
@@ -373,13 +377,13 @@ private:
     /// @brief Timestamp of the estimated state
     double timestamp_{};
     /// @brief Timestamp of the last IMU measurement
-    double last_imu_timestamp_{};
+    double last_imu_timestamp_{-1.0};
     /// @brief Timestamp of the last joint measurement
-    double last_joint_timestamp_{};
+    double last_joint_timestamp_{-1.0};
     /// @brief Timestamp of the last force/torque measurement
-    double last_ft_timestamp_{};
+    double last_ft_timestamp_{-1.0};
     /// @brief Timestamp of the last odometry measurement
-    double last_odom_timestamp_{};
+    double last_odom_timestamp_{-1.0};
 
     /// @brief Logs the measurements
     /// @param imu IMU measurement

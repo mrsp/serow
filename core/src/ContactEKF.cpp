@@ -17,7 +17,7 @@
 namespace serow {
 
 void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-                      double g, double imu_rate, bool outlier_detection, bool verbose) {
+                      double g, double imu_rate, bool outlier_detection, bool use_imu_orientation, bool verbose) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
@@ -119,6 +119,7 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     // Clear the action covariance gain matrix
     clearAction();
 
+    use_imu_orientation_ = use_imu_orientation;
     verbose_ = verbose;
     if (verbose) {
         std::cout << "[SEROW/ContactEKF]: Initialized successfully" << std::endl;
@@ -647,7 +648,9 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
     }
 
     // Update the state with the absolute IMU orientation
-    updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov);
+    if (use_imu_orientation_) {
+        updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov);
+    }
 
     // Update the state with the relative to base contacts
     updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
