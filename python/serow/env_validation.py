@@ -6,13 +6,24 @@ import zipfile
 import os
 
 
-def run_serow(dataset, robot):
+def run_serow(dataset, robot, start_idx = 0):
     serow_framework = serow.Serow()
     serow_framework.initialize(f"{robot}_pytest.json")
 
+    if (start_idx > 0):
+        initial_state = serow_framework.get_state(allow_invalid=True)
+        initial_state.set_base_state(dataset["base_states"][start_idx])
+        initial_state.set_joint_state(dataset["joint_states"][start_idx])
+        initial_state.set_contact_state(dataset["contact_states"][start_idx])
+        serow_framework.set_state(initial_state)
+
+    idx = 0
     base_positions = []
     base_orientations = []
     for imu, joint, ft in zip(dataset["imu"], dataset["joints"], dataset["ft"]):
+        if idx < start_idx:
+            idx += 1
+            continue
         status = serow_framework.filter(imu, joint, ft, None)
         if status:
             state = serow_framework.get_state(allow_invalid=True)
@@ -21,16 +32,28 @@ def run_serow(dataset, robot):
 
     return np.array(base_positions), np.array(base_orientations)
 
-def run_serow_per_step(dataset, robot):
+def run_serow_per_step(dataset, robot, start_idx = 0):
     serow_framework = serow.Serow()
     serow_framework.initialize(f"{robot}_pytest.json")
 
+    if (start_idx > 0):
+        initial_state = serow_framework.get_state(allow_invalid=True)
+        initial_state.set_base_state(dataset["base_states"][start_idx])
+        initial_state.set_joint_state(dataset["joint_states"][start_idx])
+        initial_state.set_contact_state(dataset["contact_states"][start_idx])
+        serow_framework.set_state(initial_state)
+
+    idx = 0
     base_positions = []
     base_orientations = []
     for imu, joint, ft in zip(dataset["imu"], dataset["joints"], dataset["ft"]):
+        if idx < start_idx:
+            idx += 1
+            continue
         imu, kin, ft = serow_framework.process_measurements(imu, joint, ft, None)
         serow_framework.base_estimator_predict_step(imu, kin)        
         for cf in kin.contacts_status.keys():
+            serow_framework.set_action(cf, np.array([1.0], dtype=np.float32))
             serow_framework.base_estimator_update_with_contact_position(cf, kin)
         serow_framework.base_estimator_finish_update(imu, kin)
         state = serow_framework.get_state(allow_invalid=True)
@@ -39,10 +62,14 @@ def run_serow_per_step(dataset, robot):
     return np.array(base_positions), np.array(base_orientations)
 
 
-def run_serow_playback(dataset):
+def run_serow_playback(dataset, start_idx = 0):
+    idx = 0
     base_positions = []
     base_orientations = []
     for bs in dataset["base_states"]:
+        if idx < start_idx:
+            idx += 1
+            continue
         base_positions.append(bs.base_position)
         base_orientations.append(bs.base_orientation)
 
@@ -62,13 +89,15 @@ class TestSerow(unittest.TestCase):
         print(f"Length of dataset imu: {len(self.dataset['imu'])}")
         print(f"Length of dataset ft: {len(self.dataset['ft'])}")
         print(f"Length of dataset base pose ground truth: {len(self.dataset['base_pose_ground_truth'])}")
+
     def test_serow(self):
-        base_positions, base_orientations = run_serow(self.dataset, self.robot)
+        start_idx = 25
+        base_positions, base_orientations = run_serow(self.dataset, self.robot, start_idx)
         actual_base_positions, actual_base_orientations = run_serow_playback(
-            self.dataset
+            self.dataset, start_idx
         )
         base_positions_per_step, base_orientations_per_step = run_serow_per_step(
-            self.dataset, self.robot
+            self.dataset, self.robot, start_idx
         )
         print(f"Base positions: {len(base_positions)}")
         print(f"Actual base positions: {len(actual_base_positions)}")
@@ -86,12 +115,15 @@ class TestSerow(unittest.TestCase):
         orientation_error = base_orientations - actual_base_orientations
         position_error_per_step = base_positions_per_step - actual_base_positions
         orientation_error_per_step = base_orientations_per_step - actual_base_orientations
+        per_step_vs_filter_position_error = base_positions_per_step - base_positions
+        per_step_vs_filter_orientation_error = base_orientations_per_step - base_orientations
+
         print(f"Actual Position error: {position_error.sum()}, {position_error.max()}")
-        print(
-            f"Actual Orientation error: {orientation_error.sum()}, {orientation_error.max()}"
-        )
+        print(f"Actual Orientation error: {orientation_error.sum()}, {orientation_error.max()}")
         print(f"Actual Position error per step: {position_error_per_step.sum()}, {position_error_per_step.max()}")
         print(f"Actual Orientation error per step: {orientation_error_per_step.sum()}, {orientation_error_per_step.max()}")
+        print(f"per_step() vs filter() position error: {per_step_vs_filter_position_error.sum()}, {per_step_vs_filter_position_error.max()}")
+        print(f"per_step() vs filter() orientation error: {per_step_vs_filter_orientation_error.sum()}, {per_step_vs_filter_orientation_error.max()}")
 
         # Plot the base position and orientation
         fig, axs = plt.subplots(2, 1)
