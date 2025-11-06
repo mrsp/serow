@@ -333,6 +333,11 @@ void State::setBaseState(const BaseState& base_state) {
     base_state_ = base_state;
 }
 
+void State::setBaseStatePose(const Eigen::Vector3d& position,
+                             const Eigen::Quaterniond& orientation) {
+    base_state_.base_position = position;
+    base_state_.base_orientation = orientation;
+}
 void State::setContactState(const ContactState& contact_state) {
     contact_state_ = contact_state;
 }

@@ -272,6 +272,8 @@ public:
     void setBaseState(const BaseState& base_state);
     BaseState getBaseState() const;
 
+    void setBaseStatePose(const Eigen::Vector3d& position,const Eigen::Quaterniond& orientation);
+    
     void setContactState(const ContactState& contact_state);
     ContactState getContactState() const;
 
