@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from env_sac import SerowEnv, action_to_scale
 from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from scipy.spatial.transform import Rotation as R
 import serow
 
 class TestSerowEnvMultiCF:
@@ -24,9 +25,9 @@ class TestSerowEnvMultiCF:
         self.contact_status = dataset["contact_states"]
         self.contact_frames = list(self.contact_status[0].contacts_status.keys())
         
+        # Extract raw GT data
         self.pos_gt = []
         self.quat_gt = []
-        self.N = len(self.pose_gt)
         for i in range(len(self.pose_gt)):
             self.pos_gt.append(np.array(self.pose_gt[i].position))
             self.quat_gt.append(np.array(self.pose_gt[i].orientation))
@@ -34,8 +35,14 @@ class TestSerowEnvMultiCF:
         self.pos_gt = np.array(self.pos_gt)
         self.quat_gt = np.array(self.quat_gt)
         
+        # Normalize GT to start from origin
+        self._normalize_ground_truth()
+        
+        self.N = len(self.pose_gt)
+        
         print(f"Dataset size: {self.N} samples")
         print(f"Contact frames: {self.contact_frames}")
+        print(f"Initial GT pose: pos={self.pos_gt[0]}, quat={self.quat_gt[0]}")
         
         # Storage for results
         self.baseline_orientations = []
@@ -60,12 +67,43 @@ class TestSerowEnvMultiCF:
             for cf in self.contact_frames
         }
 
+    def _normalize_ground_truth(self):
+        """Normalize ground truth to start from (0,0,0) and identity quaternion (1,0,0,0)"""
+        # Get initial pose
+        pos_0 = self.pos_gt[0].copy()
+        quat_0 = self.quat_gt[0].copy()  # [w, x, y, z]
+        
+        # Create rotation from initial quaternion
+        # scipy uses [x, y, z, w] convention
+        R_0 = R.from_quat([quat_0[1], quat_0[2], quat_0[3], quat_0[0]])
+        R_0_inv = R_0.inv()
+        
+        # Transform all poses
+        normalized_pos = []
+        normalized_quat = []
+        
+        for i in range(len(self.pos_gt)):
+            # Transform position: rotate to initial frame, then subtract initial position
+            pos_rotated = R_0_inv.apply(self.pos_gt[i] - pos_0)
+            normalized_pos.append(pos_rotated)
+            
+            # Transform orientation: q_new = q_0_inv * q_i
+            R_i = R.from_quat([self.quat_gt[i][1], self.quat_gt[i][2], 
+                              self.quat_gt[i][3], self.quat_gt[i][0]])
+            R_new = R_0_inv * R_i
+            quat_new = R_new.as_quat()  # [x, y, z, w]
+            # Convert back to [w, x, y, z]
+            normalized_quat.append([quat_new[3], quat_new[0], quat_new[1], quat_new[2]])
+        
+        self.pos_gt = np.array(normalized_pos)
+        self.quat_gt = np.array(normalized_quat)
+
     def compute_reward_and_error(self, state, step_idx):
         """Compute reward and errors"""
         pos_est = np.asarray(state.get_base_position(), dtype=np.float64)
         quat_est = np.asarray(state.get_base_orientation(), dtype=np.float64)
-        pos_gt = np.asarray(self.pose_gt[step_idx].position, dtype=np.float64)
-        quat_gt = np.asarray(self.pose_gt[step_idx].orientation, dtype=np.float64)
+        pos_gt = self.pos_gt[step_idx]
+        quat_gt = self.quat_gt[step_idx]
 
         # Position error
         pos_err = float(np.linalg.norm(pos_est[0:2] - pos_gt[0:2]) + 
@@ -281,14 +319,21 @@ def plot_comparison_results(test_env):
     # Adjust layout: 6 rows × 2 cols (to fit 4 leg action plots)
     fig, axes = plt.subplots(6, 2, figsize=(14, 22))
 
-    # --- Row 1: Position X, Y ---
-    for idx, axis_name in enumerate(['X', 'Y']):
-        axes[0, idx].plot(time_steps, test_env.pos_gt[:, idx], 'r-', label='Ground Truth', linewidth=1.5)
-        axes[0, idx].plot(time_steps, test_env.rl_positions[:, idx], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
-        axes[0, idx].plot(time_steps, test_env.baseline_positions[:, idx], 'g--', label='Baseline', linewidth=1, alpha=0.8)
-        axes[0, idx].set_ylabel(f'{axis_name} Position (m)')
-        axes[0, idx].legend()
-        axes[0, idx].grid(True, alpha=0.3)
+    # --- Row 1: Position X ---
+    axes[0, 0].plot(time_steps, test_env.pos_gt[:, 0], 'r-', label='Ground Truth', linewidth=1.5)
+    axes[0, 0].plot(time_steps, test_env.rl_positions[:, 0], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
+    axes[0, 0].plot(time_steps, test_env.baseline_positions[:, 0], 'g--', label='Baseline', linewidth=1, alpha=0.8)
+    axes[0, 0].set_ylabel('X Position (m)')
+    axes[0, 0].legend()
+    axes[0, 0].grid(True, alpha=0.3)
+
+    # --- Row 1: Position Y ---
+    axes[0, 1].plot(time_steps, test_env.pos_gt[:, 1], 'r-', label='Ground Truth', linewidth=1.5)
+    axes[0, 1].plot(time_steps, test_env.rl_positions[:, 1], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
+    axes[0, 1].plot(test_env.baseline_positions[:, 1], 'g--', label='Baseline', linewidth=1, alpha=0.8)
+    axes[0, 1].set_ylabel('Y Position (m)')
+    axes[0, 1].legend()
+    axes[0, 1].grid(True, alpha=0.3)
 
     # --- Row 2: Position Z, Position Error ---
     axes[1, 0].plot(time_steps, test_env.pos_gt[:, 2], 'r-', label='Ground Truth', linewidth=1.5)
