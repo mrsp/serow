@@ -925,6 +925,23 @@ PYBIND11_MODULE(serow, m) {
              "Returns whether the robot has point feet")
         .def("set_base_state", &serow::State::setBaseState, py::arg("base_state"),
              "Sets the base state of the robot")
+        .def("set_base_state_pose", 
+            [](serow::State& self, 
+            const Eigen::Vector3d& position,
+            const Eigen::Vector4d& orientation_array) {
+                // Assuming quaternion is [w, x, y, z] or [x, y, z, w]
+                // Adjust indices based on your convention
+                Eigen::Quaterniond orientation(
+                    orientation_array[0],  // w
+                    orientation_array[1],  // x
+                    orientation_array[2],  // y
+                    orientation_array[3]   // z
+                );
+                self.setBaseStatePose(position, orientation);
+            },
+            py::arg("position"),
+            py::arg("orientation"),
+            "Sets the base state pose of the robot using position and orientation")
         .def("set_contact_state", &serow::State::setContactState, py::arg("contact_state"),
              "Sets the contact state of the robot")
         .def("set_centroidal_state", &serow::State::setCentroidalState, py::arg("centroidal_state"),
