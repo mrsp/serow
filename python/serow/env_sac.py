@@ -2,7 +2,7 @@ import numpy as np
 import gymnasium as gym
 import copy
 from utils import quaternion_to_rotation_matrix
-
+import sys
 
 # Orientation error
 def quat_geodesic_angle_wxyz(q_est, q_gt):
@@ -47,6 +47,11 @@ class SerowEnv(gym.Env):
         self.contact_status = dataset["contact_states"]
         self.contact_frames = list(self.contact_status[0].contacts_status.keys())
         self.target_cf = "FL_foot"  # which contact frame to control 
+        
+        self.prev_pos = None
+        self.prev_ori = None
+        self.starting_t = 0
+        self.reward_history = []
         print("Loaded dataset with IMU: ", len(self.imu), " samples", " Joints: ", len(self.joints), " samples", " FT: ", len(self.ft), " samples", " GT Pose: ", len(self.pose_gt), " samples", " Contact states: ", len(self.contact_status), " samples"  )
         
         self.cf_index = {name: i for i, name in enumerate(self.contact_frames)}
@@ -57,7 +62,7 @@ class SerowEnv(gym.Env):
         self.state_dim = 9 + self.action_history_size 
           
         self.start_episode_time = 0 
-        self.max_start = 20_000 # max index to start an episode (on reset)    
+        self.max_start = 39000 # max index to start an episode (on reset)    
 
         # Extract kinematic measurements for every time step
         self.serow.initialize("go2_rl.json")  # Initialize SEROW instance
@@ -106,8 +111,7 @@ class SerowEnv(gym.Env):
         self.action_history_buffer = np.zeros((self.action_history_size,), dtype=np.float32) # buffer of floats
         # --- step bookkeeping ---
         self.t = 0
-        self.last_action = np.zeros(4, dtype=np.float32)   # match action dims
-        
+        self.last_action = None
     
     def _update_all_contacts_if_available(self, kin):
         """
@@ -133,10 +137,21 @@ class SerowEnv(gym.Env):
         # --- Errors ---
         pos_err = float(np.linalg.norm(pos_est[0:2] - pos_gt[0:2]) + 2 * np.linalg.norm(pos_est[2]-pos_gt[2]))                    # meters
         ori_err = float(quat_geodesic_angle_wxyz(quat_est, quat_gt))         # radians
-
         # Base term: linear penalty (SAC-friendly)
         reward = -(self.w_pos * pos_err + self.w_ori * ori_err)
+        
+        self.reward_history.append(reward)
 
+        # if reward < -5.0:    
+                
+        #     print("ERRORS --> " , pos_err, "  " ,  ori_err, "  ", reward)
+        #     print("ACTION --> " , self.current_action)
+        #     print("EST POSE --> " , pos_est , "  " , quat_est)
+        #     print("Prev Estimated pose --> " , self.prev_pos , "  " , self.prev_ori)
+        #     print("GT  POSE --> " , pos_gt  , "  " , quat_gt)
+            
+            
+        #     sys.exit()
         return float(reward), pos_err
     
     def frobenius_norm(R: np.ndarray) -> float:
@@ -200,29 +215,38 @@ class SerowEnv(gym.Env):
 
         return self.obs
     
-    def reset(self, *, seed=42, options=None):
-        super().reset(seed=seed)
-        
+    def reset(self, *, seed=None, options=None):
+        if seed is not None:
+            super().reset(seed=seed)
+
+        print(f"\033[91mEpisode Finished started at {self.starting_t} and ended at {self.t} with duration {self.t-self.starting_t} timesteps\033[0m")
+
         self.t = int(self.np_random.integers(0, self.max_start + 1)) # Get a new random start point
         # Make sure we start at a point where the target contact frame is in contact
         while (self.kin_data[self.t].contacts_status[self.target_cf] == False
                and self.kin_data[self.t + 1].contacts_status[self.target_cf] == False ):
             self.t = int(self.np_random.integers(0, self.max_start + 1)) # Get a new random start point
-        
+        self.starting_t = self.t
         self.start_episode_time = self.t # Store the initial point of the episode
         self.last_action = 0.0
         self.serow.reset()
-            
         
+        # initial_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
+                
         curr_state = self.serow.get_state(allow_invalid=True)
         curr_state.set_joint_state(self.joint_states[self.t])
         curr_state.set_base_state(self.base_states[self.t])
+        curr_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
         curr_state.set_contact_state(self.contact_status[self.t])
         self.serow.set_state(curr_state)
         
         kin_next = self.kin_data[self.t + 1]  # measurements aligned with the new state index
         self.obs = self.get_observation(self.target_cf, curr_state, kin_next)
 
+        # print(curr_state.get_base_position() , " " , self.pose_gt[self.t].position)
+        # print(curr_state.get_base_orientation() , " " , self.pose_gt[self.t].orientation)
+        self.prev_ori = None
+        self.prev_pos = None
         info = {}
         self.action_history_buffer.fill(0.0)
         return self.obs, info
@@ -243,8 +267,12 @@ class SerowEnv(gym.Env):
             obs = np.zeros(self.state_dim, dtype=np.float32)
         else:
             state = self.serow.get_state(allow_invalid=True)
+            # debug_pos_error =float(np.linalg.norm(state.get_base_position() - self.pose_gt[self.t].position))
+            # print("pos error" , debug_pos_error)
 
-            
+            if self.prev_pos is None or self.prev_ori is None:
+                self.prev_pos = state.get_base_position()
+                self.prev_ori = state.get_base_orientation()
             action = np.asarray(action, dtype=np.float32)
             
             kin = self.kin_data[self.t] # Extract current kinematic measurement
@@ -272,7 +300,10 @@ class SerowEnv(gym.Env):
                         
             if (pos_err > 0.2):
                     diverged = True
-                    
+            else:
+                self.prev_pos = state.get_base_position()
+                self.prev_ori = state.get_base_orientation()
+
             # 4) Time limit / dataset end
             time_limit_reached = (self.t >= self.N - 1)
 
@@ -281,15 +312,13 @@ class SerowEnv(gym.Env):
             truncated  = bool(time_limit_reached)
             if (terminated):
                 print(f"\033[91mFilter Diverged with pos err {pos_err} at step {self.t} and lasted {self.t - self.start_episode_time} timesteps\033[0m")
-                self.obs = np.zeros(self.state_dim, dtype=np.float32)
+                # self.obs = np.zeros(self.state_dim, dtype=np.float32)
 
             if truncated:
-                print("Episode truncated")
-                # optional: zero observation at terminal step
-                self.obs = np.zeros(self.state_dim, dtype=np.float32)
+                print(f"\033[91mEpisode Trancated\033[0m")
         
         # 6) Bookkeeping: move current -> last action AFTER computing reward/obs
-        self.last_action = np.asarray(self.current_action, dtype=np.float32)
+        self.last_action = self.current_action
 
         # 7) Info dict for logging (helps tuning but not used by the policy)
         info = {
