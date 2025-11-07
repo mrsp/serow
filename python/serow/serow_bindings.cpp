@@ -942,6 +942,12 @@ PYBIND11_MODULE(serow, m) {
             py::arg("position"),
             py::arg("orientation"),
             "Sets the base state pose of the robot using position and orientation")
+        .def("set_base_state_velocity", 
+            [](serow::State& self, const Eigen::Vector3d& linear_velocity) {
+                self.setBaseStateVelocity(linear_velocity);
+            },
+            py::arg("linear_velocity"),
+            "Sets the base state velocity of the robot using a 3D linear velocity vector")
         .def("set_contact_state", &serow::State::setContactState, py::arg("contact_state"),
              "Sets the contact state of the robot")
         .def("set_centroidal_state", &serow::State::setCentroidalState, py::arg("centroidal_state"),
