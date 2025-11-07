@@ -338,6 +338,11 @@ void State::setBaseStatePose(const Eigen::Vector3d& position,
     base_state_.base_position = position;
     base_state_.base_orientation = orientation;
 }
+
+void State::setBaseStateVelocity(const Eigen::Vector3d& linear_velocity){
+    base_state_.base_linear_velocity = linear_velocity;
+}
+
 void State::setContactState(const ContactState& contact_state) {
     contact_state_ = contact_state;
 }

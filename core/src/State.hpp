@@ -264,7 +264,11 @@ public:
     void setValid(bool valid);
     /// Sets the flag to indicate if the state is initialized
     void setInitialized(bool initialized);
-
+    // Sets the base position and orientation
+    void setBaseStatePose(const Eigen::Vector3d& position,const Eigen::Quaterniond& orientation);
+    // Sets the base linear velocity
+    void setBaseStateVelocity(const Eigen::Vector3d& linear_velocity);
+    
     State() = default;
     State(const std::set<std::string>& contacts_frame, bool point_feet,
           const std::string& base_frame);
@@ -272,8 +276,6 @@ public:
     void setBaseState(const BaseState& base_state);
     BaseState getBaseState() const;
 
-    void setBaseStatePose(const Eigen::Vector3d& position,const Eigen::Quaterniond& orientation);
-    
     void setContactState(const ContactState& contact_state);
     ContactState getContactState() const;
 
