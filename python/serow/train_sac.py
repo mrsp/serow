@@ -32,6 +32,7 @@ for cf in cfs:
         "MlpPolicy",
         env_vec,
         verbose=1,
+        seed = 42,
         learning_rate=1e-4,
         buffer_size=100_000,
         batch_size=256,
