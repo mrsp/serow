@@ -101,6 +101,7 @@ class TestSerowEnvMultiCF:
     def compute_reward_and_error(self, state, step_idx):
         """Compute reward and errors"""
         pos_est = np.asarray(state.get_base_position(), dtype=np.float64)
+        quat_gt = self.quat_gt[step_idx]
         quat_est = np.asarray(state.get_base_orientation(), dtype=np.float64)
         pos_gt = self.pos_gt[step_idx]
         quat_gt = self.quat_gt[step_idx]
@@ -310,99 +311,107 @@ class TestSerowEnvMultiCF:
             self.rl_actions[cf] = np.array(self.rl_actions[cf])
             
             
-            
 def plot_comparison_results(test_env):
-    """Create comparison plots without titles, rewards, or empty plots, with outlier filtering."""
-
+    """Create comparison plots with 4-column layout: position errors, quaternions, and cumulative metrics."""
     time_steps = np.arange(len(test_env.rl_positions))
-
-    # Adjust layout: 6 rows × 2 cols (to fit 4 leg action plots)
-    fig, axes = plt.subplots(6, 2, figsize=(14, 22))
-
-    # --- Row 1: Position X ---
+    
+    # 3 rows × 4 cols layout
+    fig, axes = plt.subplots(3, 4, figsize=(20, 12))
+    
+    # --- Row 1: Position Errors (X, Y, Z) + Total Position Error ---
+    # X Position Error
+    x_error_rl = np.abs(test_env.rl_positions[:, 0] - test_env.pos_gt[:, 0])
+    x_error_baseline = np.abs(test_env.baseline_positions[:, 0] - test_env.pos_gt[:, 0])
     axes[0, 0].plot(time_steps, test_env.pos_gt[:, 0], 'r-', label='Ground Truth', linewidth=1.5)
     axes[0, 0].plot(time_steps, test_env.rl_positions[:, 0], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
     axes[0, 0].plot(time_steps, test_env.baseline_positions[:, 0], 'g--', label='Baseline', linewidth=1, alpha=0.8)
     axes[0, 0].set_ylabel('X Position (m)')
     axes[0, 0].legend()
     axes[0, 0].grid(True, alpha=0.3)
-
-    # --- Row 1: Position Y ---
+    
+    # Y Position Error
+    y_error_rl = np.abs(test_env.rl_positions[:, 1] - test_env.pos_gt[:, 1])
+    y_error_baseline = np.abs(test_env.baseline_positions[:, 1] - test_env.pos_gt[:, 1])
     axes[0, 1].plot(time_steps, test_env.pos_gt[:, 1], 'r-', label='Ground Truth', linewidth=1.5)
     axes[0, 1].plot(time_steps, test_env.rl_positions[:, 1], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
-    axes[0, 1].plot(test_env.baseline_positions[:, 1], 'g--', label='Baseline', linewidth=1, alpha=0.8)
+    axes[0, 1].plot(time_steps, test_env.baseline_positions[:, 1], 'g--', label='Baseline', linewidth=1, alpha=0.8)
     axes[0, 1].set_ylabel('Y Position (m)')
     axes[0, 1].legend()
     axes[0, 1].grid(True, alpha=0.3)
-
-    # --- Row 2: Position Z, Position Error ---
-    axes[1, 0].plot(time_steps, test_env.pos_gt[:, 2], 'r-', label='Ground Truth', linewidth=1.5)
-    axes[1, 0].plot(time_steps, test_env.rl_positions[:, 2], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
-    axes[1, 0].plot(time_steps, test_env.baseline_positions[:, 2], 'g--', label='Baseline', linewidth=1, alpha=0.8)
-    axes[1, 0].set_ylabel('Z Position (m)')
-    axes[1, 0].legend()
-    axes[1, 0].grid(True, alpha=0.3)
-
-    axes[1, 1].plot(time_steps, test_env.rl_position_errors, 'b-', label='RL Agent Error', linewidth=1)
-    axes[1, 1].plot(time_steps, test_env.baseline_pos_errors, 'g--', label='Baseline Error', linewidth=1)
-    axes[1, 1].set_ylabel('Position Error (m)')
-    axes[1, 1].legend()
-    axes[1, 1].grid(True, alpha=0.3)
-
-    # --- Row 3: XY trajectory, Orientation Error ---
-    axes[2, 0].plot(test_env.pos_gt[:, 0], test_env.pos_gt[:, 1], 'r-', label='Ground Truth', linewidth=1.5)
-    axes[2, 0].plot(test_env.rl_positions[:, 0], test_env.rl_positions[:, 1], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
-    axes[2, 0].plot(test_env.baseline_positions[:, 0], test_env.baseline_positions[:, 1], 'g--', label='Baseline', linewidth=1, alpha=0.8)
-    axes[2, 0].set_xlabel('X Position (m)')
-    axes[2, 0].set_ylabel('Y Position (m)')
+    
+    # Z Position Error
+    z_error_rl = np.abs(test_env.rl_positions[:, 2] - test_env.pos_gt[:, 2])
+    z_error_baseline = np.abs(test_env.baseline_positions[:, 2] - test_env.pos_gt[:, 2])
+    axes[0, 2].plot(time_steps, test_env.pos_gt[:, 2], 'r-', label='Ground Truth', linewidth=1.5)
+    axes[0, 2].plot(time_steps, test_env.rl_positions[:, 2], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
+    axes[0, 2].plot(time_steps, test_env.baseline_positions[:, 2], 'g--', label='Baseline', linewidth=1, alpha=0.8)
+    axes[0, 2].set_ylabel('Z Position (m)')
+    axes[0, 2].legend()
+    axes[0, 2].grid(True, alpha=0.3)
+    
+    # Total Position Error
+    axes[0, 3].plot(time_steps, test_env.rl_position_errors, 'b-', label='RL Agent', linewidth=1)
+    axes[0, 3].plot(time_steps, test_env.baseline_pos_errors, 'g--', label='Baseline', linewidth=1)
+    axes[0, 3].set_ylabel('Total Position Error (m)')
+    axes[0, 3].legend()
+    axes[0, 3].grid(True, alpha=0.3)
+    
+    # --- Row 2: Quaternions (W, X, Y, Z) ---
+    quat_labels = ['W', 'X', 'Y', 'Z']
+    for i in range(4):
+        axes[1, i].plot(time_steps, test_env.quat_gt[:, i], 'r-', label='Ground Truth', linewidth=1.5)
+        axes[1, i].plot(time_steps, test_env.rl_orientations[:, i], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
+        # Assuming baseline orientations are stored similarly
+        if hasattr(test_env, 'baseline_orientations'):
+            axes[1, i].plot(time_steps, test_env.baseline_orientations[:, i], 'g--', label='Baseline', linewidth=1, alpha=0.8)
+        axes[1, i].set_ylabel(f'Quaternion {quat_labels[i]}')
+        axes[1, i].legend()
+        axes[1, i].grid(True, alpha=0.3)
+    
+    # --- Row 3: Cumulative Error, Orientation Error, XY Trajectory, and Cumulative Ori Error ---
+    # Cumulative Position Error
+    cumulative_rl = np.cumsum(test_env.rl_position_errors)
+    cumulative_baseline = np.cumsum(test_env.baseline_pos_errors)
+    axes[2, 0].plot(time_steps, cumulative_rl, 'b-', label='RL Agent', linewidth=1.5)
+    axes[2, 0].plot(time_steps, cumulative_baseline, 'g--', label='Baseline', linewidth=1.5)
+    axes[2, 0].set_xlabel('Time Steps')
+    axes[2, 0].set_ylabel('Cumulative Error (m)')
     axes[2, 0].legend()
     axes[2, 0].grid(True, alpha=0.3)
-    axes[2, 0].axis('equal')
-
+    
+    # Orientation Error
     axes[2, 1].plot(time_steps, test_env.rl_ori_errors, 'b-', label='RL Agent', linewidth=1)
     axes[2, 1].plot(time_steps, test_env.baseline_ori_errors, 'g--', label='Baseline', linewidth=1)
+    axes[2, 1].set_xlabel('Time Steps')
     axes[2, 1].set_ylabel('Orientation Error (rad)')
     axes[2, 1].legend()
     axes[2, 1].grid(True, alpha=0.3)
-
-    # --- Rows 4–5: Actions per contact frame (4 total legs) ---
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
-    for idx, cf in enumerate(test_env.contact_frames):
-        row = 3 + idx // 2
-        col = idx % 2
-        if len(test_env.rl_actions[cf]) > 0:
-            action_data = np.array(test_env.rl_actions[cf])
-
-            # Filter outliers (1st–99th percentile)
-            low, high = np.percentile(action_data, [1, 99])
-            filtered = np.clip(action_data, low, high)
-
-            axes[row, col].plot(np.arange(len(filtered)), filtered,
-                                color=colors[idx], linewidth=1, alpha=0.8, label=cf)
-            axes[row, col].set_ylabel('Action Value')
-            axes[row, col].set_xlabel('Contact Steps')
-            axes[row, col].legend()
-            axes[row, col].grid(True, alpha=0.3)
-
-    # --- Row 6: Cumulative position error ---
-    cumulative_rl = np.cumsum(test_env.rl_position_errors)
-    cumulative_baseline = np.cumsum(test_env.baseline_pos_errors)
-    axes[5, 0].plot(time_steps, cumulative_rl, 'b-', label='RL Agent', linewidth=1.5)
-    axes[5, 0].plot(time_steps, cumulative_baseline, 'g--', label='Baseline', linewidth=1.5)
-    axes[5, 0].set_xlabel('Time Steps')
-    axes[5, 0].set_ylabel('Cumulative Error (m)')
-    axes[5, 0].legend()
-    axes[5, 0].grid(True, alpha=0.3)
-
-    # Remove last unused subplot
-    fig.delaxes(axes[5, 1])
-
+    
+    # XY Trajectory
+    axes[2, 2].plot(test_env.pos_gt[:, 0], test_env.pos_gt[:, 1], 'r-', label='Ground Truth', linewidth=1.5)
+    axes[2, 2].plot(test_env.rl_positions[:, 0], test_env.rl_positions[:, 1], 'b-', label='RL Agent', linewidth=1, alpha=0.8)
+    axes[2, 2].plot(test_env.baseline_positions[:, 0], test_env.baseline_positions[:, 1], 'g--', label='Baseline', linewidth=1, alpha=0.8)
+    axes[2, 2].set_xlabel('X Position (m)')
+    axes[2, 2].set_ylabel('Y Position (m)')
+    axes[2, 2].legend()
+    axes[2, 2].grid(True, alpha=0.3)
+    axes[2, 2].axis('equal')
+    
+    # Cumulative Orientation Error
+    cumulative_ori_rl = np.cumsum(test_env.rl_ori_errors)
+    cumulative_ori_baseline = np.cumsum(test_env.baseline_ori_errors)
+    axes[2, 3].plot(time_steps, cumulative_ori_rl, 'b-', label='RL Agent', linewidth=1.5)
+    axes[2, 3].plot(time_steps, cumulative_ori_baseline, 'g--', label='Baseline', linewidth=1.5)
+    axes[2, 3].set_xlabel('Time Steps')
+    axes[2, 3].set_ylabel('Cumulative Ori Error (rad)')
+    axes[2, 3].legend()
+    axes[2, 3].grid(True, alpha=0.3)
+    
     plt.tight_layout()
-    plt.savefig('rl_vs_baseline_cleaned.png', dpi=150)
-    print("Plot saved as 'rl_vs_baseline_cleaned.png'")
+    plt.savefig('rl_vs_baseline_4col.png', dpi=150)
+    print("Plot saved as 'rl_vs_baseline_4col.png'")
     plt.show()
-
-
+    
 def load_models_and_normalizers(dataset, contact_frames):
     """Load all trained models and their normalizers"""
     models = {}
