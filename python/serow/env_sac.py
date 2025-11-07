@@ -44,6 +44,7 @@ class SerowEnv(gym.Env):
         self.base_states = dataset["base_states"]
         self.joint_states = dataset["joint_states"] 
         self.pose_gt = dataset["base_pose_ground_truth"]  # assumes .position (3,), .orientation (wxyz)
+        self.velocity_gt = dataset["base_velocity_ground_truth"]
         self.contact_status = dataset["contact_states"]
         self.contact_frames = list(self.contact_status[0].contacts_status.keys())
         self.target_cf = "FL_foot"  # which contact frame to control 
@@ -132,16 +133,16 @@ class SerowEnv(gym.Env):
         
         self.reward_history.append(reward)
 
-        # if reward < -5.0:    
+        if reward < -100.0:    
                 
-        #     print("ERRORS --> " , pos_err, "  " ,  ori_err, "  ", reward)
-        #     print("ACTION --> " , self.current_action)
-        #     print("EST POSE --> " , pos_est , "  " , quat_est)
-        #     print("Prev Estimated pose --> " , self.prev_pos , "  " , self.prev_ori)
-        #     print("GT  POSE --> " , pos_gt  , "  " , quat_gt)
+            print("ERRORS --> " , pos_err, "  " ,  ori_err, "  ", reward)
+            print("ACTION --> " , self.current_action)
+            print("EST POSE --> " , pos_est , "  " , quat_est)
+            print("Prev Estimated pose --> " , self.prev_pos , "  " , self.prev_ori)
+            print("GT  POSE --> " , pos_gt  , "  " , quat_gt)
             
             
-        #     sys.exit()
+            sys.exit()
         return float(reward), pos_err
     
     def frobenius_norm(R: np.ndarray) -> float:
@@ -227,6 +228,7 @@ class SerowEnv(gym.Env):
         self.initial_state.set_joint_state(self.joint_states[self.t])
         self.initial_state.set_base_state(self.base_states[self.t])
         self.initial_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
+        self.initial_state.set_base_state_velocity(self.velocity_gt[self.t].linear_velocity)
         self.initial_state.set_contact_state(self.contact_status[self.t])
         self.serow.set_state(self.initial_state)
         
@@ -250,10 +252,11 @@ class SerowEnv(gym.Env):
 
         pos_err = 0.0
         reward = 0.0
-        if self.kin_data[self.t].contacts_status[self.target_cf] == True:
-            # truncated = True
-            # reward = 0.0
-            # obs = np.zeros(self.state_dim, dtype=np.float32)
+        if self.kin_data[self.t].contacts_status[self.target_cf] == False:
+            truncated = True
+            reward = 0.0
+            obs = np.zeros(self.state_dim, dtype=np.float32)
+        else:
             state = self.serow.get_state(allow_invalid=True)
             print("Current position ", state.get_base_position() , " GT Position " , self.pose_gt[self.t].position, " at step ", self.t)
             # debug_pos_error =float(np.linalg.norm(state.get_base_position() - self.pose_gt[self.t].position))
