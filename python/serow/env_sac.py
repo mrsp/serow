@@ -3,6 +3,7 @@ import gymnasium as gym
 import copy
 from utils import quaternion_to_rotation_matrix
 import sys
+import serow  # local import so unit tests can run without serow installed
 
 # Orientation error
 def quat_geodesic_angle_wxyz(q_est, q_gt):
@@ -32,7 +33,6 @@ class SerowEnv(gym.Env):
 
     def __init__(self, dataset, target_cf, w_pos=1.0, w_ori=0.5):
         super(SerowEnv,self).__init__()
-        import serow  # local import so unit tests can run without serow installed
         self.serow = serow.Serow()
         print("Initializing Serow Environment")
         
@@ -80,17 +80,7 @@ class SerowEnv(gym.Env):
             self.kin_data.append(kin)    
         
         print("Serow Processed dataset with IMU: ", len(self.imu_data), " samples", " Kinematic Measurements: ", len(self.kin_data), " samples")
-        # Check for invalid data
-        invalid_counter = 0
-        for i, status in enumerate(self.contact_status):
-            contacts = status.contacts_status.values()
-
-            if all(not c for c in contacts):  # everything is False i.e. no contacts
-                invalid_counter += 1
-                print(f"Invalid sample at step {i}")
-
-        print(f"Total invalid samples: {invalid_counter}")
-
+        
         self.N = len(self.contact_status) # Number of samples in the dataset
 
         # --- RL bits ---
@@ -216,11 +206,10 @@ class SerowEnv(gym.Env):
         return self.obs
     
     def reset(self, *, seed=None, options=None):
-        if seed is not None:
-            super().reset(seed=seed)
+        # if seed is not None:
+        super().reset(seed=seed)
 
-        print(f"\033[91mEpisode Finished started at {self.starting_t} and ended at {self.t} with duration {self.t-self.starting_t} timesteps\033[0m")
-
+        print(f"\033[92mEpisode Finished started at {self.starting_t} and ended at {self.t} with duration {self.t-self.starting_t} timesteps\033[0m")
         self.t = int(self.np_random.integers(0, self.max_start + 1)) # Get a new random start point
         # Make sure we start at a point where the target contact frame is in contact
         while (self.kin_data[self.t].contacts_status[self.target_cf] == False
@@ -229,19 +218,20 @@ class SerowEnv(gym.Env):
         self.starting_t = self.t
         self.start_episode_time = self.t # Store the initial point of the episode
         self.last_action = 0.0
-        self.serow.reset()
         
         # initial_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
                 
-        curr_state = self.serow.get_state(allow_invalid=True)
-        curr_state.set_joint_state(self.joint_states[self.t])
-        curr_state.set_base_state(self.base_states[self.t])
-        curr_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
-        curr_state.set_contact_state(self.contact_status[self.t])
-        self.serow.set_state(curr_state)
+        # curr_state = self.serow.get_state(allow_invalid=True)
+        self.serow.reset()
+        self.initial_state = self.serow.get_state(allow_invalid=True) # Store initial state for reset
+        self.initial_state.set_joint_state(self.joint_states[self.t])
+        self.initial_state.set_base_state(self.base_states[self.t])
+        self.initial_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
+        self.initial_state.set_contact_state(self.contact_status[self.t])
+        self.serow.set_state(self.initial_state)
         
         kin_next = self.kin_data[self.t + 1]  # measurements aligned with the new state index
-        self.obs = self.get_observation(self.target_cf, curr_state, kin_next)
+        self.obs = self.get_observation(self.target_cf, self.initial_state, kin_next)
 
         # print(curr_state.get_base_position() , " " , self.pose_gt[self.t].position)
         # print(curr_state.get_base_orientation() , " " , self.pose_gt[self.t].orientation)
@@ -260,13 +250,12 @@ class SerowEnv(gym.Env):
 
         pos_err = 0.0
         reward = 0.0
-        
-        if self.kin_data[self.t].contacts_status[self.target_cf] == False:
-            truncated = True
-            reward = 0.0
-            obs = np.zeros(self.state_dim, dtype=np.float32)
-        else:
+        if self.kin_data[self.t].contacts_status[self.target_cf] == True:
+            # truncated = True
+            # reward = 0.0
+            # obs = np.zeros(self.state_dim, dtype=np.float32)
             state = self.serow.get_state(allow_invalid=True)
+            print("Current position ", state.get_base_position() , " GT Position " , self.pose_gt[self.t].position, " at step ", self.t)
             # debug_pos_error =float(np.linalg.norm(state.get_base_position() - self.pose_gt[self.t].position))
             # print("pos error" , debug_pos_error)
 
@@ -285,7 +274,6 @@ class SerowEnv(gym.Env):
             self.serow.base_estimator_update_with_contact_position(self.target_cf, kin)       
             self.serow.base_estimator_finish_update(self.imu[self.t], kin)
 
-            self.t += 1
 
             state = self.serow.get_state(allow_invalid=True)
             
@@ -311,6 +299,8 @@ class SerowEnv(gym.Env):
             terminated = bool(diverged)
             truncated  = bool(time_limit_reached)
             if (terminated):
+                print("Diverged position ", state.get_base_position() , " GT Position " , self.pose_gt[self.t].position, " at step ", self.t)
+
                 print(f"\033[91mFilter Diverged with pos err {pos_err} at step {self.t} and lasted {self.t - self.start_episode_time} timesteps\033[0m")
                 # self.obs = np.zeros(self.state_dim, dtype=np.float32)
 
@@ -327,6 +317,7 @@ class SerowEnv(gym.Env):
             "terminated": bool(terminated),
             "pos_err": float(pos_err)#, "ori_err": float(ori_err),
         }
+        self.t += 1
 
         # 8) Return (Gymnasium API)
         return self.obs, float(reward), terminated, truncated, info
