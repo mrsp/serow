@@ -13,7 +13,7 @@ def quat_geodesic_angle_wxyz(q_est, q_gt):
     return 2.0 * np.arccos(dot)
 
 # Scales a to a positive scale in [10^min_exp, 10^max_exp]
-def action_to_scale(a, min_exp=-7.0, max_exp=-2.0):
+def action_to_scale(a, min_exp=-7.0, max_exp=-1.0):
     a = np.clip(np.asarray(a, dtype=np.float32), -1.0, 1.0)
 
     # Affine map from [-1,1] to [min_exp, max_exp]
@@ -47,7 +47,6 @@ class SerowEnv(gym.Env):
         self.velocity_gt = dataset["base_velocity_ground_truth"]
         self.contact_status = dataset["contact_states"]
         self.contact_frames = list(self.contact_status[0].contacts_status.keys())
-        self.target_cf = "FL_foot"  # which contact frame to control 
         
         self.prev_pos = None
         self.prev_ori = None
@@ -102,7 +101,6 @@ class SerowEnv(gym.Env):
         self.action_history_buffer = np.zeros((self.action_history_size,), dtype=np.float32) # buffer of floats
         # --- step bookkeeping ---
         self.t = 0
-        self.last_action = None
     
     def _update_all_contacts_if_available(self, kin):
         """
@@ -133,15 +131,18 @@ class SerowEnv(gym.Env):
         
         self.reward_history.append(reward)
 
-        if reward < -100.0:    
+
+        if reward < -50.0:    
                 
             print("ERRORS --> " , pos_err, "  " ,  ori_err, "  ", reward)
             print("ACTION --> " , self.current_action)
             print("EST POSE --> " , pos_est , "  " , quat_est)
             print("Prev Estimated pose --> " , self.prev_pos , "  " , self.prev_ori)
             print("GT  POSE --> " , pos_gt  , "  " , quat_gt)
-            
-            
+            print(" FT MEAS --> " , self.ft[self.t]["FL_foot"].force)
+            print(" IMU MEAS --> " , self.imu[self.t].linear_acceleration)
+            print(" Angular vel --> " , self.imu[self.t].angular_velocity)
+
             sys.exit()
         return float(reward), pos_err
     
@@ -218,7 +219,6 @@ class SerowEnv(gym.Env):
             self.t = int(self.np_random.integers(0, self.max_start + 1)) # Get a new random start point
         self.starting_t = self.t
         self.start_episode_time = self.t # Store the initial point of the episode
-        self.last_action = 0.0
         
         # initial_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
                 
@@ -228,7 +228,7 @@ class SerowEnv(gym.Env):
         self.initial_state.set_joint_state(self.joint_states[self.t])
         self.initial_state.set_base_state(self.base_states[self.t])
         self.initial_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
-        self.initial_state.set_base_state_velocity(self.velocity_gt[self.t].linear_velocity)
+        # self.initial_state.set_base_state_velocity(self.velocity_gt[self.t].linear_velocity)
         self.initial_state.set_contact_state(self.contact_status[self.t])
         self.serow.set_state(self.initial_state)
         
@@ -281,7 +281,7 @@ class SerowEnv(gym.Env):
             state = self.serow.get_state(allow_invalid=True)
             
 
-            self.current_action = action
+            self.current_action = scaled_action
 
             reward, pos_err = self._compute_reward(state) 
                 
@@ -311,7 +311,6 @@ class SerowEnv(gym.Env):
                 print(f"\033[91mEpisode Trancated\033[0m")
         
         # 6) Bookkeeping: move current -> last action AFTER computing reward/obs
-        self.last_action = self.current_action
 
         # 7) Info dict for logging (helps tuning but not used by the policy)
         info = {
