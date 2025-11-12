@@ -124,27 +124,40 @@ class SerowEnv(gym.Env):
         quat_gt = np.asarray(self.pose_gt[self.t].orientation, dtype=np.float64)  # wxyz
 
         # --- Errors ---
-        pos_err = float(np.linalg.norm(pos_est[0:2] - pos_gt[0:2]) + 2 * np.linalg.norm(pos_est[2]-pos_gt[2]))                    # meters
+        pos_err = float(np.linalg.norm(pos_est[0:3] - pos_gt[0:3])) #+ 2 * np.linalg.norm(pos_est[2]-pos_gt[2]))                    # meters
         ori_err = float(quat_geodesic_angle_wxyz(quat_est, quat_gt))         # radians
         # Base term: linear penalty (SAC-friendly)
-        reward = -(self.w_pos * pos_err + self.w_ori * ori_err)
+        # reward = -(self.w_pos * pos_err + self.w_ori * ori_err)
         
+        
+        L = 0.3  # meters
+
+        # Uncertainty-weighted SE(3) distance
+        sigma_pos = 0.05  # estimated from sensor/filter
+        sigma_ori = 0.8
+
+        # SE(3) geodesic with proper scaling
+        d_pos = pos_err / sigma_pos
+        d_ori = (L * ori_err) / sigma_ori
+
+        # Combined metric (Euclidean in normalized space)
+        reward = -np.sqrt(d_pos**2 + d_ori**2)
         self.reward_history.append(reward)
 
 
-        if reward < -50.0:    
+        # if reward < -50.0:    
                 
-            print("ERRORS --> " , pos_err, "  " ,  ori_err, "  ", reward)
-            print("ACTION --> " , self.current_action)
-            print("EST POSE --> " , pos_est , "  " , quat_est)
-            print("Prev Estimated pose --> " , self.prev_pos , "  " , self.prev_ori)
-            print("GT  POSE --> " , pos_gt  , "  " , quat_gt)
-            print(" FT MEAS --> " , self.ft[self.t]["FL_foot"].force)
-            print(" IMU MEAS --> " , self.imu[self.t].linear_acceleration)
-            print(" Angular vel --> " , self.imu[self.t].angular_velocity)
-
-            sys.exit()
-        return float(reward), pos_err
+        # print("ERRORS --> " ,self.w_pos*  pos_err, "  " , self.w_ori*  ori_err, "  ", reward)
+        # print("ACTION --> " , self.current_action)
+        # print("EST POSE --> " , pos_est , "  " , quat_est)
+        # print("Prev Estimated pose --> " , self.prev_pos , "  " , self.prev_ori)
+        # print("GT  POSE --> " , pos_gt  , "  " , quat_gt)
+        # print("FT MEAS --> " , self.ft[self.t]["FL_foot"].force)
+        # print("IMU MEAS --> " , self.imu[self.t].linear_acceleration)
+        # print("Angular vel --> " , self.imu[self.t].angular_velocity)
+        # print(20 * "=")
+            # sys.exit()
+        return float(reward), pos_err, ori_err
     
     def frobenius_norm(R: np.ndarray) -> float:
         R = np.asarray(R, dtype=float).reshape(3, 3)
@@ -258,7 +271,7 @@ class SerowEnv(gym.Env):
             obs = np.zeros(self.state_dim, dtype=np.float32)
         else:
             state = self.serow.get_state(allow_invalid=True)
-            print("Current position ", state.get_base_position() , " GT Position " , self.pose_gt[self.t].position, " at step ", self.t)
+            # print("Current position ", state.get_base_position() , " GT Position " , self.pose_gt[self.t].position, " at step ", self.t)
             # debug_pos_error =float(np.linalg.norm(state.get_base_position() - self.pose_gt[self.t].position))
             # print("pos error" , debug_pos_error)
 
@@ -270,12 +283,11 @@ class SerowEnv(gym.Env):
             kin = self.kin_data[self.t] # Extract current kinematic measurement
 
             # 1) map action in [-1,1] -> positive 'scale' and apply it
-            scaled_action = action_to_scale(action).astype(np.float64)  # shape (4,)
-          
+            scaled_action = action_to_scale(action).astype(np.float64)  
     
             self.serow.set_action(self.target_cf, scaled_action)
             self.serow.base_estimator_update_with_contact_position(self.target_cf, kin)       
-            self.serow.base_estimator_finish_update(self.imu[self.t], kin)
+            self.serow.base_estimator_finish_update(self.imu_data[self.t], kin)
 
 
             state = self.serow.get_state(allow_invalid=True)
@@ -283,13 +295,13 @@ class SerowEnv(gym.Env):
 
             self.current_action = scaled_action
 
-            reward, pos_err = self._compute_reward(state) 
+            reward, pos_err, ori_err = self._compute_reward(state) 
                 
             kin_next = self.kin_data[self.t]  # measurements aligned with the new state index
 
             self.obs = self.get_observation(self.target_cf, state, kin_next)
                         
-            if (pos_err > 0.2):
+            if (pos_err > 0.2) or ori_err > 0.4:
                     diverged = True
             else:
                 self.prev_pos = state.get_base_position()
