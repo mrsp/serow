@@ -77,6 +77,10 @@ public:
     /// @return SEROW's internal state if available
     std::optional<State> getState(bool allow_invalid = false);
 
+    /// @brief Checks if SEROW's state is valid
+    /// @return True if state is valid else false
+    bool isStateValid() const;
+
     /// @brief fetches SEROW's contact state
     /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
     /// @return SEROW's contact state if available

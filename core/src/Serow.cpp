@@ -1312,6 +1312,10 @@ std::optional<State> Serow::getState(bool allow_invalid) {
     }
 }
 
+bool Serow::isStateValid() const {
+    return state_.isValid();
+}
+
 std::optional<BaseState> Serow::getBaseState(bool allow_invalid) {
     if (state_.is_valid_ || allow_invalid) {
         return state_.base_state_;
@@ -1437,7 +1441,10 @@ void Serow::reset() {
     terrain_estimator_.reset();
     frame_tfs_.clear();
     imu_outlier_detector_.clear();
-
+    last_imu_timestamp_ = -1.0;
+    last_joint_timestamp_ = -1.0;
+    last_ft_timestamp_ = -1.0;
+    
     is_initialized_ = false;
     cycle_ = 0;
     imu_calibration_cycles_ = 0;
