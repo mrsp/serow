@@ -450,7 +450,7 @@ def load_models_and_normalizers(dataset, contact_frames):
 
 def main():    
     # Load test dataset
-    test_dataset = "go2_test_slope.npz"
+    test_dataset = "go2_test.npz"
     data = np.load(test_dataset, allow_pickle=True)
     print(f"Loaded dataset: {test_dataset}")
     

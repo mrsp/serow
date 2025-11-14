@@ -13,7 +13,7 @@ def quat_geodesic_angle_wxyz(q_est, q_gt):
     return 2.0 * np.arccos(dot)
 
 # Scales a to a positive scale in [10^min_exp, 10^max_exp]
-def action_to_scale(a, min_exp=-7.0, max_exp=-1.0):
+def action_to_scale(a, min_exp=-3.0, max_exp=-1.0):
     a = np.clip(np.asarray(a, dtype=np.float32), -1.0, 1.0)
 
     # Affine map from [-1,1] to [min_exp, max_exp]
@@ -52,6 +52,9 @@ class SerowEnv(gym.Env):
         self.prev_ori = None
         self.starting_t = 0
         self.reward_history = []
+        
+        self.last_obs = None
+        
         print("Loaded dataset with IMU: ", len(self.imu), " samples", " Joints: ", len(self.joints), " samples", " FT: ", len(self.ft), " samples", " GT Pose: ", len(self.pose_gt), " samples", " Contact states: ", len(self.contact_status), " samples"  )
         
         self.cf_index = {name: i for i, name in enumerate(self.contact_frames)}
@@ -62,11 +65,11 @@ class SerowEnv(gym.Env):
         self.state_dim = 9 + self.action_history_size 
           
         self.start_episode_time = 0 
-        self.max_start = 39000 # max index to start an episode (on reset)    
+        self.max_start = len(self.imu) # max index to start an episode (on reset)    
 
         # Extract kinematic measurements for every time step
         self.serow.initialize("go2_rl.json")  # Initialize SEROW instance
-        self.initial_state = self.serow.get_state(allow_invalid=True) # Store initial state for reset
+        self.initial_state = self.serow.get_state(allow_invalid=False) # Store initial state for reset
         self.imu_data = []
         self.kin_data = []
         for step_count in range (len(self.imu)):
@@ -143,7 +146,7 @@ class SerowEnv(gym.Env):
         # Combined metric (Euclidean in normalized space)
         reward = -np.sqrt(d_pos**2 + d_ori**2)
         self.reward_history.append(reward)
-
+        print(f"Step {self.t}: pos_err={d_pos:.4f} m, ori_err={d_ori:.4f} rad, reward={reward:.4f}")
 
         # if reward < -50.0:    
                 
@@ -224,29 +227,57 @@ class SerowEnv(gym.Env):
         # if seed is not None:
         super().reset(seed=seed)
 
+
+        max_valid_start = self.max_start - 100
+
+        # Sample a random t
+        self.t = int(self.np_random.integers(0, max_valid_start))
+
+        # Re-sample until all the next 100 timesteps are in contact
+        while not all(
+            self.kin_data[self.t + i].contacts_status[self.target_cf]
+            for i in range(101) # 100 Convergence cycles hyperparameter
+        ):
+            self.t = int(self.np_random.integers(0, max_valid_start))
+            
         print(f"\033[92mEpisode Finished started at {self.starting_t} and ended at {self.t} with duration {self.t-self.starting_t} timesteps\033[0m")
-        self.t = int(self.np_random.integers(0, self.max_start + 1)) # Get a new random start point
-        # Make sure we start at a point where the target contact frame is in contact
-        while (self.kin_data[self.t].contacts_status[self.target_cf] == False
-               and self.kin_data[self.t + 1].contacts_status[self.target_cf] == False ):
-            self.t = int(self.np_random.integers(0, self.max_start + 1)) # Get a new random start point
+       
+        # self.t = int(self.np_random.integers(0, self.max_start)) # Get a new random start point
+        # # Make sure we start at a point where the target contact frame is in contact
+        # while (self.kin_data[self.t].contacts_status[self.target_cf] == False
+        #        and self.kin_data[self.t + 1].contacts_status[self.target_cf] == False ):
+        #     self.t = int(self.np_random.integers(0, self.max_start)) # Get a new random start point
+        
         self.starting_t = self.t
         self.start_episode_time = self.t # Store the initial point of the episode
         
-        # initial_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
-                
-        # curr_state = self.serow.get_state(allow_invalid=True)
+        # TODO: Add iterations until serow has converged
         self.serow.reset()
-        self.initial_state = self.serow.get_state(allow_invalid=True) # Store initial state for reset
-        self.initial_state.set_joint_state(self.joint_states[self.t])
-        self.initial_state.set_base_state(self.base_states[self.t])
-        self.initial_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
+        # self.initial_state = self.serow.get_state(allow_invalid=True) # Store initial state for reset
+        # self.initial_state.set_joint_state(self.joint_states[self.t])
+        # self.initial_state.set_base_state(self.base_states[self.t])
+        # self.initial_state.set_base_state_pose(self.pose_gt[self.t].position, self.pose_gt[self.t].orientation)
         # self.initial_state.set_base_state_velocity(self.velocity_gt[self.t].linear_velocity)
-        self.initial_state.set_contact_state(self.contact_status[self.t])
-        self.serow.set_state(self.initial_state)
+        # self.initial_state.set_contact_state(self.contact_status[self.t])
+        # self.serow.set_state(self.initial_state)
         
-        kin_next = self.kin_data[self.t + 1]  # measurements aligned with the new state index
-        self.obs = self.get_observation(self.target_cf, self.initial_state, kin_next)
+        cycles_lopp = 0 
+        for imu, joint, ft in zip(self.imu, self.joints, self.ft):
+            cycles_lopp += 1
+            status = self.serow.filter(imu, joint, ft, None)
+            if status:
+                state = self.serow.get_state(allow_invalid=False)
+                if (self.serow.is_state_valid()):
+                    break
+                # print("Status true", self.serow.is_state_valid(), " at cycle ", cycles_lopp )
+                
+        print("SEROW converged...", state.get_base_position(), " ", state.get_base_orientation() ,
+              " ", self.pose_gt[self.t].position, " ", self.pose_gt[self.t].orientation)
+        
+        
+        
+        # Get observation at time t
+        self.obs = self.get_observation(self.target_cf, self.initial_state, self.kin_data[self.t])
 
         # print(curr_state.get_base_position() , " " , self.pose_gt[self.t].position)
         # print(curr_state.get_base_orientation() , " " , self.pose_gt[self.t].orientation)
@@ -262,44 +293,50 @@ class SerowEnv(gym.Env):
         diverged = False
         truncated  = False
         terminated = False
-
         pos_err = 0.0
         reward = 0.0
-        if self.kin_data[self.t].contacts_status[self.target_cf] == False:
+        self.t += 1
+        if (self.t >= self.N-2):
             truncated = True
-            reward = 0.0
-            obs = np.zeros(self.state_dim, dtype=np.float32)
-        else:
-            state = self.serow.get_state(allow_invalid=True)
-            # print("Current position ", state.get_base_position() , " GT Position " , self.pose_gt[self.t].position, " at step ", self.t)
-            # debug_pos_error =float(np.linalg.norm(state.get_base_position() - self.pose_gt[self.t].position))
-            # print("pos error" , debug_pos_error)
+            return self.obs, float(reward), terminated, truncated, {}
 
+        if self.kin_data[self.t].contacts_status[self.target_cf] == False:
+            # truncated = True
+            reward = 0.0
+            self.obs = self.last_obs.copy()
+        else:
+            
+            self.serow.base_estimator_predict_step(self.imu_data[self.t], self.kin_data[self.t])
+            
+            state = self.serow.get_state(allow_invalid=False)
+           
             if self.prev_pos is None or self.prev_ori is None:
                 self.prev_pos = state.get_base_position()
                 self.prev_ori = state.get_base_orientation()
+                
             action = np.asarray(action, dtype=np.float32)
             
-            kin = self.kin_data[self.t] # Extract current kinematic measurement
-
             # 1) map action in [-1,1] -> positive 'scale' and apply it
             scaled_action = action_to_scale(action).astype(np.float64)  
     
             self.serow.set_action(self.target_cf, scaled_action)
-            self.serow.base_estimator_update_with_contact_position(self.target_cf, kin)       
-            self.serow.base_estimator_finish_update(self.imu_data[self.t], kin)
+            self.serow.base_estimator_update_with_contact_position(self.target_cf, self.kin_data[self.t])       
+            self.serow.base_estimator_finish_update(self.imu_data[self.t], self.kin_data[self.t])
 
-
-            state = self.serow.get_state(allow_invalid=True)
+            # update history buffer
+            self.action_history_buffer = np.roll(self.action_history_buffer, -1)
+            self.action_history_buffer[-1] = action[0]
+            
+            state = self.serow.get_state(allow_invalid=False)
             
 
             self.current_action = scaled_action
 
             reward, pos_err, ori_err = self._compute_reward(state) 
                 
-            kin_next = self.kin_data[self.t]  # measurements aligned with the new state index
+            
 
-            self.obs = self.get_observation(self.target_cf, state, kin_next)
+            self.obs = self.get_observation(self.target_cf, state, self.kin_data[self.t])
                         
             if (pos_err > 0.2) or ori_err > 0.4:
                     diverged = True
@@ -308,11 +345,9 @@ class SerowEnv(gym.Env):
                 self.prev_ori = state.get_base_orientation()
 
             # 4) Time limit / dataset end
-            time_limit_reached = (self.t >= self.N - 1)
 
             # 5) If terminating now, you can zero obs (optional), otherwise keep obs
             terminated = bool(diverged)
-            truncated  = bool(time_limit_reached)
             if (terminated):
                 print("Diverged position ", state.get_base_position() , " GT Position " , self.pose_gt[self.t].position, " at step ", self.t)
 
@@ -322,7 +357,6 @@ class SerowEnv(gym.Env):
             if truncated:
                 print(f"\033[91mEpisode Trancated\033[0m")
         
-        # 6) Bookkeeping: move current -> last action AFTER computing reward/obs
 
         # 7) Info dict for logging (helps tuning but not used by the policy)
         info = {
@@ -331,7 +365,6 @@ class SerowEnv(gym.Env):
             "terminated": bool(terminated),
             "pos_err": float(pos_err)#, "ori_err": float(ori_err),
         }
-        self.t += 1
-
+        self.last_obs = self.obs.copy()
         # 8) Return (Gymnasium API)
         return self.obs, float(reward), terminated, truncated, info

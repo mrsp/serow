@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from env_sac import SerowEnv
 from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewardThreshold
 import os
 import shutil
 
@@ -14,6 +15,7 @@ def make_env_from_npz(path_npz, target_cf, w_pos=1.0, w_ori=0.5):
 
 # -------- main ----------
 train_dataset = "datasets/go2_train.npz"
+val_dataset = "go2_test_slope.npz"
 base_log = "logs_serow"
 if os.path.exists(base_log):
     shutil.rmtree(base_log)
@@ -25,32 +27,57 @@ reward_histories = {}
 for cf in cfs:
     print(f"\nTraining {cf}...")
     
+    eval_env = DummyVecEnv([lambda cf=cf: make_env_from_npz(train_dataset, cf)])
+    eval_env = VecNormalize(
+        eval_env,
+        norm_obs=True,
+        norm_reward=False,
+        clip_obs=10.0,
+        clip_reward=10.0,
+        gamma=0.99,
+        training=False  # Don't update running stats during eval
+    )
+
+
+    stop_callback = StopTrainingOnRewardThreshold(reward_threshold=-1.5, verbose=1)
+    eval_callback = EvalCallback(
+        eval_env,
+        callback_on_new_best=stop_callback,
+        n_eval_episodes=50,
+        eval_freq=5_000,
+        best_model_save_path="./logs/best_model/",
+        log_path="./logs/results/",
+        deterministic=True,
+        verbose=1
+    )
+
+
     env_vec = DummyVecEnv([lambda cf=cf: make_env_from_npz(train_dataset, cf)])
-    env_vec = VecNormalize(env_vec, norm_obs=True, norm_reward=True, clip_obs=20.0, gamma=0.995)
+    env_vec = VecNormalize(env_vec, norm_obs=True, norm_reward=False,clip_reward = 10.0, clip_obs=10.0, gamma=0.995)
     
     model = SAC(
         "MlpPolicy",
         env_vec,
         verbose=1,
         seed = 42,
-        learning_rate=1e-4,
+        learning_rate=3e-4,
         buffer_size=100_000,
         batch_size=256,
         gamma=0.99,
         tau=0.005,
         learning_starts=1_000,
-        train_freq=(64, "step"),
-        gradient_steps=64,
+        train_freq=(1, "step"),
+        gradient_steps=1,
         ent_coef="auto_0.1",
         policy_kwargs=dict(
             net_arch=dict(
-                pi=[128, 128],
-                qf=[128, 128]
+                pi=[256, 256],
+                qf=[256, 256]
             )
         ),
     )
     
-    model.learn(total_timesteps=20_000)
+    model.learn(total_timesteps=50_000, callback = eval_callback, progress_bar=True)
     model.save(f"serow_sac_{cf}")
     env_vec.save(f"vecnormalize_{cf}.pkl")
     models[cf] = model
