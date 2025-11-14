@@ -719,6 +719,8 @@ PYBIND11_MODULE(serow, m) {
              "Gets the contact state of the robot")
         .def("get_state", &serow::Serow::getState, py::arg("allow_invalid") = false,
              "Gets the complete state of the robot")
+        .def("is_state_valid", &serow::Serow::isStateValid,
+             "Returns true if the current state is valid")
         .def("is_initialized", &serow::Serow::isInitialized, "Returns true if SEROW is initialized")
         .def("set_state", &serow::Serow::setState, py::arg("state"), "Sets the state of the robot")
         .def(
