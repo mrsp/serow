@@ -266,6 +266,8 @@ public:
     void setInitialized(bool initialized);
     // Sets the base position and orientation
     void setBaseStatePose(const Eigen::Vector3d& position,const Eigen::Quaterniond& orientation);
+    // Sets the base pose covariance
+    void setBasePoseCov(const Eigen::Matrix<double, 6, 6>& base_pose_cov);
     // Sets the base linear velocity
     void setBaseStateVelocity(const Eigen::Vector3d& linear_velocity);
     

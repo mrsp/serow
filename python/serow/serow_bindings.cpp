@@ -846,8 +846,7 @@ PYBIND11_MODULE(serow, m) {
         .def("get_base_pose", &serow::State::getBasePose,
              "Returns the base pose as a rigid transformation")
         .def("get_base_position", &serow::State::getBasePosition, "Returns the base position")
-        .def(
-            "get_base_orientation",
+        .def("get_base_orientation",
             [](const serow::State& self) { return quaternion_to_numpy(self.getBaseOrientation()); },
             "Returns the base orientation")
         .def("get_base_linear_velocity", &serow::State::getBaseLinearVelocity,
@@ -944,6 +943,8 @@ PYBIND11_MODULE(serow, m) {
             py::arg("position"),
             py::arg("orientation"),
             "Sets the base state pose of the robot using position and orientation")
+        .def("set_base_pose_cov", &serow::State::setBasePoseCov, py::arg("base_pose_cov"),
+            "Sets the base pose covariance (6x6 matrix with position and orientation covariances)")
         .def("set_base_state_velocity", 
             [](serow::State& self, const Eigen::Vector3d& linear_velocity) {
                 self.setBaseStateVelocity(linear_velocity);

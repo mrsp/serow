@@ -339,6 +339,11 @@ void State::setBaseStatePose(const Eigen::Vector3d& position,
     base_state_.base_orientation = orientation;
 }
 
+void State::setBasePoseCov(const Eigen::Matrix<double, 6, 6>& base_pose_cov) {
+    base_state_.base_position_cov = base_pose_cov.block<3, 3>(0, 0);
+    base_state_.base_orientation_cov = base_pose_cov.block<3, 3>(3, 3);
+}
+
 void State::setBaseStateVelocity(const Eigen::Vector3d& linear_velocity){
     base_state_.base_linear_velocity = linear_velocity;
 }
