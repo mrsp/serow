@@ -9,9 +9,9 @@ from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewar
 import os
 import shutil
 
-def make_env_from_npz(path_npz, target_cf, w_pos=1.0, w_ori=0.5):
+def make_env_from_npz(path_npz, target_cf):
     data = np.load(path_npz, allow_pickle=True)
-    return SerowEnv(data, target_cf, w_pos=w_pos, w_ori=w_ori)
+    return SerowEnv(data, target_cf)
 
 # -------- main ----------
 train_dataset = "datasets/go2_train.npz"
@@ -27,7 +27,7 @@ reward_histories = {}
 for cf in cfs:
     print(f"\nTraining {cf}...")
     
-    eval_env = DummyVecEnv([lambda cf=cf: make_env_from_npz(train_dataset, cf)])
+    eval_env = DummyVecEnv([lambda cf=cf: make_env_from_npz(val_dataset, cf)])
     eval_env = VecNormalize(
         eval_env,
         norm_obs=True,
@@ -35,7 +35,7 @@ for cf in cfs:
         clip_obs=10.0,
         clip_reward=10.0,
         gamma=0.99,
-        training=False  # Don't update running stats during eval
+        training=True  # Don't update running stats during eval
     )
 
 
@@ -53,7 +53,7 @@ for cf in cfs:
 
 
     env_vec = DummyVecEnv([lambda cf=cf: make_env_from_npz(train_dataset, cf)])
-    env_vec = VecNormalize(env_vec, norm_obs=True, norm_reward=False,clip_reward = 10.0, clip_obs=10.0, gamma=0.995)
+    env_vec = VecNormalize(env_vec, norm_obs=True, norm_reward=False,clip_reward = 10.0, clip_obs=10.0, gamma=0.99)
     
     model = SAC(
         "MlpPolicy",
@@ -77,7 +77,7 @@ for cf in cfs:
         ),
     )
     
-    model.learn(total_timesteps=50_000, callback = eval_callback, progress_bar=True)
+    model.learn(total_timesteps=100_000, callback = eval_callback, progress_bar=True)
     model.save(f"serow_sac_{cf}")
     env_vec.save(f"vecnormalize_{cf}.pkl")
     models[cf] = model
