@@ -1,9 +1,17 @@
 import numpy as np
 import gymnasium as gym
 import copy
-from utils import quaternion_to_rotation_matrix
 import sys
 import serow  # local import so unit tests can run without serow installed
+import time
+from utils import (
+    quaternion_to_rotation_matrix,
+    logMap,
+    sync_and_align_data,
+    plot_trajectories,
+)
+
+
 
 # Orientation error
 def quat_geodesic_angle_wxyz(q_est, q_gt):
@@ -27,6 +35,41 @@ def action_to_scale(a, min_exp=-6.0, max_exp=-2.0):
         exp = float(exp)
     return scale
 
+baseline_rewards = []
+def compute_baseline_rewards(serow_states, gt_pose):
+
+    for t in range(len(serow_states)):
+        serow_pos  = serow_states[t].base_position
+        serow_rot  = serow_states[t].base_orientation  # wxyz
+    
+        # --- Estimated pose ---
+        pos_est  = np.asarray(serow_pos, dtype=np.float64)
+        quat_est = np.asarray(serow_rot, dtype=np.float64)  # wxyz
+
+        # --- Ground-truth pose ---
+        pos_gt  = np.asarray(gt_pose[t].position,  dtype=np.float64)
+        quat_gt = np.asarray(gt_pose[t].orientation, dtype=np.float64)  # wxyz
+
+        # --- Errors ---
+        pos_err = float(np.linalg.norm(pos_est[0:2] - pos_gt[0:2]) + 2 * np.linalg.norm(pos_est[2]-pos_gt[2]))                    # meters
+        ori_err = float(quat_geodesic_angle_wxyz(quat_est, quat_gt))         # radians
+                
+        # Hyperparam for error computation (usually robot's height), 0.3m is roughly half the robot height
+        L = 0.4 
+
+        # Uncertainty-weighted SE(3) distance
+        sigma_pos = 0.1
+        sigma_ori = 0.3
+
+        # SE(3) geodesic with proper scaling
+        d_pos = pos_err / sigma_pos
+        d_ori = (L * ori_err) / sigma_ori
+
+        # Combined metric (Euclidean in normalized space)
+        reward = -np.sqrt(d_pos**2 + d_ori**2)
+        baseline_rewards.append(reward)
+
+    return
 
 class SerowEnv(gym.Env):
     metadata = {"render_modes": []}
@@ -53,23 +96,34 @@ class SerowEnv(gym.Env):
         self.starting_t = 0
         self.reward_history = []
         
+        # For tracking episode returns
+        self.episode_return = 0.0
+        self.episode_returns = []  
+        self.episode_lengths = []  
+        self.current_episode_length = 0
+        
+        self.innovation_buffer_size = 10  # adjust as needed
+        self.innovation_buffer = []  # separate buffer per contact frame
+
         self.last_obs = None
         self.swing_phase = False
         print("Loaded dataset with IMU: ", len(self.imu), " samples", " Joints: ", len(self.joints), " samples", " FT: ", len(self.ft), " samples", " GT Pose: ", len(self.pose_gt), " samples", " Contact states: ", len(self.contact_status), " samples"  )
         
         self.cf_index = {name: i for i, name in enumerate(self.contact_frames)}
         
-        self.pos_error_threshold = 0.8
-        self.ori_error_threshold = 0.7
+        self.pos_error_threshold = 0.6
+        self.ori_error_threshold = 0.5
 
-        self.action_history_size = 10 # How many past actions to include in the state
-        self.state_dim = 9 + self.action_history_size 
+        self.action_history_size = 10  # How many past actions to include in the state
+        self.state_dim = 15 #+ self.action_history_size 
           
         self.start_episode_time = 0 
         self.t = 0
         self.convergence_cycles = 100  # number of cycles to run the filter on reset until valid state
         self.max_start = len(dataset["imu"]) - self.convergence_cycles  # max index to start an episode (on reset) -> Hyperaparameter   
 
+        compute_baseline_rewards(self.base_states, self.pose_gt)
+        
         # Extract kinematic measurements for every time step
         self.serow.initialize("go2_rl.json")  # Initialize SEROW instance
         self.initial_state = self.serow.get_state(allow_invalid=False) # Store initial state for reset
@@ -102,7 +156,7 @@ class SerowEnv(gym.Env):
         self.obs = np.zeros((self.state_dim,), dtype=np.float32)
         self.action_history_buffer = np.zeros((self.action_history_size,), dtype=np.float32) # buffer of floats
 
-    def _compute_reward(self, state):
+    def _compute_reward(self, state, baseline_reward):
         # --- Estimated pose ---
         pos_est  = np.asarray(state.get_base_position(),    dtype=np.float64)
         quat_est = np.asarray(state.get_base_orientation(), dtype=np.float64)  # wxyz
@@ -119,7 +173,7 @@ class SerowEnv(gym.Env):
         L = 0.4 
 
         # Uncertainty-weighted SE(3) distance
-        sigma_pos = 0.1  # estimated from sensor/filter
+        sigma_pos = 0.1
         sigma_ori = 0.3
 
         # SE(3) geodesic with proper scaling
@@ -128,8 +182,11 @@ class SerowEnv(gym.Env):
 
         # Combined metric (Euclidean in normalized space)
         reward = -np.sqrt(d_pos**2 + d_ori**2)
+        
+        reward = reward - baseline_reward  # reward is negative, so we invert it
+        
         self.reward_history.append(reward)
-        print(f"Step {self.t}: pos_err={pos_err:.2f} m, ori_err={ori_err:.2f} rad, reward={reward:.4f}")
+        # print(f"Step {self.t}: pos_err={pos_err:.2f} m, ori_err={ori_err:.2f} rad, reward={reward:.4f}")
 
         return float(reward), pos_err, ori_err
     
@@ -138,19 +195,61 @@ class SerowEnv(gym.Env):
         ft_t = self.ft[self.t]  # dict: {'FL_foot': ForceTorqueMeasurement, ...}
         meas = ft_t.get(cf, None)
         if meas is None:
-            self.obs[0:3] = 0.0
+            self.obs[0] = 0.0
         else:
             force = np.asarray(meas.force, dtype=np.float32).ravel()
             if force.shape != (3,):
                 force = force[:3]
-            self.obs[0:3] = force
-
+            force_norm = np.linalg.norm(force)
+            self.obs[0] = force_norm
+            
         # 2) Innovation and NIS (use solve/Cholesky instead of explicit inverse)
         success, innovation, S = self.serow.get_contact_position_innovation(cf)
+        
+        R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
+        custom_innovation = np.zeros((3,), dtype=np.float32)
+        if state.get_contact_position(cf) is not None:
+            local_pos = R_base @ (
+                state.get_contact_position(cf) - state.get_base_position()
+            )
+            local_kin_pos = kin.contacts_position[cf]
+            custom_innovation = local_kin_pos - local_pos
 
+        self.obs[1:4] = custom_innovation
+        
+        R = np.asarray(kin.contacts_position_noise[cf] + kin.position_cov, dtype=np.float64).reshape(3, 3)
+
+        self.obs[4] = np.linalg.norm(R, ord='fro')
+        
+        self.obs[5:8] = state.get_base_linear_velocity()
+        self.obs[8:11] = state.get_base_angular_velocity()
+        
+        P = state.get_base_pose_cov()
+        pose_uncertainty = np.trace(P[0:3, 0:3])
+        self.obs[11] = np.float32(np.log1p(pose_uncertainty))
+        
+        S_stable = S + np.eye(S.shape[0]) * 1e-6 # Tikhonov Regularization for singular matrices
+        nis = custom_innovation.T @ np.linalg.solve(S_stable, custom_innovation)
+        self.obs[12] = np.float32(nis)
+
+        innovation_norm = np.linalg.norm(custom_innovation)
+        self.innovation_buffer.append(innovation_norm)
+        if len(self.innovation_buffer) > self.innovation_buffer_size:
+            self.innovation_buffer.pop(0)  # remove oldest
+        
+        # Compute statistics
+        if len(self.innovation_buffer) > 0:
+            innovation_moving_avg = np.mean(self.innovation_buffer)
+            innovation_std = np.std(self.innovation_buffer) if len(self.innovation_buffer) > 1 else 0.0
+        else:
+            innovation_moving_avg = 0.0
+            innovation_std = 0.0
+            
+        self.obs[13] = np.float32(innovation_moving_avg)
+        self.obs[14] = np.float32(innovation_std)    
+        '''
         if not success or innovation is None or S is None:
-            self.obs[3:6] = 0.0
-            self.obs[6] = 0.0
+            self.obs[1:5] = 0.0
         else:
             v = np.asarray(innovation, dtype=np.float64).reshape(3,)
             S = np.asarray(S, dtype=np.float64).reshape(3, 3)
@@ -168,27 +267,34 @@ class SerowEnv(gym.Env):
                 y = np.linalg.solve(S, v)
                 nis = float(v @ y)
 
-            self.obs[3:6] = v.astype(np.float32)
+            self.obs[1:4] = v.astype(np.float32)
             # log-scale NIS
-            self.obs[6] = np.float32(np.log1p(nis))
+            self.obs[4] = np.float32(np.log1p(nis))
             # self.obs[6] = np.float32(nis)
 
         # 3) Frobenius norm of 3×3 measurement covariance for this contact
         Rm = np.asarray(kin.contacts_position_noise[cf] + kin.position_cov, dtype=np.float64).reshape(3, 3)
         frob_R = np.linalg.norm(Rm, ord='fro')
         # Optionally log-scale:
-        self.obs[7] = np.float32(frob_R)
+        self.obs[5] = np.float32(frob_R)
 
+        P = state.get_base_pose_cov()
+        pose_uncertainty = np.trace(P[0:3, 0:3])
+        self.obs[6] = np.float32(np.log1p(pose_uncertainty))
+        
         # 4) Action history (ensure bounds and dtype)
-        n = self.action_history_size
-        ah = np.asarray(self.action_history_buffer[-n:], dtype=np.float32)
-        if ah.size < n:
-            ah = np.pad(ah, (n - ah.size, 0), constant_values=0.0)
-        self.obs[8:8+n] = ah
-
+        # n = self.action_history_size
+        # ah = np.asarray(self.action_history_buffer[-n:], dtype=np.float32)
+        # if ah.size < n:
+        #     ah = np.pad(ah, (n - ah.size, 0), constant_values=0.0)
+        # self.obs[8:8+n] = ah
+        '''
         return self.obs
     
     def reset(self, *, seed=None, options=None):
+        self.episode_return = 0.0
+        self.current_episode_length = 0
+    
         super().reset(seed=seed)
 
         print(f"\033[92mEpisode Finished started at {self.starting_t} and ended at {self.t} with duration {self.t-self.starting_t} timesteps\033[0m")
@@ -233,7 +339,7 @@ class SerowEnv(gym.Env):
                 
         
         
-        reward, pos_err, ori_err = self._compute_reward(state)                  
+        reward, pos_err, ori_err = self._compute_reward(state, baseline_rewards[self.t])                  
         if (pos_err > 0.5) or ori_err > 0.4:
             print("ON RESET: Diverged position ", state.get_base_position() , " GT Position " , self.pose_gt[self.t].position, " at step ", self.t , " With errors ", pos_err , "  " , ori_err)
         else:
@@ -263,7 +369,7 @@ class SerowEnv(gym.Env):
             return self.obs, float(reward), terminated, truncated, {}
 
         if self.kin_data[self.t].contacts_status[self.target_cf] == False:
-            # truncated = True
+            # truncated = True # If we want to train only on contact
             reward = 0.0
             if self.last_obs is not None:
                 self.obs = self.last_obs.copy()
@@ -318,10 +424,14 @@ class SerowEnv(gym.Env):
 
             self.current_action = scaled_action
 
-            reward, pos_err, ori_err = self._compute_reward(state) 
-                
+            reward, pos_err, ori_err = self._compute_reward(state,baseline_rewards[self.t]) 
+            # Accumulate episode return
+            self.episode_return += reward
+            self.current_episode_length += 1
             
+            # Check termination
 
+                
             self.obs = self.get_observation(self.target_cf, state, self.kin_data[self.t])
                         
             if (pos_err > self.pos_error_threshold) or ori_err > self.ori_error_threshold:
@@ -335,6 +445,10 @@ class SerowEnv(gym.Env):
                 print("Diverged position ", state.get_base_position() , " GT Position " , self.pose_gt[self.t].position, " at step ", self.t)
 
                 print(f"\033[91mFilter Diverged with pos err {pos_err} at step {self.t} and lasted {self.t - self.start_episode_time} timesteps\033[0m")
+
+                self.episode_returns.append(self.episode_return/self.current_episode_length)
+                self.episode_lengths.append(self.current_episode_length)
+                
                 # self.obs = np.zeros(self.state_dim, dtype=np.float32)
 
             if truncated:
