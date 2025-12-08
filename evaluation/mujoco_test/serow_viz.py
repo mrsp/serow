@@ -387,18 +387,57 @@ if __name__ == "__main__":
     fig4, axs4 = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
     fig4.suptitle("Feet forces (z-axis only)")
 
-    axs4[0].plot(timestamps, FL_forces[:, 2], label="Ground Truth", color="blue")
+    axs4[0].plot(timestamps, FL_forces[:, 0], label="Fx", color="blue")
+    axs4[0].plot(timestamps, FL_forces[:, 1], label="Fy", color="red")
+    axs4[0].plot(timestamps, FL_forces[:, 2], label="Fz", color="green")
+    axs4[0].legend()
+
     axs4[0].set_ylabel("FORCE FL")
 
-    axs4[1].plot(timestamps, FR_forces[:, 2], label="Ground Truth", color="blue")
+    axs4[1].plot(timestamps, FR_forces[:, 0], label="Fx", color="blue")
+    axs4[1].plot(timestamps, FR_forces[:, 1], label="Fy", color="red")
+    axs4[1].plot(timestamps, FR_forces[:, 2], label="Fz", color="green")
+
     axs4[1].set_ylabel("FORCE FR")
 
-    axs4[2].plot(timestamps, RL_forces[:, 2], label="Ground Truth", color="blue")
+    axs4[2].plot(timestamps, RL_forces[:, 0], label="Fx", color="blue")
+    axs4[2].plot(timestamps, RL_forces[:, 1], label="Fy", color="red")
+    axs4[2].plot(timestamps, RL_forces[:, 2], label="Fz", color="green")
+
     axs4[2].set_ylabel("FORCE RL")
 
-    axs4[3].plot(timestamps, RR_forces[:, 2], label="Ground Truth", color="blue")
+    axs4[3].plot(timestamps, RR_forces[:, 0], label="Fx", color="blue")
+    axs4[3].plot(timestamps, RR_forces[:, 1], label="Fy", color="red")
+    axs4[3].plot(timestamps, RR_forces[:, 2], label="Fz", color="green")
+
+    
     axs4[3].set_ylabel("FORCE RR")
     axs4[3].set_xlabel("Timestamp")
+
+
+
+    # Plotting GRF norm
+    figForceNorm, axsForceNorm = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
+    figForceNorm.suptitle("Feet forces (norm)")
+
+    axsForceNorm[0].plot(timestamps, np.linalg.norm(FL_forces, axis=1), color="purple")
+    axsForceNorm[0].set_ylabel("FORCE FL")
+    axsForceNorm[0].grid(True, alpha=0.3)
+
+    axsForceNorm[1].plot(timestamps, np.linalg.norm(FR_forces, axis=1), color="purple")
+    axsForceNorm[1].set_ylabel("FORCE FR")
+    axsForceNorm[1].grid(True, alpha=0.3)
+
+    axsForceNorm[2].plot(timestamps, np.linalg.norm(RL_forces, axis=1), color="purple")
+    axsForceNorm[2].set_ylabel("FORCE RL")
+    axsForceNorm[2].grid(True, alpha=0.3)
+
+    axsForceNorm[3].plot(timestamps, np.linalg.norm(RR_forces, axis=1), color="purple")
+    axsForceNorm[3].set_ylabel("FORCE RR")
+    axsForceNorm[3].set_xlabel("Timestamp")
+    axsForceNorm[3].grid(True, alpha=0.3)
+
+    plt.tight_layout()
 
     # Plotting Ground Truth and Estimated Position (x, y, z)
     fig5, axs5 = plt.subplots(6, 1, figsize=(10, 8), sharex=True)
