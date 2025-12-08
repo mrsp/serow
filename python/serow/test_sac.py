@@ -7,6 +7,12 @@ from stable_baselines3 import SAC
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from scipy.spatial.transform import Rotation as R
 import serow
+from utils import (
+    quaternion_to_rotation_matrix,
+    logMap,
+    sync_and_align_data,
+    plot_trajectories,
+)
 
 
 
@@ -58,13 +64,19 @@ class TestSerowEnvMultiCF:
         self.rl_position_errors = []
         self.rl_ori_errors = []
         self.rl_rewards = []
-        
+
         # Actions per contact frame
         self.rl_actions = {cf: [] for cf in self.contact_frames}
         
         # Action history per contact frame
         self.action_history_size = 10
-        self.state_dim = 9 + self.action_history_size 
+                
+        self.innovation_buffer_size = 10  # adjust as needed
+        self.innovation_buffer = []  # separate buffer per contact frame
+        self.state_dim = 15
+        
+        self.obs = np.zeros((self.state_dim,), dtype=np.float32)
+
         self.action_history_buffers = {
             cf: np.zeros((self.action_history_size,), dtype=np.float32) 
             for cf in self.contact_frames
@@ -122,57 +134,67 @@ class TestSerowEnvMultiCF:
         y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
         z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
         return np.array([w, x, y, z])
+    
 
-    def get_observation(self, serow_framework, cf, state, kin, step_idx):
-        """Generate observation for a specific contact frame"""
-        obs = np.zeros((self.state_dim,), dtype=np.float32)
+    def get_observation(self,serow, cf, state, kin,ft):
+            # 1) Force of chosen contact frame (convert from Eigen/pybind to np)
+            meas = ft.get(cf, None)
+            if meas is None:
+                self.obs[0] = 0.0
+            else:
+                force = np.asarray(meas.force, dtype=np.float32).ravel()
+                if force.shape != (3,):
+                    force = force[:3]
+                force_norm = np.linalg.norm(force)
+                self.obs[0] = force_norm
+                
+            # 2) Innovation and NIS (use solve/Cholesky instead of explicit inverse)
+            success, innovation, S = serow.get_contact_position_innovation(cf)
+            
+            R_base = quaternion_to_rotation_matrix(state.get_base_orientation()).transpose()
+            custom_innovation = np.zeros((3,), dtype=np.float32)
+            if state.get_contact_position(cf) is not None:
+                local_pos = R_base @ (
+                    state.get_contact_position(cf) - state.get_base_position()
+                )
+                local_kin_pos = kin.contacts_position[cf]
+                custom_innovation = local_kin_pos - local_pos
+
+            self.obs[1:4] = custom_innovation
+            
+            R = np.asarray(kin.contacts_position_noise[cf] + kin.position_cov, dtype=np.float64).reshape(3, 3)
+
+            self.obs[4] = np.linalg.norm(R, ord='fro')
+            
+            self.obs[5:8] = state.get_base_linear_velocity()
+            self.obs[8:11] = state.get_base_angular_velocity()
+            
+            P = state.get_base_pose_cov()
+            pose_uncertainty = np.trace(P[0:3, 0:3])
+            self.obs[11] = np.float32(np.log1p(pose_uncertainty))
+            
+            S_stable = S + np.eye(S.shape[0]) * 1e-6 # Tikhonov Regularization for singular matrices
+            nis = custom_innovation.T @ np.linalg.solve(S_stable, custom_innovation)
+            self.obs[12] = np.float32(nis)
+
+            innovation_norm = np.linalg.norm(custom_innovation)
+            self.innovation_buffer.append(innovation_norm)
+            if len(self.innovation_buffer) > self.innovation_buffer_size:
+                self.innovation_buffer.pop(0)  # remove oldest
+            
+            # Compute statistics
+            if len(self.innovation_buffer) > 0:
+                innovation_moving_avg = np.mean(self.innovation_buffer)
+                innovation_std = np.std(self.innovation_buffer) if len(self.innovation_buffer) > 1 else 0.0
+            else:
+                innovation_moving_avg = 0.0
+                innovation_std = 0.0
+                
+            self.obs[13] = np.float32(innovation_moving_avg)
+            self.obs[14] = np.float32(innovation_std)    
+
+            return self.obs
         
-        # 1) Force of contact frame
-        ft_t = self.raw_ft_data[step_idx]
-        meas = ft_t.get(cf, None)
-        if meas is None:
-            obs[0:3] = 0.0
-        else:
-            force = np.asarray(meas.force, dtype=np.float32).ravel()
-            if force.shape != (3,):
-                force = force[:3]
-            obs[0:3] = force
-
-        # 2) Innovation and NIS
-        success, innovation, S = serow_framework.get_contact_position_innovation(cf)
-
-        if not success or innovation is None or S is None:
-            obs[3:6] = 0.0
-            obs[6] = 0.0
-        else:
-            v = np.asarray(innovation, dtype=np.float64).reshape(3,)
-            S = np.asarray(S, dtype=np.float64).reshape(3, 3)
-            S = 0.5 * (S + S.T)
-            S.flat[::4] += 1e-9
-
-            try:
-                L = np.linalg.cholesky(S)
-                y = np.linalg.solve(L, v)
-                y = np.linalg.solve(L.T, y)
-                nis = float(v @ y)
-            except np.linalg.LinAlgError:
-                y = np.linalg.solve(S, v)
-                nis = float(v @ y)
-
-            obs[3:6] = v.astype(np.float32)
-            obs[6] = np.float32(nis)
-
-        # 3) Frobenius norm of measurement covariance
-        Rm = np.asarray(kin.contacts_position_noise[cf] + kin.position_cov, 
-                       dtype=np.float64).reshape(3, 3)
-        frob_R = np.linalg.norm(Rm, ord='fro')
-        obs[7] = np.float32(frob_R)
-
-        # 4) Action history for THIS contact frame
-        n = self.action_history_size
-        obs[8:8+n] = self.action_history_buffers[cf][-n:]
-
-        return obs
     
     def run_baseline_test(self, dataset):
         """Baseline with all actions = 1.0"""
@@ -248,8 +270,8 @@ class TestSerowEnvMultiCF:
             for cf in self.contact_frames:
                 if kin.contacts_status[cf]:  # If in contact
                     # Get observation for this contact frame
-                    obs = self.get_observation(serow_framework, cf, post_state, kin, step_count)
-                    
+                    obs = self.get_observation(serow_framework, cf, post_state, kin,ft)
+
                     # Normalize observation
                     if vec_normalizes[cf] is not None:
                         obs = vec_normalizes[cf].normalize_obs(obs)
@@ -450,7 +472,7 @@ def load_models_and_normalizers(dataset, contact_frames):
 
 def main():    
     # Load test dataset
-    test_dataset = "go2_test.npz"
+    test_dataset = "datasets/test/go2_test_mixed.npz"
     data = np.load(test_dataset, allow_pickle=True)
     print(f"Loaded dataset: {test_dataset}")
     
