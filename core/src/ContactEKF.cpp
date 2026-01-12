@@ -315,6 +315,7 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
 
     cp_noise += position_cov;
     const double action = contact_position_action_cov_gain_.at(cf);
+    // Check if the action covariance gain matrix is not the zero matrix
     if (action > 0.0) {
         cp_noise *= action;
     }

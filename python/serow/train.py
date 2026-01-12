@@ -15,7 +15,6 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3 import DQN
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CallbackList
-from utils import export_dqn_to_onnx
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.type_aliases import RolloutReturn
 
@@ -447,54 +446,6 @@ if __name__ == "__main__":
     if not os.path.exists("models"):
         os.makedirs("models")
     model.save(f"models/{robot}_dqn")
-
-    try:
-        # Create a wrapper class to match the expected interface for export_dqn_to_onnx
-        class DQNModelWrapper:
-            def __init__(self, dqn_model, device):
-                self.device = device
-                # For DQN, the policy is accessed via model.policy
-                self.policy = dqn_model.policy
-                self.name = "DQN"
-
-                # Validate that the policy has the expected structure
-                if not hasattr(self.policy, "q_net"):
-                    raise AttributeError("DQN policy must have a 'q_net' attribute")
-
-                # Check if we have the expected policy type
-                policy_type = type(self.policy).__name__
-                if "DQNPolicy" not in policy_type:
-                    print(f"Warning: Expected DQNPolicy, got {policy_type}")
-
-                # Validate the q_net structure
-                q_net_type = type(self.policy.q_net).__name__
-                print(f"Q-network type: {q_net_type}")
-
-                # Check if q_net has the expected forward method
-                if not hasattr(self.policy.q_net, "forward"):
-                    raise AttributeError("Q-network must have a 'forward' method")
-
-        # Create the wrapper - pass the entire model, not just model.policy
-        model_wrapper = DQNModelWrapper(model, device)
-
-        # Define parameters for ONNX export
-        export_params = {
-            "state_dim": state_dim,
-            "action_dim": action_dim,
-        }
-
-        # Export to ONNX
-        print("Exporting model to ONNX...")
-        print(f"Policy type: {type(model_wrapper.policy)}")
-        print(f"Q-net type: {type(model_wrapper.policy.q_net)}")
-        export_dqn_to_onnx(model_wrapper, robot, export_params, "models")
-        print("ONNX export completed successfully!")
-
-    except Exception as e:
-        print(f"Error exporting model to ONNX: {e}")
-        import traceback
-
-        traceback.print_exc()
 
     # Debug information
     print("Training callback stats:")
