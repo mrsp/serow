@@ -58,9 +58,12 @@ public:
      * @param g Acceleration due to gravity.
      * @param imu_rate IMU update rate.
      * @param outlier_detection Flag indicating if outlier detection mechanisms should be enabled.
+     * @param use_imu_orientation Flag indicating if IMU orientation is used during the update step.
+     * @param verbose Flag indicating if verbose output should be enabled.
      */
     void init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-              double g, double imu_rate, bool outlier_detection = false);
+              double g, double imu_rate, bool outlier_detection = false, bool use_imu_orientation = false, 
+              bool verbose = false);
     /**
      * @brief Predicts the robot's state forward based on IMU and kinematic measurements.
      * @param state Current state of the robot.
@@ -111,6 +114,37 @@ public:
     void updateWithIMUOrientation(BaseState& state, const Eigen::Quaterniond& imu_orientation,
                                   const Eigen::Matrix3d& imu_orientation_cov);
 
+    /**
+     * @brief Sets the action for the contact estimator
+     * @param cf Contact frame name
+     * @param action Action
+     */
+    void setAction(const std::string& cf, const Eigen::VectorXd& action);
+
+    /**
+     * @brief Clears the action covariance gain matrix
+     */
+    void clearAction();
+
+    /**
+     * @brief Gets the contact position innovation
+     * @param contact_frame Contact frame name
+     * @param innovation Contact position innovation
+     * @param covariance Contact position covariance
+     */
+    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+                                      Eigen::Matrix3d& covariance) const;
+
+    /**
+     * @brief Gets the contact orientation innovation
+     * @param contact_frame Contact frame name
+     * @param innovation Contact orientation innovation
+     * @param covariance Contact orientation covariance
+     */
+    bool getContactOrientationInnovation(const std::string& contact_frame,
+                                         Eigen::Vector3d& innovation,
+                                         Eigen::Matrix3d& covariance) const;
+
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
@@ -148,6 +182,16 @@ private:
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
+
+    std::map<std::string, double> contact_position_action_cov_gain_;
+    std::map<std::string, double> contact_orientation_action_cov_gain_;
+
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
+    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
+        contact_orientation_innovation_;
+
+    bool verbose_{};  ///< Flag indicating if verbose output is enabled.
+    bool use_imu_orientation_{};  ///< Flag indicating if IMU orientation is used during the update step.
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.

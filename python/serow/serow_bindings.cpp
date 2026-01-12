@@ -643,7 +643,7 @@ PYBIND11_MODULE(serow, m) {
         .def(py::init<>(), "Default constructor")
         .def("init", &serow::ContactEKF::init, py::arg("state"), py::arg("contacts_frame"),
              py::arg("point_feet"), py::arg("g"), py::arg("imu_rate"),
-             py::arg("outlier_detection") = false,
+             py::arg("outlier_detection") = false, py::arg("use_imu_orientation") = false, py::arg("verbose") = false,
              "Initializes the EKF with the initial robot state and parameters")
         .def("predict", &serow::ContactEKF::predict, py::arg("state"), py::arg("imu"),
              py::arg("kin"),
@@ -720,7 +720,67 @@ PYBIND11_MODULE(serow, m) {
         .def("get_state", &serow::Serow::getState, py::arg("allow_invalid") = false,
              "Gets the complete state of the robot")
         .def("is_initialized", &serow::Serow::isInitialized, "Returns true if SEROW is initialized")
-        .def("set_state", &serow::Serow::setState, py::arg("state"), "Sets the state of the robot");
+        .def("set_state", &serow::Serow::setState, py::arg("state"), "Sets the state of the robot")
+        .def(
+            "get_contact_position_innovation",
+            [](serow::Serow& self, const std::string& contact_frame) {
+                Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
+                Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+                bool success =
+                    self.getContactPositionInnovation(contact_frame, innovation, covariance);
+                return std::make_tuple(success, innovation, covariance);
+            },
+            py::arg("contact_frame"),
+            "Returns the contact position innovation and covariance for a given contact frame")
+        .def(
+            "get_contact_orientation_innovation",
+            [](serow::Serow& self, const std::string& contact_frame) {
+                Eigen::Vector3d innovation = Eigen::Vector3d::Zero();
+                Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+                bool success =
+                    self.getContactOrientationInnovation(contact_frame, innovation, covariance);
+                return std::make_tuple(success, innovation, covariance);
+            },
+            py::arg("contact_frame"),
+            "Returns the contact orientation innovation and covariance for a given contact frame")
+        .def(
+            "process_measurements",
+            [](serow::Serow& self, const serow::ImuMeasurement& imu,
+               const std::map<std::string, serow::JointMeasurement>& joints,
+               py::object force_torque, py::object contacts_probability) {
+                std::optional<std::map<std::string, serow::ForceTorqueMeasurement>> ft_opt;
+                if (!force_torque.is_none()) {
+                    ft_opt =
+                        force_torque.cast<std::map<std::string, serow::ForceTorqueMeasurement>>();
+                }
+
+                std::optional<std::map<std::string, serow::ContactMeasurement>> contact_prob_opt;
+                if (!contacts_probability.is_none()) {
+                    contact_prob_opt =
+                        contacts_probability
+                            .cast<std::map<std::string, serow::ContactMeasurement>>();
+                }
+
+                return self.processMeasurements(imu, joints, ft_opt, contact_prob_opt);
+            },
+            py::arg("imu"), py::arg("joints"), py::arg("force_torque") = py::none(),
+            py::arg("contacts_probability") = py::none(),
+            "Processes the measurements and returns a tuple of IMU, kinematic, and force-torque "
+            "measurements")
+        .def("base_estimator_predict_step", &serow::Serow::baseEstimatorPredictStep, py::arg("imu"),
+             py::arg("kin"), "Runs the base estimator's predict step")
+        .def("base_estimator_update_with_contact_position",
+             &serow::Serow::baseEstimatorUpdateWithContactPosition, py::arg("contact_frame"),
+             py::arg("kin"), "Runs the base estimator's update step with contact position")
+        .def("base_estimator_finish_update", &serow::Serow::baseEstimatorFinishUpdate,
+             py::arg("imu"), py::arg("kin"),
+             "Concludes the base estimator's update step with the IMU measurement")
+        .def("base_estimator_update_with_imu_orientation",
+             &serow::Serow::baseEstimatorUpdateWithImuOrientation, py::arg("imu"),
+             "Runs the base estimator's update step with the IMU orientation")
+        .def("reset", &serow::Serow::reset, "Resets the state of SEROW")
+        .def("set_action", &serow::Serow::setAction, py::arg("cf"), py::arg("action"),
+             "Sets the action of the robot");
 
     // Binding for CentroidalState
     py::class_<serow::CentroidalState>(m, "CentroidalState",

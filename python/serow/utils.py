@@ -2,8 +2,9 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import os
+import torch
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def rotation_matrix_to_quaternion(R):
@@ -512,3 +513,9 @@ def plot_contact_forces_and_torques(contact_states):
 
     plt.tight_layout()
     plt.show()
+
+class BaseVelocityGroundTruth:
+    def __init__(self, timestamp, linear_velocity, angular_velocity):
+        self.timestamp = timestamp
+        self.linear_velocity = linear_velocity
+        self.angular_velocity = angular_velocity

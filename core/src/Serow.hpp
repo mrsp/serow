@@ -102,6 +102,59 @@ public:
     /// @param state the state to set
     void setState(const State& state);
 
+    /// @brief Processes the measurements and returns the IMU, kinematic, and force/torque
+    /// measurements
+    /// @param imu IMU measurement
+    /// @param joints joint measurements
+    /// @param force_torque force/torque measurements
+    /// @param contacts_probability contact probabilities
+    /// @return tuple containing the IMU, kinematic, and force/torque measurements
+    std::tuple<ImuMeasurement, KinematicMeasurement, std::map<std::string, ForceTorqueMeasurement>>
+    processMeasurements(
+        ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+        std::optional<std::map<std::string, ForceTorqueMeasurement>> force_torque,
+        std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
+
+    /// @brief Runs the base estimator predict step
+    /// @param imu IMU measurement
+    /// @param kin kinematic measurements
+    void baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicMeasurement& kin);
+
+    /// @brief Runs the base estimator update step with IMU orientation
+    /// @param imu IMU measurement
+    void baseEstimatorUpdateWithImuOrientation(const ImuMeasurement& imu);
+
+    /// @brief Runs the base estimator update step with contact position
+    /// @param cf contact frame name
+    /// @param kin kinematic measurements
+    void baseEstimatorUpdateWithContactPosition(const std::string& cf,
+                                                const KinematicMeasurement& kin);
+
+    /// @brief Runs the base estimator finish update step
+    /// @param imu IMU measurement
+    /// @param kin kinematic measurements
+    void baseEstimatorFinishUpdate(const ImuMeasurement& imu, const KinematicMeasurement& kin);
+
+    /// @brief Sets the action for the base estimator
+    /// @param cf contact frame name
+    /// @param action action
+    bool setAction(const std::string& cf, const Eigen::VectorXd& action);
+
+    /// @brief Gets the contact position innovation
+    /// @param contact_frame contact frame name
+    /// @param innovation contact position innovation
+    /// @param covariance contact position covariance
+    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
+                                      Eigen::Matrix3d& covariance) const;
+
+    /// @brief Gets the contact orientation innovation
+    /// @param contact_frame contact frame name
+    /// @param innovation contact orientation innovation
+    /// @param covariance contact orientation covariance
+    bool getContactOrientationInnovation(const std::string& contact_frame,
+                                         Eigen::Vector3d& innovation,
+                                         Eigen::Matrix3d& covariance) const;
+
 private:
     struct Params {
         /// @brief name of the robot
@@ -263,6 +316,10 @@ private:
         std::set<std::string> contacts_frame{};
         /// @brief whether or not the robot has point feet
         bool point_feet{false};
+        /// @brief whether or not to use the IMU orientation during the ContactEKF update step
+        bool use_imu_orientation{false};
+        /// @brief whether or not to use the IMU outlier detection during the filter step
+        bool imu_outlier_detection{false};
     };
 
     /// @brief SEROW's configuration
@@ -320,13 +377,13 @@ private:
     /// @brief Timestamp of the estimated state
     double timestamp_{};
     /// @brief Timestamp of the last IMU measurement
-    double last_imu_timestamp_{};
+    double last_imu_timestamp_{-1.0};
     /// @brief Timestamp of the last joint measurement
-    double last_joint_timestamp_{};
+    double last_joint_timestamp_{-1.0};
     /// @brief Timestamp of the last force/torque measurement
-    double last_ft_timestamp_{};
+    double last_ft_timestamp_{-1.0};
     /// @brief Timestamp of the last odometry measurement
-    double last_odom_timestamp_{};
+    double last_odom_timestamp_{-1.0};
 
     /// @brief Logs the measurements
     /// @param imu IMU measurement

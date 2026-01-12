@@ -123,19 +123,23 @@ def compute_ATE_pos(gt_pos, est_x, est_y, est_z):
 def compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z):
     est_rot = np.column_stack((est_rot_w, est_rot_x, est_rot_y, est_rot_z))
     rotation_errors = np.zeros((gt_rot.shape[0]))
+    
     for i in range(gt_rot.shape[0]):
         q_gt = gt_rot[i]
         q_est = est_rot[i]
-
+        
+        # Ensure quaternions are on the same hemisphere
+        if np.dot(q_gt, q_est) < 0:
+            q_est = -q_est
+        
         q_gt_conj = np.array(
             [q_gt[0], -q_gt[1], -q_gt[2], -q_gt[3]]
-        )  # Conjugate of q_gt
+        )
         q_rel = quaternion_multiply(q_gt_conj, q_est)
         rotation_errors[i] = 2 * np.arccos(np.clip(q_rel[0], -1.0, 1.0))
-
+    
     ate_rot = np.sqrt(np.mean(rotation_errors**2))
     return ate_rot
-
 
 def quaternion_multiply(q1, q2):
     """

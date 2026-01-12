@@ -17,7 +17,7 @@
 namespace serow {
 
 void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-                      double g, double imu_rate, bool outlier_detection) {
+                      double g, double imu_rate, bool outlier_detection, bool use_imu_orientation, bool verbose) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
@@ -115,6 +115,15 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     }
 
     last_imu_timestamp_.reset();
+
+    // Clear the action covariance gain matrix
+    clearAction();
+
+    use_imu_orientation_ = use_imu_orientation;
+    verbose_ = verbose;
+    if (verbose) {
+        std::cout << "[SEROW/ContactEKF]: Initialized successfully" << std::endl;
+    }
 }
 
 void ContactEKF::setState(const BaseState& state) {
@@ -147,6 +156,9 @@ void ContactEKF::setState(const BaseState& state) {
         }
     }
     last_imu_timestamp_ = state.timestamp;
+
+    // Clear the action covariance gain matrix
+    clearAction();
 }
 
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobians(
@@ -190,9 +202,11 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
         return;
     }
     if (dt < nominal_dt_ / 2) {
-        std::cout << "[SEROW/ContactEKF]: Predict step sample time is abnormal " << dt
-                  << " while the nominal sample time is " << nominal_dt_ << " setting to nominal"
-                  << std::endl;
+        if (verbose_) {
+            std::cout << "[SEROW/ContactEKF]: Predict step sample time is abnormal " << dt
+                      << " while the nominal sample time is " << nominal_dt_
+                      << " setting to nominal" << std::endl;
+        }
         dt = nominal_dt_;
     }
 
@@ -227,6 +241,13 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
     computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration,
                             kin.contacts_status, kin.contacts_position, kin.contacts_orientation);
     last_imu_timestamp_ = imu.timestamp;
+
+    // Clear the action covariance gain matrix
+    clearAction();
+
+    // Clear the innovation and update buffers
+    contact_position_innovation_.clear();
+    contact_orientation_innovation_.clear();
 }
 
 void ContactEKF::computeDiscreteDynamics(
@@ -293,6 +314,12 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
     const Eigen::Matrix3d R_base_transpose = R_base.transpose();
 
     cp_noise += position_cov;
+    const double action = contact_position_action_cov_gain_.at(cf);
+    // Check if the action covariance gain matrix is not the zero matrix
+    if (action > 0.0) {
+        cp_noise *= action;
+    }
+
     // If the terrain estimator is in the loop reduce the effect that kinematics has in the
     // contact height update
     if (terrain_estimator) {
@@ -366,6 +393,7 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
         P_ = std::move(P_i);
         state = std::move(updated_state_i);
     }
+    contact_position_innovation_[cf] = std::make_pair(z, s + 1e-8 * Eigen::Matrix3d::Identity());
 }
 
 void ContactEKF::updateWithContactOrientation(BaseState& state, const std::string& cf,
@@ -376,6 +404,11 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
         return;
     }
     co_noise += orientation_cov;
+    // Check if the action covariance gain matrix is not the zero matrix
+    const double action = contact_orientation_action_cov_gain_.at(cf);
+    if (action > 0.0) {
+        co_noise *= action;
+    }
 
     const int num_iter = 5;
     Eigen::MatrixXd H(3, num_states_);
@@ -406,6 +439,7 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
         }
         P_ = (I_ - K * H) * P_;
     }
+    contact_orientation_innovation_[cf] = std::make_pair(z, s + 1e-8 * Eigen::Matrix3d::Identity());
 }
 
 void ContactEKF::updateWithContacts(
@@ -615,7 +649,9 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
     }
 
     // Update the state with the absolute IMU orientation
-    updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov);
+    if (use_imu_orientation_) {
+        updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov);
+    }
 
     // Update the state with the relative to base contacts
     updateWithContacts(state, kin.contacts_position, kin.contacts_position_noise,
@@ -665,6 +701,55 @@ void ContactEKF::updateWithIMUOrientation(BaseState& state,
 
     P_ = (I_ - K * H) * P_;
     updateState(state, dx, P_);
+}
+
+void ContactEKF::setAction(const std::string& cf, const Eigen::VectorXd& action) {
+    if (action.size() == 1) {
+        contact_position_action_cov_gain_.at(cf) = action(0);
+    } else if (action.size() == 2) {
+        contact_position_action_cov_gain_.at(cf) = action(0);
+        if (!point_feet_) {
+            contact_orientation_action_cov_gain_.at(cf) = action(1);
+        }
+    } else {
+        throw std::invalid_argument("Action vector must have 1 or 2 elements");
+    }
+}
+
+bool ContactEKF::getContactPositionInnovation(const std::string& contact_frame,
+                                              Eigen::Vector3d& innovation,
+                                              Eigen::Matrix3d& covariance) const {
+    if (contact_position_innovation_.find(contact_frame) != contact_position_innovation_.end()) {
+        innovation = contact_position_innovation_.at(contact_frame).first;
+        covariance = contact_position_innovation_.at(contact_frame).second;
+        return true;
+    }
+    return false;
+}
+
+bool ContactEKF::getContactOrientationInnovation(const std::string& contact_frame,
+                                                 Eigen::Vector3d& innovation,
+                                                 Eigen::Matrix3d& covariance) const {
+    if (point_feet_) {
+        return false;
+    }
+
+    if (contact_orientation_innovation_.find(contact_frame) !=
+        contact_orientation_innovation_.end()) {
+        innovation = contact_orientation_innovation_.at(contact_frame).first;
+        covariance = contact_orientation_innovation_.at(contact_frame).second;
+        return true;
+    }
+    return false;
+}
+
+void ContactEKF::clearAction() {
+    for (const auto& cf : contacts_frame_) {
+        contact_position_action_cov_gain_[cf] = 0.0;
+        if (!point_feet_) {
+            contact_orientation_action_cov_gain_[cf] = 0.0;
+        }
+    }
 }
 
 }  // namespace serow

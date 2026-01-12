@@ -56,8 +56,8 @@ def main():
     g = 9.81  # Gravity constant
     imu_rate = 1000.0  # IMU update rate in Hz
     outlier_detection = True  # Enable outlier detection
-
-    ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection)
+    use_imu_orientation = True  # Use the IMU orientation during the ContactEKF update step
+    ekf.init(state, contacts_frame, point_feet, g, imu_rate, outlier_detection, use_imu_orientation)
 
     # Create IMU measurement
     imu = ImuMeasurement()

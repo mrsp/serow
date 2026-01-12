@@ -68,6 +68,10 @@
         0.0,
         1.0
     ],
+    // boolean: whether or not to use the IMU outlier detection during the filter step
+    "imu_outlier_detection": true,
+    // boolean: whether or not to use the IMU orientation during the ContactEKF update step
+    "use_imu_orientation": true,
     // boolean: whether or not to estimate initial values for the IMU gyro/accelerometer biases
     "calibrate_initial_imu_bias": false,
     // integer: number of IMU measurements to use for estimating the IMU gyro/accelerometer biases
