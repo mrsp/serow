@@ -27,7 +27,8 @@ ground_truth_base_positions = [gt.position for gt in dataset["base_pose_ground_t
 ground_truth_base_orientations = [gt.orientation for gt in dataset["base_pose_ground_truth"]]
 
 # 1. Define the function you want to optimize (the "Black Box")
-def fn(x0, y0, z0, x1, y1, z1):
+# Using parameter transformation: ht = lt + delta, where delta > 0 ensures ht > lt
+def fn(x0, y0, z0, x1, y1, z1, lt, delta, jv):
     # Read the json file
     json_file = f'{json_path}/{robot}_pytest.json'
     with open(json_file, 'r') as f:
@@ -40,6 +41,9 @@ def fn(x0, y0, z0, x1, y1, z1):
     config['contact_position_slip_covariance'][0] = x1
     config['contact_position_slip_covariance'][1] = y1
     config['contact_position_slip_covariance'][2] = z1
+    config['low_threshold'] = lt
+    config['high_threshold'] = lt + delta
+    config['joint_position_variance'] = jv
 
     # Write the config to a temporary file
     temp_file = f'{json_path}/{robot}_temp.json'
@@ -90,12 +94,19 @@ def fn(x0, y0, z0, x1, y1, z1):
 
 if __name__ == "__main__":
     # 2. Define the parameter bounds (the search space)
+    # Using lt and delta instead of ht and lt to ensure ht > lt constraint
+    # ht will be computed as lt + delta, where delta > 0
     pbounds = {'x0': (1e-8, 1e-3), 
                'y0': (1e-8, 1e-3), 
                'z0': (1e-8, 1e-3), 
                'x1': (1e-8, 1e-3), 
                'y1': (1e-8, 1e-3), 
-               'z1': (1e-8, 1e-3)}
+               'z1': (1e-8, 1e-3),
+               'lt': (0.0, 5.0),    
+               'delta': (0.1, 5.0),  
+               'jv' : (1e-5, 1e-2)}
+
+
 
     # 3. Initialize the optimizer
     optimizer = BayesianOptimization(
