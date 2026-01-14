@@ -356,7 +356,7 @@ private:
     std::shared_ptr<TerrainElevation> terrain_estimator_;
     /// @brief Data loggers
     std::unique_ptr<ProprioceptionLogger> proprioception_logger_;
-    std::unique_ptr<ExteroceptionLogger> exteroception_logger_;
+    std::shared_ptr<ExteroceptionLogger> exteroception_logger_;
     std::unique_ptr<MeasurementLogger> measurement_logger_;
     /// @brief Threadpool job for proprioceptive logging
     std::unique_ptr<ThreadPool> proprioception_logger_job_;

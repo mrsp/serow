@@ -109,8 +109,12 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
 
 // Conversion functions
 int LocalTerrainMapper::localIndexToHashId(const std::array<int, 2>& id_in) const {
-    const std::array<int, 2> id = {id_in[0] + half_map_dim, id_in[1] + half_map_dim};
-    return id[0] * map_dim + id[1];
+    // Clamp id_in to valid range [-half_map_dim, half_map_dim-1] before adding half_map_dim
+    // This ensures the result is in [0, map_dim-1] for both dimensions
+    // This prevents out-of-bounds access when id_in[i] = half_map_dim (which would give map_dim after adding)
+    const int id0 = std::max(-half_map_dim, std::min(half_map_dim - 1, id_in[0])) + half_map_dim;
+    const int id1 = std::max(-half_map_dim, std::min(half_map_dim - 1, id_in[1])) + half_map_dim;
+    return id0 * map_dim + id1;
 }
 
 int LocalTerrainMapper::locationToGlobalIndex(const float loc) const {
@@ -137,8 +141,10 @@ std::array<int, 2> LocalTerrainMapper::globalIndexToLocalIndex(
     for (size_t i = 0; i < 2; i++) {
         // Apply modulo to keep within bounds
         id_l[i] = fast_mod<map_dim>(id_g[i]);
-        // Adjust to keep within [-half_map_dim, half_map_dim]
-        if (id_l[i] > half_map_dim) {
+        // Adjust to keep within [-half_map_dim, half_map_dim-1]
+        // Note: We use >= instead of > to ensure we never return half_map_dim,
+        // which would cause out-of-bounds access in localIndexToHashId
+        if (id_l[i] >= half_map_dim) {
             id_l[i] -= map_dim;
         } else if (id_l[i] < -half_map_dim) {
             id_l[i] += map_dim;
