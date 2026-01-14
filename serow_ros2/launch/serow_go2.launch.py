@@ -10,7 +10,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     # Get the default path to the config file
     default_config_file = os.path.join(
-        get_package_share_directory("serow_ros2"), "config", "h1_config.yaml"
+        get_package_share_directory("serow_ros2"), "config", "go2_config.yaml"
     )
 
     # Declare the config file argument
