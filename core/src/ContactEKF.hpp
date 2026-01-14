@@ -115,7 +115,7 @@ public:
                                   const Eigen::Matrix3d& imu_orientation_cov);
 
     /**
-     * @brief Sets the action for the contact estimator
+     * @brief Sets the action for the contact estimator. (Experimental feature for RL)
      * @param cf Contact frame name
      * @param action Action
      */
