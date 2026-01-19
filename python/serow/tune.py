@@ -121,16 +121,16 @@ if __name__ == "__main__":
     # 2. Define the parameter bounds (the search space)
     # Using lt and delta instead of ht and lt to ensure ht > lt constraint
     # ht will be computed as lt + delta, where delta > 0
-    pbounds = {'x0': (1e-8, 1e-3), 
-               'y0': (1e-8, 1e-3), 
-               'z0': (1e-8, 1e-3), 
-               'x1': (1e-8, 1e-3), 
-               'y1': (1e-8, 1e-3), 
-               'z1': (1e-8, 1e-3),
-               'lt': (0.0, 5.0),    
-               'delta': (0.1, 5.0),  
-               'jv' : (1e-5, 1e-2),
-               'jc' : (10.0, 20.0)}
+    pbounds = {'x0': (1e-7, 1e-4), 
+               'y0': (1e-7, 1e-4), 
+               'z0': (1e-7, 1e-4), 
+               'x1': (1e-7, 1e-4), 
+               'y1': (1e-7, 1e-4), 
+               'z1': (1e-7, 1e-4),
+               'lt': (0.0, 4.0),    
+               'delta': (0.1, 8.0),  
+               'jv' : (1e-5, 1e-3),
+               'jc' : (12.0, 18.0)}
 
     # 3. Initialize the optimizer
     optimizer = BayesianOptimization(
@@ -152,8 +152,7 @@ if __name__ == "__main__":
     # init_points: How many steps of random exploration you want to perform
     # n_iter: How many steps of bayesian optimization you want to perform
     optimizer.maximize(
-        init_points=0,
-        n_iter=100,
+        n_iter=500,
     )
 
     # 5. Get the best results
