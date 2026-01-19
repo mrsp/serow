@@ -27,48 +27,27 @@ ground_truth_base_positions = [gt.position for gt in dataset["base_pose_ground_t
 ground_truth_base_orientations = [gt.orientation for gt in dataset["base_pose_ground_truth"]]
 
 def default_config():
-    # Initialize the Serow framework
-    serow_framework = serow.Serow()
-    serow_framework.initialize(f"{robot}_pytest.json")
-    initial_state = serow_framework.get_state(allow_invalid=True)
-    initial_state.set_joint_state(joint_state)
-    initial_state.set_base_state(base_state)
-    initial_state.set_contact_state(contact_state)
-    serow_framework.set_state(initial_state)
-     
-    # Run filter
-    position_error = 0.0
-    orientation_error = 0.0
-    steps = 0
-    successful_steps = 0
-    for imu, joint, ft in zip(dataset["imu"], dataset["joints"], dataset["ft"]):
-        status = serow_framework.filter(imu, joint, ft, None)
-        if status:
-            state = serow_framework.get_state(allow_invalid=True)
-            base_position = np.array(state.get_base_position())
-            base_orientation = np.array(state.get_base_orientation())
-            gt_base_position = np.array(ground_truth_base_positions[steps])
-            gt_base_orientation = np.array(ground_truth_base_orientations[steps])
-            position_error += np.linalg.norm(base_position - gt_base_position, axis=0)
-            orientation_error += np.linalg.norm(logMap(
-                quaternion_to_rotation_matrix(gt_base_orientation).transpose()
-                @ quaternion_to_rotation_matrix(base_orientation),
-            ), axis=0)
-            successful_steps += 1
-        steps += 1
- 
-    # Normalize errors by number of successful steps to avoid bias toward longer sequences
-    if successful_steps == 0:
-        return -1e10  # Return poor score if no successful steps
-    
-    # Normalize and combine errors 
-    normalized_position_error = position_error / successful_steps
-    normalized_orientation_error = orientation_error / successful_steps
-    
-    # Return negative sum for maximization (BayesianOptimization maximizes)
-    return -(normalized_position_error + normalized_orientation_error)  
+    # Read the json file
+    json_file = f'{json_path}/{robot}_pytest.json'
+    with open(json_file, 'r') as f:
+        config = json.load(f)
 
-# 1. Define the function you want to optimize (the "Black Box")
+    params = {
+        'x0': config['contact_position_covariance'][0],
+        'y0': config['contact_position_covariance'][1],
+        'z0': config['contact_position_covariance'][2],
+        'x1': config['contact_position_slip_covariance'][0],
+        'y1': config['contact_position_slip_covariance'][1],
+        'z1': config['contact_position_slip_covariance'][2],
+        'lt': config['low_threshold'],
+        'delta': config['high_threshold'] - config['low_threshold'],
+        'jv': config['joint_position_variance'],
+        'jc': config['joint_cutoff_frequency'],
+    }
+    print(f"Default params: {params}")
+    return params
+
+# 0. Define the function you want to optimize (the "Black Box")
 # Using parameter transformation: ht = lt + delta, where delta > 0 ensures ht > lt
 def fn(x0, y0, z0, x1, y1, z1, lt, delta, jv, jc):
     # Read the json file
@@ -136,9 +115,9 @@ def fn(x0, y0, z0, x1, y1, z1, lt, delta, jv, jc):
 
 
 if __name__ == "__main__":
-    default_score = default_config()
-    print(f"Default score: {default_score}")
-    
+    # 1. Get the default parameters
+    default_params = default_config()
+
     # 2. Define the parameter bounds (the search space)
     # Using lt and delta instead of ht and lt to ensure ht > lt constraint
     # ht will be computed as lt + delta, where delta > 0
@@ -160,18 +139,29 @@ if __name__ == "__main__":
         random_state=42,
     )
 
+    # Load the optimizer state from the file (if it exists)
+    if os.path.exists(f"{robot}_optimizer_state.json"):
+        state_file = f"{robot}_optimizer_state.json"
+        print(f"Loading optimizer state from {state_file}")
+        optimizer.load_state(state_file)
+    else:
+        # Probe the default parameters (once at the beginning to guide the optimizer)
+        optimizer.probe(params=default_params, lazy=True)
+
     # 4. Perform the optimization
     # init_points: How many steps of random exploration you want to perform
     # n_iter: How many steps of bayesian optimization you want to perform
     optimizer.maximize(
-        init_points=2,
-        n_iter=200,
+        init_points=0,
+        n_iter=100,
     )
 
     # 5. Get the best results
     print(f"Best optimization parameters: {optimizer.max['params']}")
     print(f"Best optimization function value: {optimizer.max['target']}")
-    print(f"Default score: {default_score}")
 
-    # 6.Remove the temporary file
+    # 6. Save the optimizer state to the file
+    optimizer.save_state(f"{robot}_optimizer_state.json")
+
+    # 7. Remove the temporary file
     os.remove(f"{json_path}/{robot}_temp.json")
