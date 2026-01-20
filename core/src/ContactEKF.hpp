@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Copyright (C) Stylianos Piperakis, Ownage Dynamics L.P.
  * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
  * General Public License as published by the Free Software Foundation, version 3.
  *
@@ -115,7 +115,7 @@ public:
                                   const Eigen::Matrix3d& imu_orientation_cov);
 
     /**
-     * @brief Sets the action for the contact estimator
+     * @brief Sets the action for the contact estimator. (Experimental feature for RL)
      * @param cf Contact frame name
      * @param action Action
      */

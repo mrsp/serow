@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2024 Stylianos Piperakis, Ownage Dynamics L.P.
+ * Copyright (C) Stylianos Piperakis, Ownage Dynamics L.P.
  * Serow is free software: you can redistribute it and/or modify it under the terms of the GNU
  * General Public License as published by the Free Software Foundation, version 3.
  *
@@ -71,7 +71,8 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
 
     // Set the initial state
     P_ = I_;
-    P_(v_idx_, v_idx_) = state.base_linear_velocity_cov;
+    const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
+    P_(v_idx_, v_idx_).noalias() = R.transpose() * state.base_linear_velocity_cov * R;
     P_(r_idx_, r_idx_) = state.base_orientation_cov;
     P_(p_idx_, p_idx_) = state.base_position_cov;
     P_(bg_idx_, bg_idx_) = state.imu_angular_velocity_bias_cov;
@@ -129,7 +130,8 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
 void ContactEKF::setState(const BaseState& state) {
     // Set the error state covariance
     P_ = I_;
-    P_(v_idx_, v_idx_) = state.base_linear_velocity_cov;
+    const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
+    P_(v_idx_, v_idx_).noalias() = R.transpose() * state.base_linear_velocity_cov * R;
     P_(r_idx_, r_idx_) = state.base_orientation_cov;
     P_(p_idx_, p_idx_) = state.base_position_cov;
     P_(bg_idx_, bg_idx_) = state.imu_angular_velocity_bias_cov;
@@ -164,8 +166,8 @@ void ContactEKF::setState(const BaseState& state) {
 std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobians(
     const BaseState& state, Eigen::Vector3d angular_velocity) {
     angular_velocity -= state.imu_angular_velocity_bias;
-    const Eigen::Vector3d& v = state.base_linear_velocity;
-    const Eigen::Matrix3d& R = state.base_orientation.toRotationMatrix();
+    const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
+    const Eigen::Vector3d v = R.transpose() * state.base_linear_velocity;
 
     Eigen::MatrixXd Ac(num_states_, num_states_), Lc(num_states_, num_inputs_);
     Lc = Lc_;
@@ -259,16 +261,18 @@ void ContactEKF::computeDiscreteDynamics(
     linear_acceleration -= state.imu_linear_acceleration_bias;
 
     // Nonlinear Process Model
-    const Eigen::Vector3d v = state.base_linear_velocity;
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
     const Eigen::Vector3d r = state.base_position;
+    const Eigen::Vector3d v = R.transpose() * state.base_linear_velocity;
+    const Eigen::Vector3d v_w = state.base_linear_velocity;
 
     // Linear velocity
-    state.base_linear_velocity.noalias() =
-        (v.cross(angular_velocity) + R.transpose() * g_ + linear_acceleration) * dt + v;
+    
+    state.base_linear_velocity.noalias() = R *
+        ((v.cross(angular_velocity) + R.transpose() * g_ + linear_acceleration) * dt) + v_w;
 
     // Position
-    state.base_position.noalias() = (R * v) * dt + r;
+    state.base_position.noalias() = v_w * dt + r;
 
     // Orientation
     state.base_orientation =
@@ -543,11 +547,13 @@ BaseState ContactEKF::updateStateCopy(const BaseState& state, const Eigen::Vecto
     BaseState updated_state = state;
     updated_state.base_position += dx(p_idx_);
     updated_state.base_position_cov = P(p_idx_, p_idx_);
-    updated_state.base_linear_velocity += dx(v_idx_);
-    updated_state.base_linear_velocity_cov = P(v_idx_, v_idx_);
+
     updated_state.base_orientation =
         Eigen::Quaterniond(lie::so3::plus(state.base_orientation.toRotationMatrix(), dx(r_idx_)))
             .normalized();
+    const Eigen::Matrix3d R = updated_state.base_orientation.toRotationMatrix();
+    updated_state.base_linear_velocity += R * dx(v_idx_);
+    updated_state.base_linear_velocity_cov.noalias() = R * P(v_idx_, v_idx_) * R.transpose();
     updated_state.base_orientation_cov = P(r_idx_, r_idx_);
     updated_state.imu_angular_velocity_bias += dx(bg_idx_);
     updated_state.imu_angular_velocity_bias_cov = P(bg_idx_, bg_idx_);
@@ -581,11 +587,13 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
                              const Eigen::MatrixXd& P) const {
     state.base_position += dx(p_idx_);
     state.base_position_cov = P(p_idx_, p_idx_);
-    state.base_linear_velocity += dx(v_idx_);
-    state.base_linear_velocity_cov = P(v_idx_, v_idx_);
+
     state.base_orientation =
         Eigen::Quaterniond(lie::so3::plus(state.base_orientation.toRotationMatrix(), dx(r_idx_)))
             .normalized();
+    const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();    
+    state.base_linear_velocity += R * dx(v_idx_);
+    state.base_linear_velocity_cov.noalias() = R * P(v_idx_, v_idx_) * R.transpose();
     state.base_orientation_cov = P(r_idx_, r_idx_);
     state.imu_angular_velocity_bias += dx(bg_idx_);
     state.imu_angular_velocity_bias_cov = P(bg_idx_, bg_idx_);

@@ -5,3 +5,4 @@ mcap>=1.2.2
 flatbuffers>=25.2.10
 gymnasium>=0.29.0
 stable-baselines3>=2.0.0
+bayesian-optimization>=3.2.0

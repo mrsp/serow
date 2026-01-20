@@ -1,0 +1,7 @@
+joint_state_rate: 100
+joint_state_topic: "/joint_states"
+base_imu_topic: "/imu0"
+config_file_path: "nao.json"
+force_torque_state_topics:
+  - "/left_ankle/force_torque_states"
+  - "/right_ankle/force_torque_states"

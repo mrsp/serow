@@ -1,7 +1,0 @@
-joint_state_rate: 150
-joint_state_topic: "/h1/joint_states"
-base_imu_topic: "/h1/imu"
-config_file_path: "h1.json"
-force_torque_state_topics:
-  - "/h1/left_ankle/force_torque_states"
-  - "/h1/right_ankle/force_torque_states"

@@ -1,12 +1,13 @@
-# Getting Started (Legacy)
-These instructions will get you a copy of the project up and running on your local machine for testing purposes with ROS noetic.
+# Getting Started
+These instructions will get you a copy of the project up and running on your local machine for testing purposes with ROS2.
 
 ## Install
 * Install [SEROW](https://github.com/mrsp/serow/tree/devel?tab=readme-ov-file#getting-started)
-* Create a ROS workspace with `mkdir -p ros_ws/src`
-* `cd ros_ws/src`
-* `ln -s $SEROW_PATH/serow_ros ./serow_ros`
-* `cd .. && catkin_make -DCMAKE_BUILD_TYPE=Release` 
+* Create a ROS workspace with `mkdir -p ros2_ws/src`
+* `cd ros2_ws/src`
+* `ln -s $SEROW_PATH/serow_ros2 ./serow_ros2`
+* `cd .. && colcon build --packages-select serow_ros2
+* `source install/setup.bash`
 
 ## Minimum Robot Requirements
 ### Using the Base Estimator to estimate: 
@@ -31,23 +32,10 @@ These instructions will get you a copy of the project up and running on your loc
 * IMU (e.g. topic `/imu0`)
 * Feet Pressure or Force/Torque sensors for Center of Pressure (COP) computation in the local foot frame (e.g. topics `/left_leg/force_torque_states`, `/right_leg/force_torque_states`)
 
-## ROS Examples
-### Valkyrie SRCsim
-* Download the valkyrie bag file from [valk_bagfile](https://drive.google.com/file/d/19Q0m3dUCS2Il-SP_xgqSF4WQosfykrul/view?usp=sharing)
-* `roscore`
-* `rosbag play --pause valk.bag`
-* `roslaunch serow_ros serow_valk.launch`
-* hit space to unpause the rosbag play
-
-![valk](../img/valk.png)
-### NAO walking on rough terrain outdoors
-* Download the nao bag file from [nao_bagfile](https://drive.google.com/file/d/1DAimsvSaths10C3lDGTYhwei64Ih1Ffx/view?usp=sharing)
-* `roscore`
-* `rosbag play --pause nao.bag`
-* `roslaunch serow_ros serow_nao.launch`
-* hit space to unpause the rosbag play
-
-![nao](../img/nao.jpg)
+## ROS2 Examples
+* Download the go2 bag file from
+* `ros2 bag play go2.bag`
+* `ros2 launch serow_ros2 serow_go2.launch.py`
 
 ## License
 [GNU GPLv3](LICENSE) 
