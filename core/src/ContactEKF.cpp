@@ -344,11 +344,12 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
     // Iterative ESKF update
     for (size_t iter = 0; iter < num_iter; iter++) {
         H.setZero();
-        const Eigen::Vector3d x = state.base_orientation.toRotationMatrix().transpose() *
+        const Eigen::Matrix3d R_base_transpose = state.base_orientation.toRotationMatrix().transpose();
+        const Eigen::Vector3d x = R_base_transpose *
             (state.contacts_position.at(cf) - state.base_position);
         z = cp - x;
-        H.block(0, p_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix().transpose();
-        H.block(0, pl_idx_.at(cf)[0], 3, 3) = state.base_orientation.toRotationMatrix().transpose();
+        H.block(0, p_idx_[0], 3, 3) = -R_base_transpose;
+        H.block(0, pl_idx_.at(cf)[0], 3, 3) = R_base_transpose;
         H.block(0, r_idx_[0], 3, 3) = lie::so3::wedge(x);
 
         // Normal ESKF update
@@ -425,13 +426,12 @@ void ContactEKF::updateWithContactOrientation(BaseState& state, const std::strin
     for (size_t iter = 0; iter < num_iter; iter++) {
         // Construct the innovation vector z
         const Eigen::Quaterniond x = Eigen::Quaterniond(
-            state.contacts_orientation.value().at(cf).toRotationMatrix().transpose() *
-            state.base_orientation.toRotationMatrix());
+            state.base_orientation.toRotationMatrix().transpose() * state.contacts_orientation.value().at(cf).toRotationMatrix());
         z = lie::so3::minus(co, x);
 
         // Construct the linearized measurement matrix H
         H.setZero();
-        H.block(0, r_idx_[0], 3, 3) = -x.toRotationMatrix();
+        H.block(0, r_idx_[0], 3, 3) = -x.toRotationMatrix().transpose();
         H.block(0, rl_idx_.at(cf)[0], 3, 3) = Eigen::Matrix3d::Identity();
         PH_transpose.noalias() = P_ * H.transpose();
         s.noalias() = co_noise / contact_outlier_detector.zeta + H * PH_transpose;

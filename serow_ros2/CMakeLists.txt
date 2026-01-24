@@ -28,6 +28,7 @@ find_package(Eigen3 3.4 REQUIRED NO_MODULE)
 find_package(nlohmann_json REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(ament_index_cpp REQUIRED)
+find_package(message_filters REQUIRED)
 
 # Add executable
 add_executable(serow_ros2 src/serow_driver.cpp src/SerowRos2.cpp)
@@ -52,6 +53,7 @@ ament_target_dependencies(serow_ros2
   sensor_msgs
   geometry_msgs
   ament_index_cpp
+  message_filters
 )
 
 # Install targets

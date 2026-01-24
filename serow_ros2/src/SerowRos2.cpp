@@ -17,6 +17,7 @@
 #include "yaml-cpp/yaml.h"
 
 using std::placeholders::_1;
+using std::placeholders::_2;
 namespace fs = std::filesystem;
 
 SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
@@ -73,15 +74,20 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     }
 
     // Create subscribers
-    RCLCPP_INFO(this->get_logger(), "Creating joint state subscription on topic: %s",
-                joint_state_topic.c_str());
-    joint_state_subscription_ = this->create_subscription<sensor_msgs::msg::JointState>(
-        joint_state_topic, 10, std::bind(&SerowRos2::jointStateCallback, this, _1));
+    RCLCPP_INFO(this->get_logger(), "Creating joint state and base imu synchronizer subscription on topics: %s and %s",
+                joint_state_topic.c_str(), base_imu_topic.c_str());
 
-    RCLCPP_INFO(this->get_logger(), "Creating base imu subscription on topic: %s",
-                base_imu_topic.c_str());
-    base_imu_subscription_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        base_imu_topic, 10, std::bind(&SerowRos2::baseImuCallback, this, _1));
+    // Create message_filters subscribers for synchronization
+    joint_state_subscriber_.subscribe(this, joint_state_topic);
+    base_imu_subscriber_.subscribe(this, base_imu_topic);
+
+    // Create a synchronizer for the joint state and base imu
+    sync_ = std::make_shared<message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::JointState, sensor_msgs::msg::Imu>>>(
+        message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::JointState, sensor_msgs::msg::Imu>(10),
+        joint_state_subscriber_,
+        base_imu_subscriber_
+    );
+    sync_->registerCallback(std::bind(&SerowRos2::jointStateAndBaseImuCallback, this, _1, _2));
 
     // Dynamically create a wrench callback, one for each force torque state topic
     for (const auto& ft_topic : force_torque_state_topics) {
@@ -154,75 +160,78 @@ SerowRos2::~SerowRos2() {
 }
 
 void SerowRos2::run() {
-    if (joint_state_data_.has_value() && base_imu_data_.has_value()) {
-        // Create the joint measurements
-        const auto& joint_state_data = joint_state_data_.value();
-        std::map<std::string, serow::JointMeasurement> joint_measurements;
-        for (size_t i = 0; i < joint_state_data.name.size(); i++) {
-            serow::JointMeasurement joint{};
-            joint.timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
-                static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
-            joint.position = joint_state_data.position[i];
-            if (!joint_state_data.velocity.empty()) {
-                joint.velocity = joint_state_data.velocity[i];
-            }
-            joint_measurements[joint_state_data.name[i]] = std::move(joint);
+    sensor_msgs::msg::JointState joint_state_data;
+    sensor_msgs::msg::Imu imu_data;
+    {
+        std::lock_guard<std::mutex> lock(joint_imu_data_mutex_);
+        if (!joint_state_data_.has_value() || !base_imu_data_.has_value()) {
+            return;
         }
-
-        // Create the base imu measurement
-        const auto& imu_data = base_imu_data_.value();
-        serow::ImuMeasurement imu_measurement{};
-        imu_measurement.timestamp = static_cast<double>(imu_data.header.stamp.sec) +
-            static_cast<double>(imu_data.header.stamp.nanosec) * 1e-9;
-        imu_measurement.linear_acceleration =
-            Eigen::Vector3d(imu_data.linear_acceleration.x, imu_data.linear_acceleration.y,
-                            imu_data.linear_acceleration.z);
-        imu_measurement.angular_velocity = Eigen::Vector3d(
-            imu_data.angular_velocity.x, imu_data.angular_velocity.y, imu_data.angular_velocity.z);
+        joint_state_data = joint_state_data_.value();
+        imu_data = base_imu_data_.value();
 
         // Clear the used joint and imu measurements
         joint_state_data_.reset();
         base_imu_data_.reset();
+    }
 
-        // Create the force torque measurements
-        std::map<std::string, serow::ForceTorqueMeasurement> ft_measurements;
-        if (ft_data_.size() == force_torque_state_subscriptions_.size()) {
-            // Create the leg F/T measurement
-            for (auto& [key, value] : ft_data_) {
-                serow::ForceTorqueMeasurement ft{};
-                const auto& ft_data = value;
-                ft.timestamp = static_cast<double>(ft_data.header.stamp.sec) +
-                    static_cast<double>(ft_data.header.stamp.nanosec) * 1e-9;
-                ft.force = Eigen::Vector3d(ft_data.wrench.force.x, ft_data.wrench.force.y,
-                                           ft_data.wrench.force.z);
-                ft.torque.emplace(Eigen::Vector3d(ft_data.wrench.torque.x, ft_data.wrench.torque.y,
-                                                  ft_data.wrench.torque.z));
-                ft_measurements[key] = std::move(ft);
-            }
-            // Clear the used force torque measurements
-            ft_data_.clear();
+    // Create the joint measurements
+    std::map<std::string, serow::JointMeasurement> joint_measurements;
+    for (size_t i = 0; i < joint_state_data.name.size(); i++) {
+        serow::JointMeasurement joint{};
+        joint.timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
+            static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
+        joint.position = joint_state_data.position[i];
+        if (!joint_state_data.velocity.empty()) {
+            joint.velocity = joint_state_data.velocity[i];
         }
+        joint_measurements[joint_state_data.name[i]] = std::move(joint);
+    }
 
-        serow_.filter(imu_measurement, joint_measurements,
-                      ft_measurements.size() == force_torque_state_subscriptions_.size()
-                          ? std::make_optional(ft_measurements)
-                          : std::nullopt);
-
-        const auto& state = serow_.getState();
-        if (state) {
-            // Queue the state for publishing instead of publishing directly to not block the
-            // main thread
-            {
-                std::lock_guard<std::mutex> lock(publish_queue_mutex_);
-                publish_queue_.push(state.value());
-
-                // Keep only the latest state to avoid queue buildup
-                while (publish_queue_.size() > 1) {
-                    publish_queue_.pop();
-                }
-            }
-            publish_condition_.notify_one();
+    // Create the base imu measurement
+    serow::ImuMeasurement imu_measurement{};
+    imu_measurement.timestamp = static_cast<double>(imu_data.header.stamp.sec) +
+        static_cast<double>(imu_data.header.stamp.nanosec) * 1e-9;
+    imu_measurement.linear_acceleration =
+        Eigen::Vector3d(imu_data.linear_acceleration.x, imu_data.linear_acceleration.y,
+                        imu_data.linear_acceleration.z);
+    imu_measurement.angular_velocity = Eigen::Vector3d(
+        imu_data.angular_velocity.x, imu_data.angular_velocity.y, imu_data.angular_velocity.z);
+    
+    // Create the force torque measurements
+    std::map<std::string, serow::ForceTorqueMeasurement> ft_measurements;
+    if (ft_data_.size() == force_torque_state_subscriptions_.size()) {
+        // Create the leg F/T measurement
+        for (auto& [key, value] : ft_data_) {
+            serow::ForceTorqueMeasurement ft{};
+            const auto& ft_data = value;
+            ft.timestamp = static_cast<double>(ft_data.header.stamp.sec) +
+                static_cast<double>(ft_data.header.stamp.nanosec) * 1e-9;
+            ft.force = Eigen::Vector3d(ft_data.wrench.force.x, ft_data.wrench.force.y,
+                                       ft_data.wrench.force.z);
+            ft.torque.emplace(Eigen::Vector3d(ft_data.wrench.torque.x, ft_data.wrench.torque.y,
+                                              ft_data.wrench.torque.z));
+            ft_measurements[key] = std::move(ft);
         }
+    }
+    serow_.filter(imu_measurement, joint_measurements,
+                  ft_measurements.size() == force_torque_state_subscriptions_.size()
+                        ? std::make_optional(ft_measurements)
+                        : std::nullopt);
+
+    const auto& state = serow_.getState();
+    if (state) {
+        // Queue the state for publishing instead of publishing directly to not block the main thread
+        {
+            std::lock_guard<std::mutex> lock(publish_queue_mutex_);
+            publish_queue_.push(state.value());
+
+            // Keep only the latest state to avoid queue buildup
+            while (publish_queue_.size() > 1) {
+                publish_queue_.pop();
+            }
+        }
+        publish_condition_.notify_one();
     }
 }
 
@@ -445,10 +454,8 @@ void SerowRos2::publishContactState(const serow::State& state) {
     }
 }
 
-void SerowRos2::jointStateCallback(const sensor_msgs::msg::JointState& msg) {
-    this->joint_state_data_ = msg;
-}
-
-void SerowRos2::baseImuCallback(const sensor_msgs::msg::Imu& msg) {
-    this->base_imu_data_ = msg;
+void SerowRos2::jointStateAndBaseImuCallback(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state_msg, const sensor_msgs::msg::Imu::ConstSharedPtr& base_imu_msg) {
+    std::lock_guard<std::mutex> lock(joint_imu_data_mutex_);
+    this->joint_state_data_ = *joint_state_msg;
+    this->base_imu_data_ = *base_imu_msg;
 }

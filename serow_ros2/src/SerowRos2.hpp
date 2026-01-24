@@ -28,6 +28,9 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/float64.hpp>
+#include <message_filters/sync_policies/approximate_time.hpp>
+#include <message_filters/synchronizer.hpp>
+#include <message_filters/subscriber.hpp>
 
 class SerowRos2 : public rclcpp::Node {
 public:
@@ -48,9 +51,7 @@ private:
 
     void publishContactState(const serow::State& state);
 
-    void jointStateCallback(const sensor_msgs::msg::JointState& msg);
-
-    void baseImuCallback(const sensor_msgs::msg::Imu& msg);
+    void jointStateAndBaseImuCallback(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state_msg, const sensor_msgs::msg::Imu::ConstSharedPtr& base_imu_msg);
 
     serow::Serow serow_;
     // Publishers
@@ -69,8 +70,11 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
 
     // Subscribers
-    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscription_;
-    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr base_imu_subscription_;
+    message_filters::Subscriber<sensor_msgs::msg::JointState> joint_state_subscriber_;
+    message_filters::Subscriber<sensor_msgs::msg::Imu> base_imu_subscriber_;
+    
+    std::shared_ptr<message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::JointState, sensor_msgs::msg::Imu>>> sync_;
+
     std::vector<rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr>
         force_torque_state_subscriptions_;
     std::vector<std::function<void(const geometry_msgs::msg::WrenchStamped&)>>
@@ -86,4 +90,5 @@ private:
     std::mutex publish_queue_mutex_;
     std::condition_variable publish_condition_;
     bool shutdown_requested_ = false;
+    std::mutex joint_imu_data_mutex_;
 };

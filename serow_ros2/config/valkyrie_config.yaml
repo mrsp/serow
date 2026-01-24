@@ -1,0 +1,8 @@
+robot_name: "valkyrie"
+topics:
+  joint_states: "/joint_states"
+  imu: "/imu"
+  force_torque_states:
+    - "/force_torque_states/left"
+    - "/force_torque_states/right"
+serow_config: "valkyrie.json" 
