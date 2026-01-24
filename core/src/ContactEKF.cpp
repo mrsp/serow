@@ -250,6 +250,8 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu,
     // Clear the innovation and update buffers
     contact_position_innovation_.clear();
     contact_orientation_innovation_.clear();
+
+    std::cout << "ContactEKF (Predict) Base position: " << state.base_position.transpose() << std::endl;
 }
 
 void ContactEKF::computeDiscreteDynamics(
@@ -267,7 +269,6 @@ void ContactEKF::computeDiscreteDynamics(
     const Eigen::Vector3d v_w = state.base_linear_velocity;
 
     // Linear velocity
-    
     state.base_linear_velocity.noalias() = R *
         ((v.cross(angular_velocity) + R.transpose() * g_ + linear_acceleration) * dt) + v_w;
 
@@ -312,7 +313,7 @@ void ContactEKF::updateWithContactPosition(BaseState& state, const std::string& 
     if (!cs) {
         return;
     }
-
+    
     // Pre-compute rotation matrix once
     const Eigen::Matrix3d R_base = state.base_orientation.toRotationMatrix();
     const Eigen::Matrix3d R_base_transpose = R_base.transpose();
@@ -587,7 +588,6 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
                              const Eigen::MatrixXd& P) const {
     state.base_position += dx(p_idx_);
     state.base_position_cov = P(p_idx_, p_idx_);
-
     state.base_orientation =
         Eigen::Quaterniond(lie::so3::plus(state.base_orientation.toRotationMatrix(), dx(r_idx_)))
             .normalized();

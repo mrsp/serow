@@ -156,9 +156,8 @@ void LegOdometry::estimate(
             Eigen::Quaterniond(Rwb * base_to_foot_orientations.at(key).toRotationMatrix());
     }
 
-    for (const auto& [key, value] : pivots_) {
-        contact_positions_[key] = base_to_foot_positions.at(key) +
-            base_to_foot_orientations.at(key).toRotationMatrix() * value;
+    for (const auto& [key, value] : feet_position_prev_) {
+        contact_positions_[key] = Rwb.transpose() * (value -  base_position_);
         contact_orientations_[key] = base_to_foot_orientations.at(key);
     }
 

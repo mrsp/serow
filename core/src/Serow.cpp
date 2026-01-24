@@ -711,7 +711,8 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
         kin.base_to_foot_positions, kin.base_to_foot_linear_velocities,
         kin.base_to_foot_angular_velocities, state.contact_state_.contacts_force,
         state.contact_state_.contacts_probability, state.contact_state_.contacts_torque);
-
+   
+    std::cout << "LegOdometry Base position: " << leg_odometry_->getBasePosition().transpose() << std::endl;
     kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
     kin.contacts_position = leg_odometry_->getContactPositions();
     kin.position_cov = params_.contact_position_cov.asDiagonal();

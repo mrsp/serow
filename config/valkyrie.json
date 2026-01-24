@@ -9,7 +9,7 @@
     "model_path": "valkyrie.urdf",
     "g": 9.81,
     "joint_rate": 500.0,
-    "estimate_joint_velocity": true,
+    "estimate_joint_velocity": false,
     "joint_cutoff_frequency": 20.0,
     "joint_position_variance": 0.0625,
     "angular_momentum_cutoff_frequency": 5.0,
