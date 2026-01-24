@@ -251,11 +251,15 @@ void SerowRos2::publish() {
             publish_queue_.pop();
             lock.unlock();
 
-            // Publish all state data
-            publishJointState(state);
-            publishBaseState(state);
-            publishCentroidState(state);
-            publishContactState(state);
+            // Publish all state data with exception handling
+            try {
+                publishJointState(state);
+                publishBaseState(state);
+                publishCentroidState(state);
+                publishContactState(state);
+            } catch (const std::exception& e) {
+                RCLCPP_ERROR(this->get_logger(), "Error publishing state: %s", e.what());
+            }
 
             lock.lock();
         }

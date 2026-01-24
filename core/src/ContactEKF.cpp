@@ -531,7 +531,7 @@ void ContactEKF::updateWithTerrain(BaseState& state,
 
                 // Construct the measurement noise matrix R
                 R(0, 0) = static_cast<double>(elevation.value().variance);
-
+                
                 PH_transpose.noalias() = P_ * H.transpose();
                 const Eigen::MatrixXd s = R + H * PH_transpose;
                 const Eigen::MatrixXd K = PH_transpose * s.inverse();
@@ -640,7 +640,6 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                 // Transform measurement noise to world frame
                 const Eigen::Matrix3d con_cov = T_world_to_base.linear() *
                     kin.contacts_position_noise.at(cf) * T_world_to_base.linear().transpose();
-
                 if (!terrain_estimator->update(con_pos_xy, con_pos_z,
                                                static_cast<float>(con_cov(2, 2)))) {
                     std::cout << "Contact for " << cf
@@ -648,7 +647,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                                  "updated "
                               << std::endl;
                 } else {
-                    if (kin.is_new_contact.at(cf)) {
+                    if (kin.is_new_contact.count(cf) > 0 && kin.is_new_contact.at(cf)) {
                         terrain_estimator->addContactPoint(con_pos_xy);
                     }
                 }
