@@ -124,36 +124,14 @@ public:
     /// @param imu IMU measurement
     void baseEstimatorUpdateWithImuOrientation(const ImuMeasurement& imu);
 
-    /// @brief Runs the base estimator update step with contact position
-    /// @param cf contact frame name
+    /// @brief Runs the base estimator update step with base linear velocity
     /// @param kin kinematic measurements
-    void baseEstimatorUpdateWithContactPosition(const std::string& cf,
-                                                const KinematicMeasurement& kin);
+    void baseEstimatorUpdateWithBaseLinearVelocity(const KinematicMeasurement& kin);
 
     /// @brief Runs the base estimator finish update step
     /// @param imu IMU measurement
     /// @param kin kinematic measurements
     void baseEstimatorFinishUpdate(const ImuMeasurement& imu, const KinematicMeasurement& kin);
-
-    /// @brief Sets the action for the base estimator
-    /// @param cf contact frame name
-    /// @param action action
-    bool setAction(const std::string& cf, const Eigen::VectorXd& action);
-
-    /// @brief Gets the contact position innovation
-    /// @param contact_frame contact frame name
-    /// @param innovation contact position innovation
-    /// @param covariance contact position covariance
-    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
-                                      Eigen::Matrix3d& covariance) const;
-
-    /// @brief Gets the contact orientation innovation
-    /// @param contact_frame contact frame name
-    /// @param innovation contact orientation innovation
-    /// @param covariance contact orientation covariance
-    bool getContactOrientationInnovation(const std::string& contact_frame,
-                                         Eigen::Vector3d& innovation,
-                                         Eigen::Matrix3d& covariance) const;
 
 private:
     struct Params {
@@ -215,11 +193,6 @@ private:
         /// @brief Schmidt-Trigger high threshold (N) i.e. mass * g / 3.0. Note, must be very
         /// carefully tuned since base estimator is directly affected by the robot's contact status.
         /// Only applies if estimate_contact_status = true
-        double high_threshold{};
-        /// @brief Schmidt-Trigger high threshold (N) i.e. mass * g / 6.0. Note, must be very
-        /// carefully tuned since base estimator is directly affected by the robot's contact status.
-        /// Only applies if estimate_contact_status = true
-        double low_threshold{};
         /// @brief moving median filter batch used to remove leg end-effector vertical force
         /// outliers. Only applies if estimate_contact_status = true
         size_t median_window{};
@@ -241,16 +214,6 @@ private:
         /// @brief accelerometer bias instanbility (or stability). Can be found in the IMU data
         /// sheet or computed with the Alan variance method
         Eigen::Vector3d linear_acceleration_bias_cov{Eigen::Vector3d::Zero()};
-        /// @brief minimum leg end-effector contact relative to base frame position uncertainty
-        /// (m^2)
-        Eigen::Vector3d contact_position_cov{Eigen::Vector3d::Zero()};
-        /// @brief minimum leg end-effector contact orientation relative to base frame uncertainty
-        /// (rad^2)
-        Eigen::Vector3d contact_orientation_cov{Eigen::Vector3d::Zero()};
-        /// @brief leg end-effector contact position slip uncertainty (m^2)
-        Eigen::Vector3d contact_position_slip_cov{Eigen::Vector3d::Zero()};
-        /// @brief leg end-effector contact orientation slip uncertainty (rad^2)
-        Eigen::Vector3d contact_orientation_slip_cov{Eigen::Vector3d::Zero()};
         /// @brief CoM position process noise (m^2)
         Eigen::Vector3d com_position_process_cov{Eigen::Vector3d::Zero()};
         /// @brief CoM linear velocity process noise (m^2/s^2)
@@ -268,11 +231,6 @@ private:
         Eigen::Vector3d initial_base_orientation_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for the base linear velocity (m^2/s^2)
         Eigen::Vector3d initial_base_linear_velocity_cov{Eigen::Vector3d::Zero()};
-        /// @brief initial uncertainty for the leg end-effector contact position (m^2)
-        Eigen::Vector3d initial_contact_position_cov{Eigen::Vector3d::Zero()};
-        /// @brief initial uncertainty for the leg end-effector contact orientation (rad^2), only
-        /// applies for flat feet
-        Eigen::Vector3d initial_contact_orientation_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for IMU linear acceleration bias (m^2/s^4)
         Eigen::Vector3d initial_imu_linear_acceleration_bias_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for IMU gyro bias (rad^2/s^2)
@@ -320,6 +278,8 @@ private:
         bool use_imu_orientation{false};
         /// @brief whether or not to use the IMU outlier detection during the filter step
         bool imu_outlier_detection{false};
+        /// @brief whether or not to enable verbose output
+        bool verbose{false};
     };
 
     /// @brief SEROW's configuration

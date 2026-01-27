@@ -95,7 +95,10 @@ struct GroundReactionForceMeasurement {
  */
 struct KinematicMeasurement {
     double timestamp{};  ///< Timestamp of the measurement (s)
+    Eigen::Vector3d base_position{Eigen::Vector3d::Zero()};  ///< Base position (m)
     Eigen::Vector3d base_linear_velocity{Eigen::Vector3d::Zero()};  ///< Base linear velocity (m/s)
+    Eigen::Matrix3d base_linear_velocity_cov{
+        Eigen::Matrix3d::Identity()};  ///< Covariance matrix of base linear velocity (m^2/s^2)
     std::map<std::string, bool>
         contacts_status;  ///< Map of contact status for different parts (0 or 1)
     std::map<std::string, double> contacts_probability;  ///< Map of contact probabilities ([0, 1])

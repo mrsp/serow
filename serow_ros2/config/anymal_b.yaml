@@ -1,0 +1,11 @@
+
+robot_name: "anymal_b"
+topics:
+  joint_states: "/joint_states"
+  imu: "/imu"
+  force_torque_states:
+    - "/force_torque_states/lf_foot"
+    - "/force_torque_states/rf_foot"
+    - "/force_torque_states/lh_foot"
+    - "/force_torque_states/rh_foot"
+serow_config: "anymal_b.json" 

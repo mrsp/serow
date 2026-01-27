@@ -56,6 +56,7 @@ class LegOdometry {
 private:
     /**
      * @brief Computes the Instanteneous Moment Pivot (IMP) for a given contact frame.
+     * @param timestamp Timestamp of the measurement
      * @param frame Contact frame name
      * @param R Base orientation in world coordinates
      * @param angular_velocity Angular velocity of the base in world coordinates
@@ -63,18 +64,20 @@ private:
      * @param force Ground reaction force at the contact frame in world coordinates
      * @param torque Ground reaction torque at the contact frame in world coordinates (optional)
      */
-    void computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
+    void computeIMP(const double timestamp, const std::string& frame, const Eigen::Matrix3d& R,
                     const Eigen::Vector3d& angular_velocity, const Eigen::Vector3d& linear_velocity,
                     const Eigen::Vector3d& force,
                     std::optional<Eigen::Vector3d> torque = std::nullopt);
 
-    bool is_initialized{};  ///< Flag indicating if the odometry has been initialized
+    std::optional<double> timestamp_{};  ///< Timestamp of the last measurement
     Eigen::Vector3d base_position_ =
         Eigen::Vector3d::Zero();  ///< Estimated base position in world coordinates
     Eigen::Vector3d base_position_prev_ =
         Eigen::Vector3d::Zero();  ///< Previous base position in world coordinates
     Eigen::Vector3d base_linear_velocity_ =
         Eigen::Vector3d::Zero();  ///< Estimated base linear velocity in world coordinates
+    Eigen::Matrix3d base_linear_velocity_cov_ =
+        Eigen::Matrix3d::Identity();  ///< Estimated base linear velocity covariance
     Params params_;               ///< Optimization parameters
 
     std::map<std::string, Eigen::Vector3d>
@@ -127,6 +130,12 @@ public:
     const Eigen::Vector3d& getBaseLinearVelocity() const;
 
     /**
+     * @brief Gets the estimated base linear velocity covariance in world coordinates.
+     * @return The estimated base linear velocity covariance in world coordinates.
+     */
+    const Eigen::Matrix3d& getBaseLinearVelocityCov() const;
+
+    /**
      * @brief Gets the feet contact positions relative to the base frame.
      * @return The feet contact positions relative to the base frame.
      */
@@ -149,9 +158,13 @@ public:
      * @param base_to_foot_angular_velocities Relative foot angular velocities from the base to the
      * feet frame
      * @param contact_forces Contact forces at the feet frame
+     * @param contact_probabilities Contact probabilities for the feet frames
+     * @param contact_positions_noise Contact position noise covariances for the feet frames
+     * @param base_angular_velocity_noise Base angular velocity noise covariance
      * @param contact_torques Contact torques at the feet frame (optional)
      */
     void estimate(
+        const double timestamp,
         const Eigen::Quaterniond& base_orientation, const Eigen::Vector3d& base_angular_velocity,
         const std::map<std::string, Eigen::Quaterniond>& base_to_foot_orientations,
         const std::map<std::string, Eigen::Vector3d>& base_to_foot_positions,
@@ -159,6 +172,8 @@ public:
         const std::map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
         const std::map<std::string, Eigen::Vector3d>& contact_forces,
         const std::map<std::string, double>& contact_probabilities,
+        const std::map<std::string, Eigen::Matrix3d>& contact_positions_noise,
+        const Eigen::Matrix3d& base_angular_velocity_noise,
         std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques = std::nullopt);
 };
 

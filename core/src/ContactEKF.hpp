@@ -17,8 +17,7 @@
  *        This EKF fuses data from an Inertial Measurement Unit (IMU), relative to the base leg
  *        contact measurements, and optionally external odometry (e.g., Visual Odometry or Lidar
  *        Odometry). It models the state of the robot including base position, velocity,
- * orientation, gyro and accelerometer biases, leg contact positions, and contact orientations in
- * world frame coordinates.
+ * orientation, gyro and accelerometer biases.
  * @author Stylianos Piperakis
  * @details The state estimation involves predicting and updating the robot's state based on sensor
  *          measurements and the robot's dynamics. The EKF integrates outlier detection mechanisms
@@ -54,23 +53,21 @@ public:
      * parameters.
      * @param state Initial state of the robot.
      * @param contacts_frame Set of contact frame names.
-     * @param point_feet Flag indicating if the robot has point feet.
      * @param g Acceleration due to gravity.
      * @param imu_rate IMU update rate.
      * @param outlier_detection Flag indicating if outlier detection mechanisms should be enabled.
      * @param use_imu_orientation Flag indicating if IMU orientation is used during the update step.
      * @param verbose Flag indicating if verbose output should be enabled.
      */
-    void init(const BaseState& state, std::set<std::string> contacts_frame, bool point_feet,
-              double g, double imu_rate, bool outlier_detection = false, bool use_imu_orientation = false, 
+    void init(const BaseState& state, std::set<std::string> contacts_frame, double g, 
+              double imu_rate, bool outlier_detection = false, bool use_imu_orientation = false, 
               bool verbose = false);
     /**
-     * @brief Predicts the robot's state forward based on IMU and kinematic measurements.
+     * @brief Predicts the robot's state forward based on IMU.
      * @param state Current state of the robot.
      * @param imu IMU measurements.
-     * @param kin Kinematic measurements.
      */
-    void predict(BaseState& state, const ImuMeasurement& imu, const KinematicMeasurement& kin);
+    void predict(BaseState& state, const ImuMeasurement& imu);
 
     /**
      * @brief Updates the robot's state based on kinematic measurements (and optionally odometry
@@ -91,20 +88,13 @@ public:
     void setState(const BaseState& state);
 
     /**
-     * @brief Updates the robot's state based on contact position measurements.
+     * @brief Updates the robot's state based on base linear velocity measurements.
      * @param state Current state of the robot.
-     * @param cf Contact frame name.
-     * @param cs Leg contact status.
-     * @param cp Leg contact position.
-     * @param cp_noise Covariance of leg contact position measurement.
-     * @param position_cov Covariance of position measurements.
-     * @param terrain_estimator Terrain elevation estimator.
+     * @param base_linear_velocity Base linear velocity in world coordinates.
+     * @param base_linear_velocity_cov Covariance of base linear velocity measurement in world coordinates.    
      */
-    void updateWithContactPosition(BaseState& state, const std::string& cf, const bool cs,
-                                   const Eigen::Vector3d& cp, Eigen::Matrix3d cp_noise,
-                                   const Eigen::Matrix3d& position_cov,
-                                   std::shared_ptr<TerrainElevation> terrain_estimator);
-
+    void updateWithBaseLinearVelocity(BaseState& state, const Eigen::Vector3d& base_linear_velocity,
+                                      const Eigen::Matrix3d& base_linear_velocity_cov);
     /**
      * @brief Updates the robot's state based on IMU orientation measurements.
      * @param state Current state of the robot.
@@ -114,44 +104,11 @@ public:
     void updateWithIMUOrientation(BaseState& state, const Eigen::Quaterniond& imu_orientation,
                                   const Eigen::Matrix3d& imu_orientation_cov);
 
-    /**
-     * @brief Sets the action for the contact estimator. (Experimental feature for RL)
-     * @param cf Contact frame name
-     * @param action Action
-     */
-    void setAction(const std::string& cf, const Eigen::VectorXd& action);
-
-    /**
-     * @brief Clears the action covariance gain matrix
-     */
-    void clearAction();
-
-    /**
-     * @brief Gets the contact position innovation
-     * @param contact_frame Contact frame name
-     * @param innovation Contact position innovation
-     * @param covariance Contact position covariance
-     */
-    bool getContactPositionInnovation(const std::string& contact_frame, Eigen::Vector3d& innovation,
-                                      Eigen::Matrix3d& covariance) const;
-
-    /**
-     * @brief Gets the contact orientation innovation
-     * @param contact_frame Contact frame name
-     * @param innovation Contact orientation innovation
-     * @param covariance Contact orientation covariance
-     */
-    bool getContactOrientationInnovation(const std::string& contact_frame,
-                                         Eigen::Vector3d& innovation,
-                                         Eigen::Matrix3d& covariance) const;
-
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
-    int contact_dim_{};                     ///< Dimension of contact-related variables.
     int num_leg_end_effectors_{};           ///< Number of leg end-effectors.
     std::set<std::string> contacts_frame_;  ///< Set of contact frame names.
-    bool point_feet_{};                     ///< Flag indicating if the robot has point feet.
     bool outlier_detection_{};              ///< Flag indicating if outlier detection is enabled.
     double nominal_dt_{};                   ///< Nominal sampling time for prediction step.
     Eigen::Vector3d g_;                     ///< Gravity vector.
@@ -161,34 +118,21 @@ private:
     Eigen::Array3i p_idx_;   ///< Indices for position state variables.
     Eigen::Array3i bg_idx_;  ///< Indices for gyro bias state variables.
     Eigen::Array3i ba_idx_;  ///< Indices for accelerometer bias state variables.
-    std::map<std::string, Eigen::Array3i> pl_idx_;  ///< Indices for leg contact position variables.
-    std::map<std::string, Eigen::Array3i>
-        rl_idx_;  ///< Indices for leg contact orientation variables.
+
     // Input indices
     Eigen::Array3i ng_idx_;   ///< Indices for IMU input variables.
     Eigen::Array3i na_idx_;   ///< Indices for kinematic input variables.
     Eigen::Array3i nbg_idx_;  ///< Indices for gyro bias input variables.
     Eigen::Array3i nba_idx_;  ///< Indices for accelerometer bias input variables.
-    std::map<std::string, Eigen::Array3i>
-        npl_idx_;  ///< Indices for updated leg contact position variables.
-    std::map<std::string, Eigen::Array3i>
-        nrl_idx_;  ///< Indices for updated leg contact orientation variables.
     std::optional<double> last_imu_timestamp_;  ///< Timestamp of the last IMU measurement.
 
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
-    /// matrix 15 + 6N x 15 + 6N
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> I_, P_;
-    /// Linearized state-input model 15 + 6N x 12 + 6N
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> Lc_;
+    /// matrix 15 x 15 
+    Eigen::Matrix<double, 15, 15> I_, P_;
+    /// Linearized state-input model 15 x 12
+    Eigen::Matrix<double, 15, 12> Lc_;
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
-
-    std::map<std::string, double> contact_position_action_cov_gain_;
-    std::map<std::string, double> contact_orientation_action_cov_gain_;
-
-    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>> contact_position_innovation_;
-    std::map<std::string, std::pair<Eigen::Vector3d, Eigen::Matrix3d>>
-        contact_orientation_innovation_;
 
     bool verbose_{};  ///< Flag indicating if verbose output is enabled.
     bool use_imu_orientation_{};  ///< Flag indicating if IMU orientation is used during the update step.
@@ -199,17 +143,10 @@ private:
      * @param dt Time step for prediction.
      * @param angular_velocity Angular velocity measurements.
      * @param linear_acceleration Linear acceleration measurements.
-     * @param contacts_status Status of leg contacts.
-     * @param contacts_position Position of leg contacts.
-     * @param contacts_orientations Orientations of leg contacts.
      */
     void computeDiscreteDynamics(
         BaseState& state, double dt, Eigen::Vector3d angular_velocity,
-        Eigen::Vector3d linear_acceleration,
-        std::optional<std::map<std::string, bool>> contacts_status,
-        std::optional<std::map<std::string, Eigen::Vector3d>> contacts_position,
-        std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientations =
-            std::nullopt);
+        Eigen::Vector3d linear_acceleration);
 
     /**
      * @brief Computes Jacobians for the prediction step of the EKF.
@@ -219,40 +156,6 @@ private:
      */
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> computePredictionJacobians(
         const BaseState& state, Eigen::Vector3d angular_velocity);
-
-    /**
-     * @brief Updates the robot's state based on contact-related measurements.
-     * @param state Current state of the robot.
-     * @param contacts_position Positions of leg contacts.
-     * @param contacts_position_noise Noise in position measurements.
-     * @param contacts_status Status of leg contacts.
-     * @param position_cov Covariance of position measurements.
-     * @param contacts_orientation Orientations of leg contacts (optional).
-     * @param contacts_orientation_noise Noise in orientation measurements (optional).
-     * @param orientation_cov Covariance of orientation measurements (optional).
-     * @param terrain_estimator Terrain elevation estimator (optional).
-     */
-    void updateWithContacts(
-        BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
-        std::map<std::string, Eigen::Matrix3d> contacts_position_noise,
-        const std::map<std::string, bool>& contacts_status, const Eigen::Matrix3d& position_cov,
-        std::optional<std::map<std::string, Eigen::Quaterniond>> contacts_orientation,
-        std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_noise,
-        std::optional<Eigen::Matrix3d> orientation_cov,
-        std::shared_ptr<TerrainElevation> terrain_estimator);
-
-    /**
-     * @brief Updates the robot's state based on contact orientation measurements.
-     * @param state Current state of the robot.
-     * @param cf Contact frame name.
-     * @param cs Leg contact status.
-     * @param co Leg contact orientation.
-     * @param co_noise Covariance of leg contact orientation measurement.
-     * @param orientation_cov Covariance of orientation measurements.
-     */
-    void updateWithContactOrientation(BaseState& state, const std::string& cf, const bool cs,
-                                      const Eigen::Quaterniond& co, Eigen::Matrix3d co_noise,
-                                      const Eigen::Matrix3d& orientation_cov);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
@@ -270,10 +173,14 @@ private:
     /**
      * @brief Updates the robot's state based on terrain measurements.
      * @param state Current state of the robot.
-     * @param contacts_status Status of leg contacts.
+     * @param base_position_z Z-coordinate of the base position leg odometry.
+     * @param contacts_position Positions of leg contacts.
+     * @param contacts_probability Probabilities of leg contacts.
      * @param terrain_estimator Terrain elevation mapper.
      */
-    void updateWithTerrain(BaseState& state, const std::map<std::string, bool>& contacts_status,
+    void updateWithTerrain(BaseState& state, const double base_position_z, 
+                           const std::map<std::string, Eigen::Vector3d>& contacts_position,
+                           const std::map<std::string, double>& contacts_probability,
                            std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**

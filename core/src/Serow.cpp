@@ -124,6 +124,11 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
 
+    // Initialize point feet flag
+    if (!checkConfigParam("point_feet", params_.point_feet)) {
+        return false;
+    }
+
     // Whether or not to log proprioception, exteroception, and measurement data
     if (!checkConfigParam("log_data", params_.log_data)) {
         return false;
@@ -155,9 +160,6 @@ bool Serow::initialize(const std::string& config_file) {
         contacts_frame.insert(config["foot_frames"][idx]);
     }
     params_.contacts_frame = std::move(contacts_frame);
-
-    if (!checkConfigParam("point_feet", params_.point_feet))
-        return false;
 
     if (!checkConfigParam("use_imu_orientation", params_.use_imu_orientation))
         return false;
@@ -212,10 +214,6 @@ bool Serow::initialize(const std::string& config_file) {
     if (!checkConfigParam("tau_1", params_.tau_1))
         return false;
     if (!checkConfigParam("estimate_contact_status", params_.estimate_contact_status))
-        return false;
-    if (!checkConfigParam("high_threshold", params_.high_threshold))
-        return false;
-    if (!checkConfigParam("low_threshold", params_.low_threshold))
         return false;
     if (!checkConfigParam("median_window", params_.median_window))
         return false;
@@ -354,7 +352,6 @@ bool Serow::initialize(const std::string& config_file) {
                                                  "imu_linear_acceleration_covariance",
                                                  "imu_linear_acceleration_bias_covariance",
                                                  "base_orientation_covariance",
-                                                 "contact_position_covariance",
                                                  "com_position_process_covariance",
                                                  "com_linear_velocity_process_covariance",
                                                  "external_forces_process_covariance",
@@ -363,26 +360,14 @@ bool Serow::initialize(const std::string& config_file) {
                                                  "initial_base_position_covariance",
                                                  "initial_base_orientation_covariance",
                                                  "initial_base_linear_velocity_covariance",
-                                                 "initial_contact_position_covariance",
                                                  "initial_imu_linear_acceleration_bias_covariance",
                                                  "initial_imu_angular_velocity_bias_covariance",
                                                  "initial_com_position_covariance",
                                                  "initial_com_linear_velocity_covariance",
-                                                 "initial_external_forces_covariance",
-                                                 "contact_position_slip_covariance"};
+                                                 "initial_external_forces_covariance"};
 
     for (const auto& cov_name : cov_arrays) {
         if (!checkConfigArray(cov_name, 3))
-            return false;
-    }
-
-    // Optional covariance arrays
-    const std::vector<std::string> optional_cov_arrays = {"contact_orientation_covariance",
-                                                          "contact_orientation_slip_covariance",
-                                                          "initial_contact_orientation_covariance"};
-
-    for (const auto& cov_name : optional_cov_arrays) {
-        if (!config[cov_name].is_null() && !checkConfigArray(cov_name, 3))
             return false;
     }
 
@@ -401,8 +386,6 @@ bool Serow::initialize(const std::string& config_file) {
     loadCovarianceVector("imu_linear_acceleration_bias_covariance",
                          params_.linear_acceleration_bias_cov);
     loadCovarianceVector("base_orientation_covariance", params_.base_orientation_cov);
-    loadCovarianceVector("contact_position_covariance", params_.contact_position_cov);
-    loadCovarianceVector("contact_position_slip_covariance", params_.contact_position_slip_cov);
     loadCovarianceVector("com_position_process_covariance", params_.com_position_process_cov);
     loadCovarianceVector("com_linear_velocity_process_covariance",
                          params_.com_linear_velocity_process_cov);
@@ -414,8 +397,6 @@ bool Serow::initialize(const std::string& config_file) {
                          params_.initial_base_orientation_cov);
     loadCovarianceVector("initial_base_linear_velocity_covariance",
                          params_.initial_base_linear_velocity_cov);
-    loadCovarianceVector("initial_contact_position_covariance",
-                         params_.initial_contact_position_cov);
     loadCovarianceVector("initial_imu_linear_acceleration_bias_covariance",
                          params_.initial_imu_linear_acceleration_bias_cov);
     loadCovarianceVector("initial_imu_angular_velocity_bias_covariance",
@@ -425,20 +406,6 @@ bool Serow::initialize(const std::string& config_file) {
                          params_.initial_com_linear_velocity_cov);
     loadCovarianceVector("initial_external_forces_covariance", params_.initial_external_forces_cov);
 
-    // Load optional orientation covariances if not null
-    if (!config["contact_orientation_covariance"].is_null()) {
-        loadCovarianceVector("contact_orientation_covariance", params_.contact_orientation_cov);
-    }
-
-    if (!config["contact_orientation_slip_covariance"].is_null()) {
-        loadCovarianceVector("contact_orientation_slip_covariance",
-                             params_.contact_orientation_slip_cov);
-    }
-
-    if (!config["initial_contact_orientation_covariance"].is_null()) {
-        loadCovarianceVector("initial_contact_orientation_covariance",
-                             params_.initial_contact_orientation_cov);
-    }
 
     // External odometry extrinsics
     if (!config["T_base_to_odom"].is_null()) {
@@ -705,26 +672,6 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
             params_.joint_rate, params_.g, params_.eps);
     }
 
-    // Perform leg odometry estimation
-    leg_odometry_->estimate(
-        imu.orientation, imu.angular_velocity, kin.base_to_foot_orientations,
-        kin.base_to_foot_positions, kin.base_to_foot_linear_velocities,
-        kin.base_to_foot_angular_velocities, state.contact_state_.contacts_force,
-        state.contact_state_.contacts_probability, state.contact_state_.contacts_torque);
-   
-    std::cout << "LegOdometry Base position: " << leg_odometry_->getBasePosition().transpose() << std::endl;
-    kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
-    kin.contacts_position = leg_odometry_->getContactPositions();
-    kin.position_cov = params_.contact_position_cov.asDiagonal();
-    kin.position_slip_cov = params_.contact_position_slip_cov.asDiagonal();
-
-    // Handle orientation for non-point feet
-    if (!state.isPointFeet()) {
-        kin.contacts_orientation = leg_odometry_->getContactOrientations();
-        kin.orientation_cov = params_.contact_orientation_cov.asDiagonal();
-        kin.orientation_slip_cov = params_.contact_orientation_slip_cov.asDiagonal();
-    }
-
     // Compute orientation noise for contacts
     std::map<std::string, Eigen::Matrix3d> kin_contacts_orientation_noise;
     for (const auto& frame : state.getContactsFrame()) {
@@ -739,6 +686,26 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
 
     if (!state.isPointFeet()) {
         kin.contacts_orientation_noise = std::move(kin_contacts_orientation_noise);
+    }
+
+    // Perform leg odometry estimation
+    leg_odometry_->estimate(
+        kin.timestamp,
+        imu.orientation, imu.angular_velocity, kin.base_to_foot_orientations,
+        kin.base_to_foot_positions, kin.base_to_foot_linear_velocities,
+        kin.base_to_foot_angular_velocities, state.contact_state_.contacts_force,
+        state.contact_state_.contacts_probability, kin.contacts_position_noise, 
+        imu.angular_velocity_cov, state.contact_state_.contacts_torque);
+   
+    std::cout << "LegOdometry Base position: " << leg_odometry_->getBasePosition().transpose() << std::endl;
+    kin.base_position = leg_odometry_->getBasePosition();
+    kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();
+    kin.base_linear_velocity_cov = leg_odometry_->getBaseLinearVelocityCov();
+    kin.contacts_position = leg_odometry_->getContactPositions();
+
+    // Handle orientation for non-point feet
+    if (!state.isPointFeet()) {
+        kin.contacts_orientation = leg_odometry_->getContactOrientations();
     }
 }
 
@@ -793,14 +760,14 @@ void Serow::runContactEstimator(
                 if (contact_estimators_.count(frame) == 0) {
                     contact_estimators_.emplace(
                         frame,
-                        ContactDetector(frame, params_.high_threshold, params_.low_threshold,
+                        ContactDetector(frame, 100.0, 10.0,
                                         state.getMass(), params_.g, params_.median_window));
                     contact_estimators_.at(frame).setState(
                         state.contact_state_.contacts_status.at(frame),
                         state.contact_state_.contacts_force.at(frame).z());
                 }
+                den += contact_estimators_.at(frame).getContactForce();
             }
-
             state.contact_state_.timestamp = ft.at(frame).timestamp;
 
             // Transform F/T to base frame
@@ -812,19 +779,14 @@ void Serow::runContactEstimator(
                 state.base_state_.base_orientation.toRotationMatrix();
             contacts_force[frame].noalias() =
                 R_world_to_base * R_foot_to_base * R_foot_to_force * frame_force;
-
             // Process torque if not point feet
-            if (!state.isPointFeet() && ft.at(frame).torque.has_value()) {
-                contacts_torque[frame].noalias() = R_world_to_base * R_foot_to_base *
-                    params_.R_foot_to_torque.at(frame) * ft.at(frame).torque.value();
-            }
-
-            // Estimate the contact status
-            if (params_.estimate_contact_status) {
-                contact_estimators_.at(frame).SchmittTrigger(contacts_force.at(frame).z());
-                state.contact_state_.contacts_status[frame] =
-                    contact_estimators_.at(frame).getContactStatus();
-                den += contact_estimators_.at(frame).getContactForce();
+            if (!state.isPointFeet()) {
+                if (ft.count(frame) > 0 && ft.at(frame).torque.has_value()) {
+                    contacts_torque[frame].noalias() = R_world_to_base * R_foot_to_base *
+                        params_.R_foot_to_torque.at(frame) * ft.at(frame).torque.value();
+                } else {
+                    throw std::runtime_error("No torque measurement provided for frame: " + frame);
+                }
             }
         }
 
@@ -839,12 +801,14 @@ void Serow::runContactEstimator(
             }
         } else if (contacts_probability) {
             state.contact_state_.contacts_probability = std::move(contacts_probability.value());
+        } else {
+            throw std::runtime_error("No contact probability provided and contact status estimation is disabled");
+        }
 
-            // Compute binary contact status
-            for (const auto& frame : state.getContactsFrame()) {
-                state.contact_state_.contacts_status[frame] =
-                    state.contact_state_.contacts_probability.at(frame) > 0.5;
-            }
+        // Compute binary contact status
+        for (const auto& frame : state.getContactsFrame()) {
+            state.contact_state_.contacts_status[frame] = 
+                state.contact_state_.contacts_probability.at(frame) > 0.5;
         }
 
         // Estimate the COP in the local foot frame
@@ -854,7 +818,6 @@ void Serow::runContactEstimator(
                 state.contact_state_.contacts_status.at(frame)) {
                 kin.is_new_contact[frame] = true;
             }
-
             ft.at(frame).cop = Eigen::Vector3d::Zero();
 
             // Calculate COP
@@ -883,40 +846,40 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
     timers_["base-estimator-predict"].start();
     // Initialize terrain estimator if needed
     if (params_.enable_terrain_estimation && !terrain_estimator_) {
-        float terrain_height = 0.0;
-        int i = 0;
-
+        double terrain_height = 0.0;
+        double den = 0.0;
+        Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
+        T_world_to_base.translation() = state.base_state_.base_position;
+        T_world_to_base.linear() = state.base_state_.base_orientation.toRotationMatrix();
         for (const auto& [cf, cp] : state.contact_state_.contacts_status) {
-            if (cp) {
-                i++;
-                terrain_height += state.base_state_.contacts_position.at(cf).z();
+            den += cp;
+            terrain_height += cp * (T_world_to_base * state.base_state_.contacts_position.at(cf)).z();
+        }
+
+        if (den > 0.0) {
+            terrain_height /= den;
+
+            // Initialize terrain elevation mapper
+            if (params_.terrain_estimator_type == "naive") {
+                terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
+            } else if (params_.terrain_estimator_type == "fast") {
+                terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
+            } else {
+                throw std::runtime_error("Invalid terrain estimator type: " +
+                                         params_.terrain_estimator_type);
             }
-        }
+            terrain_estimator_->initializeLocalMap(
+                terrain_height, 1e4, params_.minimum_terrain_height_variance,
+                params_.maximum_recenter_distance, params_.maximum_contact_points,
+                params_.minimum_contact_probability);
 
-        if (i > 0) {
-            terrain_height /= i;
+            terrain_estimator_->recenter({static_cast<float>(state.base_state_.base_position.x()),
+                                          static_cast<float>(state.base_state_.base_position.y())});
         }
-
-        // Initialize terrain elevation mapper
-        if (params_.terrain_estimator_type == "naive") {
-            terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
-        } else if (params_.terrain_estimator_type == "fast") {
-            terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
-        } else {
-            throw std::runtime_error("Invalid terrain estimator type: " +
-                                     params_.terrain_estimator_type);
-        }
-        terrain_estimator_->initializeLocalMap(
-            terrain_height, 1e4, params_.minimum_terrain_height_variance,
-            params_.maximum_recenter_distance, params_.maximum_contact_points,
-            params_.minimum_contact_probability);
-
-        terrain_estimator_->recenter({static_cast<float>(state.base_state_.base_position.x()),
-                                      static_cast<float>(state.base_state_.base_position.y())});
     }
 
     // Call the base estimator predict step
-    base_estimator_.predict(state.base_state_, imu, kin);
+    base_estimator_.predict(state.base_state_, imu);
     timers_["base-estimator-predict"].stop();
 
     // Transform odometry measurements if available
@@ -958,6 +921,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
             gyro_derivative_estimator->setState(base_angular_velocity, Eigen::Vector3d::Zero());
         }
     }
+
     const Eigen::Vector3d base_angular_acceleration =
         gyro_derivative_estimator->filter(base_angular_velocity, imu.timestamp);
     state.base_state_.base_angular_velocity = base_pose.linear() * base_angular_velocity;
@@ -1208,7 +1172,7 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     auto ft_timestamp = force_torque.has_value()
         ? std::optional<double>(force_torque.value().begin()->second.timestamp)
         : std::nullopt;
-
+     
     if (ft_timestamp.has_value() &&
         (ft_timestamp.value() < last_ft_timestamp_ ||
          abs(force_torque.value().begin()->second.timestamp - last_ft_timestamp_) < 1e-6)) {
@@ -1502,9 +1466,9 @@ void Serow::reset() {
     std::map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
     for (const auto& cf : state_.getContactsFrame()) {
         state_.base_state_.contacts_position_cov[cf] =
-            params_.initial_contact_position_cov.asDiagonal();
+            params_.initial_base_position_cov.asDiagonal();
         if (!state_.isPointFeet()) {
-            contacts_orientation_cov[cf] = params_.initial_contact_orientation_cov.asDiagonal();
+            contacts_orientation_cov[cf] = params_.initial_base_orientation_cov.asDiagonal();
         }
     }
     if (!contacts_orientation_cov.empty()) {
@@ -1518,8 +1482,8 @@ void Serow::reset() {
     state_.centroidal_state_.external_forces_cov = params_.initial_external_forces_cov.asDiagonal();
 
     // Initialize the base and CoM estimators
-    base_estimator_.init(state_.base_state_, state_.getContactsFrame(), state_.isPointFeet(),
-                         params_.g, params_.imu_rate, params_.outlier_detection, params_.use_imu_orientation);
+    base_estimator_.init(state_.base_state_, state_.getContactsFrame(), params_.g, params_.imu_rate, 
+                         params_.outlier_detection, params_.use_imu_orientation, params_.verbose);
 
     com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                         params_.force_torque_rate);
@@ -1681,49 +1645,43 @@ Serow::processMeasurements(
 void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicMeasurement& kin) {
     // Initialize terrain estimator if needed
     if (params_.enable_terrain_estimation && !terrain_estimator_) {
-        float terrain_height = 0.0;
-        int i = 0;
+        double terrain_height = 0.0;
+        double den = 0;
+        Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
+        T_world_to_base.translation() = state_.base_state_.base_position;
+        T_world_to_base.linear() = state_.base_state_.base_orientation.toRotationMatrix();
+        for (const auto& [cf, cp] : kin.contacts_probability) {
+            terrain_height += cp * (T_world_to_base * kin.contacts_position.at(cf)).z();
+            den += cp;
+        }
 
-        for (const auto& [cf, cp] : state_.contact_state_.contacts_status) {
-            if (cp) {
-                i++;
-                terrain_height += state_.base_state_.contacts_position.at(cf).z();
+        if (den > 0) {
+            terrain_height /= den;
+            // Initialize terrain elevation mapper
+            if (params_.terrain_estimator_type == "naive") {
+                terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
+            } else if (params_.terrain_estimator_type == "fast") {
+                terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
+            } else {
+                throw std::runtime_error("Invalid terrain estimator type: " +
+                                        params_.terrain_estimator_type);
             }
+            terrain_estimator_->initializeLocalMap(static_cast<float>(terrain_height), 1e4,
+                                                   params_.minimum_terrain_height_variance);
+            terrain_estimator_->recenter({static_cast<float>(state_.base_state_.base_position.x()),
+                                          static_cast<float>(state_.base_state_.base_position.y())});
         }
-
-        if (i > 0) {
-            terrain_height /= i;
-        }
-
-        // Initialize terrain elevation mapper
-        if (params_.terrain_estimator_type == "naive") {
-            terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
-        } else if (params_.terrain_estimator_type == "fast") {
-            terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
-        } else {
-            throw std::runtime_error("Invalid terrain estimator type: " +
-                                     params_.terrain_estimator_type);
-        }
-        terrain_estimator_->initializeLocalMap(terrain_height, 1e4,
-                                               params_.minimum_terrain_height_variance);
-        terrain_estimator_->recenter({static_cast<float>(state_.base_state_.base_position.x()),
-                                      static_cast<float>(state_.base_state_.base_position.y())});
     }
 
     // Call the base estimator predict step
     state_.base_state_.timestamp = imu.timestamp;
-    base_estimator_.predict(state_.base_state_, imu, kin);
+    base_estimator_.predict(state_.base_state_, imu);
 }
 
-void Serow::baseEstimatorUpdateWithContactPosition(const std::string& cf,
-                                                   const KinematicMeasurement& kin) {
+void Serow::baseEstimatorUpdateWithBaseLinearVelocity(const KinematicMeasurement& kin) {
     state_.base_state_.timestamp = kin.timestamp;
-    const bool cs = kin.contacts_status.at(cf);
-    const Eigen::Vector3d& cp = kin.contacts_position.at(cf);
-    const Eigen::Matrix3d& cp_noise = kin.contacts_position_noise.at(cf);
-    const Eigen::Matrix3d& position_cov = kin.position_cov;
-    base_estimator_.updateWithContactPosition(state_.base_state_, cf, cs, cp, cp_noise,
-                                              position_cov, terrain_estimator_);
+    base_estimator_.updateWithBaseLinearVelocity(state_.base_state_, kin.base_linear_velocity,
+                                                 kin.base_linear_velocity_cov);
 }
 
 void Serow::baseEstimatorUpdateWithImuOrientation(const ImuMeasurement& imu) {
@@ -1785,23 +1743,6 @@ void Serow::baseEstimatorFinishUpdate(const ImuMeasurement& imu, const Kinematic
     if (!state_.is_valid_ && cycle_++ > params_.convergence_cycles) {
         state_.is_valid_ = true;
     }
-}
-
-bool Serow::setAction(const std::string& cf, const Eigen::VectorXd& action) {
-    base_estimator_.setAction(cf, action);
-    return true;
-}
-
-bool Serow::getContactPositionInnovation(const std::string& contact_frame,
-                                         Eigen::Vector3d& innovation,
-                                         Eigen::Matrix3d& covariance) const {
-    return base_estimator_.getContactPositionInnovation(contact_frame, innovation, covariance);
-}
-
-bool Serow::getContactOrientationInnovation(const std::string& contact_frame,
-                                            Eigen::Vector3d& innovation,
-                                            Eigen::Matrix3d& covariance) const {
-    return base_estimator_.getContactOrientationInnovation(contact_frame, innovation, covariance);
 }
 
 }  // namespace serow

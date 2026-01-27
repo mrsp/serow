@@ -23,13 +23,10 @@ LegOdometry::LegOdometry(
     std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass, double alpha1,
     double alpha3, double freq, double g, double eps,
     std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset) {
-    params_.freq = freq;
     params_.mass = mass;
     params_.alpha1 = alpha1;
     params_.alpha3 = alpha3;
-    params_.Tm = 1.0 / freq;
-    params_.Tm2 = params_.Tm * params_.Tm;
-    params_.Tm3 = (mass * mass * g * g) * params_.Tm2;
+    params_.freq = freq;
     params_.g = g;
     params_.eps = eps;
     params_.num_leg_ee = feet_position.size();
@@ -61,7 +58,8 @@ const std::map<std::string, Eigen::Quaterniond> LegOdometry::getContactOrientati
     return contact_orientations_;
 }
 
-void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
+void LegOdometry::computeIMP(const double timestamp,
+                             const std::string& frame, const Eigen::Matrix3d& R,
                              const Eigen::Vector3d& angular_velocity,
                              const Eigen::Vector3d& linear_velocity, const Eigen::Vector3d& force,
                              std::optional<Eigen::Vector3d> torque) {
@@ -70,6 +68,15 @@ void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
 
     Eigen::Matrix3d A = Eigen::Matrix3d::Zero();
     Eigen::Vector3d b = Eigen::Vector3d::Zero();
+
+    if (!timestamp_) {
+        params_.Tm = 1.0 / params_.freq;
+    } else {
+        params_.Tm = timestamp - timestamp_.value();
+
+    }
+    params_.Tm2 = params_.Tm * params_.Tm;
+    params_.Tm3 = (params_.mass * params_.mass * params_.g * params_.g) * params_.Tm2;
 
     A.noalias() = 1.0 / params_.Tm2 * Eigen::Matrix3d::Identity();
     A.noalias() -= params_.alpha1 * omega_skew * omega_skew;
@@ -86,6 +93,7 @@ void LegOdometry::computeIMP(const std::string& frame, const Eigen::Matrix3d& R,
 }
 
 void LegOdometry::estimate(
+    const double timestamp,
     const Eigen::Quaterniond& base_orientation, const Eigen::Vector3d& base_angular_velocity,
     const std::map<std::string, Eigen::Quaterniond>& base_to_foot_orientations,
     const std::map<std::string, Eigen::Vector3d>& base_to_foot_positions,
@@ -93,6 +101,8 @@ void LegOdometry::estimate(
     const std::map<std::string, Eigen::Vector3d>& base_to_foot_angular_velocities,
     const std::map<std::string, Eigen::Vector3d>& contact_forces,
     const std::map<std::string, double>& contact_probabilities,
+    const std::map<std::string, Eigen::Matrix3d>& contact_positions_noise,
+    const Eigen::Matrix3d& base_angular_velocity_noise,
     std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques) {
     const Eigen::Matrix3d Rwb = base_orientation.toRotationMatrix();
 
@@ -106,15 +116,13 @@ void LegOdometry::estimate(
         force_weights[key] = std::clamp((value + params_.eps) / den, 0.0, 1.0);
     }
 
-    if (!is_initialized) {
+    if (!timestamp_) {
         base_linear_velocity_ = Eigen::Vector3d::Zero();
         for (const auto& [key, value] : base_to_foot_positions) {
             base_linear_velocity_ += force_weights.at(key) *
                 (-lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) -
                  Rwb * base_to_foot_linear_velocities.at(key));
         }
-    } else {
-        base_linear_velocity_ = (base_position_ - base_position_prev_) * params_.freq;
     }
 
     for (const auto& [key, value] : base_to_foot_orientations) {
@@ -124,11 +132,11 @@ void LegOdometry::estimate(
             lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) +
             Rwb * base_to_foot_linear_velocities.at(key);
         if (contact_torques.has_value()) {
-            computeIMP(key, Rwb * value.toRotationMatrix(), foot_angular_velocity,
+            computeIMP(timestamp, key, Rwb * value.toRotationMatrix(), foot_angular_velocity,
                        foot_linear_velocity, contact_forces.at(key),
                        contact_torques.value().at(key));
         } else {
-            computeIMP(key, Rwb * value.toRotationMatrix(), foot_angular_velocity,
+            computeIMP(timestamp, key, Rwb * value.toRotationMatrix(), foot_angular_velocity,
                        foot_linear_velocity, contact_forces.at(key));
         }
     }
@@ -161,9 +169,24 @@ void LegOdometry::estimate(
         contact_orientations_[key] = base_to_foot_orientations.at(key);
     }
 
-    if (!is_initialized) {
-        is_initialized = true;
+    // Compute the base linear velocity measurement and covariance
+    if (timestamp_) {
+        const double dt = timestamp - timestamp_.value();
+        base_linear_velocity_ = (base_position_ - base_position_prev_) / dt;
+    } 
+
+    base_linear_velocity_cov_ = Eigen::Matrix3d::Zero();
+    for (const auto& [key, value] : force_weights) {
+        base_linear_velocity_cov_ += value * Rwb * contact_positions_noise.at(key) * Rwb.transpose();
+        const Eigen::Matrix3d contact_skew = lie::so3::wedge(Rwb * contact_positions_.at(key));
+        base_linear_velocity_cov_ +=  value * contact_skew * base_angular_velocity_noise * contact_skew.transpose();
     }
+
+   timestamp_ = timestamp;
+}
+
+const Eigen::Matrix3d& LegOdometry::getBaseLinearVelocityCov() const {
+    return base_linear_velocity_cov_;
 }
 
 }  // namespace serow

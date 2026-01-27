@@ -214,6 +214,7 @@ void SerowRos2::run() {
             ft_measurements[key] = std::move(ft);
         }
     }
+
     serow_.filter(imu_measurement, joint_measurements,
                   ft_measurements.size() == force_torque_state_subscriptions_.size()
                         ? std::make_optional(ft_measurements)
