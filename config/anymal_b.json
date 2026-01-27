@@ -12,7 +12,7 @@
   "g": 9.81,
   "joint_rate": 400.0,
   "estimate_joint_velocity": false,
-  "joint_cutoff_frequency": 100.0,
+  "joint_cutoff_frequency": 20.0,
   "joint_position_variance": 0.001,
   "angular_momentum_cutoff_frequency": 20.0,
   "imu_rate": 400.0,

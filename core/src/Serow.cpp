@@ -652,6 +652,7 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
         }
         state.setInitialized(true);
     }
+
     return kin;
 }
 
@@ -755,19 +756,6 @@ void Serow::runContactEstimator(
         double den = state.num_leg_ee_ * params_.eps;
 
         for (const auto& frame : state.getContactsFrame()) {
-            // Create contact estimators if needed
-            if (params_.estimate_contact_status) {
-                if (contact_estimators_.count(frame) == 0) {
-                    contact_estimators_.emplace(
-                        frame,
-                        ContactDetector(frame, 100.0, 10.0,
-                                        state.getMass(), params_.g, params_.median_window));
-                    contact_estimators_.at(frame).setState(
-                        state.contact_state_.contacts_status.at(frame),
-                        state.contact_state_.contacts_force.at(frame).z());
-                }
-                den += contact_estimators_.at(frame).getContactForce();
-            }
             state.contact_state_.timestamp = ft.at(frame).timestamp;
 
             // Transform F/T to base frame
@@ -779,6 +767,7 @@ void Serow::runContactEstimator(
                 state.base_state_.base_orientation.toRotationMatrix();
             contacts_force[frame].noalias() =
                 R_world_to_base * R_foot_to_base * R_foot_to_force * frame_force;
+
             // Process torque if not point feet
             if (!state.isPointFeet()) {
                 if (ft.count(frame) > 0 && ft.at(frame).torque.has_value()) {
@@ -787,6 +776,22 @@ void Serow::runContactEstimator(
                 } else {
                     throw std::runtime_error("No torque measurement provided for frame: " + frame);
                 }
+            }
+
+            // Estimate the contact status
+            if (params_.estimate_contact_status) {
+                // Create contact estimators if needed
+                if (contact_estimators_.count(frame) == 0) {
+                    contact_estimators_.emplace(
+                        frame,
+                        ContactDetector(frame, 100.0, 10.0,
+                                        state.getMass(), params_.g, params_.median_window));
+                    contact_estimators_.at(frame).setState(
+                        state.contact_state_.contacts_status.at(frame),
+                        state.contact_state_.contacts_force.at(frame).z());
+                }
+                contact_estimators_.at(frame).SchmittTrigger(contacts_force.at(frame).z());
+                den += contact_estimators_.at(frame).getContactForce();
             }
         }
 
