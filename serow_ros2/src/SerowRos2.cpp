@@ -112,7 +112,6 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
                 this->ft_buffers_[msg.header.frame_id].add(ft);
                 // Save frame_id to ft_topic mapping
                 ft_topic_to_frame_id_[ft_topic] = msg.header.frame_id;
-                this->ft_data_[msg.header.frame_id] = std::move(ft);
             };
         force_torque_state_topic_callbacks_.push_back(std::move(force_torque_state_topic_callback));
         RCLCPP_INFO(this->get_logger(), "Creating force torque state subscription on topic: %s",
@@ -223,23 +222,19 @@ void SerowRos2::run() {
         const auto& ft_topic = force_torque_state_topics_[i];
         std::lock_guard<std::mutex> lock(*ft_subscription_mutexes_[i]);
         const auto& frame_id = ft_topic_to_frame_id_[ft_topic];
-        // const auto& ft_buffer = ft_buffers_[frame_id];
-        // const auto& ft_measurement = ft_buffer.get(imu_measurement.timestamp, ft_max_time_diff_);
-        // if (ft_measurement) {
-        //     std::cout << "F/T measurement for frame: " << frame_id << " at timestamp: " << imu_measurement.timestamp << " found" << std::endl;
-        //     std::cout << "Force: " << ft_measurement.value().force.transpose() << std::endl;
-        //     std::cout << "Torque: " << ft_measurement.value().torque.value().transpose() << std::endl;
-        //     synchronized_ft_measurements[frame_id] = std::move(ft_measurement.value());
-        // } else {
-        //     const auto& time_range = ft_buffer.getTimeRange();
-        //     RCLCPP_ERROR(this->get_logger(), "Failed to get F/T measurement for frame: %s at timestamp: %f", frame_id.c_str(), imu_measurement.timestamp);
-        //     if (time_range) {
-        //         RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
-        //     } else {
-        //         RCLCPP_ERROR(this->get_logger(), "Time range: not available");
-        //     }
-        // }
-        synchronized_ft_measurements[frame_id] = ft_data_.at(frame_id);
+        const auto& ft_buffer = ft_buffers_[frame_id];
+        const auto& ft_measurement = ft_buffer.get(imu_measurement.timestamp, ft_max_time_diff_);
+        if (ft_measurement) {
+            synchronized_ft_measurements[frame_id] = std::move(ft_measurement.value());
+        } else {
+            const auto& time_range = ft_buffer.getTimeRange();
+            RCLCPP_ERROR(this->get_logger(), "Failed to get F/T measurement for frame: %s at timestamp: %f", frame_id.c_str(), imu_measurement.timestamp);
+            if (time_range) {
+                RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "Time range: not available");
+            }
+        }
     }
 
     serow_.filter(imu_measurement, joint_measurements, 

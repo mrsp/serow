@@ -84,7 +84,6 @@ private:
     std::vector<std::unique_ptr<std::mutex>> ft_subscription_mutexes_;  // One mutex per F/T subscription
     std::optional<sensor_msgs::msg::Imu> base_imu_data_;
     std::optional<sensor_msgs::msg::JointState> joint_state_data_;
-    std::map<std::string, serow::ForceTorqueMeasurement> ft_data_;
     std::map<std::string, serow::ForceTorqueMeasurementBuffer> ft_buffers_;
     std::vector<std::string> force_torque_state_topics_;
     std::map<std::string, std::string> ft_topic_to_frame_id_;
