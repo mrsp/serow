@@ -13,6 +13,7 @@
 #include "SerowRos2.hpp"
 
 #include <filesystem>
+#include <limits>
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "yaml-cpp/yaml.h"
 
@@ -56,14 +57,17 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     const std::string& robot_name = config["robot_name"].as<std::string>();
     const std::string& joint_state_topic = config["topics"]["joint_states"].as<std::string>();
     const std::string& base_imu_topic = config["topics"]["imu"].as<std::string>();
-    std::vector<std::string> force_torque_state_topics;
     for (const auto& topic : config["topics"]["force_torque_states"]) {
-        force_torque_state_topics.push_back(topic.as<std::string>());
+        force_torque_state_topics_.push_back(topic.as<std::string>());
     }
     const std::string& serow_config = config["serow_config"].as<std::string>();
 
     RCLCPP_INFO(this->get_logger(), "Robot name: %s", robot_name.c_str());
     RCLCPP_INFO(this->get_logger(), "Serow config file: %s", serow_config.c_str());
+
+    // Configure F/T synchronization tolerance
+    ft_max_time_diff_ = this->declare_parameter<double>("ft_max_time_diff", 0.1);
+    RCLCPP_INFO(this->get_logger(), "F/T max time difference: %.3f seconds", ft_max_time_diff_);
 
     // Initialize SERoW
     try {
@@ -90,16 +94,31 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     sync_->registerCallback(std::bind(&SerowRos2::jointStateAndBaseImuCallback, this, _1, _2));
 
     // Dynamically create a wrench callback, one for each force torque state topic
-    for (const auto& ft_topic : force_torque_state_topics) {
+    for (size_t i = 0; i < force_torque_state_topics_.size(); ++i) {
+        const auto& ft_topic = force_torque_state_topics_[i];
+        
+        // Create a dedicated mutex for this subscription
+        ft_subscription_mutexes_.push_back(std::make_unique<std::mutex>());
+        std::mutex* ft_mutex = ft_subscription_mutexes_.back().get();
+        
         auto force_torque_state_topic_callback =
-            [this](const geometry_msgs::msg::WrenchStamped& msg) {
-                this->ft_data_[msg.header.frame_id] = msg;
+            [this, ft_mutex, ft_topic](const geometry_msgs::msg::WrenchStamped& msg) {
+                std::lock_guard<std::mutex> lock(*ft_mutex);
+                serow::ForceTorqueMeasurement ft{};
+                ft.timestamp = static_cast<double>(msg.header.stamp.sec) +
+                    static_cast<double>(msg.header.stamp.nanosec) * 1e-9;
+                ft.force = Eigen::Vector3d(msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z);
+                ft.torque.emplace(Eigen::Vector3d(msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z));
+                this->ft_buffers_[msg.header.frame_id].add(ft);
+                // Save frame_id to ft_topic mapping
+                ft_topic_to_frame_id_[ft_topic] = msg.header.frame_id;
+                this->ft_data_[msg.header.frame_id] = std::move(ft);
             };
         force_torque_state_topic_callbacks_.push_back(std::move(force_torque_state_topic_callback));
         RCLCPP_INFO(this->get_logger(), "Creating force torque state subscription on topic: %s",
                     ft_topic.c_str());
         auto ft_subscription = this->create_subscription<geometry_msgs::msg::WrenchStamped>(
-            ft_topic, 1, force_torque_state_topic_callbacks_.back());
+            ft_topic, 10, force_torque_state_topic_callbacks_.back());
         force_torque_state_subscriptions_.push_back(std::move(ft_subscription));
     }
 
@@ -198,28 +217,33 @@ void SerowRos2::run() {
     imu_measurement.angular_velocity = Eigen::Vector3d(
         imu_data.angular_velocity.x, imu_data.angular_velocity.y, imu_data.angular_velocity.z);
     
-    // Create the force torque measurements
-    std::map<std::string, serow::ForceTorqueMeasurement> ft_measurements;
-    if (ft_data_.size() == force_torque_state_subscriptions_.size()) {
-        // Create the leg F/T measurement
-        for (auto& [key, value] : ft_data_) {
-            serow::ForceTorqueMeasurement ft{};
-            const auto& ft_data = value;
-            ft.timestamp = static_cast<double>(ft_data.header.stamp.sec) +
-                static_cast<double>(ft_data.header.stamp.nanosec) * 1e-9;
-            ft.force = Eigen::Vector3d(ft_data.wrench.force.x, ft_data.wrench.force.y,
-                                       ft_data.wrench.force.z);
-            ft.torque.emplace(Eigen::Vector3d(ft_data.wrench.torque.x, ft_data.wrench.torque.y,
-                                              ft_data.wrench.torque.z));
-            ft_measurements[key] = std::move(ft);
-        }
+    // Retrieve the synchronized F/T measurements for each foot frame
+    std::map<std::string, serow::ForceTorqueMeasurement> synchronized_ft_measurements;
+    for (size_t i = 0; i < force_torque_state_topics_.size(); ++i) {
+        const auto& ft_topic = force_torque_state_topics_[i];
+        std::lock_guard<std::mutex> lock(*ft_subscription_mutexes_[i]);
+        const auto& frame_id = ft_topic_to_frame_id_[ft_topic];
+        // const auto& ft_buffer = ft_buffers_[frame_id];
+        // const auto& ft_measurement = ft_buffer.get(imu_measurement.timestamp, ft_max_time_diff_);
+        // if (ft_measurement) {
+        //     std::cout << "F/T measurement for frame: " << frame_id << " at timestamp: " << imu_measurement.timestamp << " found" << std::endl;
+        //     std::cout << "Force: " << ft_measurement.value().force.transpose() << std::endl;
+        //     std::cout << "Torque: " << ft_measurement.value().torque.value().transpose() << std::endl;
+        //     synchronized_ft_measurements[frame_id] = std::move(ft_measurement.value());
+        // } else {
+        //     const auto& time_range = ft_buffer.getTimeRange();
+        //     RCLCPP_ERROR(this->get_logger(), "Failed to get F/T measurement for frame: %s at timestamp: %f", frame_id.c_str(), imu_measurement.timestamp);
+        //     if (time_range) {
+        //         RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
+        //     } else {
+        //         RCLCPP_ERROR(this->get_logger(), "Time range: not available");
+        //     }
+        // }
+        synchronized_ft_measurements[frame_id] = ft_data_.at(frame_id);
     }
 
-    serow_.filter(imu_measurement, joint_measurements,
-                  ft_measurements.size() == force_torque_state_subscriptions_.size()
-                        ? std::make_optional(ft_measurements)
-                        : std::nullopt);
-
+    serow_.filter(imu_measurement, joint_measurements, 
+                  synchronized_ft_measurements.size() == force_torque_state_topics_.size() ? std::make_optional(synchronized_ft_measurements) : std::nullopt);
     const auto& state = serow_.getState();
     if (state) {
         // Queue the state for publishing instead of publishing directly to not block the main thread

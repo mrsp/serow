@@ -39,7 +39,7 @@
         -1.0
     ],
     "imu_outlier_detection": false,
-    "use_imu_orientation": false,
+    "use_imu_orientation": true,
     "calibrate_initial_imu_bias": false,
     "max_imu_calibration_cycles": 300,
     "bias_acc": [
@@ -216,7 +216,7 @@
         0.0,
         1.0
     ],
-    "enable_terrain_estimation": true,
+    "enable_terrain_estimation": false,
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3,
     "maximum_contact_points": 2,

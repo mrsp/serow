@@ -15,9 +15,11 @@
 #include <condition_variable>
 #include <functional>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <serow/Serow.hpp>
+#include <serow/ForceTorqueMeasurementBuffer.hpp>
 #include <thread>
 
 #include <geometry_msgs/msg/point_stamped.hpp>
@@ -79,9 +81,14 @@ private:
         force_torque_state_subscriptions_;
     std::vector<std::function<void(const geometry_msgs::msg::WrenchStamped&)>>
         force_torque_state_topic_callbacks_;
+    std::vector<std::unique_ptr<std::mutex>> ft_subscription_mutexes_;  // One mutex per F/T subscription
     std::optional<sensor_msgs::msg::Imu> base_imu_data_;
     std::optional<sensor_msgs::msg::JointState> joint_state_data_;
-    std::map<std::string, geometry_msgs::msg::WrenchStamped> ft_data_;
+    std::map<std::string, serow::ForceTorqueMeasurement> ft_data_;
+    std::map<std::string, serow::ForceTorqueMeasurementBuffer> ft_buffers_;
+    std::vector<std::string> force_torque_state_topics_;
+    std::map<std::string, std::string> ft_topic_to_frame_id_;
+    double ft_max_time_diff_ = 0.1;  // Max time difference for F/T synchronization (default: 100ms)
     rclcpp::TimerBase::SharedPtr timer_;
 
     // Threading components for asynchronous publishing
