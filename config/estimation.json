@@ -16,8 +16,6 @@
     },
     // string: robot URDF file, should be placed inside the urdf folder  
     "model_path": "my_robot.urdf",
-    // double: total mass of the robot (kg)
-    "mass": 130.0,
     // double: gravity constant (m/s^2)
     "g": 9.81,
     // double: rate at which joint encoders produce measurements (Hz)
@@ -131,16 +129,6 @@
     // boolean: whether or not to estimate the leg end-effector contact status. If set to false, 
     // the user should provide the end-effector contact probabilities
     "estimate_contact_status": true,
-    // double: Schmidt-Trigger high threshold (N) i.e. mass * g / 3.0
-    // Note, must be very carefully tuned since base estimator is directly affected by the robot's 
-    // contact status.
-    // Only applies if estimate_contact_status = true
-    "high_threshold": 350.0,
-    // double: Schmidt-Trigger high threshold (N) i.e. mass * g / 6.0. 
-    // Note, must be very carefully tuned since base estimator is directly affected by the robot's 
-    // contact status.
-    // Only applies if estimate_contact_status = true
-    "low_threshold": 125.0,
     // integer: moving median filter batch used to remove leg end-effector vertical force outliers.
     // Only applies if estimate_contact_status = true
     "median_window": 13,
@@ -186,30 +174,6 @@
         1e-3,
         1e-3
     ],
-    // array: minimum leg end-effector contact relative to base frame position uncertainty (m^2)
-    "contact_position_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
-    ],
-    // array: minimum leg end-effector contact orientation relative to base frame uncertainty (rad^2)
-    "contact_orientation_covariance": [
-        1e-3,
-        1e-3,
-        1e-3
-    ],
-    // array: leg end-effector contact position slip uncertainty (m^2)
-    "contact_position_slip_covariance": [
-        1e-4,
-        1e-4,
-        1e-4
-    ],
-    // array: leg end-effector contact orientation slip uncertainty (rad^2)
-    "contact_orientation_slip_covariance": [
-        1e-3,
-        1e-3,
-        1e-3
-    ],
     // array: initial uncertainty for the base position (m^2)
     "initial_base_position_covariance": [
         1.0,
@@ -224,19 +188,6 @@
     ],
     // array: initial uncertainty for the base linear velocity (m^2/s^2)
     "initial_base_linear_velocity_covariance": [
-        1.0,
-        1.0,
-        1.0
-    ],
-    // array: initial uncertainty for the leg end-effector contact position (m^2)
-    "initial_contact_position_covariance": [
-        1.0,
-        1.0,
-        1.0
-    ],
-    // array: initial uncertainty for the leg end-effector contact orientation (rad^2)
-    // only applies for flat feet
-    "initial_contact_orientation_covariance": [
         1.0,
         1.0,
         1.0

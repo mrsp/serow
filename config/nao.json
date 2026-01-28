@@ -105,8 +105,6 @@
     "attitude_estimator_proportional_gain": 0.5,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
-    "high_threshold": 15.0,
-    "low_threshold": 5.0,
     "median_window": 7,
     "outlier_detection": false,
     "convergence_cycles": 0,
@@ -131,26 +129,6 @@
         1e-5
     ],
     "base_orientation_covariance": [
-        1e-3,
-        1e-3,
-        1e-3
-    ],
-    "contact_position_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
-    ],
-    "contact_orientation_covariance": [
-        1e-3,
-        1e-3,
-        1e-3
-    ],
-    "contact_position_slip_covariance": [
-        1e-4,
-        1e-4,
-        1e-4
-    ],
-    "contact_orientation_slip_covariance": [
         1e-3,
         1e-3,
         1e-3
@@ -191,16 +169,6 @@
         1.0
     ],
     "initial_base_linear_velocity_covariance": [
-        1.0,
-        1.0,
-        1.0
-    ],
-    "initial_contact_position_covariance": [
-        1.0,
-        1.0,
-        1.0
-    ],
-    "initial_contact_orientation_covariance": [
         1.0,
         1.0,
         1.0

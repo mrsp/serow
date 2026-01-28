@@ -252,11 +252,11 @@ void ContactEKF::updateWithTerrain(BaseState& state,
         H(0, p_idx_[2]) = 1.0;
 
         // Compute innovation
-        z(0) = (base_position_z + contact_height_innovation.value()) - state.base_position.z();
+        z(0) = contact_height_innovation.value();
 
         // Construct the measurement noise matrix R
         R(0, 0) = contact_height_innovation_cov.value(); 
-        
+
         PH_transpose.noalias() = P_ * H.transpose();
         const Eigen::MatrixXd s = R + H * PH_transpose;
         const Eigen::MatrixXd K = PH_transpose * s.inverse();

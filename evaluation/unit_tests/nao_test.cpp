@@ -56,7 +56,7 @@ TEST(SerowTests, NaoTest) {
     joints.insert({"RWristYaw", jm});
     joints.insert({"RHand", jm});
 
-    serow::ForceTorqueMeasurement ft{.timestamp = 0.01, .force = Eigen::Vector3d(0.0, 0.0, 40.0)};
+    serow::ForceTorqueMeasurement ft{.timestamp = 0.01, .force = Eigen::Vector3d(0.0, 0.0, 40.0), .torque = Eigen::Vector3d(0.0, 0.0, 0.0)};
     std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
     force_torque.insert({"l_ankle", ft});
     force_torque.insert({"r_ankle", ft});

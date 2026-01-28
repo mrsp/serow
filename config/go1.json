@@ -13,7 +13,7 @@
   "joint_rate": 500.0,
   "estimate_joint_velocity": true,
   "joint_cutoff_frequency": 15.0,
-  "joint_position_variance": 0.01,
+  "joint_position_variance": 0.001,
   "angular_momentum_cutoff_frequency": 5.0,
   "tau_0": 1.0,
   "tau_1": 0.1,
@@ -40,7 +40,7 @@
     0.0,
     1.0
   ],
-  "imu_outlier_detection": true,
+  "imu_outlier_detection": false,
   "use_imu_orientation": true,
   "calibrate_initial_imu_bias": true,
   "max_imu_calibration_cycles": 100,
@@ -106,10 +106,8 @@
   "attitude_estimator_proportional_gain": 1.0,
   "attitude_estimator_integral_gain": 0.3,
   "estimate_contact_status": true,
-  "high_threshold": 16.0,
-  "low_threshold": 15.0,
   "median_window": 7,
-  "outlier_detection": true,
+  "outlier_detection": false,
   "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [
     1e-3,
@@ -136,18 +134,6 @@
     1e-3,
     1e-3
   ],
-  "contact_position_covariance": [
-    1e-4,
-    1e-4,
-    1e-4
-  ],
-  "contact_orientation_covariance": null,
-  "contact_position_slip_covariance": [
-    1e-6,
-    1e-6,
-    1e-6
-  ],
-  "contact_orientation_slip_covariance": null,
   "com_position_process_covariance": [
     1e-6,
     1e-6,
@@ -188,12 +174,6 @@
     1e-3,
     1e-3
   ],
-  "initial_contact_position_covariance": [
-    1e-6,
-    1e-6,
-    1e-6
-  ],
-  "initial_contact_orientation_covariance": null,
   "initial_imu_linear_acceleration_bias_covariance": [
     1e-4,
     1e-4,
