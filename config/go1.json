@@ -12,9 +12,7 @@
   "g": 9.81,
   "joint_rate": 500.0,
   "estimate_joint_velocity": true,
-  "joint_cutoff_frequency": 15.0,
   "joint_position_variance": 0.001,
-  "angular_momentum_cutoff_frequency": 5.0,
   "tau_0": 1.0,
   "tau_1": 0.1,
   "imu_rate": 800.0,
@@ -54,7 +52,6 @@
     0.0,
     0.0
   ],
-  "gyro_cutoff_frequency": 5.0,
   "force_torque_rate": 100.0,
   "R_foot_to_force": {
     "0": [

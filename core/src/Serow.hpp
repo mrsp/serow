@@ -148,9 +148,6 @@ private:
         size_t max_imu_calibration_cycles{};
         /// @brief rate at which IMU measurements are available (Hz)
         double imu_rate{};
-        /// @brief low-pass filter cutoff frequency (Hz), used to filter the IMU gyro measurement.
-        /// Cannot be greater than imu_rate / 2.0
-        double gyro_cutoff_frequency{};
         /// @brief if available - gyro bias (rad/s). Only applies if calibrate_imu = false
         Eigen::Vector3d bias_gyro{Eigen::Vector3d::Zero()};
         /// @brief if available - accelerometer bias (m/s^2). Only applies if calibrate_imu = false
@@ -164,15 +161,8 @@ private:
         /// @brief whether or not to estimate the joint velocities, if set to false then the user
         /// must provide them
         bool estimate_joint_velocity{};
-        /// @brief low-pass filter cutoff frequency (Hz), used to filter the joint encoder
-        /// measurements. Cannot be greater than joint_rate / 2.0. Only applies if
-        /// estimate_joint_velocity = true
-        double joint_cutoff_frequency{};
         /// @brief measurement noise of joint encoder (rad^2)
         double joint_position_variance{};
-        /// @brief low-pass filter cutoff frequency (Hz), used to filter the angular momentum
-        /// around the CoM. Cannot be greater than joint_rate / 2.0
-        double angular_momentum_cutoff_frequency{};
         /// @brief cost weight when computing the instantaneous moment pivot with kinematics. Only
         /// applies for flat feet
         double tau_0{};
@@ -343,6 +333,8 @@ private:
     double last_ft_timestamp_{-1.0};
     /// @brief Timestamp of the last odometry measurement
     double last_odom_timestamp_{-1.0};
+    std::vector<double> coeffs_joint_;
+    std::vector<double> coeffs_imu_;
 
     /// @brief Logs the measurements
     /// @param imu IMU measurement

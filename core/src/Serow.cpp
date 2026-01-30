@@ -192,20 +192,13 @@ bool Serow::initialize(const std::string& config_file) {
     }
 
     // Load other scalar parameters
-    if (!checkConfigParam("gyro_cutoff_frequency", params_.gyro_cutoff_frequency))
-        return false;
     if (!checkConfigParam("force_torque_rate", params_.force_torque_rate))
         return false;
     if (!checkConfigParam("joint_rate", params_.joint_rate))
         return false;
     if (!checkConfigParam("estimate_joint_velocity", params_.estimate_joint_velocity))
         return false;
-    if (!checkConfigParam("joint_cutoff_frequency", params_.joint_cutoff_frequency))
-        return false;
     if (!checkConfigParam("joint_position_variance", params_.joint_position_variance))
-        return false;
-    if (!checkConfigParam("angular_momentum_cutoff_frequency",
-                          params_.angular_momentum_cutoff_frequency))
         return false;
     if (!checkConfigParam("g", params_.g))
         return false;
@@ -427,6 +420,14 @@ bool Serow::initialize(const std::string& config_file) {
         }
     }
 
+    // Compute SG-filter parameters
+    // Calculate M based on time horizon (minimum 3 points for 2nd order poly)
+    const double time_horizon = 0.02;
+    const int M_joint = std::max(3, static_cast<int>(std::round(time_horizon * params_.joint_rate)));
+    const int M_imu = std::max(3, static_cast<int>(std::round(time_horizon * params_.imu_rate)));
+    // Compute coefficients
+    coeffs_joint_ = computeSGCoefficients(M_joint);
+    coeffs_imu_ = computeSGCoefficients(M_imu);
     reset();
 
     // Create timers
@@ -535,19 +536,18 @@ void Serow::runJointsEstimator(State& state,
         } else {
             if (joint_estimators_.count(key) == 0) {
                 joint_estimators_.emplace(key,
-                                          DerivativeEstimator(key, params_.joint_rate,
-                                                              params_.joint_cutoff_frequency, 1));
+                                          DerivativeEstimator(key, coeffs_joint_, params_.joint_rate));
                 if (state.isInitialized()) {
                     joint_estimators_.at(key).setState(
-                        Eigen::Matrix<double, 1, 1>(state.joint_state_.joints_position.at(key)),
                         Eigen::Matrix<double, 1, 1>(state.joint_state_.joints_velocity.at(key)));
                 } else {
-                    joint_estimators_.at(key).setState(Eigen::Matrix<double, 1, 1>(value.position),
-                                                       Eigen::Matrix<double, 1, 1>(0.0));
+                    joint_estimators_.at(key).setState(Eigen::Matrix<double, 1, 1>(0.0));
                 }
             }
             joints_velocity[key] = joint_estimators_.at(key).filter(
-                Eigen::Matrix<double, 1, 1>(value.position), value.timestamp)(0);
+                Eigen::Matrix<double, 1, 1>(value.position), 
+                Eigen::Matrix<double, 1, 1>(params_.joint_position_variance), 
+                value.timestamp)(0);
         }
     }
     state.joint_state_.timestamp = joint_timestamp;
@@ -562,10 +562,10 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
 
     const Eigen::Matrix3d R_base_to_gyro_transpose = params_.R_base_to_gyro.transpose();
     const Eigen::Matrix3d R_base_to_acc_transpose = params_.R_base_to_acc.transpose();
-    imu.angular_velocity_cov = R_base_to_gyro * params_.angular_velocity_cov.asDiagonal() * R_base_to_gyro_transpose;
-    imu.angular_velocity_bias_cov = R_base_to_gyro * params_.angular_velocity_bias_cov.asDiagonal() * R_base_to_gyro_transpose;
-    imu.linear_acceleration_cov = R_base_to_acc * params_.linear_acceleration_cov.asDiagonal() * R_base_to_acc_transpose;
-    imu.linear_acceleration_bias_cov = R_base_to_acc * params_.linear_acceleration_bias_cov.asDiagonal() * R_base_to_acc_transpose;
+    imu.angular_velocity_cov = params_.R_base_to_gyro * params_.angular_velocity_cov.asDiagonal() * R_base_to_gyro_transpose;
+    imu.angular_velocity_bias_cov = params_.R_base_to_gyro * params_.angular_velocity_bias_cov.asDiagonal() * R_base_to_gyro_transpose;
+    imu.linear_acceleration_cov = params_.R_base_to_acc * params_.linear_acceleration_cov.asDiagonal() * R_base_to_acc_transpose;
+    imu.linear_acceleration_bias_cov = params_.R_base_to_acc * params_.linear_acceleration_bias_cov.asDiagonal() * R_base_to_acc_transpose;
 
     // Estimate the base frame attitude
     if (!attitude_estimator_) {
@@ -720,22 +720,20 @@ void Serow::runAngularMomentumEstimator(State& state) {
     // Initialize angular momentum derivative estimator if needed
     if (!angular_momentum_derivative_estimator) {
         angular_momentum_derivative_estimator = std::make_unique<DerivativeEstimator>(
-            "CoM Angular Momentum Derivative", params_.joint_rate,
-            params_.angular_momentum_cutoff_frequency, 3);
+            "CoM Angular Momentum Derivative", coeffs_joint_, params_.joint_rate, 3);
         if (state.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = R_world_to_base.transpose();
             angular_momentum_derivative_estimator->setState(
-                R_base_to_world * state.centroidal_state_.angular_momentum,
                 R_base_to_world * state.centroidal_state_.angular_momentum_derivative);
         } else {
-            angular_momentum_derivative_estimator->setState(com_angular_momentum,
-                                                            Eigen::Vector3d::Zero());
+            angular_momentum_derivative_estimator->setState(Eigen::Vector3d::Zero());
         }
     }
 
     // Estimate the angular momentum derivative around the CoM in base frame
     const Eigen::Vector3d& com_angular_momentum_derivative =
         angular_momentum_derivative_estimator->filter(com_angular_momentum,
+                                                      Eigen::Vector3d::Ones(),
                                                       state.joint_state_.timestamp);
 
     // Update the state
@@ -917,19 +915,18 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
         Eigen::Vector3d(0.0, 0.0, params_.g);
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>(
-            "Gyro Derivative", params_.imu_rate, params_.gyro_cutoff_frequency, 3);
+            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3);
         if (state.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = base_pose.linear().transpose();
             gyro_derivative_estimator->setState(
-                R_base_to_world * state.base_state_.base_angular_velocity,
                 R_base_to_world * state.base_state_.base_angular_acceleration);
         } else {
-            gyro_derivative_estimator->setState(base_angular_velocity, Eigen::Vector3d::Zero());
+            gyro_derivative_estimator->setState(Eigen::Vector3d::Zero());
         }
     }
 
     const Eigen::Vector3d base_angular_acceleration =
-        gyro_derivative_estimator->filter(base_angular_velocity, imu.timestamp);
+        gyro_derivative_estimator->filter(base_angular_velocity, imu.angular_velocity_cov.diagonal(), imu.timestamp);
     state.base_state_.base_angular_velocity = base_pose.linear() * base_angular_velocity;
     state.base_state_.base_angular_acceleration = base_pose.linear() * base_angular_acceleration;
     state.base_state_.base_linear_acceleration = base_linear_acceleration;
@@ -1706,18 +1703,17 @@ void Serow::baseEstimatorFinishUpdate(const ImuMeasurement& imu, const Kinematic
         Eigen::Vector3d(0.0, 0.0, params_.g);
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>(
-            "Gyro Derivative", params_.imu_rate, params_.gyro_cutoff_frequency, 3);
+            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3);
         if (state_.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = base_pose.linear().transpose();
             gyro_derivative_estimator->setState(
-                R_base_to_world * state_.base_state_.base_angular_velocity,
                 R_base_to_world * state_.base_state_.base_angular_acceleration);
         } else {
-            gyro_derivative_estimator->setState(base_angular_velocity, Eigen::Vector3d::Zero());
+            gyro_derivative_estimator->setState(Eigen::Vector3d::Zero());
         }
     }
     const Eigen::Vector3d base_angular_acceleration =
-        gyro_derivative_estimator->filter(base_angular_velocity, imu.timestamp);
+        gyro_derivative_estimator->filter(base_angular_velocity, imu.angular_velocity_cov.diagonal(), imu.timestamp);
     state_.base_state_.base_angular_velocity = base_pose.linear() * base_angular_velocity;
     state_.base_state_.base_angular_acceleration = base_pose.linear() * base_angular_acceleration;
     state_.base_state_.base_linear_acceleration = base_linear_acceleration;

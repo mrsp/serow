@@ -24,15 +24,8 @@
     // boolean: whether or not to estimate the joint velocities, if set to false then the user must 
     // provide them
     "estimate_joint_velocity": true,
-    // double: low-pass filter cutoff frequency (Hz), used to filter the joint encoder measurements. 
-    // Cannot be greater than joint_rate / 2.0. Only applies if estimate_joint_velocity = true
-    "joint_cutoff_frequency": 10.0,
     // double: measurement noise of joint encoder (rad^2)
     "joint_position_variance": 0.1,
-    // Angular momentum derivative estimator
-    // double: low-pass filter cutoff frequency (Hz), used to filter the angular momentum around the 
-    // CoM. Cannot be greater than joint_rate / 2.0
-    "angular_momentum_cutoff_frequency": 5.0,
     // Contact point estimator
     // double: cost weight when computing the instantaneous moment pivot with kinematics. 
     // Only applies for flat feet
@@ -86,10 +79,6 @@
         0.0,
         0.0
     ],
-    // Base angular acceleration estimator
-    // double: low-pass filter cutoff frequency (Hz), used to filter the IMU gyro measurement. 
-    // Cannot be greater than imu_rate / 2.0
-    "gyro_cutoff_frequency": 5.0,
     // double: rate at which leg end-effector force (and optionally torque) measurements are available
     "force_torque_rate": 500.0,
     // dictionary: rotation matrix from each foot frame to force sensor frame
