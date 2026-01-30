@@ -128,11 +128,6 @@
         0.25,
         0.25
     ],
-    "base_orientation_covariance": [
-        1e-3,
-        1e-3,
-        1e-3
-    ],
     "com_position_process_covariance": [
         1e-6,
         1e-6,

@@ -167,13 +167,6 @@
         1e-5,
         1e-5
     ],
-    // array: base orientation uncertainty (rad^2). Can be used in the base estimator to correct the
-    // base orientation estimate with the IMU orientation measurement
-    "base_orientation_covariance": [
-        1e-3,
-        1e-3,
-        1e-3
-    ],
     // array: initial uncertainty for the base position (m^2)
     "initial_base_position_covariance": [
         1.0,

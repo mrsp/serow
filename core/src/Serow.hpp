@@ -258,7 +258,6 @@ private:
         /// @brief minimum contact probability to consider a contact point for terrain elevation
         /// estimation
         double minimum_contact_probability{0.15};
-        Eigen::Vector3d base_orientation_cov{Eigen::Vector3d::Zero()};
         std::string terrain_estimator_type{};
         bool log_data{true};
         bool log_measurements{false};

@@ -29,6 +29,8 @@
 
 #include <iostream>
 #include <optional>
+#include <cmath>
+#include "lie.hpp"
 
 namespace serow {
 
@@ -43,7 +45,7 @@ public:
      *  @param ki Integral gain
      *  @param verbose whether to print verbose output
      */
-    Mahony(double freq, double kp, double ki = 0.0, bool verbose = false) {
+    Mahony(double freq, const Eigen::Matrix3d& Q_gyro, const Eigen::Matrix3d& Q_acc, double kp, double ki = 0.0, bool verbose = false) {
         nominal_dt_ = 1.0 / freq;
         twoKp_ = 2.0 * kp;
         twoKi_ = 2.0 * ki;
@@ -51,6 +53,9 @@ public:
         integralFBy_ = 0.0;
         integralFBz_ = 0.0;
         verbose_ = verbose;
+        Q_gyro_ = Q_gyro;
+        Q_acc_ = Q_acc;
+        P_ = Eigen::Matrix3d::Identity() * 1e-1;
     }
 
     /** @fn Eigen::Quaterniond getQ()
@@ -89,6 +94,14 @@ public:
         return q_.toRotationMatrix().eulerAngles(0, 1, 2);
     }
 
+
+    /** @fn Eigen::Matrix3d getOrientationCov()
+     *  @returns the orientation covariance matrix in the world frame
+     */
+    Eigen::Matrix3d getOrientationCov() const {
+        return R_ * P_ * R_.transpose();
+    }
+
     /** @fn filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc)
      *  @brief Computes the IMU orientation w.r.t the world frame of reference
      *  @param gyro angular velocity as measured by the IMU
@@ -103,6 +116,14 @@ public:
         double ax = acc(0);
         double ay = acc(1);
         double az = acc(2);
+
+
+        // Small angle approximation of the rotation update
+        const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() - lie::so3::wedge(gyro) * dt;
+
+        // Predict step (Uncertainty increases due to Gyro noise)
+        const double decay_factor = std::exp(-dt / tau_);
+        P_ = F * P_ * F.transpose() * decay_factor + Q_gyro_ * dt;
 
         // Valid accelerometer check
         if (!(std::abs(ax) < 1e-6 && std::abs(ay) < 1e-6 && std::abs(az) < 1e-6)) {
@@ -121,6 +142,19 @@ public:
             const double halfex = ay * halfvz - az * halfvy;
             const double halfey = az * halfvx - ax * halfvz;
             const double halfez = ax * halfvy - ay * halfvx;
+
+            // Measurement Jacobian (H) for gravity
+            // This represents how the orientation error affects the gravity vector observation
+            const Eigen::Vector3d v_est(halfvx, halfvy, halfvz); 
+            const Eigen::Matrix3d H = lie::so3::wedge(v_est);
+
+            // Scale the accelerometer noise by the inverse of Kp to match the filter's weighting
+            const Eigen::Matrix3d R_acc = (Q_acc_ / dt) / (twoKp_ * 0.5); 
+        
+            // Kalman-like gain for covariance shrinkage
+            const Eigen::Matrix3d S = H * P_ * H.transpose() + R_acc;
+            const Eigen::Matrix3d K = P_ * H.transpose() * S.inverse();
+            P_ = (Eigen::Matrix3d::Identity() - K * H) * P_;
 
             // Integral feedback with anti-windup decay
             if (twoKi_ > 0.0) {
@@ -231,6 +265,15 @@ private:
     std::optional<double> timestamp_ = std::nullopt;
     /// Whether to print verbose output
     bool verbose_{};
+    /// Gyro noise covariance
+    Eigen::Matrix3d Q_gyro_ = Eigen::Matrix3d::Identity();
+    /// Accelerometer noise covariance
+    Eigen::Matrix3d Q_acc_ = Eigen::Matrix3d::Identity();
+    /// Orientation covariance matrix
+    Eigen::Matrix3d P_ = Eigen::Matrix3d::Identity();
+    /// Time constant for covariance decay to prevent yaw dimension of 
+    /// covariance from growing unbounded due to unobservability
+    const double tau_ = 3600.0; 
 };
 
 }  // namespace serow

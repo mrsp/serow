@@ -351,7 +351,6 @@ bool Serow::initialize(const std::string& config_file) {
                                                  "imu_angular_velocity_bias_covariance",
                                                  "imu_linear_acceleration_covariance",
                                                  "imu_linear_acceleration_bias_covariance",
-                                                 "base_orientation_covariance",
                                                  "com_position_process_covariance",
                                                  "com_linear_velocity_process_covariance",
                                                  "external_forces_process_covariance",
@@ -385,7 +384,6 @@ bool Serow::initialize(const std::string& config_file) {
     loadCovarianceVector("imu_linear_acceleration_covariance", params_.linear_acceleration_cov);
     loadCovarianceVector("imu_linear_acceleration_bias_covariance",
                          params_.linear_acceleration_bias_cov);
-    loadCovarianceVector("base_orientation_covariance", params_.base_orientation_cov);
     loadCovarianceVector("com_position_process_covariance", params_.com_position_process_cov);
     loadCovarianceVector("com_linear_velocity_process_covariance",
                          params_.com_linear_velocity_process_cov);
@@ -562,15 +560,23 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
     imu.angular_velocity = params_.R_base_to_gyro * imu.angular_velocity;
     imu.linear_acceleration = params_.R_base_to_acc * imu.linear_acceleration;
 
+    const Eigen::Matrix3d R_base_to_gyro_transpose = params_.R_base_to_gyro.transpose();
+    const Eigen::Matrix3d R_base_to_acc_transpose = params_.R_base_to_acc.transpose();
+    imu.angular_velocity_cov = R_base_to_gyro * params_.angular_velocity_cov.asDiagonal() * R_base_to_gyro_transpose;
+    imu.angular_velocity_bias_cov = R_base_to_gyro * params_.angular_velocity_bias_cov.asDiagonal() * R_base_to_gyro_transpose;
+    imu.linear_acceleration_cov = R_base_to_acc * params_.linear_acceleration_cov.asDiagonal() * R_base_to_acc_transpose;
+    imu.linear_acceleration_bias_cov = R_base_to_acc * params_.linear_acceleration_bias_cov.asDiagonal() * R_base_to_acc_transpose;
+
     // Estimate the base frame attitude
     if (!attitude_estimator_) {
-        attitude_estimator_ = std::make_unique<Mahony>(params_.imu_rate, params_.Kp, params_.Ki);
+        attitude_estimator_ = std::make_unique<Mahony>(params_.imu_rate, imu.angular_velocity_cov, 
+                                                       imu.linear_acceleration_cov, params_.Kp, params_.Ki);
         attitude_estimator_->setState(state.base_state_.base_orientation);
     }
 
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration, imu.timestamp);
     imu.orientation = attitude_estimator_->getQ();
-    imu.orientation_cov = params_.base_orientation_cov.asDiagonal();
+    imu.orientation_cov = attitude_estimator_->getOrientationCov();
 
     // IMU bias calibration - Assuming the IMU is stationary
     if (!state.isInitialized()) {
@@ -603,11 +609,6 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
         }
     }
 
-    // Create the base estimation measurements
-    imu.angular_velocity_cov = params_.angular_velocity_cov.asDiagonal();
-    imu.angular_velocity_bias_cov = params_.angular_velocity_bias_cov.asDiagonal();
-    imu.linear_acceleration_cov = params_.linear_acceleration_cov.asDiagonal();
-    imu.linear_acceleration_bias_cov = params_.linear_acceleration_bias_cov.asDiagonal();
     return true;
 }
 
