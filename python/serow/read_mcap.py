@@ -154,6 +154,16 @@ def decode_kinematic_measurement(data: bytes) -> serow.KinematicMeasurement:
     if timestamp:
         msg.timestamp = timestamp.Sec() + timestamp.Nsec() * 1e-9
 
+    # Decode base position
+    if fb_msg.BasePosition():
+        msg.base_position = np.array(
+            [
+                fb_msg.BasePosition().X(),
+                fb_msg.BasePosition().Y(),
+                fb_msg.BasePosition().Z(),
+            ]
+        )
+
     # Decode base linear velocity
     if fb_msg.BaseLinearVelocity():
         msg.base_linear_velocity = np.array(
@@ -164,22 +174,15 @@ def decode_kinematic_measurement(data: bytes) -> serow.KinematicMeasurement:
             ]
         )
 
-    # Decode base orientation
-    if fb_msg.BaseOrientation():
-        msg.base_orientation = np.array(
-            [
-                fb_msg.BaseOrientation().W(),
-                fb_msg.BaseOrientation().X(),
-                fb_msg.BaseOrientation().Y(),
-                fb_msg.BaseOrientation().Z(),
-            ]
-        )
-
     # Decode contact names and status
     contacts_status = {}
     contacts_probability = {}
+    is_new_contact = {}
     contacts_position = {}
     base_to_foot_positions = {}
+    base_to_foot_orientations = {}
+    base_to_foot_linear_velocities = {}
+    base_to_foot_angular_velocities = {}
     contacts_position_noise = {}
     contacts_orientation = {}
     contacts_orientation_noise = {}
@@ -190,12 +193,25 @@ def decode_kinematic_measurement(data: bytes) -> serow.KinematicMeasurement:
             contacts_status[name] = fb_msg.ContactsStatus(i)
         if i < fb_msg.ContactsProbabilityLength():
             contacts_probability[name] = fb_msg.ContactsProbability(i)
+        if i < fb_msg.IsNewContactLength():
+            is_new_contact[name] = fb_msg.IsNewContact(i)
         if i < fb_msg.ContactsPositionLength():
             pos = fb_msg.ContactsPosition(i)
             contacts_position[name] = np.array([pos.X(), pos.Y(), pos.Z()])
         if i < fb_msg.BaseToFootPositionsLength():
             pos = fb_msg.BaseToFootPositions(i)
             base_to_foot_positions[name] = np.array([pos.X(), pos.Y(), pos.Z()])
+        if i < fb_msg.BaseToFootOrientationsLength():
+            quat = fb_msg.BaseToFootOrientations(i)
+            base_to_foot_orientations[name] = np.array(
+                [quat.W(), quat.X(), quat.Y(), quat.Z()]
+            )
+        if i < fb_msg.BaseToFootLinearVelocitiesLength():
+            vel = fb_msg.BaseToFootLinearVelocities(i)
+            base_to_foot_linear_velocities[name] = np.array([vel.X(), vel.Y(), vel.Z()])
+        if i < fb_msg.BaseToFootAngularVelocitiesLength():
+            vel = fb_msg.BaseToFootAngularVelocities(i)
+            base_to_foot_angular_velocities[name] = np.array([vel.X(), vel.Y(), vel.Z()])
         if i < fb_msg.ContactsPositionNoiseLength():
             matrix = fb_msg.ContactsPositionNoise(i)
             contacts_position_noise[name] = np.array(
@@ -222,11 +238,17 @@ def decode_kinematic_measurement(data: bytes) -> serow.KinematicMeasurement:
 
     msg.contacts_status = contacts_status
     msg.contacts_probability = contacts_probability
+    msg.is_new_contact = is_new_contact
     msg.contacts_position = contacts_position
     msg.base_to_foot_positions = base_to_foot_positions
+    msg.base_to_foot_orientations = base_to_foot_orientations
+    msg.base_to_foot_linear_velocities = base_to_foot_linear_velocities
+    msg.base_to_foot_angular_velocities = base_to_foot_angular_velocities
     msg.contacts_position_noise = contacts_position_noise
-    msg.contacts_orientation = contacts_orientation
-    msg.contacts_orientation_noise = contacts_orientation_noise
+    if contacts_orientation:
+        msg.contacts_orientation = contacts_orientation
+    if contacts_orientation_noise:
+        msg.contacts_orientation_noise = contacts_orientation_noise
 
     # Decode COM measurements
     if fb_msg.ComAngularMomentumDerivative():
@@ -260,16 +282,6 @@ def decode_kinematic_measurement(data: bytes) -> serow.KinematicMeasurement:
     if fb_msg.BaseLinearVelocityCov():
         matrix = fb_msg.BaseLinearVelocityCov()
         msg.base_linear_velocity_cov = np.array(
-            [
-                [matrix.M00(), matrix.M01(), matrix.M02()],
-                [matrix.M10(), matrix.M11(), matrix.M12()],
-                [matrix.M20(), matrix.M21(), matrix.M22()],
-            ]
-        )
-
-    if fb_msg.BaseOrientationCov():
-        matrix = fb_msg.BaseOrientationCov()
-        msg.base_orientation_cov = np.array(
             [
                 [matrix.M00(), matrix.M01(), matrix.M02()],
                 [matrix.M10(), matrix.M11(), matrix.M12()],

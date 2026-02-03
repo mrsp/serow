@@ -520,7 +520,6 @@ void Serow::runJointsEstimator(State& state,
     // Estimate joint velocities
     std::map<std::string, double> joints_position;
     std::map<std::string, double> joints_velocity;
-
     double joint_timestamp{};
     for (const auto& [key, value] : joints) {
         joints_position[key] = value.position;

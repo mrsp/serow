@@ -52,9 +52,7 @@ def run_serow_per_step(dataset, robot, start_idx = 0):
             continue
         imu, kin, ft = serow_framework.process_measurements(imu, joint, ft, None)
         serow_framework.base_estimator_predict_step(imu, kin)        
-        for cf in kin.contacts_status.keys():
-            serow_framework.set_action(cf, np.array([1.0], dtype=np.float32))
-            serow_framework.base_estimator_update_with_contact_position(cf, kin)
+        serow_framework.base_estimator_update_with_base_linear_velocity(kin)
         serow_framework.base_estimator_finish_update(imu, kin)
         state = serow_framework.get_state(allow_invalid=True)
         base_positions.append(state.get_base_position())
@@ -91,7 +89,7 @@ class TestSerow(unittest.TestCase):
         print(f"Length of dataset base pose ground truth: {len(self.dataset['base_pose_ground_truth'])}")
 
     def test_serow(self):
-        start_idx = 25
+        start_idx = 0
         base_positions, base_orientations = run_serow(self.dataset, self.robot, start_idx)
         actual_base_positions, actual_base_orientations = run_serow_playback(
             self.dataset, start_idx

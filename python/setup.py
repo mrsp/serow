@@ -17,13 +17,8 @@ class CMakeBuild(build_ext):
         if not extdir.endswith(os.path.sep):
             extdir += os.path.sep
 
-        # Get the source directory based on the extension name
-        if ext.name == 'serow.contact_ekf':
-            sourcedir = os.path.join(setup_dir, 'serow')
-        elif ext.name == 'serow.state':
-            sourcedir = os.path.join(setup_dir, 'serow')
-        else:
-            raise ValueError(f"Unknown extension: {ext.name}")
+        # Get the source directory
+        sourcedir = os.path.join(setup_dir, 'serow')
 
         cmake_args = [
             f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}',
@@ -44,8 +39,7 @@ setup(
     packages=find_packages(),
     package_dir={"": "."},
     ext_modules=[
-        Extension('serow.contact_ekf', sources=[], extra_compile_args=[], extra_link_args=[]),
-        Extension('serow.state', sources=[], extra_compile_args=[], extra_link_args=[]),
+        Extension('serow.serow', sources=[], extra_compile_args=[], extra_link_args=[]),
     ],
     cmdclass=dict(build_ext=CMakeBuild),
     install_requires=[
