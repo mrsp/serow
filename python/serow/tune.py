@@ -33,39 +33,32 @@ def default_config():
         config = json.load(f)
 
     params = {
-        'x0': config['contact_position_covariance'][0],
-        'y0': config['contact_position_covariance'][1],
-        'z0': config['contact_position_covariance'][2],
-        'x1': config['contact_position_slip_covariance'][0],
-        'y1': config['contact_position_slip_covariance'][1],
-        'z1': config['contact_position_slip_covariance'][2],
-        'lt': config['low_threshold'],
-        'delta': config['high_threshold'] - config['low_threshold'],
+        'x0': config['imu_angular_velocity_covariance'][0],
+        'y0': config['imu_angular_velocity_covariance'][1],
+        'z0': config['imu_angular_velocity_covariance'][2],
+        'x1': config['imu_linear_acceleration_covariance'][0],
+        'y1': config['imu_linear_acceleration_covariance'][1],
+        'z1': config['imu_linear_acceleration_covariance'][2],
         'jv': config['joint_position_variance'],
-        'jc': config['joint_cutoff_frequency'],
     }
     print(f"Default params: {params}")
     return params
 
 # 0. Define the function you want to optimize (the "Black Box")
-# Using parameter transformation: ht = lt + delta, where delta > 0 ensures ht > lt
-def fn(x0, y0, z0, x1, y1, z1, lt, delta, jv, jc):
+def fn(x0, y0, z0, x1, y1, z1, jv):
     # Read the json file
     json_file = f'{json_path}/{robot}_pytest.json'
     with open(json_file, 'r') as f:
         config = json.load(f)
 
     # Replace the parameters with the new values
-    config['contact_position_covariance'][0] = x0
-    config['contact_position_covariance'][1] = y0
-    config['contact_position_covariance'][2] = z0
-    config['contact_position_slip_covariance'][0] = x1
-    config['contact_position_slip_covariance'][1] = y1
-    config['contact_position_slip_covariance'][2] = z1
-    config['low_threshold'] = lt
-    config['high_threshold'] = lt + delta
+    config['imu_angular_velocity_covariance'][0] = x0
+    config['imu_angular_velocity_covariance'][1] = y0
+    config['imu_angular_velocity_covariance'][2] = z0
+    config['imu_linear_acceleration_covariance'][0] = x1
+    config['imu_linear_acceleration_covariance'][1] = y1
+    config['imu_linear_acceleration_covariance'][2] = z1
     config['joint_position_variance'] = jv
-    config['joint_cutoff_frequency'] = jc
 
     # Write the config to a temporary file
     temp_file = f'{json_path}/{robot}_temp.json'
@@ -119,18 +112,13 @@ if __name__ == "__main__":
     default_params = default_config()
 
     # 2. Define the parameter bounds (the search space)
-    # Using lt and delta instead of ht and lt to ensure ht > lt constraint
-    # ht will be computed as lt + delta, where delta > 0
-    pbounds = {'x0': (1e-7, 1e-4), 
-               'y0': (1e-7, 1e-4), 
-               'z0': (1e-7, 1e-4), 
-               'x1': (1e-7, 1e-4), 
-               'y1': (1e-7, 1e-4), 
-               'z1': (1e-7, 1e-4),
-               'lt': (0.0, 4.0),    
-               'delta': (0.1, 8.0),  
-               'jv' : (1e-5, 1e-3),
-               'jc' : (12.0, 18.0)}
+    pbounds = {'x0': (1e-6, 1e-4), 
+               'y0': (1e-6, 1e-4), 
+               'z0': (1e-6, 1e-4), 
+               'x1': (1e-4, 1e-2), 
+               'y1': (1e-4, 1e-2), 
+               'z1': (1e-4, 1e-2),
+               'jv' : (1e-5, 1e-3)}
 
     # 3. Initialize the optimizer
     optimizer = BayesianOptimization(

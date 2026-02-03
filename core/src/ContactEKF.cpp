@@ -140,7 +140,6 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu) {
     // Predict the state
     computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration);
     last_imu_timestamp_ = imu.timestamp;
-    std::cout << "ContactEKF (Predict) Base position: " << state.base_position.transpose() << std::endl;
 }
 
 void ContactEKF::computeDiscreteDynamics(
