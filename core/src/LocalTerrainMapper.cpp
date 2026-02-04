@@ -204,14 +204,18 @@ int LocalTerrainMapper::globalIndexToHashId(const std::array<int, 2>& id_g) cons
 }
 
 bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, float variance) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
     if (!inside(loc)) {
         return false;
     }
-    std::lock_guard<std::mutex> lock(mutex_);
 
     variance = std::max(variance, min_terrain_height_variance_);
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
     const int center_hash_id = globalIndexToHashId(center_idx);
+    if (center_hash_id < 0 || center_hash_id >= static_cast<int>(elevation_.size())) {
+        return false;
+    }
     ElevationCell& cell = elevation_[center_hash_id];
     cell.contact = true;
     cell.updated = true;
@@ -243,7 +247,9 @@ bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, f
                 continue;
             }
             const auto hash_id = globalIndexToHashId(idx);
-            elevation_[hash_id] = cell;
+            if (hash_id >= 0 && hash_id < static_cast<int>(elevation_.size())) {
+                elevation_[hash_id] = cell;
+            }
         }
     }
     return true;
@@ -258,7 +264,6 @@ std::optional<ElevationCell> LocalTerrainMapper::getElevation(const std::array<f
 
     const int hash_id = locationToHashId(loc);
 
-    // Add bounds check!
     if (hash_id < 0 || hash_id >= static_cast<int>(elevation_.size())) {
         return std::nullopt;
     }
@@ -327,7 +332,6 @@ bool LocalTerrainMapper::setElevation(const std::array<float, 2>& loc,
     }
     const int idx = locationToHashId(loc);
 
-    // Add bounds check!
     if (idx < 0 || idx >= static_cast<int>(elevation_.size())) {
         return false;
     }

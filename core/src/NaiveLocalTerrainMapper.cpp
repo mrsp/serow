@@ -112,15 +112,19 @@ void NaiveLocalTerrainMapper::initializeLocalMap(const float height, const float
 
 bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float height,
                                      float variance) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
     if (!inside(loc)) {
         return false;
     }
-    std::lock_guard<std::mutex> lock(mutex_);
 
     variance = std::max(min_terrain_height_variance_, variance);
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
     const std::array<int, 2> center_local_idx = globalIndexToLocalIndex(center_idx);
     const int center_hash_id = localIndexToHashId(center_local_idx);
+    if (center_hash_id < 0 || center_hash_id >= map_size) {
+        return false;
+    }
     ElevationCell& cell = elevation_[center_hash_id];
     cell.contact = true;
     cell.updated = true;
@@ -153,7 +157,9 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
             }
             const std::array<int, 2> local_idx = globalIndexToLocalIndex(idx);
             const int hash_id = localIndexToHashId(local_idx);
-            elevation_[hash_id] = cell;
+            if (hash_id >= 0 && hash_id < map_size) {
+                elevation_[hash_id] = cell;
+            }
         }
     }
     return true;
@@ -204,21 +210,27 @@ void NaiveLocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
 
 std::optional<ElevationCell> NaiveLocalTerrainMapper::getElevation(
     const std::array<float, 2>& loc) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!inside(loc)) {
         return std::nullopt;
     }
     const int hash_id = locationToHashId(loc);
-    std::lock_guard<std::mutex> lock(mutex_);
+    if (hash_id < 0 || hash_id >= map_size) {
+        return std::nullopt;
+    }
     return elevation_[hash_id];
 }
 
 bool NaiveLocalTerrainMapper::setElevation(const std::array<float, 2>& loc,
                                            const ElevationCell& elevation) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!inside(loc)) {
         return false;
     }
     const int hash_id = locationToHashId(loc);
-    std::lock_guard<std::mutex> lock(mutex_);
+    if (hash_id < 0 || hash_id >= map_size) {
+        return false;
+    }
     elevation_[hash_id] = elevation;
     return true;
 }

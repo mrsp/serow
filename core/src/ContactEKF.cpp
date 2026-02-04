@@ -201,68 +201,57 @@ void ContactEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& bas
 }
 
 void ContactEKF::updateWithTerrain(BaseState& state,
-                                   const double base_position_z,
                                    const std::map<std::string, Eigen::Vector3d>& contacts_position,
+                                   const std::map<std::string, Eigen::Matrix3d>& contacts_position_cov,
                                    const std::map<std::string, double>& contacts_probability,
                                    std::shared_ptr<TerrainElevation> terrain_estimator) {
 
-    Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
-    T_world_to_base.translation() = state.base_position;
-    T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
-    std::optional<double> contact_height_innovation;
-    std::optional<double> contact_height_innovation_cov;
-    double den = 0.0;
+    const Eigen::Vector3d p_world_to_base = state.base_position;
+    const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
+
+    // Initialize the innovation vector z, the linearized measurement matrix H, and the measurement noise 
+    // matrix R
+    Eigen::VectorXd z(1);
+    Eigen::MatrixXd H(1, num_states_);
+    Eigen::MatrixXd R(1, 1);
+    Eigen::MatrixXd PH_transpose(num_states_, 1);
+
     for (const auto& [cf, cp] : contacts_probability) {
         // Update only when the elevation at the contact points is available and updated in the
         // map
         if (cp > 0.5) {
-            const Eigen::Vector3d con_pos_world = T_world_to_base * contacts_position.at(cf);
+            const Eigen::Vector3d con_pos_world = R_world_to_base * contacts_position.at(cf) + p_world_to_base;
             const std::array<float, 2> con_pos_xy = {
                 static_cast<float>(con_pos_world.x()),
                 static_cast<float>(con_pos_world.y())};
             const auto elevation = terrain_estimator->getElevation(con_pos_xy);
             if (elevation.has_value() && elevation.value().updated) {
-                if (!contact_height_innovation.has_value()) {
-                    contact_height_innovation = 0.0;
-                    contact_height_innovation_cov = 0.0;
-                }
-                contact_height_innovation.value() += cp * (static_cast<double>(elevation.value().height) - con_pos_world.z());
-                contact_height_innovation_cov.value() += cp * (static_cast<double>(elevation.value().variance));
+                const Eigen::Matrix3d con_cov_world = R_world_to_base * contacts_position_cov.at(cf) * R_world_to_base.transpose();
+
+                // Construct the linearized measurement matrix H
+                H.setZero();
+                // dh/dp_z
+                H(0, p_idx_[2]) = 1.0;
+
+                // dh/d_chi = [0, 0, 1] * (-R * skew(p_contact_body))
+                // const Eigen::Matrix3d skew_cp = lie::so3::wedge(contacts_position.at(cf));
+                // H.block(0, r_idx_[0], 1, 3) = -(R_world_to_base * skew_cp).row(2);
+
+                // Compute innovation
+                z(0) = static_cast<double>(elevation.value().height) - con_pos_world.z();
+
+                // Construct the measurement noise matrix R
+                R(0, 0) = (static_cast<double>(elevation.value().variance + con_cov_world(2, 2)) + 1e-6) / cp; 
+
+                PH_transpose.noalias() = P_ * H.transpose();
+                const Eigen::MatrixXd s = R + H * PH_transpose;
+                const Eigen::MatrixXd K = PH_transpose * s.inverse();
+                const Eigen::VectorXd dx = K * z;
+                updateState(state, dx, P_);
+                P_ = (I_ - K * H) * P_;
             }
-            den += cp;
         }
-    }        
-    
-    if (contact_height_innovation.has_value() && den > 0.0) {
-        contact_height_innovation.value() /= den;
-        contact_height_innovation_cov.value() /= den;
-        
-        // Initialize the innovation vector z, the linearized measurement matrix H, and the
-        // measurement noise matrix R
-        Eigen::VectorXd z(1);
-        Eigen::MatrixXd H(1, num_states_);
-        Eigen::MatrixXd R(1, 1);
-        Eigen::MatrixXd PH_transpose(num_states_, 1);
-        z.setZero();
-        R.setIdentity();
-
-        // Construct the linearized measurement matrix H
-        H.setZero();
-        H(0, p_idx_[2]) = 1.0;
-
-        // Compute innovation
-        z(0) = contact_height_innovation.value();
-
-        // Construct the measurement noise matrix R
-        R(0, 0) = contact_height_innovation_cov.value(); 
-
-        PH_transpose.noalias() = P_ * H.transpose();
-        const Eigen::MatrixXd s = R + H * PH_transpose;
-        const Eigen::MatrixXd K = PH_transpose * s.inverse();
-        const Eigen::VectorXd dx = K * z;
-        updateState(state, dx, P_);
-        P_ = (I_ - K * H) * P_;
-    }
+    }  
 }
 
 BaseState ContactEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
@@ -322,7 +311,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                 const Eigen::Matrix3d con_cov = T_world_to_base.linear() *
                     kin.contacts_position_noise.at(cf) * T_world_to_base.linear().transpose();
                 if (!terrain_estimator->update(con_pos_xy, con_pos_z,
-                                               static_cast<float>(con_cov(2, 2)))) {
+                                               static_cast<float>((con_cov(2, 2) + 1e-6) / cp))) {
                     std::cout << "Contact for " << cf
                               << " is not inside the terrain elevation map and thus height is not "
                                  "updated "
@@ -351,7 +340,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
     // Update the state with the absolute terrain height at each contact location and
     // potentially recenter the terrain mapper
     if (terrain_estimator) {
-        updateWithTerrain(state, kin.base_position.z(), kin.contacts_position, kin.contacts_probability, terrain_estimator);
+        updateWithTerrain(state, kin.contacts_position, kin.contacts_position_noise, kin.contacts_probability, terrain_estimator);
         // Recenter the map
         const std::array<float, 2> base_pos_xy = {static_cast<float>(state.base_position.x()),
                                                   static_cast<float>(state.base_position.y())};

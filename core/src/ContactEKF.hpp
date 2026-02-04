@@ -173,13 +173,14 @@ private:
     /**
      * @brief Updates the robot's state based on terrain measurements.
      * @param state Current state of the robot.
-     * @param base_position_z Z-coordinate of the base position leg odometry.
      * @param contacts_position Positions of leg contacts.
+     * @param contacts_position_noise Covariances of leg contact positions.
      * @param contacts_probability Probabilities of leg contacts.
      * @param terrain_estimator Terrain elevation mapper.
      */
-    void updateWithTerrain(BaseState& state, const double base_position_z, 
+    void updateWithTerrain(BaseState& state, 
                            const std::map<std::string, Eigen::Vector3d>& contacts_position,
+                           const std::map<std::string, Eigen::Matrix3d>& contacts_position_noise,
                            const std::map<std::string, double>& contacts_probability,
                            std::shared_ptr<TerrainElevation> terrain_estimator);
 
