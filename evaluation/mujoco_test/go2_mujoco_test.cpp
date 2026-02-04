@@ -6,11 +6,9 @@
 #include <regex>
 #include <chrono>
 
-// MCAP Includes
 #include <mcap/reader.hpp>
 #include <mcap/writer.hpp>
 
-// Other Includes
 #include <Eigen/Dense>
 #include <nlohmann/json.hpp>
 #include "serow/Serow.hpp"
@@ -18,7 +16,7 @@
 using namespace serow;
 using json = nlohmann::json;
 
-// --- Helper: Resolve Paths ---
+// Helper: Resolve Paths
 std::string resolvePath(const json& config, const std::string& path) {
     const char* env_p = std::getenv("SEROW_PATH");
     std::string serow_path_env = (env_p) ? env_p : ""; 
@@ -33,7 +31,7 @@ std::string resolvePath(const json& config, const std::string& path) {
     return resolved_path;
 }
 
-// --- Helper: Map Joint Names ---
+//  Map Joint Names
 std::string mapJointName(const std::string& pyName) {
     std::string leg = pyName.substr(0, 2); 
     std::string part = pyName.substr(3);   
@@ -77,7 +75,7 @@ int main(int argc, char** argv) {
         std::cout << "Input: " << INPUT_FILE << "\nOutput: " << OUTPUT_FILE << std::endl;
 
         // ---------------------------------------------------------
-        // 1. SETUP MCAP WRITER
+        // SETUP MCAP WRITER
         // ---------------------------------------------------------
         mcap::McapWriter writer;
         mcap::McapWriterOptions writerOptions("serow_estimator");
@@ -93,7 +91,7 @@ int main(int argc, char** argv) {
         writer.addChannel(outputChannel);
 
         // ---------------------------------------------------------
-        // 2. SETUP MCAP READER
+        // SETUP MCAP READER
         // ---------------------------------------------------------
         mcap::McapReader reader;
         status = reader.open(INPUT_FILE);
@@ -102,15 +100,13 @@ int main(int argc, char** argv) {
         }
 
         // ---------------------------------------------------------
-        // 3. PROCESSING LOOP
+        // PROCESSING LOOP
         // ---------------------------------------------------------
         size_t message_count = 0;
         auto start_time = std::chrono::high_resolution_clock::now();
 
         auto messages = reader.readMessages();
         
-        double last_timestamp = -1.0;
-        int frame_counter = 0;
 
         for (const auto& msgView : messages) {
             const mcap::Message& msg = msgView.message;
@@ -123,23 +119,7 @@ int main(int argc, char** argv) {
             json j_in = json::parse(payload);
             double timestamp = j_in["timestamp"];
 
-            // --- CALCULATE FREQUENCY HERE ---
-            if (last_timestamp > 0) {
-                double dt = timestamp - last_timestamp;
-                if (dt > 1e-6) { // Avoid division by zero
-                    double freq = 1.0 / dt;
-                    
-                    // Print every 1000 frames to avoid spamming console
-                  
-                    std::cout << "Frame " << frame_counter 
-                                << " | dt: " << dt << "s"
-                                << " | Rate: " << freq << " Hz" << std::endl;
-                    
-                }
-            }
-            last_timestamp = timestamp;
-            frame_counter++;
-            // --- A. Parse IMU ---
+            // Parse IMU 
             serow::ImuMeasurement imu;
             imu.timestamp = timestamp;
             imu.linear_acceleration = Eigen::Vector3d(
@@ -153,7 +133,7 @@ int main(int argc, char** argv) {
                 j_in["imu"]["angular_velocity"]["z"]
             );
 
-            // --- B. Parse Forces ---
+            // Parse Forces
             std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
             std::vector<std::string> legs = {"FL", "FR", "RL", "RR"};
             for(const auto& leg : legs) {
@@ -167,7 +147,7 @@ int main(int argc, char** argv) {
                 }});
             }
 
-            // --- C. Parse Joints ---
+            //  Parse Joints 
             std::map<std::string, serow::JointMeasurement> joints;
             json j_joints = j_in["joint_states"];
             for (auto& [key, val] : j_joints.items()) {
@@ -224,20 +204,20 @@ int main(int argc, char** argv) {
                 json j_out;
                 j_out["timestamp"] = timestamp;
 
-                // 1. Base Pose
+                // Base Pose
                 j_out["base_pose"]["position"] = { {"x", basePos.x()}, {"y", basePos.y()}, {"z", basePos.z()} };
                 j_out["base_pose"]["rotation"] = { {"w", baseOrient.w()}, {"x", baseOrient.x()}, {"y", baseOrient.y()}, {"z", baseOrient.z()} };
                 
-                // 2. CoM State (This was missing!)
+                // CoM State (This was missing!)
                 j_out["CoM_state"]["position"] = { {"x", comPos.x()}, {"y", comPos.y()}, {"z", comPos.z()} };
                 j_out["CoM_state"]["velocity"] = { {"x", comVel.x()}, {"y", comVel.y()}, {"z", comVel.z()} };
                 j_out["CoM_state"]["externalForces"] = { {"x", extForce.x()}, {"y", extForce.y()}, {"z", extForce.z()} };
 
-                // 3. IMU Biases
+                // IMU Biases
                 j_out["imu_bias"]["accel"] = { {"x", biasAcc.x()}, {"y", biasAcc.y()}, {"z", biasAcc.z()} };
                 j_out["imu_bias"]["angVel"] = { {"x", biasGyr.x()}, {"y", biasGyr.y()}, {"z", biasGyr.z()} };
 
-                // 4. Contact Positions
+                // Contact Positions
                 j_out["contact_positions"]["FL_foot"] = { {"x", get_contact("FL").x()}, {"y", get_contact("FL").y()}, {"z", get_contact("FL").z()} };
                 j_out["contact_positions"]["FR_foot"] = { {"x", get_contact("FR").x()}, {"y", get_contact("FR").y()}, {"z", get_contact("FR").z()} };
                 j_out["contact_positions"]["RL_foot"] = { {"x", get_contact("RL").x()}, {"y", get_contact("RL").y()}, {"z", get_contact("RL").z()} };

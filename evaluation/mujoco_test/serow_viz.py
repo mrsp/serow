@@ -15,14 +15,11 @@ with open(config_file, "r") as f:
 
 serow_path = os.environ.get("SEROW_PATH")
 if not serow_path:
-    # Fallback if env var not set, useful for testing in local folders
     serow_path = "" 
 
-# Resolve paths from the JSON configuration
 base_path = config["Paths"]["base_path"]
 experiment_type = config["Experiment"]["type"]
 
-# Helper to ensure we point to .mcap files even if config says .h5
 def fix_extension(path):
     if path.endswith(".h5"):
         return path.replace(".h5", ".mcap")
@@ -46,7 +43,7 @@ def load_gt_data(mcap_file):
     RL_forces = []
     RR_forces = []
     imu_accel = []
-    imu_gyro = []  # Added list for gyroscope
+    imu_gyro = []  
 
     print(f"Loading Ground Truth from: {mcap_file}")
     
@@ -60,13 +57,13 @@ def load_gt_data(mcap_file):
             # Base Ground Truth
             gt = data["base_ground_truth"]
             positions.append([gt["position"]["x"], gt["position"]["y"], gt["position"]["z"]])
-            # Quaternion order [w, x, y, z] to match plotting logic
+            # Quaternion order [w, x, y, z]
             orientations.append([gt["orientation"]["w"], gt["orientation"]["x"], gt["orientation"]["y"], gt["orientation"]["z"]])
             com_positions.append([gt["com_position"]["x"], gt["com_position"]["y"], gt["com_position"]["z"]])
             
             # IMU
             acc = data["imu"]["linear_acceleration"]
-            gyr = data["imu"]["angular_velocity"] # Extract Gyro
+            gyr = data["imu"]["angular_velocity"] 
             
             imu_accel.append([acc["x"], acc["y"], acc["z"]])
             imu_gyro.append([gyr["x"], gyr["y"], gyr["z"]])
@@ -97,7 +94,7 @@ def load_serow_preds(mcap_file):
     com_pos = []
     com_vel = []
     base_pos = []
-    base_rot = [] # [x, y, z, w] or [w, x, y, z]
+    base_rot = []
     imu_bias_acc = []
     imu_bias_gyr = []
 
@@ -105,7 +102,6 @@ def load_serow_preds(mcap_file):
 
     with open(mcap_file, "rb") as f:
         reader = make_reader(f)
-        # Topic name based on C++ code: outputChannel("serow_predictions", ...)
         for schema, channel, message in reader.iter_messages(topics=["serow_predictions"]):
             data = json.loads(message.data)
 
@@ -118,8 +114,6 @@ def load_serow_preds(mcap_file):
             bp = data["base_pose"]
             base_pos.append([bp["position"]["x"], bp["position"]["y"], bp["position"]["z"]])
             
-            # Note: Plotting code expects separate arrays for x,y,z,w. 
-            # We will split them later. Storing as [w, x, y, z] here.
             base_rot.append([bp["rotation"]["w"], bp["rotation"]["x"], bp["rotation"]["y"], bp["rotation"]["z"]])
 
             # Bias
@@ -134,15 +128,12 @@ def load_serow_preds(mcap_file):
     base_rot = np.array(base_rot)
     imu_bias_acc = np.array(imu_bias_acc)
     imu_bias_gyr = np.array(imu_bias_gyr)
-
-    # Unpack for the return statement to match original function signature
-    # Original signature: pos_x, pos_y, pos_z, com_pos_x...
     
     return (
         base_pos[:, 0], base_pos[:, 1], base_pos[:, 2], # pos x, y, z
         com_pos[:, 0], com_pos[:, 1], com_pos[:, 2],    # com pos x, y, z
         com_vel[:, 0], com_vel[:, 1], com_vel[:, 2],    # com vel x, y, z
-        base_rot[:, 1], base_rot[:, 2], base_rot[:, 3], base_rot[:, 0], # rot x, y, z, w (Note order change to match legacy return)
+        base_rot[:, 1], base_rot[:, 2], base_rot[:, 3], base_rot[:, 0], # rot x, y, z, w 
         imu_bias_acc[:, 0], imu_bias_acc[:, 1], imu_bias_acc[:, 2], # b_ax, b_ay, b_az
         imu_bias_gyr[:, 0], imu_bias_gyr[:, 1], imu_bias_gyr[:, 2], # b_wx, b_wy, b_wz
     )
@@ -193,7 +184,7 @@ def quaternion_multiply(q1, q2):
     return np.array([w, x, y, z])
 
 
-### Removes the bias from the initial pose (world frame is 0 0 0  0 0 0 1 at time t = 0 )
+# Removes the bias from the initial pose (world frame is 0 0 0  0 0 0 1 at time t = 0 )
 def remove_gt_bias(positions, orientations):
     initial_position = positions[0] 
     q0 = orientations[0] 
@@ -211,8 +202,8 @@ if __name__ == "__main__":
         gt_pos,
         gt_rot,
         com_pos,
-        gt_acc,  # Renamed for clarity
-        gt_gyr,  # Added
+        gt_acc,
+        gt_gyr,
         timestamps,
         FL_forces,
         FR_forces,
@@ -288,8 +279,8 @@ if __name__ == "__main__":
     RL_forces = RL_forces[(size_diff):cut_end]
     RR_forces = RR_forces[(size_diff):cut_end]
     com_pos = com_pos[(size_diff):cut_end]
-    gt_acc = gt_acc[(size_diff):cut_end] # Slice Acc
-    gt_gyr = gt_gyr[(size_diff):cut_end] # Slice Gyr
+    gt_acc = gt_acc[(size_diff):cut_end]
+    gt_gyr = gt_gyr[(size_diff):cut_end] 
     timestamps = timestamps[(size_diff):cut_end]
 
     print(
@@ -428,7 +419,7 @@ if __name__ == "__main__":
     axs5[5].set_ylabel("bias wz")
     axs5[5].set_xlabel("Timestamp")
 
-    # --- NEW FIGURE 6: IMU MEASUREMENTS ---
+    # IMU measurements
     fig6, axs6 = plt.subplots(6, 1, figsize=(10, 12), sharex=True)
     fig6.suptitle("IMU Measurements (Ground Truth)")
 
