@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // --- D. Run Filter ---
+            // Run Filter
             if(j_in.contains("base_ground_truth")) {
                 BasePoseGroundTruth gt;
                 gt.timestamp = timestamp;
@@ -180,7 +180,7 @@ int main(int argc, char** argv) {
                 estimator.filter(imu, joints, force_torque);
             }
 
-            // --- E. Write Output ---
+            //  Write Output 
             auto state = estimator.getState();
             if (state.has_value()) {
                 auto basePos = state->getBasePosition();
@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
                 auto biasAcc = state->getImuLinearAccelerationBias();
                 auto biasGyr = state->getImuAngularVelocityBias();
 
-                // Get Contact Positions (Safe access)
+                // Get Contact Positions
                 auto get_contact = [&](const std::string& leg) -> Eigen::Vector3d {
                    auto val = state->getContactPosition(leg + "_foot");
                    return val.has_value() ? val.value() : Eigen::Vector3d::Zero();
@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
                 j_out["base_pose"]["position"] = { {"x", basePos.x()}, {"y", basePos.y()}, {"z", basePos.z()} };
                 j_out["base_pose"]["rotation"] = { {"w", baseOrient.w()}, {"x", baseOrient.x()}, {"y", baseOrient.y()}, {"z", baseOrient.z()} };
                 
-                // CoM State (This was missing!)
+                // CoM State
                 j_out["CoM_state"]["position"] = { {"x", comPos.x()}, {"y", comPos.y()}, {"z", comPos.z()} };
                 j_out["CoM_state"]["velocity"] = { {"x", comVel.x()}, {"y", comVel.y()}, {"z", comVel.z()} };
                 j_out["CoM_state"]["externalForces"] = { {"x", extForce.x()}, {"y", extForce.y()}, {"z", extForce.z()} };

@@ -1,6 +1,6 @@
 {
   "Experiment": {
-    "type": "slope"
+    "type": "random_walk_flat"
   },
   "Paths": {
     "base_path": "/evaluation/mujoco_test/mujoco_data",
