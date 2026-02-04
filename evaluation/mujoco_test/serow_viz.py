@@ -1,10 +1,8 @@
-# Visualizing data for SEROW
-
-import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import json
+from mcap.reader import make_reader
 
 display_plots = True
 
@@ -17,114 +15,145 @@ with open(config_file, "r") as f:
 
 serow_path = os.environ.get("SEROW_PATH")
 if not serow_path:
-    raise EnvironmentError("SEROW_PATH environment variable not set.")
+    serow_path = "" 
 
-# Resolve paths from the JSON configuration
 base_path = config["Paths"]["base_path"]
 experiment_type = config["Experiment"]["type"]
-measurement_file = serow_path + config["Paths"]["data_file"].replace(
-    "{base_path}", base_path
-).replace("{type}", experiment_type)
-prediction_file = serow_path + config["Paths"]["prediction_file"].replace(
-    "{base_path}", base_path
-).replace("{type}", experiment_type)
+
+def fix_extension(path):
+    if path.endswith(".h5"):
+        return path.replace(".h5", ".mcap")
+    return path
+
+raw_meas_path = config["Paths"]["data_file"].replace("{base_path}", base_path).replace("{type}", experiment_type)
+raw_pred_path = config["Paths"]["prediction_file"].replace("{base_path}", base_path).replace("{type}", experiment_type)
+
+measurement_file = serow_path + fix_extension(raw_meas_path)
+prediction_file = serow_path + fix_extension(raw_pred_path)
 
 
-# Load the data from the HDF5 file
-def load_gt_data(h5_file):
-    with h5py.File(h5_file, "r") as f:
-        positions = np.array(f["/base_ground_truth/position"])
-        orientations = np.array(f["/base_ground_truth/orientation"])
-        timestamps = np.array(f["/timestamps"])
-        com_positions = np.array(f["CoM_ground_truth/position"])
-        FL_forces = np.array(f["/feet_force/FL"])
-        FR_forces = np.array(f["/feet_force/FR"])
-        RL_forces = np.array(f["/feet_force/RL"])
-        RR_forces = np.array(f["/feet_force/RR"])
+# Load the Ground Truth data from the MCAP file
+def load_gt_data(mcap_file):
+    positions = []
+    orientations = []
+    timestamps = []
+    com_positions = []
+    FL_forces = []
+    FR_forces = []
+    RL_forces = []
+    RR_forces = []
+    imu_accel = []
+    imu_gyro = []  
 
-        imu = np.array(f["/imu/linear_acceleration"])
+    print(f"Loading Ground Truth from: {mcap_file}")
+    
+    with open(mcap_file, "rb") as f:
+        reader = make_reader(f)
+        for schema, channel, message in reader.iter_messages(topics=["/robot_state"]):
+            data = json.loads(message.data)
+            
+            timestamps.append(data["timestamp"])
+            
+            # Base Ground Truth
+            gt = data["base_ground_truth"]
+            positions.append([gt["position"]["x"], gt["position"]["y"], gt["position"]["z"]])
+            # Quaternion order [w, x, y, z]
+            orientations.append([gt["orientation"]["w"], gt["orientation"]["x"], gt["orientation"]["y"], gt["orientation"]["z"]])
+            com_positions.append([gt["com_position"]["x"], gt["com_position"]["y"], gt["com_position"]["z"]])
+            
+            # IMU
+            acc = data["imu"]["linear_acceleration"]
+            gyr = data["imu"]["angular_velocity"] 
+            
+            imu_accel.append([acc["x"], acc["y"], acc["z"]])
+            imu_gyro.append([gyr["x"], gyr["y"], gyr["z"]])
+            
+            # Forces
+            ff = data["feet_forces"]
+            FL_forces.append([ff["FL"]["x"], ff["FL"]["y"], ff["FL"]["z"]])
+            FR_forces.append([ff["FR"]["x"], ff["FR"]["y"], ff["FR"]["z"]])
+            RL_forces.append([ff["RL"]["x"], ff["RL"]["y"], ff["RL"]["z"]])
+            RR_forces.append([ff["RR"]["x"], ff["RR"]["y"], ff["RR"]["z"]])
 
     return (
-        positions,
-        orientations,
-        com_positions,
-        imu,
-        timestamps,
-        FL_forces,
-        FR_forces,
-        RL_forces,
-        RR_forces,
+        np.array(positions),
+        np.array(orientations),
+        np.array(com_positions),
+        np.array(imu_accel),
+        np.array(imu_gyro), # Return Gyro
+        np.array(timestamps),
+        np.array(FL_forces),
+        np.array(FR_forces),
+        np.array(RL_forces),
+        np.array(RR_forces),
     )
 
 
-def print_meta(h5_file):
-    with h5py.File(h5_file, "r") as f:
-        for name in f.keys():
-            print(name)
+# Load the Estimated data from the MCAP file
+def load_serow_preds(mcap_file):
+    com_pos = []
+    com_vel = []
+    base_pos = []
+    base_rot = []
+    imu_bias_acc = []
+    imu_bias_gyr = []
 
+    print(f"Loading Predictions from: {mcap_file}")
 
-def load_serow_preds(h5_file):
-    with h5py.File(h5_file, "r") as f:
-        com_pos_x = np.array(f["CoM_state/position/x"])
-        com_pos_y = np.array(f["CoM_state/position/y"])
-        com_pos_z = np.array(f["CoM_state/position/z"])
+    with open(mcap_file, "rb") as f:
+        reader = make_reader(f)
+        for schema, channel, message in reader.iter_messages(topics=["serow_predictions"]):
+            data = json.loads(message.data)
 
-        com_vel_x = np.array(f["CoM_state/velocity/x"])
-        com_vel_y = np.array(f["CoM_state/velocity/y"])
-        com_vel_z = np.array(f["CoM_state/velocity/z"])
+            # CoM
+            com = data["CoM_state"]
+            com_pos.append([com["position"]["x"], com["position"]["y"], com["position"]["z"]])
+            com_vel.append([com["velocity"]["x"], com["velocity"]["y"], com["velocity"]["z"]])
 
-        pos_x = np.array(f["base_pose/position/x"])
-        pos_y = np.array(f["base_pose/position/y"])
-        pos_z = np.array(f["base_pose/position/z"])
+            # Base Pose
+            bp = data["base_pose"]
+            base_pos.append([bp["position"]["x"], bp["position"]["y"], bp["position"]["z"]])
+            base_rot.append([bp["rotation"]["w"], bp["rotation"]["x"], bp["rotation"]["y"], bp["rotation"]["z"]])
 
-        rot_x = np.array(f["base_pose/rotation/x"])
-        rot_y = np.array(f["base_pose/rotation/y"])
-        rot_z = np.array(f["base_pose/rotation/z"])
-        rot_w = np.array(f["base_pose/rotation/w"])
+            # Bias
+            bias = data["imu_bias"]
+            imu_bias_acc.append([bias["accel"]["x"], bias["accel"]["y"], bias["accel"]["z"]])
+            imu_bias_gyr.append([bias["angVel"]["x"], bias["angVel"]["y"], bias["angVel"]["z"]])
 
-        b_ax = np.array(f["imu_bias/accel/x"])
-        b_ay = np.array(f["imu_bias/accel/y"])
-        b_az = np.array(f["imu_bias/accel/z"])
-
-        b_wx = np.array(f["imu_bias/angVel/x"])
-        b_wy = np.array(f["imu_bias/angVel/y"])
-        b_wz = np.array(f["imu_bias/angVel/z"])
-
+    # Convert to numpy
+    com_pos = np.array(com_pos)
+    com_vel = np.array(com_vel)
+    base_pos = np.array(base_pos)
+    base_rot = np.array(base_rot)
+    imu_bias_acc = np.array(imu_bias_acc)
+    imu_bias_gyr = np.array(imu_bias_gyr)
+    
     return (
-        pos_x,
-        pos_y,
-        pos_z,
-        com_pos_x,
-        com_pos_y,
-        com_pos_z,
-        com_vel_x,
-        com_vel_y,
-        com_vel_z,
-        rot_x,
-        rot_y,
-        rot_z,
-        rot_w,
-        b_ax,
-        b_ay,
-        b_az,
-        b_wx,
-        b_wy,
-        b_wz,
+        base_pos[:, 0], base_pos[:, 1], base_pos[:, 2], # pos x, y, z
+        com_pos[:, 0], com_pos[:, 1], com_pos[:, 2],    # com pos x, y, z
+        com_vel[:, 0], com_vel[:, 1], com_vel[:, 2],    # com vel x, y, z
+        base_rot[:, 1], base_rot[:, 2], base_rot[:, 3], base_rot[:, 0], # rot x, y, z, w 
+        imu_bias_acc[:, 0], imu_bias_acc[:, 1], imu_bias_acc[:, 2], # b_ax, b_ay, b_az
+        imu_bias_gyr[:, 0], imu_bias_gyr[:, 1], imu_bias_gyr[:, 2], # b_wx, b_wy, b_wz
     )
 
 
 def compute_ATE_pos(gt_pos, est_x, est_y, est_z):
     est_pos = np.column_stack((est_x, est_y, est_z))
-    error = np.linalg.norm(gt_pos - est_pos, axis=1)
+    # Ensure dimensions match for calculation
+    n = min(gt_pos.shape[0], est_pos.shape[0])
+    error = np.linalg.norm(gt_pos[:n] - est_pos[:n], axis=1)
     ate = np.sqrt(np.mean(error**2))
     return ate
 
 
 def compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z):
     est_rot = np.column_stack((est_rot_w, est_rot_x, est_rot_y, est_rot_z))
-    rotation_errors = np.zeros((gt_rot.shape[0]))
+    rotation_errors = []
     
-    for i in range(gt_rot.shape[0]):
+    n = min(gt_rot.shape[0], est_rot.shape[0])
+
+    for i in range(n):
         q_gt = gt_rot[i]
         q_est = est_rot[i]
         
@@ -136,21 +165,14 @@ def compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z):
             [q_gt[0], -q_gt[1], -q_gt[2], -q_gt[3]]
         )
         q_rel = quaternion_multiply(q_gt_conj, q_est)
-        rotation_errors[i] = 2 * np.arccos(np.clip(q_rel[0], -1.0, 1.0))
+        rotation_errors.append(2 * np.arccos(np.clip(q_rel[0], -1.0, 1.0)))
     
-    ate_rot = np.sqrt(np.mean(rotation_errors**2))
+    ate_rot = np.sqrt(np.mean(np.array(rotation_errors)**2))
     return ate_rot
 
 def quaternion_multiply(q1, q2):
     """
     Multiply two quaternions q1 and q2.
-
-    Parameters:
-    - q1: numpy array of shape (4,), quaternion (w, x, y, z).
-    - q2: numpy array of shape (4,), quaternion (w, x, y, z).
-
-    Returns:
-    - q: numpy array of shape (4,), resulting quaternion.
     """
     w1, x1, y1, z1 = q1
     w2, x2, y2, z2 = q2
@@ -161,31 +183,12 @@ def quaternion_multiply(q1, q2):
     return np.array([w, x, y, z])
 
 
-def compute_com_vel(com_pos, timestamps):
-    com_vel = np.zeros_like(com_pos)
-    # Central difference for most points
-    for i in range(1, len(com_pos) - 1):
-        dt = timestamps[i + 1] - timestamps[i - 1]
-        com_vel[i] = (com_pos[i + 1] - com_pos[i - 1]) / dt  # Using Central Difference
-    # Forward difference for first point
-    com_vel[0] = (com_pos[1] - com_pos[0]) / (timestamps[1] - timestamps[0])
-    # Backward difference for last point
-    com_vel[-1] = (com_pos[-1] - com_pos[-2]) / (timestamps[-1] - timestamps[-2])
-
-    return com_vel
-
-
-### Removes the bias from the initial pose (world frame is 0 0 0  0 0 0 1 at time t = 0 )
+# Removes the bias from the initial pose (world frame is 0 0 0  0 0 0 1 at time t = 0 )
 def remove_gt_bias(positions, orientations):
-    # Get the initial position and orientation
-    initial_position = positions[0]  # Initial position at time t=0
-    q0 = orientations[0]  # Initial orientation at time t=0
+    initial_position = positions[0] 
+    q0 = orientations[0] 
 
-    # Modify the position and orientation to be relative to the world frame (t=0 as origin)
-    # Subtract initial position from all positions to set the initial position to (0, 0, 0)
     positions = positions - initial_position
-    # You can modify the orientation similarly by applying the inverse of the initial quaternion.
-    # Assuming orientations are in quaternion format (x, y, z, w), we need to inverse the initial orientation
     initial_orientation_inv = np.array([q0[0], -q0[1], -q0[2], -q0[3]])
     orientations = np.array(
         [quaternion_multiply(initial_orientation_inv, q) for q in orientations]
@@ -198,7 +201,8 @@ if __name__ == "__main__":
         gt_pos,
         gt_rot,
         com_pos,
-        imu,
+        gt_acc,
+        gt_gyr,
         timestamps,
         FL_forces,
         FR_forces,
@@ -227,41 +231,56 @@ if __name__ == "__main__":
         b_wz,
     ) = load_serow_preds(prediction_file)
 
-    # Because estimates and ground truth is not the same size
+    # ---------------------------------------------------------
+    # Synchronization Logic
+    # ---------------------------------------------------------
     size_diff = gt_pos.shape[0] - est_pos_x.shape[0]
+    
+    # Check if dimensions are valid for slicing
+    if size_diff < 0:
+        print(f"Warning: Estimation has {abs(size_diff)} more frames than GT. Truncating Estimation.")
+        est_pos_x = est_pos_x[:gt_pos.shape[0]]
+        size_diff = 0
+    
+    # Slice the End of Estimates (remove last 10 frames as per original code)
+    cut_end = -10
+    
+    est_pos_x = est_pos_x[:cut_end]
+    est_pos_y = est_pos_y[:cut_end]
+    est_pos_z = est_pos_z[:cut_end]
+    est_rot_x = est_rot_x[:cut_end]
+    est_rot_y = est_rot_y[:cut_end]
+    est_rot_z = est_rot_z[:cut_end]
+    est_rot_w = est_rot_w[:cut_end]
 
-    est_pos_x = est_pos_x[:(-10)]
-    est_pos_y = est_pos_y[:(-10)]
-    est_pos_z = est_pos_z[:(-10)]
-    est_rot_x = est_rot_x[:(-10)]
-    est_rot_y = est_rot_y[:(-10)]
-    est_rot_z = est_rot_z[:(-10)]
-    est_rot_w = est_rot_w[:(-10)]
+    com_pos_x = com_pos_x[:cut_end]
+    com_pos_y = com_pos_y[:cut_end]
+    com_pos_z = com_pos_z[:cut_end]
+    com_vel_x = com_vel_x[:cut_end]
+    com_vel_y = com_vel_y[:cut_end]
+    com_vel_z = com_vel_z[:cut_end]
 
-    com_pos_x = com_pos_x[:(-10)]
-    com_pos_y = com_pos_y[:(-10)]
-    com_pos_z = com_pos_z[:(-10)]
-    com_vel_x = com_vel_x[:(-10)]
-    com_vel_y = com_vel_y[:(-10)]
-    com_vel_z = com_vel_z[:(-10)]
+    b_ax = b_ax[:cut_end]
+    b_ay = b_ay[:cut_end]
+    b_az = b_az[:cut_end]
+    b_wx = b_wx[:cut_end]
+    b_wy = b_wy[:cut_end]
+    b_wz = b_wz[:cut_end]
 
-    b_ax = b_ax[:(-10)]
-    b_ay = b_ay[:(-10)]
-    b_az = b_az[:(-10)]
-    b_wx = b_wx[:(-10)]
-    b_wy = b_wy[:(-10)]
-    b_wz = b_wz[:(-10)]
-
-    gt_pos = gt_pos[(size_diff):(-10)]
-    gt_rot = gt_rot[(size_diff):(-10)]
+    # Slice the Start and End of Ground Truth
+    gt_pos = gt_pos[(size_diff):cut_end]
+    gt_rot = gt_rot[(size_diff):cut_end]
 
     gt_pos, gt_rot = remove_gt_bias(gt_pos, gt_rot)
-    FL_forces = FL_forces[(size_diff):(-10)]
-    FR_forces = FR_forces[(size_diff):(-10)]
-    RL_forces = RL_forces[(size_diff):(-10)]
-    RR_forces = RR_forces[(size_diff):(-10)]
-    com_pos = com_pos[(size_diff):(-10)]
-    imu = imu[(size_diff):(-10)]
+    
+    FL_forces = FL_forces[(size_diff):cut_end]
+    FR_forces = FR_forces[(size_diff):cut_end]
+    RL_forces = RL_forces[(size_diff):cut_end]
+    RR_forces = RR_forces[(size_diff):cut_end]
+    com_pos = com_pos[(size_diff):cut_end]
+    gt_acc = gt_acc[(size_diff):cut_end]
+    gt_gyr = gt_gyr[(size_diff):cut_end] 
+    timestamps = timestamps[(size_diff):cut_end]
 
     print(
         "Base position ATE: ", compute_ATE_pos(gt_pos, est_pos_x, est_pos_y, est_pos_z)
@@ -271,10 +290,10 @@ if __name__ == "__main__":
         compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z),
     )
 
-    # com_vel = compute_com_vel(com_pos,timestamps)
-
-    timestamps = timestamps[(size_diff):(-10)]
-
+    # ---------------------------------------------------------
+    # Plotting
+    # ---------------------------------------------------------
+    
     # Plotting Ground Truth and Estimated Position (x, y, z)
     fig1, axs1 = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
     fig1.suptitle("Base position")
@@ -334,7 +353,7 @@ if __name__ == "__main__":
     axs2[3].set_xlabel("Timestamp")
     axs2[3].legend()
 
-    # Plotting Ground Truth and Estimated Orientation (x, y, z, w)
+    # Plotting Ground Truth and Estimated CoM
     fig3, axs3 = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
     fig3.suptitle("CoM position")
 
@@ -342,7 +361,6 @@ if __name__ == "__main__":
     axs3[0].plot(
         timestamps, com_pos_x, label="Estimated", color="orange", linestyle="--"
     )
-
     axs3[0].set_ylabel("com_pos_x")
     axs3[0].legend()
 
@@ -350,7 +368,6 @@ if __name__ == "__main__":
     axs3[1].plot(
         timestamps, com_pos_y, label="Estimated", color="orange", linestyle="--"
     )
-
     axs3[1].set_ylabel("com_pos_y")
     axs3[1].legend()
 
@@ -358,32 +375,10 @@ if __name__ == "__main__":
     axs3[2].plot(
         timestamps, com_pos_z, label="Estimated", color="orange", linestyle="--"
     )
-
     axs3[2].set_ylabel("com_pos_z")
     axs3[2].legend()
 
-    # Plotting Ground Truth and Estimated Orientation (x, y, z, w)
-    # fig6, axs6= plt.subplots(3, 1, figsize=(10, 10), sharex=True)
-    # fig6.suptitle("CoM Velocity")
-
-    # axs6[0].plot(timestamps, com_vel[:,0], label='Ground Truth', color='blue')
-    # axs6[0].plot(timestamps, com_vel_x, label='Estimated', color='orange', linestyle='--')
-
-    # axs6[0].set_ylabel('com_vel_x')
-    # axs6[0].legend()
-
-    # axs6[1].plot(timestamps, com_vel[:,1], label='Ground Truth', color='blue')
-    # axs6[1].plot(timestamps, com_vel_y, label='Estimated', color='orange', linestyle='--')
-    # axs6[1].set_ylabel('com_vel_y')
-    # axs6[1].legend()
-
-    # axs6[2].plot(timestamps, com_vel[:,2], label='Ground Truth', color='blue')
-    # axs6[2].plot(timestamps, com_vel_z, label='Estimated', color='orange', linestyle='--')
-
-    # axs6[2].set_ylabel('com_vel_z')
-    # axs6[2].legend()
-
-    # Plotting Ground Truth and Estimated Position (x, y, z)
+    # Plotting Forces
     fig4, axs4 = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
     fig4.suptitle("Feet forces (z-axis only)")
 
@@ -400,11 +395,11 @@ if __name__ == "__main__":
     axs4[3].set_ylabel("FORCE RR")
     axs4[3].set_xlabel("Timestamp")
 
-    # Plotting Ground Truth and Estimated Position (x, y, z)
+    # Plotting Biases
     fig5, axs5 = plt.subplots(6, 1, figsize=(10, 8), sharex=True)
     fig5.suptitle("IMU estimated biases")
 
-    axs5[0].plot(timestamps, b_ax, label="Ground Truth", color="blue")
+    axs5[0].plot(timestamps, b_ax, label="Estimated", color="blue")
     axs5[0].set_ylabel("bias ax")
 
     axs5[1].plot(timestamps, b_ay, color="blue")
@@ -421,8 +416,42 @@ if __name__ == "__main__":
 
     axs5[5].plot(timestamps, b_wz, color="blue")
     axs5[5].set_ylabel("bias wz")
+    axs5[5].set_xlabel("Timestamp")
 
-    axs5[3].set_xlabel("Timestamp")
+    # IMU measurements
+    fig6, axs6 = plt.subplots(6, 1, figsize=(10, 12), sharex=True)
+    fig6.suptitle("IMU Measurements (Ground Truth)")
+
+    # Accel X
+    axs6[0].plot(timestamps, gt_acc[:, 0], color="green", label="Accel X")
+    axs6[0].set_ylabel("Accel X (m/s^2)")
+    axs6[0].legend()
+
+    # Accel Y
+    axs6[1].plot(timestamps, gt_acc[:, 1], color="green", label="Accel Y")
+    axs6[1].set_ylabel("Accel Y (m/s^2)")
+    axs6[1].legend()
+
+    # Accel Z
+    axs6[2].plot(timestamps, gt_acc[:, 2], color="green", label="Accel Z")
+    axs6[2].set_ylabel("Accel Z (m/s^2)")
+    axs6[2].legend()
+
+    # Gyro X
+    axs6[3].plot(timestamps, gt_gyr[:, 0], color="red", label="Gyro X")
+    axs6[3].set_ylabel("Gyro X (rad/s)")
+    axs6[3].legend()
+
+    # Gyro Y
+    axs6[4].plot(timestamps, gt_gyr[:, 1], color="red", label="Gyro Y")
+    axs6[4].set_ylabel("Gyro Y (rad/s)")
+    axs6[4].legend()
+
+    # Gyro Z
+    axs6[5].plot(timestamps, gt_gyr[:, 2], color="red", label="Gyro Z")
+    axs6[5].set_ylabel("Gyro Z (rad/s)")
+    axs6[5].set_xlabel("Timestamp")
+    axs6[5].legend()
 
     plt.tight_layout()
 
