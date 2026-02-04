@@ -113,7 +113,6 @@ def load_serow_preds(mcap_file):
             # Base Pose
             bp = data["base_pose"]
             base_pos.append([bp["position"]["x"], bp["position"]["y"], bp["position"]["z"]])
-            
             base_rot.append([bp["rotation"]["w"], bp["rotation"]["x"], bp["rotation"]["y"], bp["rotation"]["z"]])
 
             # Bias
