@@ -104,7 +104,6 @@
   "attitude_estimator_integral_gain": 0.3,
   "estimate_contact_status": true,
   "median_window": 7,
-  "outlier_detection": false,
   "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [
     1e-3,

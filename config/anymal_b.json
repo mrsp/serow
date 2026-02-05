@@ -104,7 +104,6 @@
   "median_window": 13,
   "tau_0": 1.0,
   "tau_1": 0.0,
-  "outlier_detection": false,
   "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [
     5e-5,

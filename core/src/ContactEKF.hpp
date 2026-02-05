@@ -55,13 +55,11 @@ public:
      * @param contacts_frame Set of contact frame names.
      * @param g Acceleration due to gravity.
      * @param imu_rate IMU update rate.
-     * @param outlier_detection Flag indicating if outlier detection mechanisms should be enabled.
      * @param use_imu_orientation Flag indicating if IMU orientation is used during the update step.
      * @param verbose Flag indicating if verbose output should be enabled.
      */
     void init(const BaseState& state, std::set<std::string> contacts_frame, double g, 
-              double imu_rate, bool outlier_detection = false, bool use_imu_orientation = false, 
-              bool verbose = false);
+              double imu_rate, bool use_imu_orientation = false, bool verbose = false);
     /**
      * @brief Predicts the robot's state forward based on IMU.
      * @param state Current state of the robot.
@@ -109,7 +107,6 @@ private:
     int num_inputs_{};                      ///< Number of input variables.
     int num_leg_end_effectors_{};           ///< Number of leg end-effectors.
     std::set<std::string> contacts_frame_;  ///< Set of contact frame names.
-    bool outlier_detection_{};              ///< Flag indicating if outlier detection is enabled.
     double nominal_dt_{};                   ///< Nominal sampling time for prediction step.
     Eigen::Vector3d g_;                     ///< Gravity vector.
     // State indices

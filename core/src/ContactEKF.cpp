@@ -17,11 +17,10 @@
 namespace serow {
 
 void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame,
-                      double g, double imu_rate, bool outlier_detection, bool use_imu_orientation, bool verbose) {
+                      double g, double imu_rate, bool use_imu_orientation, bool verbose) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
-    outlier_detection_ = outlier_detection;
     num_states_ = 15;
     num_inputs_ = 12;
     nominal_dt_ = 1.0 / imu_rate;
@@ -392,7 +391,7 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state, const Eigen::Vec
                                               const Eigen::Matrix3d& base_linear_velocity_cov) {
     const int num_iter = 5;
     Eigen::MatrixXd H(3, num_states_);
-    H.setZero(3, num_states_);
+    H.setZero();
     Eigen::MatrixXd K(num_states_, 3);
     Eigen::MatrixXd PH_transpose(num_states_, 3);
     Eigen::Vector3d z;
@@ -405,7 +404,7 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state, const Eigen::Vec
         const Eigen::Vector3d v = R.transpose() * state.base_linear_velocity;
         H.block(0, v_idx_[0], 3, 3) = R;
         H.block(0, r_idx_[0], 3, 3) = -R * lie::so3::wedge(v);
-        
+            
         // Construct the innovation vector z
         const Eigen::Vector3d z = base_linear_velocity - state.base_linear_velocity;
 
@@ -419,40 +418,7 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state, const Eigen::Vec
             break;
         }
     }
-
-    if (!outlier_detection_) {
-        P_ = (I_ - K * H) * P_;
-    } else {
-        // RESKF update
-        contact_outlier_detector.init();
-        Eigen::MatrixXd P_i = P_;
-        BaseState updated_state_i = state;
-        for (size_t i = 0; i < contact_outlier_detector.iters; i++) {
-            if (contact_outlier_detector.zeta > contact_outlier_detector.threshold) {
-                const Eigen::Matrix3d R_z = base_linear_velocity_cov / contact_outlier_detector.zeta;
-                PH_transpose.noalias() = P_ * H.transpose();
-                s.noalias() = R_z + H * PH_transpose;
-                K.noalias() = PH_transpose * s.inverse();
-                const Eigen::VectorXd dx = K * z;
-                P_i = (I_ - K * H) * P_;
-                updated_state_i = updateStateCopy(state, dx, P_);
-
-                // Outlier detection with the base linear velocity measurement vector
-                const Eigen::Vector3d v_i = updated_state_i.base_orientation.toRotationMatrix().transpose() * updated_state_i.base_linear_velocity;
-                const Eigen::Matrix<double, 1, 3> v_i_transpose = v_i.transpose();
-                const Eigen::Matrix3d BetaT = base_linear_velocity * base_linear_velocity.transpose() - 2.0 * base_linear_velocity * v_i_transpose +
-                    v_i * v_i_transpose + H * P_i * H.transpose();
-                contact_outlier_detector.estimate(BetaT, base_linear_velocity_cov);
-            } else {
-                // Measurement is an outlier
-                updated_state_i = std::move(state);
-                P_i = std::move(P_);
-                break;
-            }
-        }
-        P_ = std::move(P_i);
-        state = std::move(updated_state_i);
-    }
+    P_ = (I_ - K * H) * P_;
 }
 
 }  // namespace serow

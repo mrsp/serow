@@ -210,8 +210,6 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("median_window", params_.median_window))
         return false;
-    if (!checkConfigParam("outlier_detection", params_.outlier_detection))
-        return false;
     if (!checkConfigParam("convergence_cycles", params_.convergence_cycles))
         return false;
     if (!checkConfigParam("enable_terrain_estimation", params_.enable_terrain_estimation))
@@ -1484,7 +1482,7 @@ void Serow::reset() {
 
     // Initialize the base and CoM estimators
     base_estimator_.init(state_.base_state_, state_.getContactsFrame(), params_.g, params_.imu_rate, 
-                         params_.outlier_detection, params_.use_imu_orientation, params_.verbose);
+                         params_.use_imu_orientation, params_.verbose);
 
     com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                         params_.force_torque_rate);

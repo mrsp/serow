@@ -122,9 +122,6 @@
     // Only applies if estimate_contact_status = true
     "median_window": 13,
     // Base estimator
-    // boolean: whether or not to remove outlier leg end-effector kinematic measurements in base 
-    // estimation
-    "outlier_detection": false,
     // integer: after how many loop cycles SEROW's estimate is considered valid e.g. all the filters 
     // have converged and estimate should become available for feedback
     "convergence_cycles": 0,
