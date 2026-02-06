@@ -63,7 +63,8 @@ void LegOdometry::computeIMP(const double timestamp,
                              const Eigen::Vector3d& angular_velocity,
                              const Eigen::Vector3d& linear_velocity, const Eigen::Vector3d& force,
                              std::optional<Eigen::Vector3d> torque) {
-    const Eigen::Matrix3d force_skew = lie::so3::wedge(force);
+    const Eigen::Vector3d force_foot = R.transpose() * force;
+    const Eigen::Matrix3d force_skew = lie::so3::wedge(force_foot);
     const Eigen::Matrix3d omega_skew = lie::so3::wedge(R.transpose() * angular_velocity);
 
     Eigen::Matrix3d A = Eigen::Matrix3d::Zero();
@@ -84,9 +85,10 @@ void LegOdometry::computeIMP(const double timestamp,
     b.noalias() += params_.alpha1 * omega_skew * R.transpose() * linear_velocity;
 
     if (params_.alpha3 > 0 && torque.has_value() && force_torque_offset_.has_value()) {
+        const Eigen::Vector3d torque_foot = R.transpose() * torque.value();
         A.noalias() -= params_.alpha3 / params_.Tm3 * force_skew * force_skew;
         b.noalias() += params_.alpha3 / params_.Tm3 *
-            (force_skew * torque.value() -
+            (force_skew * torque_foot -
              force_skew * force_skew * force_torque_offset_->at(frame));
     }
     pivots_.at(frame).noalias() = A.inverse() * b;
@@ -116,19 +118,19 @@ void LegOdometry::estimate(
         force_weights[key] = std::clamp((value + params_.eps) / den, 0.0, 1.0);
     }
 
-    if (!timestamp_) {
-        base_linear_velocity_ = Eigen::Vector3d::Zero();
-        for (const auto& [key, value] : base_to_foot_positions) {
-            base_linear_velocity_ += force_weights.at(key) *
-                (-lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) -
-                 Rwb * base_to_foot_linear_velocities.at(key));
-        }
+    // Compute base velocity kinematically assuming weighted-average contact is stationary
+    // This is self-contained and doesn't depend on external velocity estimates
+    Eigen::Vector3d base_linear_velocity_kinematic = Eigen::Vector3d::Zero();
+    for (const auto& [key, value] : base_to_foot_positions) {
+        base_linear_velocity_kinematic += force_weights.at(key) *
+            (-lie::so3::wedge(base_angular_velocity) * Rwb * value -
+             Rwb * base_to_foot_linear_velocities.at(key));
     }
 
     for (const auto& [key, value] : base_to_foot_orientations) {
         const Eigen::Vector3d foot_angular_velocity =
             base_angular_velocity + Rwb * base_to_foot_angular_velocities.at(key);
-        const Eigen::Vector3d foot_linear_velocity = base_linear_velocity_ +
+        const Eigen::Vector3d foot_linear_velocity = base_linear_velocity_kinematic +
             lie::so3::wedge(base_angular_velocity) * Rwb * base_to_foot_positions.at(key) +
             Rwb * base_to_foot_linear_velocities.at(key);
         if (contact_torques.has_value()) {
@@ -169,11 +171,13 @@ void LegOdometry::estimate(
         contact_orientations_[key] = base_to_foot_orientations.at(key);
     }
 
-    // Compute the base linear velocity measurement and covariance
+    // Compute base linear velocity from position change (finite differences)
     if (timestamp_) {
         const double dt = timestamp - timestamp_.value();
         base_linear_velocity_ = (base_position_ - base_position_prev_) / dt;
-    } 
+    } else {
+        base_linear_velocity_ = base_linear_velocity_kinematic;
+    }
 
     base_linear_velocity_cov_ = Eigen::Matrix3d::Zero();
     for (const auto& [key, value] : force_weights) {
