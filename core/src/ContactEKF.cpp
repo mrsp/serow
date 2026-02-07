@@ -246,8 +246,8 @@ void ContactEKF::updateWithTerrain(BaseState& state,
                 const Eigen::MatrixXd s = R + H * PH_transpose;
                 const Eigen::MatrixXd K = PH_transpose * s.inverse();
                 const Eigen::VectorXd dx = K * z;
-                updateState(state, dx, P_);
                 P_ = (I_ - K * H) * P_;
+                updateState(state, dx, P_);
             }
         }
     }  

@@ -779,13 +779,11 @@ void Serow::runContactEstimator(
                 if (contact_estimators_.count(frame) == 0) {
                     contact_estimators_.emplace(
                         frame,
-                        ContactDetector(frame, 100.0, 10.0,
-                                        state.getMass(), params_.g, params_.median_window));
+                        ContactDetector(frame, state.getMass(), params_.g, params_.median_window));
                     contact_estimators_.at(frame).setState(
-                        state.contact_state_.contacts_status.at(frame),
                         state.contact_state_.contacts_force.at(frame).z());
                 }
-                contact_estimators_.at(frame).SchmittTrigger(contacts_force.at(frame).z());
+                contact_estimators_.at(frame).run(contacts_force.at(frame).z());
                 den += contact_estimators_.at(frame).getContactForce();
             }
         }
@@ -1141,6 +1139,14 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
                    std::optional<std::map<std::string, ContactMeasurement>> contacts_probability,
                    std::optional<BasePoseGroundTruth> base_pose_ground_truth) {
     timers_["total-time"].start();
+    
+    // Safety check: joints map must not be empty
+    if (joints.empty()) {
+        std::cerr << "[SEROW/filter]: Joint measurements are empty, skipping filtering" << std::endl;
+        timers_["total-time"].stop();
+        return false;
+    }
+    
     const double imu_timestamp = imu.timestamp;
     const double joint_timestamp = joints.begin()->second.timestamp;
 
@@ -1168,7 +1174,8 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     last_imu_timestamp_ = imu_timestamp;
     last_joint_timestamp_ = joint_timestamp;
 
-    auto ft_timestamp = force_torque.has_value()
+    // Safety check: force_torque map must not be empty if provided
+    auto ft_timestamp = (force_torque.has_value() && !force_torque.value().empty())
         ? std::optional<double>(force_torque.value().begin()->second.timestamp)
         : std::nullopt;
      

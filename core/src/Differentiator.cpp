@@ -27,7 +27,7 @@ Differentiator::Differentiator(const std::string& name, double dt, bool verbose)
 }
 
 double Differentiator::filter(double x, double dt) {
-    if (dt < dt_ / 2.0) {
+    if (dt <= 0.0 || dt < dt_ / 2.0) {
         if (verbose_) {
             std::cout << "[SEROW/Differentiator] " << name_ << ": Sample time is abnormal " << dt
                       << " while the nominal sample time is " << dt_ << " setting to nominal"

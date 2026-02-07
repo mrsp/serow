@@ -101,8 +101,8 @@ Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement,
             derivative_sum += coefficients_[i] * buffers_[d][i];
         }
         
-        // Division by dt effectively converts "change per sample-index" to "change per second"
-        x_dot_(d) = derivative_sum / nominal_dt_; 
+        // Division by nominal_dt converts "change per sample-index" to "change per second"
+        x_dot_(d) = derivative_sum / nominal_dt_;
 
         // Update the covariance of the derivative
         x_dot_cov_(d) = measurement_variance(d) * noise_gain_;

@@ -44,7 +44,11 @@ public:
      * @brief Constructs a MovingMedianFilter object with a specified window size
      * @param window_size Size of the sliding window for median calculation
      */
-    explicit MovingMedianFilter(size_t window_size) : window_size_(window_size) {}
+    explicit MovingMedianFilter(size_t window_size) : window_size_(window_size) {
+        if (window_size_ == 0) {
+            throw std::invalid_argument("MovingMedianFilter: window_size must be > 0");
+        }
+    }
 
     /**
      * @brief Applies the moving median filter to a new data point
