@@ -581,7 +581,7 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
             if (imu_calibration_cycles_ < params_.max_imu_calibration_cycles) {
                 const Eigen::Matrix3d& R_world_to_base = attitude_estimator_->getR();
                 params_.bias_gyro += imu.angular_velocity;
-                params_.bias_acc.noalias() += imu.linear_acceleration +
+                params_.bias_acc += imu.linear_acceleration +
                     R_world_to_base.transpose() * Eigen::Vector3d(0.0, 0.0, -params_.g);
                 imu_calibration_cycles_++;
                 return false;
@@ -688,13 +688,17 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
     }
 
     // Perform leg odometry estimation
+    // Transform angular velocity and its covariance from base frame to world frame
+    const Eigen::Matrix3d Rwb = imu.orientation.toRotationMatrix();
+    const Eigen::Vector3d base_angular_velocity_world = Rwb * imu.angular_velocity;
+    const Eigen::Matrix3d base_angular_velocity_cov_world = Rwb * imu.angular_velocity_cov * Rwb.transpose();
     leg_odometry_->estimate(
         kin.timestamp,
-        imu.orientation, imu.angular_velocity, kin.base_to_foot_orientations,
+        imu.orientation, base_angular_velocity_world, kin.base_to_foot_orientations,
         kin.base_to_foot_positions, kin.base_to_foot_linear_velocities,
         kin.base_to_foot_angular_velocities, state.contact_state_.contacts_force,
         state.contact_state_.contacts_probability, kin.contacts_position_noise, 
-        imu.angular_velocity_cov, state.contact_state_.contacts_torque);
+        base_angular_velocity_cov_world, state.contact_state_.contacts_torque);
    
     kin.base_position = leg_odometry_->getBasePosition();
     kin.base_linear_velocity = leg_odometry_->getBaseLinearVelocity();

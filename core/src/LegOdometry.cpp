@@ -186,11 +186,10 @@ void LegOdometry::estimate(
     }
 
     base_linear_velocity_cov_ = Eigen::Matrix3d::Zero();
-    const Eigen::Matrix3d base_angular_velocity_noise_world = Rwb * base_angular_velocity_noise * Rwb.transpose();
     for (const auto& [key, value] : force_weights) {
         base_linear_velocity_cov_ += value * Rwb * contact_positions_noise.at(key) * Rwb.transpose();
         const Eigen::Matrix3d contact_skew = lie::so3::wedge(Rwb * contact_positions_.at(key));
-        base_linear_velocity_cov_ +=  value * contact_skew * base_angular_velocity_noise_world * contact_skew.transpose();
+        base_linear_velocity_cov_ +=  value * contact_skew * base_angular_velocity_noise * contact_skew.transpose();
     }
 
    timestamp_ = timestamp;
