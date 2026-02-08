@@ -174,16 +174,23 @@ void LegOdometry::estimate(
     // Compute base linear velocity from position change (finite differences)
     if (timestamp_) {
         const double dt = timestamp - timestamp_.value();
-        base_linear_velocity_ = (base_position_ - base_position_prev_) / dt;
+        // Safety check: avoid division by very small or negative dt
+        if (dt > 1e-6) {
+            base_linear_velocity_ = (base_position_ - base_position_prev_) / dt;
+        } else {
+            // Fallback to kinematic velocity if dt is too small
+            base_linear_velocity_ = base_linear_velocity_kinematic;
+        }
     } else {
         base_linear_velocity_ = base_linear_velocity_kinematic;
     }
 
     base_linear_velocity_cov_ = Eigen::Matrix3d::Zero();
+    const Eigen::Matrix3d base_angular_velocity_noise_world = Rwb * base_angular_velocity_noise * Rwb.transpose();
     for (const auto& [key, value] : force_weights) {
         base_linear_velocity_cov_ += value * Rwb * contact_positions_noise.at(key) * Rwb.transpose();
         const Eigen::Matrix3d contact_skew = lie::so3::wedge(Rwb * contact_positions_.at(key));
-        base_linear_velocity_cov_ +=  value * contact_skew * base_angular_velocity_noise * contact_skew.transpose();
+        base_linear_velocity_cov_ +=  value * contact_skew * base_angular_velocity_noise_world * contact_skew.transpose();
     }
 
    timestamp_ = timestamp;
