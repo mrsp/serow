@@ -182,7 +182,7 @@ int main(int argc, char** argv) {
             }
 
             //  Write Output 
-            auto state = estimator.getState();
+            auto state = estimator.getState(true);
             if (state.has_value()) {
                 auto basePos = state->getBasePosition();
                 auto baseOrient = state->getBaseOrientation();
