@@ -34,7 +34,7 @@ std::string resolvePath(const json& config, const std::string& path) {
 //  Map Joint Names
 std::string mapJointName(const std::string& pyName) {
     std::string leg = pyName.substr(0, 2); 
-    std::string part = pyName.substr(3);   
+    std::string part = pyName.substr(3);    
 
     std::string serowPart;
     if (part == "Hip") serowPart = "hip";
@@ -155,7 +155,8 @@ int main(int argc, char** argv) {
                 if(!serow_name.empty()) {
                     joints.insert({serow_name, serow::JointMeasurement{
                         .timestamp = timestamp,
-                        .position = val["position"]
+                        .position = val["position"],
+                        .velocity = val["velocity"]
                     }});
                 }
             }
@@ -185,6 +186,7 @@ int main(int argc, char** argv) {
             if (state.has_value()) {
                 auto basePos = state->getBasePosition();
                 auto baseOrient = state->getBaseOrientation();
+                auto baseLinVel = state->getBaseLinearVelocity();
                 
                 // Get CoM Data
                 auto comPos = state->getCoMPosition();
@@ -207,6 +209,7 @@ int main(int argc, char** argv) {
                 // Base Pose
                 j_out["base_pose"]["position"] = { {"x", basePos.x()}, {"y", basePos.y()}, {"z", basePos.z()} };
                 j_out["base_pose"]["rotation"] = { {"w", baseOrient.w()}, {"x", baseOrient.x()}, {"y", baseOrient.y()}, {"z", baseOrient.z()} };
+                j_out["base_pose"]["linear_velocity"] = { {"x", baseLinVel.x()}, {"y", baseLinVel.y()}, {"z", baseLinVel.z()} };
                 
                 // CoM State
                 j_out["CoM_state"]["position"] = { {"x", comPos.x()}, {"y", comPos.y()}, {"z", comPos.z()} };

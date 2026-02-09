@@ -36,6 +36,7 @@ prediction_file = serow_path + fix_extension(raw_pred_path)
 def load_gt_data(mcap_file):
     positions = []
     orientations = []
+    lin_velocities = []
     timestamps = []
     com_positions = []
     FL_forces = []
@@ -59,6 +60,8 @@ def load_gt_data(mcap_file):
             positions.append([gt["position"]["x"], gt["position"]["y"], gt["position"]["z"]])
             # Quaternion order [w, x, y, z]
             orientations.append([gt["orientation"]["w"], gt["orientation"]["x"], gt["orientation"]["y"], gt["orientation"]["z"]])
+            lin_velocities.append([gt["linear_velocity"]["x"], gt["linear_velocity"]["y"], gt["linear_velocity"]["z"]])
+
             com_positions.append([gt["com_position"]["x"], gt["com_position"]["y"], gt["com_position"]["z"]])
             
             # IMU
@@ -78,9 +81,10 @@ def load_gt_data(mcap_file):
     return (
         np.array(positions),
         np.array(orientations),
+        np.array(lin_velocities),
         np.array(com_positions),
         np.array(imu_accel),
-        np.array(imu_gyro), # Return Gyro
+        np.array(imu_gyro), 
         np.array(timestamps),
         np.array(FL_forces),
         np.array(FR_forces),
@@ -95,6 +99,7 @@ def load_serow_preds(mcap_file):
     com_vel = []
     base_pos = []
     base_rot = []
+    base_lin_vel = []
     imu_bias_acc = []
     imu_bias_gyr = []
 
@@ -114,6 +119,12 @@ def load_serow_preds(mcap_file):
             bp = data["base_pose"]
             base_pos.append([bp["position"]["x"], bp["position"]["y"], bp["position"]["z"]])
             base_rot.append([bp["rotation"]["w"], bp["rotation"]["x"], bp["rotation"]["y"], bp["rotation"]["z"]])
+            
+            # Check if velocity exists (backward compatibility)
+            if "linear_velocity" in bp:
+                base_lin_vel.append([bp["linear_velocity"]["x"], bp["linear_velocity"]["y"], bp["linear_velocity"]["z"]])
+            else:
+                base_lin_vel.append([0.0, 0.0, 0.0]) # Default or handle appropriately
 
             # Bias
             bias = data["imu_bias"]
@@ -125,16 +136,18 @@ def load_serow_preds(mcap_file):
     com_vel = np.array(com_vel)
     base_pos = np.array(base_pos)
     base_rot = np.array(base_rot)
+    base_lin_vel = np.array(base_lin_vel)
     imu_bias_acc = np.array(imu_bias_acc)
     imu_bias_gyr = np.array(imu_bias_gyr)
     
     return (
-        base_pos[:, 0], base_pos[:, 1], base_pos[:, 2], # pos x, y, z
-        com_pos[:, 0], com_pos[:, 1], com_pos[:, 2],    # com pos x, y, z
-        com_vel[:, 0], com_vel[:, 1], com_vel[:, 2],    # com vel x, y, z
-        base_rot[:, 1], base_rot[:, 2], base_rot[:, 3], base_rot[:, 0], # rot x, y, z, w 
-        imu_bias_acc[:, 0], imu_bias_acc[:, 1], imu_bias_acc[:, 2], # b_ax, b_ay, b_az
-        imu_bias_gyr[:, 0], imu_bias_gyr[:, 1], imu_bias_gyr[:, 2], # b_wx, b_wy, b_wz
+        base_pos[:, 0], base_pos[:, 1], base_pos[:, 2],
+        base_lin_vel[:, 0], base_lin_vel[:, 1], base_lin_vel[:, 2],
+        com_pos[:, 0], com_pos[:, 1], com_pos[:, 2],
+        com_vel[:, 0], com_vel[:, 1], com_vel[:, 2],
+        base_rot[:, 1], base_rot[:, 2], base_rot[:, 3], base_rot[:, 0], 
+        imu_bias_acc[:, 0], imu_bias_acc[:, 1], imu_bias_acc[:, 2],
+        imu_bias_gyr[:, 0], imu_bias_gyr[:, 1], imu_bias_gyr[:, 2],
     )
 
 
@@ -200,6 +213,7 @@ if __name__ == "__main__":
     (
         gt_pos,
         gt_rot,
+        gt_vel,
         com_pos,
         gt_acc,
         gt_gyr,
@@ -213,6 +227,9 @@ if __name__ == "__main__":
         est_pos_x,
         est_pos_y,
         est_pos_z,
+        est_vel_x,
+        est_vel_y,
+        est_vel_z,
         com_pos_x,
         com_pos_y,
         com_pos_z,
@@ -248,6 +265,10 @@ if __name__ == "__main__":
     est_pos_x = est_pos_x[:cut_end]
     est_pos_y = est_pos_y[:cut_end]
     est_pos_z = est_pos_z[:cut_end]
+    est_vel_x = est_vel_x[:cut_end]
+    est_vel_y = est_vel_y[:cut_end]
+    est_vel_z = est_vel_z[:cut_end]
+
     est_rot_x = est_rot_x[:cut_end]
     est_rot_y = est_rot_y[:cut_end]
     est_rot_z = est_rot_z[:cut_end]
@@ -270,6 +291,7 @@ if __name__ == "__main__":
     # Slice the Start and End of Ground Truth
     gt_pos = gt_pos[(size_diff):cut_end]
     gt_rot = gt_rot[(size_diff):cut_end]
+    gt_vel = gt_vel[(size_diff):cut_end]
 
     gt_pos, gt_rot = remove_gt_bias(gt_pos, gt_rot)
     
@@ -452,6 +474,29 @@ if __name__ == "__main__":
     axs6[5].set_ylabel("Gyro Z (rad/s)")
     axs6[5].set_xlabel("Timestamp")
     axs6[5].legend()
+    
+    # -----------------------------------------------------
+    # Base Linear Velocity
+    # -----------------------------------------------------
+    fig7, axs7 = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+    fig7.suptitle("Base Linear Velocity")
+
+    axs7[0].plot(timestamps, gt_vel[:, 0], label="Ground Truth", color="blue")
+    axs7[0].plot(timestamps, est_vel_x, label="Estimated", color="orange", linestyle="--")
+    axs7[0].set_ylabel("vel_x (m/s)")
+    axs7[0].legend()
+
+    axs7[1].plot(timestamps, gt_vel[:, 1], label="Ground Truth", color="blue")
+    axs7[1].plot(timestamps, est_vel_y, label="Estimated", color="orange", linestyle="--")
+    axs7[1].set_ylabel("vel_y (m/s)")
+    axs7[1].legend()
+
+    axs7[2].plot(timestamps, gt_vel[:, 2], label="Ground Truth", color="blue")
+    axs7[2].plot(timestamps, est_vel_z, label="Estimated", color="orange", linestyle="--")
+    axs7[2].set_ylabel("vel_z (m/s)")
+    axs7[2].set_xlabel("Timestamp")
+    axs7[2].legend()
+
 
     plt.tight_layout()
 
