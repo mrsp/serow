@@ -133,7 +133,8 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu) {
     Qc(nba_idx_, nba_idx_) = imu.linear_acceleration_bias_cov;
 
     // Predict the state error covariance
-    const Eigen::MatrixXd Qd = Ad * Lc * Qc * Lc.transpose() * Ad.transpose() * dt;
+    // First-order discrete-time process noise with Euler integration
+    const Eigen::MatrixXd Qd = Lc * Qc * Lc.transpose() * dt;
     P_ = Ad * P_ * Ad.transpose() + Qd;
 
     // Predict the state
@@ -399,7 +400,7 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state, const Eigen::Vec
 
     // Iterative ESKF update
     for (size_t iter = 0; iter < num_iter; iter++) {
-        // Construct the linearized measurement matrix H
+        // Construct the linearized measurement matrix H around the current state estimate
         const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
         const Eigen::Vector3d v = R.transpose() * state.base_linear_velocity;
         H.block(0, v_idx_[0], 3, 3) = R;
@@ -408,17 +409,36 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state, const Eigen::Vec
         // Construct the innovation vector z
         const Eigen::Vector3d z = base_linear_velocity - state.base_linear_velocity;
 
-        // Normal ESKF update
+        // Compute the Kalman gain with the current linearization
         PH_transpose.noalias() = P_ * H.transpose();
         s.noalias() = base_linear_velocity_cov + H * PH_transpose;
         K.noalias() = PH_transpose * s.inverse();
         const Eigen::VectorXd dx = K * z;
-        updateState(state, dx, P_);
+        
+        // Update only the state estimate (not the covariance) during iterations
+        state.base_position += dx(p_idx_);
+        state.base_orientation =
+            Eigen::Quaterniond(lie::so3::plus(state.base_orientation.toRotationMatrix(), dx(r_idx_)))
+                .normalized();
+        const Eigen::Matrix3d R_updated = state.base_orientation.toRotationMatrix();
+        state.base_linear_velocity += R_updated * dx(v_idx_);
+        state.imu_angular_velocity_bias += dx(bg_idx_);
+        state.imu_linear_acceleration_bias += dx(ba_idx_);
         if (dx.squaredNorm() < 1e-9) {
             break;
         }
     }
+    
+    // Update the covariance once after convergence
     P_ = (I_ - K * H) * P_;
+    
+    // Update state covariances with the final P_
+    state.base_position_cov = P_(p_idx_, p_idx_);
+    state.base_orientation_cov = P_(r_idx_, r_idx_);
+    const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
+    state.base_linear_velocity_cov.noalias() = R * P_(v_idx_, v_idx_) * R.transpose();
+    state.imu_angular_velocity_bias_cov = P_(bg_idx_, bg_idx_);
+    state.imu_linear_acceleration_bias_cov = P_(ba_idx_, ba_idx_);
 }
 
 }  // namespace serow
