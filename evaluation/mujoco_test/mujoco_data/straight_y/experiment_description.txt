@@ -1,0 +1,4 @@
+1. Robot still for 3 secs
+2. starts trot
+3. Rotates 90 degrees
+4. Move straight towards +y axis with constant vel

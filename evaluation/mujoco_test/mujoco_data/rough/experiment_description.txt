@@ -1,0 +1,3 @@
+1. Still for 3 secs
+2. Trots for ~2 secs
+3. Starts walking to +x rough terrain with constant velocity
