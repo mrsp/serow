@@ -902,8 +902,8 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
     }
 
     // Update base state with relative to base contacts
-    const Eigen::Isometry3d& base_pose = state.getBasePose();
     base_estimator_.update(state.base_state_, imu, kin, odom, terrain_estimator_);
+    const Eigen::Isometry3d& base_pose = state.getBasePose();
 
     // Estimate base angular velocity and linear acceleration
     const Eigen::Vector3d base_angular_velocity =
