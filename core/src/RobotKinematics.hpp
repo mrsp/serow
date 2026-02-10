@@ -34,6 +34,7 @@
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/parsers/urdf.hpp>
+#include <pinocchio/parsers/mjcf.hpp>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -50,7 +51,7 @@ public:
 
     /**
      * @brief Constructor to initialize the robot model and kinematic data
-     * @param model_name Name of the URDF model file or robot model
+     * @param model_name Name of the model file for the robot
      * @param verbose Verbosity flag for model loading (default: false)
      */
     RobotKinematics(const std::string& model_name, double joint_position_variance,
@@ -58,19 +59,26 @@ public:
         // Create the model
         pmodel_ = std::make_unique<pinocchio::Model>();
 
-        // Build the kinematic model from URDF file
+        // Build the kinematic model from file
         try {
-            std::cout << "Building URDF model " << model_name << std::endl;
-            pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
+            std::cout << "Building model " << model_name << std::endl;
+            if (model_name.find(".xml") != std::string::npos) {
+                pinocchio::mjcf::buildModel(model_name, *pmodel_, verbose);
+            } else if (model_name.find(".urdf") != std::string::npos) {
+                pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
+            } else {
+                throw std::runtime_error("Failed to load model from '" + model_name +
+                                     "': Unsupported file type, supported types are .xml and .urdf");
+            }
         } catch (const std::exception& e) {
-            throw std::runtime_error("Failed to load URDF model from '" + model_name +
+            throw std::runtime_error("Failed to load model from '" + model_name +
                                      "': " + e.what());
         }
 
         // Verify the model was loaded successfully
         if (pmodel_->nq == 0) {
             throw std::runtime_error(
-                "URDF model loaded but has 0 degrees of freedom. Check if the file is valid: " +
+                "Model loaded but has 0 degrees of freedom. Check if the file is valid: " +
                 model_name);
         }
 
@@ -78,7 +86,7 @@ public:
         if (pmodel_->lowerPositionLimit.size() == 0 || pmodel_->upperPositionLimit.size() == 0 ||
             pmodel_->velocityLimit.size() == 0) {
             throw std::runtime_error(
-                "URDF model loaded but joint limits are empty. Check if the file is valid: " +
+                "Model loaded but joint limits are empty. Check if the file is valid: " +
                 model_name);
         }
 
@@ -90,7 +98,7 @@ public:
         jnames_.reserve(names_size);
         for (int i = 0; i < names_size; i++) {
             const std::string& jname = pmodel_->names[i];
-            if (jname != "universe") {
+            if (jname.find("universe") == std::string::npos && jname.find("free") == std::string::npos) {
                 jnames_.push_back(jname);
             }
         }
@@ -446,8 +454,7 @@ public:
     }
 
     /**
-     * @brief Computes recursively the total mass of the robot based on the urdf description of the
-     * robot
+     * @brief Computes recursively the total mass of the robot based on the description of the robot
      * @note Store the result to the member total_mass_
      */
     void computeTotalMass() {

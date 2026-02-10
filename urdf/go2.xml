@@ -98,7 +98,7 @@
             <geom size="0.011 0.0325" pos="0.02 0 -0.148" quat="0.999688 0 0.0249974 0" type="cylinder" class="collision"/>
             <geom pos="0 0 -0.213" mesh="foot" class="visual" material="black"/>
             <geom name="FL" class="foot"/>
-            <site name="FL_foot_sensor" pos="0 0 -0.213" quat = "1 0 0 0" size="0.01" rgba="1 0 0 1"/>       
+            <site name="FL_foot" pos="0 0 -0.213" quat = "1 0 0 0" size="0.01" rgba="1 0 0 1"/>       
     </body>
         </body>
       </body>
@@ -126,7 +126,7 @@
             <geom size="0.011 0.0325" pos="0.02 0 -0.148" quat="0.999688 0 0.0249974 0" type="cylinder" class="collision"/>
             <geom pos="0 0 -0.213" mesh="foot" class="visual" material="black"/>
             <geom name="FR" class="foot"/>
-            <site name="FR_foot_sensor" pos="0 0 -0.213"  quat = "1 0 0 0" size="0.01" rgba="1 0 0 1"/>       
+            <site name="FR_foot" pos="0 0 -0.213"  quat = "1 0 0 0" size="0.01" rgba="1 0 0 1"/>       
           </body>
         </body>
       </body>
@@ -154,7 +154,7 @@
             <geom size="0.011 0.0325" pos="0.02 0 -0.148" quat="0.999688 0 0.0249974 0" type="cylinder" class="collision"/>
             <geom pos="0 0 -0.213" mesh="foot" class="visual" material="black"/>
             <geom name="RL" class="foot"/>
-            <site name="RL_foot_sensor" pos="0 0 -0.213" quat = "1 0 0 0" size="0.01" rgba="1 0 0 1"/>       
+            <site name="RL_foot" pos="0 0 -0.213" quat = "1 0 0 0" size="0.01" rgba="1 0 0 1"/>       
           </body>
         </body>
       </body>
@@ -182,7 +182,7 @@
             <geom size="0.011 0.0325" pos="0.02 0 -0.148" quat="0.999688 0 0.0249974 0" type="cylinder" class="collision"/>
             <geom pos="0 0 -0.213" mesh="foot" class="visual" material="black"/>
             <geom name="RR" class="foot"/>
-            <site name="RR_foot_sensor" pos="0 0 -0.213" quat ="1 0 0 0" size="0.01" rgba="1 0 0 1"/>       
+            <site name="RR_foot" pos="0 0 -0.213" quat ="1 0 0 0" size="0.01" rgba="1 0 0 1"/>       
           </body>
         </body>
       </body>
@@ -206,10 +206,10 @@
   <sensor>
       <accelerometer name="Body_Acc" site="imu"/>
       <gyro name="Body_Gyro" site="imu"/>
-      <force name="FL_foot_force" site="FL_foot_sensor" noise ="0.0"/>
-      <force name="FR_foot_force" site="FR_foot_sensor" noise ="0.0"/>
-      <force name="RL_foot_force" site="RL_foot_sensor" noise ="0.0"/>
-      <force name="RR_foot_force" site="RR_foot_sensor" noise ="0.0"/>
+      <force name="FL_foot_force" site="FL_foot" noise ="0.0"/>
+      <force name="FR_foot_force" site="FR_foot" noise ="0.0"/>
+      <force name="RL_foot_force" site="RL_foot" noise ="0.0"/>
+      <force name="RR_foot_force" site="RR_foot" noise ="0.0"/>
 
   </sensor>
   <keyframe>
