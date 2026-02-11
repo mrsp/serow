@@ -164,9 +164,6 @@ bool Serow::initialize(const std::string& config_file) {
     if (!checkConfigParam("use_imu_orientation", params_.use_imu_orientation))
         return false;
 
-    if (!checkConfigParam("imu_outlier_detection", params_.imu_outlier_detection))
-        return false;
-
     if (!checkConfigParam("imu_rate", params_.imu_rate))
         return false;
 
@@ -430,7 +427,6 @@ bool Serow::initialize(const std::string& config_file) {
 
     // Create timers
     timers_.clear();
-    timers_.try_emplace("imu-outlier-detection");
     timers_.try_emplace("imu-estimation");
     timers_.try_emplace("joint-estimation");
     timers_.try_emplace("forward-kinematics");
@@ -1235,17 +1231,6 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     runJointsEstimator(state_, joints);
     timers_["joint-estimation"].stop();
 
-    // Check if the IMU measurements are valid with the Median Absolute Deviation (MAD)
-    if (params_.imu_outlier_detection) {
-        timers_["imu-outlier-detection"].start();
-        bool is_imu_outlier = isImuMeasurementOutlier(imu);
-        timers_["imu-outlier-detection"].stop();
-        if (is_imu_outlier) {
-            timers_["total-time"].stop();
-            return false;
-        }
-    }
-
     // Estimate the base frame attitude and initial IMU biases
     timers_["imu-estimation"].start();
     bool calibrated = runImuEstimator(state_, imu);
@@ -1274,7 +1259,7 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     // Run the base estimator
     runBaseEstimator(state_, imu, kin, odom);
-
+    
     // Run the CoM estimator
     runCoMEstimator(state_, kin, ft);
 
@@ -1376,7 +1361,6 @@ Serow::~Serow() {
 
         // Clear other containers
         frame_tfs_.clear();
-        imu_outlier_detector_.clear();
         timers_.clear();
     } catch (...) {
         // If anything goes wrong during destruction, just continue
@@ -1447,7 +1431,6 @@ void Serow::reset() {
     leg_odometry_.reset();
     terrain_estimator_.reset();
     frame_tfs_.clear();
-    imu_outlier_detector_.clear();
 
     is_initialized_ = false;
     cycle_ = 0;
@@ -1498,89 +1481,8 @@ void Serow::reset() {
     com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                         params_.force_torque_rate);
 
-    // Compute a valid history size for the IMU outlier detection
-    size_t imu_history_size = params_.imu_rate < 120 ? 40 : params_.imu_rate / 3;
-    if (imu_history_size > 200) {
-        imu_history_size = 200;
-    }
-
-    // Initialize IMU outlier detection storage
-    for (size_t i = 0; i < 6; i++) {
-        imu_outlier_detector_.push_back(MovingMedianFilter(imu_history_size));
-    }
-
     // Terminate logging threads
     stopLogging();
-}
-
-bool Serow::isImuMeasurementOutlier(const ImuMeasurement& imu) {
-    const double MAD_THRESHOLD_MULTIPLIER = 6.0;
-    const double MAD_TO_STD_FACTOR = 1.4826;
-
-    // Add current measurements to filters
-    for (size_t i = 0; i < 3; i++) {
-        imu_outlier_detector_[i].filter(imu.angular_velocity[i]);
-        imu_outlier_detector_[i + 3].filter(imu.linear_acceleration[i]);
-    }
-
-    // Need sufficient history for MAD calculation
-    if (imu_outlier_detector_[0].size() < imu_outlier_detector_[0].maxSize() / 2) {
-        return false;
-    }
-
-    // Calculate current medians
-    const Eigen::Vector3d av_median(imu_outlier_detector_[0].getMedian(),
-                                    imu_outlier_detector_[1].getMedian(),
-                                    imu_outlier_detector_[2].getMedian());
-    const Eigen::Vector3d la_median(imu_outlier_detector_[3].getMedian(),
-                                    imu_outlier_detector_[4].getMedian(),
-                                    imu_outlier_detector_[5].getMedian());
-
-    // Pre-allocate vector to avoid repeated allocations
-    static thread_local std::vector<double> deviations;
-    deviations.clear();
-    deviations.reserve(200);  // Reserve maximum expected size
-
-    // Calculate MAD for each axis more efficiently
-    Eigen::Vector3d av_mad = Eigen::Vector3d::Zero();
-    Eigen::Vector3d la_mad = Eigen::Vector3d::Zero();
-
-    for (size_t i = 0; i < 3; i++) {
-        const auto& av_window = imu_outlier_detector_[i].getWindow();
-        const auto& la_window = imu_outlier_detector_[i + 3].getWindow();
-
-        // Calculate MAD for angular velocity
-        deviations.clear();
-        for (double value : av_window) {
-            deviations.push_back(std::abs(value - av_median[i]));
-        }
-        std::nth_element(deviations.begin(), deviations.begin() + deviations.size() / 2,
-                         deviations.end());
-        av_mad[i] = deviations[deviations.size() / 2];
-
-        // Calculate MAD for linear acceleration
-        deviations.clear();
-        for (double value : la_window) {
-            deviations.push_back(std::abs(value - la_median[i]));
-        }
-        std::nth_element(deviations.begin(), deviations.begin() + deviations.size() / 2,
-                         deviations.end());
-        la_mad[i] = deviations[deviations.size() / 2];
-    }
-
-    // Convert MAD to standard deviation approximation
-    const Eigen::Vector3d av_std_dev(av_mad * MAD_TO_STD_FACTOR);
-    const Eigen::Vector3d la_std_dev(la_mad * MAD_TO_STD_FACTOR);
-
-    // Calculate z-scores for current measurement
-    const Eigen::Vector3d av_z_scores =
-        (imu.angular_velocity - av_median).cwiseQuotient(av_std_dev);
-    const Eigen::Vector3d la_z_scores =
-        (imu.linear_acceleration - la_median).cwiseQuotient(la_std_dev);
-
-    // Check if any component exceeds the threshold using SIMD-friendly operations
-    return (av_z_scores.array().abs() > MAD_THRESHOLD_MULTIPLIER).any() ||
-        (la_z_scores.array().abs() > MAD_THRESHOLD_MULTIPLIER).any();
 }
 
 void Serow::logTimings() {

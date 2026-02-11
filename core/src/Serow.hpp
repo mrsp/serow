@@ -180,15 +180,9 @@ private:
         /// @brief whether or not to estimate the leg end-effector contact status. If set to false,
         /// the user should provide the end-effector contact probabilities
         bool estimate_contact_status{};
-        /// @brief Schmidt-Trigger high threshold (N) i.e. mass * g / 3.0. Note, must be very
-        /// carefully tuned since base estimator is directly affected by the robot's contact status.
-        /// Only applies if estimate_contact_status = true
         /// @brief moving median filter batch used to remove leg end-effector vertical force
         /// outliers. Only applies if estimate_contact_status = true
         size_t median_window{};
-        /// @brief whether or not to remove outlier leg end-effector kinematic measurements in base
-        /// estimation
-        bool outlier_detection{};
         /// @brief after how many loop cycles SEROW's estimate is considered valid e.g. all the
         /// filters have converged and estimate should become available for feedback
         size_t convergence_cycles{};
@@ -265,8 +259,6 @@ private:
         bool point_feet{false};
         /// @brief whether or not to use the IMU orientation during the ContactEKF update step
         bool use_imu_orientation{false};
-        /// @brief whether or not to use the IMU outlier detection during the filter step
-        bool imu_outlier_detection{false};
         /// @brief whether or not to enable verbose output
         bool verbose{false};
     };
@@ -317,8 +309,6 @@ private:
     std::unique_ptr<ThreadPool> timings_logger_job_;
     /// @brief Frame transformations
     std::map<std::string, Eigen::Isometry3d> frame_tfs_;
-    /// @brief IMU outlier detection storage
-    std::vector<MovingMedianFilter> imu_outlier_detector_;
     /// @brief Timers for the filter functions
     std::unordered_map<std::string, Timer> timers_;
     /// @brief Last time the timings were logged
@@ -414,11 +404,6 @@ private:
 
     /// @brief Stops SEROW's logging threads
     void stopLogging();
-
-    /// @brief Checks if IMU measurement is an outlier using Median Absolute Deviation (MAD)
-    /// @param imu IMU measurement to check
-    /// @return true if the measurement is an outlier
-    bool isImuMeasurementOutlier(const ImuMeasurement& imu);
 
     /// @brief Logs the filter timings
     void logTimings();
