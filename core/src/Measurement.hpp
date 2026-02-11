@@ -47,10 +47,10 @@ struct JointMeasurement {
  */
 struct ImuMeasurement {
     double timestamp{};                      ///< Timestamp of the measurement (s)
-    Eigen::Vector3d linear_acceleration{};   ///< Linear acceleration measured by IMU (m/s^2)
-    Eigen::Vector3d angular_velocity{};      ///< Angular velocity measured by IMU (rad/s)
-    Eigen::Quaterniond orientation{};        ///< Orientation measured by IMU (quaternion)
-    Eigen::Vector3d angular_acceleration{};  ///< Angular acceleration measured by IMU (rad/s^2)
+    Eigen::Vector3d linear_acceleration{Eigen::Vector3d::Zero()};   ///< Linear acceleration measured by IMU (m/s^2)
+    Eigen::Vector3d angular_velocity{Eigen::Vector3d::Zero()};      ///< Angular velocity measured by IMU (rad/s)
+    Eigen::Quaterniond orientation{Eigen::Quaterniond::Identity()};  ///< Orientation estimated by IMU measurements (quaternion)
+    Eigen::Vector3d angular_acceleration{Eigen::Vector3d::Zero()};   ///< Angular acceleration estimated by IMU measurements (rad/s^2)
 
     Eigen::Matrix3d orientation_cov{
         Eigen::Matrix3d::Identity()};  ///< Covariance matrix of orientation (rad^2)

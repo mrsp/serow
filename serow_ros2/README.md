@@ -6,7 +6,7 @@ These instructions will get you a copy of the project up and running on your loc
 * Create a ROS workspace with `mkdir -p ros2_ws/src`
 * `cd ros2_ws/src`
 * `ln -s $SEROW_PATH/serow_ros2 ./serow_ros2`
-* `cd .. && colcon build --packages-select serow_ros2
+* `cd .. && colcon build --packages-select serow_ros2`
 * `source install/setup.bash`
 
 ## Minimum Robot Requirements

@@ -1,5 +1,5 @@
-
 robot_name: "anymal_b"
+path_to_serow_library: "/usr/local/lib"
 topics:
   joint_states: "/joint_states"
   imu: "/imu"
