@@ -1259,7 +1259,7 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     // Run the base estimator
     runBaseEstimator(state_, imu, kin, odom);
-
+    
     // Run the CoM estimator
     runCoMEstimator(state_, kin, ft);
 
