@@ -7,6 +7,17 @@ find_package(pinocchio REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(FlatBuffers REQUIRED)
 
+# Find zstd before mcap_builder
+# zstd::libzstd_shared / zstd::libzstd_static. Create alias if needed.
+find_package(zstd QUIET)
+if(zstd_FOUND AND NOT TARGET zstd::libzstd)
+  if(TARGET zstd::libzstd_shared)
+    add_library(zstd::libzstd ALIAS zstd::libzstd_shared)
+  elseif(TARGET zstd::libzstd_static)
+    add_library(zstd::libzstd ALIAS zstd::libzstd_static)
+  endif()
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
   mcap_builder

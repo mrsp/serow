@@ -8,7 +8,7 @@
         "2": "RL_foot",
         "3": "RR_foot"
     },
-    "model_path": "go2.xml",
+    "model_path": "go2.urdf",
     "g": 9.81,
     "joint_rate": 500.0,
     "estimate_joint_velocity": true,

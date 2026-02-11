@@ -685,6 +685,9 @@ private:
     // Optimized message writing with reuse of message object
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) noexcept {
+        if (data_size == 0 || data == nullptr) {
+            return; 
+        }
         try {
             // Update message object with new values
             mcap::Message message;

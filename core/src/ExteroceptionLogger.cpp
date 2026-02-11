@@ -208,6 +208,9 @@ private:
 
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) {
+        if (data_size == 0 || data == nullptr) {
+            return; 
+        }
         try {
             mcap::Message message;
             message.channelId = channel_id;

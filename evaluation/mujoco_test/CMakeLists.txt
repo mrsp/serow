@@ -4,6 +4,8 @@ project(serow_tests VERSION 1.0.0 LANGUAGES CXX)
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 20)
 endif()
+
+find_package(zstd REQUIRED)
 find_package(mcap)
 
 find_package(pinocchio REQUIRED)
