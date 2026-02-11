@@ -1,0 +1,36 @@
+include "Quaternion.fbs";
+include "Vector3.fbs";
+include "Matrix3.fbs";
+include "Time.fbs";
+
+namespace foxglove;
+
+table KinematicMeasurement {
+    timestamp: Time (id: 0);
+    base_linear_velocity: Vector3 (id: 1);
+    base_orientation: Quaternion (id: 2);
+    contact_names: [string] (id: 3);
+    contacts_status: [bool] (id: 4);
+    contacts_probability: [double] (id: 5);
+    contacts_position: [Vector3] (id: 6);
+    base_to_foot_positions: [Vector3] (id: 7);
+    contacts_position_noise: [Matrix3] (id: 8);
+    contacts_orientation: [Quaternion] (id: 9);
+    contacts_orientation_noise: [Matrix3] (id: 10);
+    com_angular_momentum_derivative: Vector3 (id: 11);
+    com_position: Vector3 (id: 12);
+    com_linear_acceleration: Vector3 (id: 13);
+    base_linear_velocity_cov: Matrix3 (id: 14);
+    base_orientation_cov: Matrix3 (id: 15);
+    position_slip_cov: Matrix3 (id: 16);
+    orientation_slip_cov: Matrix3 (id: 17);
+    position_cov: Matrix3 (id: 18);
+    orientation_cov: Matrix3 (id: 19);
+    com_position_process_cov: Matrix3 (id: 20);
+    com_linear_velocity_process_cov: Matrix3 (id: 21);
+    external_forces_process_cov: Matrix3 (id: 22);
+    com_position_cov: Matrix3 (id: 23);
+    com_linear_acceleration_cov: Matrix3 (id: 24);
+}
+
+root_type KinematicMeasurement;

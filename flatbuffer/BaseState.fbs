@@ -1,0 +1,82 @@
+include "Time.fbs";
+include "Vector3.fbs";
+include "Quaternion.fbs";
+include "Matrix3.fbs";
+
+namespace foxglove;
+
+
+table BaseState {
+  // Timestamp of the state (s)
+  timestamp:Time (id: 0);
+  
+  contact_names: [string] (id: 1);
+
+  // 3D Base position in world frame coordinates (m)
+  base_position: Vector3 (id: 2);
+  
+  // Base orientation quaternion [w, x, y, z] in world frame coordinates
+  base_orientation: Quaternion (id: 3);
+  
+  // 3D Base linear velocity in world frame coordinates (m/s)
+  base_linear_velocity: Vector3 (id: 4);
+  
+  // 3D Base angular velocity in world frame coordinates (rad/s)
+  base_angular_velocity: Vector3 (id: 5);
+  
+  // 3D Base linear acceleration in world frame coordinates (m/s^2)
+  base_linear_acceleration: Vector3 (id: 6);
+
+  // 3D Base angular acceleration in world frame coordinates (rad/s^2)
+  base_angular_acceleration: Vector3 (id: 7);
+  
+  // 3D IMU linear acceleration bias in IMU frame coordinates (m/s^2)
+  imu_linear_acceleration_bias: Vector3 (id: 8);
+  
+  // 3D IMU angular velocity bias in IMU frame coordinates (rad/s)
+  imu_angular_velocity_bias: Vector3 (id: 9);
+
+  // Base position covariance in world frame coordinates (m^2)
+  base_position_cov: Matrix3 (id: 10);
+
+  // Base orientation covariance in world frame coordinates (rad^2)
+  base_orientation_cov: Matrix3 (id: 11);
+
+  // Base linear velocity covariance in world frame coordinates (m^2/s^2)
+  base_linear_velocity_cov: Matrix3 (id: 12);
+
+  // Base angular velocity covariance in world frame coordinates (rad^2/s^2)
+  base_angular_velocity_cov: Matrix3 (id: 13);
+
+  // IMU acceleration bias covariance in local imu frame coordinates (m^2/s^4)
+  imu_linear_acceleration_bias_cov: Matrix3 (id: 14);
+
+  // IMU gyro rate bias covariance in local imu frame coordinates (rad^2/s^2)
+  imu_angular_velocity_bias_cov: Matrix3 (id: 15);
+
+  // Contact positions in world frame coordinates (m)
+  contacts_position: [Vector3] (id: 16);
+
+  // Contact orientations in world frame coordinates (only for flat feet)
+  contacts_orientation: [Quaternion] (id: 17);
+
+  // Contact position covariances in world frame coordinates (m^2)
+  contacts_position_cov: [Matrix3] (id: 18);
+
+  // Contact orientation covariances in world frame coordinates (rad^2)
+  contacts_orientation_cov: [Matrix3] (id: 19);
+
+  // Feet positions in world frame coordinates (m)
+  feet_position: [Vector3] (id: 20);
+
+  // Feet orientations in world frame coordinates
+  feet_orientation: [Quaternion] (id: 21);
+
+  // Feet linear velocities in world frame coordinates (m/s)
+  feet_linear_velocity: [Vector3] (id: 22);
+
+  // Feet angular velocities in world frame coordinates (rad/s)
+  feet_angular_velocity: [Vector3] (id: 23);
+}
+
+root_type BaseState;

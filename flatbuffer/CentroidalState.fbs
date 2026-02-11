@@ -1,0 +1,32 @@
+include "Time.fbs";
+include "Vector3.fbs";
+
+namespace foxglove;
+
+table CentroidalState {
+  // Timestamp of the state (s)
+  timestamp:Time (id: 0);
+  
+  // 3D CoM position in world frame coordinates (m)
+  com_position: Vector3 (id: 1);
+  
+  // 3D CoM linear velocity in world frame coordinates (m/s)
+  com_linear_velocity: Vector3 (id: 2);
+  
+  // 3D External forces at the CoM in world frame coordinates (N)
+  external_forces: Vector3 (id: 3);
+  
+  // 3D COP position in world frame coordinates (m)
+  cop_position: Vector3 (id: 4);
+  
+  // 3D CoM linear acceleration in world frame coordinates (m/s^2)
+  com_linear_acceleration: Vector3 (id: 5);
+  
+  // 3D Angular momentum around the CoM in world frame coordinates (kg m^2/s)
+  angular_momentum: Vector3 (id: 6);
+  
+  // 3D Angular momentum derivative around the CoM in world frame coordinates (Nm)
+  angular_momentum_derivative: Vector3 (id: 7);
+}
+
+root_type CentroidalState;

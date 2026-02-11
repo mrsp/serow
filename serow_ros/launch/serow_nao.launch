@@ -1,0 +1,4 @@
+<launch>
+    <rosparam file="$(find serow_ros)/config/nao.yaml" command="load" />
+    <node name="serow_ros" pkg="serow_ros" type="serow_driver" output="screen" />
+</launch>

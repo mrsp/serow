@@ -1,0 +1,11 @@
+{
+  "Experiment": {
+    "type": "slope"
+  },
+  "Paths": {
+    "base_path": "/evaluation/mujoco_test/mujoco_data",
+    "data_file": "{base_path}/{type}/go2_data.mcap",
+    "prediction_file": "{base_path}/{type}/serow_predictions.mcap",
+    "elevation_map_file": "{base_path}/{type}/est_elevation_map.bin"
+  }
+}
