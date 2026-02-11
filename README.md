@@ -36,7 +36,7 @@ export SEROW_PATH=<path-to-serow-package>
 ```
 ## Prerequisites
 * [Eigen](https://eigen.tuxfamily.org/dox/index.html) 3.4.0 and later
-* [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 2.2.1 and later
+* [Pinocchio](https://github.com/stack-of-tasks/pinocchio) 3.0.0 and later
 * [json](https://github.com/nlohmann/json/tree/master)
 * [flatbuffers](https://github.com/google/flatbuffers)
 * cmake 3.16.3 and later
