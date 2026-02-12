@@ -280,6 +280,29 @@ if __name__ == "__main__":
             ax.grid(True)
             ax.legend(loc="upper right")
         axs5[3].set_xlabel("Time (s)")
+        
+        #--- Figure 6: Raw IMU Measurements (Diagnostic) ---
+        fig6, axs6 = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+        fig6.suptitle("Raw IMU Measurements")
+
+        # Plot Linear Acceleration
+        imu_acc = np.array(gt["acc"]) # Ensure this is a numpy array
+        axs6[0].plot(gt["ts"], imu_acc[:, 0], label="Acc X", alpha=0.7)
+        axs6[0].plot(gt["ts"], imu_acc[:, 1], label="Acc Y", alpha=0.7)
+        axs6[0].plot(gt["ts"], imu_acc[:, 2], label="Acc Z", alpha=0.7)
+        axs6[0].set_ylabel("Linear Acc (m/s²)")
+        axs6[0].legend(loc="upper right")
+        axs6[0].grid(True, alpha=0.3)
+
+        # Plot Angular Velocity
+        imu_gyr = np.array(gt["gyr"]) # Ensure this is a numpy array
+        axs6[1].plot(gt["ts"], imu_gyr[:, 0], label="Gyr X", alpha=0.7)
+        axs6[1].plot(gt["ts"], imu_gyr[:, 1], label="Gyr Y", alpha=0.7)
+        axs6[1].plot(gt["ts"], imu_gyr[:, 2], label="Gyr Z", alpha=0.7)
+        axs6[1].set_ylabel("Angular Vel (rad/s)")
+        axs6[1].set_xlabel("Time (s)")
+        axs6[1].legend(loc="upper right")
+        axs6[1].grid(True, alpha=0.3)
 
         plt.tight_layout()
         plt.show()
