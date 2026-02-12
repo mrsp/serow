@@ -1,9 +1,24 @@
 # Install mcap
+Use this repo to install mcap for cpp. 
+
 https://github.com/olympus-robotics/mcap_builder 
 
-Use this repo to install mcap for cpp. Compile and run the go2_mujoco_test
+
+# Install ZSTD compression from source
+```
+$ git clone https://github.com/facebook/zstd.git
+$ cd zstd
+$ cd build/cmake
+$ cmake .
+$ sudo make install
+```
+
+
+
+Compile and run the go2_mujoco_test
 
 ```
+$ cd serow/evaluation/mujoco_test/
 $ mkdir build 
 $ cd build && cmake ..
 $ make -j8
