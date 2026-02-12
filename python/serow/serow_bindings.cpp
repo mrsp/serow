@@ -659,7 +659,7 @@ PYBIND11_MODULE(serow, m) {
                                   "Extended Kalman Filter for humanoid robot state estimation")
         .def(py::init<>(), "Default constructor")
         .def("init", &serow::ContactEKF::init, py::arg("state"), py::arg("contacts_frame"),
-             py::arg("g"), py::arg("imu_rate"),
+             py::arg("g"), py::arg("imu_rate"), py::arg("eps") = 0.05,
              py::arg("use_imu_orientation") = false, py::arg("verbose") = false,
              "Initializes the EKF with the initial robot state and parameters")
         .def("predict", &serow::ContactEKF::predict, py::arg("state"), py::arg("imu"),

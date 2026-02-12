@@ -50,7 +50,7 @@ class LegOdometry {
         double freq{};        ///< Joint state nominal frequency
         double alpha1{};      ///< Alpha1 parameter
         double alpha3{};      ///< Alpha3 parameter
-        double eps{};         ///< Epsilon parameter
+        double eps{0.05};     ///< Epsilon parameter
     };
 
 private:

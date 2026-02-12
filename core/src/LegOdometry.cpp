@@ -108,16 +108,19 @@ void LegOdometry::estimate(
     std::optional<std::map<std::string, Eigen::Vector3d>> contact_torques) {
     const Eigen::Matrix3d Rwb = base_orientation.toRotationMatrix();
 
-    double den = params_.eps * params_.num_leg_ee;
-    std::map<std::string, double> force_weights;
+    double den = 0.0;
     for (const auto& [key, value] : contact_probabilities) {
         den += value;
     }
-
+    
+    std::map<std::string, double> force_weights;
     for (const auto& [key, value] : contact_probabilities) {
-        force_weights[key] = std::clamp((value + params_.eps) / den, 0.0, 1.0);
+        if (den > params_.eps) {
+            force_weights[key] = std::clamp(value/den, 0.0, 1.0);
+        } else {
+            force_weights[key] = 0.0;
+        }
     }
-
     // Compute base velocity kinematically assuming weighted-average contact is stationary
     // This is self-contained and doesn't depend on external velocity estimates
     Eigen::Vector3d base_linear_velocity_kinematic = Eigen::Vector3d::Zero();

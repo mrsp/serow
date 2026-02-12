@@ -748,8 +748,7 @@ void Serow::runContactEstimator(
     if (!ft.empty()) {
         std::map<std::string, Eigen::Vector3d> contacts_force;
         std::map<std::string, Eigen::Vector3d> contacts_torque;
-        double den = state.num_leg_ee_ * params_.eps;
-
+        double den = 0.0;
         for (const auto& frame : state.getContactsFrame()) {
             state.contact_state_.timestamp = ft.at(frame).timestamp;
 
@@ -793,9 +792,13 @@ void Serow::runContactEstimator(
             den /= state.num_leg_ee_;
             for (const auto& frame : state.getContactsFrame()) {
                 // Use std::clamp for bounds checking
+                if (den > params_.eps) {
                 state.contact_state_.contacts_probability[frame] = std::clamp(
-                    (contact_estimators_.at(frame).getContactForce() + params_.eps) / den, 0.0,
-                    1.0);
+                        contact_estimators_.at(frame).getContactForce() / den, 0.0,
+                        1.0);
+                } else {
+                    state.contact_state_.contacts_probability[frame] = 0.0;
+                }
             }
         } else if (contacts_probability) {
             state.contact_state_.contacts_probability = std::move(contacts_probability.value());
@@ -854,7 +857,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
             terrain_height += cp * (T_world_to_base * state.base_state_.contacts_position.at(cf)).z();
         }
 
-        if (den > 0.0) {
+        if (den > params_.eps) {
             terrain_height /= den;
 
             // Initialize terrain elevation mapper
@@ -1476,7 +1479,7 @@ void Serow::reset() {
 
     // Initialize the base and CoM estimators
     base_estimator_.init(state_.base_state_, state_.getContactsFrame(), params_.g, params_.imu_rate, 
-                         params_.use_imu_orientation, params_.verbose);
+                         params_.eps, params_.use_imu_orientation, params_.verbose);
 
     com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                         params_.force_torque_rate);
@@ -1567,7 +1570,7 @@ void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicM
             den += cp;
         }
 
-        if (den > 0) {
+        if (den > params_.eps) {
             terrain_height /= den;
             // Initialize terrain elevation mapper
             if (params_.terrain_estimator_type == "naive") {

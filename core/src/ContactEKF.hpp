@@ -55,11 +55,12 @@ public:
      * @param contacts_frame Set of contact frame names.
      * @param g Acceleration due to gravity.
      * @param imu_rate IMU update rate.
+     * @param eps Minimum contact probability to update the state with kinematics.
      * @param use_imu_orientation Flag indicating if IMU orientation is used during the update step.
      * @param verbose Flag indicating if verbose output should be enabled.
      */
     void init(const BaseState& state, std::set<std::string> contacts_frame, double g, 
-              double imu_rate, bool use_imu_orientation = false, bool verbose = false);
+              double imu_rate, double eps = 0.05, bool use_imu_orientation = false, bool verbose = false);
     /**
      * @brief Predicts the robot's state forward based on IMU.
      * @param state Current state of the robot.
@@ -109,6 +110,7 @@ private:
     std::set<std::string> contacts_frame_;  ///< Set of contact frame names.
     double nominal_dt_{};                   ///< Nominal sampling time for prediction step.
     Eigen::Vector3d g_;                     ///< Gravity vector.
+    double eps_{0.05};                      ///< Minimum contact probability to update the state with kinematics.
     // State indices
     Eigen::Array3i v_idx_;   ///< Indices for velocity state variables.
     Eigen::Array3i r_idx_;   ///< Indices for orientation state variables.
