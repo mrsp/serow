@@ -17,9 +17,10 @@
 namespace serow {
 
 void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame,
-                      double g, double imu_rate, bool use_imu_orientation, bool verbose) {
+                      double g, double imu_rate, double eps, bool use_imu_orientation, bool verbose) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
+    eps_ = eps;
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
     num_states_ = 15;
     num_inputs_ = 12;
@@ -329,8 +330,15 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
     if (use_imu_orientation_) {
         updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov);
     }
-
-    updateWithBaseLinearVelocity(state, kin.base_linear_velocity, kin.base_linear_velocity_cov);
+   
+    // Update the state with the absolute base linear velocity computed with leg kinematics only if there is contact
+    double den = 0.0;
+    for (const auto& [cf, cp] : kin.contacts_probability) {
+        den += cp;
+    }
+    if (den > eps_) {
+        updateWithBaseLinearVelocity(state, kin.base_linear_velocity, kin.base_linear_velocity_cov);
+    }
 
     if (odom.has_value()) {
         updateWithOdometry(state, odom->base_position, odom->base_orientation,

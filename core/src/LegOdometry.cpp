@@ -112,13 +112,14 @@ void LegOdometry::estimate(
     for (const auto& [key, value] : contact_probabilities) {
         den += value;
     }
-    if (den < 1e-6) {
-        return;
-    }
     
     std::map<std::string, double> force_weights;
     for (const auto& [key, value] : contact_probabilities) {
-        force_weights[key] = value/den;
+        if (den > params_.eps) {
+            force_weights[key] = std::clamp(value/den, 0.0, 1.0);
+        } else {
+            force_weights[key] = 0.0;
+        }
     }
     // Compute base velocity kinematically assuming weighted-average contact is stationary
     // This is self-contained and doesn't depend on external velocity estimates

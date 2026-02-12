@@ -225,7 +225,7 @@ private:
         Eigen::Vector3d initial_com_linear_velocity_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for the external forces acting on the CoM (N)
         Eigen::Vector3d initial_external_forces_cov{Eigen::Vector3d::Zero()};
-        double eps{0.1};
+        double eps{0.05};
         /// @brief rigid body transformation from optional exteroceptive (visual/lidar odometry) to
         /// base frame. Is not specified if no exteroceptive odometry is provided
         Eigen::Isometry3d T_base_to_odom{Eigen::Isometry3d::Identity()};
