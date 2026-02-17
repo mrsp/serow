@@ -153,7 +153,7 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
                 "/serow/" + contact_frame + "/contact/probability", 10);
     }
     odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(
-        "/serow/" + state->getBaseFrame() + "/odom", 10);
+        "/serow/odom", 10);
     joint_state_publisher_ =
         this->create_publisher<sensor_msgs::msg::JointState>("/serow/joint_states", 10);
 

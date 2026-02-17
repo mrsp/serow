@@ -1,0 +1,11 @@
+robot_name: "spot"
+path_to_serow_library: "/usr/local/lib"
+topics:
+  joint_states: "/spot/joint_states"
+  imu: "/spot/imu"
+  force_torque_states:
+    - "/spot/front_left_foot/force_torque_states"
+    - "/spot/front_right_foot/force_torque_states"
+    - "/spot/hind_left_foot/force_torque_states"
+    - "/spot/hind_right_foot/force_torque_states"
+serow_config: "spot.json" 

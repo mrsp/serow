@@ -761,7 +761,7 @@ void Serow::runContactEstimator(
                 state.base_state_.base_orientation.toRotationMatrix();
             contacts_force[frame].noalias() =
                 R_world_to_base * R_foot_to_base * R_foot_to_force * frame_force;
-
+ 
             // Process torque if not point feet
             if (!state.isPointFeet()) {
                 if (ft.count(frame) > 0 && ft.at(frame).torque.has_value()) {
@@ -782,7 +782,7 @@ void Serow::runContactEstimator(
                     contact_estimators_.at(frame).setState(
                         state.contact_state_.contacts_force.at(frame).z());
                 }
-                contact_estimators_.at(frame).run(contacts_force.at(frame).z());
+                contact_estimators_.at(frame).run(ft.at(frame).force.z());
                 den += contact_estimators_.at(frame).getContactForce();
             }
         }
