@@ -60,6 +60,11 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     for (const auto& topic : config["topics"]["force_torque_states"]) {
         force_torque_state_topics_.push_back(topic.as<std::string>());
     }
+    const std::string& ground_truth_topic = config["topics"]["ground_truth"].as<std::string>();
+    if (!ground_truth_topic.empty()) {
+        ground_truth_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>(
+            ground_truth_topic, 10, std::bind(&SerowRos2::groundTruthCallback, this, _1));
+    }
     const std::string& serow_config = config["serow_config"].as<std::string>();
 
     RCLCPP_INFO(this->get_logger(), "Robot name: %s", robot_name.c_str());
@@ -156,6 +161,10 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
         "/serow/odom", 10);
     joint_state_publisher_ =
         this->create_publisher<sensor_msgs::msg::JointState>("/serow/joint_states", 10);
+    if  (!ground_truth_topic.empty()) {
+        ground_truth_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(
+            "/serow/ground_truth", 10);
+    }
 
     // Start the publishing thread
     publishing_thread_ = std::thread(&SerowRos2::publish, this);
@@ -237,14 +246,38 @@ void SerowRos2::run() {
         }
     }
 
+    std::optional<serow::BasePoseGroundTruth> ground_truth_pose = std::nullopt;
+    if (first_ground_truth_odometry_.has_value()) {
+        std::lock_guard<std::mutex> lock(ground_truth_data_mutex_); 
+        const auto& ground_truth_odometry = ground_truth_odometry_buffer_.get(imu_measurement.timestamp, ft_max_time_diff_);
+        if (ground_truth_odometry.has_value()) {
+            serow::BasePoseGroundTruth gt;
+            gt.timestamp = ground_truth_odometry.value().timestamp;
+            gt.position = ground_truth_odometry.value().base_position;
+            gt.orientation = ground_truth_odometry.value().base_orientation;
+            ground_truth_pose = std::move(gt);
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Failed to get ground truth odometry at timestamp: %f", imu_measurement.timestamp);
+            const auto& time_range = ground_truth_odometry_buffer_.getTimeRange();
+            if (time_range) {
+                RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "Time range: not available");
+            }
+        }
+    }
+
     serow_.filter(imu_measurement, joint_measurements, 
-                  synchronized_ft_measurements.size() == force_torque_state_topics_.size() ? std::make_optional(synchronized_ft_measurements) : std::nullopt);
+                  synchronized_ft_measurements.size() == force_torque_state_topics_.size() ? std::make_optional(synchronized_ft_measurements) : std::nullopt,
+                  std::nullopt,
+                  std::nullopt,
+                  ground_truth_pose);
     const auto& state = serow_.getState();
     if (state) {
         // Queue the state for publishing instead of publishing directly to not block the main thread
         {
             std::lock_guard<std::mutex> lock(publish_queue_mutex_);
-            publish_queue_.push(state.value());
+            publish_queue_.push(std::make_pair(state.value(), ground_truth_pose));
 
             // Keep only the latest state to avoid queue buildup
             while (publish_queue_.size() > 1) {
@@ -267,7 +300,7 @@ void SerowRos2::publish() {
 
         // Process all queued states
         while (!publish_queue_.empty()) {
-            auto state = publish_queue_.front();
+            auto [state, gt] = publish_queue_.front();
             publish_queue_.pop();
             lock.unlock();
 
@@ -277,6 +310,9 @@ void SerowRos2::publish() {
                 publishBaseState(state);
                 publishCentroidState(state);
                 publishContactState(state);
+                if (gt.has_value()) {
+                    publishGroundTruth(gt.value(), state.getBaseFrame());
+                }
             } catch (const std::exception& e) {
                 RCLCPP_ERROR(this->get_logger(), "Error publishing state: %s", e.what());
             }
@@ -284,6 +320,21 @@ void SerowRos2::publish() {
             lock.lock();
         }
     }
+}
+
+void SerowRos2::publishGroundTruth(const serow::BasePoseGroundTruth& gt, const std::string& frame_id) {
+    auto ground_truth_msg = nav_msgs::msg::Odometry();
+    ground_truth_msg.header.stamp = rclcpp::Time(gt.timestamp);
+    ground_truth_msg.header.frame_id = "world";
+    ground_truth_msg.child_frame_id = frame_id;
+    ground_truth_msg.pose.pose.position.x = gt.position.x();
+    ground_truth_msg.pose.pose.position.y = gt.position.y();
+    ground_truth_msg.pose.pose.position.z = gt.position.z();
+    ground_truth_msg.pose.pose.orientation.x = gt.orientation.x();
+    ground_truth_msg.pose.pose.orientation.y = gt.orientation.y();
+    ground_truth_msg.pose.pose.orientation.z = gt.orientation.z();
+    ground_truth_msg.pose.pose.orientation.w = gt.orientation.w();
+    ground_truth_publisher_->publish(ground_truth_msg);
 }
 
 void SerowRos2::publishJointState(const serow::State& state) {
@@ -482,4 +533,19 @@ void SerowRos2::jointStateAndBaseImuCallback(const sensor_msgs::msg::JointState:
     std::lock_guard<std::mutex> lock(joint_imu_data_mutex_);
     this->joint_state_data_ = *joint_state_msg;
     this->base_imu_data_ = *base_imu_msg;
+}
+
+void SerowRos2::groundTruthCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& ground_truth_msg) {
+    std::lock_guard<std::mutex> lock(ground_truth_data_mutex_);
+    serow::OdometryMeasurement ground_truth_odometry{};
+    ground_truth_odometry.timestamp = static_cast<double>(ground_truth_msg->header.stamp.sec) +
+        static_cast<double>(ground_truth_msg->header.stamp.nanosec) * 1e-9;
+    ground_truth_odometry.base_position = Eigen::Vector3d(ground_truth_msg->pose.pose.position.x, ground_truth_msg->pose.pose.position.y, ground_truth_msg->pose.pose.position.z);
+    ground_truth_odometry.base_orientation = Eigen::Quaterniond(ground_truth_msg->pose.pose.orientation.w, ground_truth_msg->pose.pose.orientation.x, ground_truth_msg->pose.pose.orientation.y, ground_truth_msg->pose.pose.orientation.z);
+    if (!first_ground_truth_odometry_.has_value()) {
+        first_ground_truth_odometry_ = ground_truth_odometry;
+    }
+    ground_truth_odometry.base_position = ground_truth_odometry.base_position - first_ground_truth_odometry_.value().base_position;
+    ground_truth_odometry.base_orientation = first_ground_truth_odometry_.value().base_orientation.inverse() * ground_truth_odometry.base_orientation;
+    ground_truth_odometry_buffer_.add(std::move(ground_truth_odometry));
 }

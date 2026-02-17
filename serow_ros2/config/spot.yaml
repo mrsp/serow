@@ -8,4 +8,5 @@ topics:
     - "/spot/front_right_foot/force_torque_states"
     - "/spot/hind_left_foot/force_torque_states"
     - "/spot/hind_right_foot/force_torque_states"
+  ground_truth: "/spot/ground_truth/odometry"
 serow_config: "spot.json" 

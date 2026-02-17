@@ -6,4 +6,5 @@ topics:
   force_torque_states:
     - "/force_torque_states/left"
     - "/force_torque_states/right"
+  ground_truth: ""
 serow_config: "valkyrie.json" 

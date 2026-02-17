@@ -8,4 +8,5 @@ topics:
     - "/force_torque_states/rf_foot"
     - "/force_torque_states/lh_foot"
     - "/force_torque_states/rh_foot"
+  ground_truth: ""
 serow_config: "anymal_b.json" 

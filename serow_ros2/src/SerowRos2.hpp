@@ -20,6 +20,7 @@
 #include <queue>
 #include <serow/Serow.hpp>
 #include <serow/ForceTorqueMeasurementBuffer.hpp>
+#include <serow/OdometryMeasurementBuffer.hpp>
 #include <thread>
 
 #include <geometry_msgs/msg/point_stamped.hpp>
@@ -53,7 +54,11 @@ private:
 
     void publishContactState(const serow::State& state);
 
+    void publishGroundTruth(const serow::BasePoseGroundTruth& gt, const std::string& frame_id);
+
     void jointStateAndBaseImuCallback(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state_msg, const sensor_msgs::msg::Imu::ConstSharedPtr& base_imu_msg);
+
+    void groundTruthCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& ground_truth_msg);
 
     serow::Serow serow_;
     // Publishers
@@ -63,6 +68,7 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr com_momentum_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr com_momentum_rate_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::WrenchStamped>::SharedPtr com_external_wrench_publisher_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr ground_truth_publisher_;
     std::map<std::string, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr>
         foot_odom_publishers_;
     std::map<std::string, rclcpp::Publisher<geometry_msgs::msg::WrenchStamped>::SharedPtr>
@@ -74,6 +80,7 @@ private:
     // Subscribers
     message_filters::Subscriber<sensor_msgs::msg::JointState> joint_state_subscriber_;
     message_filters::Subscriber<sensor_msgs::msg::Imu> base_imu_subscriber_;
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr ground_truth_subscriber_;
     
     std::shared_ptr<message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::JointState, sensor_msgs::msg::Imu>>> sync_;
 
@@ -85,6 +92,7 @@ private:
     std::optional<sensor_msgs::msg::Imu> base_imu_data_;
     std::optional<sensor_msgs::msg::JointState> joint_state_data_;
     std::map<std::string, serow::ForceTorqueMeasurementBuffer> ft_buffers_;
+    serow::OdometryMeasurementBuffer ground_truth_odometry_buffer_;
     std::vector<std::string> force_torque_state_topics_;
     std::map<std::string, std::string> ft_topic_to_frame_id_;
     double ft_max_time_diff_ = 0.1;  // Max time difference for F/T synchronization (default: 100ms)
@@ -92,9 +100,11 @@ private:
 
     // Threading components for asynchronous publishing
     std::thread publishing_thread_;
-    std::queue<serow::State> publish_queue_;
+    std::queue<std::pair<serow::State, std::optional<serow::BasePoseGroundTruth>>> publish_queue_;
     std::mutex publish_queue_mutex_;
     std::condition_variable publish_condition_;
     bool shutdown_requested_ = false;
     std::mutex joint_imu_data_mutex_;
+    std::mutex ground_truth_data_mutex_;
+    std::optional<serow::OdometryMeasurement> first_ground_truth_odometry_;
 };

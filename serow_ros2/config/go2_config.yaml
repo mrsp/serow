@@ -8,4 +8,5 @@ topics:
     - "/go2/LR/force_torque_states"
     - "/go2/RR/force_torque_states"
     - "/go2/RF/force_torque_states"
+  ground_truth: ""
 serow_config: "go2.json" 
