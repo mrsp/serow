@@ -12,8 +12,8 @@
     "g": 9.81,
     "joint_rate": 100.0,
     "estimate_joint_velocity": false,
-    "joint_position_variance": 1e-5,
-    "tau_0": 1.0,
+    "joint_position_variance": 1e-6,
+    "tau_0": 0.01,
     "tau_1": 0.0,
     "imu_rate": 100.0,
     "R_base_to_gyro": [
@@ -99,15 +99,15 @@
         ]
     },
     "R_foot_to_torque": null,
-    "attitude_estimator_proportional_gain": 0.5,
+    "attitude_estimator_proportional_gain": 0.1,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
-    "median_window": 1,
+    "median_window": 5,
     "convergence_cycles": 0,
     "imu_angular_velocity_covariance": [
-        1e-4,
-        1e-4,
-        1e-4
+        1e-5,
+        1e-5,
+        1e-5
     ],
     "imu_angular_velocity_bias_covariance": [
         1e-6,
@@ -120,9 +120,9 @@
         1e-3
     ],
     "imu_linear_acceleration_bias_covariance": [
-        1e-5,
-        1e-5,
-        1e-5
+        1e-6,
+        1e-6,
+        1e-6
     ],
     "com_position_process_covariance": [
         1e-6,
@@ -175,14 +175,14 @@
         1.0e-6
     ],
     "initial_com_position_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-6,
+        1.0e-6,
+        1.0e-6
     ],
     "initial_com_linear_velocity_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-1,
+        1.0e-1,
+        1.0e-1
     ],
     "initial_external_forces_covariance": [
         1.0,

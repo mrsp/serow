@@ -111,7 +111,7 @@ private:
     bool shutdown_requested_ = false;
     std::mutex joint_imu_data_mutex_;
     std::mutex ground_truth_data_mutex_;
-    std::optional<serow::OdometryMeasurement> first_ground_truth_odometry_;
+    std::optional<Eigen::Isometry3d> first_ground_truth_pose_;
     nav_msgs::msg::Path odom_path_msg_;
     nav_msgs::msg::Path gt_path_msg_;
     std::map<std::string, nav_msgs::msg::Path> foot_odom_path_msgs_;

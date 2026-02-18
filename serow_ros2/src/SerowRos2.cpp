@@ -257,7 +257,7 @@ void SerowRos2::run() {
     }
 
     std::optional<serow::BasePoseGroundTruth> ground_truth_pose = std::nullopt;
-    if (first_ground_truth_odometry_.has_value()) {
+    if (first_ground_truth_pose_.has_value()) {
         std::lock_guard<std::mutex> lock(ground_truth_data_mutex_); 
         const auto& ground_truth_odometry = ground_truth_odometry_buffer_.get(imu_measurement.timestamp, ft_max_time_diff_);
         if (ground_truth_odometry.has_value()) {
@@ -588,15 +588,23 @@ void SerowRos2::jointStateAndBaseImuCallback(const sensor_msgs::msg::JointState:
 
 void SerowRos2::groundTruthCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& ground_truth_msg) {
     std::lock_guard<std::mutex> lock(ground_truth_data_mutex_);
-    serow::OdometryMeasurement ground_truth_odometry{};
-    ground_truth_odometry.timestamp = static_cast<double>(ground_truth_msg->header.stamp.sec) +
-        static_cast<double>(ground_truth_msg->header.stamp.nanosec) * 1e-9;
-    ground_truth_odometry.base_position = Eigen::Vector3d(ground_truth_msg->pose.pose.position.x, ground_truth_msg->pose.pose.position.y, ground_truth_msg->pose.pose.position.z);
-    ground_truth_odometry.base_orientation = Eigen::Quaterniond(ground_truth_msg->pose.pose.orientation.w, ground_truth_msg->pose.pose.orientation.x, ground_truth_msg->pose.pose.orientation.y, ground_truth_msg->pose.pose.orientation.z);
-    if (!first_ground_truth_odometry_.has_value()) {
-        first_ground_truth_odometry_ = ground_truth_odometry;
+    const Eigen::Quaterniond q(ground_truth_msg->pose.pose.orientation.w, ground_truth_msg->pose.pose.orientation.x, ground_truth_msg->pose.pose.orientation.y, ground_truth_msg->pose.pose.orientation.z);
+    const Eigen::Vector3d p(ground_truth_msg->pose.pose.position.x, ground_truth_msg->pose.pose.position.y, ground_truth_msg->pose.pose.position.z);
+    Eigen::Isometry3d current_ground_truth_pose = Eigen::Isometry3d::Identity();
+    current_ground_truth_pose.linear() = q.toRotationMatrix();
+    current_ground_truth_pose.translation() = p;
+
+    if (!first_ground_truth_pose_.has_value()) {
+        first_ground_truth_pose_ = current_ground_truth_pose;
     }
-    ground_truth_odometry.base_position = ground_truth_odometry.base_position - first_ground_truth_odometry_.value().base_position;
-    ground_truth_odometry.base_orientation = first_ground_truth_odometry_.value().base_orientation.inverse() * ground_truth_odometry.base_orientation;
+
+    // Express current pose in the first pose's frame: origin at first position,
+
+    const Eigen::Isometry3d ground_truth_pose = first_ground_truth_pose_.value().inverse() * current_ground_truth_pose;
+
+    serow::OdometryMeasurement ground_truth_odometry;
+    ground_truth_odometry.timestamp = ground_truth_msg->header.stamp.sec + ground_truth_msg->header.stamp.nanosec * 1e-9;
+    ground_truth_odometry.base_position = ground_truth_pose.translation();
+    ground_truth_odometry.base_orientation = ground_truth_pose.linear();
     ground_truth_odometry_buffer_.add(std::move(ground_truth_odometry));
 }

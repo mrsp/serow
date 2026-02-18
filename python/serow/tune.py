@@ -102,9 +102,12 @@ def fn(x0, y0, z0, x1, y1, z1, jv):
     # Normalize and combine errors 
     normalized_position_error = position_error / successful_steps
     normalized_orientation_error = orientation_error / successful_steps
-    
+    error = normalized_position_error + normalized_orientation_error
+    if np.isnan(error) or np.isinf(error):
+        return -1e10
+
     # Return negative sum for maximization (BayesianOptimization maximizes)
-    return -(normalized_position_error + normalized_orientation_error)
+    return -error
 
 
 if __name__ == "__main__":
@@ -115,10 +118,10 @@ if __name__ == "__main__":
     pbounds = {'x0': (1e-6, 1e-4), 
                'y0': (1e-6, 1e-4), 
                'z0': (1e-6, 1e-4), 
-               'x1': (1e-4, 1e-2), 
-               'y1': (1e-4, 1e-2), 
-               'z1': (1e-4, 1e-2),
-               'jv' : (1e-5, 1e-3)}
+               'x1': (1e-6, 1e-3), 
+               'y1': (1e-6, 1e-3), 
+               'z1': (1e-6, 1e-3),
+               'jv' : (1e-6, 1e-3)}
 
     # 3. Initialize the optimizer
     optimizer = BayesianOptimization(
