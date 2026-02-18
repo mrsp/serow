@@ -10,3 +10,4 @@ topics:
     - "/force_torque_states/rh_foot"
   ground_truth: ""
 serow_config: "anymal_b.json" 
+publish_path: false

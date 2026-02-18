@@ -10,3 +10,5 @@ topics:
     - "/go2/RF/force_torque_states"
   ground_truth: ""
 serow_config: "go2.json" 
+publish_path: false
+

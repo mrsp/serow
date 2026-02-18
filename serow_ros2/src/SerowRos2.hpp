@@ -27,6 +27,7 @@
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <geometry_msgs/msg/wrench_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
@@ -63,14 +64,18 @@ private:
     serow::Serow serow_;
     // Publishers
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_publisher_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr odom_path_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr com_position_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr cop_position_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr com_momentum_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr com_momentum_rate_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::WrenchStamped>::SharedPtr com_external_wrench_publisher_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr ground_truth_publisher_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr ground_truth_path_publisher_;
     std::map<std::string, rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr>
         foot_odom_publishers_;
+    std::map<std::string, rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr>
+        foot_odom_path_publishers_;
     std::map<std::string, rclcpp::Publisher<geometry_msgs::msg::WrenchStamped>::SharedPtr>
         foot_wrench_publishers_;
     std::map<std::string, rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr>
@@ -107,4 +112,7 @@ private:
     std::mutex joint_imu_data_mutex_;
     std::mutex ground_truth_data_mutex_;
     std::optional<serow::OdometryMeasurement> first_ground_truth_odometry_;
+    nav_msgs::msg::Path odom_path_msg_;
+    nav_msgs::msg::Path gt_path_msg_;
+    std::map<std::string, nav_msgs::msg::Path> foot_odom_path_msgs_;
 };

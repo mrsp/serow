@@ -8,3 +8,4 @@ topics:
     - "/force_torque_states/right"
   ground_truth: ""
 serow_config: "valkyrie.json" 
+publish_path: false

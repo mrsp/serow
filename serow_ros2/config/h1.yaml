@@ -8,3 +8,5 @@ topics:
     - "/h1/right_ankle/force_torque_states"
   ground_truth: ""
 serow_config: "h1.json" 
+publish_path: false
+

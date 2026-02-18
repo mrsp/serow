@@ -67,6 +67,12 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Install RViz config
+install(FILES
+  share/serow_ros2.rviz
+  DESTINATION share/${PROJECT_NAME}
+)
+
 # Install launch files
 install(DIRECTORY
   launch

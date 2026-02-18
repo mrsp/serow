@@ -66,7 +66,8 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
             ground_truth_topic, 10, std::bind(&SerowRos2::groundTruthCallback, this, _1));
     }
     const std::string& serow_config = config["serow_config"].as<std::string>();
-
+    const bool publish_path = config["publish_path"].as<bool>();
+     
     RCLCPP_INFO(this->get_logger(), "Robot name: %s", robot_name.c_str());
     RCLCPP_INFO(this->get_logger(), "Serow config file: %s", serow_config.c_str());
 
@@ -156,6 +157,9 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
         foot_contact_probability_publishers_[contact_frame] =
             this->create_publisher<std_msgs::msg::Float64>(
                 "/serow/" + contact_frame + "/contact/probability", 10);
+        if (publish_path) {
+            foot_odom_path_publishers_[contact_frame] = this->create_publisher<nav_msgs::msg::Path>("/serow/" + contact_frame + "/odom/path", 10);
+        }
     }
     odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(
         "/serow/odom", 10);
@@ -164,6 +168,12 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     if  (!ground_truth_topic.empty()) {
         ground_truth_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(
             "/serow/ground_truth", 10);
+        if (publish_path) {
+            ground_truth_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/ground_truth/path", 10);
+        }
+    }
+    if (publish_path) {
+        odom_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/odom/path", 10);
     }
 
     // Start the publishing thread
@@ -335,6 +345,20 @@ void SerowRos2::publishGroundTruth(const serow::BasePoseGroundTruth& gt, const s
     ground_truth_msg.pose.pose.orientation.z = gt.orientation.z();
     ground_truth_msg.pose.pose.orientation.w = gt.orientation.w();
     ground_truth_publisher_->publish(ground_truth_msg);
+
+    if (ground_truth_path_publisher_) {
+        gt_path_msg_.header.stamp = ground_truth_msg.header.stamp;
+        gt_path_msg_.header.frame_id = "world";
+        // Handle a max size of 1000 poses by removing the oldest pose when the size is reached
+        if (gt_path_msg_.poses.size() >= 1000) {
+            gt_path_msg_.poses.erase(gt_path_msg_.poses.begin());
+        }
+        geometry_msgs::msg::PoseStamped pose_stamped;
+        pose_stamped.header = ground_truth_msg.header;
+        pose_stamped.pose = ground_truth_msg.pose.pose;
+        gt_path_msg_.poses.push_back(pose_stamped);
+        ground_truth_path_publisher_->publish(gt_path_msg_);
+    }
 }
 
 void SerowRos2::publishJointState(const serow::State& state) {
@@ -406,6 +430,20 @@ void SerowRos2::publishBaseState(const serow::State& state) {
     }
     odom_publisher_->publish(odom_msg);
 
+    if (odom_path_publisher_) {
+        odom_path_msg_.header.stamp = odom_msg.header.stamp;
+        odom_path_msg_.header.frame_id = "world";
+        // Handle a max size of 1000 poses by removing the oldest pose when the size is reached
+        if (odom_path_msg_.poses.size() >= 1000) {
+            odom_path_msg_.poses.erase(odom_path_msg_.poses.begin());
+        }
+        geometry_msgs::msg::PoseStamped pose_stamped;
+        pose_stamped.header = odom_msg.header;
+        pose_stamped.pose = odom_msg.pose.pose;
+        odom_path_msg_.poses.push_back(pose_stamped);
+        odom_path_publisher_->publish(odom_path_msg_);
+    }
+
     const auto& contact_frames = state.getContactsFrame();
     for (const auto& contact_frame : contact_frames) {
         const Eigen::Vector3d& foot_position = state.getFootPosition(contact_frame);
@@ -431,6 +469,19 @@ void SerowRos2::publishBaseState(const serow::State& state) {
         odom_msg.twist.twist.angular.y = foot_angular_velocity.y();
         odom_msg.twist.twist.angular.z = foot_angular_velocity.z();
         foot_odom_publishers_[contact_frame]->publish(odom_msg);
+        if (foot_odom_path_publishers_[contact_frame]) {
+            foot_odom_path_msgs_[contact_frame].header.stamp = odom_msg.header.stamp;
+            foot_odom_path_msgs_[contact_frame].header.frame_id = "world";
+            // Handle a max size of 1000 poses by removing the oldest pose when the size is reached
+            if (foot_odom_path_msgs_[contact_frame].poses.size() >= 1000) {
+                foot_odom_path_msgs_[contact_frame].poses.erase(foot_odom_path_msgs_[contact_frame].poses.begin());
+            }
+            geometry_msgs::msg::PoseStamped pose_stamped;
+            pose_stamped.header = odom_msg.header;
+            pose_stamped.pose = odom_msg.pose.pose;
+            foot_odom_path_msgs_[contact_frame].poses.push_back(pose_stamped);
+            foot_odom_path_publishers_[contact_frame]->publish(foot_odom_path_msgs_[contact_frame]);
+        }
     }
 }
 
