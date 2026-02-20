@@ -1,0 +1,25 @@
+{
+  "Target": {
+    "robot": "g1",
+    "experiment": "straight"
+  },
+  "Paths": {
+    "base_path": "evaluation/mujoco_test/humanoid/mujoco_data",
+    "data_file": "{base_path}/{full_exp}/robot_data.mcap",
+    "prediction_file": "{base_path}/{full_exp}/serow_predictions.mcap"
+  },
+  "RobotDatabase": {
+    "g1": {
+      "contact_map": {
+        "left": "left_ankle_roll_link",
+        "right": "right_ankle_roll_link"
+      }
+    },
+    "h1": {
+      "contact_map": {
+        "left": "left_ankle_link",
+        "right": "right_ankle_link"
+      }
+    }
+  }
+}

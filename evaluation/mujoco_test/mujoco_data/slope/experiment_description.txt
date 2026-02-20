@@ -1,5 +1,0 @@
-1. Stands still 3 secs
-2. Starts trot ~2-3 secs
-3. Starts walking in +x with constant speed
-4. Climbs a slope
-5. Stops at the top for ~2 secs
