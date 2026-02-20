@@ -67,7 +67,8 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     }
     const std::string& serow_config = config["serow_config"].as<std::string>();
     const bool publish_path = config["publish_path"].as<bool>();
-     
+    add_gravity_to_imu_ = config["add_gravity_to_imu"].as<bool>();
+
     RCLCPP_INFO(this->get_logger(), "Robot name: %s", robot_name.c_str());
     RCLCPP_INFO(this->get_logger(), "Serow config file: %s", serow_config.c_str());
 
@@ -214,10 +215,11 @@ void SerowRos2::run() {
 
     // Create the joint measurements
     std::map<std::string, serow::JointMeasurement> joint_measurements;
+    double joint_state_timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
+        static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
     for (size_t i = 0; i < joint_state_data.name.size(); i++) {
         serow::JointMeasurement joint{};
-        joint.timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
-            static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
+        joint.timestamp = joint_state_timestamp;
         joint.position = joint_state_data.position[i];
         if (!joint_state_data.velocity.empty()) {
             joint.velocity = joint_state_data.velocity[i];
@@ -226,12 +228,17 @@ void SerowRos2::run() {
     }
 
     // Create the base imu measurement
-    serow::ImuMeasurement imu_measurement{};
-    imu_measurement.timestamp = static_cast<double>(imu_data.header.stamp.sec) +
+    double imu_timestamp = static_cast<double>(imu_data.header.stamp.sec) +
         static_cast<double>(imu_data.header.stamp.nanosec) * 1e-9;
+    serow::ImuMeasurement imu_measurement{};
+    imu_measurement.timestamp = imu_timestamp;
     imu_measurement.linear_acceleration =
         Eigen::Vector3d(imu_data.linear_acceleration.x, imu_data.linear_acceleration.y,
                         imu_data.linear_acceleration.z);
+    if (add_gravity_to_imu_) {
+        const Eigen::Matrix3d R_imu_to_world = Eigen::Quaterniond(imu_data.orientation.w, imu_data.orientation.x, imu_data.orientation.y, imu_data.orientation.z).toRotationMatrix();
+        imu_measurement.linear_acceleration = R_imu_to_world.transpose() * (R_imu_to_world * imu_measurement.linear_acceleration + Eigen::Vector3d(0.0, 0.0, 9.81));
+    }
     imu_measurement.angular_velocity = Eigen::Vector3d(
         imu_data.angular_velocity.x, imu_data.angular_velocity.y, imu_data.angular_velocity.z);
     
@@ -599,7 +606,6 @@ void SerowRos2::groundTruthCallback(const nav_msgs::msg::Odometry::ConstSharedPt
     }
 
     // Express current pose in the first pose's frame: origin at first position,
-
     const Eigen::Isometry3d ground_truth_pose = first_ground_truth_pose_.value().inverse() * current_ground_truth_pose;
 
     serow::OdometryMeasurement ground_truth_odometry;

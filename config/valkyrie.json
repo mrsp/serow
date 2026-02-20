@@ -9,10 +9,10 @@
     "model_path": "valkyrie.urdf",
     "g": 9.81,
     "joint_rate": 500.0,
-    "estimate_joint_velocity": false,
-    "joint_position_variance": 0.001,
+    "estimate_joint_velocity": true,
+    "joint_position_variance": 1e-6,
     "tau_0": 1.0,
-    "tau_1": 0.01,
+    "tau_1": 0.001,
     "imu_rate": 500.0,
     "R_base_to_gyro": [
         1.0,
@@ -101,27 +101,27 @@
     "attitude_estimator_proportional_gain": 0.02,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
-    "median_window": 15,
+    "median_window": 11,
     "convergence_cycles": 0,
     "imu_angular_velocity_covariance": [
-        0.04,
-        0.04,
-        0.04
+        0.0004,
+        0.0004,
+        0.0004
     ],
     "imu_angular_velocity_bias_covariance": [
-        0.001754269,
-        0.001754269,
-        0.001754269
+        1e-7,
+        1e-7,
+        1e-7
     ],
     "imu_linear_acceleration_covariance": [
-        0.289,
-        0.289,
-        0.289
+        0.001,
+        0.001,
+        0.001
     ],
     "imu_linear_acceleration_bias_covariance": [
-        0.025,
-        0.025,
-        0.025
+        1e-6,
+        1e-6,
+        1e-6
     ],
     "com_position_process_covariance": [
         1e-6,
@@ -174,14 +174,14 @@
         1.0e-3
     ],
     "initial_com_position_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-6,
+        1.0e-6,
+        1.0e-6
     ],
     "initial_com_linear_velocity_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-3,
+        1.0e-3,
+        1.0e-3
     ],
     "initial_external_forces_covariance": [
         1.0,
@@ -206,12 +206,12 @@
         0.0,
         1.0
     ],
-    "enable_terrain_estimation": false,
+    "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
-    "minimum_terrain_height_variance": 1e-3,
-    "maximum_contact_points": 2,
-    "maximum_recenter_distance": 0.45,
-    "minimum_contact_probability": 0.25,
+    "minimum_terrain_height_variance": 1e-8,
+    "maximum_contact_points": 4,
+    "maximum_recenter_distance": 0.6,
+    "minimum_contact_probability": 0.15,
     "T_base_to_ground_truth": null,
     "log_data": true,
     "log_measurements": true,

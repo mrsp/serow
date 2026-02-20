@@ -17,9 +17,10 @@
 namespace serow {
 
 void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame,
-                      double g, double imu_rate, double eps, bool use_imu_orientation, bool verbose) {
+                      double g, double imu_rate, double eps, bool point_feet, bool use_imu_orientation, bool verbose) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
+    point_feet_ = point_feet;
     eps_ = eps;
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
     num_states_ = 15;
@@ -311,8 +312,25 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                 // Transform measurement noise to world frame
                 const Eigen::Matrix3d con_cov = T_world_to_base.linear() *
                     kin.contacts_position_noise.at(cf) * T_world_to_base.linear().transpose();
+
+                std::optional<std::array<float, 3>> normal = std::nullopt;
+                if (!point_feet_ && kin.contacts_orientation.has_value() && kin.contacts_orientation.value().count(cf) > 0) {
+                    const Eigen::Matrix3d& R_world_to_base = T_world_to_base.linear();
+                    const Eigen::Vector3d n_contact = (R_world_to_base * kin.contacts_orientation.value().at(cf).toRotationMatrix() * Eigen::Vector3d::UnitZ()).normalized();
+                    // Compute the angular velocity of the leg end-effector in contact
+                    const Eigen::Vector3d omega_contact = R_world_to_base * kin.base_to_foot_angular_velocities.at(cf) + state.base_angular_velocity;
+                    // Compute the linear velocity of the leg end-effector in contact
+                    const Eigen::Vector3d p_base_to_leg = R_world_to_base * kin.base_to_foot_positions.at(cf);
+                    const Eigen::Vector3d v_contact = state.base_linear_velocity + 
+                        state.base_angular_velocity.cross(p_base_to_leg) +
+                        R_world_to_base * kin.base_to_foot_linear_velocities.at(cf);
+                    // Update the terrain elevation with a plane contact if the leg in contact is stable
+                    if (cp > 0.85 && omega_contact.norm() < 0.01 && v_contact.norm() < 0.01) {
+                        normal = {static_cast<float>(n_contact.x()), static_cast<float>(n_contact.y()), static_cast<float>(n_contact.z())};
+                    } 
+                }
                 if (!terrain_estimator->update(con_pos_xy, con_pos_z,
-                                               static_cast<float>((con_cov(2, 2) + 1e-6) / cp))) {
+                                               static_cast<float>((con_cov(2, 2) + 1e-6) / cp), normal)) {
                     std::cout << "Contact for " << cf
                               << " is not inside the terrain elevation map and thus height is not "
                                  "updated "

@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace serow {
 
@@ -66,9 +67,9 @@ inline std::string findFilepath(const std::string& filename) {
     return result;
 }
 
-constexpr float resolution = 0.01;
+constexpr float resolution = 0.02;
 constexpr float resolution_inv = 1.0 / resolution;
-constexpr float radius = 0.05;
+constexpr float radius = 0.20;
 constexpr int radius_cells = static_cast<int>(radius * resolution_inv) + 1;
 constexpr int map_dim = 512;                 // 2^7
 constexpr int half_map_dim = map_dim / 2;    // 2^6
@@ -119,7 +120,8 @@ public:
                                     const size_t max_contact_points = 4,
                                     const float min_contact_probability = 0.15) = 0;
 
-    virtual bool update(const std::array<float, 2>& loc, float height, float variance) = 0;
+    virtual bool update(const std::array<float, 2>& loc, float height, float variance,
+                        std::optional<std::array<float, 3>> normal = std::nullopt) = 0;
 
     virtual bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation) = 0;
 
@@ -215,7 +217,7 @@ public:
 
         // Interpolate using inverse distance weighting
         const float step = resolution;
-        const float power = 2.0f;  // Power parameter for IDW
+        const float power = 5.0f;  // Power parameter for IDW
 
         for (float x = min_x; x <= max_x; x += step) {
             for (float y = min_y; y <= max_y; y += step) {
@@ -274,9 +276,9 @@ public:
             }
         }
 
-        // Remove the oldest two contact points
-        contact_points_.pop_back();
-        contact_points_.pop_back();
+        if (!contact_points_.empty()) {
+            contact_points_.pop_back();
+        }
     }
 
 protected:

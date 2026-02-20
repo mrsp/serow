@@ -203,7 +203,8 @@ int LocalTerrainMapper::globalIndexToHashId(const std::array<int, 2>& id_g) cons
     return localIndexToHashId(globalIndexToLocalIndex(id_g));
 }
 
-bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, float variance) {
+bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, float variance, 
+                                std::optional<std::array<float, 3>> normal) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!inside(loc)) {
@@ -236,22 +237,51 @@ bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, f
     cell.height = prior_height + kalman_gain * (height - prior_height);
     cell.variance = (1.0f - kalman_gain) * effective_prior_variance;
 
-    // Process a square region centered on the robot
-    for (int di = -radius_cells; di <= radius_cells; ++di) {
-        for (int dj = -radius_cells; dj <= radius_cells; ++dj) {
-            if (di == 0 && dj == 0) {
-                continue;
-            }
+    // Process a region around the contact point 
+    int rc = radius_cells;
+    float nx_over_nz = 0.0f;
+    float ny_over_nz = 0.0f;
+    if (normal.has_value()) {
+        rc = radius_cells * 2;
+        nx_over_nz = normal.value()[0] / normal.value()[2];
+        ny_over_nz = normal.value()[1] / normal.value()[2];
+    }
+
+    const float d_max = rc * resolution;
+    const float dist_variance_gain_ = 100.0f / (d_max * d_max);
+    for (int di = -rc; di <= rc; ++di) {
+        for (int dj = -rc; dj <= rc; ++dj) {
+            if (di == 0 && dj == 0) continue;
+    
             const std::array<int, 2> idx = {center_idx[0] + di, center_idx[1] + dj};
-            if (!inside(idx)) {
-                continue;
-            }
-            const auto hash_id = globalIndexToHashId(idx);
-            if (hash_id >= 0 && hash_id < static_cast<int>(elevation_.size())) {
-                elevation_[hash_id] = cell;
-            }
+            if (!inside(idx)) continue;
+    
+            const std::array<int, 2> local_idx = globalIndexToLocalIndex(idx);
+            const int hash_id = localIndexToHashId(local_idx);
+            if (hash_id < 0 || hash_id >= map_size) continue;
+    
+            const std::array<float, 2> cell_xy = globalIndexToLocation(idx);
+            const float dx = cell_xy[0] - loc[0];
+            const float dy = cell_xy[1] - loc[1];
+            const float dist2 = dx * dx + dy * dy;
+    
+            // Inflate measurement variance with distance (e.g. exponential or linear)
+            const float sigma_scale = 1.0f + dist_variance_gain_ * dist2;
+            const float neighbor_meas_variance = variance * sigma_scale;
+    
+            // Compute predicted height 
+            const float predicted_height = cell.height - nx_over_nz * dx - ny_over_nz * dy;
+    
+            // Run a proper Kalman update on the neighbor cell
+            ElevationCell& neighbor = elevation_[hash_id];
+            const float S = neighbor.variance + neighbor_meas_variance;
+            const float K = neighbor.variance / S;
+            neighbor.height   = neighbor.height + K * (predicted_height - neighbor.height);
+            neighbor.variance = (1.0f - K) * neighbor.variance;
+            neighbor.updated  = true;
         }
     }
+    
     return true;
 }
 

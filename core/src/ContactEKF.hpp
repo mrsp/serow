@@ -56,11 +56,12 @@ public:
      * @param g Acceleration due to gravity.
      * @param imu_rate IMU update rate.
      * @param eps Minimum contact probability to update the state with kinematics.
+     * @param point_feet Flag indicating if the feet are point contacts.
      * @param use_imu_orientation Flag indicating if IMU orientation is used during the update step.
      * @param verbose Flag indicating if verbose output should be enabled.
      */
     void init(const BaseState& state, std::set<std::string> contacts_frame, double g, 
-              double imu_rate, double eps = 0.05, bool use_imu_orientation = false, bool verbose = false);
+              double imu_rate, double eps = 0.05, bool point_feet = true, bool use_imu_orientation = false, bool verbose = false);
     /**
      * @brief Predicts the robot's state forward based on IMU.
      * @param state Current state of the robot.
@@ -132,7 +133,8 @@ private:
     Eigen::Matrix<double, 15, 12> Lc_;
 
     OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
-
+  
+    bool point_feet_{};  ///< Flag indicating if the robot has point feet.
     bool verbose_{};  ///< Flag indicating if verbose output is enabled.
     bool use_imu_orientation_{};  ///< Flag indicating if IMU orientation is used during the update step.
 

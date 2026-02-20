@@ -9,3 +9,4 @@ topics:
   ground_truth: ""
 serow_config: "valkyrie.json" 
 publish_path: false
+add_gravity_to_imu: true

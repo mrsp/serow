@@ -115,4 +115,5 @@ private:
     nav_msgs::msg::Path odom_path_msg_;
     nav_msgs::msg::Path gt_path_msg_;
     std::map<std::string, nav_msgs::msg::Path> foot_odom_path_msgs_;
+    bool add_gravity_to_imu_ = false;
 };

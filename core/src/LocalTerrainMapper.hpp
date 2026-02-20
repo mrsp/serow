@@ -65,7 +65,8 @@ public:
                             const size_t max_contact_points = 4,
                             const float min_contact_probability = 0.15) override;
 
-    bool update(const std::array<float, 2>& loc, float height, float variance) override;
+    bool update(const std::array<float, 2>& loc, float height, float variance,
+                std::optional<std::array<float, 3>> normal = std::nullopt) override;
 
     bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation) override;
 

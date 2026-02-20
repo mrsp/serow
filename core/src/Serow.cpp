@@ -782,7 +782,7 @@ void Serow::runContactEstimator(
                     contact_estimators_.at(frame).setState(
                         state.contact_state_.contacts_force.at(frame).z());
                 }
-                contact_estimators_.at(frame).run(ft.at(frame).force.z());
+                contact_estimators_.at(frame).run(contacts_force.at(frame).z());
                 den += contact_estimators_.at(frame).getContactForce();
             }
         }
@@ -1153,20 +1153,19 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     const double imu_timestamp = imu.timestamp;
     const double joint_timestamp = joints.begin()->second.timestamp;
 
-    if (imu_timestamp < last_imu_timestamp_ || abs(imu_timestamp - last_imu_timestamp_) < 1e-6) {
+    if (imu_timestamp < last_imu_timestamp_) {
         std::cerr << "IMU measurements are out of order, skipping filtering" << std::endl;
         timers_["total-time"].stop();
         return false;
     }
 
-    if (joint_timestamp < last_joint_timestamp_ ||
-        abs(joint_timestamp - last_joint_timestamp_) < 1e-6) {
+    if (joint_timestamp < last_joint_timestamp_) {
         std::cerr << "Joint measurements are out of order, skipping filtering" << std::endl;
         timers_["total-time"].stop();
         return false;
     }
 
-    if (abs(imu_timestamp - joint_timestamp) > 1e-3) {
+    if (abs(imu_timestamp - joint_timestamp) > 5e-3) {
         std::cerr << "IMU and joint timestamps are not synchronized, skipping filtering"
                   << std::endl;
         timers_["total-time"].stop();
@@ -1479,7 +1478,7 @@ void Serow::reset() {
 
     // Initialize the base and CoM estimators
     base_estimator_.init(state_.base_state_, state_.getContactsFrame(), params_.g, params_.imu_rate, 
-                         params_.eps, params_.use_imu_orientation, params_.verbose);
+                         params_.eps, params_.point_feet, params_.use_imu_orientation, params_.verbose);
 
     com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                         params_.force_torque_rate);
