@@ -27,8 +27,10 @@ class TerrainElevationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize both implementations with the same parameters
-        terrain.initializeLocalMap(initial_height, initial_variance, min_variance);
-        naive_terrain.initializeLocalMap(initial_height, initial_variance, min_variance);
+        TerrainElevation::Params params;
+        params.min_variance = min_variance;
+        terrain.initializeLocalMap(initial_height, initial_variance, params);
+        naive_terrain.initializeLocalMap(initial_height, initial_variance, params);
     }
 
     // Test parameters

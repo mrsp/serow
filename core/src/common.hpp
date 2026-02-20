@@ -67,15 +67,6 @@ inline std::string findFilepath(const std::string& filename) {
     return result;
 }
 
-constexpr float resolution = 0.02;
-constexpr float resolution_inv = 1.0 / resolution;
-constexpr float radius = 0.20;
-constexpr int radius_cells = static_cast<int>(radius * resolution_inv) + 1;
-constexpr int map_dim = 512;                 // 2^7
-constexpr int half_map_dim = map_dim / 2;    // 2^6
-constexpr int map_size = map_dim * map_dim;  // 2^14 = 16.384
-constexpr int half_map_size = map_size / 2;  // 2^13 = 8.192
-
 struct ElevationCell {
     float height{};
     float variance{};
@@ -93,15 +84,58 @@ struct LocalMapState {
     std::vector<std::array<float, 3>> data{};
 };
 
+constexpr int map_dim = 512;                 // 2^7
+constexpr int half_map_dim = map_dim / 2;    // 2^6
+constexpr int map_size = map_dim * map_dim;  // 2^14 = 16.384
+constexpr int half_map_size = map_size / 2;  // 2^13 = 8.192
+
 class TerrainElevation {
 public:
+    struct Params {
+        float resolution;
+        float resolution_inv;
+        float radius;
+        int radius_cells;
+        float dist_variance_gain;
+        float power;
+        float min_variance;
+        float max_recenter_distance;
+        size_t max_contact_points;
+        float min_contact_probability;
+
+        Params()
+            : resolution(0.02f),
+              resolution_inv(1.0f / 0.02f),
+              radius(0.20f),
+              radius_cells(static_cast<int>(0.20f * 1.0f / 0.02f) + 1),
+              dist_variance_gain(100.0f),
+              power(5.0f),
+              min_variance(1e-6f),
+              max_recenter_distance(0.35f),
+              max_contact_points(4),
+              min_contact_probability(0.15f) {}
+        Params(const float resolution, const float radius, 
+               const float dist_variance_gain, const float power, const float min_variance, 
+               const float max_recenter_distance, const size_t max_contact_points, const float min_contact_probability) {
+            this->resolution = resolution;
+            this->resolution_inv = 1.0f / resolution;
+            this->radius = radius;
+            this->radius_cells = static_cast<int>(radius * resolution_inv) + 1;
+            this->dist_variance_gain = dist_variance_gain;
+            this->power = power;
+            this->min_variance = min_variance;
+            this->max_recenter_distance = max_recenter_distance;
+            this->max_contact_points = max_contact_points;
+            this->min_contact_probability = min_contact_probability;
+        }
+    };
     virtual ~TerrainElevation() = default;
 
     void printMapInformation() {
         const std::string GREEN = "\033[1;32m";
         const std::string WHITE = "\033[1;37m";
-        std::cout << GREEN << "\tresolution: " << resolution << std::endl;
-        std::cout << GREEN << "\tinverse resolution: " << resolution_inv << std::endl;
+        std::cout << GREEN << "\tresolution: " << params_.resolution << std::endl;
+        std::cout << GREEN << "\tinverse resolution: " << params_.resolution_inv << std::endl;
         std::cout << GREEN << "\tlocal map size: " << map_size << std::endl;
         std::cout << GREEN << "\tlocal map half size: " << half_map_size << std::endl;
         std::cout << GREEN << "\tlocal map dim: " << map_dim << std::endl;
@@ -114,11 +148,7 @@ public:
 
     virtual void recenter(const std::array<float, 2>& location) = 0;
 
-    virtual void initializeLocalMap(const float height, const float variance,
-                                    const float min_variance = 1e-6,
-                                    const float max_recenter_distance = 0.35,
-                                    const size_t max_contact_points = 4,
-                                    const float min_contact_probability = 0.15) = 0;
+    virtual void initializeLocalMap(const float height, const float variance, const Params& params = Params()) = 0;
 
     virtual bool update(const std::array<float, 2>& loc, float height, float variance,
                         std::optional<std::array<float, 3>> normal = std::nullopt) = 0;
@@ -156,17 +186,21 @@ public:
         }
 
         contact_points_.push_front(point);
-        while (contact_points_.size() > max_contact_points_) {
+        while (contact_points_.size() > params_.max_contact_points) {
             contact_points_.pop_back();
         }
     }
 
     float getMaxRecenterDistance() const {
-        return max_recenter_distance_;
+        return params_.max_recenter_distance;
+    }
+
+    float getResolution() const {
+        return params_.resolution;
     }
 
     float getMinContactProbability() const {
-        return min_contact_probability_;
+        return params_.min_contact_probability;
     }
 
     void clearContactPoints() {
@@ -216,8 +250,8 @@ public:
         }
 
         // Interpolate using inverse distance weighting
-        const float step = resolution;
-        const float power = 5.0f;  // Power parameter for IDW
+        const float step = params_.resolution;
+        const float power = params_.power;  // Power parameter for IDW
 
         for (float x = min_x; x <= max_x; x += step) {
             for (float y = min_y; y <= max_y; y += step) {
@@ -246,7 +280,7 @@ public:
                     float distance = std::sqrt(dx * dx + dy * dy);
 
                     // Avoid division by zero
-                    if (distance < resolution) {
+                    if (distance < params_.resolution) {
                         weighted_height = contact_cell->height;
                         weighted_variance = contact_cell->variance;
                         sum_weights = 1.0f;
@@ -286,12 +320,8 @@ protected:
                                               const std::array<int, 2>& new_origin_i) = 0;
 
     std::array<ElevationCell, map_size> elevation_;
-
+    Params params_;
     ElevationCell default_elevation_;
-    float min_terrain_height_variance_{};
-    size_t max_contact_points_{4};
-    float max_recenter_distance_{0.35};
-    float min_contact_probability_{0.15};
     std::deque<std::array<float, 2>> contact_points_{};
 
     std::array<int, 2> local_map_origin_i_{0, 0};

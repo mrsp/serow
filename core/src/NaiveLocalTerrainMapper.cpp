@@ -19,9 +19,9 @@ namespace serow {
 // Coordinate conversion functions
 int NaiveLocalTerrainMapper::locationToGlobalIndex(const float loc) const {
     if (loc > 0.0) {
-        return static_cast<int>(resolution_inv * loc + 0.5);
+        return static_cast<int>(params_.resolution_inv * loc + 0.5);
     } else {
-        return static_cast<int>(resolution_inv * loc - 0.5);
+        return static_cast<int>(params_.resolution_inv * loc - 0.5);
     }
 }
 
@@ -32,7 +32,7 @@ std::array<int, 2> NaiveLocalTerrainMapper::locationToGlobalIndex(
 
 std::array<float, 2> NaiveLocalTerrainMapper::globalIndexToLocation(
     const std::array<int, 2>& id_g) const {
-    return {(id_g[0] * resolution), (id_g[1] * resolution)};
+    return {(id_g[0] * params_.resolution), (id_g[1] * params_.resolution)};
 }
 
 std::array<int, 2> NaiveLocalTerrainMapper::globalIndexToLocalIndex(
@@ -78,30 +78,23 @@ void NaiveLocalTerrainMapper::resetLocalMap() {
     clearContactPoints();
 }
 
-void NaiveLocalTerrainMapper::initializeLocalMap(const float height, const float variance,
-                                                 const float min_variance,
-                                                 const float max_recenter_distance,
-                                                 const size_t max_contact_points,
-                                                 const float min_contact_probability) {
+void NaiveLocalTerrainMapper::initializeLocalMap(const float height, const float variance, const Params& params) {
     default_elevation_ = ElevationCell(height, variance);
-    min_terrain_height_variance_ = min_variance;
-    max_contact_points_ = max_contact_points;
-    max_recenter_distance_ = max_recenter_distance;
-    min_contact_probability_ = min_contact_probability;
+    params_ = params;
 
     // Make sure the max recenter distance is within the map bounds
-    const float max_recenter_distance_bound = 0.5f * half_map_dim * resolution;
-    if (max_recenter_distance_ > max_recenter_distance_bound) {
-        max_recenter_distance_ = max_recenter_distance_bound;
-        std::cout << "Max recenter distance is too large, setting to " << max_recenter_distance_
+    const float max_recenter_distance_bound = 0.5f * half_map_dim * params_.resolution;
+    if (params_.max_recenter_distance > max_recenter_distance_bound) {
+        params_.max_recenter_distance = max_recenter_distance_bound;
+        std::cout << "Max recenter distance is too large, setting to " << params_.max_recenter_distance
                   << std::endl;
     }
 
     // Make sure the min contact probability is within the range [0, 1]
-    if (min_contact_probability_ < 0.0f || min_contact_probability_ > 1.0f) {
-        min_contact_probability_ = 0.15f;
+    if (params_.min_contact_probability < 0.0f || params_.min_contact_probability > 1.0f) {
+        params_.min_contact_probability = 0.15f;
         std::cout << "Min contact probability is out of range, setting to "
-                  << min_contact_probability_ << std::endl;
+                  << params_.min_contact_probability << std::endl;
     }
 
     for (int i = 0; i < map_size; ++i) {
@@ -118,7 +111,7 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
         return false;
     }
 
-    variance = std::max(min_terrain_height_variance_, variance);
+    variance = std::max(params_.min_variance, variance);
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
     const std::array<int, 2> center_local_idx = globalIndexToLocalIndex(center_idx);
     const int center_hash_id = localIndexToHashId(center_local_idx);
@@ -133,30 +126,29 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
     const float prior_variance = cell.variance;
     const float prior_height = cell.height;
 
-    // Ensure variances are positive to avoid division issues
-    const float effective_variance = std::max(variance, 1e-6f);
-    const float effective_prior_variance = std::max(prior_variance, 1e-6f);
+    // Ensure prior variance is positive to avoid division issues
+    const float effective_prior_variance = std::max(prior_variance, params_.min_variance);
 
     // Compute Kalman gain
     const float kalman_gain =
-        effective_prior_variance / (effective_prior_variance + effective_variance);
+        effective_prior_variance / (effective_prior_variance + variance);
 
     // Update height and variance
     cell.height = prior_height + kalman_gain * (height - prior_height);
     cell.variance = (1.0f - kalman_gain) * effective_prior_variance;
 
     // Process a region around the contact point 
-    int rc = radius_cells;
+    int rc = params_.radius_cells;
     float nx_over_nz = 0.0f;
     float ny_over_nz = 0.0f;
     if (normal.has_value()) {
-        rc = radius_cells * 2;
+        rc = params_.radius_cells * 2;
         nx_over_nz = normal.value()[0] / normal.value()[2];
         ny_over_nz = normal.value()[1] / normal.value()[2];
     }
 
-    const float d_max = rc * resolution;
-    const float dist_variance_gain_ = 100.0f / (d_max * d_max);
+    const float d_max = rc * params_.resolution;
+    const float dist_variance_gain_ = params_.dist_variance_gain / (d_max * d_max);
     for (int di = -rc; di <= rc; ++di) {
         for (int dj = -rc; dj <= rc; ++dj) {
             if (di == 0 && dj == 0) continue;

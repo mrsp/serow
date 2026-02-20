@@ -325,7 +325,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                         state.base_angular_velocity.cross(p_base_to_leg) +
                         R_world_to_base * kin.base_to_foot_linear_velocities.at(cf);
                     // Update the terrain elevation with a plane contact if the leg in contact is stable
-                    if (cp > 0.85 && omega_contact.norm() < 0.01 && v_contact.norm() < 0.01) {
+                    if (cp > 0.85 && omega_contact.norm() < 0.02 && v_contact.norm() < 0.02) {
                         normal = {static_cast<float>(n_contact.x()), static_cast<float>(n_contact.y()), static_cast<float>(n_contact.z())};
                     } 
                 }

@@ -196,6 +196,10 @@
     "maximum_contact_points": 4,
     "maximum_recenter_distance": 0.35,
     "minimum_contact_probability": 0.15,
+    "resolution": 0.01,
+    "radius": 0.10,
+    "dist_variance_gain": 10.0,
+    "power": 2.0,
     "T_base_to_ground_truth": [
         1.0,
         0.0,

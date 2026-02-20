@@ -222,6 +222,14 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("minimum_contact_probability", params_.minimum_contact_probability))
         return false;
+    if (!checkConfigParam("resolution", params_.resolution))
+        return false;
+    if (!checkConfigParam("radius", params_.radius))
+        return false;
+    if (!checkConfigParam("dist_variance_gain", params_.dist_variance_gain))
+        return false;
+    if (!checkConfigParam("power", params_.power))
+        return false;
 
     // Read log directory parameter
     if (!checkConfigParam("log_dir", params_.log_dir))
@@ -869,10 +877,19 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
                 throw std::runtime_error("Invalid terrain estimator type: " +
                                          params_.terrain_estimator_type);
             }
-            terrain_estimator_->initializeLocalMap(
-                terrain_height, 1e4, params_.minimum_terrain_height_variance,
-                params_.maximum_recenter_distance, params_.maximum_contact_points,
-                params_.minimum_contact_probability);
+            {
+                TerrainElevation::Params p;
+                p.min_variance = static_cast<float>(params_.minimum_terrain_height_variance);
+                p.max_recenter_distance = static_cast<float>(params_.maximum_recenter_distance);
+                p.max_contact_points = params_.maximum_contact_points;
+                p.min_contact_probability = static_cast<float>(params_.minimum_contact_probability);
+                p.resolution = static_cast<float>(params_.resolution);
+                p.radius = static_cast<float>(params_.radius);
+                p.dist_variance_gain = static_cast<float>(params_.dist_variance_gain);
+                p.power = static_cast<float>(params_.power);
+                terrain_estimator_->initializeLocalMap(
+                    static_cast<float>(terrain_height), 1e4f, p);
+            }
 
             terrain_estimator_->recenter({static_cast<float>(state.base_state_.base_position.x()),
                                           static_cast<float>(state.base_state_.base_position.y())});
@@ -1054,7 +1071,7 @@ void Serow::logExteroception(const State& state) {
         auto terrain_estimator = terrain_estimator_;
         auto exteroception_logger = exteroception_logger_;
         // Capture resolution value to avoid any potential issues with global variable access
-        constexpr double res_base = static_cast<double>(resolution);
+        const double res_base = terrain_estimator ? static_cast<double>(terrain_estimator->getResolution()) : 0.02;
         exteroception_logger_job_->addJob([terrain_estimator, exteroception_logger, ts = state.base_state_.timestamp, res_base]() {
             try {
                 if (!terrain_estimator || !exteroception_logger) {
@@ -1580,8 +1597,19 @@ void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicM
                 throw std::runtime_error("Invalid terrain estimator type: " +
                                         params_.terrain_estimator_type);
             }
-            terrain_estimator_->initializeLocalMap(static_cast<float>(terrain_height), 1e4,
-                                                   params_.minimum_terrain_height_variance);
+            {
+                TerrainElevation::Params p;
+                p.min_variance = static_cast<float>(params_.minimum_terrain_height_variance);
+                p.max_recenter_distance = static_cast<float>(params_.maximum_recenter_distance);
+                p.max_contact_points = params_.maximum_contact_points;
+                p.min_contact_probability = static_cast<float>(params_.minimum_contact_probability);
+                p.resolution = static_cast<float>(params_.resolution);
+                p.radius = static_cast<float>(params_.radius);
+                p.dist_variance_gain = static_cast<float>(params_.dist_variance_gain);
+                p.power = static_cast<float>(params_.power);
+                terrain_estimator_->initializeLocalMap(
+                    static_cast<float>(terrain_height), 1e4f, p);
+            }
             terrain_estimator_->recenter({static_cast<float>(state_.base_state_.base_position.x()),
                                           static_cast<float>(state_.base_state_.base_position.y())});
         }

@@ -31,10 +31,7 @@ public:
     void recenter(const std::array<float, 2>& loc) override;
 
     void initializeLocalMap(const float height, const float variance,
-                            const float min_variance = 1e-6,
-                            const float max_recenter_distance = 0.35,
-                            const size_t max_contact_points = 4,
-                            const float min_contact_probability = 0.15) override;
+                            const Params& params = Params()) override;
 
     bool update(const std::array<float, 2>& loc, float height, float variance, 
                 std::optional<std::array<float, 3>> normal = std::nullopt) override;
