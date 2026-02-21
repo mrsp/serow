@@ -192,111 +192,109 @@ SerowRos2::~SerowRos2() {
 
 void SerowRos2::run() {
     // Fetch the most recent joint state data 
-    sensor_msgs::msg::JointState joint_state_data;
+    std::queue<sensor_msgs::msg::JointState> joint_state_queue;
     {
         std::lock_guard<std::mutex> lock(joint_data_mutex_);
-        if (!joint_state_data_.has_value()) {
-            return;
-        }
-        joint_state_data = joint_state_data_.value();
-
-        // Clear the used joint measurements
-        joint_state_data_.reset();
+        joint_state_queue = std::move(joint_state_queue_);
     }
+    while (!joint_state_queue.empty()) {
+        const sensor_msgs::msg::JointState joint_state_data = std::move(joint_state_queue.front());
+        joint_state_queue.pop();
+        const double joint_state_timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
+            static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
 
-    double joint_state_timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
-        static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
-    
-    // Fetch the base imu measurement from the buffer
-    std::optional<serow::ImuMeasurement> base_imu_measurement = std::nullopt;
-    {
-        std::lock_guard<std::mutex> lock(base_imu_data_mutex_);
-        base_imu_measurement = base_imu_buffer_.get(joint_state_timestamp, ft_max_time_diff_);
-        if (!base_imu_measurement.has_value()) {
-            RCLCPP_ERROR(this->get_logger(), "Failed to get base imu measurement at timestamp: %f", joint_state_timestamp);
-            const auto& time_range = base_imu_buffer_.getTimeRange();
-            if (time_range) {
-                RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
-            } else {
-                RCLCPP_ERROR(this->get_logger(), "Time range: not available");
-            }
-            return;
-        } 
-    }
-
-    // Create the joint measurements
-    std::map<std::string, serow::JointMeasurement> joint_measurements;
-    for (size_t i = 0; i < joint_state_data.name.size(); i++) {
-        serow::JointMeasurement joint{};
-        joint.timestamp = joint_state_timestamp;
-        joint.position = joint_state_data.position[i];
-        if (!joint_state_data.velocity.empty()) {
-            joint.velocity = joint_state_data.velocity[i];
-        }
-        joint_measurements[joint_state_data.name[i]] = std::move(joint);
-    }
-    
-    // Retrieve the synchronized F/T measurements for each foot frame
-    std::map<std::string, serow::ForceTorqueMeasurement> synchronized_ft_measurements;
-    for (size_t i = 0; i < force_torque_state_topics_.size(); ++i) {
-        const auto& ft_topic = force_torque_state_topics_[i];
-        std::lock_guard<std::mutex> lock(*ft_subscription_mutexes_[i]);
-        const auto& frame_id = ft_topic_to_frame_id_[ft_topic];
-        const auto& ft_buffer = ft_buffers_[frame_id];
-        const auto& ft_measurement = ft_buffer.get(joint_state_timestamp, ft_max_time_diff_);
-        if (ft_measurement) {
-            synchronized_ft_measurements[frame_id] = std::move(ft_measurement.value());
-        } else {
-            const auto& time_range = ft_buffer.getTimeRange();
-            RCLCPP_ERROR(this->get_logger(), "Failed to get F/T measurement for frame: %s at timestamp: %f", frame_id.c_str(), joint_state_timestamp);
-            if (time_range) {
-                RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
-            } else {
-                RCLCPP_ERROR(this->get_logger(), "Time range: not available");
-            }
-        }
-    }
-
-    // Fetch the most recent ground truth data (if available)
-    std::optional<serow::BasePoseGroundTruth> ground_truth_pose = std::nullopt;
-    if (first_ground_truth_pose_.has_value()) {
-        std::lock_guard<std::mutex> lock(ground_truth_data_mutex_); 
-        const auto& ground_truth_odometry = ground_truth_odometry_buffer_.get(joint_state_timestamp, ft_max_time_diff_);
-        if (ground_truth_odometry.has_value()) {
-            serow::BasePoseGroundTruth gt;
-            gt.timestamp = ground_truth_odometry.value().timestamp;
-            gt.position = ground_truth_odometry.value().base_position;
-            gt.orientation = ground_truth_odometry.value().base_orientation;
-            ground_truth_pose = std::move(gt);
-        } else {
-            RCLCPP_ERROR(this->get_logger(), "Failed to get ground truth odometry at timestamp: %f", joint_state_timestamp);
-            const auto& time_range = ground_truth_odometry_buffer_.getTimeRange();
-            if (time_range) {
-                RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
-            } else {
-                RCLCPP_ERROR(this->get_logger(), "Time range: not available");
-            }
-        }
-    }
-
-    serow_.filter(base_imu_measurement.value(), joint_measurements, 
-                  synchronized_ft_measurements.size() == force_torque_state_topics_.size() ? std::make_optional(synchronized_ft_measurements) : std::nullopt,
-                  std::nullopt,
-                  std::nullopt,
-                  ground_truth_pose);
-    const auto& state = serow_.getState();
-    if (state) {
-        // Queue the state for publishing instead of publishing directly to not block the main thread
+        // Fetch the base imu measurement from the buffer
+        std::optional<serow::ImuMeasurement> base_imu_measurement = std::nullopt;
         {
-            std::lock_guard<std::mutex> lock(publish_queue_mutex_);
-            publish_queue_.push(std::make_pair(state.value(), ground_truth_pose));
+            std::lock_guard<std::mutex> lock(base_imu_data_mutex_);
+            base_imu_measurement = base_imu_buffer_.get(joint_state_timestamp, 0.005);
+            if (!base_imu_measurement.has_value()) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to get base imu measurement at timestamp: %f", joint_state_timestamp);
+                const auto& time_range = base_imu_buffer_.getTimeRange();
+                if (time_range) {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
+                } else {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: not available");
+                }
+                return;
+            } 
+        }
 
-            // Keep only the latest state to avoid queue buildup
-            while (publish_queue_.size() > 1) {
-                publish_queue_.pop();
+        base_imu_measurement.value().timestamp = joint_state_timestamp;
+        // Create the joint measurements
+        std::map<std::string, serow::JointMeasurement> joint_measurements;
+        for (size_t i = 0; i < joint_state_data.name.size(); i++) {
+            serow::JointMeasurement joint{};
+            joint.timestamp = joint_state_timestamp;
+            joint.position = joint_state_data.position[i];
+            if (!joint_state_data.velocity.empty()) {
+                joint.velocity = joint_state_data.velocity[i];
+            }
+            joint_measurements[joint_state_data.name[i]] = std::move(joint);
+        }
+        
+        // Retrieve the synchronized F/T measurements for each foot frame
+        std::map<std::string, serow::ForceTorqueMeasurement> synchronized_ft_measurements;
+        for (size_t i = 0; i < force_torque_state_topics_.size(); ++i) {
+            const auto& ft_topic = force_torque_state_topics_[i];
+            std::lock_guard<std::mutex> lock(*ft_subscription_mutexes_[i]);
+            const auto& frame_id = ft_topic_to_frame_id_[ft_topic];
+            const auto& ft_buffer = ft_buffers_[frame_id];
+            const auto& ft_measurement = ft_buffer.get(joint_state_timestamp, ft_max_time_diff_);
+            if (ft_measurement) {
+                synchronized_ft_measurements[frame_id] = std::move(ft_measurement.value());
+            } else {
+                const auto& time_range = ft_buffer.getTimeRange();
+                RCLCPP_ERROR(this->get_logger(), "Failed to get F/T measurement for frame: %s at timestamp: %f", frame_id.c_str(), joint_state_timestamp);
+                if (time_range) {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
+                } else {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: not available");
+                }
             }
         }
-        publish_condition_.notify_one();
+
+        // Fetch the most recent ground truth data (if available)
+        std::optional<serow::BasePoseGroundTruth> ground_truth_pose = std::nullopt;
+        if (first_ground_truth_pose_.has_value()) {
+            std::lock_guard<std::mutex> lock(ground_truth_data_mutex_); 
+            const auto& ground_truth_odometry = ground_truth_odometry_buffer_.get(joint_state_timestamp, ft_max_time_diff_);
+            if (ground_truth_odometry.has_value()) {
+                serow::BasePoseGroundTruth gt;
+                gt.timestamp = ground_truth_odometry.value().timestamp;
+                gt.position = ground_truth_odometry.value().base_position;
+                gt.orientation = ground_truth_odometry.value().base_orientation;
+                ground_truth_pose = std::move(gt);
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "Failed to get ground truth odometry at timestamp: %f", joint_state_timestamp);
+                const auto& time_range = ground_truth_odometry_buffer_.getTimeRange();
+                if (time_range) {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
+                } else {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: not available");
+                }
+            }
+        }
+
+        serow_.filter(base_imu_measurement.value(), joint_measurements, 
+                    synchronized_ft_measurements.size() == force_torque_state_topics_.size() ? std::make_optional(synchronized_ft_measurements) : std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    ground_truth_pose);
+        const auto& state = serow_.getState();
+        if (state) {
+            // Queue the state for publishing instead of publishing directly to not block the main thread
+            {
+                std::lock_guard<std::mutex> lock(publish_queue_mutex_);
+                publish_queue_.push(std::make_pair(state.value(), ground_truth_pose));
+
+                // Keep only the latest state to avoid queue buildup
+                while (publish_queue_.size() > 1) {
+                    publish_queue_.pop();
+                }
+            }
+            publish_condition_.notify_one();
+        }
     }
 }
 
@@ -584,7 +582,7 @@ void SerowRos2::publishContactState(const serow::State& state) {
 
 void SerowRos2::jointStateCallback(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state_msg) {
     std::lock_guard<std::mutex> lock(joint_data_mutex_);
-    this->joint_state_data_ = *joint_state_msg;
+    joint_state_queue_.push(*joint_state_msg);
 }
 
 void SerowRos2::baseImuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr& base_imu_msg) {
