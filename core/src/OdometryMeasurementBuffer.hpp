@@ -29,7 +29,7 @@ public:
     OdometryMeasurementBuffer(const size_t max_size = 1000, bool interpolate_covariance = false);
 
     /**
-     * @brief Add a synchronized vector of odometry measurements to the buffer
+     * @brief Add an odometry measurement to the buffer
      * @param measurement OdometryMeasurement to add
      */
     void add(const OdometryMeasurement& measurement);

@@ -24,15 +24,15 @@
 
 namespace serow {
 
-class ForceTorqueMeasurementBuffer {
+class ImuMeasurementBuffer {
 public:
-    ForceTorqueMeasurementBuffer(const size_t max_size = 1000);
+    ImuMeasurementBuffer(const size_t max_size = 1000, bool interpolate_covariance = false);
 
     /**
-     * @brief Add a force-torque measurement to the buffer
-     * @param measurement ForceTorqueMeasurement to add
+     * @brief Adds an imu measurement to the buffer
+     * @param measurement ImuMeasurement to add
      */
-    void add(const ForceTorqueMeasurement& measurement);
+    void add(const ImuMeasurement& measurement);
 
     /**
      * @brief Clear the buffer
@@ -60,31 +60,40 @@ public:
     bool isTimestampInRange(const double timestamp, const double tolerance = 0.005) const;
 
     /**
-     * @brief Get a ForceTorqueMeasurement at the exact timestamp, or interpolate between measurements
+     * @brief Get an ImuMeasurement at the exact timestamp, or interpolate between measurements
      * Assumes measurements come in monotonically increasing time order
      * @param timestamp Target timestamp for the measurement
      * @param max_time_diff Maximum allowed time difference
-     * @return Interpolated ForceTorqueMeasurement, or nullopt if timestamp is outside buffer range
+     * @return Interpolated ImuMeasurement, or nullopt if timestamp is outside buffer range
      */
-    std::optional<ForceTorqueMeasurement> get(const double timestamp, 
-                                              const double max_time_diff = 0.015) const;
+    std::optional<ImuMeasurement> get(const double timestamp, 
+                                      const double max_time_diff = 0.015) const;
 
 private:
     size_t max_size_{1000};
-    std::deque<ForceTorqueMeasurement> measurements_{};
+    bool interpolate_covariance_{false};
+    std::deque<ImuMeasurement> measurements_{};
 
     /**
-     * @brief Interpolate between two vectors of ForceTorqueMeasurements at a given timestamp
+     * @brief Interpolate between two vectors of ImuMeasurements at a given timestamp
      * @param m1 First measurement (earlier timestamp)
      * @param m2 Second measurement (later timestamp)
      * @param target_timestamp Target timestamp for interpolation
      * @param t1 Timestamp of first measurement
-     * @return Interpolated ForceTorqueMeasurement
+     * @return Interpolated ImuMeasurement
      */
-    ForceTorqueMeasurement interpolate(const ForceTorqueMeasurement& m1, 
-                                       const ForceTorqueMeasurement& m2, 
-                                       const double target_timestamp, 
-                                       const double t1) const;
+    ImuMeasurement interpolate(const ImuMeasurement& m1, 
+                               const ImuMeasurement& m2, 
+                               const double target_timestamp, 
+                               const double t1) const;
+
+    /**
+     * @brief Enforce positive definiteness of a symmetric matrix (e.g. covariance).
+     * Symmetrizes, then clamps eigenvalues to a minimum so the result is PD.
+     * @param sym Symmetric matrix (e.g. from linear interpolation)
+     * @return Positive definite matrix
+     */
+    Eigen::Matrix3d makePositiveDefinite(const Eigen::Matrix3d& sym) const;
 };
 
 }  // namespace serow
