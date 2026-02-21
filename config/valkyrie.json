@@ -8,12 +8,12 @@
     },
     "model_path": "valkyrie.urdf",
     "g": 9.81,
-    "joint_rate": 500.0,
+    "joint_rate": 400.0,
     "estimate_joint_velocity": true,
     "joint_position_variance": 1e-6,
     "tau_0": 1.0,
     "tau_1": 0.001,
-    "imu_rate": 500.0,
+    "imu_rate": 400.0,
     "R_base_to_gyro": [
         1.0,
         0.0,
@@ -49,7 +49,7 @@
         0.0,
         0.0
     ],
-    "force_torque_rate": 500.0,
+    "force_torque_rate": 400.0,
     "R_foot_to_force": {
         "0": [
             1.0,
@@ -217,7 +217,7 @@
     "dist_variance_gain": 10.0,
     "power": 5.0,
     "T_base_to_ground_truth": null,
-    "log_data": true,
-    "log_measurements": true,
+    "log_data": false,
+    "log_measurements": false,
     "log_dir": "/tmp/"
 }

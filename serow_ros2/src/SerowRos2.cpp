@@ -64,7 +64,7 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     const std::string& ground_truth_topic = config["topics"]["ground_truth"].as<std::string>();
     if (!ground_truth_topic.empty()) {
         ground_truth_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>(
-            ground_truth_topic, 10, std::bind(&SerowRos2::groundTruthCallback, this, _1));
+            ground_truth_topic, 100, std::bind(&SerowRos2::groundTruthCallback, this, _1));
     }
     const std::string& serow_config = config["serow_config"].as<std::string>();
     const bool publish_path = config["publish_path"].as<bool>();
@@ -74,7 +74,8 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     RCLCPP_INFO(this->get_logger(), "Serow config file: %s", serow_config.c_str());
 
     // Configure F/T synchronization tolerance
-    ft_max_time_diff_ = this->declare_parameter<double>("ft_max_time_diff", 0.1);
+    ft_max_time_diff_ = this->declare_parameter<double>("ft_max_time_diff", 0.01);
+    imu_max_time_diff_ = this->declare_parameter<double>("imu_max_time_diff", 0.005);
     RCLCPP_INFO(this->get_logger(), "F/T max time difference: %.3f seconds", ft_max_time_diff_);
 
     // Initialize SERoW
@@ -90,8 +91,8 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
                 joint_state_topic.c_str(), base_imu_topic.c_str());
 
     // Create message_filters subscribers for synchronization
-    joint_state_subscriber_ = this->create_subscription<sensor_msgs::msg::JointState>(joint_state_topic, 10, std::bind(&SerowRos2::jointStateCallback, this, _1));
-    base_imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>(base_imu_topic, 2, std::bind(&SerowRos2::baseImuCallback, this, _1));
+    joint_state_subscriber_ = this->create_subscription<sensor_msgs::msg::JointState>(joint_state_topic, 100, std::bind(&SerowRos2::jointStateCallback, this, _1));
+    base_imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>(base_imu_topic, 100, std::bind(&SerowRos2::baseImuCallback, this, _1));
 
     // Dynamically create a wrench callback, one for each force torque state topic
     for (size_t i = 0; i < force_torque_state_topics_.size(); ++i) {
@@ -117,7 +118,7 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
         RCLCPP_INFO(this->get_logger(), "Creating force torque state subscription on topic: %s",
                     ft_topic.c_str());
         auto ft_subscription = this->create_subscription<geometry_msgs::msg::WrenchStamped>(
-            ft_topic, 2, force_torque_state_topic_callbacks_.back());
+            ft_topic, 100, force_torque_state_topic_callbacks_.back());
         force_torque_state_subscriptions_.push_back(std::move(ft_subscription));
     }
 
@@ -133,41 +134,41 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     }
 
     com_position_publisher_ =
-        this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/com/position", 10);
+        this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/com/position", 100);
     cop_position_publisher_ =
-        this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/cop/position", 10);
+        this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/cop/position", 100);
     com_momentum_publisher_ =
-        this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum", 10);
+        this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum", 100);
     com_momentum_rate_publisher_ =
-        this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum_rate", 10);
+        this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum_rate", 100);
     com_external_wrench_publisher_ =
-        this->create_publisher<geometry_msgs::msg::WrenchStamped>("/serow/com/external_wrench", 10);
+        this->create_publisher<geometry_msgs::msg::WrenchStamped>("/serow/com/external_wrench", 100);
     for (const auto& contact_frame : state->getContactsFrame()) {
         foot_odom_publishers_[contact_frame] = this->create_publisher<nav_msgs::msg::Odometry>(
-            "/serow/" + contact_frame + "/odom", 10);
+            "/serow/" + contact_frame + "/odom", 100);
         foot_wrench_publishers_[contact_frame] =
             this->create_publisher<geometry_msgs::msg::WrenchStamped>(
-                "/serow/" + contact_frame + "/contact/wrench", 10);
+                "/serow/" + contact_frame + "/contact/wrench", 100);
         foot_contact_probability_publishers_[contact_frame] =
             this->create_publisher<std_msgs::msg::Float64>(
-                "/serow/" + contact_frame + "/contact/probability", 10);
+                "/serow/" + contact_frame + "/contact/probability", 100);
         if (publish_path) {
             foot_odom_path_publishers_[contact_frame] = this->create_publisher<nav_msgs::msg::Path>("/serow/" + contact_frame + "/odom/path", 10);
         }
     }
     odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(
-        "/serow/odom", 10);
+        "/serow/odom", 100);
     joint_state_publisher_ =
-        this->create_publisher<sensor_msgs::msg::JointState>("/serow/joint_states", 10);
+        this->create_publisher<sensor_msgs::msg::JointState>("/serow/joint_states", 100);
     if  (!ground_truth_topic.empty()) {
         ground_truth_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(
-            "/serow/ground_truth", 10);
+            "/serow/ground_truth", 100);
         if (publish_path) {
-            ground_truth_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/ground_truth/path", 10);
+            ground_truth_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/ground_truth/path", 100);
         }
     }
     if (publish_path) {
-        odom_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/odom/path", 10);
+        odom_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/odom/path", 100);
     }
 
     // Start the publishing thread
@@ -207,7 +208,7 @@ void SerowRos2::run() {
         std::optional<serow::ImuMeasurement> base_imu_measurement = std::nullopt;
         {
             std::lock_guard<std::mutex> lock(base_imu_data_mutex_);
-            base_imu_measurement = base_imu_buffer_.get(joint_state_timestamp, 0.005);
+            base_imu_measurement = base_imu_buffer_.get(joint_state_timestamp, imu_max_time_diff_);
             if (!base_imu_measurement.has_value()) {
                 RCLCPP_ERROR(this->get_logger(), "Failed to get base imu measurement at timestamp: %f", joint_state_timestamp);
                 const auto& time_range = base_imu_buffer_.getTimeRange();

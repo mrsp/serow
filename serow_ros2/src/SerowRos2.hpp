@@ -98,7 +98,8 @@ private:
     serow::ImuMeasurementBuffer base_imu_buffer_;
     std::vector<std::string> force_torque_state_topics_;
     std::map<std::string, std::string> ft_topic_to_frame_id_;
-    double ft_max_time_diff_ = 0.1;  // Max time difference for F/T synchronization (default: 100ms)
+    double ft_max_time_diff_ = 0.01;  // Max time difference for F/T synchronization (default: 10ms)
+    double imu_max_time_diff_ = 0.005;  // Max time difference for IMU synchronization (default: 5ms)
     rclcpp::TimerBase::SharedPtr timer_;
 
     // Threading components for asynchronous publishing
