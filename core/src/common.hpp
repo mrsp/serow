@@ -102,7 +102,9 @@ public:
         float max_recenter_distance;
         size_t max_contact_points;
         float min_contact_probability;
-
+        float min_stable_contact_probability;
+        float min_stable_foot_angular_velocity;
+        float min_stable_foot_linear_velocity;
         Params()
             : resolution(0.02f),
               resolution_inv(1.0f / 0.02f),
@@ -113,10 +115,14 @@ public:
               min_variance(1e-6f),
               max_recenter_distance(0.35f),
               max_contact_points(4),
-              min_contact_probability(0.15f) {}
+              min_contact_probability(0.15f),
+              min_stable_contact_probability(0.95f),
+              min_stable_foot_angular_velocity(0.03f),
+              min_stable_foot_linear_velocity(0.03f) {}
         Params(const float resolution, const float radius, 
                const float dist_variance_gain, const float power, const float min_variance, 
-               const float max_recenter_distance, const size_t max_contact_points, const float min_contact_probability) {
+               const float max_recenter_distance, const size_t max_contact_points, const float min_contact_probability, 
+               const float min_stable_contact_probability = 0.95f, const float min_stable_foot_angular_velocity = 0.03f, const float min_stable_foot_linear_velocity = 0.03f) {
             this->resolution = resolution;
             this->resolution_inv = 1.0f / resolution;
             this->radius = radius;
@@ -127,6 +133,9 @@ public:
             this->max_recenter_distance = max_recenter_distance;
             this->max_contact_points = max_contact_points;
             this->min_contact_probability = min_contact_probability;
+            this->min_stable_contact_probability = min_stable_contact_probability;
+            this->min_stable_foot_angular_velocity = min_stable_foot_angular_velocity;
+            this->min_stable_foot_linear_velocity = min_stable_foot_linear_velocity;
         }
     };
     virtual ~TerrainElevation() = default;
@@ -201,6 +210,18 @@ public:
 
     float getMinContactProbability() const {
         return params_.min_contact_probability;
+    }
+
+    float getMinStableContactProbability() const {
+        return params_.min_stable_contact_probability;
+    }
+
+    float getMinStableFootAngularVelocity() const {
+        return params_.min_stable_foot_angular_velocity;
+    }
+
+    float getMinStableFootLinearVelocity() const {
+        return params_.min_stable_foot_linear_velocity;
     }
 
     void clearContactPoints() {

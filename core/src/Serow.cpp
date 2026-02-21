@@ -222,6 +222,12 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("minimum_contact_probability", params_.minimum_contact_probability))
         return false;
+    if (!checkConfigParam("minimum_stable_contact_probability", params_.minimum_stable_contact_probability))
+        return false;
+    if (!checkConfigParam("minimum_stable_foot_angular_velocity", params_.minimum_stable_foot_angular_velocity))
+        return false;
+    if (!checkConfigParam("minimum_stable_foot_linear_velocity", params_.minimum_stable_foot_linear_velocity))
+        return false;
     if (!checkConfigParam("resolution", params_.resolution))
         return false;
     if (!checkConfigParam("radius", params_.radius))
@@ -883,6 +889,9 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
                 p.max_recenter_distance = static_cast<float>(params_.maximum_recenter_distance);
                 p.max_contact_points = params_.maximum_contact_points;
                 p.min_contact_probability = static_cast<float>(params_.minimum_contact_probability);
+                p.min_stable_contact_probability = static_cast<float>(params_.minimum_stable_contact_probability);
+                p.min_stable_foot_angular_velocity = static_cast<float>(params_.minimum_stable_foot_angular_velocity);
+                p.min_stable_foot_linear_velocity = static_cast<float>(params_.minimum_stable_foot_linear_velocity);
                 p.resolution = static_cast<float>(params_.resolution);
                 p.radius = static_cast<float>(params_.radius);
                 p.dist_variance_gain = static_cast<float>(params_.dist_variance_gain);
@@ -1603,6 +1612,9 @@ void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicM
                 p.max_recenter_distance = static_cast<float>(params_.maximum_recenter_distance);
                 p.max_contact_points = params_.maximum_contact_points;
                 p.min_contact_probability = static_cast<float>(params_.minimum_contact_probability);
+                p.min_stable_contact_probability = static_cast<float>(params_.minimum_stable_contact_probability);
+                p.min_stable_foot_angular_velocity = static_cast<float>(params_.minimum_stable_foot_angular_velocity);
+                p.min_stable_foot_linear_velocity = static_cast<float>(params_.minimum_stable_foot_linear_velocity);
                 p.resolution = static_cast<float>(params_.resolution);
                 p.radius = static_cast<float>(params_.radius);
                 p.dist_variance_gain = static_cast<float>(params_.dist_variance_gain);

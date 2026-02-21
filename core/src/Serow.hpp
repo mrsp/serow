@@ -242,6 +242,15 @@ private:
         /// @brief minimum contact probability to consider a contact point for terrain elevation
         /// estimation
         double minimum_contact_probability{0.15};
+        /// @brief minimum stable contact probability to consider a contact plane for terrain elevation
+        /// estimation
+        double minimum_stable_contact_probability{0.85};
+        /// @brief minimum stable foot angular velocity to consider a contact plane for terrain elevation
+        /// estimation
+        double minimum_stable_foot_angular_velocity{0.025};
+        /// @brief minimum stable foot linear velocity to consider a contact plane for terrain elevation
+        /// estimation
+        double minimum_stable_foot_linear_velocity{0.025};
         /// @brief resolution of the terrain elevation mapper
         double resolution{0.02};
         /// @brief radius of inflation per contact point for the terrain elevation mapper
