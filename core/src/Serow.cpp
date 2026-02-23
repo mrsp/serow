@@ -724,7 +724,8 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
 void Serow::runAngularMomentumEstimator(State& state) {
     // Get the angular momentum around the CoM in base frame coordinates as compute with rigid-body
     // kinematics
-    const Eigen::Vector3d& com_angular_momentum = kinematic_estimator_->comAngularMomentum();
+    const std::pair<Eigen::Vector3d, Eigen::Matrix3d> com_angular_momentum_and_covariance = 
+        kinematic_estimator_->comAngularMomentumAndCovariance();
     const Eigen::Matrix3d& R_world_to_base = state.base_state_.base_orientation.toRotationMatrix();
 
     // Initialize angular momentum derivative estimator if needed
@@ -741,13 +742,13 @@ void Serow::runAngularMomentumEstimator(State& state) {
     }
 
     // Estimate the angular momentum derivative around the CoM in base frame
-    const Eigen::Vector3d& com_angular_momentum_derivative =
-        angular_momentum_derivative_estimator->filter(com_angular_momentum,
-                                                      Eigen::Vector3d::Ones(),
+    const Eigen::Vector3d com_angular_momentum_derivative =
+        angular_momentum_derivative_estimator->filter(com_angular_momentum_and_covariance.first,
+                                                      com_angular_momentum_and_covariance.second.diagonal(),
                                                       state.joint_state_.timestamp);
 
     // Update the state
-    state.centroidal_state_.angular_momentum = R_world_to_base * com_angular_momentum;
+    state.centroidal_state_.angular_momentum = R_world_to_base * com_angular_momentum_and_covariance.first;
     state.centroidal_state_.angular_momentum_derivative =
         R_world_to_base * com_angular_momentum_derivative;
 }
