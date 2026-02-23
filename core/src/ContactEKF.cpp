@@ -172,34 +172,50 @@ void ContactEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& bas
                                     const Eigen::Quaterniond& base_orientation,
                                     const Eigen::Matrix3d& base_position_cov,
                                     const Eigen::Matrix3d& base_orientation_cov) {
-    Eigen::MatrixXd H(6, num_states_);
-    Eigen::MatrixXd PH_transpose(num_states_, 6);
-    H.setZero();
-    Eigen::MatrixXd R = Eigen::Matrix<double, 6, 6>::Zero();
-
-    // Construct the innovation vector z
-    const Eigen::Vector3d zp = base_position - state.base_position;
-    const Eigen::Vector3d zq = lie::so3::minus(base_orientation, state.base_orientation);
-    Eigen::VectorXd z(6);
-    z.setZero();
-    z.head(3) = zp;
-    z.tail(3) = zq;
-
     // Construct the linearized measurement matrix H
+    Eigen::MatrixXd H(6, num_states_);
+    H.setZero();
     H.block(0, p_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
     H.block(3, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
-    // Construct the measurement noise matrix R
-    R.topLeftCorner<3, 3>() = base_position_cov;
+    // RESKF update
+    base_position_outlier_detector.init();
+    Eigen::MatrixXd P_i = P_;
+    BaseState updated_state_i = state;
+    Eigen::VectorXd z(6);
+    z.setZero();
+    z.head(3) = base_position - state.base_position;
+    z.tail(3) = lie::so3::minus(base_orientation, state.base_orientation);
+
+    const Eigen::MatrixXd  PH_transpose = P_ * H.transpose();
+    Eigen::MatrixXd R = Eigen::Matrix<double, 6, 6>::Zero();
     R.bottomRightCorner<3, 3>() = base_orientation_cov;
+    const Eigen::Matrix3d bb = base_position * base_position.transpose();
+    for (size_t i = 0; i < base_position_outlier_detector.iters; i++) {
+        if (base_position_outlier_detector.zeta > base_position_outlier_detector.threshold) {
+            const Eigen::Matrix3d R_z = base_position_cov / base_position_outlier_detector.zeta;
+            R.topLeftCorner<3, 3>() = R_z;
+            const Eigen::MatrixXd s = R + H * PH_transpose;
+            const Eigen::MatrixXd K = PH_transpose * s.inverse();
+            const Eigen::VectorXd dx = K * z;
+            P_i = (I_ - K * H) * P_;
+            updated_state_i = updateStateCopy(state, dx, P_);
 
-    PH_transpose.noalias() = P_ * H.transpose();
-    const Eigen::Matrix<double, 6, 6> s = R + H * PH_transpose;
-    const Eigen::MatrixXd K = PH_transpose * s.inverse();
-    const Eigen::VectorXd dx = K * z;
+            // Outlier detection with the base position measurement vector
+            const Eigen::Vector3d& x_i = updated_state_i.base_position;
+            const Eigen::Matrix3d BetaT = bb - 2.0 * base_position * x_i.transpose() + 
+                x_i * x_i.transpose() + H.block(0, p_idx_[0], 3, 3) * P_i * H.block(0, p_idx_[0], 3, 3).transpose();
+            base_position_outlier_detector.estimate(BetaT, base_position_cov);
+        } else {
+            // Measurement is an outlier
+            updated_state_i = state;
+            P_i = P_;
+            break;
+        }
+    }
 
-    P_ = (I_ - K * H) * P_;
-    updateState(state, dx, P_);
+    P_ = std::move(P_i);
+    state = std::move(updated_state_i);
 }
 
 void ContactEKF::updateWithTerrain(BaseState& state,

@@ -132,7 +132,7 @@ private:
     /// Linearized state-input model 15 x 12
     Eigen::Matrix<double, 15, 12> Lc_;
 
-    OutlierDetector contact_outlier_detector;  ///< Outlier detector instance.
+    OutlierDetector base_position_outlier_detector;  ///< Outlier detector instance.
   
     bool point_feet_{};  ///< Flag indicating if the robot has point feet.
     bool verbose_{};  ///< Flag indicating if verbose output is enabled.
