@@ -681,15 +681,15 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
             params_.joint_rate, params_.g, params_.eps);
     }
 
-    // Compute orientation noise for contacts
+    // Compute orientation noise for contacts 
     std::map<std::string, Eigen::Matrix3d> kin_contacts_orientation_noise;
     for (const auto& frame : state.getContactsFrame()) {
-        const Eigen::Vector3d& lin_vel_noise = kinematic_estimator_->linearVelocityNoise(frame);
-        kin.contacts_position_noise[frame].noalias() = lin_vel_noise * lin_vel_noise.transpose();
+        kin.contacts_position_noise[frame].noalias() =
+            kinematic_estimator_->linearVelocityCovariance(frame);
 
         if (!state.isPointFeet()) {
-            const Eigen::Vector3d& ang_vel = kinematic_estimator_->angularVelocityNoise(frame);
-            kin_contacts_orientation_noise[frame].noalias() = ang_vel * ang_vel.transpose();
+            kin_contacts_orientation_noise[frame].noalias() =
+                kinematic_estimator_->angularVelocityCovariance(frame);
         }
     }
 

@@ -121,7 +121,7 @@ public:
             dqmax_[i] = pmodel_->velocityLimit[i];
         }
 
-        qn_ = Eigen::VectorXd::Ones(jnames_.size()) * std::sqrt(joint_position_variance);
+        qn_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_position_variance;
 
         // Initialize state vectors
         q_.resize(jnames_.size());
@@ -204,7 +204,6 @@ public:
      * @brief Updates the joint configuration and kinematic data
      * @param qmap Map of joint names to their positions
      * @param qdotmap Map of joint names to their velocities
-     * @param joint_std Standard deviation for joint configuration noise
      */
     void updateJointConfig(const std::map<std::string, double>& qmap,
                            const std::map<std::string, double>& qdotmap) {
@@ -214,21 +213,23 @@ public:
     }
 
     /**
-     * @brief Computes the noise in linear velocity of a specific frame
+     * @brief Computes the linear velocity covariance of frame from independent joint noise.
      * @param frame_name Name of the frame
-     * @return Noise in linear velocity
+     * @return 3x3 Linear velocity covariance matrix
      */
-    Eigen::Vector3d linearVelocityNoise(const std::string& frame_name) const {
-        return linearJacobian(frame_name) * qn_;
+    Eigen::Matrix3d linearVelocityCovariance(const std::string& frame_name) const {
+        const Eigen::MatrixXd J = linearJacobian(frame_name);
+        return J * qn_.asDiagonal() * J.transpose();
     }
 
     /**
-     * @brief Computes the noise in angular velocity of a specific frame
+     * @brief Computes the angular velocity covariance of frame from independent joint noise.
      * @param frame_name Name of the frame
-     * @return Noise in angular velocity
+     * @return 3x3 Angular velocity covariance matrix
      */
-    Eigen::Vector3d angularVelocityNoise(const std::string& frame_name) const {
-        return angularJacobian(frame_name) * qn_;
+    Eigen::Matrix3d angularVelocityCovariance(const std::string& frame_name) const {
+        const Eigen::MatrixXd J = angularJacobian(frame_name);
+        return J * qn_.asDiagonal() * J.transpose();
     }
 
     /**
@@ -493,14 +494,42 @@ public:
     }
 
     /**
+     * @brief Computes the angular momentum of the center of mass (CoM) of the robot model and its covariance.
+     * @return std::pair<Eigen::Vector3d, Eigen::Matrix3d> with angular momentum and angular momentum covariance.
+     */
+    std::pair<Eigen::Vector3d, Eigen::Matrix3d> comAngularMomentumAndCovariance() const {
+        pinocchio::computeCentroidalMap(*pmodel_, *data_, q_);
+        const Eigen::MatrixXd Ag_angular = data_->Ag.bottomRows(3);
+        const Eigen::Vector3d h_angular = Ag_angular * qdot_;
+        const Eigen::Matrix3d cov =
+            Ag_angular * qn_.asDiagonal() * Ag_angular.transpose();
+        return {h_angular, cov};
+    }
+
+    /**
      * @brief Computes the angular momentum of the center of mass (CoM) of the robot model.
-     * @return Eigen::VectorXd representing the angular momentum of the CoM.
-     * @note This function computes the angular momentum of the CoM using
-     * pinocchio::computeCentroidalMomentum.
+     * @return Eigen::VectorXd representing the angular momentum of the CoM (3D).
+     * @note If you need both momentum and covariance, use comAngularMomentumAndCovariance() for
+     * one Pinocchio pass instead of calling this and comAngularMomentumCovariance() separately.
      */
     Eigen::VectorXd comAngularMomentum() const {
         pinocchio::computeCentroidalMomentum(*pmodel_, *data_, q_, qdot_);
         return data_->hg.angular();
+    }
+
+    /**
+     * @brief Computes the covariance of the center of mass (CoM) angular momentum from joint noise.
+     * The angular momentum of the center of mass (CoM) is calculated as h_angular = Ag_angular(q) * v; 
+     * this propagates joint velocity uncertainty (using the same per-joint variance as joint position noise) 
+     * through the centroidal map to a 3x3 covariance in (angular momentum)² units.
+     * @return Eigen::Matrix3d covariance of the CoM angular momentum (3x3).
+     * @note If you need both momentum and covariance, use comAngularMomentumAndCovariance() for
+     * one Pinocchio pass instead of calling this and comAngularMomentum() separately.
+     */
+    Eigen::Matrix3d comAngularMomentumCovariance() const {
+        pinocchio::computeCentroidalMap(*pmodel_, *data_, q_);
+        const Eigen::MatrixXd Ag_angular = data_->Ag.bottomRows(3);
+        return Ag_angular * qn_.asDiagonal() * Ag_angular.transpose();
     }
 
     /**
@@ -655,7 +684,7 @@ private:
     Eigen::VectorXd q_;
     /// Joint velocities
     Eigen::VectorXd qdot_;
-    /// Joint position measurement noises
+    /// Joint position measurement noise (variance per joint)
     Eigen::VectorXd qn_;
     /// Total mass of the robot
     double total_mass_;
