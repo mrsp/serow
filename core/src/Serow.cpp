@@ -222,6 +222,20 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("minimum_contact_probability", params_.minimum_contact_probability))
         return false;
+    if (!checkConfigParam("minimum_stable_contact_probability", params_.minimum_stable_contact_probability))
+        return false;
+    if (!checkConfigParam("minimum_stable_foot_angular_velocity", params_.minimum_stable_foot_angular_velocity))
+        return false;
+    if (!checkConfigParam("minimum_stable_foot_linear_velocity", params_.minimum_stable_foot_linear_velocity))
+        return false;
+    if (!checkConfigParam("resolution", params_.resolution))
+        return false;
+    if (!checkConfigParam("radius", params_.radius))
+        return false;
+    if (!checkConfigParam("dist_variance_gain", params_.dist_variance_gain))
+        return false;
+    if (!checkConfigParam("power", params_.power))
+        return false;
 
     // Read log directory parameter
     if (!checkConfigParam("log_dir", params_.log_dir))
@@ -667,15 +681,15 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
             params_.joint_rate, params_.g, params_.eps);
     }
 
-    // Compute orientation noise for contacts
+    // Compute orientation noise for contacts 
     std::map<std::string, Eigen::Matrix3d> kin_contacts_orientation_noise;
     for (const auto& frame : state.getContactsFrame()) {
-        const Eigen::Vector3d& lin_vel_noise = kinematic_estimator_->linearVelocityNoise(frame);
-        kin.contacts_position_noise[frame].noalias() = lin_vel_noise * lin_vel_noise.transpose();
+        kin.contacts_position_noise[frame].noalias() =
+            kinematic_estimator_->linearVelocityCovariance(frame);
 
         if (!state.isPointFeet()) {
-            const Eigen::Vector3d& ang_vel = kinematic_estimator_->angularVelocityNoise(frame);
-            kin_contacts_orientation_noise[frame].noalias() = ang_vel * ang_vel.transpose();
+            kin_contacts_orientation_noise[frame].noalias() =
+                kinematic_estimator_->angularVelocityCovariance(frame);
         }
     }
 
@@ -710,7 +724,8 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
 void Serow::runAngularMomentumEstimator(State& state) {
     // Get the angular momentum around the CoM in base frame coordinates as compute with rigid-body
     // kinematics
-    const Eigen::Vector3d& com_angular_momentum = kinematic_estimator_->comAngularMomentum();
+    const std::pair<Eigen::Vector3d, Eigen::Matrix3d> com_angular_momentum_and_covariance = 
+        kinematic_estimator_->comAngularMomentumAndCovariance();
     const Eigen::Matrix3d& R_world_to_base = state.base_state_.base_orientation.toRotationMatrix();
 
     // Initialize angular momentum derivative estimator if needed
@@ -727,13 +742,13 @@ void Serow::runAngularMomentumEstimator(State& state) {
     }
 
     // Estimate the angular momentum derivative around the CoM in base frame
-    const Eigen::Vector3d& com_angular_momentum_derivative =
-        angular_momentum_derivative_estimator->filter(com_angular_momentum,
-                                                      Eigen::Vector3d::Ones(),
+    const Eigen::Vector3d com_angular_momentum_derivative =
+        angular_momentum_derivative_estimator->filter(com_angular_momentum_and_covariance.first,
+                                                      com_angular_momentum_and_covariance.second.diagonal(),
                                                       state.joint_state_.timestamp);
 
     // Update the state
-    state.centroidal_state_.angular_momentum = R_world_to_base * com_angular_momentum;
+    state.centroidal_state_.angular_momentum = R_world_to_base * com_angular_momentum_and_covariance.first;
     state.centroidal_state_.angular_momentum_derivative =
         R_world_to_base * com_angular_momentum_derivative;
 }
@@ -782,7 +797,7 @@ void Serow::runContactEstimator(
                     contact_estimators_.at(frame).setState(
                         state.contact_state_.contacts_force.at(frame).z());
                 }
-                contact_estimators_.at(frame).run(ft.at(frame).force.z());
+                contact_estimators_.at(frame).run(contacts_force.at(frame).z());
                 den += contact_estimators_.at(frame).getContactForce();
             }
         }
@@ -869,10 +884,22 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
                 throw std::runtime_error("Invalid terrain estimator type: " +
                                          params_.terrain_estimator_type);
             }
-            terrain_estimator_->initializeLocalMap(
-                terrain_height, 1e4, params_.minimum_terrain_height_variance,
-                params_.maximum_recenter_distance, params_.maximum_contact_points,
-                params_.minimum_contact_probability);
+            {
+                TerrainElevation::Params p;
+                p.min_variance = static_cast<float>(params_.minimum_terrain_height_variance);
+                p.max_recenter_distance = static_cast<float>(params_.maximum_recenter_distance);
+                p.max_contact_points = params_.maximum_contact_points;
+                p.min_contact_probability = static_cast<float>(params_.minimum_contact_probability);
+                p.min_stable_contact_probability = static_cast<float>(params_.minimum_stable_contact_probability);
+                p.min_stable_foot_angular_velocity = static_cast<float>(params_.minimum_stable_foot_angular_velocity);
+                p.min_stable_foot_linear_velocity = static_cast<float>(params_.minimum_stable_foot_linear_velocity);
+                p.resolution = static_cast<float>(params_.resolution);
+                p.radius = static_cast<float>(params_.radius);
+                p.dist_variance_gain = static_cast<float>(params_.dist_variance_gain);
+                p.power = static_cast<float>(params_.power);
+                terrain_estimator_->initializeLocalMap(
+                    static_cast<float>(terrain_height), 1e4f, p);
+            }
 
             terrain_estimator_->recenter({static_cast<float>(state.base_state_.base_position.x()),
                                           static_cast<float>(state.base_state_.base_position.y())});
@@ -1054,7 +1081,7 @@ void Serow::logExteroception(const State& state) {
         auto terrain_estimator = terrain_estimator_;
         auto exteroception_logger = exteroception_logger_;
         // Capture resolution value to avoid any potential issues with global variable access
-        constexpr double res_base = static_cast<double>(resolution);
+        const double res_base = terrain_estimator ? static_cast<double>(terrain_estimator->getResolution()) : 0.02;
         exteroception_logger_job_->addJob([terrain_estimator, exteroception_logger, ts = state.base_state_.timestamp, res_base]() {
             try {
                 if (!terrain_estimator || !exteroception_logger) {
@@ -1153,20 +1180,19 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     const double imu_timestamp = imu.timestamp;
     const double joint_timestamp = joints.begin()->second.timestamp;
 
-    if (imu_timestamp < last_imu_timestamp_ || abs(imu_timestamp - last_imu_timestamp_) < 1e-6) {
+    if (imu_timestamp < last_imu_timestamp_) {
         std::cerr << "IMU measurements are out of order, skipping filtering" << std::endl;
         timers_["total-time"].stop();
         return false;
     }
 
-    if (joint_timestamp < last_joint_timestamp_ ||
-        abs(joint_timestamp - last_joint_timestamp_) < 1e-6) {
+    if (joint_timestamp < last_joint_timestamp_) {
         std::cerr << "Joint measurements are out of order, skipping filtering" << std::endl;
         timers_["total-time"].stop();
         return false;
     }
 
-    if (abs(imu_timestamp - joint_timestamp) > 1e-3) {
+    if (abs(imu_timestamp - joint_timestamp) > 5e-3) {
         std::cerr << "IMU and joint timestamps are not synchronized, skipping filtering"
                   << std::endl;
         timers_["total-time"].stop();
@@ -1479,7 +1505,7 @@ void Serow::reset() {
 
     // Initialize the base and CoM estimators
     base_estimator_.init(state_.base_state_, state_.getContactsFrame(), params_.g, params_.imu_rate, 
-                         params_.eps, params_.use_imu_orientation, params_.verbose);
+                         params_.eps, params_.point_feet, params_.use_imu_orientation, params_.verbose);
 
     com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
                         params_.force_torque_rate);
@@ -1581,8 +1607,22 @@ void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicM
                 throw std::runtime_error("Invalid terrain estimator type: " +
                                         params_.terrain_estimator_type);
             }
-            terrain_estimator_->initializeLocalMap(static_cast<float>(terrain_height), 1e4,
-                                                   params_.minimum_terrain_height_variance);
+            {
+                TerrainElevation::Params p;
+                p.min_variance = static_cast<float>(params_.minimum_terrain_height_variance);
+                p.max_recenter_distance = static_cast<float>(params_.maximum_recenter_distance);
+                p.max_contact_points = params_.maximum_contact_points;
+                p.min_contact_probability = static_cast<float>(params_.minimum_contact_probability);
+                p.min_stable_contact_probability = static_cast<float>(params_.minimum_stable_contact_probability);
+                p.min_stable_foot_angular_velocity = static_cast<float>(params_.minimum_stable_foot_angular_velocity);
+                p.min_stable_foot_linear_velocity = static_cast<float>(params_.minimum_stable_foot_linear_velocity);
+                p.resolution = static_cast<float>(params_.resolution);
+                p.radius = static_cast<float>(params_.radius);
+                p.dist_variance_gain = static_cast<float>(params_.dist_variance_gain);
+                p.power = static_cast<float>(params_.power);
+                terrain_estimator_->initializeLocalMap(
+                    static_cast<float>(terrain_height), 1e4f, p);
+            }
             terrain_estimator_->recenter({static_cast<float>(state_.base_state_.base_position.x()),
                                           static_cast<float>(state_.base_state_.base_position.y())});
         }

@@ -242,7 +242,28 @@ private:
         /// @brief minimum contact probability to consider a contact point for terrain elevation
         /// estimation
         double minimum_contact_probability{0.15};
+        /// @brief minimum stable contact probability to consider a contact plane for terrain elevation
+        /// estimation
+        double minimum_stable_contact_probability{0.85};
+        /// @brief minimum stable foot angular velocity to consider a contact plane for terrain elevation
+        /// estimation
+        double minimum_stable_foot_angular_velocity{0.025};
+        /// @brief minimum stable foot linear velocity to consider a contact plane for terrain elevation
+        /// estimation
+        double minimum_stable_foot_linear_velocity{0.025};
+        /// @brief resolution of the terrain elevation mapper
+        double resolution{0.02};
+        /// @brief radius of inflation per contact point for the terrain elevation mapper
+        double radius{0.20};
+        /// @brief dist_variance_gain of the terrain elevation mapper, used to scale the variance of the terrain elevation mapper
+        double dist_variance_gain{100.0};
+        /// @brief power of the terrain elevation mapper, used to weight the contribution of the contact points to the terrain elevation mapper
+        double power{5.0};
+        /// @brief type of the terrain elevation mapper
+        /// @param naive: uses a naive implementation of the terrain elevation mapper
+        /// @param fast: uses a fast implementation of the terrain elevation mapper
         std::string terrain_estimator_type{};
+        /// @brief whether or not to log the data
         bool log_data{true};
         bool log_measurements{false};
         /// @brief directory where log files will be stored

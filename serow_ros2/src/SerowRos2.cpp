@@ -14,6 +14,7 @@
 
 #include <filesystem>
 #include <limits>
+#include <mutex>
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "yaml-cpp/yaml.h"
 
@@ -63,16 +64,18 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     const std::string& ground_truth_topic = config["topics"]["ground_truth"].as<std::string>();
     if (!ground_truth_topic.empty()) {
         ground_truth_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>(
-            ground_truth_topic, 10, std::bind(&SerowRos2::groundTruthCallback, this, _1));
+            ground_truth_topic, 100, std::bind(&SerowRos2::groundTruthCallback, this, _1));
     }
     const std::string& serow_config = config["serow_config"].as<std::string>();
     const bool publish_path = config["publish_path"].as<bool>();
-     
+    add_gravity_to_imu_ = config["add_gravity_to_imu"].as<bool>();
+
     RCLCPP_INFO(this->get_logger(), "Robot name: %s", robot_name.c_str());
     RCLCPP_INFO(this->get_logger(), "Serow config file: %s", serow_config.c_str());
 
     // Configure F/T synchronization tolerance
-    ft_max_time_diff_ = this->declare_parameter<double>("ft_max_time_diff", 0.1);
+    ft_max_time_diff_ = this->declare_parameter<double>("ft_max_time_diff", 0.01);
+    imu_max_time_diff_ = this->declare_parameter<double>("imu_max_time_diff", 0.005);
     RCLCPP_INFO(this->get_logger(), "F/T max time difference: %.3f seconds", ft_max_time_diff_);
 
     // Initialize SERoW
@@ -88,16 +91,8 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
                 joint_state_topic.c_str(), base_imu_topic.c_str());
 
     // Create message_filters subscribers for synchronization
-    joint_state_subscriber_.subscribe(this, joint_state_topic);
-    base_imu_subscriber_.subscribe(this, base_imu_topic);
-
-    // Create a synchronizer for the joint state and base imu
-    sync_ = std::make_shared<message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::JointState, sensor_msgs::msg::Imu>>>(
-        message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::JointState, sensor_msgs::msg::Imu>(10),
-        joint_state_subscriber_,
-        base_imu_subscriber_
-    );
-    sync_->registerCallback(std::bind(&SerowRos2::jointStateAndBaseImuCallback, this, _1, _2));
+    joint_state_subscriber_ = this->create_subscription<sensor_msgs::msg::JointState>(joint_state_topic, 100, std::bind(&SerowRos2::jointStateCallback, this, _1));
+    base_imu_subscriber_ = this->create_subscription<sensor_msgs::msg::Imu>(base_imu_topic, 100, std::bind(&SerowRos2::baseImuCallback, this, _1));
 
     // Dynamically create a wrench callback, one for each force torque state topic
     for (size_t i = 0; i < force_torque_state_topics_.size(); ++i) {
@@ -123,7 +118,7 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
         RCLCPP_INFO(this->get_logger(), "Creating force torque state subscription on topic: %s",
                     ft_topic.c_str());
         auto ft_subscription = this->create_subscription<geometry_msgs::msg::WrenchStamped>(
-            ft_topic, 10, force_torque_state_topic_callbacks_.back());
+            ft_topic, 100, force_torque_state_topic_callbacks_.back());
         force_torque_state_subscriptions_.push_back(std::move(ft_subscription));
     }
 
@@ -139,41 +134,41 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     }
 
     com_position_publisher_ =
-        this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/com/position", 10);
+        this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/com/position", 100);
     cop_position_publisher_ =
-        this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/cop/position", 10);
+        this->create_publisher<geometry_msgs::msg::PointStamped>("/serow/cop/position", 100);
     com_momentum_publisher_ =
-        this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum", 10);
+        this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum", 100);
     com_momentum_rate_publisher_ =
-        this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum_rate", 10);
+        this->create_publisher<geometry_msgs::msg::TwistStamped>("/serow/com/momentum_rate", 100);
     com_external_wrench_publisher_ =
-        this->create_publisher<geometry_msgs::msg::WrenchStamped>("/serow/com/external_wrench", 10);
+        this->create_publisher<geometry_msgs::msg::WrenchStamped>("/serow/com/external_wrench", 100);
     for (const auto& contact_frame : state->getContactsFrame()) {
         foot_odom_publishers_[contact_frame] = this->create_publisher<nav_msgs::msg::Odometry>(
-            "/serow/" + contact_frame + "/odom", 10);
+            "/serow/" + contact_frame + "/odom", 100);
         foot_wrench_publishers_[contact_frame] =
             this->create_publisher<geometry_msgs::msg::WrenchStamped>(
-                "/serow/" + contact_frame + "/contact/wrench", 10);
+                "/serow/" + contact_frame + "/contact/wrench", 100);
         foot_contact_probability_publishers_[contact_frame] =
             this->create_publisher<std_msgs::msg::Float64>(
-                "/serow/" + contact_frame + "/contact/probability", 10);
+                "/serow/" + contact_frame + "/contact/probability", 100);
         if (publish_path) {
             foot_odom_path_publishers_[contact_frame] = this->create_publisher<nav_msgs::msg::Path>("/serow/" + contact_frame + "/odom/path", 10);
         }
     }
     odom_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(
-        "/serow/odom", 10);
+        "/serow/odom", 100);
     joint_state_publisher_ =
-        this->create_publisher<sensor_msgs::msg::JointState>("/serow/joint_states", 10);
+        this->create_publisher<sensor_msgs::msg::JointState>("/serow/joint_states", 100);
     if  (!ground_truth_topic.empty()) {
         ground_truth_publisher_ = this->create_publisher<nav_msgs::msg::Odometry>(
-            "/serow/ground_truth", 10);
+            "/serow/ground_truth", 100);
         if (publish_path) {
-            ground_truth_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/ground_truth/path", 10);
+            ground_truth_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/ground_truth/path", 100);
         }
     }
     if (publish_path) {
-        odom_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/odom/path", 10);
+        odom_path_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/serow/odom/path", 100);
     }
 
     // Start the publishing thread
@@ -197,104 +192,110 @@ SerowRos2::~SerowRos2() {
 }
 
 void SerowRos2::run() {
-    sensor_msgs::msg::JointState joint_state_data;
-    sensor_msgs::msg::Imu imu_data;
+    // Fetch the most recent joint state data 
+    std::queue<sensor_msgs::msg::JointState> joint_state_queue;
     {
-        std::lock_guard<std::mutex> lock(joint_imu_data_mutex_);
-        if (!joint_state_data_.has_value() || !base_imu_data_.has_value()) {
-            return;
-        }
-        joint_state_data = joint_state_data_.value();
-        imu_data = base_imu_data_.value();
-
-        // Clear the used joint and imu measurements
-        joint_state_data_.reset();
-        base_imu_data_.reset();
+        std::lock_guard<std::mutex> lock(joint_data_mutex_);
+        joint_state_queue = std::move(joint_state_queue_);
     }
-
-    // Create the joint measurements
-    std::map<std::string, serow::JointMeasurement> joint_measurements;
-    for (size_t i = 0; i < joint_state_data.name.size(); i++) {
-        serow::JointMeasurement joint{};
-        joint.timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
+    while (!joint_state_queue.empty()) {
+        const sensor_msgs::msg::JointState joint_state_data = std::move(joint_state_queue.front());
+        joint_state_queue.pop();
+        const double joint_state_timestamp = static_cast<double>(joint_state_data.header.stamp.sec) +
             static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
-        joint.position = joint_state_data.position[i];
-        if (!joint_state_data.velocity.empty()) {
-            joint.velocity = joint_state_data.velocity[i];
-        }
-        joint_measurements[joint_state_data.name[i]] = std::move(joint);
-    }
 
-    // Create the base imu measurement
-    serow::ImuMeasurement imu_measurement{};
-    imu_measurement.timestamp = static_cast<double>(imu_data.header.stamp.sec) +
-        static_cast<double>(imu_data.header.stamp.nanosec) * 1e-9;
-    imu_measurement.linear_acceleration =
-        Eigen::Vector3d(imu_data.linear_acceleration.x, imu_data.linear_acceleration.y,
-                        imu_data.linear_acceleration.z);
-    imu_measurement.angular_velocity = Eigen::Vector3d(
-        imu_data.angular_velocity.x, imu_data.angular_velocity.y, imu_data.angular_velocity.z);
-    
-    // Retrieve the synchronized F/T measurements for each foot frame
-    std::map<std::string, serow::ForceTorqueMeasurement> synchronized_ft_measurements;
-    for (size_t i = 0; i < force_torque_state_topics_.size(); ++i) {
-        const auto& ft_topic = force_torque_state_topics_[i];
-        std::lock_guard<std::mutex> lock(*ft_subscription_mutexes_[i]);
-        const auto& frame_id = ft_topic_to_frame_id_[ft_topic];
-        const auto& ft_buffer = ft_buffers_[frame_id];
-        const auto& ft_measurement = ft_buffer.get(imu_measurement.timestamp, ft_max_time_diff_);
-        if (ft_measurement) {
-            synchronized_ft_measurements[frame_id] = std::move(ft_measurement.value());
-        } else {
-            const auto& time_range = ft_buffer.getTimeRange();
-            RCLCPP_ERROR(this->get_logger(), "Failed to get F/T measurement for frame: %s at timestamp: %f", frame_id.c_str(), imu_measurement.timestamp);
-            if (time_range) {
-                RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
-            } else {
-                RCLCPP_ERROR(this->get_logger(), "Time range: not available");
-            }
-        }
-    }
-
-    std::optional<serow::BasePoseGroundTruth> ground_truth_pose = std::nullopt;
-    if (first_ground_truth_pose_.has_value()) {
-        std::lock_guard<std::mutex> lock(ground_truth_data_mutex_); 
-        const auto& ground_truth_odometry = ground_truth_odometry_buffer_.get(imu_measurement.timestamp, ft_max_time_diff_);
-        if (ground_truth_odometry.has_value()) {
-            serow::BasePoseGroundTruth gt;
-            gt.timestamp = ground_truth_odometry.value().timestamp;
-            gt.position = ground_truth_odometry.value().base_position;
-            gt.orientation = ground_truth_odometry.value().base_orientation;
-            ground_truth_pose = std::move(gt);
-        } else {
-            RCLCPP_ERROR(this->get_logger(), "Failed to get ground truth odometry at timestamp: %f", imu_measurement.timestamp);
-            const auto& time_range = ground_truth_odometry_buffer_.getTimeRange();
-            if (time_range) {
-                RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
-            } else {
-                RCLCPP_ERROR(this->get_logger(), "Time range: not available");
-            }
-        }
-    }
-
-    serow_.filter(imu_measurement, joint_measurements, 
-                  synchronized_ft_measurements.size() == force_torque_state_topics_.size() ? std::make_optional(synchronized_ft_measurements) : std::nullopt,
-                  std::nullopt,
-                  std::nullopt,
-                  ground_truth_pose);
-    const auto& state = serow_.getState();
-    if (state) {
-        // Queue the state for publishing instead of publishing directly to not block the main thread
+        // Fetch the base imu measurement from the buffer
+        std::optional<serow::ImuMeasurement> base_imu_measurement = std::nullopt;
         {
-            std::lock_guard<std::mutex> lock(publish_queue_mutex_);
-            publish_queue_.push(std::make_pair(state.value(), ground_truth_pose));
+            std::lock_guard<std::mutex> lock(base_imu_data_mutex_);
+            base_imu_measurement = base_imu_buffer_.get(joint_state_timestamp, imu_max_time_diff_);
+            if (!base_imu_measurement.has_value()) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to get base imu measurement at timestamp: %f", joint_state_timestamp);
+                const auto& time_range = base_imu_buffer_.getTimeRange();
+                if (time_range) {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
+                } else {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: not available");
+                }
+                return;
+            } 
+        }
 
-            // Keep only the latest state to avoid queue buildup
-            while (publish_queue_.size() > 1) {
-                publish_queue_.pop();
+        base_imu_measurement.value().timestamp = joint_state_timestamp;
+        // Create the joint measurements
+        std::map<std::string, serow::JointMeasurement> joint_measurements;
+        for (size_t i = 0; i < joint_state_data.name.size(); i++) {
+            serow::JointMeasurement joint{};
+            joint.timestamp = joint_state_timestamp;
+            joint.position = joint_state_data.position[i];
+            if (!joint_state_data.velocity.empty()) {
+                joint.velocity = joint_state_data.velocity[i];
+            }
+            joint_measurements[joint_state_data.name[i]] = std::move(joint);
+        }
+        
+        // Retrieve the synchronized F/T measurements for each foot frame
+        std::map<std::string, serow::ForceTorqueMeasurement> synchronized_ft_measurements;
+        for (size_t i = 0; i < force_torque_state_topics_.size(); ++i) {
+            const auto& ft_topic = force_torque_state_topics_[i];
+            std::lock_guard<std::mutex> lock(*ft_subscription_mutexes_[i]);
+            const auto& frame_id = ft_topic_to_frame_id_[ft_topic];
+            const auto& ft_buffer = ft_buffers_[frame_id];
+            const auto& ft_measurement = ft_buffer.get(joint_state_timestamp, ft_max_time_diff_);
+            if (ft_measurement) {
+                synchronized_ft_measurements[frame_id] = std::move(ft_measurement.value());
+            } else {
+                const auto& time_range = ft_buffer.getTimeRange();
+                RCLCPP_ERROR(this->get_logger(), "Failed to get F/T measurement for frame: %s at timestamp: %f", frame_id.c_str(), joint_state_timestamp);
+                if (time_range) {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
+                } else {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: not available");
+                }
             }
         }
-        publish_condition_.notify_one();
+
+        // Fetch the most recent ground truth data (if available)
+        std::optional<serow::BasePoseGroundTruth> ground_truth_pose = std::nullopt;
+        if (first_ground_truth_pose_.has_value()) {
+            std::lock_guard<std::mutex> lock(ground_truth_data_mutex_); 
+            const auto& ground_truth_odometry = ground_truth_odometry_buffer_.get(joint_state_timestamp, ft_max_time_diff_);
+            if (ground_truth_odometry.has_value()) {
+                serow::BasePoseGroundTruth gt;
+                gt.timestamp = ground_truth_odometry.value().timestamp;
+                gt.position = ground_truth_odometry.value().base_position;
+                gt.orientation = ground_truth_odometry.value().base_orientation;
+                ground_truth_pose = std::move(gt);
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "Failed to get ground truth odometry at timestamp: %f", joint_state_timestamp);
+                const auto& time_range = ground_truth_odometry_buffer_.getTimeRange();
+                if (time_range) {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first, time_range->second);
+                } else {
+                    RCLCPP_ERROR(this->get_logger(), "Time range: not available");
+                }
+            }
+        }
+
+        serow_.filter(base_imu_measurement.value(), joint_measurements, 
+                    synchronized_ft_measurements.size() == force_torque_state_topics_.size() ? std::make_optional(synchronized_ft_measurements) : std::nullopt,
+                    std::nullopt,
+                    std::nullopt,
+                    ground_truth_pose);
+        const auto& state = serow_.getState();
+        if (state) {
+            // Queue the state for publishing instead of publishing directly to not block the main thread
+            {
+                std::lock_guard<std::mutex> lock(publish_queue_mutex_);
+                publish_queue_.push(std::make_pair(state.value(), ground_truth_pose));
+
+                // Keep only the latest state to avoid queue buildup
+                while (publish_queue_.size() > 1) {
+                    publish_queue_.pop();
+                }
+            }
+            publish_condition_.notify_one();
+        }
     }
 }
 
@@ -580,11 +581,29 @@ void SerowRos2::publishContactState(const serow::State& state) {
     }
 }
 
-void SerowRos2::jointStateAndBaseImuCallback(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state_msg, const sensor_msgs::msg::Imu::ConstSharedPtr& base_imu_msg) {
-    std::lock_guard<std::mutex> lock(joint_imu_data_mutex_);
-    this->joint_state_data_ = *joint_state_msg;
-    this->base_imu_data_ = *base_imu_msg;
+void SerowRos2::jointStateCallback(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state_msg) {
+    std::lock_guard<std::mutex> lock(joint_data_mutex_);
+    joint_state_queue_.push(*joint_state_msg);
 }
+
+void SerowRos2::baseImuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr& base_imu_msg) {
+    std::lock_guard<std::mutex> lock(base_imu_data_mutex_);
+    serow::ImuMeasurement imu_measurement{};
+    imu_measurement.timestamp = static_cast<double>(base_imu_msg->header.stamp.sec) +
+        static_cast<double>(base_imu_msg->header.stamp.nanosec) * 1e-9;
+    imu_measurement.linear_acceleration =
+        Eigen::Vector3d(base_imu_msg->linear_acceleration.x, base_imu_msg->linear_acceleration.y,
+                        base_imu_msg->linear_acceleration.z);
+    imu_measurement.angular_velocity = Eigen::Vector3d(
+        base_imu_msg->angular_velocity.x, base_imu_msg->angular_velocity.y, base_imu_msg->angular_velocity.z);
+    
+    if (add_gravity_to_imu_) {
+        const Eigen::Matrix3d R_imu_to_world = Eigen::Quaterniond(base_imu_msg->orientation.w, base_imu_msg->orientation.x, base_imu_msg->orientation.y, base_imu_msg->orientation.z).toRotationMatrix();
+        imu_measurement.linear_acceleration = R_imu_to_world.transpose() * (R_imu_to_world * imu_measurement.linear_acceleration + Eigen::Vector3d(0.0, 0.0, 9.81));
+    }
+    base_imu_buffer_.add(std::move(imu_measurement));
+}
+
 
 void SerowRos2::groundTruthCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& ground_truth_msg) {
     std::lock_guard<std::mutex> lock(ground_truth_data_mutex_);
@@ -599,7 +618,6 @@ void SerowRos2::groundTruthCallback(const nav_msgs::msg::Odometry::ConstSharedPt
     }
 
     // Express current pose in the first pose's frame: origin at first position,
-
     const Eigen::Isometry3d ground_truth_pose = first_ground_truth_pose_.value().inverse() * current_ground_truth_pose;
 
     serow::OdometryMeasurement ground_truth_odometry;

@@ -21,6 +21,7 @@
 #include <serow/Serow.hpp>
 #include <serow/ForceTorqueMeasurementBuffer.hpp>
 #include <serow/OdometryMeasurementBuffer.hpp>
+#include <serow/ImuMeasurementBuffer.hpp>
 #include <thread>
 
 #include <geometry_msgs/msg/point_stamped.hpp>
@@ -32,9 +33,6 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <std_msgs/msg/float64.hpp>
-#include <message_filters/sync_policies/approximate_time.hpp>
-#include <message_filters/synchronizer.hpp>
-#include <message_filters/subscriber.hpp>
 
 class SerowRos2 : public rclcpp::Node {
 public:
@@ -57,7 +55,9 @@ private:
 
     void publishGroundTruth(const serow::BasePoseGroundTruth& gt, const std::string& frame_id);
 
-    void jointStateAndBaseImuCallback(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state_msg, const sensor_msgs::msg::Imu::ConstSharedPtr& base_imu_msg);
+    void jointStateCallback(const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state_msg);
+
+    void baseImuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr& base_imu_msg);
 
     void groundTruthCallback(const nav_msgs::msg::Odometry::ConstSharedPtr& ground_truth_msg);
 
@@ -83,24 +83,23 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
 
     // Subscribers
-    message_filters::Subscriber<sensor_msgs::msg::JointState> joint_state_subscriber_;
-    message_filters::Subscriber<sensor_msgs::msg::Imu> base_imu_subscriber_;
+    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_subscriber_;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr base_imu_subscriber_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr ground_truth_subscriber_;
-    
-    std::shared_ptr<message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::JointState, sensor_msgs::msg::Imu>>> sync_;
-
     std::vector<rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr>
         force_torque_state_subscriptions_;
     std::vector<std::function<void(const geometry_msgs::msg::WrenchStamped&)>>
         force_torque_state_topic_callbacks_;
+
     std::vector<std::unique_ptr<std::mutex>> ft_subscription_mutexes_;  // One mutex per F/T subscription
-    std::optional<sensor_msgs::msg::Imu> base_imu_data_;
-    std::optional<sensor_msgs::msg::JointState> joint_state_data_;
+    std::queue<sensor_msgs::msg::JointState> joint_state_queue_;
     std::map<std::string, serow::ForceTorqueMeasurementBuffer> ft_buffers_;
     serow::OdometryMeasurementBuffer ground_truth_odometry_buffer_;
+    serow::ImuMeasurementBuffer base_imu_buffer_;
     std::vector<std::string> force_torque_state_topics_;
     std::map<std::string, std::string> ft_topic_to_frame_id_;
-    double ft_max_time_diff_ = 0.1;  // Max time difference for F/T synchronization (default: 100ms)
+    double ft_max_time_diff_ = 0.01;  // Max time difference for F/T synchronization (default: 10ms)
+    double imu_max_time_diff_ = 0.005;  // Max time difference for IMU synchronization (default: 5ms)
     rclcpp::TimerBase::SharedPtr timer_;
 
     // Threading components for asynchronous publishing
@@ -109,10 +108,12 @@ private:
     std::mutex publish_queue_mutex_;
     std::condition_variable publish_condition_;
     bool shutdown_requested_ = false;
-    std::mutex joint_imu_data_mutex_;
+    std::mutex joint_data_mutex_;
+    std::mutex base_imu_data_mutex_;
     std::mutex ground_truth_data_mutex_;
     std::optional<Eigen::Isometry3d> first_ground_truth_pose_;
     nav_msgs::msg::Path odom_path_msg_;
     nav_msgs::msg::Path gt_path_msg_;
     std::map<std::string, nav_msgs::msg::Path> foot_odom_path_msgs_;
+    bool add_gravity_to_imu_ = false;
 };
