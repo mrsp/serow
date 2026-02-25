@@ -1,12 +1,12 @@
 {
   "robot_name": "g1_12dof",
   "base_frame": "pelvis",
-  "point_feet": false,
+  "point_feet": true,
   "foot_frames": {
     "0": "left_ankle_roll_link",
     "1": "right_ankle_roll_link"
   },
-  "model_path": "g1_12dof.urdf",
+  "model_path": "g1_12dof.xml",
   "g": 9.81,
   "joint_rate": 500.0,
   "estimate_joint_velocity": true,
@@ -159,9 +159,9 @@
     1.0e-6
   ],
   "initial_base_linear_velocity_covariance": [
-    1.0e-6,
-    1.0e-6,
-    1.0e-6
+    1.0e-1,
+    1.0e-1,
+    1.0e-1
   ],
   "initial_imu_linear_acceleration_bias_covariance": [
     1.0e-6,
@@ -188,13 +188,19 @@
     1.0,
     1.0
   ],
-  "T_base_to_odom": null,
-  "enable_terrain_estimation": false,
+  "enable_terrain_estimation": true,
   "terrain_estimator": "fast",
-  "minimum_terrain_height_variance": 1e-3,
+  "minimum_terrain_height_variance": 1e-6,
   "maximum_contact_points": 4,
-  "maximum_recenter_distance": 0.35,
+  "maximum_recenter_distance": 1.0,
   "minimum_contact_probability": 0.15,
+  "minimum_stable_contact_probability": 0.85,
+  "minimum_stable_foot_angular_velocity": 0.02,
+  "minimum_stable_foot_linear_velocity": 0.02,
+  "resolution": 0.015,
+  "radius": 0.5,
+  "dist_variance_gain": 10.0,
+  "power": 5.0,
   "T_base_to_ground_truth": null,
   "log_data": false,
   "log_measurements": false,
