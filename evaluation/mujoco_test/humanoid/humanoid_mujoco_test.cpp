@@ -223,6 +223,17 @@ int main(int argc, char** argv) {
                 j_out["imu_bias"]["accel"] = { {"x", biasAcc.x()}, {"y", biasAcc.y()}, {"z", biasAcc.z()} };
                 j_out["imu_bias"]["angVel"] = { {"x", biasGyr.x()}, {"y", biasGyr.y()}, {"z", biasGyr.z()} };
 
+                // Contact Probabilities
+                for (const auto& [json_key, serow_link_name] : contact_map) {
+                    auto prob = state->getContactProbability(serow_link_name);
+                    if (prob.has_value()) {
+                        j_out["contact_probabilities"][serow_link_name] = prob.value();
+                    } else {
+                        // Fallback if the probability is not set yet
+                        j_out["contact_probabilities"][serow_link_name] = 0.0; 
+                    }
+                }
+
                 // Write Message
                 std::string output_payload = j_out.dump();
 
