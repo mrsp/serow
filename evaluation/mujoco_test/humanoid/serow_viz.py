@@ -2,10 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import json
-import re
 from mcap.reader import make_reader
 from scipy.spatial.transform import Rotation as R
-
 
 CONFIG_FILE = "test_config.json"
 
@@ -25,8 +23,8 @@ exp_name   = config["Target"].get("experiment", "straight")
 base_path_cfg = config["Paths"].get("base_path", ".")
 
 full_exp_name = f"{robot_name}_{exp_name}"
-gt_topic_name = f"/robot_state"      # Data MCAP Topic
-est_topic_name = "serow_predictions" # Estimator Topic
+gt_topic_name = f"/robot_state"      
+est_topic_name = "serow_predictions" 
 
 def resolve_template(raw_path):
     s = raw_path.replace("{base_path}", base_path_cfg)
@@ -58,9 +56,7 @@ print(f"[CONFIG] Experiment: {exp_name}")
 print(f"[CONFIG] GT File:    {MEASUREMENT_FILE}")
 print(f"[CONFIG] Est File:   {PREDICTION_FILE}")
 
-
 def load_gt(mcap_file, topic):
-    """Loads Ground Truth data (Pos, Rot, Vel, IMU, Forces)"""
     data_store = {
         "ts": [], "pos": [], "rot": [], "lin_vel": [],
         "acc": [], "gyr": [], "f_left": [], "f_right": []
@@ -79,7 +75,6 @@ def load_gt(mcap_file, topic):
             
             gt = d["base_ground_truth"]
             data_store["pos"].append([gt["position"]["x"], gt["position"]["y"], gt["position"]["z"]])
-            # Store Quaternion as [w, x, y, z]
             data_store["rot"].append([gt["orientation"]["w"], gt["orientation"]["x"], gt["orientation"]["y"], gt["orientation"]["z"]])
             data_store["lin_vel"].append([gt["linear_velocity"]["x"], gt["linear_velocity"]["y"], gt["linear_velocity"]["z"]])
             
@@ -105,10 +100,9 @@ def load_gt(mcap_file, topic):
     return {k: np.array(v) for k, v in data_store.items()}
 
 def load_est(mcap_file, topic):
-    """Loads Serow Predictions"""
     data_store = {
         "ts": [], "pos": [], "rot": [], "lin_vel": [],
-        "b_acc": [], "b_gyr": []
+        "prob_left": [], "prob_right": []
     }
 
     if not os.path.exists(mcap_file):
@@ -122,10 +116,8 @@ def load_est(mcap_file, topic):
 
             data_store["ts"].append(d["timestamp"])
 
-            # Base Pose
             bp = d["base_pose"]
             data_store["pos"].append([bp["position"]["x"], bp["position"]["y"], bp["position"]["z"]])
-            # Store Quaternion as [w, x, y, z]
             data_store["rot"].append([bp["rotation"]["w"], bp["rotation"]["x"], bp["rotation"]["y"], bp["rotation"]["z"]])
             
             if "linear_velocity" in bp:
@@ -133,45 +125,45 @@ def load_est(mcap_file, topic):
             else:
                 data_store["lin_vel"].append([0.0, 0.0, 0.0])
 
-            # Bias
-            if "imu_bias" in d:
-                bias = d["imu_bias"]
-                data_store["b_acc"].append([bias["accel"]["x"], bias["accel"]["y"], bias["accel"]["z"]])
-                data_store["b_gyr"].append([bias["angVel"]["x"], bias["angVel"]["y"], bias["angVel"]["z"]])
+            # Extract Contact Probabilities
+            probs = d.get("contact_probabilities", {})
+            p_left = 0.0
+            p_right = 0.0
+            
+            if probs:
+                # Group by left/right using keyword matching in the link names
+                l_vals = [v for k, v in probs.items() if 'left' in k.lower() or 'fl' in k.lower() or 'rl' in k.lower()]
+                r_vals = [v for k, v in probs.items() if 'right' in k.lower() or 'fr' in k.lower() or 'rr' in k.lower()]
+                
+                # If a quadruped has two left feet, take the max probability to show the "left side" is in contact
+                if l_vals: p_left = max(l_vals)
+                if r_vals: p_right = max(r_vals)
+                
+            data_store["prob_left"].append(p_left)
+            data_store["prob_right"].append(p_right)
 
     return {k: np.array(v) for k, v in data_store.items()}
 
 def align_gt_to_est(gt_pos, gt_rot):
-    """
-    Transforms GT trajectory to start at (0,0,0) with Identity rotation,
-    matching the typical startup state of the Estimator.
-    """
     if len(gt_pos) == 0: return gt_pos, gt_rot
 
-    # Get Initial GT Pose
     p0 = gt_pos[0]
-    q0 = gt_rot[0] # [w, x, y, z]
-    
-    # Create Rotation object for q0 (scipy expects [x, y, z, w])
+    q0 = gt_rot[0] 
     r0 = R.from_quat([q0[1], q0[2], q0[3], q0[0]])
     r0_inv = r0.inv()
 
-    # Align Positions: P_aligned = R0_inv * (P - P0)
     pos_centered = gt_pos - p0
     pos_aligned = r0_inv.apply(pos_centered)
 
-    # Align Rotations: R_aligned = R0_inv * R
-    r_current = R.from_quat(gt_rot[:, [1, 2, 3, 0]]) # Convert input [w,x,y,z] to [x,y,z,w]
+    r_current = R.from_quat(gt_rot[:, [1, 2, 3, 0]])
     r_aligned = r0_inv * r_current
     
-    # Convert back to [w, x, y, z]
     rot_aligned_xyzw = r_aligned.as_quat()
     rot_aligned = rot_aligned_xyzw[:, [3, 0, 1, 2]]
     
     return pos_aligned, rot_aligned
 
 def compute_ATE(gt_ts, gt_pos, est_ts, est_pos):
-    """Computes RMSE between aligned GT and Est."""
     if len(gt_ts) == 0 or len(est_ts) == 0: return 0.0
 
     t_start = max(gt_ts[0], est_ts[0])
@@ -183,107 +175,130 @@ def compute_ATE(gt_ts, gt_pos, est_ts, est_pos):
     
     if len(eval_ts) == 0: return 0.0
 
-    # Interpolate GT to Est timestamps
     eval_gt_x = np.interp(eval_ts, gt_ts, gt_pos[:, 0])
     eval_gt_y = np.interp(eval_ts, gt_ts, gt_pos[:, 1])
     eval_gt_z = np.interp(eval_ts, gt_ts, gt_pos[:, 2])
     eval_gt = np.column_stack((eval_gt_x, eval_gt_y, eval_gt_z))
     
     error = np.linalg.norm(eval_gt - eval_est, axis=1)
-    rmse = np.sqrt(np.mean(error**2))
-    return rmse
-
+    return np.sqrt(np.mean(error**2))
 
 gt_data = load_gt(MEASUREMENT_FILE, gt_topic_name)
 est_data = load_est(PREDICTION_FILE, est_topic_name)
 
 if not gt_data or len(gt_data["ts"]) == 0:
-    print("FATAL: Ground Truth data is empty or missing.")
+    print("FATAL: Ground Truth data is empty.")
     exit(1)
-
 if not est_data or len(est_data["ts"]) == 0:
-    print("FATAL: Prediction data is empty or missing. Check your C++ writer.")
+    print("FATAL: Prediction data is empty.")
     exit(1)
 
-# --- Alignment ---
 print("Aligning Ground Truth to Estimation Start Frame...")
 gt_pos_aligned, gt_rot_aligned = align_gt_to_est(gt_data["pos"], gt_data["rot"])
 
-# --- Metrics ---
 ate = compute_ATE(gt_data["ts"], gt_pos_aligned, est_data["ts"], est_data["pos"])
 print(f"=========================================")
 print(f" ATE (Position RMSE): {ate:.4f} m")
 print(f"=========================================")
 
-# --- Plotting ---
 ts_gt = gt_data["ts"]
 ts_est = est_data["ts"]
 
-# Figure 1: Position & Velocity
-fig1, axs1 = plt.subplots(3, 2, figsize=(14, 10), sharex=True)
-fig1.suptitle(f"Serow State Estimation - {robot_name}\nATE: {ate:.4f} m")
-labels = ["X", "Y", "Z"]
+r_gt = R.from_quat(gt_rot_aligned[:, [1, 2, 3, 0]])
+r_est = R.from_quat(est_data["rot"][:, [1, 2, 3, 0]])
 
-# Col 1: Position
+rpy_gt = np.unwrap(r_gt.as_euler('xyz', degrees=True), period=360, axis=0)
+rpy_est = np.unwrap(r_est.as_euler('xyz', degrees=True), period=360, axis=0)
+
+q0 = gt_data["rot"][0]
+r0 = R.from_quat([q0[1], q0[2], q0[3], q0[0]])
+gt_vel_aligned = r0.inv().apply(gt_data["lin_vel"])
+
+# ---------------------------------------------------------
+# Figure 1: Position, Velocity, and RPY Orientation
+# ---------------------------------------------------------
+fig1, axs1 = plt.subplots(3, 3, figsize=(18, 10), sharex=True)
+fig1.suptitle(f"Serow State Estimation - {robot_name}\nATE: {ate:.4f} m")
+
+# Column 1: Position
+labels_pos = ["X", "Y", "Z"]
 for i in range(3):
-    axs1[i, 0].plot(ts_gt, gt_pos_aligned[:, i], label="GT (Aligned)", color="black", alpha=0.6)
+    axs1[i, 0].plot(ts_gt, gt_pos_aligned[:, i], label="GT", color="black", alpha=0.6)
     axs1[i, 0].plot(ts_est, est_data["pos"][:, i], label="Estimated", color="red", linestyle="--")
-    axs1[i, 0].set_ylabel(f"Pos {labels[i]} (m)")
+    axs1[i, 0].set_ylabel(f"Pos {labels_pos[i]} (m)")
     axs1[i, 0].grid(True, alpha=0.3)
 axs1[0, 0].legend()
 axs1[0, 0].set_title("Base Position")
 
-# Col 2: Linear Velocity
-q0 = gt_data["rot"][0]
-r0 = R.from_quat([q0[1], q0[2], q0[3], q0[0]])
-r0_inv = r0.inv()
-gt_vel_aligned = r0_inv.apply(gt_data["lin_vel"])
-
+# Column 2: Velocity
+labels_vel = ["X", "Y", "Z"]
 for i in range(3):
-    axs1[i, 1].plot(ts_gt, gt_vel_aligned[:, i], label="GT (Aligned)", color="black", alpha=0.6)
+    axs1[i, 1].plot(ts_gt, gt_vel_aligned[:, i], label="GT", color="black", alpha=0.6)
     axs1[i, 1].plot(ts_est, est_data["lin_vel"][:, i], label="Estimated", color="red", linestyle="--")
-    axs1[i, 1].set_ylabel(f"Vel {labels[i]} (m/s)")
+    axs1[i, 1].set_ylabel(f"Vel {labels_vel[i]} (m/s)")
     axs1[i, 1].grid(True, alpha=0.3)
-axs1[0, 1].set_title("Base Linear Velocity")
-axs1[2, 0].set_xlabel("Time (s)")
-axs1[2, 1].set_xlabel("Time (s)")
+axs1[0, 1].set_title("Base Velocity")
 
-# Figure 2: Orientation & Biases
-fig2, axs2 = plt.subplots(4, 2, figsize=(14, 12), sharex=True)
-fig2.suptitle("Orientation & IMU Biases")
+# Column 3: Orientation (RPY)
+labels_rpy = ["Roll", "Pitch", "Yaw"]
+for i in range(3):
+    axs1[i, 2].plot(ts_gt, rpy_gt[:, i], label="GT", color="black", alpha=0.6)
+    axs1[i, 2].plot(ts_est, rpy_est[:, i], label="Estimated", color="red", linestyle="--")
+    axs1[i, 2].set_ylabel(f"{labels_rpy[i]} (deg)")
+    axs1[i, 2].grid(True, alpha=0.3)
+axs1[0, 2].set_title("Orientation (Euler)")
 
-# Col 1: Orientation (Quaternions)
-quat_labels = ["W", "X", "Y", "Z"]
-for i in range(4):
-    axs2[i, 0].plot(ts_gt, gt_rot_aligned[:, i], label="GT (Aligned)", color="black", alpha=0.6)
-    axs2[i, 0].plot(ts_est, est_data["rot"][:, i], label="Est", color="red", linestyle="--")
-    axs2[i, 0].set_ylabel(f"Q {quat_labels[i]}")
-    axs2[i, 0].grid(True, alpha=0.3)
-axs2[0, 0].set_title("Orientation (Quaternion)")
+for j in range(3):
+    axs1[2, j].set_xlabel("Time (s)")
 
-# Col 2: Biases & Forces (Context)
-# Plot Accel Bias
-axs2[0, 1].plot(ts_est, est_data["b_acc"], label=["ax", "ay", "az"])
-axs2[0, 1].set_title("Est. Accel Bias")
-axs2[0, 1].grid(True)
-axs2[0, 1].legend()
+fig1.tight_layout()
 
-# Plot Gyro Bias
-axs2[1, 1].plot(ts_est, est_data["b_gyr"], label=["wx", "wy", "wz"])
-axs2[1, 1].set_title("Est. Gyro Bias")
-axs2[1, 1].grid(True)
-axs2[1, 1].legend()
+# ---------------------------------------------------------
+# Figure 2: IMU Measurements & Feet Forces + Probabilities
+# ---------------------------------------------------------
+fig2, axs2 = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
+fig2.suptitle("Raw IMU, Forces, and Est. Contact Probability")
 
-# Plot GT Forces (Context for slip)
-axs2[2, 1].plot(ts_gt, gt_data["f_left"][:, 2], label="Left/FL Z", color="blue", alpha=0.5)
-axs2[2, 1].set_title("GT Force Left (Z)")
-axs2[2, 1].grid(True)
+# Accel
+axs2[0].plot(ts_gt, gt_data["acc"][:, 0], label="Acc X")
+axs2[0].plot(ts_gt, gt_data["acc"][:, 1], label="Acc Y")
+axs2[0].plot(ts_gt, gt_data["acc"][:, 2], label="Acc Z")
+axs2[0].set_ylabel("Accel (m/s²)")
+axs2[0].grid(True, alpha=0.4)
+axs2[0].legend(loc="upper right")
 
-axs2[3, 1].plot(ts_gt, gt_data["f_right"][:, 2], label="Right/FR Z", color="orange", alpha=0.5)
-axs2[3, 1].set_title("GT Force Right (Z)")
-axs2[3, 1].grid(True)
-axs2[3, 1].set_xlabel("Time (s)")
+# Gyro
+axs2[1].plot(ts_gt, gt_data["gyr"][:, 0], label="Gyr X")
+axs2[1].plot(ts_gt, gt_data["gyr"][:, 1], label="Gyr Y")
+axs2[1].plot(ts_gt, gt_data["gyr"][:, 2], label="Gyr Z")
+axs2[1].set_ylabel("Gyro (rad/s)")
+axs2[1].grid(True, alpha=0.4)
+axs2[1].legend(loc="upper right")
 
-plt.tight_layout()
+# Left Force & Probability
+axs2[2].plot(ts_gt, gt_data["f_left"][:, 2], color="blue", alpha=0.5, label="GT Force Z")
+axs2[2].set_ylabel("Left Force Z (N)", color="blue")
+axs2[2].tick_params(axis='y', labelcolor="blue")
+axs2[2].grid(True, alpha=0.4)
+
+ax_prob_l = axs2[2].twinx()  # Create a twin Y-axis
+ax_prob_l.plot(ts_est, est_data["prob_left"], color="red", linestyle=":", linewidth=2, label="Est Prob")
+ax_prob_l.set_ylabel("Est Probability", color="red")
+ax_prob_l.set_ylim(-0.1, 1.1)  # Bound it cleanly
+ax_prob_l.tick_params(axis='y', labelcolor="red")
+
+# Right Force & Probability
+axs2[3].plot(ts_gt, gt_data["f_right"][:, 2], color="orange", alpha=0.5, label="GT Force Z")
+axs2[3].set_ylabel("Right Force Z (N)", color="orange")
+axs2[3].tick_params(axis='y', labelcolor="orange")
+axs2[3].grid(True, alpha=0.4)
+
+ax_prob_r = axs2[3].twinx()  # Create a twin Y-axis
+ax_prob_r.plot(ts_est, est_data["prob_right"], color="red", linestyle=":", linewidth=2, label="Est Prob")
+ax_prob_r.set_ylabel("Est Probability", color="red")
+ax_prob_r.set_ylim(-0.1, 1.1)
+ax_prob_r.tick_params(axis='y', labelcolor="red")
+axs2[3].set_xlabel("Time (s)")
+
+fig2.tight_layout()
 plt.show()
-
