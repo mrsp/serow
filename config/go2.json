@@ -102,7 +102,7 @@
     "attitude_estimator_proportional_gain": 0.1,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
-    "median_window": 19,
+    "median_window": 17,
     "convergence_cycles": 100,
     "imu_angular_velocity_covariance": [
         0.01,
@@ -196,9 +196,9 @@
     "maximum_contact_points": 4,
     "maximum_recenter_distance": 0.35,
     "minimum_contact_probability": 0.35,
-    "resolution": 0.01,
-    "radius": 0.10,
-    "dist_variance_gain": 10.0,
+    "resolution": 0.02,
+    "radius": 0.05,
+    "dist_variance_gain": 100.0,
     "power": 2.0,
     "T_base_to_ground_truth": [
         1.0,
@@ -218,7 +218,7 @@
         0.0,
         1.0
     ],
-    "log_data": true,
-    "log_measurements": true,
+    "log_data": false,
+    "log_measurements": false,
     "log_dir": "/tmp/"
 }

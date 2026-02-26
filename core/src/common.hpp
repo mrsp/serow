@@ -19,8 +19,8 @@
 #include <iostream>
 #include <optional>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 namespace serow {
 
@@ -119,10 +119,12 @@ public:
               min_stable_contact_probability(0.95f),
               min_stable_foot_angular_velocity(0.03f),
               min_stable_foot_linear_velocity(0.03f) {}
-        Params(const float resolution, const float radius, 
-               const float dist_variance_gain, const float power, const float min_variance, 
-               const float max_recenter_distance, const size_t max_contact_points, const float min_contact_probability, 
-               const float min_stable_contact_probability = 0.95f, const float min_stable_foot_angular_velocity = 0.03f, const float min_stable_foot_linear_velocity = 0.03f) {
+        Params(const float resolution, const float radius, const float dist_variance_gain,
+               const float power, const float min_variance, const float max_recenter_distance,
+               const size_t max_contact_points, const float min_contact_probability,
+               const float min_stable_contact_probability = 0.95f,
+               const float min_stable_foot_angular_velocity = 0.03f,
+               const float min_stable_foot_linear_velocity = 0.03f) {
             this->resolution = resolution;
             this->resolution_inv = 1.0f / resolution;
             this->radius = radius;
@@ -157,7 +159,8 @@ public:
 
     virtual void recenter(const std::array<float, 2>& location) = 0;
 
-    virtual void initializeLocalMap(const float height, const float variance, const Params& params = Params()) = 0;
+    virtual void initializeLocalMap(const float height, const float variance,
+                                    const Params& params = Params()) = 0;
 
     virtual bool update(const std::array<float, 2>& loc, float height, float variance,
                         std::optional<std::array<float, 3>> normal = std::nullopt) = 0;
