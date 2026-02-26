@@ -206,7 +206,7 @@
         0.0,
         1.0
     ],
-    "enable_terrain_estimation": true,
+    "enable_terrain_estimation": false,
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-6,
     "maximum_contact_points": 4,

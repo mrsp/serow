@@ -211,31 +211,41 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("enable_terrain_estimation", params_.enable_terrain_estimation))
         return false;
-    if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
-        return false;
-    if (!checkConfigParam("minimum_terrain_height_variance",
-                          params_.minimum_terrain_height_variance))
-        return false;
-    if (!checkConfigParam("maximum_contact_points", params_.maximum_contact_points))
-        return false;
-    if (!checkConfigParam("maximum_recenter_distance", params_.maximum_recenter_distance))
-        return false;
-    if (!checkConfigParam("minimum_contact_probability", params_.minimum_contact_probability))
-        return false;
-    if (!checkConfigParam("minimum_stable_contact_probability", params_.minimum_stable_contact_probability))
-        return false;
-    if (!checkConfigParam("minimum_stable_foot_angular_velocity", params_.minimum_stable_foot_angular_velocity))
-        return false;
-    if (!checkConfigParam("minimum_stable_foot_linear_velocity", params_.minimum_stable_foot_linear_velocity))
-        return false;
-    if (!checkConfigParam("resolution", params_.resolution))
-        return false;
-    if (!checkConfigParam("radius", params_.radius))
-        return false;
-    if (!checkConfigParam("dist_variance_gain", params_.dist_variance_gain))
-        return false;
-    if (!checkConfigParam("power", params_.power))
-        return false;
+
+    if (params_.enable_terrain_estimation) {
+        if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
+            return false;
+        if (!checkConfigParam("minimum_terrain_height_variance",
+                            params_.minimum_terrain_height_variance))
+            return false;
+        if (!checkConfigParam("maximum_contact_points", params_.maximum_contact_points))
+            return false;
+        if (!checkConfigParam("maximum_recenter_distance", params_.maximum_recenter_distance))
+            return false;
+        if (!checkConfigParam("minimum_contact_probability", params_.minimum_contact_probability))
+            return false;
+        if (!checkConfigParam("resolution", params_.resolution))
+            return false;
+        if (!checkConfigParam("radius", params_.radius))
+            return false;
+        if (!checkConfigParam("dist_variance_gain", params_.dist_variance_gain))
+            return false;
+        if (!checkConfigParam("power", params_.power))
+            return false;
+
+        // Stable-contact terrain thresholds are only mandatory for non-point feet.
+        if (!params_.point_feet) {
+            if (!checkConfigParam("minimum_stable_contact_probability",
+                                params_.minimum_stable_contact_probability))
+                return false;
+            if (!checkConfigParam("minimum_stable_foot_angular_velocity",
+                                params_.minimum_stable_foot_angular_velocity))
+                return false;
+            if (!checkConfigParam("minimum_stable_foot_linear_velocity",
+                                params_.minimum_stable_foot_linear_velocity))
+                return false;
+        }
+    }
 
     // Read log directory parameter
     if (!checkConfigParam("log_dir", params_.log_dir))
