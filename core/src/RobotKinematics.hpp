@@ -30,11 +30,13 @@
 #include <pinocchio/algorithm/centroidal.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/jacobian.hpp>
+#include <pinocchio/algorithm/joint-configuration.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/algorithm/model.hpp>
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/multibody/model.hpp>
-#include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/parsers/mjcf.hpp>
+#include <pinocchio/parsers/urdf.hpp>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -52,6 +54,7 @@ public:
     /**
      * @brief Constructor to initialize the robot model and kinematic data
      * @param model_name Name of the model file for the robot
+     * @param joint_position_variance Per-joint position measurement noise variance
      * @param verbose Verbosity flag for model loading (default: false)
      */
     RobotKinematics(const std::string& model_name, double joint_position_variance,
@@ -67,12 +70,12 @@ public:
             } else if (model_name.find(".urdf") != std::string::npos) {
                 pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
             } else {
-                throw std::runtime_error("Failed to load model from '" + model_name +
-                                     "': Unsupported file type, supported types are .xml and .urdf");
+                throw std::runtime_error(
+                    "Failed to load model from '" + model_name +
+                    "': Unsupported file type, supported types are .xml and .urdf");
             }
         } catch (const std::exception& e) {
-            throw std::runtime_error("Failed to load model from '" + model_name +
-                                     "': " + e.what());
+            throw std::runtime_error("Failed to load model from '" + model_name + "': " + e.what());
         }
 
         // Verify the model was loaded successfully
@@ -82,6 +85,11 @@ public:
                 model_name);
         }
 
+        // Enforce fixed-base behavior by default by locking any root free-flyer joint.
+        // NOTE: data_ is intentionally created AFTER this call since buildReducedModel
+        // replaces *pmodel_ with a new model object, invalidating any previously created Data.
+        reduceRootFreeFlyerToFixedBase();
+
         // Additional safety checks
         if (pmodel_->lowerPositionLimit.size() == 0 || pmodel_->upperPositionLimit.size() == 0 ||
             pmodel_->velocityLimit.size() == 0) {
@@ -90,15 +98,16 @@ public:
                 model_name);
         }
 
-        // Create the data associated with the model
+        // Create the data associated with the (possibly reduced) model
         data_ = std::make_unique<pinocchio::Data>(*pmodel_);
 
-        // Initialize joint names excluding the "universe" joint
-        int names_size = pmodel_->names.size();
-        jnames_.reserve(names_size);
-        for (int i = 0; i < names_size; i++) {
-            const std::string& jname = pmodel_->names[i];
-            if (jname.find("universe") == std::string::npos && jname.find("free") == std::string::npos) {
+        // Initialize joint names excluding the "universe" joint and floating-base variants
+        jnames_.reserve(pmodel_->names.size());
+        for (const auto& jname : pmodel_->names) {
+            if (jname.find("universe") == std::string::npos &&
+                jname.find("world") == std::string::npos &&
+                jname.find("free") == std::string::npos &&
+                jname.find("floating") == std::string::npos) {
                 jnames_.push_back(jname);
             }
         }
@@ -108,30 +117,25 @@ public:
         qmax_.resize(jnames_.size());
         dqmax_.resize(jnames_.size());
 
-        // Use explicit copying instead of direct assignment
+        // Map limits by joint ids to keep them aligned with filtered joint names
         for (size_t i = 0; i < jnames_.size(); i++) {
-            qmin_[i] = pmodel_->lowerPositionLimit[i];
-        }
-
-        for (size_t i = 0; i < jnames_.size(); i++) {
-            qmax_[i] = pmodel_->upperPositionLimit[i];
-        }
-
-        for (size_t i = 0; i < jnames_.size(); i++) {
-            dqmax_[i] = pmodel_->velocityLimit[i];
+            const pinocchio::JointIndex jidx = pmodel_->getJointId(jnames_[i]);
+            const pinocchio::JointIndex qidx = pmodel_->idx_qs[jidx];
+            const pinocchio::JointIndex vidx = pmodel_->idx_vs[jidx];
+            qmin_[i] = (pmodel_->nqs[jidx] > 0) ? pmodel_->lowerPositionLimit[qidx] : 0.0;
+            qmax_[i] = (pmodel_->nqs[jidx] > 0) ? pmodel_->upperPositionLimit[qidx] : 0.0;
+            dqmax_[i] = (pmodel_->nvs[jidx] > 0) ? pmodel_->velocityLimit[vidx] : 0.0;
         }
 
         qn_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_position_variance;
 
         // Initialize state vectors
-        q_.resize(jnames_.size());
-        qdot_.resize(jnames_.size());
-        q_.setZero();
-        qdot_.setZero();
+        q_.setZero(pmodel_->nq);
+        qdot_.setZero(pmodel_->nv);
 
         // Set default values for continuous joints if limits are invalid
         for (int i = 0; i < qmin_.size(); i++) {
-            double d = qmax_[i] - qmin_[i];
+            const double d = qmax_[i] - qmin_[i];
             if ((d < 0) || (std::fabs(d) < 0.001)) {
                 qmin_[i] = -50.0;
                 qmax_[i] = 50.0;
@@ -148,7 +152,6 @@ public:
         }
 
         if (verbose) {
-            // Output model information
             std::cout << "Joint Names: " << std::endl;
             printJointNames();
             std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
@@ -161,43 +164,24 @@ public:
     }
 
     /**
-     * @brief Destructor to ensure proper cleanup of Pinocchio objects
+     * @brief Destructor
      */
-    ~RobotKinematics() {
-        try {
-            // Check if pointers are valid before attempting to reset them
-            if (data_ && data_.get() != nullptr) {
-                // Try to access a simple member to check if the object is still valid
-                if (pmodel_ && pmodel_.get() != nullptr) {
-                    // Explicitly clear data before model to avoid destruction order issues
-                    data_.reset();
-                }
-            }
-
-            if (pmodel_ && pmodel_.get() != nullptr) {
-                pmodel_.reset();
-            }
-        } catch (...) {
-            // If anything goes wrong during destruction, just continue
-            // This prevents crashes during cleanup
-            std::cerr << "Warning: Exception during RobotKinematics destruction" << std::endl;
-        }
-    }
+    ~RobotKinematics() = default;
 
     /**
-     * @brief Returns the number of degrees of freedom (DOF) of the model
-     * @return Number of DOF
+     * @brief Returns the configuration space dimension of the model (nq).
+     * @note For models with continuous joints nq > nv; prefer ndofActuated() for velocity-space
+     * operations.
      */
     int ndof() const {
         return pmodel_->nq;
     }
 
     /**
-     * @brief Returns the number of actuated degrees of freedom (DOF) of the model
-     * @return Number of actuated DOF
+     * @brief Returns the velocity space dimension of the model (nv), i.e. true actuated DoF.
      */
     int ndofActuated() const {
-        return pmodel_->nq;
+        return pmodel_->nv;
     }
 
     /**
@@ -213,9 +197,9 @@ public:
     }
 
     /**
-     * @brief Computes the linear velocity covariance of frame from independent joint noise.
+     * @brief Computes the linear velocity covariance of a frame from independent joint noise.
      * @param frame_name Name of the frame
-     * @return 3x3 Linear velocity covariance matrix
+     * @return 3x3 linear velocity covariance matrix
      */
     Eigen::Matrix3d linearVelocityCovariance(const std::string& frame_name) const {
         const Eigen::MatrixXd J = linearJacobian(frame_name);
@@ -223,9 +207,9 @@ public:
     }
 
     /**
-     * @brief Computes the angular velocity covariance of frame from independent joint noise.
+     * @brief Computes the angular velocity covariance of a frame from independent joint noise.
      * @param frame_name Name of the frame
-     * @return 3x3 Angular velocity covariance matrix
+     * @return 3x3 angular velocity covariance matrix
      */
     Eigen::Matrix3d angularVelocityCovariance(const std::string& frame_name) const {
         const Eigen::MatrixXd J = angularJacobian(frame_name);
@@ -233,7 +217,7 @@ public:
     }
 
     /**
-     * @brief Maps joint names to their respective indices and assigns values
+     * @brief Maps joint names to their respective indices and assigns values for q_ and qdot_
      * @param qmap Map of joint names to their positions
      * @param qdotmap Map of joint names to their velocities
      */
@@ -243,14 +227,15 @@ public:
         qdot_.setZero(pmodel_->nv);
 
         for (size_t i = 0; i < jnames_.size(); i++) {
-            size_t jidx = pmodel_->getJointId(jnames_[i]);
-            size_t qidx = pmodel_->idx_qs[jidx];
-            size_t vidx = pmodel_->idx_vs[jidx];
+            const size_t jidx = pmodel_->getJointId(jnames_[i]);
+            const size_t qidx = pmodel_->idx_qs[jidx];
+            const size_t vidx = pmodel_->idx_vs[jidx];
 
-            // Assign values based on joint type (continuous or not)
             if (pmodel_->nqs[jidx] == 2) {
-                q_[qidx] = cos(qmap.at(jnames_[i]));
-                q_[qidx + 1] = sin(qmap.at(jnames_[i]));
+                // Continuous (revolute unbounded) joint stored as (cos, sin)
+                const double angle = qmap.at(jnames_[i]);
+                q_[qidx] = std::cos(angle);
+                q_[qidx + 1] = std::sin(angle);
                 qdot_[vidx] = qdotmap.at(jnames_[i]);
             } else {
                 q_[qidx] = qmap.at(jnames_[i]);
@@ -265,24 +250,20 @@ public:
      * @return Geometric Jacobian matrix
      */
     Eigen::MatrixXd geometricJacobian(const std::string& frame_name) const {
-        pinocchio::Data::Matrix6x J(6, pmodel_->nv);
-        J.fill(0);
+        pinocchio::Data::Matrix6x J = pinocchio::Data::Matrix6x::Zero(6, pmodel_->nv);
 
-        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-
-        // Check if the frame index is invalid
-        if (link_number >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
-            std::cerr << "WARNING: Link name <" << frame_name << "> is invalid! ... "
-                      << "Returning zeros" << std::endl;
-            return Eigen::MatrixXd::Zero(6, ndofActuated());
+        const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
+        if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
+            std::cerr << "WARNING: Link name <" << frame_name << "> is invalid! "
+                      << "Returning zeros." << std::endl;
+            return Eigen::MatrixXd::Zero(6, pmodel_->nv);
         }
 
-        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+        pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
 
-        // Transform Jacobian from local frame to base frame
-        J.topRows(3) = (data_->oMf[link_number].rotation()) * J.topRows(3);
-        J.bottomRows(3) = (data_->oMf[link_number].rotation()) * J.bottomRows(3);
-
+        const Eigen::Matrix3d& R = data_->oMf[fid].rotation();
+        J.topRows(3) = R * J.topRows(3);
+        J.bottomRows(3) = R * J.bottomRows(3);
         return J;
     }
 
@@ -292,7 +273,7 @@ public:
      * @return Linear velocity
      */
     Eigen::Vector3d linearVelocity(const std::string& frame_name) const {
-        return (linearJacobian(frame_name) * qdot_);
+        return linearJacobian(frame_name) * qdot_;
     }
 
     /**
@@ -301,7 +282,7 @@ public:
      * @return Angular velocity
      */
     Eigen::Vector3d angularVelocity(const std::string& frame_name) const {
-        return (angularJacobian(frame_name) * qdot_);
+        return angularJacobian(frame_name) * qdot_;
     }
 
     /**
@@ -310,173 +291,135 @@ public:
      * @return Position vector of the frame
      */
     Eigen::Vector3d linkPosition(const std::string& frame_name) const {
-        try {
-            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-            return data_->oMf[link_number].translation();
-        } catch (std::exception& e) {
-            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
-                      << "Returning zeros" << std::endl;
+        const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
+        if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! "
+                      << "Returning zeros." << std::endl;
             return Eigen::Vector3d::Zero();
         }
+        return data_->oMf[fid].translation();
     }
 
     /**
-     * @brief Computes the orientation of a specified frame in the robot model using quaternion
-     * representation.
+     * @brief Retrieves the orientation of a frame as a quaternion.
      * @param frame_name Name of the frame whose orientation is to be computed.
-     * @return Eigen::Quaterniond representing the orientation of the specified frame.
-     * @throws std::exception if the frame_name is invalid in the robot model.
-     * @note This function retrieves the orientation from pinocchio::Data and converts it to
-     * Eigen::Quaterniond.
+     * @return Eigen::Quaterniond (identity on invalid frame name)
      */
     Eigen::Quaterniond linkOrientation(const std::string& frame_name) const {
-        try {
-            // Get the frame index from the model based on the frame name
-            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-
-            // Convert rotation matrix of the frame to quaternion representation
-            Eigen::Vector4d temp = rotationToQuaternion(data_->oMf[link_number].rotation());
-            Eigen::Quaterniond tempQ;
-            tempQ.w() = temp(0);
-            tempQ.x() = temp(1);
-            tempQ.y() = temp(2);
-            tempQ.z() = temp(3);
-
-            return tempQ;
-        } catch (std::exception& e) {
-            // Handle invalid frame name exception
-            std::cerr << "WARNING: Frame name " << frame_name << " is invalid! ... "
+        const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
+        if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
+            std::cerr << "WARNING: Frame name " << frame_name << " is invalid! "
                       << "Returning identity quaternion." << std::endl;
             return Eigen::Quaterniond::Identity();
         }
+        return Eigen::Quaterniond(data_->oMf[fid].rotation());
     }
 
     /**
-     * @brief Retrieves the position and orientation of a specified frame in the robot model.
-     * @param frame_name Name of the frame whose pose (position and orientation) is to be retrieved.
-     * @return Eigen::VectorXd containing the pose of the specified frame (3 for translation, 4 for
-     * quaternion).
-     * @throws std::exception if the frame_name is invalid in the robot model.
-     * @note This function retrieves both translation and quaternion representation of the frame's
-     * orientation.
+     * @brief Retrieves the pose of a frame as a 7-vector [tx, ty, tz, qw, qx, qy, qz].
+     * @param frame_name Name of the frame whose pose is to be computed.
+     * @return Pose vector of the frame
      */
     Eigen::VectorXd linkPose(const std::string& frame_name) const {
-        Eigen::VectorXd lpose(7);  // Vector to store pose (translation + quaternion)
+        Eigen::VectorXd lpose(7);
 
-        // Get the frame index from the model based on the frame name
-        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+        const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
+        if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
+            std::cerr << "WARNING: Frame name " << frame_name << " is invalid! "
+                      << "Returning zero pose." << std::endl;
+            lpose.setZero();
+            lpose(3) = 1.0;  // identity quaternion w=1
+            return lpose;
+        }
 
-        // Retrieve translation and quaternion representation of the frame's orientation
-        lpose.head(3) = data_->oMf[link_number].translation();
-        lpose.tail(4) = rotationToQuaternion(data_->oMf[link_number].rotation());
-
+        lpose.head(3) = data_->oMf[fid].translation();
+        const Eigen::Quaterniond q(data_->oMf[fid].rotation());
+        lpose(3) = q.w();
+        lpose(4) = q.x();
+        lpose(5) = q.y();
+        lpose(6) = q.z();
         return lpose;
     }
 
     /**
-     * @brief Retrieves the rigid body transformation of a specified frame in the robot model.
-     * @param frame_name Name of the frame whose rigid body transformation is to be retrieved.
-     * @return Eigen::Isometry3d representing the rigid body transformation of the specified frame.
-     * @throws std::exception if the frame_name is invalid in the robot model.
-     * @note This function retrieves both translation and rotation of the frame's rigid body
-     * transformation.
+     * @brief Retrieves the rigid-body transform of a frame as an Eigen::Isometry3d.
+     * @param frame_name Name of the frame whose transform is to be computed.
+     * @return Rigid-body transform of the frame
      */
     Eigen::Isometry3d linkTF(const std::string& frame_name) const {
         Eigen::Isometry3d lpose = Eigen::Isometry3d::Identity();
 
-        // Get the frame index from the model based on the frame name
-        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+        const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
+        if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
+            std::cerr << "WARNING: Frame name " << frame_name << " is invalid! "
+                      << "Returning identity transform." << std::endl;
+            return lpose;
+        }
 
-        // Retrieve translation and quaternion representation of the frame's orientation
-        lpose.translation() = data_->oMf[link_number].translation();
-        lpose.linear() = data_->oMf[link_number].rotation();
-
+        lpose.translation() = data_->oMf[fid].translation();
+        lpose.linear() = data_->oMf[fid].rotation();
         return lpose;
     }
 
     /**
-     * @brief Computes the linear Jacobian matrix of a specified frame in the robot model.
-     * @param frame_name Name of the frame whose linear Jacobian matrix is to be computed.
-     * @return Eigen::MatrixXd representing the linear Jacobian matrix of the specified frame.
-     * @throws std::exception if the frame_name is invalid in the robot model.
-     * @note This function computes and transforms the Jacobian matrix from pinocchio::LOCAL frame
-     * to the base frame.
+     * @brief Computes the linear (translational) Jacobian (3 x nv).
+     * @param frame_name Name of the frame whose linear Jacobian is to be computed.
+     * @return Linear Jacobian matrix
      */
     Eigen::MatrixXd linearJacobian(const std::string& frame_name) const {
-        pinocchio::Data::Matrix6x J(6, pmodel_->nv);  // Jacobian matrix placeholder
-        J.fill(0);
+        pinocchio::Data::Matrix6x J = pinocchio::Data::Matrix6x::Zero(6, pmodel_->nv);
 
-        // Get the frame index from the model based on the frame name
-        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-
-        // Compute the Jacobian matrix in the pinocchio::LOCAL frame
-        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-
-        try {
-            // Transform the Jacobian from pinocchio::LOCAL frame to base frame using rotation
-            // matrix
-            return (data_->oMf[link_number].rotation()) * J.topRows(3);
-        } catch (std::exception& e) {
-            // Handle invalid frame name exception
-            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+        const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
+        if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! "
                       << "Returning zeros." << std::endl;
-            return Eigen::MatrixXd::Zero(3, ndofActuated());
+            return Eigen::MatrixXd::Zero(3, pmodel_->nv);
         }
+
+        pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
+        return data_->oMf[fid].rotation() * J.topRows(3);
     }
 
     /**
-     * @brief Computes the angular Jacobian matrix of a specified frame in the robot model.
-     * @param frame_name Name of the frame whose angular Jacobian matrix is to be computed.
-     * @return Eigen::MatrixXd representing the angular Jacobian matrix of the specified frame.
-     * @throws std::exception if the frame_name is invalid in the robot model.
-     * @note This function computes and transforms the Jacobian matrix from pinocchio::LOCAL frame
-     * to the base frame.
+     * @brief Computes the angular Jacobian (3 x nv).
+     * @param frame_name Name of the frame whose angular Jacobian is to be computed.
+     * @return Angular Jacobian matrix
      */
     Eigen::MatrixXd angularJacobian(const std::string& frame_name) const {
-        pinocchio::Data::Matrix6x J(6, pmodel_->nv);  // Jacobian matrix placeholder
-        J.fill(0);
+        pinocchio::Data::Matrix6x J = pinocchio::Data::Matrix6x::Zero(6, pmodel_->nv);
 
-        // Get the frame index from the model based on the frame name
-        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-
-        try {
-            // Compute the Jacobian matrix in the pinocchio::LOCAL frame
-            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-
-            // Transform the Jacobian from pinocchio::LOCAL frame to base frame using rotation
-            // matrix
-            return (data_->oMf[link_number].rotation()) * J.bottomRows(3);
-        } catch (std::exception& e) {
-            // Handle invalid frame name exception
-            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+        const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
+        if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! "
                       << "Returning zeros." << std::endl;
-            return Eigen::MatrixXd::Zero(3, ndofActuated());
+            return Eigen::MatrixXd::Zero(3, pmodel_->nv);
         }
+
+        pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
+        return data_->oMf[fid].rotation() * J.bottomRows(3);
     }
 
     /**
-     * @brief Computes recursively the total mass of the robot based on the description of the robot
-     * @note Store the result to the member total_mass_
+     * @brief Computes the total mass of the robot from all body inertias.
      */
     void computeTotalMass() {
         total_mass_ = 0.0;
-        // Start from 1 since index 0 is typically the universe/world frame
         for (int i = 0; i < pmodel_->nbodies; ++i) {
             total_mass_ += pmodel_->inertias[i].mass();
         }
     }
 
     /**
-     * @brief Returns the total mass of the robot
+     * @brief Gets the total mass of the robot.
+     * @return Total mass of the robot
      */
     double getTotalMass() const {
         return total_mass_;
     }
 
     /**
-     * @brief Computes the position of the center of mass (CoM) of the robot model.
-     * @return Eigen::VectorXd representing the position of the CoM.
-     * @note This function computes the CoM position using pinocchio::centerOfMass.
+     * @brief Computes the CoM position.
+     * @return CoM position vector
      */
     Eigen::VectorXd comPosition() const {
         pinocchio::centerOfMass(*pmodel_, *data_, q_);
@@ -484,33 +427,28 @@ public:
     }
 
     /**
-     * @brief Computes the Jacobian matrix of the center of mass (CoM) of the robot model.
-     * @return Eigen::MatrixXd representing the Jacobian matrix of the CoM.
-     * @note This function computes the Jacobian matrix of the CoM using
-     * pinocchio::jacobianCenterOfMass.
+     * @brief Computes the CoM Jacobian (3 x nv).
+     * @return CoM Jacobian matrix
      */
     Eigen::MatrixXd comJacobian() const {
         return pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
     }
 
     /**
-     * @brief Computes the angular momentum of the center of mass (CoM) of the robot model and its covariance.
-     * @return std::pair<Eigen::Vector3d, Eigen::Matrix3d> with angular momentum and angular momentum covariance.
+     * @brief Computes the CoM angular momentum and its covariance in a single Pinocchio pass.
+     * @return {h_angular (3D), covariance (3x3)}
      */
     std::pair<Eigen::Vector3d, Eigen::Matrix3d> comAngularMomentumAndCovariance() const {
         pinocchio::computeCentroidalMap(*pmodel_, *data_, q_);
         const Eigen::MatrixXd Ag_angular = data_->Ag.bottomRows(3);
         const Eigen::Vector3d h_angular = Ag_angular * qdot_;
-        const Eigen::Matrix3d cov =
-            Ag_angular * qn_.asDiagonal() * Ag_angular.transpose();
+        const Eigen::Matrix3d cov = Ag_angular * qn_.asDiagonal() * Ag_angular.transpose();
         return {h_angular, cov};
     }
 
     /**
-     * @brief Computes the angular momentum of the center of mass (CoM) of the robot model.
-     * @return Eigen::VectorXd representing the angular momentum of the CoM (3D).
-     * @note If you need both momentum and covariance, use comAngularMomentumAndCovariance() for
-     * one Pinocchio pass instead of calling this and comAngularMomentumCovariance() separately.
+     * @brief Computes the CoM angular momentum.
+     * @note Prefer comAngularMomentumAndCovariance() if you also need the covariance.
      */
     Eigen::VectorXd comAngularMomentum() const {
         pinocchio::computeCentroidalMomentum(*pmodel_, *data_, q_, qdot_);
@@ -518,13 +456,8 @@ public:
     }
 
     /**
-     * @brief Computes the covariance of the center of mass (CoM) angular momentum from joint noise.
-     * The angular momentum of the center of mass (CoM) is calculated as h_angular = Ag_angular(q) * v; 
-     * this propagates joint velocity uncertainty (using the same per-joint variance as joint position noise) 
-     * through the centroidal map to a 3x3 covariance in (angular momentum)² units.
-     * @return Eigen::Matrix3d covariance of the CoM angular momentum (3x3).
-     * @note If you need both momentum and covariance, use comAngularMomentumAndCovariance() for
-     * one Pinocchio pass instead of calling this and comAngularMomentum() separately.
+     * @brief Computes the CoM angular momentum covariance from joint noise.
+     * @note Prefer comAngularMomentumAndCovariance() if you also need the momentum.
      */
     Eigen::Matrix3d comAngularMomentumCovariance() const {
         pinocchio::computeCentroidalMap(*pmodel_, *data_, q_);
@@ -533,46 +466,47 @@ public:
     }
 
     /**
-     * @brief Retrieves the names of all joints in the robot model.
-     * @return std::vector<std::string> containing the names of all joints.
-     * @note This function returns the stored joint names in the member variable jnames_.
+     * @brief Retrieves the names of the joints
+     * @return Vector of joint names
      */
     std::vector<std::string> jointNames() const {
         return jnames_;
     }
 
     /**
-     * @brief Retrieves the maximum angular limits of all joints in the robot model.
-     * @return Eigen::VectorXd containing the maximum angular limits of all joints.
-     * @note This function returns the stored maximum joint angular limits in the member variable
-     * qmax_.
+     * @brief Retrieves the names of the frames
+     * @return Vector of frame names
+     */
+    std::vector<std::string> frameNames() const {
+        return frame_names_;
+    }
+
+    /**
+     * @brief Retrieves the maximum angular limits of the joints
+     * @return Vector of maximum angular limits
      */
     Eigen::VectorXd jointMaxAngularLimits() const {
         return qmax_;
     }
 
     /**
-     * @brief Retrieves the minimum angular limits of all joints in the robot model.
-     * @return Eigen::VectorXd containing the minimum angular limits of all joints.
-     * @note This function returns the stored minimum joint angular limits in the member variable
-     * qmin_.
+     * @brief Retrieves the minimum angular limits of the joints
+     * @return Vector of minimum angular limits
      */
     Eigen::VectorXd jointMinAngularLimits() const {
         return qmin_;
     }
 
     /**
-     * @brief Retrieves the velocity limits of all joints in the robot model.
-     * @return Eigen::VectorXd containing the velocity limits of all joints.
-     * @note This function returns the stored joint velocity limits in the member variable dqmax_.
+     * @brief Retrieves the velocity limits of the joints
+     * @return Vector of velocity limits
      */
     Eigen::VectorXd jointVelocityLimits() const {
         return dqmax_;
     }
 
     /**
-     * @brief Prints the names of all joints in the robot model to standard output.
-     * @note This function iterates through jnames_ and prints each joint name.
+     * @brief Prints the names of the joints
      */
     void printJointNames() const {
         for (const auto& jname : jnames_) {
@@ -581,98 +515,28 @@ public:
     }
 
     /**
-     * @brief Retrieves the names of all joints in the robot model.
-     * @return std::vector<std::string> containing the names of all joints.
-     * @note This function returns the stored joint names in the member variable jnames_.
-     */
-    std::vector<std::string> getJointNames() const {
-        return jnames_;
-    }
-
-    /**
-     * @brief Prints the names and limits of all joints in the robot model to standard output.
-     * @note This function checks if the sizes of jnames_, qmin_, qmax_, and dqmax_ match.
-     *       It then prints the joint names, minimum angular limits (qmin_), maximum angular limits
-     * (qmax_), and velocity limits (dqmax_) in a tabular format.
+     * @brief Prints the joint limits
      */
     void printJointLimits() const {
-        if (!((jnames_.size() == static_cast<size_t>(qmin_.size())) &&
-              (jnames_.size() == static_cast<size_t>(qmax_.size())) &&
-              (jnames_.size() == static_cast<size_t>(dqmax_.size())))) {
+        if (jnames_.size() != static_cast<size_t>(qmin_.size()) ||
+            jnames_.size() != static_cast<size_t>(qmax_.size()) ||
+            jnames_.size() != static_cast<size_t>(dqmax_.size())) {
             std::cerr << "Joint names and joint limits size do not match!" << std::endl;
             return;
         }
         std::cout << "\nJoint Name\t qmin \t qmax \t dqmax" << std::endl;
-        for (size_t i = 0; i < jnames_.size(); ++i)
+        for (size_t i = 0; i < jnames_.size(); ++i) {
             std::cout << jnames_[i] << "\t\t" << qmin_[i] << "\t" << qmax_[i] << "\t" << dqmax_[i]
                       << std::endl;
-    }
-
-    /**
-     * @brief Returns the sign of a given double value.
-     * @param x The input double value.
-     * @return 1.0 if x >= 0, otherwise -1.0.
-     * @note This function determines the sign of the input value x.
-     */
-    double sgn(const double& x) const {
-        if (x >= 0) {
-            return 1.0;
-        } else {
-            return -1.0;
         }
-    }
-
-    /**
-     * @brief Converts a rotation matrix R into quaternion representation.
-     * @param R The 3x3 rotation matrix.
-     * @return Eigen::Vector4d representing the quaternion [w, x, y, z].
-     * @note This function computes the quaternion from the given rotation matrix R,
-     *       using a specific method that handles edge cases where the matrix is nearly singular.
-     */
-    Eigen::Vector4d rotationToQuaternion(const Eigen::Matrix3d& R) const {
-        double eps = 1e-6;     // Small value for numerical stability
-        Eigen::Vector4d quat;  // Quaternion representation [w, x, y, z]
-
-        // Compute quaternion components
-        quat(0) = 0.5 * sqrt(R(0, 0) + R(1, 1) + R(2, 2) + 1.0);  // w component
-
-        // Determine x, y, z components, handling special cases to avoid division by zero
-        if (fabs(R(0, 0) - R(1, 1) - R(2, 2) + 1.0) < eps) {
-            quat(1) = 0.0;
-        } else {
-            quat(1) = 0.5 * sgn(R(2, 1) - R(1, 2)) * sqrt(R(0, 0) - R(1, 1) - R(2, 2) + 1.0);
-        }
-
-        if (fabs(R(1, 1) - R(2, 2) - R(0, 0) + 1.0) < eps) {
-            quat(2) = 0.0;
-        } else {
-            quat(2) = 0.5 * sgn(R(0, 2) - R(2, 0)) * sqrt(R(1, 1) - R(2, 2) - R(0, 0) + 1.0);
-        }
-
-        if (fabs(R(2, 2) - R(0, 0) - R(1, 1) + 1.0) < eps) {
-            quat(3) = 0.0;
-        } else {
-            quat(3) = 0.5 * sgn(R(1, 0) - R(0, 1)) * sqrt(R(2, 2) - R(0, 0) - R(1, 1) + 1.0);
-        }
-
-        return quat;
-    }
-
-    /**
-     * @brief Retrieves the names of all frames in the robot model.
-     * @return std::vector<std::string> containing the names of all frames.
-     * @note This function returns the stored frame names in the member variable frame_names_.
-     */
-    std::vector<std::string> frameNames() const {
-        return frame_names_;
     }
 
 private:
     /// Pinocchio model
     std::unique_ptr<pinocchio::Model> pmodel_;
-    /// Pinocchio data
+    /// Pinocchio data (always consistent with *pmodel_)
     std::unique_ptr<pinocchio::Data> data_;
-    /// Joint names
+    /// Filtered joint names (excludes universe / floating-base joints)
     std::vector<std::string> jnames_;
     /// Joint position lower limits
     Eigen::VectorXd qmin_;
@@ -680,16 +544,44 @@ private:
     Eigen::VectorXd qmax_;
     /// Joint velocity limits
     Eigen::VectorXd dqmax_;
-    /// Joint positions
+    /// Joint positions (size nq)
     Eigen::VectorXd q_;
-    /// Joint velocities
+    /// Joint velocities (size nv)
     Eigen::VectorXd qdot_;
-    /// Joint position measurement noise (variance per joint)
+    /// Per-joint position noise variance (size == jnames_.size())
     Eigen::VectorXd qn_;
-    /// Total mass of the robot
-    double total_mass_;
-    /// Frame names
+    /// Total robot mass
+    double total_mass_{0.0};
+    /// BODY frame names
     std::vector<std::string> frame_names_;
+
+    /**
+     * @brief Locks root free-flyer joints so the model is fixed-base by default.
+     *
+     * Iterates all joints whose parent is the universe (index 0) and whose
+     * configuration/velocity dimensions match a free-flyer (nq=7, nv=6).
+     * buildReducedModel replaces *pmodel_ in-place; data_ must be (re-)created
+     * after this call, which the constructor guarantees.
+     */
+    void reduceRootFreeFlyerToFixedBase() {
+        std::vector<pinocchio::JointIndex> joints_to_lock;
+        joints_to_lock.reserve(pmodel_->njoints);  // upper bound; avoids misleading reserve(1)
+
+        for (pinocchio::JointIndex jid = 1;
+             jid < static_cast<pinocchio::JointIndex>(pmodel_->njoints); ++jid) {
+            const bool is_root_joint = (pmodel_->parents[jid] == 0);
+            // Prefer the joint type name to be robust against future convention changes.
+            const bool is_free_flyer = (pmodel_->joints[jid].shortname() == "JointModelFreeFlyer");
+            if (is_root_joint && is_free_flyer) {
+                joints_to_lock.push_back(jid);
+            }
+        }
+
+        if (!joints_to_lock.empty()) {
+            const Eigen::VectorXd qref = pinocchio::neutral(*pmodel_);
+            *pmodel_ = pinocchio::buildReducedModel(*pmodel_, joints_to_lock, qref);
+        }
+    }
 };
 
 }  // namespace serow
