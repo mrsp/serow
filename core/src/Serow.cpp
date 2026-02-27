@@ -503,7 +503,10 @@ void Serow::logMeasurements(ImuMeasurement imu,
                                      base_pose_ground_truth = std::move(base_pose_ground_truth)]() {
         try {
             if (!measurement_logger_->isInitialized()) {
-                double start_time = std::min(imu.timestamp, joints.begin()->second.timestamp);
+                double start_time = imu.timestamp;
+                if (!joints.empty()) {
+                    start_time = std::min(start_time, joints.begin()->second.timestamp);
+                }
                 if (!ft.empty()) {
                     start_time = std::min(start_time, ft.begin()->second.timestamp);
                 }
@@ -514,7 +517,9 @@ void Serow::logMeasurements(ImuMeasurement imu,
             }
             // Log all measurement data to MCAP file
             measurement_logger_->log(imu);
-            measurement_logger_->log(joints);
+            if (!joints.empty()) {
+                measurement_logger_->log(joints);
+            }
             if (!ft.empty()) {
                 measurement_logger_->log(ft);
             }
