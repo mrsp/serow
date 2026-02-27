@@ -74,9 +74,27 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     RCLCPP_INFO(this->get_logger(), "Serow config file: %s", serow_config.c_str());
 
     // Configure F/T synchronization tolerance
-    ft_max_time_diff_ = this->declare_parameter<double>("ft_max_time_diff", 0.01);
-    imu_max_time_diff_ = this->declare_parameter<double>("imu_max_time_diff", 0.005);
-    RCLCPP_INFO(this->get_logger(), "F/T max time difference: %.3f seconds", ft_max_time_diff_);
+    imu_max_time_diff_ = config["synchronization"]["imu_to_joint"].as<double>();
+    RCLCPP_INFO(this->get_logger(), "IMU to joint measurements max time difference: %.3f seconds",
+                imu_max_time_diff_);
+    ft_max_time_diff_ = config["synchronization"]["force_torque_to_joint"].as<double>();
+    RCLCPP_INFO(this->get_logger(), "F/T to joint measurements max time difference: %.3f seconds",
+                ft_max_time_diff_);
+
+    const auto& gt_max_node = config["synchronization"]["ground_truth_to_joint"];
+    if (gt_max_node) {
+        gt_max_time_diff_ = gt_max_node.as<double>();
+        RCLCPP_INFO(this->get_logger(),
+                    "Ground truth to joint measurements max time difference: %.3f seconds",
+                    gt_max_time_diff_);
+    }
+    const auto& ext_odom_max_node = config["synchronization"]["external_odometry_to_joint"];
+    if (ext_odom_max_node) {
+        external_odometry_max_time_diff_ = ext_odom_max_node.as<double>();
+        RCLCPP_INFO(this->get_logger(),
+                    "External odometry to joint measurements max time difference: %.3f seconds",
+                    external_odometry_max_time_diff_);
+    }
 
     // Initialize SERoW
     try {
@@ -124,6 +142,43 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
         auto ft_subscription = this->create_subscription<geometry_msgs::msg::WrenchStamped>(
             ft_topic, 100, force_torque_state_topic_callbacks_.back());
         force_torque_state_subscriptions_.push_back(std::move(ft_subscription));
+    }
+
+    const std::string& external_odometry_topic =
+        config["topics"]["external_odometry"].as<std::string>();
+    if (!external_odometry_topic.empty()) {
+        external_odometry_subscriber_ = this->create_subscription<nav_msgs::msg::Odometry>(
+            external_odometry_topic, 100,
+            std::bind(&SerowRos2::externalOdometryCallback, this, _1));
+        std::cout << "External odometry topic: " << external_odometry_topic << std::endl;
+        const auto& pos_cov_node = config["external_odometry_position_covariance"];
+        const auto& ori_cov_node = config["external_odometry_orientation_covariance"];
+        if (pos_cov_node && pos_cov_node.IsSequence()) {
+            const auto& external_odometry_position_covariance =
+                pos_cov_node.as<std::vector<double>>();
+            if (external_odometry_position_covariance.size() == 3) {
+                external_odometry_position_covariance_ =
+                    Eigen::Vector3d(external_odometry_position_covariance[0],
+                                    external_odometry_position_covariance[1],
+                                    external_odometry_position_covariance[2]);
+            } else {
+                throw std::runtime_error(
+                    "External odometry position covariance must have 3 elements");
+            }
+        }
+        if (ori_cov_node && ori_cov_node.IsSequence()) {
+            const auto& external_odometry_orientation_covariance =
+                ori_cov_node.as<std::vector<double>>();
+            if (external_odometry_orientation_covariance.size() == 3) {
+                external_odometry_orientation_covariance_ =
+                    Eigen::Vector3d(external_odometry_orientation_covariance[0],
+                                    external_odometry_orientation_covariance[1],
+                                    external_odometry_orientation_covariance[2]);
+            } else {
+                throw std::runtime_error(
+                    "External odometry orientation covariance must have 3 elements");
+            }
+        }
     }
 
     // Create a timer for processing data instead of the blocking loop, max 1000Hz processing
@@ -279,7 +334,7 @@ void SerowRos2::run() {
         if (first_ground_truth_pose_.has_value()) {
             std::lock_guard<std::mutex> lock(ground_truth_data_mutex_);
             const auto& ground_truth_odometry =
-                ground_truth_odometry_buffer_.get(joint_state_timestamp, ft_max_time_diff_);
+                ground_truth_odometry_buffer_.get(joint_state_timestamp, gt_max_time_diff_);
             if (ground_truth_odometry.has_value()) {
                 serow::BasePoseGroundTruth gt;
                 gt.timestamp = ground_truth_odometry.value().timestamp;
@@ -300,11 +355,22 @@ void SerowRos2::run() {
             }
         }
 
+        std::optional<serow::OdometryMeasurement> external_odometry = std::nullopt;
+        {
+            std::lock_guard<std::mutex> lock(external_odometry_data_mutex_);
+            external_odometry = external_odometry_buffer_.get(joint_state_timestamp,
+                                                              external_odometry_max_time_diff_);
+            if (!external_odometry.has_value()) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to get external odometry at timestamp: %f",
+                             joint_state_timestamp);
+            }
+        }
+
         serow_.filter(base_imu_measurement.value(), joint_measurements,
                       synchronized_ft_measurements.size() == force_torque_state_topics_.size()
                           ? std::make_optional(synchronized_ft_measurements)
                           : std::nullopt,
-                      std::nullopt, std::nullopt, ground_truth_pose);
+                      external_odometry, std::nullopt, ground_truth_pose);
         const auto& state = serow_.getState();
         if (state) {
             // Queue the state for publishing instead of publishing directly to not block the main
@@ -664,4 +730,36 @@ void SerowRos2::groundTruthCallback(
     ground_truth_odometry.base_position = ground_truth_pose.translation();
     ground_truth_odometry.base_orientation = ground_truth_pose.linear();
     ground_truth_odometry_buffer_.add(std::move(ground_truth_odometry));
+}
+
+void SerowRos2::externalOdometryCallback(
+    const nav_msgs::msg::Odometry::ConstSharedPtr& external_odometry_msg) {
+    std::lock_guard<std::mutex> lock(external_odometry_data_mutex_);
+    serow::OdometryMeasurement external_odometry;
+    external_odometry.timestamp = static_cast<double>(external_odometry_msg->header.stamp.sec) +
+        static_cast<double>(external_odometry_msg->header.stamp.nanosec) * 1e-9;
+    external_odometry.base_position = Eigen::Vector3d(external_odometry_msg->pose.pose.position.x,
+                                                      external_odometry_msg->pose.pose.position.y,
+                                                      external_odometry_msg->pose.pose.position.z);
+    external_odometry.base_orientation =
+        Eigen::Quaterniond(external_odometry_msg->pose.pose.orientation.w,
+                           external_odometry_msg->pose.pose.orientation.x,
+                           external_odometry_msg->pose.pose.orientation.y,
+                           external_odometry_msg->pose.pose.orientation.z);
+    if (!external_odometry_position_covariance_.has_value() ||
+        !external_odometry_orientation_covariance_.has_value()) {
+        // Use the covariance from the external odometry message (6x6 row-major:
+        // x, y, z, rotation about X, Y, Z). Extract 3x3 position and orientation blocks.
+        const auto& c = external_odometry_msg->pose.covariance;
+        external_odometry.base_position_cov << c[0], c[6], c[12], c[1], c[7], c[13], c[2], c[8],
+            c[14];
+        external_odometry.base_orientation_cov << c[21], c[27], c[33], c[22], c[28], c[34], c[23],
+            c[29], c[35];
+    } else {
+        external_odometry.base_position_cov =
+            external_odometry_position_covariance_.value().asDiagonal();
+        external_odometry.base_orientation_cov =
+            external_odometry_orientation_covariance_.value().asDiagonal();
+    }
+    external_odometry_buffer_.add(std::move(external_odometry));
 }

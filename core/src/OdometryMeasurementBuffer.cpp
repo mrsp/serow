@@ -23,7 +23,9 @@
 
 namespace serow {
 
-OdometryMeasurementBuffer::OdometryMeasurementBuffer(const size_t max_size, bool interpolate_covariance) : max_size_(max_size), interpolate_covariance_(interpolate_covariance) {}
+OdometryMeasurementBuffer::OdometryMeasurementBuffer(const size_t max_size,
+                                                     bool interpolate_covariance)
+    : max_size_(max_size), interpolate_covariance_(interpolate_covariance) {}
 
 void OdometryMeasurementBuffer::add(const OdometryMeasurement& measurement) {
     // Check if the buffer is full
@@ -31,7 +33,7 @@ void OdometryMeasurementBuffer::add(const OdometryMeasurement& measurement) {
         measurements_.pop_front();
     }
 
-    // Add the measurement to the buffer 
+    // Add the measurement to the buffer
     measurements_.push_back(measurement);
 }
 
@@ -62,15 +64,16 @@ bool OdometryMeasurementBuffer::isTimestampInRange(const double timestamp,
         timestamp <= (time_range.value().second + tolerance);
 }
 
-std::optional<OdometryMeasurement> OdometryMeasurementBuffer::get(const double timestamp,
-                                                                  const double max_time_diff) const {
+std::optional<OdometryMeasurement> OdometryMeasurementBuffer::get(
+    const double timestamp, const double max_time_diff) const {
     if (measurements_.empty()) {
         return std::nullopt;
     }
 
     // Find the two measurements to interpolate between
-    auto it = std::lower_bound(measurements_.begin(), measurements_.end(), timestamp,
-                               [](const OdometryMeasurement& m, double t) { return m.timestamp < t; });
+    auto it =
+        std::lower_bound(measurements_.begin(), measurements_.end(), timestamp,
+                         [](const OdometryMeasurement& m, double t) { return m.timestamp < t; });
 
     // Handle edge cases
     if (it == measurements_.begin()) {
@@ -120,9 +123,9 @@ std::optional<OdometryMeasurement> OdometryMeasurementBuffer::get(const double t
     return std::nullopt;
 }
 
-OdometryMeasurement OdometryMeasurementBuffer::interpolate(const OdometryMeasurement& m1, 
-                                                           const OdometryMeasurement& m2, 
-                                                           const double target_timestamp, 
+OdometryMeasurement OdometryMeasurementBuffer::interpolate(const OdometryMeasurement& m1,
+                                                           const OdometryMeasurement& m2,
+                                                           const double target_timestamp,
                                                            const double t1) const {
     OdometryMeasurement result;
     result.timestamp = target_timestamp;
@@ -138,21 +141,23 @@ OdometryMeasurement OdometryMeasurementBuffer::interpolate(const OdometryMeasure
     result.timestamp = target_timestamp;
 
     // Interpolate base position (linear interpolation)
-    result.base_position =
-        m1.base_position + w * (m2.base_position - m1.base_position);
+    result.base_position = m1.base_position + w * (m2.base_position - m1.base_position);
 
     // Interpolate base orientation (slerp interpolation)
-    result.base_orientation =
-        m1.base_orientation.slerp(w, m2.base_orientation);
+    result.base_orientation = m1.base_orientation.slerp(w, m2.base_orientation);
 
     if (interpolate_covariance_) {
         // Interpolate base position covariance (convex combination preserves PSD; then enforce PD)
         result.base_position_cov = makePositiveDefinite(
             m1.base_position_cov + w * (m2.base_position_cov - m1.base_position_cov));
 
-        // Interpolate base orientation covariance (convex combination preserves PSD; then enforce PD)
+        // Interpolate base orientation covariance (convex combination preserves PSD; then enforce
+        // PD)
         result.base_orientation_cov = makePositiveDefinite(
             m1.base_orientation_cov + w * (m2.base_orientation_cov - m1.base_orientation_cov));
+    } else {
+        result.base_position_cov = m1.base_position_cov;
+        result.base_orientation_cov = m1.base_orientation_cov;
     }
 
     return result;

@@ -60,8 +60,9 @@ public:
      * @param use_imu_orientation Flag indicating if IMU orientation is used during the update step.
      * @param verbose Flag indicating if verbose output should be enabled.
      */
-    void init(const BaseState& state, std::set<std::string> contacts_frame, double g, 
-              double imu_rate, double eps = 0.05, bool point_feet = true, bool use_imu_orientation = false, bool verbose = false);
+    void init(const BaseState& state, std::set<std::string> contacts_frame, double g,
+              double imu_rate, double eps = 0.05, bool point_feet = true,
+              bool use_imu_orientation = false, bool verbose = false);
     /**
      * @brief Predicts the robot's state forward based on IMU.
      * @param state Current state of the robot.
@@ -91,7 +92,8 @@ public:
      * @brief Updates the robot's state based on base linear velocity measurements.
      * @param state Current state of the robot.
      * @param base_linear_velocity Base linear velocity in world coordinates.
-     * @param base_linear_velocity_cov Covariance of base linear velocity measurement in world coordinates.    
+     * @param base_linear_velocity_cov Covariance of base linear velocity measurement in world
+     * coordinates.
      */
     void updateWithBaseLinearVelocity(BaseState& state, const Eigen::Vector3d& base_linear_velocity,
                                       const Eigen::Matrix3d& base_linear_velocity_cov);
@@ -111,7 +113,7 @@ private:
     std::set<std::string> contacts_frame_;  ///< Set of contact frame names.
     double nominal_dt_{};                   ///< Nominal sampling time for prediction step.
     Eigen::Vector3d g_;                     ///< Gravity vector.
-    double eps_{0.05};                      ///< Minimum contact probability to update the state with kinematics.
+    double eps_{0.05};  ///< Minimum contact probability to update the state with kinematics.
     // State indices
     Eigen::Array3i v_idx_;   ///< Indices for velocity state variables.
     Eigen::Array3i r_idx_;   ///< Indices for orientation state variables.
@@ -120,23 +122,30 @@ private:
     Eigen::Array3i ba_idx_;  ///< Indices for accelerometer bias state variables.
 
     // Input indices
-    Eigen::Array3i ng_idx_;   ///< Indices for IMU input variables.
-    Eigen::Array3i na_idx_;   ///< Indices for kinematic input variables.
-    Eigen::Array3i nbg_idx_;  ///< Indices for gyro bias input variables.
-    Eigen::Array3i nba_idx_;  ///< Indices for accelerometer bias input variables.
+    Eigen::Array3i ng_idx_;                     ///< Indices for IMU input variables.
+    Eigen::Array3i na_idx_;                     ///< Indices for kinematic input variables.
+    Eigen::Array3i nbg_idx_;                    ///< Indices for gyro bias input variables.
+    Eigen::Array3i nba_idx_;                    ///< Indices for accelerometer bias input variables.
     std::optional<double> last_imu_timestamp_;  ///< Timestamp of the last IMU measurement.
 
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
-    /// matrix 15 x 15 
+    /// matrix 15 x 15
     Eigen::Matrix<double, 15, 15> I_, P_;
     /// Linearized state-input model 15 x 12
     Eigen::Matrix<double, 15, 12> Lc_;
 
     OutlierDetector base_position_outlier_detector;  ///< Outlier detector instance.
-  
-    bool point_feet_{};  ///< Flag indicating if the robot has point feet.
-    bool verbose_{};  ///< Flag indicating if verbose output is enabled.
-    bool use_imu_orientation_{};  ///< Flag indicating if IMU orientation is used during the update step.
+
+    bool point_feet_{};           ///< Flag indicating if the robot has point feet.
+    bool verbose_{};              ///< Flag indicating if verbose output is enabled.
+    bool use_imu_orientation_{};  ///< Flag indicating if IMU orientation is used during the update
+                                  ///< step.
+
+    std::optional<Eigen::Vector3d>
+        first_odometry_position_;  ///< Initial odometry measurement position (world coordinates).
+    std::optional<Eigen::Quaterniond>
+        first_odometry_orientation_;  ///< Initial odometry measurement orientation (world
+                                      ///< coordinates).
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.
@@ -145,9 +154,8 @@ private:
      * @param angular_velocity Angular velocity measurements.
      * @param linear_acceleration Linear acceleration measurements.
      */
-    void computeDiscreteDynamics(
-        BaseState& state, double dt, Eigen::Vector3d angular_velocity,
-        Eigen::Vector3d linear_acceleration);
+    void computeDiscreteDynamics(BaseState& state, double dt, Eigen::Vector3d angular_velocity,
+                                 Eigen::Vector3d linear_acceleration);
 
     /**
      * @brief Computes Jacobians for the prediction step of the EKF.
@@ -179,7 +187,7 @@ private:
      * @param contacts_probability Probabilities of leg contacts.
      * @param terrain_estimator Terrain elevation mapper.
      */
-    void updateWithTerrain(BaseState& state, 
+    void updateWithTerrain(BaseState& state,
                            const std::map<std::string, Eigen::Vector3d>& contacts_position,
                            const std::map<std::string, Eigen::Matrix3d>& contacts_position_noise,
                            const std::map<std::string, double>& contacts_probability,

@@ -9,5 +9,9 @@ topics:
     - "/force_torque_states/lh_foot"
     - "/force_torque_states/rh_foot"
   ground_truth: ""
+  external_odometry: ""
+synchronization:
+  imu_to_joint: 0.005
+  force_torque_to_joint: 0.01
 serow_config: "anymal_b.json" 
 publish_path: false
