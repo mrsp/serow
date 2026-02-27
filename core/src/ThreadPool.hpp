@@ -48,8 +48,7 @@ public:
             }
 
             if (tasks_.size() >= max_queue_size_) {
-                std::cout << "Removing oldest task from threadpool queue" << std::endl;
-                tasks_.pop();  // remove the oldest task
+                tasks_.pop();  // drop oldest task (backpressure when queue is full)
             }
 
             tasks_.emplace([task, this]() {

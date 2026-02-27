@@ -1090,8 +1090,11 @@ void Serow::logExteroception(const State& state) {
     if (!params_.log_data) {
         return;
     }
-    if (terrain_estimator_ && !exteroception_logger_job_->isRunning() && exteroception_logger_ &&
-        ((state.base_state_.timestamp - exteroception_logger_->getLastTimestamp()) > 0.1)) {
+    // Log at up to 1 Hz; allow queuing so we don't drop frames when the writer is busy
+    constexpr double kExteroceptionLogIntervalSec = 1.0;
+    if (terrain_estimator_ && exteroception_logger_ &&
+        ((state.base_state_.timestamp - exteroception_logger_->getLastTimestamp()) >
+         kExteroceptionLogIntervalSec)) {
         // Capture shared_ptrs directly to ensure they remain valid even if Serow is destroyed
         auto terrain_estimator = terrain_estimator_;
         auto exteroception_logger = exteroception_logger_;
