@@ -12,7 +12,7 @@
   "estimate_joint_velocity": true,
   "joint_position_variance": 0.01,
   "tau_0": 0.9,
-  "tau_1": 0.0,
+  "tau_1": 0.5,
   "imu_rate": 500.0,
   "R_base_to_gyro": [
     1.0,

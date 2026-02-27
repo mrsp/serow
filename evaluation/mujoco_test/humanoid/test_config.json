@@ -1,7 +1,7 @@
 {
   "Target": {
     "robot": "g1",
-    "experiment": "test"
+    "experiment": "test_1"
   },
   "Paths": {
     "base_path": "evaluation/mujoco_test/humanoid/mujoco_data",

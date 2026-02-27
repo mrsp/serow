@@ -53,6 +53,7 @@ static FrameData parseFrame(const json& j, const std::map<std::string, std::stri
     }
 
     // Joints
+    int joint_count = 0;
     if (j.contains("joint_states")) {
         for (const auto& [name, data] : j["joint_states"].items()) {
             serow::JointMeasurement jm;
@@ -69,7 +70,7 @@ static FrameData parseFrame(const json& j, const std::map<std::string, std::stri
             f.joints[key] = jm;      
         }
     }
-
+    std::cout << "\n\n\n";
     // Floating-base placeholder
     {
         serow::JointMeasurement base{};
@@ -84,7 +85,7 @@ static FrameData parseFrame(const json& j, const std::map<std::string, std::stri
                 serow::ForceTorqueMeasurement ft;
                 ft.timestamp = f.timestamp;
                 ft.force     = vec3FromJson(j["feet_forces"][json_key]);
-                ft.torque    = Eigen::Vector3d::Zero();
+                ft.torque    = vec3FromJson(j["feet_torques"][json_key]);
                 f.forces[serow_link_name] = ft;
             }
         }
