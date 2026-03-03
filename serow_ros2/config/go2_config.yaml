@@ -9,6 +9,10 @@ topics:
     - "/go2/RR/force_torque_states"
     - "/go2/RF/force_torque_states"
   ground_truth: ""
+  external_odometry: ""
+synchronization:
+  imu_to_joint: 0.005
+  force_torque_to_joint: 0.01
 serow_config: "go2.json" 
 publish_path: false
 

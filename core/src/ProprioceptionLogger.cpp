@@ -81,10 +81,12 @@ public:
         start_time_ = timestamp;
     }
 
-    // Split timestamp into seconds and nanoseconds
+    // Use same canonical ns as writeMessage (round + round-trip) so flatbuffer time and index match
     inline void splitTimestamp(double timestamp, int64_t& sec, int32_t& nsec) const noexcept {
-        sec = static_cast<int64_t>(timestamp);
-        nsec = static_cast<int32_t>((timestamp - sec) * 1e9);
+        uint64_t ns = static_cast<uint64_t>(std::round(timestamp * 1e9));
+        ns = static_cast<uint64_t>(static_cast<double>(ns) / 1e9 * 1e9);
+        sec = static_cast<int64_t>(ns / 1000000000);
+        nsec = static_cast<int32_t>(ns % 1000000000);
     }
 
     void log(const ImuMeasurement& imu_measurement) {

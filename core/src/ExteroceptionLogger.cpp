@@ -13,8 +13,11 @@
 #include "ExteroceptionLogger.hpp"
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
+#include <mutex>
 #include "Schemas.hpp"
 
 #include "Grid_generated.h"
@@ -54,8 +57,10 @@ public:
 
             // Create the logger with ROS2 profile
             writer_ = std::make_unique<mcap::McapWriter>();
-            // Configure MCAP options with explicit version
             mcap::McapWriterOptions options("ros2");
+            // Grid messages can be several MB; default chunkSize (~768 KB) is too small
+            options.chunkSize = 16 * 1024 * 1024;  // 16 MB
+
             writer_->open(*file_writer_, options);
 
             // Initialize schemas and channels
@@ -209,28 +214,28 @@ private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) {
         if (data_size == 0 || data == nullptr) {
-            return; 
+            return;
         }
         try {
             mcap::Message message;
             message.channelId = channel_id;
             message.sequence = sequence;
 
-            // Ensure timestamp is in nanoseconds and consistent
-            // Convert to nanoseconds using std::chrono for precision
-            auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::duration<double>(timestamp));
-            uint64_t ns_timestamp = ns.count();
+            // Match libmcap index: use ns that round-trips through double so message and index
+            // match
+            uint64_t ns_timestamp = static_cast<uint64_t>(std::round(timestamp * 1e9));
+            ns_timestamp = static_cast<uint64_t>(static_cast<double>(ns_timestamp) / 1e9 * 1e9);
             message.logTime = ns_timestamp;
-            message.publishTime = ns_timestamp;  // Use same timestamp for both
+            message.publishTime = ns_timestamp;
 
             message.dataSize = data_size;
             message.data = data;
 
+            std::lock_guard<std::mutex> lock(writer_mutex_);
             auto status = writer_->write(message);
             if (status.code != mcap::StatusCode::Success) {
-                throw std::runtime_error("Failed to write message for channel " +
-                                         std::to_string(channel_id) + ": " + status.message);
+                std::cerr << "MCAP write error for channel " << channel_id
+                          << " data_size=" << data_size << ": " << status.message << std::endl;
             }
         } catch (const std::exception& e) {
             std::cerr << "MCAP write error: " << e.what() << std::endl;
@@ -268,6 +273,7 @@ private:
     uint64_t local_map_sequence_{};
     double last_timestamp_{-1.0};
     std::optional<double> start_time_;
+    std::mutex writer_mutex_;
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
     std::unique_ptr<mcap::McapWriter> writer_;

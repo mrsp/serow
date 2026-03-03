@@ -503,7 +503,10 @@ void Serow::logMeasurements(ImuMeasurement imu,
                                      base_pose_ground_truth = std::move(base_pose_ground_truth)]() {
         try {
             if (!measurement_logger_->isInitialized()) {
-                double start_time = std::min(imu.timestamp, joints.begin()->second.timestamp);
+                double start_time = imu.timestamp;
+                if (!joints.empty()) {
+                    start_time = std::min(start_time, joints.begin()->second.timestamp);
+                }
                 if (!ft.empty()) {
                     start_time = std::min(start_time, ft.begin()->second.timestamp);
                 }
@@ -514,7 +517,9 @@ void Serow::logMeasurements(ImuMeasurement imu,
             }
             // Log all measurement data to MCAP file
             measurement_logger_->log(imu);
-            measurement_logger_->log(joints);
+            if (!joints.empty()) {
+                measurement_logger_->log(joints);
+            }
             if (!ft.empty()) {
                 measurement_logger_->log(ft);
             }
@@ -1085,8 +1090,11 @@ void Serow::logExteroception(const State& state) {
     if (!params_.log_data) {
         return;
     }
-    if (terrain_estimator_ && !exteroception_logger_job_->isRunning() && exteroception_logger_ &&
-        ((state.base_state_.timestamp - exteroception_logger_->getLastTimestamp()) > 0.1)) {
+    // Log at up to 1 Hz; allow queuing so we don't drop frames when the writer is busy
+    constexpr double kExteroceptionLogIntervalSec = 1.0;
+    if (terrain_estimator_ && exteroception_logger_ &&
+        ((state.base_state_.timestamp - exteroception_logger_->getLastTimestamp()) >
+         kExteroceptionLogIntervalSec)) {
         // Capture shared_ptrs directly to ensure they remain valid even if Serow is destroyed
         auto terrain_estimator = terrain_estimator_;
         auto exteroception_logger = exteroception_logger_;
