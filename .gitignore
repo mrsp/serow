@@ -8,8 +8,10 @@
 foxglove_layout.json:Zone.Identifier
 serow_layout.json:Zone.Identifier
 /evaluation/unit_tests/results/
-/evaluation/mujoco_test/mujoco_data/*/est_*.bin
-/evaluation/mujoco_test/mujoco_data/*/serow_predictions.mcap
+/evaluation/mujoco_test/humanoid/mujoco_data/*/est_*.bin
+/evaluation/mujoco_test/humanoid/mujoco_data/*/serow_predictions.mcap
+/evaluation/mujoco_test/quadruped/mujoco_data/*/serow_predictions.mcap
+/evaluation/mujoco_test/quadruped/mujoco_data/*/est_*.bin
 /python/serow/__pycache__/
 /python/datasets/
 /python/serow.egg-info/
