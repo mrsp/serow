@@ -70,7 +70,6 @@ static FrameData parseFrame(const json& j, const std::map<std::string, std::stri
             f.joints[key] = jm;      
         }
     }
-    std::cout << "\n\n\n";
     // Floating-base placeholder
     {
         serow::JointMeasurement base{};
@@ -78,14 +77,21 @@ static FrameData parseFrame(const json& j, const std::map<std::string, std::stri
         f.joints["floating_base_joint"] = base;
     }
 
-    // Forces
+    // Forces & Torques
     if (j.contains("feet_forces")) {
         for (const auto& [json_key, serow_link_name] : contact_map) {
             if (j["feet_forces"].contains(json_key)) {
                 serow::ForceTorqueMeasurement ft;
                 ft.timestamp = f.timestamp;
                 ft.force     = vec3FromJson(j["feet_forces"][json_key]);
-                ft.torque    = vec3FromJson(j["feet_torques"][json_key]);
+                
+                // Check if torques exist for this specific foot, otherwise set to zero
+                if (j.contains("feet_torques") && j["feet_torques"].contains(json_key)) {
+                    ft.torque = vec3FromJson(j["feet_torques"][json_key]);
+                } else {
+                    ft.torque = Eigen::Vector3d::Zero();
+                }
+                
                 f.forces[serow_link_name] = ft;
             }
         }
@@ -207,7 +213,9 @@ int main(int argc, char** argv) {
                 j_out["base_pose"]["position"] = { {"x", basePos.x()}, {"y", basePos.y()}, {"z", basePos.z()} };
                 j_out["base_pose"]["rotation"] = { {"w", baseOrient.w()}, {"x", baseOrient.x()}, {"y", baseOrient.y()}, {"z", baseOrient.z()} };
                 j_out["base_pose"]["linear_velocity"] = { {"x", baseLinVel.x()}, {"y", baseLinVel.y()}, {"z", baseLinVel.z()} };
-
+                std::cout << " Base Pos: " << basePos.transpose() << " | Base Orient (w,x,y,z): " 
+                          << baseOrient.w() << "," << baseOrient.x() << "," << baseOrient.y() << "," << baseOrient.z() 
+                          << " | Base LinVel: " << baseLinVel.transpose() << "\n";
                 // CoM State
                 auto comPos = state->getCoMPosition();
                 auto comVel = state->getCoMLinearVelocity();

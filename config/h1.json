@@ -203,7 +203,7 @@
     "dist_variance_gain": 10.0,
     "power": 5.0,
     "T_base_to_ground_truth": null,
-    "log_data": true,
-    "log_measurements": true,
+    "log_data": false,
+    "log_measurements": false,
     "log_dir": "/tmp/"
 }
