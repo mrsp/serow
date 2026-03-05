@@ -122,8 +122,8 @@ private:
     Eigen::Array3i ba_idx_;  ///< Indices for accelerometer bias state variables.
 
     // Input indices
-    Eigen::Array3i ng_idx_;                     ///< Indices for IMU input variables.
-    Eigen::Array3i na_idx_;                     ///< Indices for kinematic input variables.
+    Eigen::Array3i ng_idx_;                     ///< Indices for gyro input variables.
+    Eigen::Array3i na_idx_;                     ///< Indices for acceleration input variables.
     Eigen::Array3i nbg_idx_;                    ///< Indices for gyro bias input variables.
     Eigen::Array3i nba_idx_;                    ///< Indices for accelerometer bias input variables.
     std::optional<double> last_imu_timestamp_;  ///< Timestamp of the last IMU measurement.

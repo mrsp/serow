@@ -565,7 +565,7 @@ private:
      */
     void reduceRootFreeFlyerToFixedBase() {
         std::vector<pinocchio::JointIndex> joints_to_lock;
-        joints_to_lock.reserve(pmodel_->njoints);  // upper bound; avoids misleading reserve(1)
+        joints_to_lock.reserve(pmodel_->njoints);  // upper bound;
 
         for (pinocchio::JointIndex jid = 1;
              jid < static_cast<pinocchio::JointIndex>(pmodel_->njoints); ++jid) {

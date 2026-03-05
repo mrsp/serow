@@ -272,9 +272,9 @@
     "resolution": 0.02,
     // double: radius of inflation per contact point for the terrain elevation mapper
     "radius": 0.20,
-    // double: dist_variance_gain of the terrain elevation mapper, used to scale the variance of the terrain elevation mapper
+    // double: used to scale the variance of the terrain elevation mapper
     "dist_variance_gain": 10.0,
-    // double: power of the terrain elevation mapper, used to weight the contribution of the contact points to the terrain elevation mapper
+    // double: used to weight the contribution of the contact points to the terrain elevation mapper
     "power": 2.0,
     // array: rigid body transformation from base frame to ground truth frame. Can be null if no 
     // ground truth is provided

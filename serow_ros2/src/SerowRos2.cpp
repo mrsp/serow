@@ -315,17 +315,6 @@ void SerowRos2::run() {
             const auto& ft_measurement = ft_buffer.get(joint_state_timestamp, ft_max_time_diff_);
             if (ft_measurement) {
                 synchronized_ft_measurements[frame_id] = std::move(ft_measurement.value());
-            } else {
-                const auto& time_range = ft_buffer.getTimeRange();
-                RCLCPP_ERROR(this->get_logger(),
-                             "Failed to get F/T measurement for frame: %s at timestamp: %f",
-                             frame_id.c_str(), joint_state_timestamp);
-                if (time_range) {
-                    RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first,
-                                 time_range->second);
-                } else {
-                    RCLCPP_ERROR(this->get_logger(), "Time range: not available");
-                }
             }
         }
 
@@ -341,17 +330,6 @@ void SerowRos2::run() {
                 gt.position = ground_truth_odometry.value().base_position;
                 gt.orientation = ground_truth_odometry.value().base_orientation;
                 ground_truth_pose = std::move(gt);
-            } else {
-                RCLCPP_ERROR(this->get_logger(),
-                             "Failed to get ground truth odometry at timestamp: %f",
-                             joint_state_timestamp);
-                const auto& time_range = ground_truth_odometry_buffer_.getTimeRange();
-                if (time_range) {
-                    RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first,
-                                 time_range->second);
-                } else {
-                    RCLCPP_ERROR(this->get_logger(), "Time range: not available");
-                }
             }
         }
 
@@ -360,10 +338,6 @@ void SerowRos2::run() {
             std::lock_guard<std::mutex> lock(external_odometry_data_mutex_);
             external_odometry = external_odometry_buffer_.get(joint_state_timestamp,
                                                               external_odometry_max_time_diff_);
-            if (!external_odometry.has_value()) {
-                RCLCPP_ERROR(this->get_logger(), "Failed to get external odometry at timestamp: %f",
-                             joint_state_timestamp);
-            }
         }
 
         serow_.filter(base_imu_measurement.value(), joint_measurements,
@@ -426,7 +400,10 @@ void SerowRos2::publish() {
 void SerowRos2::publishGroundTruth(const serow::BasePoseGroundTruth& gt,
                                    const std::string& frame_id) {
     auto ground_truth_msg = nav_msgs::msg::Odometry();
-    ground_truth_msg.header.stamp = rclcpp::Time(gt.timestamp);
+    // Get seconds and nanoseconds from the timestamp
+    const auto seconds = static_cast<int32_t>(gt.timestamp);
+    const auto nanoseconds = static_cast<int32_t>((gt.timestamp - seconds) * 1e9);
+    ground_truth_msg.header.stamp = rclcpp::Time(seconds, nanoseconds);
     ground_truth_msg.header.frame_id = "world";
     ground_truth_msg.child_frame_id = frame_id;
     ground_truth_msg.pose.pose.position.x = gt.position.x();

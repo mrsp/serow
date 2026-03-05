@@ -127,7 +127,7 @@ private:
     double ft_max_time_diff_{0.01};  // Max time difference for F/T synchronization (default: 10ms)
     double imu_max_time_diff_{0.005};  // Max time difference for IMU synchronization (default: 5ms)
     double gt_max_time_diff_{
-        0.05};  // Max time difference for ground truth synchronization (default: 50ms)
+        0.02};  // Max time difference for ground truth synchronization (default: 20ms)
     double external_odometry_max_time_diff_{
-        0.1};  // Max time difference for external odometry synchronization (default: 100ms)
+        0.02};  // Max time difference for external odometry synchronization (default: 20ms)
 };
