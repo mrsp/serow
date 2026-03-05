@@ -29,7 +29,7 @@ public:
     ForceTorqueMeasurementBuffer(const size_t max_size = 1000);
 
     /**
-     * @brief Add a synchronized vector of force-torque measurements to the buffer
+     * @brief Add a force-torque measurement to the buffer
      * @param measurement ForceTorqueMeasurement to add
      */
     void add(const ForceTorqueMeasurement& measurement);

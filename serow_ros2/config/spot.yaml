@@ -1,0 +1,17 @@
+robot_name: "spot"
+path_to_serow_library: "/usr/local/lib"
+topics:
+  joint_states: "/spot/joint_states"
+  imu: "/spot/imu"
+  force_torque_states:
+    - "/spot/front_left_foot/force_torque_states"
+    - "/spot/front_right_foot/force_torque_states"
+    - "/spot/hind_left_foot/force_torque_states"
+    - "/spot/hind_right_foot/force_torque_states"
+  ground_truth: "/spot/ground_truth/odometry"
+  external_odometry: ""
+synchronization:
+  imu_to_joint: 0.005
+  force_torque_to_joint: 0.01
+serow_config: "spot.json" 
+publish_path: true

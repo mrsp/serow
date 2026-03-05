@@ -12,8 +12,6 @@
  **/
 #include "LegOdometry.hpp"
 
-#include <iostream>
-
 #include "lie.hpp"
 
 namespace serow {
@@ -158,15 +156,17 @@ void LegOdometry::estimate(
     }
 
     base_position_prev_ = base_position_;
-    base_position_ = Eigen::Vector3d::Zero();
-    for (const auto& [key, value] : force_weights) {
-        base_position_ += value * contact_contributions.at(key);
-    }
+    if (den > params_.eps) {
+        base_position_ = Eigen::Vector3d::Zero();
+        for (const auto& [key, value] : force_weights) {
+            base_position_ += value * contact_contributions.at(key);
+        }
 
-    for (const auto& [key, value] : contact_contributions) {
-        feet_position_prev_.at(key) += base_position_ - value;
-        feet_orientation_prev_.at(key) =
-            Eigen::Quaterniond(Rwb * base_to_foot_orientations.at(key).toRotationMatrix());
+        for (const auto& [key, value] : contact_contributions) {
+            feet_position_prev_.at(key) += base_position_ - value;
+            feet_orientation_prev_.at(key) =
+                Eigen::Quaterniond(Rwb * base_to_foot_orientations.at(key).toRotationMatrix());
+        }
     }
 
     for (const auto& [key, value] : feet_position_prev_) {
@@ -188,12 +188,16 @@ void LegOdometry::estimate(
         base_linear_velocity_ = base_linear_velocity_kinematic;
     }
 
-    base_linear_velocity_cov_ = Eigen::Matrix3d::Zero();
-    for (const auto& [key, value] : force_weights) {
-        base_linear_velocity_cov_ += value * Rwb * contact_positions_noise.at(key) * Rwb.transpose();
-        const Eigen::Matrix3d contact_skew = lie::so3::wedge(Rwb * contact_positions_.at(key));
-        base_linear_velocity_cov_ +=  value * contact_skew * base_angular_velocity_noise * contact_skew.transpose();
-    }
+    // Initialize base linear velocity covariance to a large value in case of no contact
+    base_linear_velocity_cov_ = Eigen::Matrix3d::Identity() * 1e4;
+    if (den > params_.eps) {
+        base_linear_velocity_cov_ = Eigen::Matrix3d::Zero();
+        for (const auto& [key, value] : force_weights) {
+            base_linear_velocity_cov_ += value * Rwb * contact_positions_noise.at(key) * Rwb.transpose();
+            const Eigen::Matrix3d contact_skew = lie::so3::wedge(Rwb * contact_positions_.at(key));
+            base_linear_velocity_cov_ +=  value * contact_skew * base_angular_velocity_noise * contact_skew.transpose();
+        } 
+    } 
 
    timestamp_ = timestamp;
 }

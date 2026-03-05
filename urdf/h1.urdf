@@ -79,7 +79,7 @@
     <limit lower="-1.2999998" upper="4.4499994" effort="18." velocity="20.000001"/>
   </joint>
   <joint name="logo_joint" type="fixed">
-    <origin xyz="0. 0. 0." rpy="0. 1.5707963 0. "/>
+    <origin xyz="0. 0. 0." rpy="0. 1.5707964 0. "/>
     <parent link="torso_link"/>
     <child link="logo_link"/>
   </joint>
@@ -165,13 +165,13 @@
       <inertia ixx="0.001" ixy="0." ixz="0." iyy="0.001" iyz="0." izz="0.001"/>
     </inertial>
     <visual>
-      <origin xyz="0. 0. 0." rpy="0.0000001 -1.5707963 0. "/>
+      <origin xyz="0. 0. 0." rpy="0.0000001 -1.5707964 0. "/>
       <geometry>
         <sphere radius="0.001"/>
       </geometry>
     </visual>
     <collision>
-      <origin xyz="0. 0. 0." rpy="0.0000001 -1.5707963 0. "/>
+      <origin xyz="0. 0. 0." rpy="0.0000001 -1.5707964 0. "/>
       <geometry>
         <sphere radius="0.001"/>
       </geometry>
@@ -184,13 +184,13 @@
       <inertia ixx="0.001" ixy="0." ixz="0." iyy="0.001" iyz="0." izz="0.001"/>
     </inertial>
     <visual>
-      <origin xyz="0. 0. 0." rpy="0.0000001 -1.5707963 0. "/>
+      <origin xyz="0. 0. 0." rpy="0.0000001 -1.5707964 0. "/>
       <geometry>
         <sphere radius="0.001"/>
       </geometry>
     </visual>
     <collision>
-      <origin xyz="0. 0. 0." rpy="0.0000001 -1.5707963 0. "/>
+      <origin xyz="0. 0. 0." rpy="0.0000001 -1.5707964 0. "/>
       <geometry>
         <sphere radius="0.001"/>
       </geometry>
@@ -395,7 +395,7 @@
       <inertia ixx="0.00001" ixy="0." ixz="0." iyy="0.00001" iyz="0." izz="0.00001"/>
     </inertial>
     <visual>
-      <origin xyz="0. 0. 0." rpy="0. -1.5707963 0. "/>
+      <origin xyz="0. 0. 0." rpy="0. -1.5707964 0. "/>
       <geometry>
         <mesh filename="meshes/logo_link_visuals.obj" scale="1. 1. 1."/>
       </geometry>

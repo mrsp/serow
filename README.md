@@ -59,10 +59,6 @@ export SEROW_PATH=<path-to-serow-package>
 * Load the data
 * Import `foxglove_layout.json` 
 
-### For running the mujoco data
-* `$ pip install h5py`
-* `$ pip install matplotlib` 
-
 ## Citation
 Upon usage in an academic work kindly cite: <br/>
 

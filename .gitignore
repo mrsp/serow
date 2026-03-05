@@ -13,7 +13,7 @@ serow_layout.json:Zone.Identifier
 /evaluation/fsc_test/build/
 /evaluation/mujoco_test/build/
 /evaluation/mujoco_test/mujoco_data/*/est_*.bin
-/evaluation/mujoco_test/mujoco_data/*/serow_predictions.h5
+/evaluation/mujoco_test/mujoco_data/*/serow_predictions.mcap
 /serow_hypertuner/build/
 /python/serow/__pycache__/
 /python/build/
