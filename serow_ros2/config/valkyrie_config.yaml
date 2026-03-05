@@ -11,7 +11,7 @@ topics:
 synchronization:
   imu_to_joint: 0.005
   force_torque_to_joint: 0.01
-  external_odometry_to_joint: 0.25
+  external_odometry_to_joint: 0.01
   ground_truth_to_joint: 0.01
 serow_config: "valkyrie.json" 
 publish_path: false
