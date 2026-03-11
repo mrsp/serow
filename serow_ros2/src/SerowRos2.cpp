@@ -68,7 +68,8 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     }
     const std::string& serow_config = config["serow_config"].as<std::string>();
     const bool publish_path = config["publish_path"].as<bool>();
-    add_gravity_to_imu_ = config["add_gravity_to_imu"].as<bool>();
+    const auto& add_gravity_node = config["add_gravity_to_imu"];
+    add_gravity_to_imu_ = add_gravity_node ? add_gravity_node.as<bool>() : false;
 
     RCLCPP_INFO(this->get_logger(), "Robot name: %s", robot_name.c_str());
     RCLCPP_INFO(this->get_logger(), "Serow config file: %s", serow_config.c_str());

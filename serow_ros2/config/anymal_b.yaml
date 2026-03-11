@@ -11,7 +11,7 @@ topics:
   ground_truth: ""
   external_odometry: ""
 synchronization:
-  imu_to_joint: 0.005
-  force_torque_to_joint: 0.01
-serow_config: "anymal_b.json" 
+  imu_to_joint: 0.02
+  force_torque_to_joint: 0.02
+serow_config: "anymal_b.json"
 publish_path: false
