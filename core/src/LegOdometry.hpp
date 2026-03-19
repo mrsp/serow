@@ -26,8 +26,11 @@
 #include <Eigen/Dense>
 #endif
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
+
+#include "DerivativeEstimator.hpp"
 
 namespace serow {
 
@@ -69,7 +72,9 @@ private:
                     const Eigen::Vector3d& force,
                     std::optional<Eigen::Vector3d> torque = std::nullopt);
 
+    std::unique_ptr<DerivativeEstimator> base_linear_velocity_estimator_;
     std::optional<double> timestamp_{};  ///< Timestamp of the last measurement
+    double nominal_dt_{};                ///< Nominal sample time
     Eigen::Vector3d base_position_ =
         Eigen::Vector3d::Zero();  ///< Estimated base position in world coordinates
     Eigen::Vector3d base_position_prev_ =
@@ -78,7 +83,7 @@ private:
         Eigen::Vector3d::Zero();  ///< Estimated base linear velocity in world coordinates
     Eigen::Matrix3d base_linear_velocity_cov_ =
         Eigen::Matrix3d::Identity();  ///< Estimated base linear velocity covariance
-    Params params_;               ///< Optimization parameters
+    Params params_;                   ///< Optimization parameters
 
     std::map<std::string, Eigen::Vector3d>
         pivots_;  ///< Pivot points for the feet in relative foot coordinates
@@ -164,8 +169,8 @@ public:
      * @param contact_torques Contact torques at the feet frame (optional)
      */
     void estimate(
-        const double timestamp,
-        const Eigen::Quaterniond& base_orientation, const Eigen::Vector3d& base_angular_velocity,
+        const double timestamp, const Eigen::Quaterniond& base_orientation,
+        const Eigen::Vector3d& base_angular_velocity,
         const std::map<std::string, Eigen::Quaterniond>& base_to_foot_orientations,
         const std::map<std::string, Eigen::Vector3d>& base_to_foot_positions,
         const std::map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
