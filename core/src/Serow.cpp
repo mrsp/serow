@@ -1015,9 +1015,10 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
     const Eigen::Vector3d& base_angular_acceleration = state.base_state_.base_angular_acceleration;
     const Eigen::Vector3d& base_linear_acceleration = state.base_state_.base_linear_acceleration;
     const Eigen::Vector3d& base_angular_velocity = state.base_state_.base_angular_velocity;
+    const Eigen::Vector3d base_to_com_world = base_pose.linear() * base_to_com_position;
     kin.com_linear_acceleration.noalias() = base_linear_acceleration +
-        base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_position)) +
-        base_angular_acceleration.cross(base_to_com_position);
+        base_angular_velocity.cross(base_angular_velocity.cross(base_to_com_world)) +
+        base_angular_acceleration.cross(base_to_com_world);
 
     state.centroidal_state_.com_linear_acceleration.noalias() = kin.com_linear_acceleration;
 

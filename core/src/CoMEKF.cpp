@@ -20,7 +20,7 @@ void CoMEKF::init(const CentroidalState& state, double mass, double g, double ra
     I_ = Eigen::Matrix<double, 9, 9>::Identity();
     P_ = Eigen::Matrix<double, 9, 9>::Identity();
     // Initialize state indices
-    c_idx_ = Eigen::Array3i::LinSpaced(0, 3);
+    c_idx_ = Eigen::Array3i::LinSpaced(0, 2);
     v_idx_ = c_idx_ + 3;
     f_idx_ = v_idx_ + 3;
     // Initialize state uncertainty
@@ -90,7 +90,7 @@ Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(
     res.segment<3>(0) = state.com_linear_velocity;
     double den = state.com_position.z() - cop_position.z();
     if (std::abs(den) < 1e-6) {
-        std::cerr << "[CoMEKF]: CoM and COP height difference too small (" << den 
+        std::cerr << "[CoMEKF]: CoM and COP height difference too small (" << den
                   << "), clamping to safe value" << std::endl;
         den = 1e-6;
     }
@@ -115,7 +115,7 @@ CoMEKF::computePredictionJacobians(const CentroidalState& state,
     Eigen::Matrix<double, 9, 9> Lc = Eigen::Matrix<double, 9, 9>::Identity();
     double den = state.com_position.z() - cop_position.z();
     if (std::abs(den) < 1e-6) {
-        den = 1e-6; 
+        den = 1e-6;
     }
 
     Ac.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity();
@@ -144,7 +144,7 @@ void CoMEKF::updateWithCoMAcceleration(CentroidalState& state,
     if (std::abs(den) < 1e-6) {
         den = 1e-6;
     }
-    
+
     Eigen::Vector3d z = Eigen::Vector3d::Zero();
     z.x() = com_linear_acceleration(0) -
         ((state.com_position.x() - cop_position.x()) / (mass_ * den) * ground_reaction_force.z() +
