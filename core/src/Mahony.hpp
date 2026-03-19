@@ -148,13 +148,13 @@ public:
             const Eigen::Vector3d v_est(halfvx, halfvy, halfvz); 
             const Eigen::Matrix3d H = lie::so3::wedge(v_est);
 
-            // Scale the accelerometer noise by the inverse of Kp to match the filter's weighting
-            const Eigen::Matrix3d R_acc = (Q_acc_ / dt) / (twoKp_ * 0.5); 
-        
-            // Kalman-like gain for covariance shrinkage
-            const Eigen::Matrix3d S = H * P_ * H.transpose() + R_acc;
-            const Eigen::Matrix3d K = P_ * H.transpose() * S.inverse();
-            P_ = (Eigen::Matrix3d::Identity() - K * H) * P_;
+            // Kalman-like covariance update (requires Kp > 0; R_acc scales ~ 1/Kp)
+            if (twoKp_ > 0.0) {
+                const Eigen::Matrix3d R_acc = (Q_acc_ / dt) / (twoKp_ * 0.5);
+                const Eigen::Matrix3d S = H * P_ * H.transpose() + R_acc;
+                const Eigen::Matrix3d K = P_ * H.transpose() * S.inverse();
+                P_ = (Eigen::Matrix3d::Identity() - K * H) * P_;
+            }
 
             // Integral feedback with anti-windup decay
             if (twoKi_ > 0.0) {

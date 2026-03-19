@@ -94,7 +94,17 @@ void LegOdometry::computeIMP(const double timestamp, const std::string& frame,
         b.noalias() += params_.alpha3 / params_.Tm3 *
             (force_skew * torque_foot - force_skew * force_skew * force_torque_offset_->at(frame));
     }
-    pivots_.at(frame).noalias() = A.inverse() * b;
+
+    Eigen::LDLT<Eigen::Matrix3d> ldlt(A);
+    if (ldlt.info() == Eigen::Success) {
+        pivots_.at(frame) = ldlt.solve(b);
+    } else {
+        const Eigen::FullPivLU<Eigen::Matrix3d> lu(A);
+        if (lu.isInvertible()) {
+            pivots_.at(frame) = lu.solve(b);
+        }
+        // else: leave pivots unchanged (singular / ill-conditioned A)
+    }
 }
 
 void LegOdometry::estimate(

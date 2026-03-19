@@ -12,21 +12,30 @@
  **/
 #include "OutlierDetector.hpp"
 
+#include <cmath>
+
 namespace serow {
 
-double OutlierDetector::computePsi(double xxx) {
-    double result = 0;
-    double xx, xx2, xx4;
-    for (; xxx < 7; ++xxx) {
-        result -= 1 / xxx;
+double OutlierDetector::computePsi(double x) {
+    // Digamma ψ(x) for x > 0: recurrence ψ(x) = ψ(x+k) - Σⱼ 1/(x+j), then asymptotic for large arg.
+    constexpr double kMinArg = 1e-9;
+    if (x < kMinArg) {
+        x = kMinArg;
     }
 
-    xxx -= 1.0 / 2.0;
-    xx = 1.0 / xxx;
-    xx2 = xx * xx;
-    xx4 = xx2 * xx2;
-    result += std::log(xxx) + (1.0 / 24.0) * xx2 - (7.0 / 960.0) * xx4 +
-        (31.0 / 8064.0) * xx4 * xx2 - (127.0 / 30720.0) * xx4 * xx4;
+    double result = 0.0;
+    double t = x;
+    while (t < 7.0) {
+        result -= 1.0 / t;
+        t += 1.0;
+    }
+
+    t -= 0.5;
+    const double xx = 1.0 / t;
+    const double xx2 = xx * xx;
+    const double xx4 = xx2 * xx2;
+    result += std::log(t) + (1.0 / 24.0) * xx2 - (7.0 / 960.0) * xx4 + (31.0 / 8064.0) * xx4 * xx2 -
+        (127.0 / 30720.0) * xx4 * xx4;
     return result;
 }
 

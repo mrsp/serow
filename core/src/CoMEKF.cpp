@@ -47,9 +47,17 @@ void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
     if (last_grf_timestamp_.has_value()) {
         dt = grf.timestamp - last_grf_timestamp_.value();
     }
+
+    if (dt < 0.0) {
+        std::cerr << "[CoMEKF]: Predict step sample time is negative (" << dt << "), nominal is "
+                  << nominal_dt_ << "; skipping predict" << std::endl;
+        return;
+    }
+
     if (dt < nominal_dt_ / 2) {
         dt = nominal_dt_;
     }
+
     const auto& [Ac, Lc] =
         computePredictionJacobians(state, grf.cop, grf.force, kin.com_angular_momentum_derivative);
 

@@ -473,7 +473,6 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state,
     H.setZero();
     Eigen::MatrixXd K(num_states_, 3);
     Eigen::MatrixXd PH_transpose(num_states_, 3);
-    Eigen::Vector3d z;
     Eigen::Matrix3d s;
 
     // Iterative ESKF update
