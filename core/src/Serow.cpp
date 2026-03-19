@@ -440,10 +440,12 @@ bool Serow::initialize(const std::string& config_file) {
 
     // Compute SG-filter parameters
     // Calculate M based on time horizon (minimum 3 points for 2nd order poly)
-    const double time_horizon = 0.02;
+    const double time_horizon_joint = 1.0 / params_.joint_rate * 5.0;
+    const double time_horizon_imu = 1.0 / params_.imu_rate * 5.0;
     const int M_joint =
-        std::max(3, static_cast<int>(std::round(time_horizon * params_.joint_rate)));
-    const int M_imu = std::max(3, static_cast<int>(std::round(time_horizon * params_.imu_rate)));
+        std::max(3, static_cast<int>(std::round(time_horizon_joint * params_.joint_rate)));
+    const int M_imu =
+        std::max(3, static_cast<int>(std::round(time_horizon_imu * params_.imu_rate)));
     // Compute coefficients
     coeffs_joint_ = computeSGCoefficients(M_joint);
     coeffs_imu_ = computeSGCoefficients(M_imu);
@@ -558,7 +560,9 @@ void Serow::runJointsEstimator(State& state,
         } else {
             if (joint_estimators_.count(key) == 0) {
                 joint_estimators_.emplace(
-                    key, DerivativeEstimator(key, coeffs_joint_, params_.joint_rate));
+                    key,
+                    DerivativeEstimator(key, coeffs_joint_, params_.joint_rate, 1,
+                                        1.0 / params_.joint_rate * 5.0));
                 if (state.isInitialized()) {
                     joint_estimators_.at(key).setState(
                         Eigen::Matrix<double, 1, 1>(state.joint_state_.joints_velocity.at(key)));
@@ -750,7 +754,8 @@ void Serow::runAngularMomentumEstimator(State& state) {
     // Initialize angular momentum derivative estimator if needed
     if (!angular_momentum_derivative_estimator) {
         angular_momentum_derivative_estimator = std::make_unique<DerivativeEstimator>(
-            "CoM Angular Momentum Derivative", coeffs_joint_, params_.joint_rate, 3);
+            "CoM Angular Momentum Derivative", coeffs_joint_, params_.joint_rate, 3,
+            1.0 / params_.joint_rate * 5.0);
         if (state.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = R_world_to_base.transpose();
             angular_momentum_derivative_estimator->setState(
@@ -954,7 +959,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
         Eigen::Vector3d(0.0, 0.0, params_.g);
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>(
-            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3);
+            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3, 1.0 / params_.imu_rate * 5.0);
         if (state.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = base_pose.linear().transpose();
             gyro_derivative_estimator->setState(R_base_to_world *
@@ -1674,7 +1679,7 @@ void Serow::baseEstimatorFinishUpdate(const ImuMeasurement& imu, const Kinematic
         Eigen::Vector3d(0.0, 0.0, params_.g);
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>(
-            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3);
+            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3, 1.0 / params_.imu_rate * 5.0);
         if (state_.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = base_pose.linear().transpose();
             gyro_derivative_estimator->setState(R_base_to_world *
