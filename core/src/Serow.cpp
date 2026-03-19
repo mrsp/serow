@@ -440,10 +440,12 @@ bool Serow::initialize(const std::string& config_file) {
 
     // Compute SG-filter parameters
     // Calculate M based on time horizon (minimum 3 points for 2nd order poly)
-    const double time_horizon = 0.02;
+    const double time_horizon_joint = 1.0 / params_.joint_rate * 5.0;
+    const double time_horizon_imu = 1.0 / params_.imu_rate * 5.0;
     const int M_joint =
-        std::max(3, static_cast<int>(std::round(time_horizon * params_.joint_rate)));
-    const int M_imu = std::max(3, static_cast<int>(std::round(time_horizon * params_.imu_rate)));
+        std::max(3, static_cast<int>(std::round(time_horizon_joint * params_.joint_rate)));
+    const int M_imu =
+        std::max(3, static_cast<int>(std::round(time_horizon_imu * params_.imu_rate)));
     // Compute coefficients
     coeffs_joint_ = computeSGCoefficients(M_joint);
     coeffs_imu_ = computeSGCoefficients(M_imu);

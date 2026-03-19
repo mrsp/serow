@@ -11,7 +11,6 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 #include "LegOdometry.hpp"
-
 #include "lie.hpp"
 
 namespace serow {
@@ -38,6 +37,15 @@ LegOdometry::LegOdometry(
     }
     base_position_ = base_position;
     base_position_prev_ = base_position;
+
+    base_linear_velocity_ = Eigen::Vector3d::Zero();
+    base_linear_velocity_cov_ = Eigen::Matrix3d::Identity() * 1e4;
+
+    // Initialize the base linear velocity estimator with a time horizon of 5 times the nominal
+    // sample time
+    nominal_dt_ = 1.0 / params_.freq;
+    base_linear_velocity_estimator_ = std::make_unique<DerivativeEstimator>(
+        "Base Linear Velocity", std::vector<double>{}, params_.freq, 3, nominal_dt_ * 5.0);
 }
 
 const Eigen::Vector3d& LegOdometry::getBasePosition() const {
@@ -56,9 +64,8 @@ const std::map<std::string, Eigen::Quaterniond> LegOdometry::getContactOrientati
     return contact_orientations_;
 }
 
-void LegOdometry::computeIMP(const double timestamp,
-                             const std::string& frame, const Eigen::Matrix3d& R,
-                             const Eigen::Vector3d& angular_velocity,
+void LegOdometry::computeIMP(const double timestamp, const std::string& frame,
+                             const Eigen::Matrix3d& R, const Eigen::Vector3d& angular_velocity,
                              const Eigen::Vector3d& linear_velocity, const Eigen::Vector3d& force,
                              std::optional<Eigen::Vector3d> torque) {
     const Eigen::Vector3d force_foot = R.transpose() * force;
@@ -72,7 +79,6 @@ void LegOdometry::computeIMP(const double timestamp,
         params_.Tm = 1.0 / params_.freq;
     } else {
         params_.Tm = timestamp - timestamp_.value();
-
     }
     params_.Tm2 = params_.Tm * params_.Tm;
     params_.Tm3 = (params_.mass * params_.mass * params_.g * params_.g) * params_.Tm2;
@@ -86,15 +92,14 @@ void LegOdometry::computeIMP(const double timestamp,
         const Eigen::Vector3d torque_foot = R.transpose() * torque.value();
         A.noalias() -= params_.alpha3 / params_.Tm3 * force_skew * force_skew;
         b.noalias() += params_.alpha3 / params_.Tm3 *
-            (force_skew * torque_foot -
-             force_skew * force_skew * force_torque_offset_->at(frame));
+            (force_skew * torque_foot - force_skew * force_skew * force_torque_offset_->at(frame));
     }
     pivots_.at(frame).noalias() = A.inverse() * b;
 }
 
 void LegOdometry::estimate(
-    const double timestamp,
-    const Eigen::Quaterniond& base_orientation, const Eigen::Vector3d& base_angular_velocity,
+    const double timestamp, const Eigen::Quaterniond& base_orientation,
+    const Eigen::Vector3d& base_angular_velocity,
     const std::map<std::string, Eigen::Quaterniond>& base_to_foot_orientations,
     const std::map<std::string, Eigen::Vector3d>& base_to_foot_positions,
     const std::map<std::string, Eigen::Vector3d>& base_to_foot_linear_velocities,
@@ -110,11 +115,11 @@ void LegOdometry::estimate(
     for (const auto& [key, value] : contact_probabilities) {
         den += value;
     }
-    
+
     std::map<std::string, double> force_weights;
     for (const auto& [key, value] : contact_probabilities) {
         if (den > params_.eps) {
-            force_weights[key] = std::clamp(value/den, 0.0, 1.0);
+            force_weights[key] = std::clamp(value / den, 0.0, 1.0);
         } else {
             force_weights[key] = 0.0;
         }
@@ -170,36 +175,36 @@ void LegOdometry::estimate(
     }
 
     for (const auto& [key, value] : feet_position_prev_) {
-        contact_positions_[key] = Rwb.transpose() * (value -  base_position_);
+        contact_positions_[key] = Rwb.transpose() * (value - base_position_);
         contact_orientations_[key] = base_to_foot_orientations.at(key);
     }
 
-    // Compute base linear velocity from position change (finite differences)
+    double dt = nominal_dt_;
     if (timestamp_) {
-        const double dt = timestamp - timestamp_.value();
-        // Safety check: avoid division by very small or negative dt
-        if (dt > 1e-6) {
-            base_linear_velocity_ = (base_position_ - base_position_prev_) / dt;
-        } else {
-            // Fallback to kinematic velocity if dt is too small
-            base_linear_velocity_ = base_linear_velocity_kinematic;
+        dt = timestamp - timestamp_.value();
+        if (dt < 1e-6) {
+            dt = nominal_dt_;
         }
-    } else {
-        base_linear_velocity_ = base_linear_velocity_kinematic;
     }
 
     // Initialize base linear velocity covariance to a large value in case of no contact
-    base_linear_velocity_cov_ = Eigen::Matrix3d::Identity() * 1e4;
+    Eigen::Matrix3d base_linear_velocity_cov = Eigen::Matrix3d::Identity() * 1e4;
     if (den > params_.eps) {
-        base_linear_velocity_cov_ = Eigen::Matrix3d::Zero();
+        base_linear_velocity_cov = Eigen::Matrix3d::Zero();
         for (const auto& [key, value] : force_weights) {
-            base_linear_velocity_cov_ += value * Rwb * contact_positions_noise.at(key) * Rwb.transpose();
+            base_linear_velocity_cov +=
+                value * Rwb * contact_positions_noise.at(key) * Rwb.transpose();
             const Eigen::Matrix3d contact_skew = lie::so3::wedge(Rwb * contact_positions_.at(key));
-            base_linear_velocity_cov_ +=  value * contact_skew * base_angular_velocity_noise * contact_skew.transpose();
-        } 
-    } 
+            base_linear_velocity_cov +=
+                value * contact_skew * base_angular_velocity_noise * contact_skew.transpose();
+        }
+    }
 
-   timestamp_ = timestamp;
+    // Estimate base linear velocity using the derivative estimator
+    base_linear_velocity_ = base_linear_velocity_estimator_->filter(
+        base_position_, base_linear_velocity_cov.diagonal() * dt * dt, timestamp);
+    base_linear_velocity_cov_ = base_linear_velocity_estimator_->getCovariance();
+    timestamp_ = timestamp;
 }
 
 const Eigen::Matrix3d& LegOdometry::getBaseLinearVelocityCov() const {
