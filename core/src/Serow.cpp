@@ -560,7 +560,7 @@ void Serow::runJointsEstimator(State& state,
         } else {
             if (joint_estimators_.count(key) == 0) {
                 joint_estimators_.emplace(
-                    key, DerivativeEstimator(key, coeffs_joint_, params_.joint_rate, 1));
+                    key, DerivativeEstimator(key, coeffs_joint_, params_.joint_rate));
                 if (state.isInitialized()) {
                     joint_estimators_.at(key).setState(
                         Eigen::Matrix<double, 1, 1>(state.joint_state_.joints_velocity.at(key)));
