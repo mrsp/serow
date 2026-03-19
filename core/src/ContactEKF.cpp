@@ -30,14 +30,14 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     I_.setIdentity(num_states_, num_states_);
 
     // Initialize state indices
-    v_idx_ = Eigen::Array3i::LinSpaced(0, 3);
+    v_idx_ = Eigen::Array3i::LinSpaced(0, 2);
     r_idx_ = v_idx_ + 3;
     p_idx_ = r_idx_ + 3;
     bg_idx_ = p_idx_ + 3;
     ba_idx_ = bg_idx_ + 3;
 
     // Initialize input indices
-    ng_idx_ = Eigen::Array3i::LinSpaced(0, 3);
+    ng_idx_ = Eigen::Array3i::LinSpaced(0, 2);
     na_idx_ = ng_idx_ + 3;
     nbg_idx_ = na_idx_ + 3;
     nba_idx_ = nbg_idx_ + 3;
@@ -209,7 +209,8 @@ void ContactEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& bas
             const Eigen::MatrixXd s = R + H * PH_transpose;
             const Eigen::MatrixXd K = PH_transpose * s.inverse();
             const Eigen::VectorXd dx = K * z;
-            P_i = (I_ - K * H) * P_;
+            const Eigen::MatrixXd IKH = I_ - K * H;
+            P_i = IKH * P_ * IKH.transpose() + K * R * K.transpose();
             updated_state_i = updateStateCopy(state, dx, P_);
 
             // Outlier detection with the base position measurement vector
@@ -278,7 +279,8 @@ void ContactEKF::updateWithTerrain(
                 const Eigen::MatrixXd s = R + H * PH_transpose;
                 const Eigen::MatrixXd K = PH_transpose * s.inverse();
                 const Eigen::VectorXd dx = K * z;
-                P_ = (I_ - K * H) * P_;
+                const Eigen::MatrixXd IKH = I_ - K * H;
+                P_ = IKH * P_ * IKH.transpose() + K * R * K.transpose();
                 updateState(state, dx, P_);
             }
         }
@@ -458,7 +460,8 @@ void ContactEKF::updateWithIMUOrientation(BaseState& state,
     const Eigen::MatrixXd K = PH_transpose * s.inverse();
     const Eigen::VectorXd dx = K * z;
 
-    P_ = (I_ - K * H) * P_;
+    const Eigen::MatrixXd IKH = I_ - K * H;
+    P_ = IKH * P_ * IKH.transpose() + K * R * K.transpose();
     updateState(state, dx, P_);
 }
 
@@ -505,8 +508,9 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state,
         }
     }
 
-    // Update the covariance once after convergence
-    P_ = (I_ - K * H) * P_;
+    // Update the covariance once after convergence using the Joseph form for numerical stability
+    const Eigen::MatrixXd IKH = I_ - K * H;
+    P_ = IKH * P_ * IKH.transpose() + K * base_linear_velocity_cov * K.transpose();
 
     // Update state covariances with the final P_
     state.base_position_cov = P_(p_idx_, p_idx_);
