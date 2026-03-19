@@ -560,9 +560,7 @@ void Serow::runJointsEstimator(State& state,
         } else {
             if (joint_estimators_.count(key) == 0) {
                 joint_estimators_.emplace(
-                    key,
-                    DerivativeEstimator(key, coeffs_joint_, params_.joint_rate, 1,
-                                        1.0 / params_.joint_rate * 5.0));
+                    key, DerivativeEstimator(key, coeffs_joint_, params_.joint_rate, 1));
                 if (state.isInitialized()) {
                     joint_estimators_.at(key).setState(
                         Eigen::Matrix<double, 1, 1>(state.joint_state_.joints_velocity.at(key)));
@@ -754,8 +752,7 @@ void Serow::runAngularMomentumEstimator(State& state) {
     // Initialize angular momentum derivative estimator if needed
     if (!angular_momentum_derivative_estimator) {
         angular_momentum_derivative_estimator = std::make_unique<DerivativeEstimator>(
-            "CoM Angular Momentum Derivative", coeffs_joint_, params_.joint_rate, 3,
-            1.0 / params_.joint_rate * 5.0);
+            "CoM Angular Momentum Derivative", coeffs_joint_, params_.joint_rate, 3);
         if (state.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = R_world_to_base.transpose();
             angular_momentum_derivative_estimator->setState(
@@ -959,7 +956,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
         Eigen::Vector3d(0.0, 0.0, params_.g);
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>(
-            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3, 1.0 / params_.imu_rate * 5.0);
+            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3);
         if (state.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = base_pose.linear().transpose();
             gyro_derivative_estimator->setState(R_base_to_world *
@@ -1679,7 +1676,7 @@ void Serow::baseEstimatorFinishUpdate(const ImuMeasurement& imu, const Kinematic
         Eigen::Vector3d(0.0, 0.0, params_.g);
     if (!gyro_derivative_estimator) {
         gyro_derivative_estimator = std::make_unique<DerivativeEstimator>(
-            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3, 1.0 / params_.imu_rate * 5.0);
+            "Gyro Derivative", coeffs_imu_, params_.imu_rate, 3);
         if (state_.isInitialized()) {
             const Eigen::Matrix3d R_base_to_world = base_pose.linear().transpose();
             gyro_derivative_estimator->setState(R_base_to_world *
