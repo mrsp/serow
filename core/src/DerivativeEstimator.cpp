@@ -16,8 +16,9 @@
 
 namespace serow {
 
-DerivativeEstimator::DerivativeEstimator(const std::string& name, const std::vector<double>& coefficients, 
-                                         double f_sampling, size_t dim, double time_horizon, bool verbose) {
+DerivativeEstimator::DerivativeEstimator(const std::string& name,
+                                         const std::vector<double>& coefficients, double f_sampling,
+                                         size_t dim, double time_horizon, bool verbose) {
     name_ = name;
     dim_ = dim;
     nominal_dt_ = 1.0 / f_sampling;
@@ -26,7 +27,7 @@ DerivativeEstimator::DerivativeEstimator(const std::string& name, const std::vec
     if (coefficients.empty()) {
         // Compute the coefficients automatically
         M_ = std::max(3, static_cast<int>(std::round(time_horizon * f_sampling)));
-        coefficients_ = computeSGCoefficients(M_); 
+        coefficients_ = computeSGCoefficients(M_);
     } else {
         M_ = coefficients.size();
         coefficients_ = coefficients;
@@ -34,7 +35,7 @@ DerivativeEstimator::DerivativeEstimator(const std::string& name, const std::vec
 
     buffers_.resize(dim_, std::deque<double>(M_, 0.0));
     x_dot_ = Eigen::VectorXd::Zero(dim_);
-    
+
     // Noise power gain: sum of squared coefficients
     noise_gain_ = 0.0;
     for (const double& c : coefficients_) {
@@ -67,11 +68,13 @@ void DerivativeEstimator::setState(const Eigen::VectorXd& x_dot) {
     x_dot_ = x_dot;
 }
 
-Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement, 
-                                            const Eigen::VectorXd& measurement_variance, 
+Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement,
+                                            const Eigen::VectorXd& measurement_variance,
                                             double timestamp) {
-    if (measurement.size() != static_cast<int>(dim_) || measurement_variance.size() != static_cast<int>(dim_)) {
-        throw std::runtime_error("[DerivativeEstimator] Wrong signal dimensions to filter signal " + name_);
+    if (measurement.size() != static_cast<int>(dim_) ||
+        measurement_variance.size() != static_cast<int>(dim_)) {
+        throw std::runtime_error("[DerivativeEstimator] Wrong signal dimensions to filter signal " +
+                                 name_);
     }
 
     // --- Warm Start Logic ---
@@ -81,13 +84,14 @@ Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement,
         }
         timestamp_ = timestamp;
         initialized_ = true;
-        return x_dot_; 
+        return x_dot_;
     }
 
     // --- Time Delta Handling ---
     if (timestamp_) {
         const double dt = timestamp - timestamp_.value();
-        if (dt <= 0.0) return x_dot_; // Ignore duplicate/older timestamps
+        if (dt <= 0.0)
+            return x_dot_;  // Ignore duplicate/older timestamps
     }
     timestamp_ = timestamp;
 
@@ -100,7 +104,7 @@ Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement,
         for (size_t i = 0; i < M_; ++i) {
             derivative_sum += coefficients_[i] * buffers_[d][i];
         }
-        
+
         // Division by nominal_dt converts "change per sample-index" to "change per second"
         x_dot_(d) = derivative_sum / nominal_dt_;
 
