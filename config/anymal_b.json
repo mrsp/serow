@@ -11,7 +11,7 @@
   "model_path": "anymal_b.urdf",
   "g": 9.81,
   "joint_rate": 400.0,
-  "estimate_joint_velocity": false,
+  "estimate_joint_velocity": true,
   "joint_position_variance": 0.0005,
   "imu_rate": 400.0,
   "R_base_to_gyro": [
@@ -37,7 +37,7 @@
     -1.0
   ],
   "use_imu_orientation": true,
-  "calibrate_initial_imu_bias": false,
+  "calibrate_initial_imu_bias": true,
   "max_imu_calibration_cycles": 500,
   "bias_gyro": [
     -0.000881133,
@@ -97,8 +97,8 @@
     ]
   },
   "R_foot_to_torque": null,
-  "attitude_estimator_proportional_gain": 0.000244948,
-  "attitude_estimator_integral_gain": 0.000290386,
+  "attitude_estimator_proportional_gain": 0.1,
+  "attitude_estimator_integral_gain": 0.0,
   "estimate_contact_status": true,
   "median_window": 13,
   "tau_0": 1.0,
