@@ -1,11 +1,21 @@
 {
-  "Experiment": {
-    "type": "anymal_fsc"
+  "Target": {
+    "robot": "anymal_b",
+    "experiment": "fsc"
   },
   "Paths": {
-    "base_path": "/evaluation/fsc_test",
-    "data_file": "{base_path}/{type}/anymal_b_data.h5",
-    "prediction_file": "{base_path}/{type}/serow_predictions.h5",
-    "elevation_map_file": "{base_path}/{type}/est_elevation_map.bin"
+    "base_path": "/home/michael/github/serow/evaluation/fsc_test/anymal_fsc",
+    "data_file": "evaluation/fsc_test/anymal_fsc/anymal_dataset.mcap",
+    "prediction_file": "evaluation/fsc_test/anymal_fsc/serow_predictions.mcap"
+  },
+  "RobotDatabase": {
+    "anymal_b": {
+      "contact_map": {
+        "LF": "LF_FOOT",
+        "RF": "RF_FOOT",
+        "LH": "LH_FOOT",
+        "RH": "RH_FOOT"
+      }
+    }
   }
 }

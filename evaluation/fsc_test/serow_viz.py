@@ -1,312 +1,253 @@
-# Visualizing data for SEROW
-
-import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import json
+import sys
+from mcap.reader import make_reader
+from scipy.spatial.transform import Rotation as R
 
-display_plots = True
-imu_calibration_cycles = 0
+# -------------------------------------------------------------------------
+# CONFIGURATION
+# -------------------------------------------------------------------------
+DISPLAY_PLOTS = True
+CONFIG_FILE = "test_config.json"
+PERCENTAGE = 100.0
 
-config_file = "test_config.json"  # Path to your JSON config file
-if not os.path.exists(config_file):
-    raise FileNotFoundError(f"Configuration file {config_file} not found.")
+if len(sys.argv) > 1:
+    try:
+        PERCENTAGE = float(sys.argv[1])
+    except ValueError:
+        pass
 
-with open(config_file, "r") as f:
+with open(CONFIG_FILE, "r") as f:
     config = json.load(f)
 
-serow_path = os.environ.get("SEROW_PATH")
-if not serow_path:
-    raise EnvironmentError("SEROW_PATH environment variable not set.")
-
-# Resolve paths from the JSON configuration
+# Resolve Paths
+serow_path = os.environ.get("SEROW_PATH", "")
 base_path = config["Paths"]["base_path"]
-experiment_type = config["Experiment"]["type"]
-measurement_file = serow_path + config["Paths"]["data_file"].replace(
-    "{base_path}", base_path
-).replace("{type}", experiment_type)
-prediction_file = serow_path + config["Paths"]["prediction_file"].replace(
-    "{base_path}", base_path
-).replace("{type}", experiment_type)
+experiment_type = config["Target"]["experiment"] if "Target" in config else config["Experiment"]["type"]
 
+raw_meas_path = config["Paths"]["data_file"].replace("{base_path}", base_path).replace("{type}", experiment_type)
+raw_pred_path = config["Paths"]["prediction_file"].replace("{base_path}", base_path).replace("{type}", experiment_type)
 
-# Load the data from the HDF5 file
-def load_gt_data(h5_file):
-    with h5py.File(h5_file, "r") as f:
-        positions = np.array(f["/base_ground_truth/position"])
-        orientations = np.array(f["/base_ground_truth/orientation"])
-        FL_forces = np.array(f["/feet_force/FL"])
-        FR_forces = np.array(f["/feet_force/FR"])
-        RL_forces = np.array(f["/feet_force/RL"])
-        RR_forces = np.array(f["/feet_force/RR"])
+def fix_extension(path):
+    if path.endswith(".h5"): return path.replace(".h5", ".mcap")
+    return path
 
-        imu = np.array(f["/imu/linear_acceleration"])
+MEASUREMENT_FILE = os.path.join(serow_path, fix_extension(raw_meas_path).lstrip("/"))
+PREDICTION_FILE = os.path.join(serow_path, fix_extension(raw_pred_path).lstrip("/"))
 
-    return positions, orientations, imu, FL_forces, FR_forces, RL_forces, RR_forces
+# -------------------------------------------------------------------------
+# DATA LOADING
+# -------------------------------------------------------------------------
 
+def load_gt_data(mcap_file, percentage):
+    data = {"pos": [], "rot": [], "lin_vel": [], "ts": [], "acc": [], "gyr": [], "f_lf": [], "f_rf": [], "f_lh": [], "f_rh": []}
+    with open(mcap_file, "rb") as f:
+        reader = make_reader(f)
+        messages = list(reader.iter_messages(topics=["/robot_state"]))
+        limit = int(len(messages) * (percentage / 100.0))
+        for schema, channel, message in messages[:limit]:
+            d = json.loads(message.data)
+            data["ts"].append(d["timestamp"])
+            
+            if "base_ground_truth" in d:
+                gt = d["base_ground_truth"]
+                data["pos"].append([gt["position"]["x"], gt["position"]["y"], gt["position"]["z"]])
+                data["rot"].append([gt["orientation"]["w"], gt["orientation"]["x"], gt["orientation"]["y"], gt["orientation"]["z"]])
+                if "linear_velocity" in gt:
+                    data["lin_vel"].append([gt["linear_velocity"]["x"], gt["linear_velocity"]["y"], gt["linear_velocity"]["z"]])
 
-def print_meta(h5_file):
-    with h5py.File(h5_file, "r") as f:
-        for name in f.keys():
-            print(name)
+            data["acc"].append([d["imu"]["linear_acceleration"]["x"], d["imu"]["linear_acceleration"]["y"], d["imu"]["linear_acceleration"]["z"]])
+            data["gyr"].append([d["imu"]["angular_velocity"]["x"], d["imu"]["angular_velocity"]["y"], d["imu"]["angular_velocity"]["z"]])
+            
+            ff = d.get("feet_forces", {})
+            data["f_lf"].append([ff.get("LF", {}).get("z", 0.0)])
+            data["f_rf"].append([ff.get("RF", {}).get("z", 0.0)])
+            data["f_lh"].append([ff.get("LH", {}).get("z", 0.0)])
+            data["f_rh"].append([ff.get("RH", {}).get("z", 0.0)])
+            
+    return {k: np.array(v) for k, v in data.items() if len(v) > 0}
 
+def load_serow_preds(mcap_file, percentage):
+    data = {"pos": [], "rot": [], "lin_vel": [], "ts": [], "b_acc": [], "b_gyr": []}
+    with open(mcap_file, "rb") as f:
+        reader = make_reader(f)
+        messages = list(reader.iter_messages(topics=["serow_predictions"]))
+        limit = int(len(messages) * (percentage / 100.0))
+        for schema, channel, message in messages[:limit]:
+            d = json.loads(message.data)
+            data["ts"].append(d["timestamp"])
+            bp = d["base_pose"]
+            data["pos"].append([bp["position"]["x"], bp["position"]["y"], bp["position"]["z"]])
+            data["rot"].append([bp["rotation"]["w"], bp["rotation"]["x"], bp["rotation"]["y"], bp["rotation"]["z"]])
+            if "linear_velocity" in bp:
+                data["lin_vel"].append([bp["linear_velocity"]["x"], bp["linear_velocity"]["y"], bp["linear_velocity"]["z"]])
+            
+            bias = d.get("imu_bias", {})
+            data["b_acc"].append([bias.get("accel",{}).get("x",0), bias.get("accel",{}).get("y",0), bias.get("accel",{}).get("z",0)])
+            data["b_gyr"].append([bias.get("angVel",{}).get("x",0), bias.get("angVel",{}).get("y",0), bias.get("angVel",{}).get("z",0)])
+    return {k: np.array(v) for k, v in data.items() if len(v) > 0}
 
-def load_serow_preds(h5_file):
-    with h5py.File(h5_file, "r") as f:
-        timestamps = np.array(f["timestamp/t"])
-        pos_x = np.array(f["base_pose/position/x"])
-        pos_y = np.array(f["base_pose/position/y"])
-        pos_z = np.array(f["base_pose/position/z"])
+# -------------------------------------------------------------------------
+# DEBUG & ALIGNMENT
+# -------------------------------------------------------------------------
 
-        rot_x = np.array(f["base_pose/rotation/x"])
-        rot_y = np.array(f["base_pose/rotation/y"])
-        rot_z = np.array(f["base_pose/rotation/z"])
-        rot_w = np.array(f["base_pose/rotation/w"])
+def analyze_timestamps(ts_array, name="Data"):
+    """Scans timestamps to calculate refresh rate and identify drops/jumps."""
+    print(f"\n--- Timestamp Analysis ({name}) ---")
+    if len(ts_array) < 2:
+        print("Not enough data to analyze.")
+        return
+        
+    deltas = np.diff(ts_array)
+    mean_dt = np.mean(deltas)
+    hz = 1.0 / mean_dt if mean_dt > 0 else 0
+    
+    print(f"Total Frames:  {len(ts_array)}")
+    print(f"Total Time:    {ts_array[-1] - ts_array[0]:.2f} seconds")
+    print(f"Average Rate:  {hz:.2f} Hz (dt = {mean_dt:.6f}s)")
+    print(f"Max gap:       {np.max(deltas):.6f}s")
+    print(f"Min gap:       {np.min(deltas):.6f}s")
+    
+    # Check for backward time jumps
+    negative_dts = np.where(deltas <= 0)[0]
+    if len(negative_dts) > 0:
+        print(f"[ERROR] Found {len(negative_dts)} frames where time went backwards or stood still!")
+        for idx in negative_dts[:5]:
+            print(f"  -> Index {idx}: ts1={ts_array[idx]:.6f}, ts2={ts_array[idx+1]:.6f}")
 
-        b_ax = np.array(f["imu_bias/accel/x"])
-        b_ay = np.array(f["imu_bias/accel/y"])
-        b_az = np.array(f["imu_bias/accel/z"])
+def align_trajectory_to_zero(pos_arr, rot_arr):
+    p0 = pos_arr[0]
+    q0 = R.from_quat([rot_arr[0,1], rot_arr[0,2], rot_arr[0,3], rot_arr[0,0]])
+    q0_inv = q0.inv()
+    pos_aligned = q0_inv.apply(pos_arr - p0)
+    all_rot = R.from_quat(rot_arr[:, [1, 2, 3, 0]])
+    rot_aligned = (q0_inv * all_rot).as_quat()[:, [3, 0, 1, 2]]
+    return pos_aligned, rot_aligned
 
-        b_wx = np.array(f["imu_bias/angVel/x"])
-        b_wy = np.array(f["imu_bias/angVel/y"])
-        b_wz = np.array(f["imu_bias/angVel/z"])
-
-    return (
-        timestamps,
-        pos_x,
-        pos_y,
-        pos_z,
-        rot_x,
-        rot_y,
-        rot_z,
-        rot_w,
-        b_ax,
-        b_ay,
-        b_az,
-        b_wx,
-        b_wy,
-        b_wz,
-    )
-
-
-def compute_ATE_pos(gt_pos, est_x, est_y, est_z):
-    est_pos = np.column_stack((est_x, est_y, est_z))
-    error = np.linalg.norm(gt_pos - est_pos, axis=1)
-    ate = np.sqrt(np.mean(error**2))
-    return ate
-
-
-def compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z):
-    est_rot = np.column_stack((est_rot_w, est_rot_x, est_rot_y, est_rot_z))
-    rotation_errors = np.zeros((gt_rot.shape[0]))
-    for i in range(gt_rot.shape[0]):
-        q_gt = gt_rot[i]
-        q_est = est_rot[i]
-
-        q_gt_conj = np.array(
-            [q_gt[0], -q_gt[1], -q_gt[2], -q_gt[3]]
-        )  # Conjugate of q_gt
-        q_rel = quaternion_multiply(q_gt_conj, q_est)
-        rotation_errors[i] = 2 * np.arccos(np.clip(q_rel[0], -1.0, 1.0))
-
-    ate_rot = np.sqrt(np.mean(rotation_errors**2))
-    return ate_rot
-
-
-def quaternion_multiply(q1, q2):
-    """
-    Multiply two quaternions q1 and q2.
-
-    Parameters:
-    - q1: numpy array of shape (4,), quaternion (w, x, y, z).
-    - q2: numpy array of shape (4,), quaternion (w, x, y, z).
-
-    Returns:
-    - q: numpy array of shape (4,), resulting quaternion.
-    """
-    w1, x1, y1, z1 = q1
-    w2, x2, y2, z2 = q2
-    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-    return np.array([w, x, y, z])
-
-
-### Removes the bias from the initial pose (world frame is 0 0 0  0 0 0 1 at time t = 0 )
-def remove_gt_bias(positions, orientations):
-    # Get the initial position and orientation
-    initial_position = positions[0]  # Initial position at time t=0
-    q0 = orientations[0]  # Initial orientation at time t=0
-
-    # Modify the position and orientation to be relative to the world frame (t=0 as origin)
-    # Subtract initial position from all positions to set the initial position to (0, 0, 0)
-    positions = positions - initial_position
-    # You can modify the orientation similarly by applying the inverse of the initial quaternion.
-    # Assuming orientations are in quaternion format (x, y, z, w), we need to inverse the initial orientation
-    initial_orientation_inv = np.array([q0[0], -q0[1], -q0[2], -q0[3]])
-    orientations = np.array(
-        [quaternion_multiply(initial_orientation_inv, q) for q in orientations]
-    )
-    return positions, orientations
-
+# -------------------------------------------------------------------------
+# EXECUTION
+# -------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    gt_pos, gt_rot, imu, FL_forces, FR_forces, RL_forces, RR_forces = load_gt_data(
-        measurement_file
-    )
-    (
-        timestamps,
-        est_pos_x,
-        est_pos_y,
-        est_pos_z,
-        est_rot_x,
-        est_rot_y,
-        est_rot_z,
-        est_rot_w,
-        b_ax,
-        b_ay,
-        b_az,
-        b_wx,
-        b_wy,
-        b_wz,
-    ) = load_serow_preds(prediction_file)
-    gt_rot = np.column_stack((gt_rot[:, 3], gt_rot[:, 0], gt_rot[:, 1], gt_rot[:, 2]))
+    gt = load_gt_data(MEASUREMENT_FILE, PERCENTAGE)
+    est = load_serow_preds(PREDICTION_FILE, PERCENTAGE)
+    
+    # Run the debug analysis
+    analyze_timestamps(gt["ts"], "Ground Truth")
+    analyze_timestamps(est["ts"], "Estimator Output")
 
-    mass = (
-        FL_forces[:1000, 2]
-        + FR_forces[:1000, 2]
-        + RL_forces[:1000, 2]
-        + RR_forces[:1000, 2]
-    ) / 9.81
-    print("Mass: ", np.mean(mass))
-    gt_pos = gt_pos[imu_calibration_cycles : (len(timestamps) + imu_calibration_cycles)]
-    gt_rot = gt_rot[imu_calibration_cycles : (len(timestamps) + imu_calibration_cycles)]
+    # Shift timelines
+    gt_ts_norm = gt["ts"] - gt["ts"][0]
+    est_ts_norm = est["ts"] - est["ts"][0]
 
-    FL_forces = FL_forces[
-        imu_calibration_cycles : (len(timestamps) + imu_calibration_cycles)
-    ]
-    FR_forces = FR_forces[
-        imu_calibration_cycles : (len(timestamps) + imu_calibration_cycles)
-    ]
-    RL_forces = RL_forces[
-        imu_calibration_cycles : (len(timestamps) + imu_calibration_cycles)
-    ]
-    RR_forces = RR_forces[
-        imu_calibration_cycles : (len(timestamps) + imu_calibration_cycles)
-    ]
-    print(
-        "Base position ATE: ", compute_ATE_pos(gt_pos, est_pos_x, est_pos_y, est_pos_z)
-    )
-    print(
-        "Base rotation ATE: ",
-        compute_ATE_rot(gt_rot, est_rot_w, est_rot_x, est_rot_y, est_rot_z),
-    )
-    gt_pos, gt_rot = remove_gt_bias(gt_pos, gt_rot)
-    # com_vel = compute_com_vel(com_pos,timestamps)
+    # Align trajectories
+    gt_pos_al, gt_rot_al = align_trajectory_to_zero(gt["pos"], gt["rot"])
 
-    # Plotting Ground Truth and Estimated Position (x, y, z)
-    fig1, axs1 = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
-    fig1.suptitle("Base position")
+    # Make arrays same size for direct comparison plotting (assuming est is subset of gt)
+    timesteps = np.arange(0, est["pos"].shape[0])
+    
+    # RMSE Math
+    gt_interp = np.column_stack([np.interp(est_ts_norm, gt_ts_norm, gt_pos_al[:, i]) for i in range(3)])
+    rmse = np.sqrt(np.mean(np.linalg.norm(gt_interp - est["pos"], axis=1)**2))
 
-    axs1[0].plot(timestamps, gt_pos[:, 0], label="Ground Truth", color="blue")
-    axs1[0].plot(
-        timestamps, est_pos_x, label="Estimated", color="orange", linestyle="--"
-    )
-    axs1[0].set_ylabel("base_pos_x")
-    axs1[0].legend()
+    # -------------------------------------------------------------------------
+    # PLOTTING
+    # -------------------------------------------------------------------------
+    if DISPLAY_PLOTS:
+        # Figure 1: Position
+        fig1, axs1 = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+        fig1.suptitle(f"Base Position (RMSE: {rmse:.4f} m)")
+        labels = ["X", "Y", "Z"]
+        for i in range(3):
+            axs1[i].plot(gt_ts_norm[:len(timesteps)], gt_pos_al[:len(timesteps), i], label="GT", color="blue", lw=2)
+            axs1[i].plot(est_ts_norm, est["pos"][:, i], label="Est", color="orange", ls="--", lw=2)
+            axs1[i].set_ylabel(f"Pos {labels[i]} (m)")
+            axs1[i].grid(True, alpha=0.3)
+        axs1[0].legend(loc="upper left")
 
-    axs1[1].plot(timestamps, gt_pos[:, 1], label="Ground Truth", color="blue")
-    axs1[1].plot(
-        timestamps, est_pos_y, label="Estimated", color="orange", linestyle="--"
-    )
-    axs1[1].set_ylabel("base_pos_y")
-    axs1[1].legend()
+        # Figure 2: Orientation
+        fig2, axs2 = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
+        fig2.suptitle("Base Orientation")
+        q_labels = ["W", "X", "Y", "Z"]
+        for i in range(4):
+            axs2[i].plot(gt_ts_norm[:len(timesteps)], gt_rot_al[:len(timesteps), i], label="GT", color="blue")
+            axs2[i].plot(est_ts_norm, est["rot"][:, i], label="Est", color="orange", ls="--")
+            axs2[i].set_ylabel(f"Quat {q_labels[i]}")
+            axs2[i].grid(True, alpha=0.3)
 
-    axs1[2].plot(timestamps, gt_pos[:, 2], label="Ground Truth", color="blue")
-    axs1[2].plot(
-        timestamps, est_pos_z, label="Estimated", color="orange", linestyle="--"
-    )
-    axs1[2].set_ylabel("base_pos_z")
-    axs1[2].set_xlabel("Timestamp")
-    axs1[2].legend()
+        # Figure 3: Linear Velocity
+        if "lin_vel" in gt and "lin_vel" in est:
+            fig3, axs3 = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+            fig3.suptitle("Linear Velocity")
+            q0_gt = R.from_quat([gt["rot"][0,1], gt["rot"][0,2], gt["rot"][0,3], gt["rot"][0,0]]).inv()
+            gt_vel_aligned = q0_gt.apply(gt["lin_vel"])
+            
+            for i in range(3):
+                axs3[i].plot(gt_ts_norm[:len(timesteps)], gt_vel_aligned[:len(timesteps), i], label="GT", color="blue")
+                axs3[i].plot(est_ts_norm, est["lin_vel"][:, i], label="Est", color="orange", ls="--")
+                axs3[i].set_ylabel(f"Vel {labels[i]} (m/s)")
+                axs3[i].grid(True, alpha=0.3)
 
-    # Plotting Ground Truth and Estimated Orientation
-    fig2, axs2 = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
-    fig2.suptitle("Base Orientation")
+        # Figure 4: Biases
+        if "b_acc" in est:
+            fig4, axs4 = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+            fig4.suptitle("Estimated IMU Biases")
+            axs4[0].plot(est_ts_norm, est["b_acc"], label=["ax", "ay", "az"])
+            axs4[0].set_ylabel("Accel Bias (m/s^2)")
+            axs4[1].plot(est_ts_norm, est["b_gyr"], label=["wx", "wy", "wz"])
+            axs4[1].set_ylabel("Gyro Bias (rad/s)")
+            for ax in axs4: ax.legend(); ax.grid(True)
 
-    axs2[0].plot(timestamps, gt_rot[:, 1], label="Ground Truth", color="blue")
-    axs2[0].plot(
-        timestamps, est_rot_x, label="Estimated", color="orange", linestyle="--"
-    )
-    axs2[0].set_ylabel("Orientation W")
-    axs2[0].legend()
+        # Figure 5: Vertical Forces
+        fig5, axs5 = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
+        fig5.suptitle("Feet Forces Z (GT)")
+        keys = ["f_lf", "f_rf", "f_lh", "f_rh"]
+        legs = ["LF", "RF", "LH", "RH"]
+        for i in range(4):
+            axs5[i].plot(gt_ts_norm[:len(timesteps)], gt[keys[i]][:len(timesteps)], color="blue", label=legs[i])
+            axs5[i].set_ylabel("Force Z")
+            axs5[i].grid(True)
+            axs5[i].legend()
 
-    axs2[1].plot(timestamps, gt_rot[:, 2], label="Ground Truth", color="blue")
-    axs2[1].plot(
-        timestamps, est_rot_y, label="Estimated", color="orange", linestyle="--"
-    )
-    axs2[1].set_ylabel("Orientation X")
-    axs2[1].legend()
+        # Figure 6: Raw IMU
+        fig6, axs6 = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+        fig6.suptitle("Raw IMU Measurements")
+        axs6[0].plot(gt_ts_norm[:len(timesteps)], gt["acc"][:len(timesteps)], label=["X","Y","Z"], alpha=0.7)
+        axs6[0].set_ylabel("Linear Acc (m/s²)")
+        axs6[1].plot(gt_ts_norm[:len(timesteps)], gt["gyr"][:len(timesteps)], label=["X","Y","Z"], alpha=0.7)
+        axs6[1].set_ylabel("Angular Vel (rad/s)")
+        for ax in axs6: ax.legend(); ax.grid(True, alpha=0.3)
 
-    axs2[2].plot(timestamps, gt_rot[:, 3], label="Ground Truth", color="blue")
-    axs2[2].plot(
-        timestamps, est_rot_z, label="Estimated", color="orange", linestyle="--"
-    )
-    axs2[2].set_ylabel("Orientation Y")
-    axs2[2].legend()
 
-    axs2[3].plot(timestamps, gt_rot[:, 0], label="Ground Truth", color="blue")
-    axs2[3].plot(
-        timestamps, est_rot_w, label="Estimated", color="orange", linestyle="--"
-    )
-    axs2[3].set_ylabel("Orientation Z")
-    axs2[3].set_xlabel("Timestamp")
-    axs2[3].legend()
 
-    # Plotting Ground Truth and Estimated Position (x, y, z)
-    fig4, axs4 = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
-    fig4.suptitle("Feet forces (z-axis only)")
+        # --- Figure 7: Timestep Deltas (Refresh Rate Check) ---
+        fig7, axs7 = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+        fig7.suptitle("Timestep Differences (\u0394t) - Refresh Rate Stability")
 
-    axs4[0].plot(timestamps, FL_forces[:, 2], label="Ground Truth", color="blue")
-    axs4[0].set_ylabel("FORCE FL")
+        # Calculate the differences between consecutive timestamps
+        gt_dt = np.diff(gt["ts"])
+        est_dt = np.diff(est["ts"])
 
-    axs4[1].plot(timestamps, FR_forces[:, 2], label="Ground Truth", color="blue")
-    axs4[1].set_ylabel("FORCE FR")
+        # Ground Truth Timesteps
+        axs7[0].plot(gt_ts_norm[1:], gt_dt, color="blue", label="GT \u0394t", alpha=0.8)
+        axs7[0].axhline(np.median(gt_dt), color="red", linestyle="--", label=f"Median: {np.median(gt_dt):.5f}s")
+        axs7[0].set_ylabel("\u0394t (seconds)")
+        axs7[0].set_title("Ground Truth (/robot_state)")
+        axs7[0].grid(True, alpha=0.3)
+        axs7[0].legend(loc="upper right")
 
-    axs4[2].plot(timestamps, RL_forces[:, 2], label="Ground Truth", color="blue")
-    axs4[2].set_ylabel("FORCE RL")
+        # Estimator Timesteps
+        axs7[1].plot(est_ts_norm[1:], est_dt, color="orange", label="Est \u0394t", alpha=0.8)
+        axs7[1].axhline(np.median(est_dt), color="red", linestyle="--", label=f"Median: {np.median(est_dt):.5f}s")
+        axs7[1].set_ylabel("\u0394t (seconds)")
+        axs7[1].set_title("Estimator (serow_predictions)")
+        axs7[1].set_xlabel("Time (s)")
+        axs7[1].grid(True, alpha=0.3)
+        axs7[1].legend(loc="upper right")
 
-    axs4[3].plot(timestamps, RR_forces[:, 2], label="Ground Truth", color="blue")
-    axs4[3].set_ylabel("FORCE RR")
-    axs4[3].set_xlabel("Timestamp")
-
-    # Plotting Ground Truth and Estimated Position (x, y, z)
-    fig5, axs5 = plt.subplots(6, 1, figsize=(10, 8), sharex=True)
-    fig5.suptitle("IMU estimated biases")
-
-    axs5[0].plot(timestamps, b_ax, label="Ground Truth", color="blue")
-    axs5[0].set_ylabel("bias ax")
-
-    axs5[1].plot(timestamps, b_ay, color="blue")
-    axs5[1].set_ylabel("bias ay")
-
-    axs5[2].plot(timestamps, b_az, color="blue")
-    axs5[2].set_ylabel("bias az")
-
-    axs5[3].plot(timestamps, b_wx, color="blue")
-    axs5[3].set_ylabel("bias wx")
-
-    axs5[4].plot(timestamps, b_wy, color="blue")
-    axs5[4].set_ylabel("bias wy")
-
-    axs5[5].plot(timestamps, b_wz, color="blue")
-    axs5[5].set_ylabel("bias wz")
-
-    axs5[3].set_xlabel("Timestamp")
-
-    plt.tight_layout()
-
-    if display_plots:
+        fig7.tight_layout()
+        
+        # Finally, show all plots
         plt.show()

@@ -1,453 +1,288 @@
-#include <H5Cpp.h>
-#include <Eigen/Dense>
-#include <fstream>
-#include <iomanip>
 #include <iostream>
+#include <fstream>
+#include <string>
 #include <map>
-#include <nlohmann/json.hpp>
 #include <regex>
+#include <cstdlib>
+#include <stdexcept>
+#include <optional>
 #include <vector>
+#include <mcap/reader.hpp>
+#include <mcap/writer.hpp>
+#include <Eigen/Dense>
+#include <nlohmann/json.hpp>
 #include "serow/Serow.hpp"
 
-constexpr double dataset_percentage_ = 0.05;  // Percentage of the dataset to use for testing
-
-using namespace serow;
 using json = nlohmann::json;
 
-std::string resolvePath(const json& config, const std::string& path) {
-    std::string serowPathEnv = std::getenv("SEROW_PATH");
-    std::string resolvedPath = serowPathEnv + path;
-    std::string experiment_type_ = config["Experiment"]["type"];
-    std::string base_path_ = config["Paths"]["base_path"];
-
-    // Replace placeholders
-    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{base_path\\}"), base_path_);
-    resolvedPath = std::regex_replace(resolvedPath, std::regex("\\{type\\}"), experiment_type_);
-
-    return resolvedPath;
+static Eigen::Vector3d vec3FromJson(const json& j) {
+    if (j.contains("x") && j.contains("y") && j.contains("z"))
+        return { j["x"].get<double>(), j["y"].get<double>(), j["z"].get<double>() };
+    return Eigen::Vector3d::Zero();
 }
 
-// Saves predictions to .h5 file
-void saveDataToHDF5(const std::string& fileName, const std::string& datasetPath,
-                    const std::vector<double>& data) {
-    if (datasetPath.empty() || datasetPath[0] != '/') {
-        throw std::invalid_argument("Dataset path must be non-empty and start with '/'");
+static Eigen::Quaterniond quatFromJson(const json& j) {
+    return Eigen::Quaterniond(j.value("w", 1.0), j.value("x", 0.0), j.value("y", 0.0), j.value("z", 0.0)).normalized();
+}
+
+static json vec3ToJson(const Eigen::Vector3d& v) {
+    return { {"x", v.x()}, {"y", v.y()}, {"z", v.z()} };
+}
+
+static json quatToJson(const Eigen::Quaterniond& q) {
+    return { {"w", q.w()}, {"x", q.x()}, {"y", q.y()}, {"z", q.z()} };
+}
+
+struct FrameData {
+    double timestamp{};
+    serow::ImuMeasurement imu;
+    std::map<std::string, serow::JointMeasurement> joints;
+    std::map<std::string, serow::ForceTorqueMeasurement> forces;
+    std::optional<serow::BasePoseGroundTruth> ground_truth;
+};
+
+static FrameData parseFrame(const json& j, const std::map<std::string, std::string>& contact_map) {
+    FrameData f;
+    f.timestamp = j.value("timestamp", 0.0);
+
+    // IMU
+    f.imu.timestamp = f.timestamp;
+    if (j.contains("imu")) {
+        f.imu.linear_acceleration = vec3FromJson(j["imu"]["linear_acceleration"]);
+        f.imu.angular_velocity    = vec3FromJson(j["imu"]["angular_velocity"]);
     }
 
-    // Open or create the file
-    H5::H5File file;
-    try {
-        file.openFile(fileName, H5F_ACC_RDWR);
-    } catch (const H5::FileIException&) {
-        file = H5::H5File(fileName, H5F_ACC_TRUNC);
-    }
+    // Joints
+    if (j.contains("joint_states")) {
+        for (const auto& [name, data] : j["joint_states"].items()) {
+            serow::JointMeasurement jm;
+            jm.timestamp = f.timestamp;
+            jm.position  = data.value("position", 0.0);
+            jm.velocity  = data.value("velocity", 0.0);
 
-    const size_t lastSlash = datasetPath.find_last_of('/');
-    std::string groupPath = datasetPath.substr(0, lastSlash);
-    std::string datasetName = datasetPath.substr(lastSlash + 1);
-
-    if (datasetName.empty()) {
-        throw std::invalid_argument("Dataset name cannot be empty.");
+            f.joints[name] = jm;   
+        }
     }
-    H5::Exception::dontPrint();
-    // Ensure groups along the path exist
-    H5::Group group = file.openGroup("/");
-    if (!groupPath.empty()) {
-        std::stringstream ss(groupPath);
-        std::string token;
-        while (std::getline(ss, token, '/')) {
-            if (!token.empty()) {
-                try {
-                    group = group.openGroup(token);
-                } catch (const H5::Exception&) {
-                    group = group.createGroup(token);
+    // Forces & Torques
+    if (j.contains("feet_forces")) {
+        for (const auto& [json_key, serow_link_name] : contact_map) {
+            if (j["feet_forces"].contains(json_key)) {
+                serow::ForceTorqueMeasurement ft;
+                ft.timestamp = f.timestamp;
+                ft.force     = vec3FromJson(j["feet_forces"][json_key]);
+                
+                // Check if torques exist for this specific foot, otherwise set to zero
+                if (j.contains("feet_torques") && j["feet_torques"].contains(json_key)) {
+                    ft.torque = vec3FromJson(j["feet_torques"][json_key]);
+                } else {
+                    ft.torque = Eigen::Vector3d::Zero();
                 }
+                
+                f.forces[serow_link_name] = ft;
             }
         }
     }
 
-    // Create or open the dataset
-    try {
-        H5::DataSet dataset = group.openDataSet(datasetName);
-    } catch (const H5::Exception&) {
-        // Dataset does not exist; create it
-        hsize_t dims[1] = {data.size()};
-        H5::DataSpace dataspace(1, dims);
-        H5::DataSet dataset =
-            group.createDataSet(datasetName, H5::PredType::NATIVE_DOUBLE, dataspace);
-        dataset.write(data.data(), H5::PredType::NATIVE_DOUBLE);
+    // Ground Truth
+    if (j.contains("base_ground_truth")) {
+        const auto& gt_j = j["base_ground_truth"];
+        serow::BasePoseGroundTruth gt;
+        gt.timestamp   = f.timestamp;
+        gt.position    = vec3FromJson(gt_j["position"]);
+        gt.orientation = quatFromJson(gt_j["orientation"]);
+        f.ground_truth = gt;
     }
+
+
+    return f;
 }
 
-// Reads dataset from HDF5 file (.h5)
-std::vector<std::vector<double>> readHDF5(const std::string& filename,
-                                          const std::string& datasetName) {
-    H5::H5File file(filename, H5F_ACC_RDONLY);
+static void requireOk(const mcap::Status& s, const std::string& context) {
+    if (!s.ok()) throw std::runtime_error(context + ": " + s.message);
+}   
 
-    if (datasetName.empty()) {
-        throw std::invalid_argument("Dataset name must be non-empty and start with '/'");
-    }
-
-    H5::DataSet dataset = file.openDataSet(datasetName);
-    H5::DataSpace dataspace = dataset.getSpace();
-    hsize_t dims[2];
-    int ndims = dataspace.getSimpleExtentDims(dims);
-    if (ndims != 2 || dims[0] == 0 || dims[1] == 0) {
-        throw std::runtime_error("Unexpected dataset dimensions for " + datasetName);
-    }
-
-    std::vector<double> buffer(dims[0] * dims[1]);
-    dataset.read(buffer.data(), H5::PredType::NATIVE_DOUBLE);
-
-    std::vector<std::vector<double>> data(dims[0], std::vector<double>(dims[1]));
-    for (hsize_t i = 0; i < dims[0]; ++i) {
-        for (hsize_t j = 0; j < dims[1]; ++j) {
-            data[i][j] = buffer[i * dims[1] + j];
-        }
-    }
-    return data;
-}
-
-/// @brief Writes an elevation map measurement to a binary file
-void saveElevationMap(std::array<ElevationCell, map_size> data, double timestamp,
-                      std::ofstream& file) {
-    if (!file.is_open()) {
-        std::cerr << "[saveElevationMap] File stream is not open!\n";
-        return;
-    }
-
-    // Optional: Write a timestamp or measurement ID
-    file.write(reinterpret_cast<const char*>(&timestamp), sizeof(timestamp));
-
-    // Write the height data
-    for (size_t i = 0; i < 1024; ++i) {
-        for (size_t j = 0; j < 1024; ++j) {
-            // std::cout << data[i][j].height << '\n';
-            file.write(reinterpret_cast<const char*>(&data[i + 1024 * j].height), sizeof(float));
-        }
-    }
-    // Flush to ensure data is written
-    file.flush();
+static mcap::Timestamp toNs(double seconds) {
+    return (seconds > 0.0) ? static_cast<mcap::Timestamp>(seconds * 1e9) : 0;
 }
 
 int main(int argc, char** argv) {
     try {
-        std::string config_path = "anymal_b.json";  // Default path
+        std::string config_path = "../test_config.json";
+        double percentage = 100.0;
 
-        // If user provides a custom config path
         if (argc > 1) {
-            config_path = argv[1];
-            std::cout << "Using config from argument: " << config_path << std::endl;
+            std::string arg1 = argv[1];
+            if (arg1.find(".json") != std::string::npos) {
+                config_path = arg1;
+                if (argc > 2) percentage = std::stod(argv[2]);
+            } else {
+                percentage = std::stod(arg1); 
+            }
+        }
+
+        // Clamp percentage between 0 and 100
+        percentage = std::max(0.0, std::min(100.0, percentage));
+
+        std::ifstream cfg_file(config_path);
+        if (!cfg_file.is_open()) throw std::runtime_error("Cannot open config: " + config_path);
+        json cfg; cfg_file >> cfg;
+
+        std::string serow_path_env = "";
+        if (const char* env_p = std::getenv("SEROW_PATH")) {
+            serow_path_env = env_p;
+            if (!serow_path_env.empty() && serow_path_env.back() != '/') serow_path_env += "/";
+        }
+
+        std::string robot_name = cfg["Target"].value("robot", "anymal_b");
+        std::string exp_name   = cfg["Target"].value("experiment", "fsc");
+        std::string base_path  = cfg["Paths"].value("base_path", ".");
+
+        std::string robot_config  = robot_name + ".json"; 
+        std::string input_topic   = "/robot_state"; 
+        std::string full_exp_name = robot_name + "_" + exp_name; 
+
+        auto resolve = [&](std::string s) {
+            s = serow_path_env + s;
+            s = std::regex_replace(s, std::regex("\\{base_path\\}"), base_path);
+            s = std::regex_replace(s, std::regex("\\{robot\\}"), robot_name);
+            s = std::regex_replace(s, std::regex("\\{experiment\\}"), exp_name);
+            s = std::regex_replace(s, std::regex("\\{full_exp\\}"), full_exp_name);
+            return std::regex_replace(s, std::regex("/{2,}"), "/");
+        };
+
+        const std::string input_mcap  = resolve(cfg["Paths"]["data_file"]);
+        const std::string output_mcap = resolve(cfg["Paths"]["prediction_file"]);
+
+        if (!cfg["RobotDatabase"].contains(robot_name)) {
+            throw std::runtime_error("Robot '" + robot_name + "' not found in RobotDatabase!");
+        }
+        std::map<std::string, std::string> contact_map = 
+            cfg["RobotDatabase"][robot_name]["contact_map"].get<std::map<std::string, std::string>>();
+
+        std::cout << "[CONFIG] Input:  " << input_mcap << "\n"
+                  << "[CONFIG] Output: " << output_mcap << "\n";
+
+        serow::Serow estimator;
+        if (!estimator.initialize(robot_config)) throw std::runtime_error("Serow init failed");
+        
+        mcap::McapWriter writer;
+        mcap::McapWriterOptions writerOptions("serow_estimator");
+        requireOk(writer.open(output_mcap, writerOptions), "Open output");
+
+        mcap::Channel channel("serow_predictions", "json", 0);
+        writer.addChannel(channel);
+
+        mcap::McapReader reader;
+        requireOk(reader.open(input_mcap), "Open input");
+
+        size_t total_topic_frames = 0;
+        auto stats = reader.statistics();
+        if (stats.has_value()) {
+            for (const auto& [channel_id, count] : stats->channelMessageCounts) {
+                auto ch = reader.channel(channel_id);
+                if (ch && ch->topic == input_topic) {
+                    total_topic_frames += count;
+                }
+            }
         } else {
-            std::cout << "No config argument provided. Using default: " << config_path << std::endl;
-        }
-
-        // Initialize Serow with the specified config
-        serow::Serow SEROW;
-        if (!SEROW.initialize(config_path)) {
-            throw std::runtime_error("Failed to initialize Serow with config: " + config_path);
-        }
-
-        std::ifstream config_file("../test_config.json");
-        if (!config_file.is_open()) {
-            std::cerr << "Failed to open test_config.json" << std::endl;
-            return 1;
-        }
-        json config;
-        config_file >> config;
-        const std::string INPUT_FILE = resolvePath(config, config["Paths"]["data_file"]);
-        const std::string OUTPUT_FILE = resolvePath(config, config["Paths"]["prediction_file"]);
-        const std::string ELEVATION_MAP_FILE =
-            resolvePath(config, config["Paths"]["elevation_map_file"]);
-
-        std::ofstream file(ELEVATION_MAP_FILE);
-
-        // Read IMU data
-        auto angular_velocity = readHDF5(INPUT_FILE, "imu/angular_velocity");
-        auto linear_acceleration = readHDF5(INPUT_FILE, "imu/linear_acceleration");
-
-        // Read Joint States
-        auto joint_positions = readHDF5(INPUT_FILE, "joint_states/positions");
-        auto joint_velocities = readHDF5(INPUT_FILE, "joint_states/velocities");
-
-        // Read Feet Forces
-        auto feet_force_FR = readHDF5(INPUT_FILE, "feet_force/FR");
-        auto feet_force_FL = readHDF5(INPUT_FILE, "feet_force/FL");
-        auto feet_force_RL = readHDF5(INPUT_FILE, "feet_force/RL");
-        auto feet_force_RR = readHDF5(INPUT_FILE, "feet_force/RR");
-
-        std::vector<double> timestamps(angular_velocity.size());
-        // Initialize timestamps
-        for (size_t i = 0; i < feet_force_FL.size(); ++i) {
-            timestamps[i] = i * 0.0025;  // Start at 0 and increment by 0.0025
-        }
-        std::cout << "Timestamp size -> " << timestamps.size() << std::endl;
-        std::cout << "joint_positions size -> " << joint_positions.size() << std::endl;
-        std::cout << "angular_velocity size -> " << angular_velocity.size() << std::endl;
-        std::cout << "linear_acceleration size -> " << linear_acceleration.size() << std::endl;
-        std::cout << "feet_force_RR size -> " << feet_force_RR.size() << std::endl;
-        std::cout << "feet_force_RL size -> " << feet_force_RL.size() << std::endl;
-        std::cout << "feet_force_FL size -> " << feet_force_FL.size() << std::endl;
-        std::cout << "feet_force_FR size -> " << feet_force_FR.size() << std::endl;
-        // Store predictions
-        std::vector<double> EstTimestamp;  // timestamp
-        std::vector<double> base_pos_x, base_pos_y, base_pos_z, base_rot_x, base_rot_y, base_rot_z,
-            base_rot_w;                                          // Base pose(pos + quat)
-        std::vector<double> com_x, com_y, com_z;                 // CoM position
-        std::vector<double> com_vel_x, com_vel_y, com_vel_z;     // CoM velocity
-        std::vector<double> extFx, extFy, extFz;                 // External Force
-        std::vector<double> b_ax, b_ay, b_az, b_wx, b_wy, b_wz;  // IMU Biases
-        std::vector<Eigen::Vector3d> FR_contact_position, FL_contact_position, RL_contact_position,
-            RR_contact_position;
-
-        for (size_t i = 0; i < timestamps.size() * dataset_percentage_; ++i) {
-            double timestamp = timestamps[i];
-            std::map<std::string, serow::ForceTorqueMeasurement> force_torque;
-            force_torque.insert(
-                {"RF_FOOT",
-                 serow::ForceTorqueMeasurement{
-                     .timestamp = timestamp,
-                     .force = Eigen::Vector3d(feet_force_FR[i][0], feet_force_FR[i][1],
-                                              feet_force_FR[i][2])}});
-            force_torque.insert(
-                {"LF_FOOT",
-                 serow::ForceTorqueMeasurement{
-                     .timestamp = timestamp,
-                     .force = Eigen::Vector3d(feet_force_FL[i][0], feet_force_FL[i][1],
-                                              feet_force_FL[i][2])}});
-            force_torque.insert(
-                {"LH_FOOT",
-                 serow::ForceTorqueMeasurement{
-                     .timestamp = timestamp,
-                     .force = Eigen::Vector3d(feet_force_RL[i][0], feet_force_RL[i][1],
-                                              feet_force_RL[i][2])}});
-            force_torque.insert(
-                {"RH_FOOT",
-                 serow::ForceTorqueMeasurement{
-                     .timestamp = timestamp,
-                     .force = Eigen::Vector3d(feet_force_RR[i][0], feet_force_RR[i][1],
-                                              feet_force_RR[i][2])}});
-
-            serow::ImuMeasurement imu;
-            imu.timestamp = timestamp;
-            imu.linear_acceleration = Eigen::Vector3d(
-                linear_acceleration[i][0], linear_acceleration[i][1], linear_acceleration[i][2]);
-            imu.angular_velocity = Eigen::Vector3d(angular_velocity[i][0], angular_velocity[i][1],
-                                                   angular_velocity[i][2]);
-
-            std::map<std::string, serow::JointMeasurement> joints;
-            joints.insert({"LF_HAA",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][0],
-                                                   .velocity = joint_velocities[i][0]}});
-            joints.insert({"LF_HFE",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][1],
-                                                   .velocity = joint_velocities[i][1]}});
-            joints.insert({"LF_KFE",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][2],
-                                                   .velocity = joint_velocities[i][2]}});
-            joints.insert({"RF_HAA",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][3],
-                                                   .velocity = joint_velocities[i][3]}});
-            joints.insert({"RF_HFE",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][4],
-                                                   .velocity = joint_velocities[i][4]}});
-            joints.insert({"RF_KFE",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][5],
-                                                   .velocity = joint_velocities[i][5]}});
-            joints.insert({"LH_HAA",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][6],
-                                                   .velocity = joint_velocities[i][6]}});
-            joints.insert({"LH_HFE",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][7],
-                                                   .velocity = joint_velocities[i][7]}});
-            joints.insert({"LH_KFE",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][8],
-                                                   .velocity = joint_velocities[i][8]}});
-            joints.insert({"RH_HAA",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][9],
-                                                   .velocity = joint_velocities[i][9]}});
-            joints.insert({"RH_HFE",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][10],
-                                                   .velocity = joint_velocities[i][10]}});
-            joints.insert({"RH_KFE",
-                           serow::JointMeasurement{.timestamp = timestamp,
-                                                   .position = joint_positions[i][11],
-                                                   .velocity = joint_velocities[i][11]}});
-
-            SEROW.filter(imu, joints, force_torque);
-
-            auto state = SEROW.getState();
-            if (!state.has_value()) {
-                continue;
+            for (const auto& view : reader.readMessages()) {
+                auto ch = reader.channel(view.message.channelId);
+                if (ch && ch->topic == input_topic) total_topic_frames++;
             }
+        }
 
-            // Store the Estimates
-            auto basePos = state->getBasePosition();
-            auto baseOrient = state->getBaseOrientation();
-            // auto baseOrient = SEROW.attitude_estimator_->getQ(); // MAHONY ORIENTATION
-            auto ExternalForces = state->getCoMExternalForces();
-            auto CoMPosition = state->getCoMPosition();
-            auto CoMVelocity = state->getCoMLinearVelocity();
-            auto linAccelBias = state->getImuLinearAccelerationBias();
-            auto angVelBias = state->getImuAngularVelocityBias();
-            // Get Contact positions
-            auto FR_contact_pos = state->getContactPosition("RF_FOOT");
-            auto FL_contact_pos = state->getContactPosition("LF_FOOT");
-            auto RL_contact_pos = state->getContactPosition("LH_FOOT");
-            auto RR_contact_pos = state->getContactPosition("RH_FOOT");
+        size_t max_frames = static_cast<size_t>(total_topic_frames * (percentage / 100.0));
+        if (max_frames == 0) max_frames = total_topic_frames; // Safety fallback
 
-            if (FL_contact_pos.has_value()) {
-                FL_contact_position.push_back(FL_contact_pos.value());
-            } else {
-                FL_contact_position.push_back(Eigen::Vector3d::Zero());
+        std::cout << "[INFO] Dataset contains " << total_topic_frames << " frames on " << input_topic << ".\n";
+        std::cout << "[INFO] Processing " << percentage << "% -> " << max_frames << " frames max.\n";
+        // ---------------------------------------------
+
+        uint32_t seq = 0;
+        double last_timestamp = -1.0;
+        size_t frame_count = 0;
+
+        for (const auto& view : reader.readMessages()) {
+            const mcap::Message& msg = view.message;
+            auto ch = reader.channel(msg.channelId);
+            
+            if (!ch || ch->topic != input_topic) continue;
+
+            const std::string payload(reinterpret_cast<const char*>(msg.data), msg.dataSize);
+            const FrameData frame = parseFrame(json::parse(payload), contact_map);
+
+            if (last_timestamp < 0) { last_timestamp = frame.timestamp; continue; }
+            if (frame.timestamp <= last_timestamp) continue;
+            last_timestamp = frame.timestamp;
+
+            if (frame_count % 100 == 0) std::cout << "\r[INFO] Frame " << frame_count << " / " << max_frames << std::flush;
+
+            if (frame.ground_truth.has_value())
+                estimator.filter(frame.imu, frame.joints, frame.forces, std::nullopt, std::nullopt, frame.ground_truth);
+            else
+                estimator.filter(frame.imu, frame.joints, frame.forces);
+            
+            auto state = estimator.getState(true);
+            
+            if (state.has_value()) {
+                json j_out;
+                
+                auto basePos = state->getBasePosition();
+                auto baseOrient = state->getBaseOrientation();
+                auto baseLinVel = state->getBaseLinearVelocity();
+
+                j_out["timestamp"] = frame.timestamp;
+                j_out["base_pose"]["position"] = { {"x", basePos.x()}, {"y", basePos.y()}, {"z", basePos.z()} };
+                j_out["base_pose"]["rotation"] = { {"w", baseOrient.w()}, {"x", baseOrient.x()}, {"y", baseOrient.y()}, {"z", baseOrient.z()} };
+                j_out["base_pose"]["linear_velocity"] = { {"x", baseLinVel.x()}, {"y", baseLinVel.y()}, {"z", baseLinVel.z()} };
+                auto comPos = state->getCoMPosition();
+                auto comVel = state->getCoMLinearVelocity();
+                auto extForce = state->getCoMExternalForces();
+
+                j_out["CoM_state"]["position"] = { {"x", comPos.x()}, {"y", comPos.y()}, {"z", comPos.z()} };
+                j_out["CoM_state"]["velocity"] = { {"x", comVel.x()}, {"y", comVel.y()}, {"z", comVel.z()} };
+                j_out["CoM_state"]["externalForces"] = { {"x", extForce.x()}, {"y", extForce.y()}, {"z", extForce.z()} };
+
+                auto biasAcc = state->getImuLinearAccelerationBias();
+                auto biasGyr = state->getImuAngularVelocityBias();
+
+                j_out["imu_bias"]["accel"] = { {"x", biasAcc.x()}, {"y", biasAcc.y()}, {"z", biasAcc.z()} };
+                j_out["imu_bias"]["angVel"] = { {"x", biasGyr.x()}, {"y", biasGyr.y()}, {"z", biasGyr.z()} };
+
+                for (const auto& [json_key, serow_link_name] : contact_map) {
+                    auto prob = state->getContactProbability(serow_link_name);
+                    j_out["contact_probabilities"][serow_link_name] = prob.has_value() ? prob.value() : 0.0; 
+                }
+
+                std::string output_payload = j_out.dump();
+
+                mcap::Message outMsg;
+                outMsg.channelId = channel.id;
+                outMsg.sequence = seq++;
+                outMsg.logTime = (msg.logTime > 0) ? msg.logTime : toNs(frame.timestamp);
+                outMsg.publishTime = outMsg.logTime;
+                outMsg.data = reinterpret_cast<const std::byte*>(output_payload.data());
+                outMsg.dataSize = output_payload.size();
+
+                requireOk(writer.write(outMsg), "Failed to write message");
+            }            
+
+            ++frame_count;
+
+            if (frame_count >= max_frames) {
+                std::cout << "\n[INFO] Reached target limit of " << percentage << "% (" << max_frames << " frames). Stopping early.\n";
+                break;
             }
-
-            if (FR_contact_pos.has_value()) {
-                FR_contact_position.push_back(FR_contact_pos.value());
-            } else {
-                FR_contact_position.push_back(Eigen::Vector3d::Zero());
-            }
-
-            if (RL_contact_pos.has_value()) {
-                RL_contact_position.push_back(RL_contact_pos.value());
-            } else {
-                RL_contact_position.push_back(Eigen::Vector3d::Zero());
-            }
-
-            if (RR_contact_pos.has_value()) {
-                RR_contact_position.push_back(RR_contact_pos.value());
-            } else {
-                RR_contact_position.push_back(Eigen::Vector3d::Zero());
-            }
-
-            EstTimestamp.push_back(timestamp);
-            base_pos_x.push_back(basePos.x());
-            base_pos_y.push_back(basePos.y());
-            base_pos_z.push_back(basePos.z());
-            base_rot_x.push_back(baseOrient.x());
-            base_rot_y.push_back(baseOrient.y());
-            base_rot_z.push_back(baseOrient.z());
-            base_rot_w.push_back(baseOrient.w());
-            com_x.push_back(CoMPosition.x());
-            com_y.push_back(CoMPosition.y());
-            com_z.push_back(CoMPosition.z());
-            com_vel_x.push_back(CoMVelocity.x());
-            com_vel_y.push_back(CoMVelocity.y());
-            com_vel_z.push_back(CoMVelocity.z());
-            extFx.push_back(ExternalForces.x());
-            extFy.push_back(ExternalForces.y());
-            extFz.push_back(ExternalForces.z());
-            b_ax.push_back(linAccelBias.x());
-            b_ay.push_back(linAccelBias.y());
-            b_az.push_back(linAccelBias.z());
-            b_wx.push_back(angVelBias.x());
-            b_wy.push_back(angVelBias.y());
-            b_wz.push_back(angVelBias.z());
+            // -----------------------
         }
-
-        std::cout << "SAVING ESTIMATIONS \n";
-        std::cout << "EstTimestamp size -> " << EstTimestamp.size() << std::endl;
-        std::cout << "base_pos_x size -> " << base_pos_x.size() << std::endl;
-        std::cout << "base_pos_y size -> " << base_pos_y.size() << std::endl;
-        std::cout << "base_pos_z size -> " << base_pos_z.size() << std::endl;
-        std::cout << "base_rot_x size -> " << base_rot_x.size() << std::endl;
-        std::cout << "base_rot_y size -> " << base_rot_y.size() << std::endl;
-        std::cout << "base_rot_z size -> " << base_rot_z.size() << std::endl;
-        std::cout << "base_rot_w size -> " << base_rot_w.size() << std::endl;
-        // Write structured data to HDF5
-        H5::H5File outputFile(OUTPUT_FILE, H5F_ACC_TRUNC);  // Create the output file
-
-        saveDataToHDF5(OUTPUT_FILE, "/timestamp/t", EstTimestamp);
-        // Base State
-        saveDataToHDF5(OUTPUT_FILE, "/base_pose/position/x", base_pos_x);
-        saveDataToHDF5(OUTPUT_FILE, "/base_pose/position/y", base_pos_y);
-        saveDataToHDF5(OUTPUT_FILE, "/base_pose/position/z", base_pos_z);
-        saveDataToHDF5(OUTPUT_FILE, "/base_pose/rotation/x", base_rot_x);
-        saveDataToHDF5(OUTPUT_FILE, "/base_pose/rotation/y", base_rot_y);
-        saveDataToHDF5(OUTPUT_FILE, "/base_pose/rotation/z", base_rot_z);
-        saveDataToHDF5(OUTPUT_FILE, "/base_pose/rotation/w", base_rot_w);
-
-        // CoM state
-        saveDataToHDF5(OUTPUT_FILE, "/CoM_state/position/x", com_x);
-        saveDataToHDF5(OUTPUT_FILE, "/CoM_state/position/y", com_y);
-        saveDataToHDF5(OUTPUT_FILE, "/CoM_state/position/z", com_z);
-        saveDataToHDF5(OUTPUT_FILE, "/CoM_state/velocity/x", com_vel_x);
-        saveDataToHDF5(OUTPUT_FILE, "/CoM_state/velocity/y", com_vel_y);
-        saveDataToHDF5(OUTPUT_FILE, "/CoM_state/velocity/z", com_vel_z);
-        saveDataToHDF5(OUTPUT_FILE, "/CoM_state/externalForces/x", extFx);
-        saveDataToHDF5(OUTPUT_FILE, "/CoM_state/externalForces/y", extFy);
-        saveDataToHDF5(OUTPUT_FILE, "/CoM_state/externalForces/z", extFz);
-
-        // IMU biases
-        saveDataToHDF5(OUTPUT_FILE, "/imu_bias/accel/x", b_ax);
-        saveDataToHDF5(OUTPUT_FILE, "/imu_bias/accel/y", b_ay);
-        saveDataToHDF5(OUTPUT_FILE, "/imu_bias/accel/z", b_az);
-        saveDataToHDF5(OUTPUT_FILE, "/imu_bias/angVel/x", b_wx);
-        saveDataToHDF5(OUTPUT_FILE, "/imu_bias/angVel/y", b_wy);
-        saveDataToHDF5(OUTPUT_FILE, "/imu_bias/angVel/z", b_wz);
-
-        // Contact Positions
-        std::vector<double> FL_contact_position_x, FL_contact_position_y, FL_contact_position_z;
-        std::vector<double> FR_contact_position_x, FR_contact_position_y, FR_contact_position_z;
-        std::vector<double> RL_contact_position_x, RL_contact_position_y, RL_contact_position_z;
-        std::vector<double> RR_contact_position_x, RR_contact_position_y, RR_contact_position_z;
-
-        for (const auto& vec : FL_contact_position) {
-            FL_contact_position_x.push_back(vec.x());
-            FL_contact_position_y.push_back(vec.y());
-            FL_contact_position_z.push_back(vec.z());
-        }
-
-        for (const auto& vec : FR_contact_position) {
-            FR_contact_position_x.push_back(vec.x());
-            FR_contact_position_y.push_back(vec.y());
-            FR_contact_position_z.push_back(vec.z());
-        }
-
-        for (const auto& vec : RL_contact_position) {
-            RL_contact_position_x.push_back(vec.x());
-            RL_contact_position_y.push_back(vec.y());
-            RL_contact_position_z.push_back(vec.z());
-        }
-
-        for (const auto& vec : RR_contact_position) {
-            RR_contact_position_x.push_back(vec.x());
-            RR_contact_position_y.push_back(vec.y());
-            RR_contact_position_z.push_back(vec.z());
-        }
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/FL_foot/x", FL_contact_position_x);
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/FL_foot/y", FL_contact_position_y);
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/FL_foot/z", FL_contact_position_z);
-
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/FR_foot/x", FR_contact_position_x);
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/FR_foot/y", FR_contact_position_y);
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/FR_foot/z", FR_contact_position_z);
-
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/RL_foot/x", RL_contact_position_x);
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/RL_foot/y", RL_contact_position_y);
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/RL_foot/z", RL_contact_position_z);
-
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/RR_foot/x", RR_contact_position_x);
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/RR_foot/y", RR_contact_position_y);
-        saveDataToHDF5(OUTPUT_FILE, "/contact_positions/RR_foot/z", RR_contact_position_z);
-
-        std::cout << "Processing complete. Predictions saved to " << OUTPUT_FILE << std::endl;
+        
+        writer.close();
+        reader.close();
+        std::cout << "\n[INFO] Done. Processed " << frame_count << " frames.\n";
 
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return EXIT_FAILURE;
+        std::cerr << "\n[FATAL] " << e.what() << "\n";
+        return 1;
     }
-
-    return EXIT_SUCCESS;
+    return 0;
 }
