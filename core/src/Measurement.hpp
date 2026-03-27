@@ -46,11 +46,16 @@ struct JointMeasurement {
  * angular velocity, and their covariances
  */
 struct ImuMeasurement {
-    double timestamp{};                      ///< Timestamp of the measurement (s)
-    Eigen::Vector3d linear_acceleration{Eigen::Vector3d::Zero()};   ///< Linear acceleration measured by IMU (m/s^2)
-    Eigen::Vector3d angular_velocity{Eigen::Vector3d::Zero()};      ///< Angular velocity measured by IMU (rad/s)
-    Eigen::Quaterniond orientation{Eigen::Quaterniond::Identity()};  ///< Orientation estimated by IMU measurements (quaternion)
-    Eigen::Vector3d angular_acceleration{Eigen::Vector3d::Zero()};   ///< Angular acceleration estimated by IMU measurements (rad/s^2)
+    double timestamp{};  ///< Timestamp of the measurement (s)
+    Eigen::Vector3d linear_acceleration{
+        Eigen::Vector3d::Zero()};  ///< Linear acceleration measured by IMU (m/s^2)
+    Eigen::Vector3d angular_velocity{
+        Eigen::Vector3d::Zero()};  ///< Angular velocity measured by IMU (rad/s)
+    Eigen::Quaterniond orientation{
+        Eigen::Quaterniond::Identity()};  ///< Orientation estimated by IMU measurements
+                                          ///< (quaternion)
+    Eigen::Vector3d angular_acceleration{
+        Eigen::Vector3d::Zero()};  ///< Angular acceleration estimated by IMU measurements (rad/s^2)
 
     Eigen::Matrix3d orientation_cov{
         Eigen::Matrix3d::Identity()};  ///< Covariance matrix of orientation (rad^2)
@@ -94,7 +99,7 @@ struct GroundReactionForceMeasurement {
  * and other dynamics-related quantities
  */
 struct KinematicMeasurement {
-    double timestamp{};  ///< Timestamp of the measurement (s)
+    double timestamp{};                                      ///< Timestamp of the measurement (s)
     Eigen::Vector3d base_position{Eigen::Vector3d::Zero()};  ///< Base position (m)
     Eigen::Vector3d base_linear_velocity{Eigen::Vector3d::Zero()};  ///< Base linear velocity (m/s)
     Eigen::Matrix3d base_linear_velocity_cov{
@@ -120,11 +125,11 @@ struct KinematicMeasurement {
     std::map<std::string, Eigen::Matrix3d>
         contacts_position_noise;  ///< Map of contact position noise covariances relative to base
                                   ///< frame (m^2)
+    std::map<std::string, Eigen::Matrix3d>
+        contacts_linear_velocity_noise;  ///< Map of contact linear velocity noise covariances
+                                         ///< relative to base frame (m^2/s^2)
     std::optional<std::map<std::string, Eigen::Quaterniond>>
         contacts_orientation;  ///< Optional map of contact orientations relative to base frame
-    std::optional<std::map<std::string, Eigen::Matrix3d>>
-        contacts_orientation_noise;  ///< Optional map of contact orientation noise covariances
-                                     ///< relative to base frame (rad^2)
     Eigen::Vector3d com_angular_momentum_derivative{
         Eigen::Vector3d::Zero()};  ///< Derivative of center of mass (COM) angular momentum (Nm)
     Eigen::Vector3d com_position{Eigen::Vector3d::Zero()};  ///< Center of mass (COM) position (m)

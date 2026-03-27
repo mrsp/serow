@@ -13,6 +13,8 @@
     "joint_rate": 500.0,
     "estimate_joint_velocity": true,
     "joint_position_variance": 0.0005,
+    "joint_velocity_variance": null,
+    "smoothing_window": 7,
     "tau_0": 0.1,
     "tau_1": 0.0,
     "imu_rate": 500.0,

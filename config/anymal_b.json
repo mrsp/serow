@@ -12,7 +12,9 @@
   "g": 9.81,
   "joint_rate": 400.0,
   "estimate_joint_velocity": false,
-  "joint_position_variance": 0.0005,
+  "joint_position_variance": 1e-4,
+  "joint_velocity_variance": 0.05,
+  "smoothing_window": 7,
   "imu_rate": 400.0,
   "R_base_to_gyro": [
     -1.0,

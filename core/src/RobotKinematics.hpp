@@ -55,10 +55,11 @@ public:
      * @brief Constructor to initialize the robot model and kinematic data
      * @param model_name Name of the model file for the robot
      * @param joint_position_variance Per-joint position measurement noise variance
+     * @param joint_velocity_variance Per-joint velocity measurement noise variance
      * @param verbose Verbosity flag for model loading (default: false)
      */
     RobotKinematics(const std::string& model_name, double joint_position_variance,
-                    bool verbose = false) {
+                    double joint_velocity_variance, bool verbose = false) {
         // Create the model
         pmodel_ = std::make_unique<pinocchio::Model>();
 
@@ -127,7 +128,8 @@ public:
             dqmax_[i] = (pmodel_->nvs[jidx] > 0) ? pmodel_->velocityLimit[vidx] : 0.0;
         }
 
-        qn_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_position_variance;
+        qp_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_position_variance;
+        qn_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_velocity_variance;
 
         // Initialize state vectors
         q_.setZero(pmodel_->nq);
@@ -214,6 +216,28 @@ public:
     Eigen::Matrix3d angularVelocityCovariance(const std::string& frame_name) const {
         const Eigen::MatrixXd J = angularJacobian(frame_name);
         return J * qn_.asDiagonal() * J.transpose();
+    }
+
+    /**
+     * @brief Computes the 3D position covariance of a frame from independent joint position noise.
+     * @param frame_name Name of the frame
+     * @return 3x3 position covariance matrix (translation part)
+     */
+    Eigen::Matrix3d positionCovariance(const std::string& frame_name) const {
+        const Eigen::MatrixXd J = linearJacobian(frame_name);
+        return J * qp_.asDiagonal() * J.transpose();
+    }
+
+    /**
+     * @brief Computes the 3D orientation covariance of a frame from independent joint position
+     * noise.
+     * @param frame_name Name of the frame
+     * @return 3x3 orientation covariance matrix (small-angle / tangent-space)
+     *
+     */
+    Eigen::Matrix3d orientationCovariance(const std::string& frame_name) const {
+        const Eigen::MatrixXd J = angularJacobian(frame_name);
+        return J * qp_.asDiagonal() * J.transpose();
     }
 
     /**
@@ -549,6 +573,8 @@ private:
     /// Joint velocities (size nv)
     Eigen::VectorXd qdot_;
     /// Per-joint position noise variance (size == jnames_.size())
+    Eigen::VectorXd qp_;
+    /// Per-joint velocity noise variance (size == jnames_.size())
     Eigen::VectorXd qn_;
     /// Total robot mass
     double total_mass_{0.0};

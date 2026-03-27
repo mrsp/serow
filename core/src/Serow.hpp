@@ -161,8 +161,12 @@ private:
         /// @brief whether or not to estimate the joint velocities, if set to false then the user
         /// must provide them
         bool estimate_joint_velocity{};
-        /// @brief measurement noise of joint encoder (rad^2)
+        /// @brief measurement noise of joint position encoder (rad^2)
         double joint_position_variance{};
+        /// @brief measurement noise of joint velocity encoder (rad^2/s^2)
+        std::optional<double> joint_velocity_variance{};
+        /// @brief smoothing window for the joint velocity estimator
+        size_t smoothing_window{};
         /// @brief cost weight when computing the instantaneous moment pivot with kinematics. Only
         /// applies for flat feet
         double tau_0{};
@@ -347,6 +351,8 @@ private:
     double last_odom_timestamp_{-1.0};
     std::vector<double> coeffs_joint_;
     std::vector<double> coeffs_imu_;
+    /// @brief Model file path
+    std::string model_filepath_{""};
 
     /// @brief Logs the measurements
     /// @param imu IMU measurement

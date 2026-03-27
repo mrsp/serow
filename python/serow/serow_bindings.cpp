@@ -10,6 +10,7 @@
 #include "ContactEKF.hpp"
 #include "LocalTerrainMapper.hpp"
 #include "Measurement.hpp"
+#include "NaiveLocalTerrainMapper.hpp"
 #include "Serow.hpp"
 #include "State.hpp"
 #include "common.hpp"
@@ -55,6 +56,8 @@ PYBIND11_MODULE(serow, m) {
                 self.base_orientation = numpy_to_quaternion(arr);
             },
             "Base orientation as a quaternion (w, x, y, z)")
+        .def_readwrite("base_local_linear_velocity", &serow::BaseState::base_local_linear_velocity,
+                       "Base local linear velocity (3D vector)")
         .def_readwrite("base_linear_velocity", &serow::BaseState::base_linear_velocity,
                        "Base linear velocity (3D vector)")
         .def_readwrite("base_angular_velocity", &serow::BaseState::base_angular_velocity,
@@ -151,41 +154,43 @@ PYBIND11_MODULE(serow, m) {
 
                 return py::make_tuple(
                     state.timestamp, state.base_position,
-                    quaternion_to_numpy(state.base_orientation), state.base_linear_velocity,
-                    state.base_angular_velocity, state.base_linear_acceleration,
-                    state.base_angular_acceleration, state.imu_angular_velocity_bias,
-                    state.imu_linear_acceleration_bias, state.contacts_position,
-                    contacts_orientation_serialized, state.base_position_cov,
-                    state.base_orientation_cov, state.base_linear_velocity_cov,
-                    state.base_angular_velocity_cov, state.imu_angular_velocity_bias_cov,
-                    state.imu_linear_acceleration_bias_cov, state.contacts_position_cov,
-                    state.contacts_orientation_cov, state.feet_position,
-                    feet_orientation_serialized, state.feet_linear_velocity,
+                    quaternion_to_numpy(state.base_orientation), state.base_local_linear_velocity,
+                    state.base_linear_velocity, state.base_angular_velocity,
+                    state.base_linear_acceleration, state.base_angular_acceleration,
+                    state.imu_angular_velocity_bias, state.imu_linear_acceleration_bias,
+                    state.contacts_position, contacts_orientation_serialized,
+                    state.base_position_cov, state.base_orientation_cov,
+                    state.base_linear_velocity_cov, state.base_angular_velocity_cov,
+                    state.imu_angular_velocity_bias_cov, state.imu_linear_acceleration_bias_cov,
+                    state.contacts_position_cov, state.contacts_orientation_cov,
+                    state.feet_position, feet_orientation_serialized, state.feet_linear_velocity,
                     state.feet_angular_velocity);
             },
             [](py::tuple t) {  // __setstate__
-                if (t.size() != 23)
+                if (t.size() != 24)
                     throw std::runtime_error("Invalid state for BaseState!");
 
                 serow::BaseState state;
                 state.timestamp = t[0].cast<double>();
                 state.base_position = t[1].cast<decltype(state.base_position)>();
                 state.base_orientation = numpy_to_quaternion(t[2].cast<py::array_t<double>>());
-                state.base_linear_velocity = t[3].cast<decltype(state.base_linear_velocity)>();
-                state.base_angular_velocity = t[4].cast<decltype(state.base_angular_velocity)>();
+                state.base_local_linear_velocity =
+                    t[3].cast<decltype(state.base_local_linear_velocity)>();
+                state.base_linear_velocity = t[4].cast<decltype(state.base_linear_velocity)>();
+                state.base_angular_velocity = t[5].cast<decltype(state.base_angular_velocity)>();
                 state.base_linear_acceleration =
-                    t[5].cast<decltype(state.base_linear_acceleration)>();
+                    t[6].cast<decltype(state.base_linear_acceleration)>();
                 state.base_angular_acceleration =
-                    t[6].cast<decltype(state.base_angular_acceleration)>();
+                    t[7].cast<decltype(state.base_angular_acceleration)>();
                 state.imu_angular_velocity_bias =
-                    t[7].cast<decltype(state.imu_angular_velocity_bias)>();
+                    t[8].cast<decltype(state.imu_angular_velocity_bias)>();
                 state.imu_linear_acceleration_bias =
-                    t[8].cast<decltype(state.imu_linear_acceleration_bias)>();
-                state.contacts_position = t[9].cast<decltype(state.contacts_position)>();
+                    t[9].cast<decltype(state.imu_linear_acceleration_bias)>();
+                state.contacts_position = t[10].cast<decltype(state.contacts_position)>();
 
                 // Handle optional contacts_orientation
                 auto contacts_orientation_serialized =
-                    t[10].cast<std::map<std::string, py::array_t<double>>>();
+                    t[11].cast<std::map<std::string, py::array_t<double>>>();
                 if (!contacts_orientation_serialized.empty()) {
                     std::map<std::string, Eigen::Quaterniond> contacts_orientation;
                     for (const auto& [name, arr] : contacts_orientation_serialized) {
@@ -194,30 +199,30 @@ PYBIND11_MODULE(serow, m) {
                     state.contacts_orientation = contacts_orientation;
                 }
 
-                state.base_position_cov = t[11].cast<decltype(state.base_position_cov)>();
-                state.base_orientation_cov = t[12].cast<decltype(state.base_orientation_cov)>();
+                state.base_position_cov = t[12].cast<decltype(state.base_position_cov)>();
+                state.base_orientation_cov = t[13].cast<decltype(state.base_orientation_cov)>();
                 state.base_linear_velocity_cov =
-                    t[13].cast<decltype(state.base_linear_velocity_cov)>();
+                    t[14].cast<decltype(state.base_linear_velocity_cov)>();
                 state.base_angular_velocity_cov =
-                    t[14].cast<decltype(state.base_angular_velocity_cov)>();
+                    t[15].cast<decltype(state.base_angular_velocity_cov)>();
                 state.imu_angular_velocity_bias_cov =
-                    t[15].cast<decltype(state.imu_angular_velocity_bias_cov)>();
+                    t[16].cast<decltype(state.imu_angular_velocity_bias_cov)>();
                 state.imu_linear_acceleration_bias_cov =
-                    t[16].cast<decltype(state.imu_linear_acceleration_bias_cov)>();
-                state.contacts_position_cov = t[17].cast<decltype(state.contacts_position_cov)>();
+                    t[17].cast<decltype(state.imu_linear_acceleration_bias_cov)>();
+                state.contacts_position_cov = t[18].cast<decltype(state.contacts_position_cov)>();
                 state.contacts_orientation_cov =
-                    t[18].cast<decltype(state.contacts_orientation_cov)>();
-                state.feet_position = t[19].cast<decltype(state.feet_position)>();
+                    t[19].cast<decltype(state.contacts_orientation_cov)>();
+                state.feet_position = t[20].cast<decltype(state.feet_position)>();
 
                 // Convert feet_orientation from numpy arrays
                 auto feet_orientation_serialized =
-                    t[20].cast<std::map<std::string, py::array_t<double>>>();
+                    t[21].cast<std::map<std::string, py::array_t<double>>>();
                 for (const auto& [name, arr] : feet_orientation_serialized) {
                     state.feet_orientation[name] = numpy_to_quaternion(arr);
                 }
 
-                state.feet_linear_velocity = t[21].cast<decltype(state.feet_linear_velocity)>();
-                state.feet_angular_velocity = t[22].cast<decltype(state.feet_angular_velocity)>();
+                state.feet_linear_velocity = t[22].cast<decltype(state.feet_linear_velocity)>();
+                state.feet_angular_velocity = t[23].cast<decltype(state.feet_angular_velocity)>();
 
                 return state;
             }));
@@ -257,12 +262,12 @@ PYBIND11_MODULE(serow, m) {
                 contact.contacts_status = t[1].cast<decltype(contact.contacts_status)>();
                 contact.contacts_probability = t[2].cast<decltype(contact.contacts_probability)>();
                 contact.contacts_force = t[3].cast<decltype(contact.contacts_force)>();
-                
+
                 // Handle optional contacts_torque
                 if (!t[4].is_none()) {
                     contact.contacts_torque = t[4].cast<std::map<std::string, Eigen::Vector3d>>();
                 }
-                
+
                 return contact;
             }));
 
@@ -383,6 +388,33 @@ PYBIND11_MODULE(serow, m) {
                 return ft;
             }));
 
+    // Binding for GroundReactionForceMeasurement
+    py::class_<serow::GroundReactionForceMeasurement>(
+        m, "GroundReactionForceMeasurement",
+        "Represents ground reaction force measurements including force and center of pressure")
+        .def(py::init<>(), "Default constructor")
+        .def_readwrite("timestamp", &serow::GroundReactionForceMeasurement::timestamp,
+                       "Timestamp of the measurement (s)")
+        .def_readwrite("force", &serow::GroundReactionForceMeasurement::force,
+                       "Ground reaction force (N)")
+        .def_readwrite("cop", &serow::GroundReactionForceMeasurement::cop,
+                       "Center of pressure (COP) (m)")
+        .def(py::pickle(
+            [](const serow::GroundReactionForceMeasurement& grf) {  // __getstate__
+                return py::make_tuple(grf.timestamp, grf.force, grf.cop);
+            },
+            [](py::tuple t) {  // __setstate__
+                if (t.size() != 3)
+                    throw std::runtime_error("Invalid state for GroundReactionForceMeasurement!");
+
+                serow::GroundReactionForceMeasurement grf;
+                grf.timestamp = t[0].cast<double>();
+                grf.force = t[1].cast<decltype(grf.force)>();
+                grf.cop = t[2].cast<decltype(grf.cop)>();
+
+                return grf;
+            }));
+
     // Binding for KinematicMeasurement
     py::class_<serow::KinematicMeasurement>(m, "KinematicMeasurement",
                                             "Represents kinematic measurements")
@@ -393,7 +425,8 @@ PYBIND11_MODULE(serow, m) {
                        "Base position (3D vector)")
         .def_readwrite("base_linear_velocity", &serow::KinematicMeasurement::base_linear_velocity,
                        "Base linear velocity (3D vector)")
-        .def_readwrite("base_linear_velocity_cov", &serow::KinematicMeasurement::base_linear_velocity_cov,
+        .def_readwrite("base_linear_velocity_cov",
+                       &serow::KinematicMeasurement::base_linear_velocity_cov,
                        "Covariance matrix of base linear velocity (m^2/s^2)")
         .def_readwrite("contacts_status", &serow::KinematicMeasurement::contacts_status,
                        "Map of contact statuses (string to bool)")
@@ -433,6 +466,9 @@ PYBIND11_MODULE(serow, m) {
         .def_readwrite("contacts_position_noise",
                        &serow::KinematicMeasurement::contacts_position_noise,
                        "Map of contact position noise (string to 3x3 matrix)")
+        .def_readwrite("contacts_linear_velocity_noise",
+                       &serow::KinematicMeasurement::contacts_linear_velocity_noise,
+                       "Map of contact linear velocity noise (string to 3x3 matrix)")
         .def_property(
             "contacts_orientation",
             [](const serow::KinematicMeasurement& self) {
@@ -453,9 +489,6 @@ PYBIND11_MODULE(serow, m) {
                 self.contacts_orientation = eigen_orientations;
             },
             "Map of contact orientations (string to quaternion)")
-        .def_readwrite("contacts_orientation_noise",
-                       &serow::KinematicMeasurement::contacts_orientation_noise,
-                       "Map of contact orientation noise (string to 3x3 matrix)")
         .def_readwrite("com_angular_momentum_derivative",
                        &serow::KinematicMeasurement::com_angular_momentum_derivative,
                        "Center of mass angular momentum derivative (3D vector)")
@@ -505,17 +538,16 @@ PYBIND11_MODULE(serow, m) {
 
                 return py::make_tuple(
                     kin.timestamp, kin.base_position, kin.base_linear_velocity,
-                    kin.base_linear_velocity_cov, kin.contacts_status,
-                    kin.contacts_probability, kin.is_new_contact, kin.contacts_position,
-                    kin.base_to_foot_positions, base_to_foot_orientations_serialized,
-                    kin.base_to_foot_linear_velocities, kin.base_to_foot_angular_velocities,
-                    kin.contacts_position_noise, contacts_orientation_serialized,
-                    kin.contacts_orientation_noise, kin.com_angular_momentum_derivative,
-                    kin.com_position, kin.com_linear_acceleration, kin.position_slip_cov,
-                    kin.orientation_slip_cov, kin.position_cov, kin.orientation_cov,
-                    kin.com_position_process_cov, kin.com_linear_velocity_process_cov,
-                    kin.external_forces_process_cov, kin.com_position_cov,
-                    kin.com_linear_acceleration_cov);
+                    kin.base_linear_velocity_cov, kin.contacts_status, kin.contacts_probability,
+                    kin.is_new_contact, kin.contacts_position, kin.base_to_foot_positions,
+                    base_to_foot_orientations_serialized, kin.base_to_foot_linear_velocities,
+                    kin.base_to_foot_angular_velocities, kin.contacts_position_noise,
+                    kin.contacts_linear_velocity_noise, contacts_orientation_serialized,
+                    kin.com_angular_momentum_derivative, kin.com_position,
+                    kin.com_linear_acceleration, kin.position_slip_cov, kin.orientation_slip_cov,
+                    kin.position_cov, kin.orientation_cov, kin.com_position_process_cov,
+                    kin.com_linear_velocity_process_cov, kin.external_forces_process_cov,
+                    kin.com_position_cov, kin.com_linear_acceleration_cov);
             },
             [](py::tuple t) {  // __setstate__
                 if (t.size() != 27)
@@ -544,10 +576,12 @@ PYBIND11_MODULE(serow, m) {
                 kin.base_to_foot_angular_velocities =
                     t[11].cast<decltype(kin.base_to_foot_angular_velocities)>();
                 kin.contacts_position_noise = t[12].cast<decltype(kin.contacts_position_noise)>();
+                kin.contacts_linear_velocity_noise =
+                    t[13].cast<decltype(kin.contacts_linear_velocity_noise)>();
 
                 // Handle optional contacts_orientation
                 auto contacts_orientation_serialized =
-                    t[13].cast<std::map<std::string, py::array_t<double>>>();
+                    t[14].cast<std::map<std::string, py::array_t<double>>>();
                 if (!contacts_orientation_serialized.empty()) {
                     std::map<std::string, Eigen::Quaterniond> contacts_orientation;
                     for (const auto& [name, arr] : contacts_orientation_serialized) {
@@ -556,8 +590,6 @@ PYBIND11_MODULE(serow, m) {
                     kin.contacts_orientation = contacts_orientation;
                 }
 
-                kin.contacts_orientation_noise =
-                    t[14].cast<decltype(kin.contacts_orientation_noise)>();
                 kin.com_angular_momentum_derivative =
                     t[15].cast<decltype(kin.com_angular_momentum_derivative)>();
                 kin.com_position = t[16].cast<decltype(kin.com_position)>();
@@ -784,6 +816,130 @@ PYBIND11_MODULE(serow, m) {
              "Concludes the base estimator's update step with the IMU measurement")
         .def("reset", &serow::Serow::reset, "Resets the state of SEROW");
 
+    // Binding for ElevationCell
+    py::class_<serow::ElevationCell>(m, "ElevationCell",
+                                     "Represents a single cell in the terrain elevation map")
+        .def(py::init<>(), "Default constructor")
+        .def(py::init<float, float>(), py::arg("height"), py::arg("variance"),
+             "Constructor with height and variance")
+        .def_readwrite("height", &serow::ElevationCell::height, "Terrain height (m)")
+        .def_readwrite("variance", &serow::ElevationCell::variance, "Terrain height variance (m^2)")
+        .def_readwrite("contact", &serow::ElevationCell::contact,
+                       "Whether this cell is a contact point")
+        .def_readwrite("updated", &serow::ElevationCell::updated,
+                       "Whether this cell has been updated");
+
+    // Binding for TerrainElevation::Params
+    py::class_<serow::TerrainElevation::Params>(m, "TerrainElevationParams",
+                                                "Parameters for the terrain elevation mapper")
+        .def(py::init<>(), "Default constructor with sensible defaults")
+        .def(py::init<float, float, float, float, float, float, size_t, float, float, float,
+                      float>(),
+             py::arg("resolution"), py::arg("radius"), py::arg("dist_variance_gain"),
+             py::arg("power"), py::arg("min_variance"), py::arg("max_recenter_distance"),
+             py::arg("max_contact_points"), py::arg("min_contact_probability"),
+             py::arg("min_stable_contact_probability") = 0.95f,
+             py::arg("min_stable_foot_angular_velocity") = 0.03f,
+             py::arg("min_stable_foot_linear_velocity") = 0.03f, "Constructor with all parameters")
+        .def_readwrite("resolution", &serow::TerrainElevation::Params::resolution,
+                       "Map resolution (m/cell)")
+        .def_readwrite("resolution_inv", &serow::TerrainElevation::Params::resolution_inv,
+                       "Inverse of map resolution (cell/m)")
+        .def_readwrite("radius", &serow::TerrainElevation::Params::radius,
+                       "Radius of inflation per contact point (m)")
+        .def_readwrite("radius_cells", &serow::TerrainElevation::Params::radius_cells,
+                       "Radius of inflation in cells")
+        .def_readwrite("dist_variance_gain", &serow::TerrainElevation::Params::dist_variance_gain,
+                       "Gain to scale the variance based on distance")
+        .def_readwrite("power", &serow::TerrainElevation::Params::power,
+                       "Power parameter for inverse distance weighting")
+        .def_readwrite("min_variance", &serow::TerrainElevation::Params::min_variance,
+                       "Minimum terrain height variance (m^2)")
+        .def_readwrite("max_recenter_distance",
+                       &serow::TerrainElevation::Params::max_recenter_distance,
+                       "Maximum distance to trigger recentering (m)")
+        .def_readwrite("max_contact_points", &serow::TerrainElevation::Params::max_contact_points,
+                       "Maximum number of stored contact points")
+        .def_readwrite("min_contact_probability",
+                       &serow::TerrainElevation::Params::min_contact_probability,
+                       "Minimum contact probability for terrain estimation")
+        .def_readwrite("min_stable_contact_probability",
+                       &serow::TerrainElevation::Params::min_stable_contact_probability,
+                       "Minimum stable contact probability for terrain estimation")
+        .def_readwrite("min_stable_foot_angular_velocity",
+                       &serow::TerrainElevation::Params::min_stable_foot_angular_velocity,
+                       "Minimum stable foot angular velocity (rad/s)")
+        .def_readwrite("min_stable_foot_linear_velocity",
+                       &serow::TerrainElevation::Params::min_stable_foot_linear_velocity,
+                       "Minimum stable foot linear velocity (m/s)");
+
+    // Binding for TerrainElevation (abstract base class)
+    py::class_<serow::TerrainElevation, std::shared_ptr<serow::TerrainElevation>>(
+        m, "TerrainElevation", "Abstract base class for terrain elevation mapping")
+        .def("print_map_information", &serow::TerrainElevation::printMapInformation,
+             "Prints terrain map metadata to stdout")
+        .def("get_map_origin", &serow::TerrainElevation::getMapOrigin,
+             "Returns the map origin as [x, y]")
+        .def("recenter", &serow::TerrainElevation::recenter, py::arg("location"),
+             "Recenters the local map around the given [x, y] location")
+        .def("initialize_local_map", &serow::TerrainElevation::initializeLocalMap,
+             py::arg("height"), py::arg("variance"),
+             py::arg("params") = serow::TerrainElevation::Params(),
+             "Initializes the local map with a default height and variance")
+        .def("update", &serow::TerrainElevation::update, py::arg("loc"), py::arg("height"),
+             py::arg("variance"), py::arg("normal") = std::nullopt,
+             "Updates the elevation at the given [x, y] location")
+        .def("set_elevation", &serow::TerrainElevation::setElevation, py::arg("loc"),
+             py::arg("elevation"), "Sets the elevation cell at the given [x, y] location")
+        .def("get_elevation", &serow::TerrainElevation::getElevation, py::arg("loc"),
+             "Returns the elevation cell at the given [x, y] location, or None if outside")
+        .def("inside",
+             static_cast<bool (serow::TerrainElevation::*)(const std::array<float, 2>&) const>(
+                 &serow::TerrainElevation::inside),
+             py::arg("location"), "Checks if a [x, y] location is inside the local map")
+        .def("location_to_hash_id", &serow::TerrainElevation::locationToHashId, py::arg("loc"),
+             "Converts a [x, y] location to a hash ID")
+        .def("hash_id_to_location", &serow::TerrainElevation::hashIdToLocation, py::arg("hash_id"),
+             "Converts a hash ID to a [x, y] location")
+        .def("get_elevation_map", &serow::TerrainElevation::getElevationMap,
+             "Returns the full elevation map as an array of ElevationCells")
+        .def("get_local_map_info", &serow::TerrainElevation::getLocalMapInfo,
+             "Returns (origin, bound_max, bound_min) of the local map")
+        .def("add_contact_point", &serow::TerrainElevation::addContactPoint, py::arg("point"),
+             "Adds a contact point [x, y] to the contact point buffer")
+        .def("get_max_recenter_distance", &serow::TerrainElevation::getMaxRecenterDistance,
+             "Returns the maximum recenter distance (m)")
+        .def("get_resolution", &serow::TerrainElevation::getResolution,
+             "Returns the map resolution (m/cell)")
+        .def("get_min_contact_probability", &serow::TerrainElevation::getMinContactProbability,
+             "Returns the minimum contact probability threshold")
+        .def("get_min_stable_contact_probability",
+             &serow::TerrainElevation::getMinStableContactProbability,
+             "Returns the minimum stable contact probability threshold")
+        .def("get_min_stable_foot_angular_velocity",
+             &serow::TerrainElevation::getMinStableFootAngularVelocity,
+             "Returns the minimum stable foot angular velocity (rad/s)")
+        .def("get_min_stable_foot_linear_velocity",
+             &serow::TerrainElevation::getMinStableFootLinearVelocity,
+             "Returns the minimum stable foot linear velocity (m/s)")
+        .def("clear_contact_points", &serow::TerrainElevation::clearContactPoints,
+             "Clears all stored contact points")
+        .def("interpolate_contact_points", &serow::TerrainElevation::interpolateContactPoints,
+             "Interpolates elevation between stored contact points using inverse distance "
+             "weighting");
+
+    // Binding for LocalTerrainMapper (concrete implementation)
+    py::class_<serow::LocalTerrainMapper, serow::TerrainElevation,
+               std::shared_ptr<serow::LocalTerrainMapper>>(
+        m, "LocalTerrainMapper", "Fast local terrain elevation mapper using hash-based indexing")
+        .def(py::init<>(), "Default constructor");
+
+    // Binding for NaiveLocalTerrainMapper (concrete implementation)
+    py::class_<serow::NaiveLocalTerrainMapper, serow::TerrainElevation,
+               std::shared_ptr<serow::NaiveLocalTerrainMapper>>(
+        m, "NaiveLocalTerrainMapper", "Naive local terrain elevation mapper")
+        .def(py::init<>(), "Default constructor");
+
     // Binding for CentroidalState
     py::class_<serow::CentroidalState>(m, "CentroidalState",
                                        "Represents the centroidal state of the robot")
@@ -809,7 +965,35 @@ PYBIND11_MODULE(serow, m) {
         .def_readwrite("com_linear_velocity_cov", &serow::CentroidalState::com_linear_velocity_cov,
                        "Center of mass linear velocity covariance (3x3 matrix)")
         .def_readwrite("external_forces_cov", &serow::CentroidalState::external_forces_cov,
-                       "External forces covariance (3x3 matrix)");
+                       "External forces covariance (3x3 matrix)")
+        .def(py::pickle(
+            [](const serow::CentroidalState& cs) {  // __getstate__
+                return py::make_tuple(cs.timestamp, cs.com_position, cs.com_linear_velocity,
+                                      cs.external_forces, cs.cop_position,
+                                      cs.com_linear_acceleration, cs.angular_momentum,
+                                      cs.angular_momentum_derivative, cs.com_position_cov,
+                                      cs.com_linear_velocity_cov, cs.external_forces_cov);
+            },
+            [](py::tuple t) {  // __setstate__
+                if (t.size() != 11)
+                    throw std::runtime_error("Invalid state for CentroidalState!");
+
+                serow::CentroidalState cs;
+                cs.timestamp = t[0].cast<double>();
+                cs.com_position = t[1].cast<decltype(cs.com_position)>();
+                cs.com_linear_velocity = t[2].cast<decltype(cs.com_linear_velocity)>();
+                cs.external_forces = t[3].cast<decltype(cs.external_forces)>();
+                cs.cop_position = t[4].cast<decltype(cs.cop_position)>();
+                cs.com_linear_acceleration = t[5].cast<decltype(cs.com_linear_acceleration)>();
+                cs.angular_momentum = t[6].cast<decltype(cs.angular_momentum)>();
+                cs.angular_momentum_derivative =
+                    t[7].cast<decltype(cs.angular_momentum_derivative)>();
+                cs.com_position_cov = t[8].cast<decltype(cs.com_position_cov)>();
+                cs.com_linear_velocity_cov = t[9].cast<decltype(cs.com_linear_velocity_cov)>();
+                cs.external_forces_cov = t[10].cast<decltype(cs.external_forces_cov)>();
+
+                return cs;
+            }));
 
     // Binding for JointState
     py::class_<serow::JointState>(m, "JointState", "Represents the joint state of the robot")
@@ -843,14 +1027,14 @@ PYBIND11_MODULE(serow, m) {
         .def(py::init<std::set<std::string>, bool, std::string>(), py::arg("contacts_frame"),
              py::arg("point_feet"), py::arg("base_frame") = "base_link",
              "Constructor with contact frames, point feet flag, and base frame")
-        .def("get_joint_positions", &serow::State::getJointPositions,
-             "Returns the joint positions")
+        .def("get_joint_positions", &serow::State::getJointPositions, "Returns the joint positions")
         .def("get_joint_velocities", &serow::State::getJointVelocities,
              "Returns the joint velocities")
         .def("get_timestamp", &serow::State::getTimestamp, py::arg("state_type") = "base",
              "Returns the timestamp of the state")
-        .def("get_base_pose", &serow::State::getBasePose,
-             "Returns the base pose as a rigid transformation")
+        .def(
+            "get_base_pose", [](const serow::State& self) { return self.getBasePose().matrix(); },
+            "Returns the base pose as a 4x4 transformation matrix")
         .def("get_base_position", &serow::State::getBasePosition, "Returns the base position")
         .def(
             "get_base_orientation",
@@ -868,10 +1052,28 @@ PYBIND11_MODULE(serow, m) {
              "Returns the active contact frame names")
         .def("get_contact_position", &serow::State::getContactPosition,
              "Returns the contact position for a given frame")
-        .def("get_contact_orientation", &serow::State::getContactOrientation,
-             "Returns the contact orientation for a given frame")
-        .def("get_contact_pose", &serow::State::getContactPose,
-             "Returns the contact pose for a given frame")
+        .def(
+            "get_contact_orientation",
+            [](const serow::State& self,
+               const std::string& frame_name) -> std::optional<py::array_t<double>> {
+                auto q = self.getContactOrientation(frame_name);
+                if (q) {
+                    return quaternion_to_numpy(*q);
+                }
+                return std::nullopt;
+            },
+            py::arg("frame_name"), "Returns the contact orientation for a given frame")
+        .def(
+            "get_contact_pose",
+            [](const serow::State& self,
+               const std::string& frame_name) -> std::optional<Eigen::Matrix4d> {
+                auto pose = self.getContactPose(frame_name);
+                if (pose) {
+                    return pose->matrix();
+                }
+                return std::nullopt;
+            },
+            py::arg("frame_name"), "Returns the contact pose as a 4x4 transformation matrix")
         .def("get_contact_status", &serow::State::getContactStatus,
              "Returns the contact status for a given frame")
         .def("get_contact_force", &serow::State::getContactForce,
@@ -882,9 +1084,18 @@ PYBIND11_MODULE(serow, m) {
              "Returns the contact probability for a given frame")
         .def("get_foot_position", &serow::State::getFootPosition,
              "Returns the foot position for a given frame")
-        .def("get_foot_orientation", &serow::State::getFootOrientation,
-             "Returns the foot orientation for a given frame")
-        .def("get_foot_pose", &serow::State::getFootPose, "Returns the foot pose for a given frame")
+        .def(
+            "get_foot_orientation",
+            [](const serow::State& self, const std::string& frame_name) {
+                return quaternion_to_numpy(self.getFootOrientation(frame_name));
+            },
+            py::arg("frame_name"), "Returns the foot orientation for a given frame")
+        .def(
+            "get_foot_pose",
+            [](const serow::State& self, const std::string& frame_name) {
+                return self.getFootPose(frame_name).matrix();
+            },
+            py::arg("frame_name"), "Returns the foot pose as a 4x4 transformation matrix")
         .def("get_foot_linear_velocity", &serow::State::getFootLinearVelocity,
              "Returns the foot linear velocity for a given frame")
         .def("get_foot_angular_velocity", &serow::State::getFootAngularVelocity,
@@ -935,16 +1146,14 @@ PYBIND11_MODULE(serow, m) {
              "Returns the number of leg end-effectors")
         .def("is_point_feet", &serow::State::isPointFeet,
              "Returns whether the robot has point feet")
-        .def("is_valid", &serow::State::isValid,
-             "Returns whether the state is valid")
+        .def("is_valid", &serow::State::isValid, "Returns whether the state is valid")
         .def("is_initialized", &serow::State::isInitialized,
              "Returns whether the state is initialized")
         .def("set_valid", &serow::State::setValid, py::arg("valid"),
              "Sets whether the state is valid")
         .def("set_initialized", &serow::State::setInitialized, py::arg("initialized"),
              "Sets whether the state is initialized")
-        .def("get_base_frame", &serow::State::getBaseFrame,
-             "Returns the base frame name")
+        .def("get_base_frame", &serow::State::getBaseFrame, "Returns the base frame name")
         .def("set_base_state", &serow::State::setBaseState, py::arg("base_state"),
              "Sets the base state of the robot")
         .def("set_contact_state", &serow::State::setContactState, py::arg("contact_state"),

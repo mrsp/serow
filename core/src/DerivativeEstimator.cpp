@@ -84,6 +84,7 @@ Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement,
         }
         timestamp_ = timestamp;
         initialized_ = true;
+        x_dot_cov_ = measurement_variance * noise_gain_;
         return x_dot_;
     }
 

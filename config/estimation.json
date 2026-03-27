@@ -25,7 +25,11 @@
     // provide them
     "estimate_joint_velocity": true,
     // double: measurement noise of joint encoder (rad^2)
-    "joint_position_variance": 0.1,
+    "joint_position_variance": 0.001,
+    // double: measurement noise of joint velocity encoder (rad^2/s^2)
+    "joint_velocity_variance": 0.1,
+    // integer: smoothing window for the derivative estimators (joint velocity, IMU angular velocity, CoM Angular Momentum Derivative)
+    "smoothing_window": 7,
     // Contact point estimator
     // double: cost weight when computing the instantaneous moment pivot with kinematics. 
     // Only applies for flat feet

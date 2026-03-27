@@ -39,6 +39,8 @@ struct BaseState {
     Eigen::Vector3d base_position{Eigen::Vector3d::Zero()};
     /// Base orientation in world frame coordinates
     Eigen::Quaterniond base_orientation{Eigen::Quaterniond::Identity()};
+    /// Base local linear velocity in base frame coordinates (m/s)
+    Eigen::Vector3d base_local_linear_velocity{Eigen::Vector3d::Zero()};
     /// Base linear velocity in world frame coordinates (m/s)
     Eigen::Vector3d base_linear_velocity{Eigen::Vector3d::Zero()};
     /// Base angular velocity in world frame coordinates (rad/s)

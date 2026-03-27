@@ -13,6 +13,8 @@
     "joint_rate": 500.0,
     "estimate_joint_velocity": true,
     "joint_position_variance": 1e-4,
+    "joint_velocity_variance": null,
+    "smoothing_window": 7,
     "tau_0": 0.1,
     "tau_1": 0.0,
     "imu_rate": 500.0,
@@ -102,7 +104,7 @@
     "attitude_estimator_proportional_gain": 0.1,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
-    "median_window": 17,
+    "median_window": 21,
     "convergence_cycles": 100,
     "imu_angular_velocity_covariance": [
         0.01,

@@ -32,6 +32,7 @@
 #include <iostream>
 #include <memory>
 
+#include "ButterworthLPF.hpp"
 #include "LocalTerrainMapper.hpp"
 #include "Measurement.hpp"  // Includes various sensor measurements
 #include "OutlierDetector.hpp"
@@ -146,6 +147,10 @@ private:
     std::optional<Eigen::Quaterniond>
         first_odometry_orientation_;  ///< Initial odometry measurement orientation (world
                                       ///< coordinates).
+
+    /// @brief low pass filter for the base linear velocity in the z direction
+    /// @note This smoother only applies when the terrain is estimated
+    std::unique_ptr<ButterworthLPF> base_linear_velocity_z_lpf_;
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.

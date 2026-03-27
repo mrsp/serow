@@ -61,6 +61,10 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     last_imu_timestamp_.reset();
 
     use_imu_orientation_ = use_imu_orientation;
+
+    base_linear_velocity_z_lpf_ =
+        std::make_unique<ButterworthLPF>("Base Linear Velocity Z LPF", imu_rate, 10.0, false);
+
     verbose_ = verbose;
     if (verbose) {
         std::cout << "[SEROW/ContactEKF]: Initialized successfully" << std::endl;
@@ -83,7 +87,7 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobi
     const BaseState& state, Eigen::Vector3d angular_velocity) {
     angular_velocity -= state.imu_angular_velocity_bias;
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
-    const Eigen::Vector3d v = R.transpose() * state.base_linear_velocity;
+    const Eigen::Vector3d v = state.base_local_linear_velocity;
 
     Eigen::MatrixXd Ac(num_states_, num_states_), Lc(num_states_, num_inputs_);
     Lc = Lc_;
@@ -142,6 +146,8 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu) {
 
     // Predict the state
     computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration);
+    state.base_linear_velocity =
+        state.base_orientation.toRotationMatrix() * state.base_local_linear_velocity;
     last_imu_timestamp_ = imu.timestamp;
 }
 
@@ -154,12 +160,12 @@ void ContactEKF::computeDiscreteDynamics(BaseState& state, double dt,
     // Nonlinear Process Model
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
     const Eigen::Vector3d r = state.base_position;
-    const Eigen::Vector3d v = R.transpose() * state.base_linear_velocity;
-    const Eigen::Vector3d v_w = state.base_linear_velocity;
+    const Eigen::Vector3d v = state.base_local_linear_velocity;
+    const Eigen::Vector3d v_w = R * state.base_local_linear_velocity;
 
     // Linear velocity
-    state.base_linear_velocity.noalias() =
-        R * ((v.cross(angular_velocity) + R.transpose() * g_ + linear_acceleration) * dt) + v_w;
+    state.base_local_linear_velocity.noalias() =
+        (v.cross(angular_velocity) + R.transpose() * g_ + linear_acceleration) * dt + v;
 
     // Position
     state.base_position.noalias() = v_w * dt + r;
@@ -297,7 +303,7 @@ BaseState ContactEKF::updateStateCopy(const BaseState& state, const Eigen::Vecto
         Eigen::Quaterniond(lie::so3::plus(state.base_orientation.toRotationMatrix(), dx(r_idx_)))
             .normalized();
     const Eigen::Matrix3d R = updated_state.base_orientation.toRotationMatrix();
-    updated_state.base_linear_velocity += R * dx(v_idx_);
+    updated_state.base_local_linear_velocity += dx(v_idx_);
     updated_state.base_linear_velocity_cov.noalias() = R * P(v_idx_, v_idx_) * R.transpose();
     updated_state.base_orientation_cov = P(r_idx_, r_idx_);
     updated_state.imu_angular_velocity_bias += dx(bg_idx_);
@@ -315,7 +321,7 @@ void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
         Eigen::Quaterniond(lie::so3::plus(state.base_orientation.toRotationMatrix(), dx(r_idx_)))
             .normalized();
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
-    state.base_linear_velocity += R * dx(v_idx_);
+    state.base_local_linear_velocity += dx(v_idx_);
     state.base_linear_velocity_cov.noalias() = R * P(v_idx_, v_idx_) * R.transpose();
     state.base_orientation_cov = P(r_idx_, r_idx_);
     state.imu_angular_velocity_bias += dx(bg_idx_);
@@ -360,7 +366,8 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                     // Compute the linear velocity of the leg end-effector in contact
                     const Eigen::Vector3d p_base_to_leg =
                         R_world_to_base * kin.base_to_foot_positions.at(cf);
-                    const Eigen::Vector3d v_contact = state.base_linear_velocity +
+                    const Eigen::Vector3d v_contact =
+                        R_world_to_base * state.base_local_linear_velocity +
                         state.base_angular_velocity.cross(p_base_to_leg) +
                         R_world_to_base * kin.base_to_foot_linear_velocities.at(cf);
                     // Update the terrain elevation with a plane contact if the leg in contact is
@@ -431,6 +438,13 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
     Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
     T_world_to_base.translation() = state.base_position;
     T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
+    state.base_linear_velocity = T_world_to_base.linear() * state.base_local_linear_velocity;
+
+    if (terrain_estimator) {
+        state.base_linear_velocity.z() =
+            base_linear_velocity_z_lpf_->filter(state.base_linear_velocity.z());
+    }
+
     for (const auto& cf : contacts_frame_) {
         state.contacts_position.at(cf) = T_world_to_base * kin.contacts_position.at(cf);
         if (state.contacts_orientation.has_value() &&
@@ -479,12 +493,12 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state,
     for (size_t iter = 0; iter < num_iter; iter++) {
         // Construct the linearized measurement matrix H around the current state estimate
         const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
-        const Eigen::Vector3d v = R.transpose() * state.base_linear_velocity;
+        const Eigen::Vector3d v = state.base_local_linear_velocity;
         H.block(0, v_idx_[0], 3, 3) = R;
         H.block(0, r_idx_[0], 3, 3) = -R * lie::so3::wedge(v);
 
         // Construct the innovation vector z
-        const Eigen::Vector3d z = base_linear_velocity - state.base_linear_velocity;
+        const Eigen::Vector3d z = base_linear_velocity - R * state.base_local_linear_velocity;
 
         // Compute the Kalman gain with the current linearization
         PH_transpose.noalias() = P_ * H.transpose();
@@ -498,8 +512,7 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state,
             Eigen::Quaterniond(
                 lie::so3::plus(state.base_orientation.toRotationMatrix(), dx(r_idx_)))
                 .normalized();
-        const Eigen::Matrix3d R_updated = state.base_orientation.toRotationMatrix();
-        state.base_linear_velocity += R_updated * dx(v_idx_);
+        state.base_local_linear_velocity += dx(v_idx_);
         state.imu_angular_velocity_bias += dx(bg_idx_);
         state.imu_linear_acceleration_bias += dx(ba_idx_);
         if (dx.squaredNorm() < 1e-9) {
