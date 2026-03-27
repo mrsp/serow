@@ -457,7 +457,9 @@ bool Serow::initialize(const std::string& config_file) {
     }
 
     if (!kinematic_estimator_) {
-        throw std::runtime_error("Failed to create kinematic estimator");
+        throw std::runtime_error(
+            "Failed to create the kinematic estimator! Check the robot's model file: " +
+            model_filepath);
     }
 
     if (params_.joint_velocity_variance.has_value()) {
