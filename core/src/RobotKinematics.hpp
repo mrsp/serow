@@ -55,11 +55,10 @@ public:
      * @brief Constructor to initialize the robot model and kinematic data
      * @param model_name Name of the model file for the robot
      * @param joint_position_variance Per-joint position measurement noise variance
-     * @param joint_velocity_variance Per-joint velocity measurement noise variance
      * @param verbose Verbosity flag for model loading (default: false)
      */
     RobotKinematics(const std::string& model_name, double joint_position_variance,
-                    double joint_velocity_variance, bool verbose = false) {
+                    bool verbose = false) {
         // Create the model
         pmodel_ = std::make_unique<pinocchio::Model>();
 
@@ -129,7 +128,7 @@ public:
         }
 
         qp_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_position_variance;
-        qn_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_velocity_variance;
+        qn_ = Eigen::VectorXd::Ones(jnames_.size());
 
         // Initialize state vectors
         q_.setZero(pmodel_->nq);
@@ -196,6 +195,22 @@ public:
         mapJointNamesIDs(qmap, qdotmap);
         pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
         pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
+    }
+
+    /**
+     * @brief Sets the joint position variance
+     * @param joint_position_variance Joint position variance
+     */
+    void setJointPositionVariance(const double joint_position_variance) {
+        qp_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_position_variance;
+    }
+
+    /**
+     * @brief Sets the joint velocity variance
+     * @param joint_velocity_variance Joint velocity variance
+     */
+    void setJointVelocityVariance(const double joint_velocity_variance) {
+        qn_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_velocity_variance;
     }
 
     /**

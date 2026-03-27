@@ -351,8 +351,6 @@ private:
     double last_odom_timestamp_{-1.0};
     std::vector<double> coeffs_joint_;
     std::vector<double> coeffs_imu_;
-    /// @brief Model file path
-    std::string model_filepath_{""};
 
     /// @brief Logs the measurements
     /// @param imu IMU measurement

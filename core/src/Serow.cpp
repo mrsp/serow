@@ -308,8 +308,8 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     }
 
-    model_filepath_ = findFilepath(model_path);
-    if (model_filepath_.empty()) {
+    const std::string model_filepath = findFilepath(model_path);
+    if (model_filepath.empty()) {
         std::cerr << RED_COLOR << "Cofiguration: Model file '" << model_path << "' not found!"
                   << WHITE_COLOR << std::endl;
         return false;
@@ -445,21 +445,23 @@ bool Serow::initialize(const std::string& config_file) {
     coeffs_imu_ = computeSGCoefficients(M_imu);
 
     // Ensure kinematic estimator exists before reset() initializes mass/CoM filter.
+    try {
+        kinematic_estimator_ =
+            std::make_unique<RobotKinematics>(model_filepath, params_.joint_position_variance);
+    } catch (const std::exception& e) {
+        std::cerr << RED_COLOR << "Failed to create kinematic estimator: " << e.what()
+                  << WHITE_COLOR << std::endl;
+    } catch (...) {
+        std::cerr << RED_COLOR << "Unknown error occurred while creating kinematic estimator"
+                  << WHITE_COLOR << std::endl;
+    }
+
     if (!kinematic_estimator_) {
-        try {
-            const double joint_velocity_variance_fallback =
-                params_.joint_velocity_variance.value_or(params_.joint_position_variance);
-            kinematic_estimator_ = std::make_unique<RobotKinematics>(
-                model_filepath_, params_.joint_position_variance, joint_velocity_variance_fallback);
-        } catch (const std::exception& e) {
-            std::cerr << RED_COLOR << "Failed to create kinematic estimator: " << e.what()
-                      << WHITE_COLOR << std::endl;
-            return false;
-        } catch (...) {
-            std::cerr << RED_COLOR << "Unknown error occurred while creating kinematic estimator"
-                      << WHITE_COLOR << std::endl;
-            return false;
-        }
+        throw std::runtime_error("Failed to create kinematic estimator");
+    }
+
+    if (params_.joint_velocity_variance.has_value()) {
+        kinematic_estimator_->setJointVelocityVariance(params_.joint_velocity_variance.value());
     }
 
     reset();
@@ -587,9 +589,12 @@ void Serow::runJointsEstimator(State& state,
                 Eigen::Matrix<double, 1, 1>(params_.joint_position_variance), value.timestamp)(0);
             if (!params_.joint_velocity_variance) {
                 params_.joint_velocity_variance = joint_estimators_.at(key).getCovariance()(0, 0);
+                kinematic_estimator_->setJointVelocityVariance(
+                    params_.joint_velocity_variance.value());
             }
         }
     }
+
     state.joint_state_.timestamp = joint_timestamp;
     state.joint_state_.joints_position = std::move(joints_position);
     state.joint_state_.joints_velocity = std::move(joints_velocity);
@@ -1310,22 +1315,6 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
 
     // Update the kinematic structure
     timers_["forward-kinematics"].start();
-    if (!kinematic_estimator_) {
-        try {
-            kinematic_estimator_ =
-                std::make_unique<RobotKinematics>(model_filepath_, params_.joint_position_variance,
-                                                  params_.joint_velocity_variance.value());
-        } catch (const std::exception& e) {
-            std::cerr << RED_COLOR << "Failed to create kinematic estimator: " << e.what()
-                      << WHITE_COLOR << std::endl;
-            return false;
-        } catch (...) {
-            std::cerr << RED_COLOR << "Unknown error occurred while creating kinematic estimator"
-                      << WHITE_COLOR << std::endl;
-            return false;
-        }
-    }
-
     KinematicMeasurement kin = runForwardKinematics(state_);
     timers_["forward-kinematics"].stop();
 
@@ -1571,8 +1560,6 @@ void Serow::reset() {
             "Mass cannot be computed from the model file, check the robot's model file");
     }
 
-    kinematic_estimator_.reset();
-
     // Terminate logging threads
     stopLogging();
 }
@@ -1630,24 +1617,6 @@ Serow::processMeasurements(
     runImuEstimator(state_, imu);
 
     // Update the kinematic structure
-    if (!kinematic_estimator_) {
-        try {
-            kinematic_estimator_ =
-                std::make_unique<RobotKinematics>(model_filepath_, params_.joint_position_variance,
-                                                  params_.joint_velocity_variance.value());
-        } catch (const std::exception& e) {
-            std::cerr << RED_COLOR << "Failed to create kinematic estimator: " << e.what()
-                      << WHITE_COLOR << std::endl;
-            return std::make_tuple(ImuMeasurement{}, KinematicMeasurement{},
-                                   std::map<std::string, ForceTorqueMeasurement>{});
-        } catch (...) {
-            std::cerr << RED_COLOR << "Unknown error occurred while creating kinematic estimator"
-                      << WHITE_COLOR << std::endl;
-            return std::make_tuple(ImuMeasurement{}, KinematicMeasurement{},
-                                   std::map<std::string, ForceTorqueMeasurement>{});
-        }
-    }
-
     KinematicMeasurement kin = runForwardKinematics(state_);
     // filter() uses timestamp_ instead which is not set here
     kin.timestamp = joints.begin()->second.timestamp;
