@@ -84,14 +84,14 @@ void LegOdometry::computeIMP(const double timestamp, const std::string& frame,
     params_.Tm3 = (params_.mass * params_.mass * params_.g * params_.g) * params_.Tm2;
 
     A.noalias() = 1.0 / params_.Tm2 * Eigen::Matrix3d::Identity();
-    A.noalias() -= params_.alpha1 * omega_skew * omega_skew;
+    A -= params_.alpha1 * omega_skew * omega_skew;
     b.noalias() = 1.0 / params_.Tm2 * pivots_.at(frame);
-    b.noalias() += params_.alpha1 * omega_skew * R.transpose() * linear_velocity;
+    b += params_.alpha1 * omega_skew * R.transpose() * linear_velocity;
 
     if (params_.alpha3 > 0 && torque.has_value() && force_torque_offset_.has_value()) {
         const Eigen::Vector3d torque_foot = R.transpose() * torque.value();
-        A.noalias() -= params_.alpha3 / params_.Tm3 * force_skew * force_skew;
-        b.noalias() += params_.alpha3 / params_.Tm3 *
+        A -= params_.alpha3 / params_.Tm3 * force_skew * force_skew;
+        b += params_.alpha3 / params_.Tm3 *
             (force_skew * torque_foot - force_skew * force_skew * force_torque_offset_->at(frame));
     }
 
@@ -213,7 +213,7 @@ void LegOdometry::estimate(
     // Estimate base linear velocity using the derivative estimator
     base_linear_velocity_ = base_linear_velocity_estimator_->filter(
         base_position_, base_linear_velocity_cov.diagonal() * dt * dt, timestamp);
-    base_linear_velocity_cov_ = base_linear_velocity_estimator_->getCovariance();
+    base_linear_velocity_cov_ = base_linear_velocity_estimator_->getCovariance().asDiagonal();
     timestamp_ = timestamp;
 }
 

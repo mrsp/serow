@@ -113,7 +113,7 @@ public:
      * @brief Gets the covariance of the derivative.
      * @return The covariance of the derivative.
      */
-    Eigen::MatrixXd getCovariance() const;
+    const Eigen::VectorXd& getCovariance() const;
 
     /**
      * @brief Estimates the derivative of a measurement.

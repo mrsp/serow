@@ -64,7 +64,7 @@ public:
     /// they will be estimated from the corresponding F/T measurement
     /// @param base_pose_ground_truth optional ground truth base pose measurement for logging
     /// @return true if the filter was successful
-    bool filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+    bool filter(ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
                 std::optional<std::map<std::string, ForceTorqueMeasurement>> ft = std::nullopt,
                 std::optional<OdometryMeasurement> odom = std::nullopt,
                 std::optional<std::map<std::string, ContactMeasurement>> contact_probabilities =
@@ -111,7 +111,7 @@ public:
     /// @return tuple containing the IMU, kinematic, and force/torque measurements
     std::tuple<ImuMeasurement, KinematicMeasurement, std::map<std::string, ForceTorqueMeasurement>>
     processMeasurements(
-        ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+        ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
         std::optional<std::map<std::string, ForceTorqueMeasurement>> force_torque,
         std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
 
@@ -357,9 +357,11 @@ private:
     /// @param joints joint measurements
     /// @param ft force/torque measurements
     /// @param base_pose_ground_truth ground truth base pose
-    void logMeasurements(ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
-                         std::map<std::string, ForceTorqueMeasurement> ft,
-                         std::optional<BasePoseGroundTruth> base_pose_ground_truth = std::nullopt);
+    void logMeasurements(const ImuMeasurement& imu,
+                         const std::map<std::string, JointMeasurement>& joints,
+                         const std::map<std::string, ForceTorqueMeasurement>& ft,
+                         const std::optional<BasePoseGroundTruth>& base_pose_ground_truth =
+                             std::nullopt);
 
     /// @brief Runs all the joint estimators to estimate the joint positions and velocities
     /// @param state the state of the robot
@@ -410,7 +412,7 @@ private:
     /// @param kin kinematic measurements
     /// @param ft force/torque measurements
     void runCoMEstimator(State& state, KinematicMeasurement& kin,
-                         std::map<std::string, ForceTorqueMeasurement> ft);
+                         const std::map<std::string, ForceTorqueMeasurement>& ft);
 
     /// @brief Computes the frame transformations for all frames in the robot model
     /// @param state the state of the robot

@@ -31,7 +31,7 @@ void ButterworthLPF::reset() {
     x_pp_ = 0;
 
     if (verbose_) {
-        std::cout << name_ << " Low-pass Butterworth filter reset" << std::endl;
+        std::cout << name_ << " Low-pass Butterworth filter reset" << '\n';
     }
 }
 
@@ -44,12 +44,12 @@ ButterworthLPF::ButterworthLPF(std::string name, double f_sampling, double f_cut
     b2_ = b0_;
     a1_ = 2.0 * (ita * ita - 1.0) * b0_;
     a2_ = -(1.0 - q * ita + ita * ita) * b0_;
-    name_ = name;
+    name_ = std::move(name);
     a_ = (2.0 * 3.14159265359 * ff) / (2.0 * 3.14159265359 * ff + 1.0);
     verbose_ = verbose;
 
     if (verbose_) {
-        std::cout << name << " Low-pass Butterworth filter initialized" << std::endl;
+        std::cout << name << " Low-pass Butterworth filter initialized" << '\n';
     }
 }
 

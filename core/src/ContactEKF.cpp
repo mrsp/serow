@@ -67,7 +67,7 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
 
     verbose_ = verbose;
     if (verbose) {
-        std::cout << "[SEROW/ContactEKF]: Initialized successfully" << std::endl;
+        std::cout << "[SEROW/ContactEKF]: Initialized successfully" << '\n';
     }
 }
 
@@ -83,13 +83,14 @@ void ContactEKF::setState(const BaseState& state) {
     last_imu_timestamp_ = state.timestamp;
 }
 
-std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> ContactEKF::computePredictionJacobians(
-    const BaseState& state, Eigen::Vector3d angular_velocity) {
+std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 12>>
+ContactEKF::computePredictionJacobians(const BaseState& state, Eigen::Vector3d angular_velocity) {
     angular_velocity -= state.imu_angular_velocity_bias;
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
     const Eigen::Vector3d v = state.base_local_linear_velocity;
 
-    Eigen::MatrixXd Ac(num_states_, num_states_), Lc(num_states_, num_inputs_);
+    Eigen::Matrix<double, 15, 15> Ac;
+    Eigen::Matrix<double, 15, 12> Lc;
     Lc = Lc_;
     Lc(v_idx_, ng_idx_) = -lie::so3::wedge(v);
 
@@ -115,14 +116,14 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu) {
     if (dt < 0.0) {
         std::cout << "[SEROW/ContactEKF]: Predict step sample time is negative " << dt
                   << " while the nominal sample time is " << nominal_dt_
-                  << " returning without updating the state" << std::endl;
+                  << " returning without updating the state" << '\n';
         return;
     }
     if (dt < nominal_dt_ / 2) {
         if (verbose_) {
             std::cout << "[SEROW/ContactEKF]: Predict step sample time is abnormal " << dt
                       << " while the nominal sample time is " << nominal_dt_
-                      << " setting to nominal" << std::endl;
+                      << " setting to nominal" << '\n';
         }
         dt = nominal_dt_;
     }
@@ -130,9 +131,9 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu) {
     // Compute the state and input-state Jacobians
     const auto& [Ac, Lc] = computePredictionJacobians(state, imu.angular_velocity);
     // Euler Discretization - First order Truncation
-    const Eigen::MatrixXd Ad = I_ + Ac * dt;
+    const Eigen::Matrix<double, 15, 15> Ad = I_ + Ac * dt;
 
-    Eigen::MatrixXd Qc = Eigen::MatrixXd::Zero(num_inputs_, num_inputs_);
+    Eigen::Matrix<double, 12, 12> Qc = Eigen::Matrix<double, 12, 12>::Zero();
     // Covariance Q with full state + biases
     Qc(ng_idx_, ng_idx_) = imu.angular_velocity_cov;
     Qc(na_idx_, na_idx_) = imu.linear_acceleration_cov;
@@ -141,8 +142,11 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu) {
 
     // Predict the state error covariance
     // First-order discrete-time process noise with Euler integration
-    const Eigen::MatrixXd Qd = Lc * Qc * Lc.transpose() * dt;
-    P_ = Ad * P_ * Ad.transpose() + Qd;
+    const Eigen::Matrix<double, 15, 15> Qd = Lc * Qc * Lc.transpose() * dt;
+    Eigen::Matrix<double, 15, 15> P_new;
+    P_new.noalias() = Ad * P_ * Ad.transpose();
+    P_new += Qd;
+    P_ = P_new;
 
     // Predict the state
     computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration);
@@ -190,32 +194,33 @@ void ContactEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& bas
     const Eigen::Quaterniond bo = first_odometry_orientation_.value() * base_orientation;
 
     // Construct the linearized measurement matrix H
-    Eigen::MatrixXd H(6, num_states_);
+    Eigen::Matrix<double, 6, 15> H;
     H.setZero();
     H.block(0, p_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
     H.block(3, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
     // RESKF update
     base_position_outlier_detector.init();
-    Eigen::MatrixXd P_i = P_;
+    Eigen::Matrix<double, 15, 15> P_i = P_;
     BaseState updated_state_i = state;
-    Eigen::VectorXd z(6);
+    Eigen::Matrix<double, 6, 1> z;
     z.setZero();
     z.head(3) = bp - state.base_position;
     z.tail(3) = lie::so3::minus(bo, state.base_orientation);
 
-    const Eigen::MatrixXd PH_transpose = P_ * H.transpose();
-    Eigen::MatrixXd R = Eigen::Matrix<double, 6, 6>::Zero();
+    const Eigen::Matrix<double, 15, 6> PH_transpose = P_ * H.transpose();
+    Eigen::Matrix<double, 6, 6> R = Eigen::Matrix<double, 6, 6>::Zero();
     R.bottomRightCorner<3, 3>() = base_orientation_cov;
     const Eigen::Matrix3d bb = bp * bp.transpose();
     for (size_t i = 0; i < base_position_outlier_detector.iters; i++) {
         if (base_position_outlier_detector.zeta > base_position_outlier_detector.threshold) {
             const Eigen::Matrix3d R_z = base_position_cov / base_position_outlier_detector.zeta;
             R.topLeftCorner<3, 3>() = R_z;
-            const Eigen::MatrixXd s = R + H * PH_transpose;
-            const Eigen::MatrixXd K = PH_transpose * s.inverse();
-            const Eigen::VectorXd dx = K * z;
-            const Eigen::MatrixXd IKH = I_ - K * H;
+            const Eigen::Matrix<double, 6, 6> s = R + H * PH_transpose;
+            const Eigen::Matrix<double, 15, 6> K =
+                s.ldlt().solve(PH_transpose.transpose()).transpose();
+            const Eigen::Matrix<double, 15, 1> dx = K * z;
+            const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
             P_i = IKH * P_ * IKH.transpose() + K * R * K.transpose();
             updated_state_i = updateStateCopy(state, dx, P_);
 
@@ -232,8 +237,8 @@ void ContactEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& bas
         }
     }
 
-    P_ = std::move(P_i);
-    state = std::move(updated_state_i);
+    P_ = P_i;
+    state = updated_state_i;
 }
 
 void ContactEKF::updateWithTerrain(
@@ -244,16 +249,10 @@ void ContactEKF::updateWithTerrain(
     const Eigen::Vector3d p_world_to_base = state.base_position;
     const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
 
-    // Initialize the innovation vector z, the linearized measurement matrix H, and the measurement
-    // noise matrix R
-    Eigen::VectorXd z(1);
-    Eigen::MatrixXd H(1, num_states_);
-    Eigen::MatrixXd R(1, 1);
-    Eigen::MatrixXd PH_transpose(num_states_, 1);
+    Eigen::Matrix<double, 1, 15> H;
+    Eigen::Matrix<double, 15, 1> PH_transpose;
 
     for (const auto& [cf, cp] : contacts_probability) {
-        // Update only when the elevation at the contact points is available and updated in the
-        // map
         if (cp > 0.5) {
             const Eigen::Vector3d con_pos_world =
                 R_world_to_base * contacts_position.at(cf) + p_world_to_base;
@@ -266,35 +265,36 @@ void ContactEKF::updateWithTerrain(
 
                 // Construct the linearized measurement matrix H
                 H.setZero();
-                // dh/dp_z
-                H(0, p_idx_[2]) = 1.0;
-
                 // dh/d_chi = [0, 0, 1] * (-R * skew(p_contact_body))
+                H(0, p_idx_[2]) = 1.0;
                 // const Eigen::Matrix3d skew_cp = lie::so3::wedge(contacts_position.at(cf));
                 // H.block(0, r_idx_[0], 1, 3) = -(R_world_to_base * skew_cp).row(2);
 
-                // Compute innovation
-                z(0) = static_cast<double>(elevation.value().height) - con_pos_world.z();
+                const double z_val =
+                    static_cast<double>(elevation.value().height) - con_pos_world.z();
 
-                // Construct the measurement noise matrix R
-                R(0, 0) =
+                const double R_val =
                     (static_cast<double>(elevation.value().variance + con_cov_world(2, 2)) + 1e-6) /
                     cp;
 
                 PH_transpose.noalias() = P_ * H.transpose();
-                const Eigen::MatrixXd s = R + H * PH_transpose;
-                const Eigen::MatrixXd K = PH_transpose * s.inverse();
-                const Eigen::VectorXd dx = K * z;
-                const Eigen::MatrixXd IKH = I_ - K * H;
-                P_ = IKH * P_ * IKH.transpose() + K * R * K.transpose();
+                const double s = R_val + (H * PH_transpose)(0, 0);
+                const Eigen::Matrix<double, 15, 1> K = PH_transpose / s;
+                const Eigen::Matrix<double, 15, 1> dx = K * z_val;
+                const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
+                Eigen::Matrix<double, 15, 15> P_new;
+                P_new.noalias() = IKH * P_ * IKH.transpose();
+                P_new += K * R_val * K.transpose();
+                P_ = P_new;
                 updateState(state, dx, P_);
             }
         }
     }
 }
 
-BaseState ContactEKF::updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
-                                      const Eigen::MatrixXd& P) const {
+BaseState ContactEKF::updateStateCopy(const BaseState& state,
+                                      const Eigen::Matrix<double, 15, 1>& dx,
+                                      const Eigen::Matrix<double, 15, 15>& P) const {
     BaseState updated_state = state;
     updated_state.base_position += dx(p_idx_);
     updated_state.base_position_cov = P(p_idx_, p_idx_);
@@ -313,8 +313,8 @@ BaseState ContactEKF::updateStateCopy(const BaseState& state, const Eigen::Vecto
     return updated_state;
 }
 
-void ContactEKF::updateState(BaseState& state, const Eigen::VectorXd& dx,
-                             const Eigen::MatrixXd& P) const {
+void ContactEKF::updateState(BaseState& state, const Eigen::Matrix<double, 15, 1>& dx,
+                             const Eigen::Matrix<double, 15, 15>& P) const {
     state.base_position += dx(p_idx_);
     state.base_position_cov = P(p_idx_, p_idx_);
     state.base_orientation =
@@ -335,11 +335,11 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                         std::shared_ptr<TerrainElevation> terrain_estimator) {
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
+        Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
+        T_world_to_base.translation() = state.base_position;
+        T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
         for (const auto& [cf, cp] : kin.contacts_probability) {
             if (cp > terrain_estimator->getMinContactProbability()) {
-                Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
-                T_world_to_base.translation() = state.base_position;
-                T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
                 const Eigen::Vector3d con_pos_world =
                     T_world_to_base * kin.contacts_position.at(cf);
                 const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_world.x()),
@@ -387,7 +387,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                     std::cout << "Contact for " << cf
                               << " is not inside the terrain elevation map and thus height is not "
                                  "updated "
-                              << std::endl;
+                              << '\n';
                 } else {
                     if (kin.is_new_contact.count(cf) > 0 && kin.is_new_contact.at(cf)) {
                         terrain_estimator->addContactPoint(con_pos_xy);
@@ -458,24 +458,24 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
 void ContactEKF::updateWithIMUOrientation(BaseState& state,
                                           const Eigen::Quaterniond& imu_orientation,
                                           const Eigen::Matrix3d& imu_orientation_cov) {
-    // Construct the linearized measurement matrix H
-    Eigen::MatrixXd H;
-    H.setZero(3, num_states_);
+    Eigen::Matrix<double, 3, 15> H;
+    H.setZero();
     H.block(0, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
-    // Construct the innovation vector z
     const Eigen::Vector3d z = lie::so3::minus(imu_orientation, state.base_orientation);
 
-    // Construct the measurement noise matrix R
     const Eigen::Matrix3d& R = imu_orientation_cov;
 
-    const Eigen::MatrixXd PH_transpose = P_ * H.transpose();
+    const Eigen::Matrix<double, 15, 3> PH_transpose = P_ * H.transpose();
     const Eigen::Matrix3d s = R + H * PH_transpose;
-    const Eigen::MatrixXd K = PH_transpose * s.inverse();
-    const Eigen::VectorXd dx = K * z;
+    const Eigen::Matrix<double, 15, 3> K = s.ldlt().solve(PH_transpose.transpose()).transpose();
+    const Eigen::Matrix<double, 15, 1> dx = K * z;
 
-    const Eigen::MatrixXd IKH = I_ - K * H;
-    P_ = IKH * P_ * IKH.transpose() + K * R * K.transpose();
+    const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
+    Eigen::Matrix<double, 15, 15> P_new;
+    P_new.noalias() = IKH * P_ * IKH.transpose();
+    P_new += K * R * K.transpose();
+    P_ = P_new;
     updateState(state, dx, P_);
 }
 
@@ -483,30 +483,26 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state,
                                               const Eigen::Vector3d& base_linear_velocity,
                                               const Eigen::Matrix3d& base_linear_velocity_cov) {
     const int num_iter = 5;
-    Eigen::MatrixXd H(3, num_states_);
+    Eigen::Matrix<double, 3, 15> H;
     H.setZero();
-    Eigen::MatrixXd K(num_states_, 3);
-    Eigen::MatrixXd PH_transpose(num_states_, 3);
+    Eigen::Matrix<double, 15, 3> K;
+    Eigen::Matrix<double, 15, 3> PH_transpose;
     Eigen::Matrix3d s;
 
     // Iterative ESKF update
     for (size_t iter = 0; iter < num_iter; iter++) {
-        // Construct the linearized measurement matrix H around the current state estimate
         const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
         const Eigen::Vector3d v = state.base_local_linear_velocity;
         H.block(0, v_idx_[0], 3, 3) = R;
         H.block(0, r_idx_[0], 3, 3) = -R * lie::so3::wedge(v);
 
-        // Construct the innovation vector z
         const Eigen::Vector3d z = base_linear_velocity - R * state.base_local_linear_velocity;
 
-        // Compute the Kalman gain with the current linearization
         PH_transpose.noalias() = P_ * H.transpose();
         s.noalias() = base_linear_velocity_cov + H * PH_transpose;
-        K.noalias() = PH_transpose * s.inverse();
-        const Eigen::VectorXd dx = K * z;
+        K = s.ldlt().solve(PH_transpose.transpose()).transpose();
+        const Eigen::Matrix<double, 15, 1> dx = K * z;
 
-        // Update only the state estimate (not the covariance) during iterations
         state.base_position += dx(p_idx_);
         state.base_orientation =
             Eigen::Quaterniond(
@@ -520,9 +516,12 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state,
         }
     }
 
-    // Update the covariance once after convergence using the Joseph form for numerical stability
-    const Eigen::MatrixXd IKH = I_ - K * H;
-    P_ = IKH * P_ * IKH.transpose() + K * base_linear_velocity_cov * K.transpose();
+    // Joseph form for numerical stability
+    const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
+    Eigen::Matrix<double, 15, 15> P_new;
+    P_new.noalias() = IKH * P_ * IKH.transpose();
+    P_new += K * base_linear_velocity_cov * K.transpose();
+    P_ = P_new;
 
     // Update state covariances with the final P_
     state.base_position_cov = P_(p_idx_, p_idx_);

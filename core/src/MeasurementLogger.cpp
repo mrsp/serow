@@ -60,7 +60,7 @@ public:
             initializeSchemas();
             initializeChannels();
         } catch (const std::exception& e) {
-            std::cerr << "ProprioceptionLogger initialization error: " << e.what() << std::endl;
+            std::cerr << "ProprioceptionLogger initialization error: " << e.what() << '\n';
             throw;
         }
     }
@@ -71,7 +71,7 @@ public:
                 writer_->close();
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error closing MCAP writer: " << e.what() << std::endl;
+            std::cerr << "Error closing MCAP writer: " << e.what() << '\n';
         }
     }
 
@@ -94,7 +94,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/MeasurementLogger]: IMU Timestamp is negative " << timestamp
-                          << " returning without logging" << std::endl;
+                          << " returning without logging" << '\n';
                 return;
             }
 
@@ -202,7 +202,7 @@ public:
             writeMessage(1, imu_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
                          size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
+            std::cerr << "Error logging IMU measurement: " << e.what() << '\n';
         }
     }
 
@@ -216,7 +216,7 @@ public:
     //         const double timestamp = kinematic_measurement.timestamp - start_time_.value();
 
     //         if (timestamp < 0) {
-    //             std::cerr << "Timestamp is negative: " << timestamp << std::endl;
+    //             std::cerr << "Timestamp is negative: " << timestamp << '\n';
     //             return;
     //         }
 
@@ -471,7 +471,7 @@ public:
     //         writeMessage(2, kin_sequence_++, timestamp,
     //                      reinterpret_cast<const std::byte*>(buffer), size);
     //     } catch (const std::exception& e) {
-    //         std::cerr << "Error logging Kinematic Measurement: " << e.what() << std::endl;
+    //         std::cerr << "Error logging Kinematic Measurement: " << e.what() << '\n';
     //     }
     // }
 
@@ -487,7 +487,7 @@ public:
             if (timestamp < 0) {
                 std::cout
                     << "[SEROW/MeasurementLogger]: Base Pose Ground Truth Timestamp is negative "
-                    << timestamp << " returning without logging" << std::endl;
+                    << timestamp << " returning without logging" << '\n';
                 return;
             }
 
@@ -530,7 +530,7 @@ public:
             writeMessage(4, base_pose_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging base pose ground truth: " << e.what() << std::endl;
+            std::cerr << "Error logging base pose ground truth: " << e.what() << '\n';
         }
     }
 
@@ -545,7 +545,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/MeasurementLogger]: Joint Measurements Timestamp is negative "
-                          << timestamp << " returning without logging" << std::endl;
+                          << timestamp << " returning without logging" << '\n';
                 return;
             }
 
@@ -596,7 +596,7 @@ public:
             writeMessage(2, joints_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging joint measurement: " << e.what() << std::endl;
+            std::cerr << "Error logging joint measurement: " << e.what() << '\n';
         }
     }
 
@@ -611,7 +611,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/MeasurementLogger]: Force Torque Timestamp is negative "
-                          << timestamp << " returning without logging" << std::endl;
+                          << timestamp << " returning without logging" << '\n';
                 return;
             }
 
@@ -665,7 +665,7 @@ public:
             writeMessage(3, ft_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
                          size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging force torque measurement: " << e.what() << std::endl;
+            std::cerr << "Error logging force torque measurement: " << e.what() << '\n';
         }
     }
 
@@ -708,10 +708,10 @@ private:
             auto status = writer_->write(message);
             if (status.code != mcap::StatusCode::Success) {
                 std::cerr << "Failed to write message for channel " << channel_id << ": "
-                          << status.message << std::endl;
+                          << status.message << '\n';
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error in writeMessage: " << e.what() << std::endl;
+            std::cerr << "Error in writeMessage: " << e.what() << '\n';
         }
     }
 

@@ -168,8 +168,8 @@ private:
      * @param angular_velocity Angular velocity measurements.
      * @return Tuple containing prediction Jacobians (state transition and input models).
      */
-    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> computePredictionJacobians(
-        const BaseState& state, Eigen::Vector3d angular_velocity);
+    std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 12>>
+    computePredictionJacobians(const BaseState& state, Eigen::Vector3d angular_velocity);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
@@ -205,7 +205,8 @@ private:
      * @param dx State change vector.
      * @param P Covariance matrix of the state change.
      */
-    void updateState(BaseState& state, const Eigen::VectorXd& dx, const Eigen::MatrixXd& P) const;
+    void updateState(BaseState& state, const Eigen::Matrix<double, 15, 1>& dx,
+                     const Eigen::Matrix<double, 15, 15>& P) const;
 
     /**
      * @brief Updates a copy of the robot's state with the provided state change and covariance
@@ -215,8 +216,8 @@ private:
      * @param P Covariance matrix of the state change.
      * @return Updated state after applying the state change.
      */
-    BaseState updateStateCopy(const BaseState& state, const Eigen::VectorXd& dx,
-                              const Eigen::MatrixXd& P) const;
+    BaseState updateStateCopy(const BaseState& state, const Eigen::Matrix<double, 15, 1>& dx,
+                              const Eigen::Matrix<double, 15, 15>& P) const;
 };
 
 }  // namespace serow

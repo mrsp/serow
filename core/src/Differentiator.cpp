@@ -22,7 +22,7 @@ Differentiator::Differentiator(const std::string& name, double dt, bool verbose)
     verbose_ = verbose;
 
     if (verbose) {
-        std::cout << name_ << " Finite Differentiator Initialized Successfully" << std::endl;
+        std::cout << name_ << " Finite Differentiator Initialized Successfully" << '\n';
     }
 }
 
@@ -31,7 +31,7 @@ double Differentiator::filter(double x, double dt) {
         if (verbose_) {
             std::cout << "[SEROW/Differentiator] " << name_ << ": Sample time is abnormal " << dt
                       << " while the nominal sample time is " << dt_ << " setting to nominal"
-                      << std::endl;
+                      << '\n';
         }
         dt = dt_;
     }
@@ -53,7 +53,7 @@ void Differentiator::reset() {
     firstrun_ = true;
 
     if (verbose_) {
-        std::cout << name_ << "Finite Differentiator Reseted Successfully" << std::endl;
+        std::cout << name_ << "Finite Differentiator Reseted Successfully" << '\n';
     }
 }
 

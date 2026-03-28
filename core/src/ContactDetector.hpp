@@ -46,7 +46,7 @@ public:
      */
     ContactDetector(std::string contact_frame, double mass, double g, int median_window = 11) {
         contact_force_ = 0.0;
-        contact_frame_ = contact_frame;
+        contact_frame_ = std::move(contact_frame);
         mass_ = mass;
         g_ = g;
         mdf_ = std::make_unique<MovingMedianFilter>(median_window);
@@ -64,7 +64,7 @@ public:
      * @brief Returns the filtered vertical ground reaction force.
      * @return Filtered vertical ground reaction force in Newtons (N).
      */
-    double getContactForce() {
+    double getContactForce() const {
         return contact_force_;
     }
 
@@ -72,7 +72,7 @@ public:
      * @brief Returns the contact frame name where filtering is done.
      * @return The name of the contact frame e.g., "l_foot_frame".
      */
-    std::string getContactFrame() {
+    const std::string& getContactFrame() const {
         return contact_frame_;
     }
 

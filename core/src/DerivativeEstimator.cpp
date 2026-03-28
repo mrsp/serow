@@ -60,7 +60,7 @@ void DerivativeEstimator::reset() {
     initialized_ = false;
 
     if (verbose_) {
-        std::cout << name_ << " estimator reset" << std::endl;
+        std::cout << name_ << " estimator reset" << '\n';
     }
 }
 
@@ -115,8 +115,8 @@ Eigen::VectorXd DerivativeEstimator::filter(const Eigen::VectorXd& measurement,
     return x_dot_;
 }
 
-Eigen::MatrixXd DerivativeEstimator::getCovariance() const {
-    return x_dot_cov_.asDiagonal();
+const Eigen::VectorXd& DerivativeEstimator::getCovariance() const {
+    return x_dot_cov_;
 }
 
 }  // namespace serow

@@ -50,7 +50,7 @@ void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
 
     if (dt < 0.0) {
         std::cerr << "[CoMEKF]: Predict step sample time is negative (" << dt << "), nominal is "
-                  << nominal_dt_ << "; skipping predict" << std::endl;
+                  << nominal_dt_ << "; skipping predict" << '\n';
         return;
     }
 
@@ -69,7 +69,10 @@ void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
 
     // Euler Discretization - First order Truncation
     const Eigen::Matrix<double, 9, 9> Ad = I_ + Ac * dt;
-    P_ = Ad * P_ * Ad.transpose() + Lc * Qd * Lc.transpose() * dt;
+    Eigen::Matrix<double, 9, 9> P_new;
+    P_new.noalias() = Ad * P_ * Ad.transpose();
+    P_new += Lc * Qd * Lc.transpose() * dt;
+    P_ = P_new;
 
     // Propagate the mean estimate, forward euler integration of dynamics f
     const Eigen::Matrix<double, 9, 1> f =
@@ -99,7 +102,7 @@ Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(
     double den = state.com_position.z() - cop_position.z();
     if (std::abs(den) < 1e-6) {
         std::cerr << "[CoMEKF]: CoM and COP height difference too small (" << den
-                  << "), clamping to safe value" << std::endl;
+                  << "), clamping to safe value" << '\n';
         den = 1e-6;
     }
 
@@ -178,9 +181,14 @@ void CoMEKF::updateWithCoMAcceleration(CentroidalState& state,
 
     const Eigen::Matrix3d& R = com_linear_acceleration_cov;
     const Eigen::Matrix3d s = R + H * P_ * H.transpose();
-    const Eigen::Matrix<double, 9, 3> K = P_ * H.transpose() * s.inverse();
+    const Eigen::Matrix<double, 9, 3> K =
+        s.ldlt().solve((P_ * H.transpose()).transpose()).transpose();
     const Eigen::Matrix<double, 9, 1> dx = K * z;
-    P_ = (I_ - K * H) * P_ * (I_ - K * H).transpose() + K * R * K.transpose();
+    const Eigen::Matrix<double, 9, 9> IKH = I_ - K * H;
+    Eigen::Matrix<double, 9, 9> P_new;
+    P_new.noalias() = IKH * P_ * IKH.transpose();
+    P_new += K * R * K.transpose();
+    P_ = P_new;
     updateState(state, dx, P_);
 }
 
@@ -192,9 +200,14 @@ void CoMEKF::updateWithCoMPosition(CentroidalState& state, const Eigen::Vector3d
 
     const Eigen::Matrix3d& R = com_position_cov;
     const Eigen::Matrix3d s = R + H * P_ * H.transpose();
-    const Eigen::Matrix<double, 9, 3> K = P_ * H.transpose() * s.inverse();
+    const Eigen::Matrix<double, 9, 3> K =
+        s.ldlt().solve((P_ * H.transpose()).transpose()).transpose();
     const Eigen::Matrix<double, 9, 1> dx = K * z;
-    P_ = (I_ - K * H) * P_ * (I_ - K * H).transpose() + K * R * K.transpose();
+    const Eigen::Matrix<double, 9, 9> IKH = I_ - K * H;
+    Eigen::Matrix<double, 9, 9> P_new;
+    P_new.noalias() = IKH * P_ * IKH.transpose();
+    P_new += K * R * K.transpose();
+    P_ = P_new;
     updateState(state, dx, P_);
 }
 

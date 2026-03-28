@@ -50,7 +50,7 @@ void OutlierDetector::estimate(const Eigen::Matrix3d& BetaT, const Eigen::Matrix
     double lnp = computePsi(e_t) - efpsi;
     double ln1_p = computePsi(f_t) - efpsi;
 
-    double pzeta_1 = std::exp(lnp - 0.5 * (BetaT * R.inverse()).trace());
+    double pzeta_1 = std::exp(lnp - 0.5 * R.ldlt().solve(BetaT).trace());
     double pzeta_0 = std::exp(ln1_p);
 
     // Normalization factor

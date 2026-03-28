@@ -62,7 +62,7 @@ public:
             initializeSchemas();
             initializeChannels();
         } catch (const std::exception& e) {
-            std::cerr << "ProprioceptionLogger initialization error: " << e.what() << std::endl;
+            std::cerr << "ProprioceptionLogger initialization error: " << e.what() << '\n';
             throw;
         }
     }
@@ -73,7 +73,7 @@ public:
                 writer_->close();
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error closing MCAP writer: " << e.what() << std::endl;
+            std::cerr << "Error closing MCAP writer: " << e.what() << '\n';
         }
     }
 
@@ -100,7 +100,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/ProprioceptionLogger]: IMU Timestamp is negative " << timestamp
-                          << " returning without logging" << std::endl;
+                          << " returning without logging" << '\n';
                 return;
             }
 
@@ -149,7 +149,7 @@ public:
             writeMessage(1, imu_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
                          size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging IMU measurement: " << e.what() << std::endl;
+            std::cerr << "Error logging IMU measurement: " << e.what() << '\n';
         }
     }
 
@@ -164,7 +164,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/ProprioceptionLogger]: Contact State Timestamp is negative "
-                          << timestamp << " returning without logging" << std::endl;
+                          << timestamp << " returning without logging" << '\n';
                 return;
             }
 
@@ -238,7 +238,7 @@ public:
             writeMessage(2, contact_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging Contact State: " << e.what() << std::endl;
+            std::cerr << "Error logging Contact State: " << e.what() << '\n';
         }
     }
 
@@ -253,7 +253,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/ProprioceptionLogger]: Centroidal State Timestamp is negative "
-                          << timestamp << " returning without logging" << std::endl;
+                          << timestamp << " returning without logging" << '\n';
                 return;
             }
 
@@ -300,7 +300,7 @@ public:
             writeMessage(3, centroidal_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging Centroidal State: " << e.what() << std::endl;
+            std::cerr << "Error logging Centroidal State: " << e.what() << '\n';
         }
     }
 
@@ -315,7 +315,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/ProprioceptionLogger]: Base State Timestamp is negative "
-                          << timestamp << " returning without logging" << std::endl;
+                          << timestamp << " returning without logging" << '\n';
                 return;
             }
 
@@ -535,7 +535,7 @@ public:
             writeMessage(4, base_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
                          size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging Base State: " << e.what() << std::endl;
+            std::cerr << "Error logging Base State: " << e.what() << '\n';
         }
     }
 
@@ -550,7 +550,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/ProprioceptionLogger]: Frame Transforms Timestamp is negative "
-                          << timestamp << " returning without logging" << std::endl;
+                          << timestamp << " returning without logging" << '\n';
                 return;
             }
 
@@ -608,7 +608,7 @@ public:
             writeMessage(5, tfs_sequence_++, timestamp, reinterpret_cast<const std::byte*>(buffer),
                          size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging feet transforms: " << e.what() << std::endl;
+            std::cerr << "Error logging feet transforms: " << e.what() << '\n';
         }
     }
 
@@ -623,7 +623,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/ProprioceptionLogger]: Joint State Timestamp is negative "
-                          << timestamp << " returning without logging" << std::endl;
+                          << timestamp << " returning without logging" << '\n';
                 return;
             }
 
@@ -675,7 +675,7 @@ public:
             writeMessage(6, joint_states_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
-            std::cerr << "Error logging joint state: " << e.what() << std::endl;
+            std::cerr << "Error logging joint state: " << e.what() << '\n';
         }
     }
 
@@ -714,10 +714,10 @@ private:
             auto status = writer_->write(message);
             if (status.code != mcap::StatusCode::Success) {
                 std::cerr << "Failed to write message for channel " << channel_id << ": "
-                          << status.message << std::endl;
+                          << status.message << '\n';
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error in writeMessage: " << e.what() << std::endl;
+            std::cerr << "Error in writeMessage: " << e.what() << '\n';
         }
     }
 

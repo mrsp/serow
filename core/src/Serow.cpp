@@ -39,7 +39,7 @@ bool Serow::initialize(const std::string& config_file) {
             return false;
         }
     } catch (const std::exception& e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
+        std::cerr << "Exception: " << e.what() << '\n';
     }
 
     auto config_file_stream = std::ifstream(config_path);
@@ -204,7 +204,7 @@ bool Serow::initialize(const std::string& config_file) {
             if (!params_.joint_velocity_variance) {
                 std::cerr << RED_COLOR
                           << "Configuration: joint_velocity_variance not found in config"
-                          << WHITE_COLOR << std::endl;
+                          << WHITE_COLOR << '\n';
                 return false;
             }
     }
@@ -304,14 +304,14 @@ bool Serow::initialize(const std::string& config_file) {
     std::string model_path;
     if (!checkConfigParam("model_path", model_path)) {
         std::cerr << RED_COLOR << "Configuration: model_path not found in config" << WHITE_COLOR
-                  << std::endl;
+                  << '\n';
         return false;
     }
 
     const std::string model_filepath = findFilepath(model_path);
     if (model_filepath.empty()) {
         std::cerr << RED_COLOR << "Cofiguration: Model file '" << model_path << "' not found!"
-                  << WHITE_COLOR << std::endl;
+                  << WHITE_COLOR << '\n';
         return false;
     }
 
@@ -450,10 +450,10 @@ bool Serow::initialize(const std::string& config_file) {
             std::make_unique<RobotKinematics>(model_filepath, params_.joint_position_variance);
     } catch (const std::exception& e) {
         std::cerr << RED_COLOR << "Failed to create kinematic estimator: " << e.what()
-                  << WHITE_COLOR << std::endl;
+                  << WHITE_COLOR << '\n';
     } catch (...) {
         std::cerr << RED_COLOR << "Unknown error occurred while creating kinematic estimator"
-                  << WHITE_COLOR << std::endl;
+                  << WHITE_COLOR << '\n';
     }
 
     if (!kinematic_estimator_) {
@@ -511,10 +511,10 @@ void Serow::initializeLogging() {
     }
 }
 
-void Serow::logMeasurements(ImuMeasurement imu,
+void Serow::logMeasurements(const ImuMeasurement& imu,
                             const std::map<std::string, JointMeasurement>& joints,
-                            std::map<std::string, ForceTorqueMeasurement> ft,
-                            std::optional<BasePoseGroundTruth> base_pose_ground_truth) {
+                            const std::map<std::string, ForceTorqueMeasurement>& ft,
+                            const std::optional<BasePoseGroundTruth>& base_pose_ground_truth) {
     if (!params_.log_measurements) {
         return;
     }
@@ -552,7 +552,7 @@ void Serow::logMeasurements(ImuMeasurement imu,
                 measurement_logger_->log(gt);
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error in measurement logging thread: " << e.what() << std::endl;
+            std::cerr << "Error in measurement logging thread: " << e.what() << '\n';
         }
     });
 }
@@ -590,7 +590,7 @@ void Serow::runJointsEstimator(State& state,
                 Eigen::Matrix<double, 1, 1>(value.position),
                 Eigen::Matrix<double, 1, 1>(params_.joint_position_variance), value.timestamp)(0);
             if (!params_.joint_velocity_variance) {
-                params_.joint_velocity_variance = joint_estimators_.at(key).getCovariance()(0, 0);
+                params_.joint_velocity_variance = joint_estimators_.at(key).getCovariance()(0);
                 kinematic_estimator_->setJointVelocityVariance(
                     params_.joint_velocity_variance.value());
             }
@@ -652,10 +652,10 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
                     state.base_state_.imu_linear_acceleration_bias = params_.bias_acc;
 
                     std::cout << "Calibration for stationary IMU finished at "
-                              << imu_calibration_cycles_ << std::endl;
-                    std::cout << "Gyrometer biases " << params_.bias_gyro.transpose() << std::endl;
+                              << imu_calibration_cycles_ << '\n';
+                    std::cout << "Gyrometer biases " << params_.bias_gyro.transpose() << '\n';
                     std::cout << "Accelerometer biases " << params_.bias_acc.transpose()
-                              << std::endl;
+                              << '\n';
                 }
             }
         }
@@ -1016,7 +1016,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
 }
 
 void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
-                            std::map<std::string, ForceTorqueMeasurement> ft) {
+                            const std::map<std::string, ForceTorqueMeasurement>& ft) {
     // Prepare CoM estimation measurements
     const Eigen::Vector3d& base_to_com_position = kinematic_estimator_->comPosition();
     // Estimate the CoM angular momentum derivative
@@ -1104,7 +1104,7 @@ void Serow::logProprioception(const State& state, const ImuMeasurement& imu) {
             proprioception_logger_->log(base_state);
             proprioception_logger_->log(frame_tfs, base_state.timestamp);
         } catch (const std::exception& e) {
-            std::cerr << "Error in proprioception logging thread: " << e.what() << std::endl;
+            std::cerr << "Error in proprioception logging thread: " << e.what() << '\n';
         }
     });
 }
@@ -1129,7 +1129,7 @@ void Serow::logExteroception(const State& state) {
             try {
                 if (!terrain_estimator || !exteroception_logger) {
                     std::cerr << "Error in exteroception logging: null pointer detected"
-                              << std::endl;
+                              << '\n';
                     return;
                 }
                 if (!exteroception_logger->isInitialized()) {
@@ -1140,7 +1140,7 @@ void Serow::logExteroception(const State& state) {
                 const double res = res_base * downsample_factor;
                 if (!(res > 0.0) || !std::isfinite(res)) {
                     std::cerr << "Error in exteroception logging: invalid resolution " << res
-                              << std::endl;
+                              << '\n';
                     return;
                 }
 
@@ -1166,7 +1166,7 @@ void Serow::logExteroception(const State& state) {
                 if (grid_size == 0 || grid_size > max_grid_size) {
                     std::cerr << "Skipping exteroception log due to unexpected grid size: "
                               << grid_size << " (w=" << width << ", h=" << height << ")"
-                              << std::endl;
+                              << '\n';
                     return;
                 }
 
@@ -1196,19 +1196,19 @@ void Serow::logExteroception(const State& state) {
                 // Verify size
                 if (elevation.size() != grid_size) {
                     std::cerr << "Grid size mismatch: expected " << grid_size << ", got "
-                              << elevation.size() << std::endl;
+                              << elevation.size() << '\n';
                     return;  // Don't log invalid data
                 }
 
                 exteroception_logger->log(elevation, variance, ts);
             } catch (const std::exception& e) {
-                std::cerr << "Error in exteroception logging thread: " << e.what() << std::endl;
+                std::cerr << "Error in exteroception logging thread: " << e.what() << '\n';
             }
         });
     }
 }
 
-bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
                    std::optional<std::map<std::string, ForceTorqueMeasurement>> force_torque,
                    std::optional<OdometryMeasurement> odom,
                    std::optional<std::map<std::string, ContactMeasurement>> contacts_probability,
@@ -1218,7 +1218,7 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     // Safety check: joints map must not be empty
     if (joints.empty()) {
         std::cerr << "[SEROW/filter]: Joint measurements are empty, skipping filtering"
-                  << std::endl;
+                  << '\n';
         timers_["total-time"].stop();
         return false;
     }
@@ -1227,20 +1227,20 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     const double joint_timestamp = joints.begin()->second.timestamp;
 
     if (imu_timestamp < last_imu_timestamp_) {
-        std::cerr << "IMU measurements are out of order, skipping filtering" << std::endl;
+        std::cerr << "IMU measurements are out of order, skipping filtering" << '\n';
         timers_["total-time"].stop();
         return false;
     }
 
     if (joint_timestamp < last_joint_timestamp_) {
-        std::cerr << "Joint measurements are out of order, skipping filtering" << std::endl;
+        std::cerr << "Joint measurements are out of order, skipping filtering" << '\n';
         timers_["total-time"].stop();
         return false;
     }
 
     if (abs(imu_timestamp - joint_timestamp) > 5e-3) {
         std::cerr << "IMU and joint timestamps are not synchronized, skipping filtering"
-                  << std::endl;
+                  << '\n';
         timers_["total-time"].stop();
         return false;
     }
@@ -1257,7 +1257,7 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (ft_timestamp.has_value() &&
         (ft_timestamp.value() < last_ft_timestamp_ ||
          abs(force_torque.value().begin()->second.timestamp - last_ft_timestamp_) < 1e-6)) {
-        std::cerr << "Force-torque measurement given is the same, clearing it" << std::endl;
+        std::cerr << "Force-torque measurement given is the same, clearing it" << '\n';
         force_torque.reset();
     } else if (ft_timestamp.has_value()) {
         last_ft_timestamp_ = ft_timestamp.value();
@@ -1269,7 +1269,7 @@ bool Serow::filter(ImuMeasurement imu, std::map<std::string, JointMeasurement> j
     if (odom_timestamp.has_value() &&
         (odom_timestamp.value() < last_odom_timestamp_ ||
          abs(odom_timestamp.value() - last_odom_timestamp_) < 1e-6)) {
-        std::cerr << "Odometry measurement given is the same, clearing it" << std::endl;
+        std::cerr << "Odometry measurement given is the same, clearing it" << '\n';
         odom.reset();
     } else if (odom_timestamp.has_value()) {
         last_odom_timestamp_ = odom_timestamp.value();
@@ -1369,7 +1369,7 @@ void Serow::updateFrameTree(const State& state) {
                 frame_tfs_[frame] = base_pose * kinematic_estimator_->linkTF(frame);
             } catch (const std::exception& e) {
                 std::cerr << "Error in frame " << frame << " TF computation: " << e.what()
-                          << std::endl;
+                          << '\n';
             }
         }
     }
@@ -1440,7 +1440,7 @@ Serow::~Serow() {
     } catch (...) {
         // If anything goes wrong during destruction, just continue
         // This prevents crashes during cleanup
-        std::cerr << "Warning: Exception during Serow destruction" << std::endl;
+        std::cerr << "Warning: Exception during Serow destruction" << '\n';
     }
 }
 
@@ -1584,11 +1584,11 @@ void Serow::logTimings() {
                 file << "[" << std::chrono::high_resolution_clock::now().time_since_epoch().count()
                      << "] " << name << ": mean=" << timer.getMean() << "ms, min=" << timer.getMin()
                      << "ms, max=" << timer.getMax() << "ms"
-                     << " count=" << timer.getCount() << std::endl;
+                     << " count=" << timer.getCount() << '\n';
             }
             file.close();
         } catch (const std::exception& e) {
-            std::cerr << "Error logging timings: " << e.what() << std::endl;
+            std::cerr << "Error logging timings: " << e.what() << '\n';
         }
     });
 }
@@ -1596,7 +1596,7 @@ void Serow::logTimings() {
 // RL-specific functions
 std::tuple<ImuMeasurement, KinematicMeasurement, std::map<std::string, ForceTorqueMeasurement>>
 Serow::processMeasurements(
-    ImuMeasurement imu, std::map<std::string, JointMeasurement> joints,
+    ImuMeasurement imu, const std::map<std::string, JointMeasurement>& joints,
     std::optional<std::map<std::string, ForceTorqueMeasurement>> force_torque,
     std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
     // Check if foot frames exist on the F/T measurement

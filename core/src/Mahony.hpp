@@ -27,9 +27,9 @@
 #include <Eigen/Dense>
 #endif
 
+#include <cmath>
 #include <iostream>
 #include <optional>
-#include <cmath>
 #include "lie.hpp"
 
 namespace serow {
@@ -45,7 +45,8 @@ public:
      *  @param ki Integral gain
      *  @param verbose whether to print verbose output
      */
-    Mahony(double freq, const Eigen::Matrix3d& Q_gyro, const Eigen::Matrix3d& Q_acc, double kp, double ki = 0.0, bool verbose = false) {
+    Mahony(double freq, const Eigen::Matrix3d& Q_gyro, const Eigen::Matrix3d& Q_acc, double kp,
+           double ki = 0.0, bool verbose = false) {
         nominal_dt_ = 1.0 / freq;
         twoKp_ = 2.0 * kp;
         twoKi_ = 2.0 * ki;
@@ -94,7 +95,6 @@ public:
         return q_.toRotationMatrix().eulerAngles(0, 1, 2);
     }
 
-
     /** @fn Eigen::Matrix3d getOrientationCov()
      *  @returns the orientation covariance matrix in the world frame
      */
@@ -117,13 +117,15 @@ public:
         double ay = acc(1);
         double az = acc(2);
 
-
         // Small angle approximation of the rotation update
         const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() - lie::so3::wedge(gyro) * dt;
 
         // Predict step (Uncertainty increases due to Gyro noise)
         const double decay_factor = std::exp(-dt / tau_);
-        P_ = F * P_ * F.transpose() * decay_factor + Q_gyro_ * dt;
+        Eigen::Matrix3d P_new;
+        P_new.noalias() = F * P_ * F.transpose() * decay_factor;
+        P_new += Q_gyro_ * dt;
+        P_ = P_new;
 
         // Valid accelerometer check
         if (!(std::abs(ax) < 1e-6 && std::abs(ay) < 1e-6 && std::abs(az) < 1e-6)) {
@@ -145,14 +147,15 @@ public:
 
             // Measurement Jacobian (H) for gravity
             // This represents how the orientation error affects the gravity vector observation
-            const Eigen::Vector3d v_est(halfvx, halfvy, halfvz); 
+            const Eigen::Vector3d v_est(halfvx, halfvy, halfvz);
             const Eigen::Matrix3d H = lie::so3::wedge(v_est);
 
             // Kalman-like covariance update (requires Kp > 0; R_acc scales ~ 1/Kp)
             if (twoKp_ > 0.0) {
                 const Eigen::Matrix3d R_acc = (Q_acc_ / dt) / (twoKp_ * 0.5);
                 const Eigen::Matrix3d S = H * P_ * H.transpose() + R_acc;
-                const Eigen::Matrix3d K = P_ * H.transpose() * S.inverse();
+                const Eigen::Matrix3d K =
+                    S.ldlt().solve((P_ * H.transpose()).transpose()).transpose();
                 P_ = (Eigen::Matrix3d::Identity() - K * H) * P_;
             }
 
@@ -271,9 +274,9 @@ private:
     Eigen::Matrix3d Q_acc_ = Eigen::Matrix3d::Identity();
     /// Orientation covariance matrix
     Eigen::Matrix3d P_ = Eigen::Matrix3d::Identity();
-    /// Time constant for covariance decay to prevent yaw dimension of 
+    /// Time constant for covariance decay to prevent yaw dimension of
     /// covariance from growing unbounded due to unobservability
-    const double tau_ = 3600.0; 
+    const double tau_ = 3600.0;
 };
 
 }  // namespace serow

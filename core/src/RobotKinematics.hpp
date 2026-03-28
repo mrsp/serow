@@ -64,7 +64,7 @@ public:
 
         // Build the kinematic model from file
         try {
-            std::cout << "Building model " << model_name << std::endl;
+            std::cout << "Building model " << model_name << '\n';
             if (model_name.find(".xml") != std::string::npos) {
                 pinocchio::mjcf::buildModel(model_name, *pmodel_, verbose);
             } else if (model_name.find(".urdf") != std::string::npos) {
@@ -146,6 +146,7 @@ public:
 
         computeTotalMass();
 
+        frame_names_.reserve(pmodel_->frames.size());
         for (const auto& frame : pmodel_->frames) {
             if (frame.type == pinocchio::FrameType::BODY) {
                 frame_names_.push_back(frame.name);
@@ -153,13 +154,13 @@ public:
         }
 
         if (verbose) {
-            std::cout << "Joint Names: " << std::endl;
+            std::cout << "Joint Names: " << '\n';
             printJointNames();
-            std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
-            std::cout << "Model loaded: " << model_name << std::endl;
-            std::cout << "Frame Names: " << std::endl;
+            std::cout << "with " << ndofActuated() << " actuated joints" << '\n';
+            std::cout << "Model loaded: " << model_name << '\n';
+            std::cout << "Frame Names: " << '\n';
             for (const auto& frame : frame_names_) {
-                std::cout << frame << std::endl;
+                std::cout << frame << '\n';
             }
         }
     }
@@ -294,7 +295,7 @@ public:
         const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
         if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
             std::cerr << "WARNING: Link name <" << frame_name << "> is invalid! "
-                      << "Returning zeros." << std::endl;
+                      << "Returning zeros." << '\n';
             return Eigen::MatrixXd::Zero(6, pmodel_->nv);
         }
 
@@ -333,7 +334,7 @@ public:
         const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
         if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
             std::cerr << "WARNING: Link name " << frame_name << " is invalid! "
-                      << "Returning zeros." << std::endl;
+                      << "Returning zeros." << '\n';
             return Eigen::Vector3d::Zero();
         }
         return data_->oMf[fid].translation();
@@ -348,7 +349,7 @@ public:
         const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
         if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
             std::cerr << "WARNING: Frame name " << frame_name << " is invalid! "
-                      << "Returning identity quaternion." << std::endl;
+                      << "Returning identity quaternion." << '\n';
             return Eigen::Quaterniond::Identity();
         }
         return Eigen::Quaterniond(data_->oMf[fid].rotation());
@@ -365,7 +366,7 @@ public:
         const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
         if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
             std::cerr << "WARNING: Frame name " << frame_name << " is invalid! "
-                      << "Returning zero pose." << std::endl;
+                      << "Returning zero pose." << '\n';
             lpose.setZero();
             lpose(3) = 1.0;  // identity quaternion w=1
             return lpose;
@@ -391,7 +392,7 @@ public:
         const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
         if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
             std::cerr << "WARNING: Frame name " << frame_name << " is invalid! "
-                      << "Returning identity transform." << std::endl;
+                      << "Returning identity transform." << '\n';
             return lpose;
         }
 
@@ -411,7 +412,7 @@ public:
         const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
         if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
             std::cerr << "WARNING: Link name " << frame_name << " is invalid! "
-                      << "Returning zeros." << std::endl;
+                      << "Returning zeros." << '\n';
             return Eigen::MatrixXd::Zero(3, pmodel_->nv);
         }
 
@@ -430,7 +431,7 @@ public:
         const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
         if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
             std::cerr << "WARNING: Link name " << frame_name << " is invalid! "
-                      << "Returning zeros." << std::endl;
+                      << "Returning zeros." << '\n';
             return Eigen::MatrixXd::Zero(3, pmodel_->nv);
         }
 
@@ -508,7 +509,7 @@ public:
      * @brief Retrieves the names of the joints
      * @return Vector of joint names
      */
-    std::vector<std::string> jointNames() const {
+    const std::vector<std::string>& jointNames() const {
         return jnames_;
     }
 
@@ -516,7 +517,7 @@ public:
      * @brief Retrieves the names of the frames
      * @return Vector of frame names
      */
-    std::vector<std::string> frameNames() const {
+    const std::vector<std::string>& frameNames() const {
         return frame_names_;
     }
 
@@ -549,7 +550,7 @@ public:
      */
     void printJointNames() const {
         for (const auto& jname : jnames_) {
-            std::cout << jname << std::endl;
+            std::cout << jname << '\n';
         }
     }
 
@@ -560,13 +561,13 @@ public:
         if (jnames_.size() != static_cast<size_t>(qmin_.size()) ||
             jnames_.size() != static_cast<size_t>(qmax_.size()) ||
             jnames_.size() != static_cast<size_t>(dqmax_.size())) {
-            std::cerr << "Joint names and joint limits size do not match!" << std::endl;
+            std::cerr << "Joint names and joint limits size do not match!" << '\n';
             return;
         }
-        std::cout << "\nJoint Name\t qmin \t qmax \t dqmax" << std::endl;
+        std::cout << "\nJoint Name\t qmin \t qmax \t dqmax" << '\n';
         for (size_t i = 0; i < jnames_.size(); ++i) {
             std::cout << jnames_[i] << "\t\t" << qmin_[i] << "\t" << qmax_[i] << "\t" << dqmax_[i]
-                      << std::endl;
+                      << '\n';
         }
     }
 

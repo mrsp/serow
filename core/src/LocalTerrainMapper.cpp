@@ -81,6 +81,7 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
         const int min_id_g = local_map_bound_min_i_[i];
         const int min_id_l = fast_mod<map_dim>(min_id_g);
         std::vector<int> clear_id;
+        clear_id.reserve(std::abs(shift_num[i]));
         if (shift_num[i] > 0) {
             // forward shift, the min id should be cut
             for (int k = 0; k < shift_num[i]; k++) {
@@ -319,14 +320,14 @@ void LocalTerrainMapper::initializeLocalMap(const float height, const float vari
     if (params_.max_recenter_distance > max_recenter_distance_bound) {
         params_.max_recenter_distance = max_recenter_distance_bound;
         std::cout << "Max recenter distance is too large, setting to "
-                  << params_.max_recenter_distance << std::endl;
+                  << params_.max_recenter_distance << '\n';
     }
 
     // Make sure the min contact probability is within the range [0, 1]
     if (params_.min_contact_probability < 0.0f || params_.min_contact_probability > 1.0f) {
         params_.min_contact_probability = 0.15f;
         std::cout << "Min contact probability is out of range, setting to "
-                  << params_.min_contact_probability << std::endl;
+                  << params_.min_contact_probability << '\n';
     }
 
     resetLocalMap();

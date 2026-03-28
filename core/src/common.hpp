@@ -51,7 +51,7 @@ inline std::string findFilepath(const std::string& filename) {
                     }
                 } catch (const std::exception& e) {
                     std::cout << "Skipping subdirectory: " << entry.path()
-                              << " due to: " << e.what() << std::endl;
+                              << " due to: " << e.what() << '\n';
                 }
             }
         }
@@ -145,12 +145,12 @@ public:
     void printMapInformation() {
         const std::string GREEN = "\033[1;32m";
         const std::string WHITE = "\033[1;37m";
-        std::cout << GREEN << "\tresolution: " << params_.resolution << std::endl;
-        std::cout << GREEN << "\tinverse resolution: " << params_.resolution_inv << std::endl;
-        std::cout << GREEN << "\tlocal map size: " << map_size << std::endl;
-        std::cout << GREEN << "\tlocal map half size: " << half_map_size << std::endl;
-        std::cout << GREEN << "\tlocal map dim: " << map_dim << std::endl;
-        std::cout << GREEN << "\tlocal map half dim: " << half_map_dim << WHITE << std::endl;
+        std::cout << GREEN << "\tresolution: " << params_.resolution << '\n';
+        std::cout << GREEN << "\tinverse resolution: " << params_.resolution_inv << '\n';
+        std::cout << GREEN << "\tlocal map size: " << map_size << '\n';
+        std::cout << GREEN << "\tlocal map half size: " << half_map_size << '\n';
+        std::cout << GREEN << "\tlocal map dim: " << map_dim << '\n';
+        std::cout << GREEN << "\tlocal map half dim: " << half_map_dim << WHITE << '\n';
     };
 
     const std::array<float, 2>& getMapOrigin() const {
@@ -268,7 +268,7 @@ public:
 
         // Check if the bounding box is a valid one
         if (min_x > max_x || min_y > max_y) {
-            std::cout << "Invalid bounding box, clearing contact points" << std::endl;
+            std::cout << "Invalid bounding box, clearing contact points" << '\n';
             clearContactPoints();
             return;
         }

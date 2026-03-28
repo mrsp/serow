@@ -67,7 +67,7 @@ public:
             initializeSchemas();
             initializeChannels();
         } catch (const std::exception& e) {
-            std::cerr << "ExteroceptionLogger initialization error: " << e.what() << std::endl;
+            std::cerr << "ExteroceptionLogger initialization error: " << e.what() << '\n';
             throw;
         }
     }
@@ -78,7 +78,7 @@ public:
                 writer_->close();
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error closing MCAP writer: " << e.what() << std::endl;
+            std::cerr << "Error closing MCAP writer: " << e.what() << '\n';
         }
     }
 
@@ -96,7 +96,7 @@ public:
 
             if (timestamp < 0) {
                 std::cout << "[SEROW/ExteroceptionLogger]: Local Map Timestamp is negative "
-                          << timestamp << " returning without logging" << std::endl;
+                          << timestamp << " returning without logging" << '\n';
                 return;
             }
 
@@ -106,7 +106,7 @@ public:
 
             // Ensure both vectors have the same size
             if (elevation.size() != variance.size()) {
-                std::cerr << "Elevation and variance data size mismatch" << std::endl;
+                std::cerr << "Elevation and variance data size mismatch" << '\n';
                 return;
             }
 
@@ -182,7 +182,7 @@ public:
                          reinterpret_cast<const std::byte*>(buffer), size);
             last_timestamp_ = timestamp;
         } catch (const std::exception& e) {
-            std::cerr << "Error logging local map: " << e.what() << std::endl;
+            std::cerr << "Error logging local map: " << e.what() << '\n';
         }
     }
 
@@ -235,10 +235,10 @@ private:
             auto status = writer_->write(message);
             if (status.code != mcap::StatusCode::Success) {
                 std::cerr << "MCAP write error for channel " << channel_id
-                          << " data_size=" << data_size << ": " << status.message << std::endl;
+                          << " data_size=" << data_size << ": " << status.message << '\n';
             }
         } catch (const std::exception& e) {
-            std::cerr << "MCAP write error: " << e.what() << std::endl;
+            std::cerr << "MCAP write error: " << e.what() << '\n';
         }
     }
 
