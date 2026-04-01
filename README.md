@@ -4,7 +4,7 @@
 ## This repository is a work in progress.
 We are actively developing and addressing issues with the estimation framework. Contributions, feedback, or suggestions are highly appreciated as we continue to enhance this project!
 
-![SEROW](img/serow.jpg)
+![SEROW](img/serow.png)
 
 SEROW (State Estimation RObot Walking) facilitates legged robot state estimation. Designed as a versatile tool, SEROW offers a generalized estimation solution applicable to legged robots with N limbs, accommodating both point and flat feet configurations. Notably, the framework's codebase is openly accessible under the GNU GPLv3 License.
 
@@ -39,9 +39,9 @@ single sensor can give the full answer. SEROW fuses all of them using principled
 
 ### Joint Encoders
   - Each motor joint reports its angular position (radians).
-  - Combined with a kinematic model (URDF/MJCF), tells us where each foot is
+  - Combined with a kinematic model (URDF/MJCF), informs where each foot is
     relative to the base frame.
-  - Does NOT directly tell us where the base is in the world.
+  - Does NOT directly inform where the base is in the world.
 
 ### Force/Torque (F/T) Sensors -- Pressure Sensors 
   - Mounted at each foot (or ankle).
