@@ -1,0 +1,19 @@
+robot_name: "talos"
+path_to_serow_library: "/usr/local/lib"
+topics:
+  joint_states: "/joint_states"
+  imu: "/imu"
+  force_torque_states:
+    - "/force_torque_states/leg_left_6_link"
+    - "/force_torque_states/leg_right_6_link"
+  ground_truth: "/ground_truth/odom"
+  external_odometry: null
+synchronization:
+  imu_to_joint: 0.1
+  force_torque_to_joint: 0.1
+  ground_truth_to_joint: 0.1
+serow_config: "talos.json" 
+publish_path: false
+add_gravity_to_imu: false
+external_odometry_position_covariance: null
+external_odometry_orientation_covariance: null
