@@ -12,19 +12,12 @@
  **/
 
 /**
- * @file ContactEKF.hpp
- * @brief Implementation of Extended Kalman Filter (EKF) for state estimation in humanoid robots.
- *        This EKF fuses data from an Inertial Measurement Unit (IMU), relative to the base leg
- *        contact measurements, and optionally external odometry (e.g., Visual Odometry or Lidar
- *        Odometry). It models the state of the robot including base position, velocity,
- * orientation, gyro and accelerometer biases.
+ * @file RightInvariantEKF.hpp
+ * @brief Right-Invariant Extended Kalman Filter for state estimation in legged robots.
+ *        The filter state lives on SE_2(3) x R^6 and exploits the group-affine property of
+ *        IMU-driven dynamics to obtain a state-independent linearized error propagation.
+ *        Fuses IMU, leg-kinematic velocity, optional external odometry and terrain height.
  * @author Stylianos Piperakis
- * @details The state estimation involves predicting and updating the robot's state based on sensor
- *          measurements and the robot's dynamics. The EKF integrates outlier detection mechanisms
- *          to improve state estimation robustness, incorporating beta distribution parameters and
- *          digamma function approximations. More information on the nonlinear state estimation for
- *          humanoid robot walking can be found in:
- *          https://www.researchgate.net/publication/326194869_Nonlinear_State_Estimation_for_Humanoid_Robot_Walking
  */
 
 #pragma once
@@ -33,7 +26,6 @@
 #include <memory>
 
 #include "BaseEstimator.hpp"
-#include "ButterworthLPF.hpp"
 #include "LocalTerrainMapper.hpp"
 #include "Measurement.hpp"
 #include "OutlierDetector.hpp"
@@ -42,11 +34,11 @@
 namespace serow {
 
 /**
- * @class ContactEKF
- * @brief Implements an Extended Kalman Filter (EKF) for state estimation in humanoid robots,
- *        specifically for fusing IMU data, base leg contact measurements, and external odometry.
+ * @class RightInvariantEKF
+ * @brief Right-Invariant Extended Kalman Filter on SE_2(3) for legged-robot state estimation,
+ *        fusing IMU data, leg-kinematic velocity, and optionally external odometry.
  */
-class ContactEKF : public BaseEstimator {
+class RightInvariantEKF : public BaseEstimator {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -93,7 +85,9 @@ private:
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
     /// matrix 15 x 15
     Eigen::Matrix<double, 15, 15> I_, P_;
-    /// Linearized state-input model 15 x 12
+    /// Constant (state-independent) part of the continuous-time A matrix
+    Eigen::Matrix<double, 15, 15> Ac_;
+    /// Constant part of the noise-input Jacobian L (bias-drift rows only)
     Eigen::Matrix<double, 15, 12> Lc_;
 
     OutlierDetector base_position_outlier_detector;  ///< Outlier detector instance.
@@ -108,10 +102,6 @@ private:
     std::optional<Eigen::Quaterniond>
         first_odometry_orientation_;  ///< Initial odometry measurement orientation (world
                                       ///< coordinates).
-
-    /// @brief low pass filter for the base linear velocity in the z direction
-    /// @note This smoother only applies when the terrain is estimated
-    std::unique_ptr<ButterworthLPF> base_linear_velocity_z_lpf_;
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.
@@ -130,7 +120,7 @@ private:
      * @return Tuple containing prediction Jacobians (state transition and input models).
      */
     std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 12>>
-    computePredictionJacobians(const BaseState& state, Eigen::Vector3d angular_velocity);
+    computePredictionJacobians(const BaseState& state);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.

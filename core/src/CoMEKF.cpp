@@ -80,17 +80,23 @@ void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
     state.com_position += f(c_idx_) * dt;
     state.com_linear_velocity += f(v_idx_) * dt;
     state.external_forces += f(f_idx_) * dt;
+    state.com_position_cov = P_(c_idx_, c_idx_);
+    state.com_linear_velocity_cov = P_(v_idx_, v_idx_);
+    state.external_forces_cov = P_(f_idx_, f_idx_);
+    state.timestamp = grf.timestamp;
     last_grf_timestamp_ = grf.timestamp;
 }
 
 void CoMEKF::updateWithKinematics(CentroidalState& state, const KinematicMeasurement& kin) {
     updateWithCoMPosition(state, kin.com_position, kin.com_position_cov);
+    state.timestamp = kin.timestamp;
 }
 
 void CoMEKF::updateWithImu(CentroidalState& state, const KinematicMeasurement& kin,
                            const GroundReactionForceMeasurement& grf) {
     updateWithCoMAcceleration(state, kin.com_linear_acceleration, grf.cop, grf.force,
                               kin.com_linear_acceleration_cov, kin.com_angular_momentum_derivative);
+    state.timestamp = kin.timestamp;
 }
 
 Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(
@@ -100,11 +106,7 @@ Eigen::Matrix<double, 9, 1> CoMEKF::computeContinuousDynamics(
     Eigen::Matrix<double, 9, 1> res = Eigen::Matrix<double, 9, 1>::Zero();
     res.segment<3>(0) = state.com_linear_velocity;
     double den = state.com_position.z() - cop_position.z();
-    if (std::abs(den) < 1e-6) {
-        std::cerr << "[CoMEKF]: CoM and COP height difference too small (" << den
-                  << "), clamping to safe value" << '\n';
-        den = 1e-6;
-    }
+    den = std::max(den, 1e-6);
 
     res(3) =
         (state.com_position.x() - cop_position.x()) / (mass_ * den) * ground_reaction_force.z() +
@@ -125,9 +127,7 @@ CoMEKF::computePredictionJacobians(const CentroidalState& state,
     Eigen::Matrix<double, 9, 9> Ac = Eigen::Matrix<double, 9, 9>::Zero();
     Eigen::Matrix<double, 9, 9> Lc = Eigen::Matrix<double, 9, 9>::Identity();
     double den = state.com_position.z() - cop_position.z();
-    if (std::abs(den) < 1e-6) {
-        den = 1e-6;
-    }
+    den = std::max(den, 1e-6);
 
     Ac.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity();
     Ac(3, 0) = ground_reaction_force.z() / (mass_ * den);
@@ -152,9 +152,7 @@ void CoMEKF::updateWithCoMAcceleration(CentroidalState& state,
                                        const Eigen::Matrix3d& com_linear_acceleration_cov,
                                        const Eigen::Vector3d& com_angular_momentum_derivative) {
     double den = state.com_position.z() - cop_position.z();
-    if (std::abs(den) < 1e-6) {
-        den = 1e-6;
-    }
+    den = std::max(den, 1e-6);
 
     Eigen::Vector3d z = Eigen::Vector3d::Zero();
     z.x() = com_linear_acceleration(0) -

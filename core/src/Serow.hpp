@@ -15,9 +15,9 @@
 #include <map>
 #include <string>
 
+#include "BaseEstimator.hpp"
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
-#include "ContactEKF.hpp"
 #include "DerivativeEstimator.hpp"
 #include "ExteroceptionLogger.hpp"
 #include "LegOdometry.hpp"
@@ -287,6 +287,9 @@ private:
         bool use_imu_orientation{false};
         /// @brief whether or not to enable verbose output
         bool verbose{false};
+        /// @brief type of the base estimator: "contact" for ContactEKF, "right-invariant" for
+        /// RightInvariantEKF
+        std::string base_estimator_type{"right-invariant"};
     };
 
     /// @brief SEROW's configuration
@@ -303,7 +306,7 @@ private:
     State state_;
     /// @brief base estimator that fuses base IMU, leg end-effector contact and relative to the base
     /// leg kinematic measurements
-    ContactEKF base_estimator_;
+    std::unique_ptr<BaseEstimator> base_estimator_;
     /// @brief coM estimator that fuses ground reaction force, base IMU, and CoM kinematic
     /// measurements
     CoMEKF com_estimator_;
@@ -357,11 +360,10 @@ private:
     /// @param joints joint measurements
     /// @param ft force/torque measurements
     /// @param base_pose_ground_truth ground truth base pose
-    void logMeasurements(const ImuMeasurement& imu,
-                         const std::map<std::string, JointMeasurement>& joints,
-                         const std::map<std::string, ForceTorqueMeasurement>& ft,
-                         const std::optional<BasePoseGroundTruth>& base_pose_ground_truth =
-                             std::nullopt);
+    void logMeasurements(
+        const ImuMeasurement& imu, const std::map<std::string, JointMeasurement>& joints,
+        const std::map<std::string, ForceTorqueMeasurement>& ft,
+        const std::optional<BasePoseGroundTruth>& base_pose_ground_truth = std::nullopt);
 
     /// @brief Runs all the joint estimators to estimate the joint positions and velocities
     /// @param state the state of the robot
