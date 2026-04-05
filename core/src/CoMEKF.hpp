@@ -77,18 +77,18 @@ private:
      * @brief Performs the EKF update step with a CoM linear acceleration measurement.
      * @param state The EKF state used in the computation.
      * @param com_linear_acceleration The CoM linear acceleration in world coordinates.
-     * @param cop_position The COP position in world coordinates.
-     * @param ground_reaction_force The total ground reaction force in world coordinates.
      * @param com_linear_acceleration_cov The CoM linear acceleration covariance in world
      * coordinates.
+     * @param cop_position The COP position in world coordinates.
+     * @param ground_reaction_force The total ground reaction force in world coordinates.
      * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world
      * coordinates.
      */
     void updateWithCoMAcceleration(CentroidalState& state,
                                    const Eigen::Vector3d& com_linear_acceleration,
+                                   const Eigen::Matrix3d& com_linear_acceleration_cov,
                                    const Eigen::Vector3d& cop_position,
                                    const Eigen::Vector3d& ground_reaction_force,
-                                   const Eigen::Matrix3d& com_linear_acceleration_cov,
                                    const Eigen::Vector3d& com_angular_momentum_derivative);
 
     /**
@@ -108,6 +108,15 @@ private:
      */
     void updateState(CentroidalState& state, const Eigen::Matrix<double, 9, 1>& dx,
                      const Eigen::Matrix<double, 9, 9>& P) const;
+
+    /**
+     * @brief Computes the CoM linear acceleration measurement.
+     * @param base_state The BaseState used in the computation.
+     * @param kin The KinematicMeasurement used in the computation.
+     * @return The CoM linear acceleration measurement and covariance.
+     */
+    std::pair<Eigen::Vector3d, Eigen::Matrix3d> computeComLinearAccelerationMeasurement(
+        const BaseState& base_state, const KinematicMeasurement& kin);
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -134,18 +143,21 @@ public:
     /**
      * @brief Realizes the EKF update step with a CoM position measurement.
      * @param state The EKF state used for the update.
+     * @param base_state The BaseState used in the computation.
      * @param kin The KinematicMeasurement used in the computation.
      */
-    void updateWithKinematics(CentroidalState& state, const KinematicMeasurement& kin);
+    void updateWithKinematics(CentroidalState& state, const BaseState& base_state,
+                              const KinematicMeasurement& kin);
 
     /**
      * @brief Realizes the EKF update step with a CoM linear acceleration measurement.
      * @param state The EKF state used for the update.
+     * @param base_state The BaseState used in the computation.
      * @param kin The KinematicMeasurement used in the computation.
      * @param grf The GroundReactionForceMeasurement used in the computation.
      */
-    void updateWithImu(CentroidalState& state, const KinematicMeasurement& kin,
-                       const GroundReactionForceMeasurement& grf);
+    void updateWithImu(CentroidalState& state, const BaseState& base_state,
+                       const KinematicMeasurement& kin, const GroundReactionForceMeasurement& grf);
 
     /**
      * @brief Sets the state of the EKF.

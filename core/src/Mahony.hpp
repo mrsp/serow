@@ -81,14 +81,15 @@ public:
     }
 
     /** @fn Eigen::Matrix3d getR()
-     *  @returns the orientation of IMU w.r.t the world frame as a rotation matrix
+     *  @return Rotation matrix R_wb mapping IMU/body-frame vectors to world frame (v_world = R *
+     * v_imu).
      */
     Eigen::Matrix3d getR() const {
         return R_;
     }
 
     /** @fn Eigen::Vector3d getEuler()
-     *  @returns the orientation of IMU w.r.t the world frame as  euler angles in the RPY
+     *  @return The orientation of IMU w.r.t. the world frame as Euler angles in the RPY
      * convention
      */
     Eigen::Vector3d getEuler() const {

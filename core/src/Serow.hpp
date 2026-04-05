@@ -52,6 +52,8 @@ public:
     /// @brief initializes SEROW's configuration
     /// @param config configuration to initialize SEROW with
     /// @return true if SEROW was initialized successfully
+    /// @note JSON `foot_frames` may be a string array (e.g. `["FL_foot","FR_foot"]`) or a legacy
+    /// object with numeric keys (e.g. `{"0":"FL_foot","1":"FR_foot"}`).
     bool initialize(const std::string& config);
 
     /// @brief runs SEROW's estimator and updates the internal state
@@ -77,8 +79,9 @@ public:
     /// @return SEROW's internal state if available
     std::optional<State> getState(bool allow_invalid = false);
 
-    /// @brief fetches SEROW's contact state
-    /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
+    /// @brief Fetches SEROW's contact state
+    /// @param allow_invalid if true, return the state even when SEROW has not yet converged to a
+    /// valid estimate
     /// @return SEROW's contact state if available
     std::optional<ContactState> getContactState(bool allow_invalid = false);
 
@@ -190,17 +193,17 @@ private:
         /// @brief after how many loop cycles SEROW's estimate is considered valid e.g. all the
         /// filters have converged and estimate should become available for feedback
         size_t convergence_cycles{};
-        /// @brief gyro random walk. Can be found in the IMU data sheet or computed with the Alan
+        /// @brief gyro random walk. Can be found in the IMU data sheet or computed with the Allan
         /// variance method
         Eigen::Vector3d angular_velocity_cov{Eigen::Vector3d::Zero()};
         /// @brief gyro bias instability (or stability). Can be found in the IMU data sheet or
-        /// computed with the Alan variance method
+        /// computed with the Allan variance method
         Eigen::Vector3d angular_velocity_bias_cov{Eigen::Vector3d::Zero()};
         /// @brief accelerometer random walk. Can be found in the IMU data sheet or computed with
-        /// the Alan variance method
+        /// the Allan variance method
         Eigen::Vector3d linear_acceleration_cov{Eigen::Vector3d::Zero()};
-        /// @brief accelerometer bias instanbility (or stability). Can be found in the IMU data
-        /// sheet or computed with the Alan variance method
+        /// @brief accelerometer bias instability (or stability). Can be found in the IMU data
+        /// sheet or computed with the Allan variance method
         Eigen::Vector3d linear_acceleration_bias_cov{Eigen::Vector3d::Zero()};
         /// @brief CoM position process noise (m^2)
         Eigen::Vector3d com_position_process_cov{Eigen::Vector3d::Zero()};
@@ -208,11 +211,6 @@ private:
         Eigen::Vector3d com_linear_velocity_process_cov{Eigen::Vector3d::Zero()};
         /// @brief External forces acting on CoM process noise (N^2)
         Eigen::Vector3d external_forces_process_cov{Eigen::Vector3d::Zero()};
-        /// @brief CoM position uncertainty (m^2) as computed with robot kinematics
-        Eigen::Vector3d com_position_cov{Eigen::Vector3d::Zero()};
-        /// @brief CoM linear acceleration (m^2/s^4) as approximated with the IMU acceleration and
-        /// robot kinematics
-        Eigen::Vector3d com_linear_acceleration_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for the base position (m^2)
         Eigen::Vector3d initial_base_position_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for the base orientation (rad^2)
@@ -227,7 +225,7 @@ private:
         Eigen::Vector3d initial_com_position_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for the CoM linear velocity (m^2/s^2)
         Eigen::Vector3d initial_com_linear_velocity_cov{Eigen::Vector3d::Zero()};
-        /// @brief initial uncertainty for the external forces acting on the CoM (N)
+        /// @brief initial uncertainty for the external forces acting on the CoM (N^2)
         Eigen::Vector3d initial_external_forces_cov{Eigen::Vector3d::Zero()};
         double eps{0.05};
         /// @brief rigid body transformation from optional exteroceptive (visual/lidar odometry) to

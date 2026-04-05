@@ -11,6 +11,7 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 #include "CoMEKF.hpp"
+#include "lie.hpp"
 
 #include <iostream>
 
@@ -57,9 +58,8 @@ void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
     if (dt < nominal_dt_ / 2) {
         dt = nominal_dt_;
     }
-
     const auto& [Ac, Lc] =
-        computePredictionJacobians(state, grf.cop, grf.force, kin.com_angular_momentum_derivative);
+        computePredictionJacobians(state, grf.cop, grf.force, state.angular_momentum_derivative);
 
     // Discretization
     Eigen::Matrix<double, 9, 9> Qd = Eigen::Matrix<double, 9, 9>::Zero();
@@ -76,7 +76,7 @@ void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
 
     // Propagate the mean estimate, forward euler integration of dynamics f
     const Eigen::Matrix<double, 9, 1> f =
-        computeContinuousDynamics(state, grf.cop, grf.force, kin.com_angular_momentum_derivative);
+        computeContinuousDynamics(state, grf.cop, grf.force, state.angular_momentum_derivative);
     state.com_position += f(c_idx_) * dt;
     state.com_linear_velocity += f(v_idx_) * dt;
     state.external_forces += f(f_idx_) * dt;
@@ -87,15 +87,52 @@ void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
     last_grf_timestamp_ = grf.timestamp;
 }
 
-void CoMEKF::updateWithKinematics(CentroidalState& state, const KinematicMeasurement& kin) {
-    updateWithCoMPosition(state, kin.com_position, kin.com_position_cov);
+void CoMEKF::updateWithKinematics(CentroidalState& state, const BaseState& base_state,
+                                  const KinematicMeasurement& kin) {
+    const Eigen::Matrix3d Rwb = base_state.base_orientation.toRotationMatrix();
+    const Eigen::Vector3d& com_position = base_state.base_position + Rwb * kin.com_position;
+    const Eigen::Matrix3d& com_position_cov = Rwb * kin.com_position_cov * Rwb.transpose();
+    updateWithCoMPosition(state, com_position, com_position_cov);
     state.timestamp = kin.timestamp;
 }
 
-void CoMEKF::updateWithImu(CentroidalState& state, const KinematicMeasurement& kin,
+std::pair<Eigen::Vector3d, Eigen::Matrix3d> CoMEKF::computeComLinearAccelerationMeasurement(
+    const BaseState& base_state, const KinematicMeasurement& kin) {
+    const Eigen::Matrix3d Rwb = base_state.base_orientation.toRotationMatrix();
+    const Eigen::Vector3d& w = base_state.base_angular_velocity;
+    const Eigen::Vector3d& alpha = base_state.base_angular_acceleration;
+    const Eigen::Vector3d& a0 = base_state.base_linear_acceleration;
+    const Eigen::Vector3d r = Rwb * kin.com_position;
+    const Eigen::Vector3d wxr = w.cross(r);
+    const Eigen::Vector3d com_linear_acceleration = a0 + w.cross(wxr) + alpha.cross(r);
+
+    const Eigen::Matrix3d Sigma_r = Rwb * kin.com_position_cov * Rwb.transpose();
+    const Eigen::Matrix3d W = lie::so3::wedge(w);
+    const Eigen::Matrix3d A = lie::so3::wedge(alpha);
+    const Eigen::Matrix3d r_hat = lie::so3::wedge(r);
+    const Eigen::Matrix3d J_r = W * W + A;
+    const Eigen::Matrix3d J_w = -lie::so3::wedge(wxr) - W * r_hat;
+
+    Eigen::Matrix3d Sigma = base_state.base_linear_acceleration_cov;
+    Sigma.noalias() += J_r * Sigma_r * J_r.transpose();
+    Sigma.noalias() += J_w * base_state.base_angular_velocity_cov * J_w.transpose();
+    Sigma.noalias() += r_hat * base_state.base_angular_acceleration_cov * r_hat.transpose();
+    Sigma = 0.5 * (Sigma + Sigma.transpose());
+    return {com_linear_acceleration, Sigma};
+}
+
+void CoMEKF::updateWithImu(CentroidalState& state, const BaseState& base_state,
+                           const KinematicMeasurement& kin,
                            const GroundReactionForceMeasurement& grf) {
-    updateWithCoMAcceleration(state, kin.com_linear_acceleration, grf.cop, grf.force,
-                              kin.com_linear_acceleration_cov, kin.com_angular_momentum_derivative);
+    const std::pair<Eigen::Vector3d, Eigen::Matrix3d> com_linear_acceleration_measurement =
+        computeComLinearAccelerationMeasurement(base_state, kin);
+
+    updateWithCoMAcceleration(state, com_linear_acceleration_measurement.first,
+                              com_linear_acceleration_measurement.second, grf.cop, grf.force,
+                              state.angular_momentum_derivative);
+
+    state.com_linear_acceleration = com_linear_acceleration_measurement.first;
+    state.com_linear_acceleration_cov = com_linear_acceleration_measurement.second;
     state.timestamp = kin.timestamp;
 }
 
@@ -147,9 +184,9 @@ CoMEKF::computePredictionJacobians(const CentroidalState& state,
 
 void CoMEKF::updateWithCoMAcceleration(CentroidalState& state,
                                        const Eigen::Vector3d& com_linear_acceleration,
+                                       const Eigen::Matrix3d& com_linear_acceleration_cov,
                                        const Eigen::Vector3d& cop_position,
                                        const Eigen::Vector3d& ground_reaction_force,
-                                       const Eigen::Matrix3d& com_linear_acceleration_cov,
                                        const Eigen::Vector3d& com_angular_momentum_derivative) {
     double den = state.com_position.z() - cop_position.z();
     den = std::max(den, 1e-6);

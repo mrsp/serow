@@ -75,6 +75,10 @@ struct BaseState {
     Eigen::Matrix3d base_linear_velocity_cov{Eigen::Matrix3d::Identity()};
     /// Base angular velocity covariance in world frame coordinates (rad^2/s^2)
     Eigen::Matrix3d base_angular_velocity_cov{Eigen::Matrix3d::Identity()};
+    /// Base linear acceleration covariance in world frame coordinates (m^2/s^4)
+    Eigen::Matrix3d base_linear_acceleration_cov{Eigen::Matrix3d::Identity()};
+    /// Base angular acceleration covariance in world frame coordinates (rad^2/s^4)
+    Eigen::Matrix3d base_angular_acceleration_cov{Eigen::Matrix3d::Identity()};
     /// Imu acceleration bias covariance in local imu frame coordinates (m^2/s^4)
     Eigen::Matrix3d imu_linear_acceleration_bias_cov{Eigen::Matrix3d::Identity()};
     /// Imu gyro rate bias covariance in local imu frame coordinates (rad^2/s^2)
@@ -113,6 +117,8 @@ struct CentroidalState {
     Eigen::Matrix3d com_linear_velocity_cov{Eigen::Matrix3d::Identity()};
     /// 3D External forces at the CoM covariance in world frame coordinates (N^2)
     Eigen::Matrix3d external_forces_cov{Eigen::Matrix3d::Identity()};
+    /// 3D CoM linear acceleration covariance in world frame coordinates (m^2/s^4)
+    Eigen::Matrix3d com_linear_acceleration_cov{Eigen::Matrix3d::Identity()};
 };
 
 /**

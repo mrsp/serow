@@ -475,6 +475,15 @@ public:
     }
 
     /**
+     * @brief Computes the CoM Covariance.
+     * @return CoM Covariance matrix
+     */
+    Eigen::MatrixXd comCovariance() const {
+        const Eigen::MatrixXd J = comJacobian();
+        return J * qp_.asDiagonal() * J.transpose();
+    }
+
+    /**
      * @brief Computes the CoM angular momentum and its covariance in a single Pinocchio pass.
      * @return {h_angular (3D), covariance (3x3)}
      */

@@ -12,6 +12,8 @@
  **/
 #include "ContactEKF.hpp"
 
+#include <cmath>
+
 #include "lie.hpp"
 
 namespace serow {
@@ -426,9 +428,9 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
         const std::array<float, 2> base_pos_xy = {static_cast<float>(state.base_position.x()),
                                                   static_cast<float>(state.base_position.y())};
         const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
-        if ((abs(base_pos_xy[0] - map_origin_xy[0]) >
+        if ((std::fabs(base_pos_xy[0] - map_origin_xy[0]) >
              terrain_estimator->getMaxRecenterDistance()) ||
-            (abs(base_pos_xy[1] - map_origin_xy[1]) >
+            (std::fabs(base_pos_xy[1] - map_origin_xy[1]) >
              terrain_estimator->getMaxRecenterDistance())) {
             terrain_estimator->recenter(base_pos_xy);
         }

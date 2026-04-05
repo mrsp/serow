@@ -81,7 +81,7 @@ inline Eigen::Vector3d wrapToSO3(const Eigen::Vector3d& omega) {
     return omega_wrapped;
 }
 
-/// @brief Computes the exponential map according to the Rodriquez Formula for component in SO(3)
+/// @brief Computes the exponential map according to the Rodrigues formula for a component in SO(3)
 /// @param omega 3D twist in so(3) algebra
 /// @return 3x3 Rotation in SO(3) group
 inline Eigen::Matrix3d expMap(const Eigen::Vector3d& omega) {
