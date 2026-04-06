@@ -67,9 +67,9 @@ void RightInvariantEKF::init(const BaseState& state, std::set<std::string> conta
     last_imu_predict_timestamp_.reset();
     last_kin_update_timestamp_.reset();
     last_imu_update_timestamp_.reset();
+    last_terrain_update_timestamp_.reset();
 
     use_imu_orientation_ = use_imu_orientation;
-
     verbose_ = verbose;
     if (verbose) {
         std::cout << "[SEROW/RightInvariantEKF]: Initialized successfully" << '\n';
@@ -85,9 +85,8 @@ void RightInvariantEKF::setState(const BaseState& state) {
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
     last_imu_update_timestamp_ = state.timestamp;
     last_kin_update_timestamp_ = state.timestamp;
-    if (use_imu_orientation_) {
-        last_imu_update_timestamp_ = state.timestamp;
-    }
+    last_imu_update_timestamp_ = state.timestamp;
+    last_terrain_update_timestamp_ = state.timestamp;
 }
 
 // ---------------------------------------------------------------------------
@@ -296,10 +295,20 @@ void RightInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector
 void RightInvariantEKF::updateWithTerrain(
     BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
     const std::map<std::string, Eigen::Matrix3d>& contacts_position_cov,
-    const std::map<std::string, double>& contacts_probability,
+    const std::map<std::string, double>& contacts_probability, const double timestamp,
     std::shared_ptr<TerrainElevation> terrain_estimator) {
     const Eigen::Vector3d p_world_to_base = state.base_position;
     const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
+
+    double dt = nominal_kin_dt_;
+    if (last_terrain_update_timestamp_.has_value()) {
+        dt = timestamp - last_terrain_update_timestamp_.value();
+    }
+    last_terrain_update_timestamp_ = timestamp;
+
+    if (dt < 0.0) {
+        return;
+    }
 
     Eigen::Matrix<double, 1, 15> H = Eigen::Matrix<double, 1, 15>::Zero();
     // First-order approximation: terrain-height residual depends on contact world z, but we keep
@@ -323,7 +332,7 @@ void RightInvariantEKF::updateWithTerrain(
 
                 const double N =
                     (static_cast<double>(elevation.value().variance + con_cov_world(2, 2)) + 1e-6) /
-                    cp;
+                    (cp * dt);
 
                 PH_transpose.noalias() = P_ * H.transpose();
                 const double s = N + (H * PH_transpose)(0, 0);
@@ -419,6 +428,15 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
                                std::shared_ptr<TerrainElevation> terrain_estimator) {
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
+        double dt = nominal_kin_dt_;
+        if (last_terrain_update_timestamp_.has_value()) {
+            dt = kin.timestamp - last_terrain_update_timestamp_.value();
+        }
+
+        if (dt < 0.0) {
+            return;
+        }
+
         Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
         T_world_to_base.translation() = state.base_position;
         T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
@@ -464,9 +482,9 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
                                   static_cast<float>(n_contact.z())};
                     }
                 }
-                if (!terrain_estimator->update(con_pos_xy, con_pos_z,
-                                               static_cast<float>((con_cov(2, 2) + 1e-6) / cp),
-                                               normal)) {
+                if (!terrain_estimator->update(
+                        con_pos_xy, con_pos_z,
+                        static_cast<float>((con_cov(2, 2) + 1e-6) / (cp * dt)), normal)) {
                     std::cout << "Contact for " << cf
                               << " is not inside the terrain elevation map and thus height is not "
                                  "updated "
@@ -505,7 +523,7 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
     // potentially recenter the terrain mapper
     if (terrain_estimator) {
         updateWithTerrain(state, kin.contacts_position, kin.contacts_position_noise,
-                          kin.contacts_probability, terrain_estimator);
+                          kin.contacts_probability, kin.timestamp, terrain_estimator);
         // Recenter the map
         const std::array<float, 2> base_pos_xy = {static_cast<float>(state.base_position.x()),
                                                   static_cast<float>(state.base_position.y())};
@@ -557,7 +575,7 @@ void RightInvariantEKF::updateWithIMUOrientation(BaseState& state,
 
     // World-frame innovation: z = log(R_y R_hat^T)
     const Eigen::Vector3d z = lie::so3::logMap(imu_orientation * state.base_orientation.inverse());
-    const Eigen::Matrix3d N = imu_orientation_cov;
+    const Eigen::Matrix3d N = imu_orientation_cov / dt;
 
     const Eigen::Matrix<double, 15, 3> PH_transpose = P_ * H.transpose();
     const Eigen::Matrix3d s = N + H * PH_transpose;

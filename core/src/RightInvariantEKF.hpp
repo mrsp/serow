@@ -90,6 +90,8 @@ private:
                                                         ///< measurement used in the update step.
     std::optional<double> last_imu_update_timestamp_;   ///< Timestamp of the last IMU measurement
                                                         ///< used in the update step.
+    std::optional<double> last_terrain_update_timestamp_;  ///< Timestamp of the last terrain
+                                                           ///< measurement used in the update step.
 
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
     /// matrix 15 x 15
@@ -150,12 +152,14 @@ private:
      * @param contacts_position Positions of leg contacts.
      * @param contacts_position_noise Covariances of leg contact positions.
      * @param contacts_probability Probabilities of leg contacts.
+     * @param timestamp Timestamp of the terrain measurement.
      * @param terrain_estimator Terrain elevation mapper.
      */
     void updateWithTerrain(BaseState& state,
                            const std::map<std::string, Eigen::Vector3d>& contacts_position,
                            const std::map<std::string, Eigen::Matrix3d>& contacts_position_noise,
                            const std::map<std::string, double>& contacts_probability,
+                           const double timestamp,
                            std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**

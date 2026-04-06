@@ -635,6 +635,7 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
 
     const Eigen::Matrix3d R_base_to_gyro_transpose = params_.R_base_to_gyro.transpose();
     const Eigen::Matrix3d R_base_to_acc_transpose = params_.R_base_to_acc.transpose();
+    // Spectral densities
     imu.angular_velocity_cov = params_.R_base_to_gyro * params_.angular_velocity_cov.asDiagonal() *
         R_base_to_gyro_transpose;
     imu.angular_velocity_bias_cov = params_.R_base_to_gyro *
@@ -654,6 +655,7 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
 
     attitude_estimator_->filter(imu.angular_velocity, imu.linear_acceleration, imu.timestamp);
     imu.orientation = attitude_estimator_->getQ();
+    // Spectral density
     imu.orientation_cov = attitude_estimator_->getOrientationCov();
 
     // IMU bias calibration - Assuming the IMU is stationary
@@ -755,7 +757,7 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
             params_.joint_rate, params_.g, params_.eps);
     }
 
-    // Compute linear velocity noise for contacts
+    // Compute linear velocity noise for contacts - Spectral densities
     for (const auto& frame : state.getContactsFrame()) {
         kin.contacts_position_noise[frame].noalias() =
             kinematic_estimator_->positionCovariance(frame);
@@ -767,6 +769,7 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
     // Transform angular velocity and its covariance from base frame to world frame
     const Eigen::Matrix3d Rwb = imu.orientation.toRotationMatrix();
     const Eigen::Vector3d base_angular_velocity_world = Rwb * imu.angular_velocity;
+    // Spectral density
     const Eigen::Matrix3d base_angular_velocity_cov_world =
         Rwb * imu.angular_velocity_cov * Rwb.transpose();
     leg_odometry_->estimate(
@@ -789,7 +792,7 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
 
 void Serow::runAngularMomentumEstimator(State& state) {
     // Get the angular momentum around the CoM in base frame coordinates as compute with rigid-body
-    // kinematics
+    // kinematics - Angular momentum spectral density
     const std::pair<Eigen::Vector3d, Eigen::Matrix3d> com_angular_momentum_and_covariance =
         kinematic_estimator_->comAngularMomentumAndCovariance();
     const Eigen::Matrix3d& R_world_to_base = state.base_state_.base_orientation.toRotationMatrix();
@@ -984,7 +987,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
         odom->base_orientation =
             Eigen::Quaterniond(R_base_to_odom * odom->base_orientation.toRotationMatrix());
 
-        // Calculate covariance
+        // Calculate covariance - not spectral density
         odom->base_position_cov =
             R_base_to_odom * odom->base_position_cov * R_base_to_odom.transpose();
         odom->base_orientation_cov =
@@ -1007,6 +1010,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
     state_.base_state_.base_angular_velocity = R_world_to_base * base_angular_velocity;
     state_.base_state_.base_linear_acceleration = R_world_to_base * base_linear_acceleration;
 
+    // Spectral density
     state_.base_state_.base_linear_acceleration_cov =
         R_world_to_base * imu.linear_acceleration_cov * R_base_to_world;
     state_.base_state_.base_angular_velocity_cov =
@@ -1022,7 +1026,7 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
         }
     }
 
-    // Estimate the base angular acceleration and covariance
+    // Estimate the base angular acceleration and spectral density
     state_.base_state_.base_angular_acceleration = gyro_derivative_estimator->filter(
         state_.base_state_.base_angular_velocity,
         state_.base_state_.base_angular_velocity_cov.diagonal(), imu.timestamp);
@@ -1063,6 +1067,8 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
 
     // Estimate the CoM angular momentum derivative
     runAngularMomentumEstimator(state);
+
+    // Process noise covariances
     kin.com_position_process_cov = params_.com_position_process_cov.asDiagonal();
     kin.com_linear_velocity_process_cov = params_.com_linear_velocity_process_cov.asDiagonal();
     kin.external_forces_process_cov = params_.external_forces_process_cov.asDiagonal();

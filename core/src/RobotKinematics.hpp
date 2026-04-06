@@ -54,7 +54,7 @@ public:
     /**
      * @brief Constructor to initialize the robot model and kinematic data
      * @param model_name Name of the model file for the robot
-     * @param joint_position_variance Per-joint position measurement noise variance
+     * @param joint_position_variance Per-joint position measurement spectral density
      * @param verbose Verbosity flag for model loading (default: false)
      */
     RobotKinematics(const std::string& model_name, double joint_position_variance,
@@ -200,7 +200,7 @@ public:
 
     /**
      * @brief Sets the joint position variance
-     * @param joint_position_variance Joint position variance
+     * @param joint_position_variance Joint position spectral density
      */
     void setJointPositionVariance(const double joint_position_variance) {
         qp_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_position_variance;
@@ -208,14 +208,15 @@ public:
 
     /**
      * @brief Sets the joint velocity variance
-     * @param joint_velocity_variance Joint velocity variance
+     * @param joint_velocity_variance Joint velocity spectral density
      */
     void setJointVelocityVariance(const double joint_velocity_variance) {
         qn_ = Eigen::VectorXd::Ones(jnames_.size()) * joint_velocity_variance;
     }
 
     /**
-     * @brief Computes the linear velocity covariance of a frame from independent joint noise.
+     * @brief Computes the linear velocity covariance of a frame from independent joint velocity
+     * spectral density.
      * @param frame_name Name of the frame
      * @return 3x3 linear velocity covariance matrix
      */
@@ -225,7 +226,8 @@ public:
     }
 
     /**
-     * @brief Computes the angular velocity covariance of a frame from independent joint noise.
+     * @brief Computes the angular velocity covariance of a frame from independent joint velocity
+     * spectral density.
      * @param frame_name Name of the frame
      * @return 3x3 angular velocity covariance matrix
      */
@@ -235,7 +237,8 @@ public:
     }
 
     /**
-     * @brief Computes the 3D position covariance of a frame from independent joint position noise.
+     * @brief Computes the 3D position covariance of a frame from independent joint position
+     * spectral density.
      * @param frame_name Name of the frame
      * @return 3x3 position covariance matrix (translation part)
      */
@@ -246,7 +249,7 @@ public:
 
     /**
      * @brief Computes the 3D orientation covariance of a frame from independent joint position
-     * noise.
+     * spectral density.
      * @param frame_name Name of the frame
      * @return 3x3 orientation covariance matrix (small-angle / tangent-space)
      *
@@ -505,7 +508,7 @@ public:
     }
 
     /**
-     * @brief Computes the CoM angular momentum covariance from joint noise.
+     * @brief Computes the CoM angular momentum covariance from joint velocity spectral density.
      * @note Prefer comAngularMomentumAndCovariance() if you also need the momentum.
      */
     Eigen::Matrix3d comAngularMomentumCovariance() const {
@@ -597,9 +600,9 @@ private:
     Eigen::VectorXd q_;
     /// Joint velocities (size nv)
     Eigen::VectorXd qdot_;
-    /// Per-joint position noise variance (size == jnames_.size())
+    /// Per-joint position spectral density (size == jnames_.size())
     Eigen::VectorXd qp_;
-    /// Per-joint velocity noise variance (size == jnames_.size())
+    /// Per-joint velocity spectral density (size == jnames_.size())
     Eigen::VectorXd qn_;
     /// Total robot mass
     double total_mass_{0.0};

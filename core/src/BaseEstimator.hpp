@@ -89,7 +89,7 @@ public:
      * @brief Updates the robot's state based on base linear velocity measurements.
      * @param state Current state of the robot.
      * @param base_linear_velocity Base linear velocity in world coordinates.
-     * @param base_linear_velocity_cov Covariance of base linear velocity measurement.
+     * @param base_linear_velocity_cov Spectral density of base linear velocity measurement.
      * @param timestamp Timestamp of the measurement.
      */
     virtual void updateWithBaseLinearVelocity(BaseState& state,
@@ -101,7 +101,7 @@ public:
      * @brief Updates the robot's state based on IMU orientation measurements.
      * @param state Current state of the robot.
      * @param imu_orientation Orientation of the IMU.
-     * @param imu_orientation_cov Covariance of the IMU orientation measurements.
+     * @param imu_orientation_cov Spectral density of the IMU orientation measurements.
      * @param timestamp Timestamp of the measurement.
      */
     virtual void updateWithIMUOrientation(BaseState& state,

@@ -64,9 +64,9 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     last_imu_predict_timestamp_.reset();
     last_kin_update_timestamp_.reset();
     last_imu_update_timestamp_.reset();
+    last_terrain_update_timestamp_.reset();
 
     use_imu_orientation_ = use_imu_orientation;
-
     base_linear_velocity_z_lpf_ =
         std::make_unique<ButterworthLPF>("Base Linear Velocity Z LPF", imu_rate, 10.0, false);
 
@@ -87,9 +87,8 @@ void ContactEKF::setState(const BaseState& state) {
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
     last_imu_update_timestamp_ = state.timestamp;
     last_kin_update_timestamp_ = state.timestamp;
-    if (use_imu_orientation_) {
-        last_imu_update_timestamp_ = state.timestamp;
-    }
+    last_imu_update_timestamp_ = state.timestamp;
+    last_terrain_update_timestamp_ = state.timestamp;
 }
 
 std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 12>>
@@ -246,9 +245,19 @@ void ContactEKF::updateWithTerrain(
     BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
     const std::map<std::string, Eigen::Matrix3d>& contacts_position_cov,
     const std::map<std::string, double>& contacts_probability,
-    std::shared_ptr<TerrainElevation> terrain_estimator) {
+    std::shared_ptr<TerrainElevation> terrain_estimator, const double timestamp) {
     const Eigen::Vector3d p_world_to_base = state.base_position;
     const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
+
+    double dt = nominal_kin_dt_;
+    if (last_terrain_update_timestamp_.has_value()) {
+        dt = timestamp - last_terrain_update_timestamp_.value();
+    }
+    last_terrain_update_timestamp_ = timestamp;
+
+    if (dt < 0.0) {
+        return;
+    }
 
     Eigen::Matrix<double, 1, 15> H;
     Eigen::Matrix<double, 15, 1> PH_transpose;
@@ -271,21 +280,20 @@ void ContactEKF::updateWithTerrain(
                 // const Eigen::Matrix3d skew_cp = lie::so3::wedge(contacts_position.at(cf));
                 // H.block(0, r_idx_[0], 1, 3) = -(R_world_to_base * skew_cp).row(2);
 
-                const double z_val =
-                    static_cast<double>(elevation.value().height) - con_pos_world.z();
+                const double z = static_cast<double>(elevation.value().height) - con_pos_world.z();
 
-                const double R_val =
+                const double N =
                     (static_cast<double>(elevation.value().variance + con_cov_world(2, 2)) + 1e-6) /
-                    cp;
+                    (cp * dt);
 
                 PH_transpose.noalias() = P_ * H.transpose();
-                const double s = R_val + (H * PH_transpose)(0, 0);
+                const double s = N + (H * PH_transpose)(0, 0);
                 const Eigen::Matrix<double, 15, 1> K = PH_transpose / s;
-                const Eigen::Matrix<double, 15, 1> dx = K * z_val;
+                const Eigen::Matrix<double, 15, 1> dx = K * z;
                 const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
                 Eigen::Matrix<double, 15, 15> P_new;
                 P_new.noalias() = IKH * P_ * IKH.transpose();
-                P_new += K * R_val * K.transpose();
+                P_new += K * N * K.transpose();
                 P_ = P_new;
                 updateState(state, dx, P_);
             }
@@ -336,6 +344,15 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                         std::shared_ptr<TerrainElevation> terrain_estimator) {
     // Use the predicted state to update the terrain estimator
     if (terrain_estimator) {
+        double dt = nominal_kin_dt_;
+        if (last_terrain_update_timestamp_.has_value()) {
+            dt = kin.timestamp - last_terrain_update_timestamp_.value();
+        }
+
+        if (dt < 0.0) {
+            return;
+        }
+
         Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
         T_world_to_base.translation() = state.base_position;
         T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
@@ -382,9 +399,9 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
                                   static_cast<float>(n_contact.z())};
                     }
                 }
-                if (!terrain_estimator->update(con_pos_xy, con_pos_z,
-                                               static_cast<float>((con_cov(2, 2) + 1e-6) / cp),
-                                               normal)) {
+                if (!terrain_estimator->update(
+                        con_pos_xy, con_pos_z,
+                        static_cast<float>((con_cov(2, 2) + 1e-6) / (cp * dt)), normal)) {
                     std::cout << "Contact for " << cf
                               << " is not inside the terrain elevation map and thus height is not "
                                  "updated "
@@ -423,7 +440,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
     // potentially recenter the terrain mapper
     if (terrain_estimator) {
         updateWithTerrain(state, kin.contacts_position, kin.contacts_position_noise,
-                          kin.contacts_probability, terrain_estimator);
+                          kin.contacts_probability, kin.timestamp, terrain_estimator);
         // Recenter the map
         const std::array<float, 2> base_pos_xy = {static_cast<float>(state.base_position.x()),
                                                   static_cast<float>(state.base_position.y())};

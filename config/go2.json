@@ -13,10 +13,10 @@
     "g": 9.81,
     "joint_rate": 500.0,
     "estimate_joint_velocity": true,
-    "joint_position_variance": 1e-2,
+    "joint_position_variance": 1e-5,
     "joint_velocity_variance": null,
     "smoothing_window": 7,
-    "tau_0": 1e-3,
+    "tau_0": 5e-4,
     "tau_1": 0.0,
     "imu_rate": 500.0,
     "R_base_to_gyro": [
@@ -105,7 +105,7 @@
     "attitude_estimator_proportional_gain": 0.1,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
-    "median_window": 19,
+    "median_window": 17,
     "convergence_cycles": 100,
     "imu_angular_velocity_covariance": [
         1e-2,
@@ -133,14 +133,14 @@
         1e-6
     ],
     "com_linear_velocity_process_covariance": [
-        1e-4,
-        1e-4,
-        1e-4
+        1e-3,
+        1e-3,
+        1e-3
     ],
     "external_forces_process_covariance": [
-        1e-1,
-        1e-1,
-        1e-1
+        1.0,
+        1.0,
+        1.0
     ],
     "initial_base_position_covariance": [
         1e-6,
@@ -153,9 +153,9 @@
         1e-6
     ],
     "initial_base_linear_velocity_covariance": [
-        1e-3,
-        1e-3,
-        1e-3
+        1e-4,
+        1e-4,
+        1e-4
     ],
     "initial_imu_linear_acceleration_bias_covariance": [
         1e-6,
@@ -173,9 +173,9 @@
         1e-6
     ],
     "initial_com_linear_velocity_covariance": [
-        1e-3,
-        1e-3,
-        1e-3
+        1e-4,
+        1e-4,
+        1e-4
     ],
     "initial_external_forces_covariance": [
         1.0,
@@ -185,27 +185,27 @@
     "T_base_to_odom": null,
     "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
-    "minimum_terrain_height_variance": 1e-2,
+    "minimum_terrain_height_variance": 1e-3,
     "maximum_contact_points": 4,
     "maximum_recenter_distance": 0.35,
-    "minimum_contact_probability": 0.35,
+    "minimum_contact_probability": 0.2,
     "resolution": 0.02,
     "radius": 0.04,
     "dist_variance_gain": 200.0,
-    "power": 2.0,
+    "power": 1.5,
     "T_base_to_ground_truth": [
         1.0,
         0.0,
         0.0,
-        -0.03270961,
-        0.0,
-        1.0,
-        0.0,
-        -0.00222456,
         0.0,
         0.0,
         1.0,
-        -0.01544948,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
         0.0,
         0.0,
         0.0,
