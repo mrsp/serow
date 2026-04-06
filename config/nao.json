@@ -111,9 +111,9 @@
         1e-4
     ],
     "imu_angular_velocity_bias_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
+        1e-8,
+        1e-8,
+        1e-8
     ],
     "imu_linear_acceleration_covariance": [
         1e-3,
@@ -121,9 +121,9 @@
         1e-3
     ],
     "imu_linear_acceleration_bias_covariance": [
-        1e-5,
-        1e-5,
-        1e-5
+        1e-6,
+        1e-6,
+        1e-6
     ],
     "com_position_process_covariance": [
         1e-6,
@@ -136,44 +136,44 @@
         1e-4
     ],
     "external_forces_process_covariance": [
-        1e-2,
-        1e-2,
-        1e-2
+        1.0,
+        1.0,
+        1.0
     ],
     "initial_base_position_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1e-6,
+        1e-6,
+        1e-6
     ],
     "initial_base_orientation_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-4,
+        1.0e-4,
+        1.0e-4
     ],
     "initial_base_linear_velocity_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-3,
+        1.0e-3,
+        1.0e-3
     ],
     "initial_imu_linear_acceleration_bias_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-6,
+        1.0e-6,
+        1.0e-6
     ],
     "initial_imu_angular_velocity_bias_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-6,
+        1.0e-6,
+        1.0e-6
     ],
     "initial_com_position_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-6,
+        1.0e-6,
+        1.0e-6
     ],
     "initial_com_linear_velocity_covariance": [
-        1.0,
-        1.0,
-        1.0
+        1.0e-4,
+        1.0e-4,
+        1.0e-4
     ],
     "initial_external_forces_covariance": [
         1.0,

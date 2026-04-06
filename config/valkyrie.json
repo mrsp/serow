@@ -10,7 +10,7 @@
     "g": 9.81,
     "joint_rate": 400.0,
     "estimate_joint_velocity": true,
-    "joint_position_variance": 5e-1,
+    "joint_position_variance": 0.00125,
     "joint_velocity_variance": null,
     "smoothing_window": 7,
     "tau_0": 1.0,
@@ -100,7 +100,7 @@
             1.0
         ]
     },
-    "attitude_estimator_proportional_gain": 0.02,
+    "attitude_estimator_proportional_gain": 0.1,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
     "median_window": 11,
@@ -200,7 +200,7 @@
     ],
     "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
-    "minimum_terrain_height_variance": 1e-1,
+    "minimum_terrain_height_variance": 1e-3,
     "maximum_contact_points": 4,
     "maximum_recenter_distance": 1.0,
     "minimum_contact_probability": 0.15,
@@ -210,7 +210,7 @@
     "resolution": 0.02,
     "radius": 0.35,
     "dist_variance_gain": 100.0,
-    "power": 2.0,
+    "power": 1.5,
     "T_base_to_ground_truth": [
         1.0,
         0.0,

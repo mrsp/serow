@@ -244,8 +244,8 @@ void ContactEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& bas
 void ContactEKF::updateWithTerrain(
     BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
     const std::map<std::string, Eigen::Matrix3d>& contacts_position_cov,
-    const std::map<std::string, double>& contacts_probability,
-    std::shared_ptr<TerrainElevation> terrain_estimator, const double timestamp) {
+    const std::map<std::string, double>& contacts_probability, const double timestamp,
+    std::shared_ptr<TerrainElevation> terrain_estimator) {
     const Eigen::Vector3d p_world_to_base = state.base_position;
     const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
 

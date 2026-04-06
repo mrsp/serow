@@ -136,9 +136,9 @@
         1e-4
     ],
     "external_forces_process_covariance": [
-        1e-2,
-        1e-2,
-        1e-2
+        1.0,
+        1.0,
+        1.0
     ],
     "initial_base_position_covariance": [
         1.0e-2,
