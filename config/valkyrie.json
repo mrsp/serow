@@ -136,9 +136,9 @@
         1e-3
     ],
     "external_forces_process_covariance": [
-        1.0,
-        1.0,
-        1.0
+        5.0,
+        5.0,
+        5.0
     ],
     "initial_base_position_covariance": [
         1.0e-5,
@@ -166,9 +166,9 @@
         1.0e-6
     ],
     "initial_com_position_covariance": [
-        1.0e-6,
-        1.0e-6,
-        1.0e-6
+        1.0e-5,
+        1.0e-5,
+        1.0e-5
     ],
     "initial_com_linear_velocity_covariance": [
         1.0e-3,
@@ -176,9 +176,9 @@
         1.0e-3
     ],
     "initial_external_forces_covariance": [
-        1.0,
-        1.0,
-        1.0
+        50.0,
+        50.0,
+        50.0
     ],
     "T_base_to_odom": [
         1.0,
@@ -200,16 +200,16 @@
     ],
     "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
-    "minimum_terrain_height_variance": 1e-3,
+    "minimum_terrain_height_variance": 1e-4,
     "maximum_contact_points": 4,
-    "maximum_recenter_distance": 1.0,
+    "maximum_recenter_distance": 0.85,
     "minimum_contact_probability": 0.15,
     "minimum_stable_contact_probability": 0.85,
     "minimum_stable_foot_angular_velocity": 0.03,
     "minimum_stable_foot_linear_velocity": 0.03,
     "resolution": 0.02,
-    "radius": 0.35,
-    "dist_variance_gain": 100.0,
+    "radius": 0.4,
+    "dist_variance_gain": 1000.0,
     "power": 1.5,
     "T_base_to_ground_truth": [
         1.0,
