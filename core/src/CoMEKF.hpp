@@ -34,10 +34,15 @@ class CoMEKF {
 private:
     std::optional<double> last_grf_timestamp_; /**< Previous ground reaction force timestamp, used
                                                   in the predict step */
-    Eigen::Matrix<double, 9, 9> P_;            /**< State covariance matrix */
+    std::optional<double> last_com_update_timestamp_; /**< Previous CoM position timestamp, used in
+                                                       the update step */
+    std::optional<double> last_acc_update_timestamp_; /**< Previous CoM linear acceleration
+                                                       timestamp, used in the update step */
+    Eigen::Matrix<double, 9, 9> P_;                   /**< State covariance matrix */
     Eigen::Matrix<double, 9, 9> I_ =
         Eigen::Matrix<double, 9, 9>::Identity(); /**< Identity matrix */
-    double nominal_dt_{};                        /**< Nominal force/torque sampling period */
+    double nominal_grf_dt_{};                    /**< Nominal force/torque sampling period */
+    double nominal_kin_dt_{};                    /**< Nominal kinematic sampling period */
     double mass_{};                              /**< Robot's mass */
     double g_{};                                 /**< Gravity constant */
 
@@ -83,22 +88,25 @@ private:
      * @param ground_reaction_force The total ground reaction force in world coordinates.
      * @param com_angular_momentum_derivative The angular momentum rate around the CoM in world
      * coordinates.
+     * @param timestamp The timestamp of the measurement.
      */
     void updateWithCoMAcceleration(CentroidalState& state,
                                    const Eigen::Vector3d& com_linear_acceleration,
                                    const Eigen::Matrix3d& com_linear_acceleration_cov,
                                    const Eigen::Vector3d& cop_position,
                                    const Eigen::Vector3d& ground_reaction_force,
-                                   const Eigen::Vector3d& com_angular_momentum_derivative);
+                                   const Eigen::Vector3d& com_angular_momentum_derivative,
+                                   const double timestamp);
 
     /**
      * @brief Performs the EKF update step with a CoM position measurement.
      * @param state The EKF state used in the computation.
      * @param com_position The CoM position in world coordinates.
      * @param com_position_cov The CoM position covariance in world coordinates.
+     * @param timestamp The timestamp of the measurement.
      */
     void updateWithCoMPosition(CentroidalState& state, const Eigen::Vector3d& com_position,
-                               const Eigen::Matrix3d& com_position_cov);
+                               const Eigen::Matrix3d& com_position_cov, const double timestamp);
 
     /**
      * @brief Updates the EKF state.
@@ -126,10 +134,13 @@ public:
      * @param state The initial state of the EKF.
      * @param mass The robot's mass.
      * @param g The gravity constant.
-     * @param rate The nominal rate, corresponds to the F/T rate and the rate the predict step is
-     * realized.
+     * @param grf_rate The nominal rate, corresponds to the F/T rate and the rate the predict step
+     * is realized.
+     * @param kin_rate The nominal rate, corresponds to the kinematic rate and the rate the update
+     * step is realized.
      */
-    void init(const CentroidalState& state, double mass, double g, double rate);
+    void init(const CentroidalState& state, const double mass, const double g,
+              const double grf_rate, const double kin_rate);
 
     /**
      * @brief Realizes the EKF predict step.

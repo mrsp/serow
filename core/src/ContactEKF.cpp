@@ -18,9 +18,9 @@
 
 namespace serow {
 
-void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame, double g,
-                      double imu_rate, double eps, bool point_feet, bool use_imu_orientation,
-                      bool verbose) {
+void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_frame, const double g,
+                      const double imu_rate, const double kin_rate, const double eps,
+                      const bool point_feet, const bool use_imu_orientation, const bool verbose) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     point_feet_ = point_feet;
@@ -28,7 +28,8 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
     num_states_ = 15;
     num_inputs_ = 12;
-    nominal_dt_ = 1.0 / imu_rate;
+    nominal_imu_dt_ = 1.0 / imu_rate;
+    nominal_kin_dt_ = 1.0 / kin_rate;
     I_.setIdentity(num_states_, num_states_);
 
     // Initialize state indices
@@ -60,7 +61,9 @@ void ContactEKF::init(const BaseState& state, std::set<std::string> contacts_fra
     Lc_(r_idx_, ng_idx_) = -Eigen::Matrix3d::Identity();
     Lc_(bg_idx_, nbg_idx_) = Eigen::Matrix3d::Identity();
     Lc_(ba_idx_, nba_idx_) = Eigen::Matrix3d::Identity();
-    last_imu_timestamp_.reset();
+    last_imu_predict_timestamp_.reset();
+    last_kin_update_timestamp_.reset();
+    last_imu_update_timestamp_.reset();
 
     use_imu_orientation_ = use_imu_orientation;
 
@@ -82,7 +85,11 @@ void ContactEKF::setState(const BaseState& state) {
     P_(p_idx_, p_idx_) = state.base_position_cov;
     P_(bg_idx_, bg_idx_) = state.imu_angular_velocity_bias_cov;
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
-    last_imu_timestamp_ = state.timestamp;
+    last_imu_update_timestamp_ = state.timestamp;
+    last_kin_update_timestamp_ = state.timestamp;
+    if (use_imu_orientation_) {
+        last_imu_update_timestamp_ = state.timestamp;
+    }
 }
 
 std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 12>>
@@ -109,25 +116,18 @@ ContactEKF::computePredictionJacobians(const BaseState& state, Eigen::Vector3d a
 }
 
 void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu) {
-    double dt = nominal_dt_;
-    if (last_imu_timestamp_.has_value()) {
-        dt = imu.timestamp - last_imu_timestamp_.value();
+    double dt = nominal_imu_dt_;
+    if (last_imu_predict_timestamp_.has_value()) {
+        dt = imu.timestamp - last_imu_predict_timestamp_.value();
     }
+    last_imu_predict_timestamp_ = imu.timestamp;
 
     // Check if the sample time is abnormal
     if (dt < 0.0) {
         std::cout << "[SEROW/ContactEKF]: Predict step sample time is negative " << dt
-                  << " while the nominal sample time is " << nominal_dt_
+                  << " while the nominal sample time is " << nominal_imu_dt_
                   << " returning without updating the state" << '\n';
         return;
-    }
-    if (dt < nominal_dt_ / 2) {
-        if (verbose_) {
-            std::cout << "[SEROW/ContactEKF]: Predict step sample time is abnormal " << dt
-                      << " while the nominal sample time is " << nominal_dt_
-                      << " setting to nominal" << '\n';
-        }
-        dt = nominal_dt_;
     }
 
     // Compute the state and input-state Jacobians
@@ -154,7 +154,6 @@ void ContactEKF::predict(BaseState& state, const ImuMeasurement& imu) {
     computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration);
     state.base_linear_velocity =
         state.base_orientation.toRotationMatrix() * state.base_local_linear_velocity;
-    last_imu_timestamp_ = imu.timestamp;
 }
 
 void ContactEKF::computeDiscreteDynamics(BaseState& state, double dt,
@@ -401,7 +400,7 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
 
     // Update the state with the absolute IMU orientation
     if (use_imu_orientation_) {
-        updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov);
+        updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov, imu.timestamp);
     }
 
     // Update the state with the absolute base linear velocity computed with leg kinematics only if
@@ -411,7 +410,8 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
         den += cp;
     }
     if (den > eps_) {
-        updateWithBaseLinearVelocity(state, kin.base_linear_velocity, kin.base_linear_velocity_cov);
+        updateWithBaseLinearVelocity(state, kin.base_linear_velocity, kin.base_linear_velocity_cov,
+                                     kin.timestamp);
     }
 
     if (odom.has_value()) {
@@ -459,14 +459,24 @@ void ContactEKF::update(BaseState& state, const ImuMeasurement& imu,
 
 void ContactEKF::updateWithIMUOrientation(BaseState& state,
                                           const Eigen::Quaterniond& imu_orientation,
-                                          const Eigen::Matrix3d& imu_orientation_cov) {
+                                          const Eigen::Matrix3d& imu_orientation_cov,
+                                          const double timestamp) {
+    double dt = nominal_imu_dt_;
+    if (last_imu_update_timestamp_.has_value()) {
+        dt = timestamp - last_imu_update_timestamp_.value();
+    }
+    last_imu_update_timestamp_ = timestamp;
+
+    if (dt < 0.0) {
+        return;
+    }
+
     Eigen::Matrix<double, 3, 15> H;
     H.setZero();
     H.block(0, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
     const Eigen::Vector3d z = lie::so3::minus(imu_orientation, state.base_orientation);
-
-    const Eigen::Matrix3d& R = imu_orientation_cov;
+    const Eigen::Matrix3d R = imu_orientation_cov / dt;
 
     const Eigen::Matrix<double, 15, 3> PH_transpose = P_ * H.transpose();
     const Eigen::Matrix3d s = R + H * PH_transpose;
@@ -483,13 +493,25 @@ void ContactEKF::updateWithIMUOrientation(BaseState& state,
 
 void ContactEKF::updateWithBaseLinearVelocity(BaseState& state,
                                               const Eigen::Vector3d& base_linear_velocity,
-                                              const Eigen::Matrix3d& base_linear_velocity_cov) {
+                                              const Eigen::Matrix3d& base_linear_velocity_cov,
+                                              const double timestamp) {
+    double dt = nominal_kin_dt_;
+    if (last_kin_update_timestamp_.has_value()) {
+        dt = timestamp - last_kin_update_timestamp_.value();
+    }
+    last_kin_update_timestamp_ = timestamp;
+
+    if (dt < 0.0) {
+        return;
+    }
+
     const int num_iter = 5;
     Eigen::Matrix<double, 3, 15> H;
     H.setZero();
     Eigen::Matrix<double, 15, 3> K;
     Eigen::Matrix<double, 15, 3> PH_transpose;
     Eigen::Matrix3d s;
+    const Eigen::Matrix3d N = base_linear_velocity_cov / dt;
 
     // Iterative ESKF update
     for (size_t iter = 0; iter < num_iter; iter++) {
@@ -501,7 +523,7 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state,
         const Eigen::Vector3d z = base_linear_velocity - R * state.base_local_linear_velocity;
 
         PH_transpose.noalias() = P_ * H.transpose();
-        s.noalias() = base_linear_velocity_cov + H * PH_transpose;
+        s.noalias() = N + H * PH_transpose;
         K = s.ldlt().solve(PH_transpose.transpose()).transpose();
         const Eigen::Matrix<double, 15, 1> dx = K * z;
 
@@ -522,7 +544,7 @@ void ContactEKF::updateWithBaseLinearVelocity(BaseState& state,
     const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
     Eigen::Matrix<double, 15, 15> P_new;
     P_new.noalias() = IKH * P_ * IKH.transpose();
-    P_new += K * base_linear_velocity_cov * K.transpose();
+    P_new += K * N * K.transpose();
     P_ = P_new;
 
     // Update state covariances with the final P_

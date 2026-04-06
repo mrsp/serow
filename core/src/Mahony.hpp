@@ -100,7 +100,7 @@ public:
      *  @returns the orientation covariance matrix in the world frame
      */
     Eigen::Matrix3d getOrientationCov() const {
-        return R_ * P_ * R_.transpose();
+        return R_ * P_ * R_.transpose() * dt_;
     }
 
     /** @fn filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc)
@@ -110,7 +110,14 @@ public:
      *  @param timestamp timestamp of the measurement
      */
     void filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc, double timestamp) {
-        double dt = nominal_dt_;
+        dt_ = nominal_dt_;
+        if (timestamp_) {
+            dt_ = timestamp - timestamp_.value();
+            if (dt_ <= 0.0) {
+                dt_ = nominal_dt_;
+            }
+        }
+
         double gx = gyro(0);
         double gy = gyro(1);
         double gz = gyro(2);
@@ -119,13 +126,13 @@ public:
         double az = acc(2);
 
         // Small angle approximation of the rotation update
-        const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() - lie::so3::wedge(gyro) * dt;
+        const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() - lie::so3::wedge(gyro) * dt_;
 
         // Predict step (Uncertainty increases due to Gyro noise)
-        const double decay_factor = std::exp(-dt / tau_);
+        const double decay_factor = std::exp(-dt_ / tau_);
         Eigen::Matrix3d P_new;
         P_new.noalias() = F * P_ * F.transpose() * decay_factor;
-        P_new += Q_gyro_ * dt;
+        P_new += Q_gyro_ * dt_;
         P_ = P_new;
 
         // Valid accelerometer check
@@ -153,7 +160,7 @@ public:
 
             // Kalman-like covariance update (requires Kp > 0; R_acc scales ~ 1/Kp)
             if (twoKp_ > 0.0) {
-                const Eigen::Matrix3d R_acc = (Q_acc_ / dt) / (twoKp_ * 0.5);
+                const Eigen::Matrix3d R_acc = (Q_acc_ / dt_) / (twoKp_ * 0.5);
                 const Eigen::Matrix3d S = H * P_ * H.transpose() + R_acc;
                 const Eigen::Matrix3d K =
                     S.ldlt().solve((P_ * H.transpose()).transpose()).transpose();
@@ -162,9 +169,9 @@ public:
 
             // Integral feedback with anti-windup decay
             if (twoKi_ > 0.0) {
-                integralFBx_ = 0.98 * integralFBx_ + twoKi_ * halfex * dt;
-                integralFBy_ = 0.98 * integralFBy_ + twoKi_ * halfey * dt;
-                integralFBz_ = 0.98 * integralFBz_ + twoKi_ * halfez * dt;
+                integralFBx_ = 0.98 * integralFBx_ + twoKi_ * halfex * nominal_dt_;
+                integralFBy_ = 0.98 * integralFBy_ + twoKi_ * halfey * nominal_dt_;
+                integralFBz_ = 0.98 * integralFBz_ + twoKi_ * halfez * nominal_dt_;
                 gx += integralFBx_;
                 gy += integralFBy_;
                 gz += integralFBz_;
@@ -184,9 +191,10 @@ public:
         const double qa = q0_;
         const double qb = q1_;
         const double qc = q2_;
-        gx *= 0.5 * dt;
-        gy *= 0.5 * dt;
-        gz *= 0.5 * dt;
+        gx *=
+            0.5 * nominal_dt_;  // For stability, we use the nominal sample time for the integration
+        gy *= 0.5 * nominal_dt_;
+        gz *= 0.5 * nominal_dt_;
         q0_ += (-qb * gx - qc * gy - q3_ * gz);
         q1_ += (qa * gx + qc * gz - q3_ * gy);
         q2_ += (qa * gy - qb * gz + q3_ * gx);
@@ -265,6 +273,8 @@ private:
     double integralFBz_ = 0.0;
     /// Nominal sample time
     double nominal_dt_ = 0.0;
+    /// Sample time
+    double dt_ = 0.0;
     /// Timestamp of the last measurement
     std::optional<double> timestamp_ = std::nullopt;
     /// Whether to print verbose output

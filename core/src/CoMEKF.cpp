@@ -17,7 +17,8 @@
 
 namespace serow {
 
-void CoMEKF::init(const CentroidalState& state, double mass, double g, double rate) {
+void CoMEKF::init(const CentroidalState& state, const double mass, const double g,
+                  const double grf_rate, const double kin_rate) {
     I_ = Eigen::Matrix<double, 9, 9>::Identity();
     P_ = Eigen::Matrix<double, 9, 9>::Identity();
     // Initialize state indices
@@ -29,9 +30,12 @@ void CoMEKF::init(const CentroidalState& state, double mass, double g, double ra
     P_(v_idx_, v_idx_) = state.com_linear_velocity_cov;
     P_(f_idx_, f_idx_) = state.external_forces_cov;
     mass_ = mass;
-    nominal_dt_ = 1.0 / rate;
+    nominal_grf_dt_ = 1.0 / grf_rate;
+    nominal_kin_dt_ = 1.0 / kin_rate;
     g_ = g;
     last_grf_timestamp_.reset();
+    last_com_update_timestamp_.reset();
+    last_acc_update_timestamp_.reset();
 }
 
 void CoMEKF::setState(const CentroidalState& state) {
@@ -44,20 +48,16 @@ void CoMEKF::setState(const CentroidalState& state) {
 
 void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
                      const GroundReactionForceMeasurement& grf) {
-    double dt = nominal_dt_;
+    double dt = nominal_grf_dt_;
     if (last_grf_timestamp_.has_value()) {
         dt = grf.timestamp - last_grf_timestamp_.value();
     }
+    last_grf_timestamp_ = grf.timestamp;
 
     if (dt < 0.0) {
-        std::cerr << "[CoMEKF]: Predict step sample time is negative (" << dt << "), nominal is "
-                  << nominal_dt_ << "; skipping predict" << '\n';
         return;
     }
 
-    if (dt < nominal_dt_ / 2) {
-        dt = nominal_dt_;
-    }
     const auto& [Ac, Lc] =
         computePredictionJacobians(state, grf.cop, grf.force, state.angular_momentum_derivative);
 
@@ -84,7 +84,6 @@ void CoMEKF::predict(CentroidalState& state, const KinematicMeasurement& kin,
     state.com_linear_velocity_cov = P_(v_idx_, v_idx_);
     state.external_forces_cov = P_(f_idx_, f_idx_);
     state.timestamp = grf.timestamp;
-    last_grf_timestamp_ = grf.timestamp;
 }
 
 void CoMEKF::updateWithKinematics(CentroidalState& state, const BaseState& base_state,
@@ -92,7 +91,7 @@ void CoMEKF::updateWithKinematics(CentroidalState& state, const BaseState& base_
     const Eigen::Matrix3d Rwb = base_state.base_orientation.toRotationMatrix();
     const Eigen::Vector3d& com_position = base_state.base_position + Rwb * kin.com_position;
     const Eigen::Matrix3d& com_position_cov = Rwb * kin.com_position_cov * Rwb.transpose();
-    updateWithCoMPosition(state, com_position, com_position_cov);
+    updateWithCoMPosition(state, com_position, com_position_cov, kin.timestamp);
     state.timestamp = kin.timestamp;
 }
 
@@ -129,7 +128,7 @@ void CoMEKF::updateWithImu(CentroidalState& state, const BaseState& base_state,
 
     updateWithCoMAcceleration(state, com_linear_acceleration_measurement.first,
                               com_linear_acceleration_measurement.second, grf.cop, grf.force,
-                              state.angular_momentum_derivative);
+                              state.angular_momentum_derivative, grf.timestamp);
 
     state.com_linear_acceleration = com_linear_acceleration_measurement.first;
     state.com_linear_acceleration_cov = com_linear_acceleration_measurement.second;
@@ -187,7 +186,18 @@ void CoMEKF::updateWithCoMAcceleration(CentroidalState& state,
                                        const Eigen::Matrix3d& com_linear_acceleration_cov,
                                        const Eigen::Vector3d& cop_position,
                                        const Eigen::Vector3d& ground_reaction_force,
-                                       const Eigen::Vector3d& com_angular_momentum_derivative) {
+                                       const Eigen::Vector3d& com_angular_momentum_derivative,
+                                       const double timestamp) {
+    double dt = nominal_grf_dt_;
+    if (last_acc_update_timestamp_.has_value()) {
+        dt = timestamp - last_acc_update_timestamp_.value();
+    }
+    last_acc_update_timestamp_ = timestamp;
+
+    if (dt < 0.0) {
+        return;
+    }
+
     double den = state.com_position.z() - cop_position.z();
     den = std::max(den, 1e-6);
 
@@ -214,7 +224,7 @@ void CoMEKF::updateWithCoMAcceleration(CentroidalState& state,
     H(1, 7) = 1.0 / mass_;
     H(2, 8) = 1.0 / mass_;
 
-    const Eigen::Matrix3d& R = com_linear_acceleration_cov;
+    const Eigen::Matrix3d R = com_linear_acceleration_cov / dt;
     const Eigen::Matrix3d s = R + H * P_ * H.transpose();
     const Eigen::Matrix<double, 9, 3> K =
         s.ldlt().solve((P_ * H.transpose()).transpose()).transpose();
@@ -228,12 +238,23 @@ void CoMEKF::updateWithCoMAcceleration(CentroidalState& state,
 }
 
 void CoMEKF::updateWithCoMPosition(CentroidalState& state, const Eigen::Vector3d& com_position,
-                                   const Eigen::Matrix3d& com_position_cov) {
+                                   const Eigen::Matrix3d& com_position_cov,
+                                   const double timestamp) {
+    double dt = nominal_kin_dt_;
+    if (last_com_update_timestamp_.has_value()) {
+        dt = timestamp - last_com_update_timestamp_.value();
+    }
+    last_com_update_timestamp_ = timestamp;
+
+    if (dt < 0.0) {
+        return;
+    }
+
     const Eigen::Vector3d z = com_position - state.com_position;
     Eigen::Matrix<double, 3, 9> H = Eigen::Matrix<double, 3, 9>::Zero();
     H(c_idx_, c_idx_) = Eigen::Matrix3d::Identity();
 
-    const Eigen::Matrix3d& R = com_position_cov;
+    const Eigen::Matrix3d R = com_position_cov / dt;
     const Eigen::Matrix3d s = R + H * P_ * H.transpose();
     const Eigen::Matrix<double, 9, 3> K =
         s.ldlt().solve((P_ * H.transpose()).transpose()).transpose();

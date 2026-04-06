@@ -18,9 +18,10 @@
 
 namespace serow {
 
-void RightInvariantEKF::init(const BaseState& state, std::set<std::string> contacts_frame, double g,
-                             double imu_rate, double eps, bool point_feet, bool use_imu_orientation,
-                             bool verbose) {
+void RightInvariantEKF::init(const BaseState& state, std::set<std::string> contacts_frame,
+                             const double g, const double imu_rate, const double kin_rate,
+                             const double eps, const bool point_feet,
+                             const bool use_imu_orientation, const bool verbose) {
     num_leg_end_effectors_ = contacts_frame.size();
     contacts_frame_ = std::move(contacts_frame);
     point_feet_ = point_feet;
@@ -28,7 +29,8 @@ void RightInvariantEKF::init(const BaseState& state, std::set<std::string> conta
     g_ = Eigen::Vector3d(0.0, 0.0, -g);
     num_states_ = 15;
     num_inputs_ = 12;
-    nominal_dt_ = 1.0 / imu_rate;
+    nominal_imu_dt_ = 1.0 / imu_rate;
+    nominal_kin_dt_ = 1.0 / kin_rate;
     I_.setIdentity(num_states_, num_states_);
 
     // State error indices: [xi_R, xi_v, xi_p, db_g, db_a]
@@ -62,7 +64,9 @@ void RightInvariantEKF::init(const BaseState& state, std::set<std::string> conta
     Lc_.setZero(num_states_, num_inputs_);
     Lc_(bg_idx_, nbg_idx_) = Eigen::Matrix3d::Identity();
     Lc_(ba_idx_, nba_idx_) = Eigen::Matrix3d::Identity();
-    last_imu_timestamp_.reset();
+    last_imu_predict_timestamp_.reset();
+    last_kin_update_timestamp_.reset();
+    last_imu_update_timestamp_.reset();
 
     use_imu_orientation_ = use_imu_orientation;
 
@@ -79,7 +83,11 @@ void RightInvariantEKF::setState(const BaseState& state) {
     P_(p_idx_, p_idx_) = state.base_position_cov;
     P_(bg_idx_, bg_idx_) = state.imu_angular_velocity_bias_cov;
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
-    last_imu_timestamp_ = state.timestamp;
+    last_imu_update_timestamp_ = state.timestamp;
+    last_kin_update_timestamp_ = state.timestamp;
+    if (use_imu_orientation_) {
+        last_imu_update_timestamp_ = state.timestamp;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -135,25 +143,18 @@ RightInvariantEKF::computePredictionJacobians(const BaseState& state) {
 // Predict step
 // ---------------------------------------------------------------------------
 void RightInvariantEKF::predict(BaseState& state, const ImuMeasurement& imu) {
-    double dt = nominal_dt_;
-    if (last_imu_timestamp_.has_value()) {
-        dt = imu.timestamp - last_imu_timestamp_.value();
+    double dt = nominal_imu_dt_;
+    if (last_imu_predict_timestamp_.has_value()) {
+        dt = imu.timestamp - last_imu_predict_timestamp_.value();
     }
+    last_imu_predict_timestamp_ = imu.timestamp;
 
     // Check if the sample time is abnormal
     if (dt < 0.0) {
         std::cout << "[SEROW/RightInvariantEKF]: Predict step sample time is negative " << dt
-                  << " while the nominal sample time is " << nominal_dt_
+                  << " while the nominal sample time is " << nominal_imu_dt_
                   << " returning without updating the state" << '\n';
         return;
-    }
-    if (dt < nominal_dt_ / 2) {
-        if (verbose_) {
-            std::cout << "[SEROW/RightInvariantEKF]: Predict step sample time is abnormal " << dt
-                      << " while the nominal sample time is " << nominal_dt_
-                      << " setting to nominal" << '\n';
-        }
-        dt = nominal_dt_;
     }
 
     // Continuous-time Jacobians
@@ -180,7 +181,6 @@ void RightInvariantEKF::predict(BaseState& state, const ImuMeasurement& imu) {
 
     // Propagate the mean state (world-frame dynamics)
     computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration);
-    last_imu_timestamp_ = imu.timestamp;
 }
 
 // ---------------------------------------------------------------------------
@@ -482,7 +482,7 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
 
     // Update the state with the absolute IMU orientation
     if (use_imu_orientation_) {
-        updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov);
+        updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov, imu.timestamp);
     }
 
     // Update the state with the absolute base linear velocity computed with leg kinematics only if
@@ -492,7 +492,8 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
         den += cp;
     }
     if (den > eps_) {
-        updateWithBaseLinearVelocity(state, kin.base_linear_velocity, kin.base_linear_velocity_cov);
+        updateWithBaseLinearVelocity(state, kin.base_linear_velocity, kin.base_linear_velocity_cov,
+                                     kin.timestamp);
     }
 
     if (odom.has_value()) {
@@ -539,7 +540,18 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
 // ---------------------------------------------------------------------------
 void RightInvariantEKF::updateWithIMUOrientation(BaseState& state,
                                                  const Eigen::Quaterniond& imu_orientation,
-                                                 const Eigen::Matrix3d& imu_orientation_cov) {
+                                                 const Eigen::Matrix3d& imu_orientation_cov,
+                                                 const double timestamp) {
+    double dt = nominal_imu_dt_;
+    if (last_imu_update_timestamp_.has_value()) {
+        dt = timestamp - last_imu_update_timestamp_.value();
+    }
+    last_imu_update_timestamp_ = timestamp;
+
+    if (dt < 0.0) {
+        return;
+    }
+
     Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
     H.block(0, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
@@ -569,13 +581,23 @@ void RightInvariantEKF::updateWithIMUOrientation(BaseState& state,
 // ---------------------------------------------------------------------------
 void RightInvariantEKF::updateWithBaseLinearVelocity(
     BaseState& state, const Eigen::Vector3d& base_linear_velocity,
-    const Eigen::Matrix3d& base_linear_velocity_cov) {
+    const Eigen::Matrix3d& base_linear_velocity_cov, const double timestamp) {
+    double dt = nominal_kin_dt_;
+    if (last_kin_update_timestamp_.has_value()) {
+        dt = timestamp - last_kin_update_timestamp_.value();
+    }
+    last_kin_update_timestamp_ = timestamp;
+
+    if (dt < 0.0) {
+        return;
+    }
+
     Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
     H.block(0, v_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
     const Eigen::Vector3d z = base_linear_velocity - state.base_linear_velocity;
 
-    const Eigen::Matrix3d& N = base_linear_velocity_cov;
+    const Eigen::Matrix3d N = base_linear_velocity_cov / dt;
     const Eigen::Matrix<double, 15, 3> PH_transpose = P_ * H.transpose();
     const Eigen::Matrix3d s = N + H * PH_transpose;
     const Eigen::Matrix<double, 15, 3> K = s.ldlt().solve(PH_transpose.transpose()).transpose();
@@ -586,7 +608,6 @@ void RightInvariantEKF::updateWithBaseLinearVelocity(
     P_new.noalias() = IKH * P_ * IKH.transpose();
     P_new += K * N * K.transpose();
     P_ = P_new;
-
     updateState(state, dx, P_);
 }
 

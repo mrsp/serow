@@ -1583,11 +1583,11 @@ void Serow::reset() {
     }
 
     base_estimator_->init(state_.base_state_, state_.getContactsFrame(), params_.g,
-                          params_.imu_rate, params_.eps, params_.point_feet,
+                          params_.imu_rate, params_.joint_rate, params_.eps, params_.point_feet,
                           params_.use_imu_orientation, params_.verbose);
     if (state_.getMass() > 0.0) {
         com_estimator_.init(state_.centroidal_state_, state_.getMass(), params_.g,
-                            params_.force_torque_rate);
+                            params_.force_torque_rate, params_.joint_rate);
     } else {
         throw std::runtime_error(
             "Mass cannot be computed from the model file, check the robot's model file");
@@ -1714,13 +1714,13 @@ void Serow::baseEstimatorPredictStep(const ImuMeasurement& imu, const KinematicM
 void Serow::baseEstimatorUpdateWithBaseLinearVelocity(const KinematicMeasurement& kin) {
     state_.base_state_.timestamp = kin.timestamp;
     base_estimator_->updateWithBaseLinearVelocity(state_.base_state_, kin.base_linear_velocity,
-                                                  kin.base_linear_velocity_cov);
+                                                  kin.base_linear_velocity_cov, kin.timestamp);
 }
 
 void Serow::baseEstimatorUpdateWithImuOrientation(const ImuMeasurement& imu) {
     state_.base_state_.timestamp = imu.timestamp;
     base_estimator_->updateWithIMUOrientation(state_.base_state_, imu.orientation,
-                                              imu.orientation_cov);
+                                              imu.orientation_cov, imu.timestamp);
 }
 
 void Serow::baseEstimatorFinishUpdate(const ImuMeasurement& imu, const KinematicMeasurement& kin) {

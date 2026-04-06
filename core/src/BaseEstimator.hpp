@@ -48,13 +48,14 @@ public:
      * @param contacts_frame Set of contact frame names.
      * @param g Acceleration due to gravity.
      * @param imu_rate IMU update rate.
+     * @param kin_rate Kinematic update rate.
      * @param eps Minimum contact probability to update the state with kinematics.
      * @param point_feet Flag indicating if the feet are point contacts.
      * @param use_imu_orientation Flag indicating if IMU orientation is used during the update step.
      * @param verbose Flag indicating if verbose output should be enabled.
      */
     virtual void init(const BaseState& state, std::set<std::string> contacts_frame, double g,
-                      double imu_rate, double eps = 0.05, bool point_feet = true,
+                      double imu_rate, double kin_rate, double eps = 0.05, bool point_feet = true,
                       bool use_imu_orientation = false, bool verbose = false) = 0;
 
     /**
@@ -89,20 +90,24 @@ public:
      * @param state Current state of the robot.
      * @param base_linear_velocity Base linear velocity in world coordinates.
      * @param base_linear_velocity_cov Covariance of base linear velocity measurement.
+     * @param timestamp Timestamp of the measurement.
      */
-    virtual void updateWithBaseLinearVelocity(
-        BaseState& state, const Eigen::Vector3d& base_linear_velocity,
-        const Eigen::Matrix3d& base_linear_velocity_cov) = 0;
+    virtual void updateWithBaseLinearVelocity(BaseState& state,
+                                              const Eigen::Vector3d& base_linear_velocity,
+                                              const Eigen::Matrix3d& base_linear_velocity_cov,
+                                              const double timestamp) = 0;
 
     /**
      * @brief Updates the robot's state based on IMU orientation measurements.
      * @param state Current state of the robot.
      * @param imu_orientation Orientation of the IMU.
      * @param imu_orientation_cov Covariance of the IMU orientation measurements.
+     * @param timestamp Timestamp of the measurement.
      */
     virtual void updateWithIMUOrientation(BaseState& state,
                                           const Eigen::Quaterniond& imu_orientation,
-                                          const Eigen::Matrix3d& imu_orientation_cov) = 0;
+                                          const Eigen::Matrix3d& imu_orientation_cov,
+                                          const double timestamp) = 0;
 };
 
 }  // namespace serow

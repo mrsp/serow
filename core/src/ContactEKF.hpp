@@ -50,9 +50,10 @@ class ContactEKF : public BaseEstimator {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    void init(const BaseState& state, std::set<std::string> contacts_frame, double g,
-              double imu_rate, double eps = 0.05, bool point_feet = true,
-              bool use_imu_orientation = false, bool verbose = false) override;
+    void init(const BaseState& state, std::set<std::string> contacts_frame, const double g,
+              const double imu_rate, const double kin_rate, const double eps = 0.05,
+              const bool point_feet = true, const bool use_imu_orientation = false,
+              const bool verbose = false) override;
 
     void predict(BaseState& state, const ImuMeasurement& imu) override;
 
@@ -63,17 +64,20 @@ public:
     void setState(const BaseState& state) override;
 
     void updateWithBaseLinearVelocity(BaseState& state, const Eigen::Vector3d& base_linear_velocity,
-                                      const Eigen::Matrix3d& base_linear_velocity_cov) override;
+                                      const Eigen::Matrix3d& base_linear_velocity_cov,
+                                      const double timestamp) override;
 
     void updateWithIMUOrientation(BaseState& state, const Eigen::Quaterniond& imu_orientation,
-                                  const Eigen::Matrix3d& imu_orientation_cov) override;
+                                  const Eigen::Matrix3d& imu_orientation_cov,
+                                  const double timestamp) override;
 
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
     int num_leg_end_effectors_{};           ///< Number of leg end-effectors.
     std::set<std::string> contacts_frame_;  ///< Set of contact frame names.
-    double nominal_dt_{};                   ///< Nominal sampling time for prediction step.
+    double nominal_imu_dt_{};               ///< Nominal sampling time for prediction step.
+    double nominal_kin_dt_{};               ///< Nominal sampling time for kinematic update step.
     Eigen::Vector3d g_;                     ///< Gravity vector.
     double eps_{0.05};  ///< Minimum contact probability to update the state with kinematics.
     // State indices
@@ -84,11 +88,16 @@ private:
     Eigen::Array3i ba_idx_;  ///< Indices for accelerometer bias state variables.
 
     // Input indices
-    Eigen::Array3i ng_idx_;                     ///< Indices for gyro input variables.
-    Eigen::Array3i na_idx_;                     ///< Indices for acceleration input variables.
-    Eigen::Array3i nbg_idx_;                    ///< Indices for gyro bias input variables.
-    Eigen::Array3i nba_idx_;                    ///< Indices for accelerometer bias input variables.
-    std::optional<double> last_imu_timestamp_;  ///< Timestamp of the last IMU measurement.
+    Eigen::Array3i ng_idx_;   ///< Indices for gyro input variables.
+    Eigen::Array3i na_idx_;   ///< Indices for acceleration input variables.
+    Eigen::Array3i nbg_idx_;  ///< Indices for gyro bias input variables.
+    Eigen::Array3i nba_idx_;  ///< Indices for accelerometer bias input variables.
+    std::optional<double> last_imu_predict_timestamp_;  ///< Timestamp of the last IMU measurement
+                                                        ///< used in the predict step.
+    std::optional<double> last_kin_update_timestamp_;   ///< Timestamp of the last kinematic
+                                                        ///< measurement used in the update step.
+    std::optional<double> last_imu_update_timestamp_;   ///< Timestamp of the last IMU measurement
+                                                        ///< used in the update step.
 
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
     /// matrix 15 x 15
