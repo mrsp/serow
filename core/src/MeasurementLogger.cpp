@@ -258,7 +258,7 @@ public:
             const uint8_t* buffer = builder.GetBufferPointer();
             size_t size = builder.GetSize();
 
-            // Get the serialized data
+            ensureBasePoseGroundTruthChannel();
             writeMessage(4, base_pose_sequence_++, timestamp,
                          reinterpret_cast<const std::byte*>(buffer), size);
         } catch (const std::exception& e) {
@@ -446,11 +446,10 @@ private:
 
     void initializeSchemas() {
         std::vector<mcap::Schema> schemas;
-        schemas.reserve(4);
+        schemas.reserve(3);
         schemas.push_back(createSchema("ImuMeasurement"));
         schemas.push_back(createSchema("JointMeasurements"));
         schemas.push_back(createSchema("ForceTorqueMeasurements"));
-        schemas.push_back(createSchema("FrameTransform"));
 
         for (auto& schema : schemas) {
             writer_->addSchema(schema);
@@ -459,15 +458,28 @@ private:
 
     void initializeChannels() {
         std::vector<mcap::Channel> channels;
-        channels.reserve(4);
+        channels.reserve(3);
         channels.push_back(createChannel(1, "/imu"));
         channels.push_back(createChannel(2, "/joints"));
         channels.push_back(createChannel(3, "/ft"));
-        channels.push_back(createChannel(4, "/base_pose_ground_truth"));
 
         for (auto& channel : channels) {
             writer_->addChannel(channel);
         }
+    }
+
+    /// Register schema/channel 4 only when ground truth is logged, so MCAP summary matches the data
+    /// section when GT is never used.
+    void ensureBasePoseGroundTruthChannel() {
+        std::lock_guard<std::mutex> lock(writer_mutex_);
+        if (base_pose_channel_registered_) {
+            return;
+        }
+        mcap::Schema frame_schema = createSchema("FrameTransform");
+        writer_->addSchema(frame_schema);
+        mcap::Channel base_pose_channel = createChannel(4, "/base_pose_ground_truth");
+        writer_->addChannel(base_pose_channel);
+        base_pose_channel_registered_ = true;
     }
 
     mcap::Channel createChannel(uint16_t id, const std::string& topic) {
@@ -489,6 +501,7 @@ private:
     uint64_t base_pose_sequence_ = 0;
     std::optional<double> start_time_;
     uint64_t last_log_time_ns_{0};
+    bool base_pose_channel_registered_{false};
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
