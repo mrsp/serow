@@ -413,6 +413,15 @@ def decode_base_state(data: bytes) -> serow.BaseState:
             ]
         )
 
+    if fb_msg.BaseLocalLinearVelocity():
+        msg.base_local_linear_velocity = np.array(
+            [
+                fb_msg.BaseLocalLinearVelocity().X(),
+                fb_msg.BaseLocalLinearVelocity().Y(),
+                fb_msg.BaseLocalLinearVelocity().Z(),
+            ]
+        )
+
     # Decode base linear velocity
     if fb_msg.BaseLinearVelocity():
         msg.base_linear_velocity = np.array(
@@ -514,6 +523,26 @@ def decode_base_state(data: bytes) -> serow.BaseState:
             ]
         )
 
+    if fb_msg.BaseLinearAccelerationCov():
+        matrix = fb_msg.BaseLinearAccelerationCov()
+        msg.base_linear_acceleration_cov = np.array(
+            [
+                [matrix.M00(), matrix.M01(), matrix.M02()],
+                [matrix.M10(), matrix.M11(), matrix.M12()],
+                [matrix.M20(), matrix.M21(), matrix.M22()],
+            ]
+        )
+
+    if fb_msg.BaseAngularAccelerationCov():
+        matrix = fb_msg.BaseAngularAccelerationCov()
+        msg.base_angular_acceleration_cov = np.array(
+            [
+                [matrix.M00(), matrix.M01(), matrix.M02()],
+                [matrix.M10(), matrix.M11(), matrix.M12()],
+                [matrix.M20(), matrix.M21(), matrix.M22()],
+            ]
+        )
+
     if fb_msg.ImuLinearAccelerationBiasCov():
         matrix = fb_msg.ImuLinearAccelerationBiasCov()
         msg.imu_linear_acceleration_bias_cov = np.array(
@@ -550,34 +579,8 @@ def decode_base_state(data: bytes) -> serow.BaseState:
             [quat.W(), quat.X(), quat.Y(), quat.Z()]
         )
 
-    # Decode contact position covariances
-    contacts_position_cov = {}
-    for i in range(fb_msg.ContactsPositionCovLength()):
-        matrix = fb_msg.ContactsPositionCov(i)
-        contacts_position_cov[fb_msg.ContactNames(i).decode()] = np.array(
-            [
-                [matrix.M00(), matrix.M01(), matrix.M02()],
-                [matrix.M10(), matrix.M11(), matrix.M12()],
-                [matrix.M20(), matrix.M21(), matrix.M22()],
-            ]
-        )
-
-    # Decode contact orientation covariances
-    contacts_orientation_cov = {}
-    for i in range(fb_msg.ContactsOrientationCovLength()):
-        matrix = fb_msg.ContactsOrientationCov(i)
-        contacts_orientation_cov[fb_msg.ContactNames(i).decode()] = np.array(
-            [
-                [matrix.M00(), matrix.M01(), matrix.M02()],
-                [matrix.M10(), matrix.M11(), matrix.M12()],
-                [matrix.M20(), matrix.M21(), matrix.M22()],
-            ]
-        )
-
     msg.contacts_position = contacts_position
     msg.contacts_orientation = contacts_orientation
-    msg.contacts_position_cov = contacts_position_cov
-    msg.contacts_orientation_cov = contacts_orientation_cov
 
     # Decode feet positions
     feet_position = {}

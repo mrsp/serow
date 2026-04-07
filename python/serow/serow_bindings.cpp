@@ -101,16 +101,18 @@ PYBIND11_MODULE(serow, m) {
                        "Base linear velocity covariance (3x3 matrix)")
         .def_readwrite("base_angular_velocity_cov", &serow::BaseState::base_angular_velocity_cov,
                        "Base angular velocity covariance (3x3 matrix)")
+        .def_readwrite("base_linear_acceleration_cov",
+                       &serow::BaseState::base_linear_acceleration_cov,
+                       "Base linear acceleration covariance (3x3 matrix)")
+        .def_readwrite("base_angular_acceleration_cov",
+                       &serow::BaseState::base_angular_acceleration_cov,
+                       "Base angular acceleration covariance (3x3 matrix)")
         .def_readwrite("imu_angular_velocity_bias_cov",
                        &serow::BaseState::imu_angular_velocity_bias_cov,
                        "IMU angular velocity bias covariance (3x3 matrix)")
         .def_readwrite("imu_linear_acceleration_bias_cov",
                        &serow::BaseState::imu_linear_acceleration_bias_cov,
                        "IMU linear acceleration bias covariance (3x3 matrix)")
-        .def_readwrite("contacts_position_cov", &serow::BaseState::contacts_position_cov,
-                       "Map of contact position covariances (string to 3x3 matrix)")
-        .def_readwrite("contacts_orientation_cov", &serow::BaseState::contacts_orientation_cov,
-                       "Map of contact orientation covariances (string to 3x3 matrix)")
         .def_readwrite("feet_position", &serow::BaseState::feet_position,
                        "Map of feet positions (string to 3D vector)")
         .def_property(
@@ -161,8 +163,8 @@ PYBIND11_MODULE(serow, m) {
                     state.contacts_position, contacts_orientation_serialized,
                     state.base_position_cov, state.base_orientation_cov,
                     state.base_linear_velocity_cov, state.base_angular_velocity_cov,
+                    state.base_linear_acceleration_cov, state.base_angular_acceleration_cov,
                     state.imu_angular_velocity_bias_cov, state.imu_linear_acceleration_bias_cov,
-                    state.contacts_position_cov, state.contacts_orientation_cov,
                     state.feet_position, feet_orientation_serialized, state.feet_linear_velocity,
                     state.feet_angular_velocity);
             },
@@ -205,13 +207,14 @@ PYBIND11_MODULE(serow, m) {
                     t[14].cast<decltype(state.base_linear_velocity_cov)>();
                 state.base_angular_velocity_cov =
                     t[15].cast<decltype(state.base_angular_velocity_cov)>();
+                state.base_linear_acceleration_cov =
+                    t[16].cast<decltype(state.base_linear_acceleration_cov)>();
+                state.base_angular_acceleration_cov =
+                    t[17].cast<decltype(state.base_angular_acceleration_cov)>();
                 state.imu_angular_velocity_bias_cov =
-                    t[16].cast<decltype(state.imu_angular_velocity_bias_cov)>();
+                    t[18].cast<decltype(state.imu_angular_velocity_bias_cov)>();
                 state.imu_linear_acceleration_bias_cov =
-                    t[17].cast<decltype(state.imu_linear_acceleration_bias_cov)>();
-                state.contacts_position_cov = t[18].cast<decltype(state.contacts_position_cov)>();
-                state.contacts_orientation_cov =
-                    t[19].cast<decltype(state.contacts_orientation_cov)>();
+                    t[19].cast<decltype(state.imu_linear_acceleration_bias_cov)>();
                 state.feet_position = t[20].cast<decltype(state.feet_position)>();
 
                 // Convert feet_orientation from numpy arrays

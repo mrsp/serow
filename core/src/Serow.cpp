@@ -1562,19 +1562,6 @@ void Serow::reset() {
     state_.base_state_.imu_linear_acceleration_bias_cov =
         params_.initial_imu_linear_acceleration_bias_cov.asDiagonal();
 
-    // Initialize contact covariances
-    std::map<std::string, Eigen::Matrix3d> contacts_orientation_cov;
-    for (const auto& cf : state_.getContactsFrame()) {
-        state_.base_state_.contacts_position_cov[cf] =
-            params_.initial_base_position_cov.asDiagonal();
-        if (!state_.isPointFeet()) {
-            contacts_orientation_cov[cf] = params_.initial_base_orientation_cov.asDiagonal();
-        }
-    }
-    if (!contacts_orientation_cov.empty()) {
-        state_.base_state_.contacts_orientation_cov = std::move(contacts_orientation_cov);
-    }
-
     // Initialize centroidal state
     state_.centroidal_state_.com_position_cov = params_.initial_com_position_cov.asDiagonal();
     state_.centroidal_state_.com_linear_velocity_cov =

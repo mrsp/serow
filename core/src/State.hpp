@@ -83,11 +83,6 @@ struct BaseState {
     Eigen::Matrix3d imu_linear_acceleration_bias_cov{Eigen::Matrix3d::Identity()};
     /// Imu gyro rate bias covariance in local imu frame coordinates (rad^2/s^2)
     Eigen::Matrix3d imu_angular_velocity_bias_cov{Eigen::Matrix3d::Identity()};
-    /// Holds contact frame name to 3D contact position covariance in world frame coordinates (m^2)
-    std::map<std::string, Eigen::Matrix3d> contacts_position_cov;
-    /// Holds contact frame name to 3D contact orientation covariance in world frame coordinates,
-    /// (rad^2) only applies if the robot has flat feet
-    std::optional<std::map<std::string, Eigen::Matrix3d>> contacts_orientation_cov;
 };
 
 /**
@@ -241,16 +236,6 @@ public:
     const Eigen::Matrix3d& getImuLinearAccelerationBiasCov() const;
     /// Returns the 3D IMU angular velocity bias covariance in the local base frame
     const Eigen::Matrix3d& getImuAngularVelocityBiasCov() const;
-    /// Returns the contact frame 3D pose covariance in world frame coordinates as a 6 x 6 matrix if
-    /// the frame is in contact. Only applies if the robot has flat feet
-    std::optional<Eigen::Matrix<double, 6, 6>> getContactPoseCov(
-        const std::string& frame_name) const;
-    /// Returns the contact frame 3D position covariance if the frame is in contact in world frame
-    /// coordinates
-    std::optional<Eigen::Matrix3d> getContactPositionCov(const std::string& frame_name) const;
-    /// Returns the contact frame 3D orientation covariance in world frame coordinates if the frame
-    /// is in contact. Only applies if the robot has flat feet
-    std::optional<Eigen::Matrix3d> getContactOrientationCov(const std::string& frame_name) const;
 
     /// Returns the 3D CoM position covariance in world frame coordinates
     const Eigen::Matrix3d& getCoMPositionCov() const;
