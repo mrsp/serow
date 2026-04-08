@@ -27,7 +27,7 @@ namespace serow {
 inline std::string findFilepath(const std::string& filename) {
     const char* serow_path_env = std::getenv("SEROW_PATH");
     if (serow_path_env == nullptr) {
-        throw std::runtime_error("Environmental variable SEROW_PATH is not set.");
+        throw std::runtime_error("Environment variable SEROW_PATH is not set.");
     }
 
     std::function<std::string(const std::filesystem::path&)> searchRecursive =

@@ -12,15 +12,24 @@
  **/
 #include "SerowRos2.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <limits>
 #include <mutex>
+#include <vector>
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "yaml-cpp/yaml.h"
 
 using std::placeholders::_1;
 using std::placeholders::_2;
 namespace fs = std::filesystem;
+
+namespace {
+double joint_state_msg_stamp_seconds(const sensor_msgs::msg::JointState& msg) {
+    return static_cast<double>(msg.header.stamp.sec) +
+        static_cast<double>(msg.header.stamp.nanosec) * 1e-9;
+}
+}  // namespace
 
 SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
     // Get config file parameter
@@ -99,7 +108,13 @@ SerowRos2::SerowRos2() : Node("serow_ros2_driver") {
 
     // Initialize SERoW
     try {
-        serow_.initialize(serow_config);
+        if (!serow_.initialize(serow_config)) {
+            RCLCPP_ERROR(this->get_logger(),
+                         "SERoW configuration failed (see stderr for details). Check JSON fields");
+            throw std::runtime_error(
+                "SERoW initialize() returned false — invalid or incomplete "
+                "configuration");
+        }
     } catch (const std::exception& e) {
         RCLCPP_ERROR(this->get_logger(), "Failed to initialize SERoW: %s", e.what());
         throw std::runtime_error("Failed to initialize SERoW: " + std::string(e.what()));
@@ -253,18 +268,38 @@ SerowRos2::~SerowRos2() {
 }
 
 void SerowRos2::run() {
-    // Fetch the most recent joint state data
-    std::queue<sensor_msgs::msg::JointState> joint_state_queue;
+    std::vector<sensor_msgs::msg::JointState> joint_states;
     {
         std::lock_guard<std::mutex> lock(joint_data_mutex_);
-        joint_state_queue = std::move(joint_state_queue_);
+        joint_states.reserve(joint_state_queue_.size());
+        while (!joint_state_queue_.empty()) {
+            joint_states.push_back(std::move(joint_state_queue_.front()));
+            joint_state_queue_.pop();
+        }
     }
-    while (!joint_state_queue.empty()) {
-        const sensor_msgs::msg::JointState joint_state_data = std::move(joint_state_queue.front());
-        joint_state_queue.pop();
-        const double joint_state_timestamp =
-            static_cast<double>(joint_state_data.header.stamp.sec) +
-            static_cast<double>(joint_state_data.header.stamp.nanosec) * 1e-9;
+    std::sort(joint_states.begin(), joint_states.end(),
+              [](const sensor_msgs::msg::JointState& a, const sensor_msgs::msg::JointState& b) {
+                  if (a.header.stamp.sec != b.header.stamp.sec) {
+                      return a.header.stamp.sec < b.header.stamp.sec;
+                  }
+                  return a.header.stamp.nanosec < b.header.stamp.nanosec;
+              });
+    joint_states.erase(std::unique(joint_states.begin(), joint_states.end(),
+                                   [](const sensor_msgs::msg::JointState& a,
+                                      const sensor_msgs::msg::JointState& b) {
+                                       return a.header.stamp.sec == b.header.stamp.sec &&
+                                           a.header.stamp.nanosec == b.header.stamp.nanosec;
+                                   }),
+                       joint_states.end());
+    for (sensor_msgs::msg::JointState& joint_state_data : joint_states) {
+        const double joint_state_timestamp = joint_state_msg_stamp_seconds(joint_state_data);
+        {
+            std::lock_guard<std::mutex> lock(joint_data_mutex_);
+            if (last_used_joint_measurement_time_.has_value() &&
+                joint_state_timestamp <= last_used_joint_measurement_time_.value()) {
+                continue;
+            }
+        }
 
         // Fetch the base imu measurement from the buffer
         std::optional<serow::ImuMeasurement> base_imu_measurement = std::nullopt;
@@ -275,13 +310,6 @@ void SerowRos2::run() {
                 RCLCPP_ERROR(this->get_logger(),
                              "Failed to get base imu measurement at timestamp: %f",
                              joint_state_timestamp);
-                const auto& time_range = base_imu_buffer_.getTimeRange();
-                if (time_range) {
-                    RCLCPP_ERROR(this->get_logger(), "Time range: %f - %f", time_range->first,
-                                 time_range->second);
-                } else {
-                    RCLCPP_ERROR(this->get_logger(), "Time range: not available");
-                }
                 return;
             }
         }
@@ -346,6 +374,10 @@ void SerowRos2::run() {
                           ? std::make_optional(synchronized_ft_measurements)
                           : std::nullopt,
                       external_odometry, std::nullopt, ground_truth_pose);
+        {
+            std::lock_guard<std::mutex> lock(joint_data_mutex_);
+            last_used_joint_measurement_time_ = joint_state_timestamp;
+        }
         const auto& state = serow_.getState();
         if (state) {
             // Queue the state for publishing instead of publishing directly to not block the main
@@ -653,7 +685,12 @@ void SerowRos2::publishContactState(const serow::State& state) {
 
 void SerowRos2::jointStateCallback(
     const sensor_msgs::msg::JointState::ConstSharedPtr& joint_state_msg) {
+    const double t = joint_state_msg_stamp_seconds(*joint_state_msg);
     std::lock_guard<std::mutex> lock(joint_data_mutex_);
+    if (last_used_joint_measurement_time_.has_value() &&
+        t <= last_used_joint_measurement_time_.value()) {
+        return;
+    }
     joint_state_queue_.push(*joint_state_msg);
 }
 

@@ -11,6 +11,7 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 #include "ProprioceptionLogger.hpp"
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -342,6 +343,11 @@ public:
                 builder, base_state.base_orientation.x(), base_state.base_orientation.y(),
                 base_state.base_orientation.z(), base_state.base_orientation.w());
 
+            auto base_local_linear_velocity =
+                foxglove::CreateVector3(builder, base_state.base_local_linear_velocity.x(),
+                                        base_state.base_local_linear_velocity.y(),
+                                        base_state.base_local_linear_velocity.z());
+
             auto base_linear_velocity = foxglove::CreateVector3(
                 builder, base_state.base_linear_velocity.x(), base_state.base_linear_velocity.y(),
                 base_state.base_linear_velocity.z());
@@ -404,6 +410,28 @@ public:
                                         base_state.base_angular_velocity_cov(2, 1),
                                         base_state.base_angular_velocity_cov(2, 2));
 
+            auto base_linear_acceleration_cov =
+                foxglove::CreateMatrix3(builder, base_state.base_linear_acceleration_cov(0, 0),
+                                        base_state.base_linear_acceleration_cov(0, 1),
+                                        base_state.base_linear_acceleration_cov(0, 2),
+                                        base_state.base_linear_acceleration_cov(1, 0),
+                                        base_state.base_linear_acceleration_cov(1, 1),
+                                        base_state.base_linear_acceleration_cov(1, 2),
+                                        base_state.base_linear_acceleration_cov(2, 0),
+                                        base_state.base_linear_acceleration_cov(2, 1),
+                                        base_state.base_linear_acceleration_cov(2, 2));
+
+            auto base_angular_acceleration_cov =
+                foxglove::CreateMatrix3(builder, base_state.base_angular_acceleration_cov(0, 0),
+                                        base_state.base_angular_acceleration_cov(0, 1),
+                                        base_state.base_angular_acceleration_cov(0, 2),
+                                        base_state.base_angular_acceleration_cov(1, 0),
+                                        base_state.base_angular_acceleration_cov(1, 1),
+                                        base_state.base_angular_acceleration_cov(1, 2),
+                                        base_state.base_angular_acceleration_cov(2, 0),
+                                        base_state.base_angular_acceleration_cov(2, 1),
+                                        base_state.base_angular_acceleration_cov(2, 2));
+
             auto imu_linear_acceleration_bias_cov =
                 foxglove::CreateMatrix3(builder, base_state.imu_linear_acceleration_bias_cov(0, 0),
                                         base_state.imu_linear_acceleration_bias_cov(0, 1),
@@ -445,26 +473,6 @@ public:
             }
             auto contacts_orientation = builder.CreateVector(contacts_orientation_vec);
 
-            // Create contact position covariance vectors
-            std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_position_cov_vec;
-            for (const auto& [_, cov] : base_state.contacts_position_cov) {
-                contacts_position_cov_vec.push_back(
-                    foxglove::CreateMatrix3(builder, cov(0, 0), cov(0, 1), cov(0, 2), cov(1, 0),
-                                            cov(1, 1), cov(1, 2), cov(2, 0), cov(2, 1), cov(2, 2)));
-            }
-            auto contacts_position_cov = builder.CreateVector(contacts_position_cov_vec);
-
-            // Create contact orientation covariance vectors
-            std::vector<flatbuffers::Offset<foxglove::Matrix3>> contacts_orientation_cov_vec;
-            if (base_state.contacts_orientation_cov) {
-                for (const auto& [_, cov] : *base_state.contacts_orientation_cov) {
-                    contacts_orientation_cov_vec.push_back(foxglove::CreateMatrix3(
-                        builder, cov(0, 0), cov(0, 1), cov(0, 2), cov(1, 0), cov(1, 1), cov(1, 2),
-                        cov(2, 0), cov(2, 1), cov(2, 2)));
-                }
-            }
-            auto contacts_orientation_cov = builder.CreateVector(contacts_orientation_cov_vec);
-
             // Create feet position vectors
             std::vector<flatbuffers::Offset<foxglove::Vector3>> feet_position_vec;
             for (const auto& [_, position] : base_state.feet_position) {
@@ -497,34 +505,34 @@ public:
             }
             auto feet_angular_velocity = builder.CreateVector(feet_angular_velocity_vec);
 
-            // Create the BaseState message with fields in the correct order according to IDs
-            auto base_state_fb =
-                foxglove::CreateBaseState(builder,
-                                          &time,                             // id: 0
-                                          contact_names,                     // id: 1
-                                          base_position,                     // id: 2
-                                          base_orientation,                  // id: 3
-                                          base_linear_velocity,              // id: 4
-                                          base_angular_velocity,             // id: 5
-                                          base_linear_acceleration,          // id: 6
-                                          base_angular_acceleration,         // id: 7
-                                          imu_linear_acceleration_bias,      // id: 8
-                                          imu_angular_velocity_bias,         // id: 9
-                                          base_position_cov,                 // id: 10
-                                          base_orientation_cov,              // id: 11
-                                          base_linear_velocity_cov,          // id: 12
-                                          base_angular_velocity_cov,         // id: 13
-                                          imu_linear_acceleration_bias_cov,  // id: 14
-                                          imu_angular_velocity_bias_cov,     // id: 15
-                                          contacts_position,                 // id: 16
-                                          contacts_orientation,              // id: 17
-                                          contacts_position_cov,             // id: 18
-                                          contacts_orientation_cov,          // id: 19
-                                          feet_position,                     // id: 20
-                                          feet_orientation,                  // id: 21
-                                          feet_linear_velocity,              // id: 22
-                                          feet_angular_velocity              // id: 23
-                );
+            foxglove::BaseStateBuilder base_state_builder(builder);
+            base_state_builder.add_timestamp(&time);
+            base_state_builder.add_contact_names(contact_names);
+            base_state_builder.add_base_position(base_position);
+            base_state_builder.add_base_orientation(base_orientation);
+            base_state_builder.add_base_local_linear_velocity(base_local_linear_velocity);
+            base_state_builder.add_base_linear_velocity(base_linear_velocity);
+            base_state_builder.add_base_angular_velocity(base_angular_velocity);
+            base_state_builder.add_base_linear_acceleration(base_linear_acceleration);
+            base_state_builder.add_base_angular_acceleration(base_angular_acceleration);
+            base_state_builder.add_imu_linear_acceleration_bias(imu_linear_acceleration_bias);
+            base_state_builder.add_imu_angular_velocity_bias(imu_angular_velocity_bias);
+            base_state_builder.add_base_position_cov(base_position_cov);
+            base_state_builder.add_base_orientation_cov(base_orientation_cov);
+            base_state_builder.add_base_linear_velocity_cov(base_linear_velocity_cov);
+            base_state_builder.add_base_angular_velocity_cov(base_angular_velocity_cov);
+            base_state_builder.add_base_linear_acceleration_cov(base_linear_acceleration_cov);
+            base_state_builder.add_base_angular_acceleration_cov(base_angular_acceleration_cov);
+            base_state_builder.add_imu_linear_acceleration_bias_cov(
+                imu_linear_acceleration_bias_cov);
+            base_state_builder.add_imu_angular_velocity_bias_cov(imu_angular_velocity_bias_cov);
+            base_state_builder.add_contacts_position(contacts_position);
+            base_state_builder.add_contacts_orientation(contacts_orientation);
+            base_state_builder.add_feet_position(feet_position);
+            base_state_builder.add_feet_orientation(feet_orientation);
+            base_state_builder.add_feet_linear_velocity(feet_linear_velocity);
+            base_state_builder.add_feet_angular_velocity(feet_angular_velocity);
+            auto base_state_fb = base_state_builder.Finish();
 
             builder.Finish(base_state_fb);
 
@@ -688,29 +696,27 @@ private:
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) noexcept {
         if (data_size == 0 || data == nullptr) {
-            return; 
+            return;
         }
         try {
-            // Update message object with new values
-            mcap::Message message;
-            message.channelId = channel_id;
-            message.sequence = sequence;
-
-            // Ensure timestamp is in nanoseconds and consistent
-            // Convert to nanoseconds using std::chrono for precision
             auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::duration<double>(timestamp));
             uint64_t ns_timestamp = ns.count();
-            message.logTime = ns_timestamp;
-            message.publishTime = ns_timestamp;  // Use same timestamp for both
 
+            mcap::Message message;
+            message.channelId = channel_id;
+            message.sequence = sequence;
             message.dataSize = data_size;
             message.data = data;
 
-            // Protect the writer with a mutex
             std::lock_guard<std::mutex> lock(writer_mutex_);
+            // MCAP ingest order must not go backward in log_time; payload timestamps in the
+            // flatbuffer are unchanged—only the record metadata is clamped.
+            ns_timestamp = std::max(ns_timestamp, last_log_time_ns_);
+            last_log_time_ns_ = ns_timestamp;
+            message.logTime = ns_timestamp;
+            message.publishTime = ns_timestamp;
 
-            // Write the message without additional error checking
             auto status = writer_->write(message);
             if (status.code != mcap::StatusCode::Success) {
                 std::cerr << "Failed to write message for channel " << channel_id << ": "
@@ -771,6 +777,7 @@ private:
     uint64_t tfs_sequence_ = 0;
     uint64_t joint_states_sequence_ = 0;
     std::optional<double> start_time_;
+    uint64_t last_log_time_ns_{0};
 
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;

@@ -53,7 +53,7 @@ void Differentiator::reset() {
     firstrun_ = true;
 
     if (verbose_) {
-        std::cout << name_ << "Finite Differentiator Reseted Successfully" << '\n';
+        std::cout << name_ << " Finite Differentiator Reset Successfully" << '\n';
     }
 }
 

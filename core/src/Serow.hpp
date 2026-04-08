@@ -15,9 +15,9 @@
 #include <map>
 #include <string>
 
+#include "BaseEstimator.hpp"
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
-#include "ContactEKF.hpp"
 #include "DerivativeEstimator.hpp"
 #include "ExteroceptionLogger.hpp"
 #include "LegOdometry.hpp"
@@ -52,6 +52,8 @@ public:
     /// @brief initializes SEROW's configuration
     /// @param config configuration to initialize SEROW with
     /// @return true if SEROW was initialized successfully
+    /// @note JSON `foot_frames` may be a string array (e.g. `["FL_foot","FR_foot"]`) or a legacy
+    /// object with numeric keys (e.g. `{"0":"FL_foot","1":"FR_foot"}`).
     bool initialize(const std::string& config);
 
     /// @brief runs SEROW's estimator and updates the internal state
@@ -77,8 +79,9 @@ public:
     /// @return SEROW's internal state if available
     std::optional<State> getState(bool allow_invalid = false);
 
-    /// @brief fetches SEROW's contact state
-    /// @param allow_invalid whether to return the state even if SEROW hasn't yet converged to a
+    /// @brief Fetches SEROW's contact state
+    /// @param allow_invalid if true, return the state even when SEROW has not yet converged to a
+    /// valid estimate
     /// @return SEROW's contact state if available
     std::optional<ContactState> getContactState(bool allow_invalid = false);
 
@@ -190,17 +193,17 @@ private:
         /// @brief after how many loop cycles SEROW's estimate is considered valid e.g. all the
         /// filters have converged and estimate should become available for feedback
         size_t convergence_cycles{};
-        /// @brief gyro random walk. Can be found in the IMU data sheet or computed with the Alan
+        /// @brief gyro random walk. Can be found in the IMU data sheet or computed with the Allan
         /// variance method
         Eigen::Vector3d angular_velocity_cov{Eigen::Vector3d::Zero()};
         /// @brief gyro bias instability (or stability). Can be found in the IMU data sheet or
-        /// computed with the Alan variance method
+        /// computed with the Allan variance method
         Eigen::Vector3d angular_velocity_bias_cov{Eigen::Vector3d::Zero()};
         /// @brief accelerometer random walk. Can be found in the IMU data sheet or computed with
-        /// the Alan variance method
+        /// the Allan variance method
         Eigen::Vector3d linear_acceleration_cov{Eigen::Vector3d::Zero()};
-        /// @brief accelerometer bias instanbility (or stability). Can be found in the IMU data
-        /// sheet or computed with the Alan variance method
+        /// @brief accelerometer bias instability (or stability). Can be found in the IMU data
+        /// sheet or computed with the Allan variance method
         Eigen::Vector3d linear_acceleration_bias_cov{Eigen::Vector3d::Zero()};
         /// @brief CoM position process noise (m^2)
         Eigen::Vector3d com_position_process_cov{Eigen::Vector3d::Zero()};
@@ -208,11 +211,6 @@ private:
         Eigen::Vector3d com_linear_velocity_process_cov{Eigen::Vector3d::Zero()};
         /// @brief External forces acting on CoM process noise (N^2)
         Eigen::Vector3d external_forces_process_cov{Eigen::Vector3d::Zero()};
-        /// @brief CoM position uncertainty (m^2) as computed with robot kinematics
-        Eigen::Vector3d com_position_cov{Eigen::Vector3d::Zero()};
-        /// @brief CoM linear acceleration (m^2/s^4) as approximated with the IMU acceleration and
-        /// robot kinematics
-        Eigen::Vector3d com_linear_acceleration_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for the base position (m^2)
         Eigen::Vector3d initial_base_position_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for the base orientation (rad^2)
@@ -227,7 +225,7 @@ private:
         Eigen::Vector3d initial_com_position_cov{Eigen::Vector3d::Zero()};
         /// @brief initial uncertainty for the CoM linear velocity (m^2/s^2)
         Eigen::Vector3d initial_com_linear_velocity_cov{Eigen::Vector3d::Zero()};
-        /// @brief initial uncertainty for the external forces acting on the CoM (N)
+        /// @brief initial uncertainty for the external forces acting on the CoM (N^2)
         Eigen::Vector3d initial_external_forces_cov{Eigen::Vector3d::Zero()};
         double eps{0.05};
         /// @brief rigid body transformation from optional exteroceptive (visual/lidar odometry) to
@@ -287,6 +285,9 @@ private:
         bool use_imu_orientation{false};
         /// @brief whether or not to enable verbose output
         bool verbose{false};
+        /// @brief type of the base estimator: "contact" for ContactEKF, "right-invariant" for
+        /// RightInvariantEKF
+        std::string base_estimator_type{"right-invariant"};
     };
 
     /// @brief SEROW's configuration
@@ -303,7 +304,7 @@ private:
     State state_;
     /// @brief base estimator that fuses base IMU, leg end-effector contact and relative to the base
     /// leg kinematic measurements
-    ContactEKF base_estimator_;
+    std::unique_ptr<BaseEstimator> base_estimator_;
     /// @brief coM estimator that fuses ground reaction force, base IMU, and CoM kinematic
     /// measurements
     CoMEKF com_estimator_;
@@ -357,11 +358,10 @@ private:
     /// @param joints joint measurements
     /// @param ft force/torque measurements
     /// @param base_pose_ground_truth ground truth base pose
-    void logMeasurements(const ImuMeasurement& imu,
-                         const std::map<std::string, JointMeasurement>& joints,
-                         const std::map<std::string, ForceTorqueMeasurement>& ft,
-                         const std::optional<BasePoseGroundTruth>& base_pose_ground_truth =
-                             std::nullopt);
+    void logMeasurements(
+        const ImuMeasurement& imu, const std::map<std::string, JointMeasurement>& joints,
+        const std::map<std::string, ForceTorqueMeasurement>& ft,
+        const std::optional<BasePoseGroundTruth>& base_pose_ground_truth = std::nullopt);
 
     /// @brief Runs all the joint estimators to estimate the joint positions and velocities
     /// @param state the state of the robot

@@ -47,10 +47,11 @@ def main():
     contacts_frame = {"left_foot", "right_foot"}
     g = 9.81  # Gravity constant
     imu_rate = 1000.0  # IMU update rate in Hz
+    kin_rate = 1000.0  # Kinematic measurement update rate in Hz
     eps = 0.05  # Minimum contact probability to update the state with kinematics
     point_feet = False  # Robot has point feet?
     use_imu_orientation = True  # Use the IMU orientation during the ContactEKF update step
-    ekf.init(state, contacts_frame, g, imu_rate, eps, point_feet, use_imu_orientation)
+    ekf.init(state, contacts_frame, g, imu_rate, kin_rate, eps, point_feet, use_imu_orientation)
 
     # Create IMU measurement
     imu = ImuMeasurement()

@@ -11,6 +11,7 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 #include "ExteroceptionLogger.hpp"
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -217,21 +218,22 @@ private:
             return;
         }
         try {
+            uint64_t ns_timestamp = static_cast<uint64_t>(std::round(timestamp * 1e9));
+            ns_timestamp = static_cast<uint64_t>(static_cast<double>(ns_timestamp) / 1e9 * 1e9);
+
             mcap::Message message;
             message.channelId = channel_id;
             message.sequence = sequence;
-
-            // Match libmcap index: use ns that round-trips through double so message and index
-            // match
-            uint64_t ns_timestamp = static_cast<uint64_t>(std::round(timestamp * 1e9));
-            ns_timestamp = static_cast<uint64_t>(static_cast<double>(ns_timestamp) / 1e9 * 1e9);
-            message.logTime = ns_timestamp;
-            message.publishTime = ns_timestamp;
-
             message.dataSize = data_size;
             message.data = data;
 
             std::lock_guard<std::mutex> lock(writer_mutex_);
+            // Keep MCAP record log_time non-decreasing; flatbuffer payload time unchanged.
+            ns_timestamp = std::max(ns_timestamp, last_log_time_ns_);
+            last_log_time_ns_ = ns_timestamp;
+            message.logTime = ns_timestamp;
+            message.publishTime = ns_timestamp;
+
             auto status = writer_->write(message);
             if (status.code != mcap::StatusCode::Success) {
                 std::cerr << "MCAP write error for channel " << channel_id
@@ -273,6 +275,7 @@ private:
     uint64_t local_map_sequence_{};
     double last_timestamp_{-1.0};
     std::optional<double> start_time_;
+    uint64_t last_log_time_ns_{0};
     std::mutex writer_mutex_;
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;

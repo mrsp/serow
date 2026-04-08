@@ -31,7 +31,6 @@ State::State(const std::set<std::string>& contacts_frame, bool point_feet,
         contact_state_.contacts_probability[cf] = 0.0;
         contact_state_.contacts_force[cf] = Eigen::Vector3d::Zero();
         base_state_.contacts_position[cf] = Eigen::Vector3d::Zero();
-        base_state_.contacts_position_cov[cf] = Eigen::Matrix3d::Identity();
         base_state_.feet_position[cf] = Eigen::Vector3d::Zero();
         base_state_.feet_orientation[cf] = Eigen::Quaterniond::Identity();
         base_state_.feet_linear_velocity[cf] = Eigen::Vector3d::Zero();
@@ -45,7 +44,6 @@ State::State(const std::set<std::string>& contacts_frame, bool point_feet,
     }
     if (!isPointFeet()) {
         base_state_.contacts_orientation = std::move(contacts_orientation);
-        base_state_.contacts_orientation_cov = std::move(contacts_orientation_cov);
         contact_state_.contacts_torque = std::move(contacts_torque);
     }
 }
@@ -231,50 +229,6 @@ const Eigen::Matrix3d& State::getImuLinearAccelerationBiasCov() const {
 
 const Eigen::Matrix3d& State::getImuAngularVelocityBiasCov() const {
     return base_state_.imu_angular_velocity_bias_cov;
-}
-
-std::optional<Eigen::Matrix3d> State::getContactPositionCov(const std::string& frame_name) const {
-    // If the end-effector is in contact with the environment and we have a contact position
-    // covariance available
-    if (contact_state_.contacts_status.count(frame_name) &&
-        contact_state_.contacts_status.at(frame_name) &&
-        base_state_.contacts_position_cov.count(frame_name)) {
-        return base_state_.contacts_position_cov.at(frame_name);
-    } else {
-        return std::nullopt;
-    }
-}
-
-std::optional<Eigen::Matrix3d> State::getContactOrientationCov(
-    const std::string& frame_name) const {
-    // If the end-effector is in contact with the environment and we have a contact orientation
-    // covariance available
-    if (contact_state_.contacts_status.count(frame_name) &&
-        contact_state_.contacts_status.at(frame_name) &&
-        base_state_.contacts_orientation_cov.has_value() &&
-        base_state_.contacts_orientation.value().count(frame_name))
-        return base_state_.contacts_orientation_cov.value().at(frame_name);
-    else
-        return std::nullopt;
-}
-
-std::optional<Eigen::Matrix<double, 6, 6>> State::getContactPoseCov(
-    const std::string& frame_name) const {
-    // If the end-effector is in contact with the environment and we have a contact pose
-    // covariance available
-    if (contact_state_.contacts_status.count(frame_name) &&
-        contact_state_.contacts_status.at(frame_name) &&
-        base_state_.contacts_position_cov.count(frame_name) &&
-        base_state_.contacts_orientation_cov.has_value() &&
-        base_state_.contacts_orientation_cov.value().count(frame_name)) {
-        Eigen::Matrix<double, 6, 6> contact_pose_cov = Eigen::Matrix<double, 6, 6>::Identity();
-        contact_pose_cov.block<3, 3>(0, 0) = base_state_.contacts_position_cov.at(frame_name);
-        contact_pose_cov.block<3, 3>(3, 3) =
-            base_state_.contacts_orientation_cov.value().at(frame_name);
-        return contact_pose_cov;
-    } else {
-        return std::nullopt;
-    }
 }
 
 const Eigen::Vector3d& State::getCoMPosition() const {

@@ -14,7 +14,8 @@
 /**
  * @file ContactDetector.hpp
  * @brief Header file for the ContactDetector class.
- * @details Provides a mechanism to estimate the contact probability of a leg end-effector downstreams based on a filtered vertical ground reaction force.
+ * @details Provides a mechanism to estimate the contact probability of a leg end-effector
+ * downstream, based on a filtered vertical ground reaction force.
  */
 
 #pragma once
@@ -86,10 +87,11 @@ public:
 
 private:
     std::unique_ptr<MovingMedianFilter> mdf_; /**< Rolling median filter. */
-    double contact_force_{};                  /**< Filtered vertical ground reaction force in Newtons (N). */
-    std::string contact_frame_;               /**< Contact frame name where detection is done e.g., "l_foot_frame". */
-    double mass_{};                           /**< Mass of the robot in kilograms (kg). */
-    double g_{};                              /**< Gravity constant in meters per second squared (m/s^2). */
+    double contact_force_{}; /**< Filtered vertical ground reaction force in Newtons (N). */
+    std::string
+        contact_frame_; /**< Contact frame name where detection is done e.g., "l_foot_frame". */
+    double mass_{};     /**< Mass of the robot in kilograms (kg). */
+    double g_{};        /**< Gravity constant in meters per second squared (m/s^2). */
 };
 
 }  // namespace serow
