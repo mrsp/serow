@@ -160,7 +160,7 @@ private:
      * @brief Updates the robot's state based on terrain measurements.
      * @param state Current state of the robot.
      * @param contacts_position Positions of leg contacts.
-     * @param contacts_position_noise Covariances of leg contact positions.
+     * @param contacts_position_noise Spectral densities of leg contact positions.
      * @param contacts_probability Probabilities of leg contacts.
      * @param timestamp Timestamp of the terrain measurement.
      * @param terrain_estimator Terrain elevation mapper.

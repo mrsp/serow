@@ -478,8 +478,8 @@ public:
     }
 
     /**
-     * @brief Computes the CoM Covariance.
-     * @return CoM Covariance matrix
+     * @brief Computes the CoM Spectral Density.
+     * @return CoM Spectral Density matrix
      */
     Eigen::MatrixXd comCovariance() const {
         const Eigen::MatrixXd J = comJacobian();
@@ -487,7 +487,7 @@ public:
     }
 
     /**
-     * @brief Computes the CoM angular momentum and its covariance in a single Pinocchio pass.
+     * @brief Computes the CoM angular momentum and its spectral density in a single Pinocchio pass.
      * @return {h_angular (3D), covariance (3x3)}
      */
     std::pair<Eigen::Vector3d, Eigen::Matrix3d> comAngularMomentumAndCovariance() const {
@@ -500,7 +500,7 @@ public:
 
     /**
      * @brief Computes the CoM angular momentum.
-     * @note Prefer comAngularMomentumAndCovariance() if you also need the covariance.
+     * @note Prefer comAngularMomentumAndCovariance() if you also need the spectral density.
      */
     Eigen::VectorXd comAngularMomentum() const {
         pinocchio::computeCentroidalMomentum(*pmodel_, *data_, q_, qdot_);
@@ -508,8 +508,9 @@ public:
     }
 
     /**
-     * @brief Computes the CoM angular momentum covariance from joint velocity spectral density.
-     * @note Prefer comAngularMomentumAndCovariance() if you also need the momentum.
+     * @brief Computes the CoM angular momentum spectral density from joint velocity spectral
+     * density.
+     * @note Prefer comAngularMomentumAndCovariance() if you also need the angular momentum.
      */
     Eigen::Matrix3d comAngularMomentumCovariance() const {
         pinocchio::computeCentroidalMap(*pmodel_, *data_, q_);
