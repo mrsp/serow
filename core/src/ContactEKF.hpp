@@ -32,11 +32,12 @@
 #include <iostream>
 #include <memory>
 
+#include "BaseEstimator.hpp"
 #include "ButterworthLPF.hpp"
 #include "LocalTerrainMapper.hpp"
-#include "Measurement.hpp"  // Includes various sensor measurements
+#include "Measurement.hpp"
 #include "OutlierDetector.hpp"
-#include "State.hpp"  // Includes definitions of robot state variables
+#include "State.hpp"
 
 namespace serow {
 
@@ -45,74 +46,38 @@ namespace serow {
  * @brief Implements an Extended Kalman Filter (EKF) for state estimation in humanoid robots,
  *        specifically for fusing IMU data, base leg contact measurements, and external odometry.
  */
-class ContactEKF {
+class ContactEKF : public BaseEstimator {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    /**
-     * @brief Initializes the EKF with the initial robot state, contact frames, and other
-     * parameters.
-     * @param state Initial state of the robot.
-     * @param contacts_frame Set of contact frame names.
-     * @param g Acceleration due to gravity.
-     * @param imu_rate IMU update rate.
-     * @param eps Minimum contact probability to update the state with kinematics.
-     * @param point_feet Flag indicating if the feet are point contacts.
-     * @param use_imu_orientation Flag indicating if IMU orientation is used during the update step.
-     * @param verbose Flag indicating if verbose output should be enabled.
-     */
-    void init(const BaseState& state, std::set<std::string> contacts_frame, double g,
-              double imu_rate, double eps = 0.05, bool point_feet = true,
-              bool use_imu_orientation = false, bool verbose = false);
-    /**
-     * @brief Predicts the robot's state forward based on IMU.
-     * @param state Current state of the robot.
-     * @param imu IMU measurements.
-     */
-    void predict(BaseState& state, const ImuMeasurement& imu);
+    void init(const BaseState& state, std::set<std::string> contacts_frame, const double g,
+              const double imu_rate, const double kin_rate, const double eps = 0.05,
+              const bool point_feet = true, const bool use_imu_orientation = false,
+              const bool verbose = false) override;
 
-    /**
-     * @brief Updates the robot's state based on kinematic measurements (and optionally odometry
-     *        and terrain measurements).
-     * @param state Current state of the robot.
-     * @param kin Kinematic measurements.
-     * @param odom Optional odometry measurements.
-     * @param terrain Optional terrain measurements.
-     */
+    void predict(BaseState& state, const ImuMeasurement& imu) override;
+
     void update(BaseState& state, const ImuMeasurement& imu, const KinematicMeasurement& kin,
                 std::optional<OdometryMeasurement> odom = std::nullopt,
-                std::shared_ptr<TerrainElevation> terrain_estimator = nullptr);
+                std::shared_ptr<TerrainElevation> terrain_estimator = nullptr) override;
 
-    /**
-     * @brief Sets the state of the EKF.
-     * @param state The state to set.
-     */
-    void setState(const BaseState& state);
+    void setState(const BaseState& state) override;
 
-    /**
-     * @brief Updates the robot's state based on base linear velocity measurements.
-     * @param state Current state of the robot.
-     * @param base_linear_velocity Base linear velocity in world coordinates.
-     * @param base_linear_velocity_cov Covariance of base linear velocity measurement in world
-     * coordinates.
-     */
     void updateWithBaseLinearVelocity(BaseState& state, const Eigen::Vector3d& base_linear_velocity,
-                                      const Eigen::Matrix3d& base_linear_velocity_cov);
-    /**
-     * @brief Updates the robot's state based on IMU orientation measurements.
-     * @param state Current state of the robot.
-     * @param imu_orientation Orientation of the IMU.
-     * @param imu_orientation_cov Covariance of the IMU orientation measurements.
-     */
+                                      const Eigen::Matrix3d& base_linear_velocity_cov,
+                                      const double timestamp) override;
+
     void updateWithIMUOrientation(BaseState& state, const Eigen::Quaterniond& imu_orientation,
-                                  const Eigen::Matrix3d& imu_orientation_cov);
+                                  const Eigen::Matrix3d& imu_orientation_cov,
+                                  const double timestamp) override;
 
 private:
     int num_states_{};                      ///< Number of state variables.
     int num_inputs_{};                      ///< Number of input variables.
     int num_leg_end_effectors_{};           ///< Number of leg end-effectors.
     std::set<std::string> contacts_frame_;  ///< Set of contact frame names.
-    double nominal_dt_{};                   ///< Nominal sampling time for prediction step.
+    double nominal_imu_dt_{};               ///< Nominal sampling time for prediction step.
+    double nominal_kin_dt_{};               ///< Nominal sampling time for kinematic update step.
     Eigen::Vector3d g_;                     ///< Gravity vector.
     double eps_{0.05};  ///< Minimum contact probability to update the state with kinematics.
     // State indices
@@ -123,11 +88,18 @@ private:
     Eigen::Array3i ba_idx_;  ///< Indices for accelerometer bias state variables.
 
     // Input indices
-    Eigen::Array3i ng_idx_;                     ///< Indices for gyro input variables.
-    Eigen::Array3i na_idx_;                     ///< Indices for acceleration input variables.
-    Eigen::Array3i nbg_idx_;                    ///< Indices for gyro bias input variables.
-    Eigen::Array3i nba_idx_;                    ///< Indices for accelerometer bias input variables.
-    std::optional<double> last_imu_timestamp_;  ///< Timestamp of the last IMU measurement.
+    Eigen::Array3i ng_idx_;   ///< Indices for gyro input variables.
+    Eigen::Array3i na_idx_;   ///< Indices for acceleration input variables.
+    Eigen::Array3i nbg_idx_;  ///< Indices for gyro bias input variables.
+    Eigen::Array3i nba_idx_;  ///< Indices for accelerometer bias input variables.
+    std::optional<double> last_imu_predict_timestamp_;  ///< Timestamp of the last IMU measurement
+                                                        ///< used in the predict step.
+    std::optional<double> last_kin_update_timestamp_;   ///< Timestamp of the last kinematic
+                                                        ///< measurement used in the update step.
+    std::optional<double> last_imu_update_timestamp_;   ///< Timestamp of the last IMU measurement
+                                                        ///< used in the update step.
+    std::optional<double> last_terrain_update_timestamp_;  ///< Timestamp of the last terrain
+                                                           ///< measurement used in the update step.
 
     /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
     /// matrix 15 x 15
@@ -188,14 +160,16 @@ private:
      * @brief Updates the robot's state based on terrain measurements.
      * @param state Current state of the robot.
      * @param contacts_position Positions of leg contacts.
-     * @param contacts_position_noise Covariances of leg contact positions.
+     * @param contacts_position_noise Spectral densities of leg contact positions.
      * @param contacts_probability Probabilities of leg contacts.
+     * @param timestamp Timestamp of the terrain measurement.
      * @param terrain_estimator Terrain elevation mapper.
      */
     void updateWithTerrain(BaseState& state,
                            const std::map<std::string, Eigen::Vector3d>& contacts_position,
                            const std::map<std::string, Eigen::Matrix3d>& contacts_position_noise,
                            const std::map<std::string, double>& contacts_probability,
+                           const double timestamp,
                            std::shared_ptr<TerrainElevation> terrain_estimator);
 
     /**

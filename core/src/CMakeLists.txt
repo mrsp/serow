@@ -92,11 +92,13 @@ set(serow_src
     ForceTorqueMeasurementBuffer.cpp
     OdometryMeasurementBuffer.cpp
     ImuMeasurementBuffer.cpp
+    RightInvariantEKF.cpp
 )
 
 # Header files
 set(serow_headers
     common.hpp
+    BaseEstimator.hpp
     Serow.hpp 
     State.hpp 
     ContactEKF.hpp 
@@ -123,6 +125,7 @@ set(serow_headers
     ForceTorqueMeasurementBuffer.hpp
     OdometryMeasurementBuffer.hpp
     ImuMeasurementBuffer.hpp
+    RightInvariantEKF.hpp
 )
 
 add_library(serow SHARED ${serow_headers} ${serow_src})

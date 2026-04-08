@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <serow/ForceTorqueMeasurementBuffer.hpp>
 #include <serow/ImuMeasurementBuffer.hpp>
@@ -98,6 +99,8 @@ private:
     std::vector<std::unique_ptr<std::mutex>>
         ft_subscription_mutexes_;  // One mutex per F/T subscription
     std::queue<sensor_msgs::msg::JointState> joint_state_queue_;
+    /// Latest joint `header.stamp` time successfully passed to `filter()` (strictly increasing).
+    std::optional<double> last_used_joint_measurement_time_;
     std::map<std::string, serow::ForceTorqueMeasurementBuffer> ft_buffers_;
     serow::OdometryMeasurementBuffer ground_truth_odometry_buffer_;
     serow::OdometryMeasurementBuffer external_odometry_buffer_;

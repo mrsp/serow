@@ -24,10 +24,10 @@
     // boolean: whether or not to estimate the joint velocities, if set to false then the user must 
     // provide them
     "estimate_joint_velocity": true,
-    // double: measurement noise of joint encoder (rad^2)
-    "joint_position_variance": 0.001,
-    // double: measurement noise of joint velocity encoder (rad^2/s^2)
-    "joint_velocity_variance": 0.1,
+    // double: spectral density of joint encoder (rad^2/Hz)
+    "joint_position_variance": 1e-5,
+    // double: spectral density of joint velocity encoder (rad^2/s^2/Hz)
+    "joint_velocity_variance": null,
     // integer: smoothing window for the derivative estimators (joint velocity, IMU angular velocity, CoM Angular Momentum Derivative)
     "smoothing_window": 7,
     // Contact point estimator
@@ -127,7 +127,7 @@
     // integer: after how many loop cycles SEROW's estimate is considered valid e.g. all the filters 
     // have converged and estimate should become available for feedback
     "convergence_cycles": 0,
-    // array: gyro random walk. Can be found in the IMU data sheet or computed with the Alan variance 
+    // array: gyro random walk. Can be found in the IMU data sheet or computed with the Allan variance 
     // method
     "imu_angular_velocity_covariance": [
         1e-4,
@@ -135,13 +135,13 @@
         1e-4
     ],
     // array: gyro bias instability (or stability). Can be found in the IMU data sheet or computed 
-    // with the Alan variance method
+    // with the Allan variance method
     "imu_angular_velocity_bias_covariance": [
         1e-6,
         1e-6,
         1e-6
     ],
-    // array: accelerometer random walk. Can be found in the IMU data sheet or computed with the Alan 
+    // array: accelerometer random walk. Can be found in the IMU data sheet or computed with the Allan 
     // variance method
     "imu_linear_acceleration_covariance": [
         1e-3,
@@ -149,7 +149,7 @@
         1e-3
     ],
     // array: accelerometer bias instanbility (or stability). Can be found in the IMU data sheet or 
-    // computed with the Alan variance method
+    // computed with the Allan variance method
     "imu_linear_acceleration_bias_covariance": [
         1e-5,
         1e-5,
@@ -200,22 +200,9 @@
     ],
     // array: External forces acting on CoM process noise (N^2)
     "external_forces_process_covariance": [
-        1e-2,
-        1e-2,
-        1e-2
-    ],
-    // array: CoM position uncertainty (m^2) as computed with robot kinematics
-    "com_position_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
-    ],
-    // array: CoM linear acceleration (m^2/s^4) as approximated with the IMU acceleration and robot 
-    // kinematics
-    "com_linear_acceleration_covariance": [
-        1e-3,
-        1e-3,
-        1e-3
+        1.0,
+        1.0,
+        1.0
     ],
     // array: initial uncertainty for the CoM position (m^2)
     "initial_com_position_covariance": [
