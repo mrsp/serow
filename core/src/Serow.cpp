@@ -510,13 +510,13 @@ bool Serow::initialize(const std::string& config_file) {
 
 void Serow::initializeLogging() {
     if (!proprioception_logger_job_) {
-        proprioception_logger_job_ = std::make_unique<ThreadPool>();
+        proprioception_logger_job_ = std::make_unique<ThreadPool>(1);
     }
     if (!exteroception_logger_job_) {
         exteroception_logger_job_ = std::make_unique<ThreadPool>();
     }
     if (!measurement_logger_job_) {
-        measurement_logger_job_ = std::make_unique<ThreadPool>();
+        measurement_logger_job_ = std::make_unique<ThreadPool>(1);
     }
     if (!proprioception_logger_) {
         proprioception_logger_ =

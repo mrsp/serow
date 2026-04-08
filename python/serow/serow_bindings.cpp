@@ -492,22 +492,8 @@ PYBIND11_MODULE(serow, m) {
                 self.contacts_orientation = eigen_orientations;
             },
             "Map of contact orientations (string to quaternion)")
-        .def_readwrite("com_angular_momentum_derivative",
-                       &serow::KinematicMeasurement::com_angular_momentum_derivative,
-                       "Center of mass angular momentum derivative (3D vector)")
         .def_readwrite("com_position", &serow::KinematicMeasurement::com_position,
-                       "Center of mass position (3D vector)")
-        .def_readwrite("com_linear_acceleration",
-                       &serow::KinematicMeasurement::com_linear_acceleration,
-                       "Center of mass linear acceleration (3D vector)")
-        .def_readwrite("position_slip_cov", &serow::KinematicMeasurement::position_slip_cov,
-                       "Position slip covariance (3x3 matrix)")
-        .def_readwrite("orientation_slip_cov", &serow::KinematicMeasurement::orientation_slip_cov,
-                       "Orientation slip covariance (3x3 matrix)")
-        .def_readwrite("position_cov", &serow::KinematicMeasurement::position_cov,
-                       "Position covariance (3x3 matrix)")
-        .def_readwrite("orientation_cov", &serow::KinematicMeasurement::orientation_cov,
-                       "Orientation covariance (3x3 matrix)")
+                       "Center of mass position relative to base frame (3D vector)")
         .def_readwrite("com_position_process_cov",
                        &serow::KinematicMeasurement::com_position_process_cov,
                        "Center of mass position process covariance (3x3 matrix)")
@@ -518,10 +504,7 @@ PYBIND11_MODULE(serow, m) {
                        &serow::KinematicMeasurement::external_forces_process_cov,
                        "External forces process covariance (3x3 matrix)")
         .def_readwrite("com_position_cov", &serow::KinematicMeasurement::com_position_cov,
-                       "Center of mass position covariance (3x3 matrix)")
-        .def_readwrite("com_linear_acceleration_cov",
-                       &serow::KinematicMeasurement::com_linear_acceleration_cov,
-                       "Center of mass linear acceleration covariance (3x3 matrix)")
+                       "Center of mass position covariance relative to base frame (3x3 matrix)")
         // Add pickle support
         .def(py::pickle(
             [](const serow::KinematicMeasurement& kin) {  // __getstate__
@@ -546,14 +529,13 @@ PYBIND11_MODULE(serow, m) {
                     base_to_foot_orientations_serialized, kin.base_to_foot_linear_velocities,
                     kin.base_to_foot_angular_velocities, kin.contacts_position_noise,
                     kin.contacts_linear_velocity_noise, contacts_orientation_serialized,
-                    kin.com_angular_momentum_derivative, kin.com_position,
-                    kin.com_linear_acceleration, kin.position_slip_cov, kin.orientation_slip_cov,
-                    kin.position_cov, kin.orientation_cov, kin.com_position_process_cov,
+                    kin.com_position, kin.com_position_process_cov,
                     kin.com_linear_velocity_process_cov, kin.external_forces_process_cov,
-                    kin.com_position_cov, kin.com_linear_acceleration_cov);
+                    kin.com_position_cov);
             },
             [](py::tuple t) {  // __setstate__
-                if (t.size() != 27)
+                const std::size_t n = t.size();
+                if (n != 20 && n != 27)
                     throw std::runtime_error("Invalid state for KinematicMeasurement!");
 
                 serow::KinematicMeasurement kin;
@@ -593,22 +575,26 @@ PYBIND11_MODULE(serow, m) {
                     kin.contacts_orientation = contacts_orientation;
                 }
 
-                kin.com_angular_momentum_derivative =
-                    t[15].cast<decltype(kin.com_angular_momentum_derivative)>();
-                kin.com_position = t[16].cast<decltype(kin.com_position)>();
-                kin.com_linear_acceleration = t[17].cast<decltype(kin.com_linear_acceleration)>();
-                kin.position_slip_cov = t[18].cast<decltype(kin.position_slip_cov)>();
-                kin.orientation_slip_cov = t[19].cast<decltype(kin.orientation_slip_cov)>();
-                kin.position_cov = t[20].cast<decltype(kin.position_cov)>();
-                kin.orientation_cov = t[21].cast<decltype(kin.orientation_cov)>();
-                kin.com_position_process_cov = t[22].cast<decltype(kin.com_position_process_cov)>();
-                kin.com_linear_velocity_process_cov =
-                    t[23].cast<decltype(kin.com_linear_velocity_process_cov)>();
-                kin.external_forces_process_cov =
-                    t[24].cast<decltype(kin.external_forces_process_cov)>();
-                kin.com_position_cov = t[25].cast<decltype(kin.com_position_cov)>();
-                kin.com_linear_acceleration_cov =
-                    t[26].cast<decltype(kin.com_linear_acceleration_cov)>();
+                if (n == 20) {
+                    kin.com_position = t[15].cast<decltype(kin.com_position)>();
+                    kin.com_position_process_cov =
+                        t[16].cast<decltype(kin.com_position_process_cov)>();
+                    kin.com_linear_velocity_process_cov =
+                        t[17].cast<decltype(kin.com_linear_velocity_process_cov)>();
+                    kin.external_forces_process_cov =
+                        t[18].cast<decltype(kin.external_forces_process_cov)>();
+                    kin.com_position_cov = t[19].cast<decltype(kin.com_position_cov)>();
+                } else {
+                    // Legacy 27-tuple layout (pre-Measurement.hpp slimming)
+                    kin.com_position = t[16].cast<decltype(kin.com_position)>();
+                    kin.com_position_process_cov =
+                        t[22].cast<decltype(kin.com_position_process_cov)>();
+                    kin.com_linear_velocity_process_cov =
+                        t[23].cast<decltype(kin.com_linear_velocity_process_cov)>();
+                    kin.external_forces_process_cov =
+                        t[24].cast<decltype(kin.external_forces_process_cov)>();
+                    kin.com_position_cov = t[25].cast<decltype(kin.com_position_cov)>();
+                }
 
                 return kin;
             }));
@@ -694,8 +680,9 @@ PYBIND11_MODULE(serow, m) {
                                   "Extended Kalman Filter for humanoid robot state estimation")
         .def(py::init<>(), "Default constructor")
         .def("init", &serow::ContactEKF::init, py::arg("state"), py::arg("contacts_frame"),
-             py::arg("g"), py::arg("imu_rate"), py::arg("eps") = 0.05, py::arg("point_feet") = true,
-             py::arg("use_imu_orientation") = false, py::arg("verbose") = false,
+             py::arg("g"), py::arg("imu_rate"), py::arg("kin_rate"), py::arg("eps") = 0.05,
+             py::arg("point_feet") = true, py::arg("use_imu_orientation") = false,
+             py::arg("verbose") = false,
              "Initializes the EKF with the initial robot state and parameters")
         .def("predict", &serow::ContactEKF::predict, py::arg("state"), py::arg("imu"),
              "Predicts the robot's state forward based on IMU measurements")
@@ -728,9 +715,11 @@ PYBIND11_MODULE(serow, m) {
              "Sets the state of the EKF")
         .def("update_with_base_linear_velocity", &serow::ContactEKF::updateWithBaseLinearVelocity,
              py::arg("state"), py::arg("base_linear_velocity"), py::arg("base_linear_velocity_cov"),
+             py::arg("timestamp"),
              "Updates the robot's state based on base linear velocity measurements")
         .def("update_with_imu_orientation", &serow::ContactEKF::updateWithIMUOrientation,
              py::arg("state"), py::arg("imu_orientation"), py::arg("imu_orientation_cov"),
+             py::arg("timestamp"),
              "Updates the robot's state based on IMU orientation measurements");
 
     // Binding for Serow
@@ -1132,12 +1121,6 @@ PYBIND11_MODULE(serow, m) {
              "Returns the IMU linear acceleration bias covariance")
         .def("get_imu_angular_velocity_bias_cov", &serow::State::getImuAngularVelocityBiasCov,
              "Returns the IMU angular velocity bias covariance")
-        .def("get_contact_pose_cov", &serow::State::getContactPoseCov,
-             "Returns the contact pose covariance for a given frame")
-        .def("get_contact_position_cov", &serow::State::getContactPositionCov,
-             "Returns the contact position covariance for a given frame")
-        .def("get_contact_orientation_cov", &serow::State::getContactOrientationCov,
-             "Returns the contact orientation covariance for a given frame")
         .def("get_com_position_cov", &serow::State::getCoMPositionCov,
              "Returns the center of mass position covariance")
         .def("get_com_linear_velocity_cov", &serow::State::getCoMLinearVelocityCov,
