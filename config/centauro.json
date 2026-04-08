@@ -40,7 +40,7 @@
         0.0,
         1.0
     ],
-    "use_imu_orientation": true,
+    "use_imu_orientation": false,
     "calibrate_initial_imu_bias": true,
     "max_imu_calibration_cycles": 500,
     "bias_gyro": [
@@ -112,9 +112,9 @@
         0.01
     ],
     "imu_angular_velocity_bias_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
+        1e-8,
+        1e-8,
+        1e-8
     ],
     "imu_linear_acceleration_covariance": [
         0.2,
@@ -122,9 +122,9 @@
         0.2
     ],
     "imu_linear_acceleration_bias_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
+        1e-8,
+        1e-8,
+        1e-8
     ],
     "com_position_process_covariance": [
         1e-6,
@@ -137,19 +137,9 @@
         1e-4
     ],
     "external_forces_process_covariance": [
-        1e-1,
-        1e-1,
-        1e-1
-    ],
-    "com_position_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
-    ],
-    "com_linear_acceleration_covariance": [
-        1e-2,
-        1e-2,
-        1e-2
+        5.0,
+        5.0,
+        5.0
     ],
     "initial_base_position_covariance": [
         1e-6,
@@ -167,14 +157,14 @@
         1e-3
     ],
     "initial_imu_linear_acceleration_bias_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
+        1e-8,
+        1e-8,
+        1e-8
     ],
     "initial_imu_angular_velocity_bias_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
+        1e-8,
+        1e-8,
+        1e-8
     ],
     "initial_com_position_covariance": [
         1e-6,
@@ -192,7 +182,7 @@
         1.0
     ],
     "T_base_to_odom": null,
-    "enable_terrain_estimation": true,
+    "enable_terrain_estimation": false,
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3,
     "maximum_contact_points": 4,
