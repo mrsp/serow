@@ -3,8 +3,8 @@
     "base_frame": "pelvis",
     "point_feet": false,
     "foot_frames": {
-        "0": "leftFoot",
-        "1": "rightFoot"
+        "0": "leftCOP_Frame",
+        "1": "rightCOP_Frame"
     },
     "model_path": "valkyrie.urdf",
     "g": 9.81,
@@ -223,7 +223,7 @@
         0.0,
         0.0,
         1.0,
-        -0.973,
+        -0.9726,
         0.0,
         0.0,
         0.0,
