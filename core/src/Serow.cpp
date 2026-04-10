@@ -543,21 +543,13 @@ void Serow::logMeasurements(const ImuMeasurement& imu,
         return;
     }
     measurement_logger_job_->addJob([this, imu = imu, joints = joints, ft = ft,
-                                     base_pose_ground_truth = std::move(base_pose_ground_truth)]() {
+                                     base_pose_ground_truth = std::move(base_pose_ground_truth),
+                                     start_time = start_time_]() {
         try {
             if (!measurement_logger_->isInitialized()) {
-                double start_time = imu.timestamp;
-                if (!joints.empty()) {
-                    start_time = std::min(start_time, joints.begin()->second.timestamp);
-                }
-                if (!ft.empty()) {
-                    start_time = std::min(start_time, ft.begin()->second.timestamp);
-                }
-                if (base_pose_ground_truth.has_value()) {
-                    start_time = std::min(start_time, base_pose_ground_truth.value().timestamp);
-                }
                 measurement_logger_->setStartTime(start_time);
             }
+
             // Log all measurement data to MCAP file
             measurement_logger_->log(imu);
             if (!joints.empty()) {
@@ -1120,26 +1112,25 @@ void Serow::logProprioception(const State& state, const ImuMeasurement& imu) {
     if (!params_.log_data) {
         return;
     }
-    proprioception_logger_job_->addJob([this, joints_state = state.joint_state_,
-                                        base_state = state.base_state_,
-                                        centroidal_state = state.centroidal_state_,
-                                        contact_state = state.contact_state_, imu = imu,
-                                        frame_tfs = frame_tfs_]() {
-        try {
-            if (!proprioception_logger_->isInitialized()) {
-                proprioception_logger_->setStartTime(std::min(base_state.timestamp, imu.timestamp));
+    proprioception_logger_job_->addJob(
+        [this, joints_state = state.joint_state_, base_state = state.base_state_,
+         centroidal_state = state.centroidal_state_, contact_state = state.contact_state_,
+         imu = imu, frame_tfs = frame_tfs_, start_time = start_time_]() {
+            try {
+                if (!proprioception_logger_->isInitialized()) {
+                    proprioception_logger_->setStartTime(start_time);
+                }
+                // Log all state data to MCAP file
+                proprioception_logger_->log(imu);
+                proprioception_logger_->log(joints_state);
+                proprioception_logger_->log(contact_state);
+                proprioception_logger_->log(centroidal_state);
+                proprioception_logger_->log(base_state);
+                proprioception_logger_->log(frame_tfs, base_state.timestamp);
+            } catch (const std::exception& e) {
+                std::cerr << "Error in proprioception logging thread: " << e.what() << '\n';
             }
-            // Log all state data to MCAP file
-            proprioception_logger_->log(imu);
-            proprioception_logger_->log(joints_state);
-            proprioception_logger_->log(contact_state);
-            proprioception_logger_->log(centroidal_state);
-            proprioception_logger_->log(base_state);
-            proprioception_logger_->log(frame_tfs, base_state.timestamp);
-        } catch (const std::exception& e) {
-            std::cerr << "Error in proprioception logging thread: " << e.what() << '\n';
-        }
-    });
+        });
 }
 
 void Serow::logExteroception(const State& state) {
@@ -1158,14 +1149,15 @@ void Serow::logExteroception(const State& state) {
         const double res_base =
             terrain_estimator ? static_cast<double>(terrain_estimator->getResolution()) : 0.02;
         exteroception_logger_job_->addJob([terrain_estimator, exteroception_logger,
-                                           ts = state.base_state_.timestamp, res_base]() {
+                                           ts = state.base_state_.timestamp, res_base,
+                                           start_time = start_time_]() {
             try {
                 if (!terrain_estimator || !exteroception_logger) {
                     std::cerr << "Error in exteroception logging: null pointer detected" << '\n';
                     return;
                 }
                 if (!exteroception_logger->isInitialized()) {
-                    exteroception_logger->setStartTime(ts);
+                    exteroception_logger->setStartTime(start_time);
                 }
                 const size_t downsample_factor = 4;
                 const auto [origin, bound_max, bound_min] = terrain_estimator->getLocalMapInfo();
@@ -1311,6 +1303,7 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
             return false;
         }
         is_initialized_ = true;
+        start_time_ = timestamp_;
         initializeLogging();
     }
 

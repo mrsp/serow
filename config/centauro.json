@@ -12,10 +12,10 @@
     "g": 9.81,
     "joint_rate": 200.0,
     "estimate_joint_velocity": true,
-    "joint_position_variance": 1e-4,
+    "joint_position_variance": 1e-6,
     "joint_velocity_variance": null,
     "smoothing_window": 7,
-    "tau_0": 0.1,
+    "tau_0": 1e-3,
     "tau_1": 0.0,
     "imu_rate": 200.0,
     "R_base_to_gyro": [
@@ -104,12 +104,12 @@
     "attitude_estimator_proportional_gain": 0.1,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
-    "median_window": 21,
-    "convergence_cycles": 100,
+    "median_window": 11,
+    "convergence_cycles": 200,
     "imu_angular_velocity_covariance": [
-        0.01,
-        0.01,
-        0.01
+        1e-2,
+        1e-2,
+        1e-2
     ],
     "imu_angular_velocity_bias_covariance": [
         1e-8,
@@ -117,9 +117,9 @@
         1e-8
     ],
     "imu_linear_acceleration_covariance": [
-        0.2,
-        0.2,
-        0.2
+        1e-1,
+        1e-1,
+        1e-1
     ],
     "imu_linear_acceleration_bias_covariance": [
         1e-8,
@@ -147,9 +147,9 @@
         1e-6
     ],
     "initial_base_orientation_covariance": [
-        1e-6,
-        1e-6,
-        1e-6
+        1e-4,
+        1e-4,
+        1e-4
     ],
     "initial_base_linear_velocity_covariance": [
         1e-3,
@@ -182,17 +182,21 @@
         1.0
     ],
     "T_base_to_odom": null,
-    "enable_terrain_estimation": false,
+    "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3,
     "maximum_contact_points": 4,
     "maximum_recenter_distance": 0.35,
-    "minimum_contact_probability": 0.35,
+    "minimum_contact_probability": 0.15,
     "resolution": 0.02,
-    "radius": 0.1,
-    "dist_variance_gain": 100.0,
-    "power": 2.0,
+    "radius": 0.04,
+    "dist_variance_gain": 200.0,
+    "power": 1.5,
     "T_base_to_ground_truth": [
+        0.0,
+        0.0,
+        1.0,
+        0.0,
         1.0,
         0.0,
         0.0,
@@ -200,10 +204,6 @@
         0.0,
         1.0,
         0.0,
-        0.0,
-        0.0,
-        0.0,
-        1.0,
         0.0,
         0.0,
         0.0,

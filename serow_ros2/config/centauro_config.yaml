@@ -13,6 +13,7 @@ topics:
 synchronization:
   imu_to_joint: 0.005
   force_torque_to_joint: 0.01
+  ground_truth_to_joint: 0.005
 serow_config: "centauro.json" 
 publish_path: false
 

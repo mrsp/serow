@@ -116,7 +116,7 @@ gt_velocity_timestamps = np.array([gt.timestamp for gt in log["base_velocity_gro
     gt_position_timestamps,
     gt_positions,
     gt_orientations,
-    align=True,
+    align=False,
     base_linear_velocity=base_linear_velocities,
     base_angular_velocity=base_angular_velocities,
     gt_linear_velocity=gt_linear_velocities,
@@ -155,6 +155,9 @@ def quat_wxyz_to_euler(quat_wxyz, seq="xyz", degrees=True):
 
 base_orientations_euler = quat_wxyz_to_euler(base_orientations)
 gt_orientations_euler = quat_wxyz_to_euler(gt_orientations)
+# Subtract each series' first sample so both curves start at 0 deg (visual alignment only).
+base_orientations_euler = base_orientations_euler - base_orientations_euler[0]
+gt_orientations_euler = gt_orientations_euler - gt_orientations_euler[0]
 
 fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
 euler_labels = (
@@ -243,4 +246,34 @@ ave_rot = error(gt_angular_velocities, base_angular_velocities)
 print(f"Absolute Linear Velocity Error: {ave} m/s")
 print(f"Absolute Angular Velocity Error: {ave_rot} deg/s")
 
+
+# Fetch the imu biases from the base states
+imu_linear_acceleration_biases = np.array([base.imu_linear_acceleration_bias for base in log["base_states"]])
+imu_angular_velocity_biases = np.array([base.imu_angular_velocity_bias for base in log["base_states"]])
+imu_timestamps = np.array([base.timestamp for base in log["base_states"]])
+
+# Plot the imu biases — accelerometer (x, y, z)
+fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
+for ax, i in zip(axes, range(3)):
+    sub = axis_sub[i]
+    ax.plot(imu_timestamps, imu_linear_acceleration_biases[:, i])
+    ax.set_ylabel(rf"$b_{{a,{sub}}}$ (m/s$^2$)")
+    ax.grid(True)
+axes[-1].set_xlabel(r"$\mathrm{Time}$ (s)")
+fig.suptitle(r"IMU accelerometer bias")
+plt.tight_layout()
+
+# Plot the imu biases — gyroscope (x, y, z)
+fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
+for ax, i in zip(axes, range(3)):
+    sub = axis_sub[i]
+    ax.plot(
+        imu_timestamps,
+        imu_angular_velocity_biases[:, i] * 180 / np.pi,
+    )
+    ax.set_ylabel(rf"$b_{{\omega,{sub}}}$ (deg/s)")
+    ax.grid(True)
+axes[-1].set_xlabel(r"$\mathrm{Time}$ (s)")
+fig.suptitle(r"IMU gyroscope bias")
+plt.tight_layout()
 plt.show()
