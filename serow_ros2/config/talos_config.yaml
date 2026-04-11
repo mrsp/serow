@@ -4,8 +4,8 @@ topics:
   joint_states: "/joint_states"
   imu: "/imu"
   force_torque_states:
-    - "/force_torque_states/leg_left_6_link"
-    - "/force_torque_states/leg_right_6_link"
+    - "/force_torque_states/left_sole_link"
+    - "/force_torque_states/right_sole_link"
   ground_truth: "/ground_truth/odom"
   external_odometry: null
 synchronization:
