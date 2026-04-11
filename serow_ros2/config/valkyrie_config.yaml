@@ -6,13 +6,13 @@ topics:
   force_torque_states:
     - "/force_torque_states/left"
     - "/force_torque_states/right"
-  ground_truth: ""
+  ground_truth: "/ground_truth/odom"
   external_odometry: "/visual_odom"
 synchronization:
   imu_to_joint: 0.005
   force_torque_to_joint: 0.01
   external_odometry_to_joint: 0.01
-  ground_truth_to_joint: 0.01
+  ground_truth_to_joint: 0.02
 serow_config: "valkyrie.json" 
 publish_path: false
 add_gravity_to_imu: true

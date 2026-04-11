@@ -519,10 +519,6 @@ void MeasurementLogger::log(const ImuMeasurement& imu_measurement) {
     pimpl_->log(imu_measurement);
 }
 
-// void MeasurementLogger::log(const KinematicMeasurement& kinematic_measurement) {
-//     pimpl_->log(kinematic_measurement);
-// }
-
 void MeasurementLogger::log(const BasePoseGroundTruth& base_pose_ground_truth) {
     pimpl_->log(base_pose_ground_truth);
 }
