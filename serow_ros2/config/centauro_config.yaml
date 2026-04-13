@@ -1,0 +1,19 @@
+robot_name: "centauro"
+path_to_serow_library: "/usr/local/lib"
+topics:
+  joint_states: "/joint_states"
+  imu: "/imu"
+  force_torque_states:
+    - "/force_torque_states/wheel_1"
+    - "/force_torque_states/wheel_2"
+    - "/force_torque_states/wheel_3"
+    - "/force_torque_states/wheel_4"
+  ground_truth: "/ground_truth/odom"
+  external_odometry: ""
+synchronization:
+  imu_to_joint: 0.005
+  force_torque_to_joint: 0.01
+  ground_truth_to_joint: 0.005
+serow_config: "centauro.json" 
+publish_path: false
+

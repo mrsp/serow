@@ -169,6 +169,33 @@ def logMap(R):
     return omega
 
 
+def _sort_by_timestamp(timestamps, *arrays):
+    """Sort series by timestamp so np.interp receives monotonic x."""
+    ts = np.asarray(timestamps, dtype=float)
+    order = np.argsort(ts, kind="stable")
+    out_ts = ts[order]
+    out_arrays = tuple(np.asarray(a)[order] for a in arrays)
+    return (out_ts,) + out_arrays
+
+
+def _interp_vector(common_timestamps, xp, values):
+    """Interpolate (N, D) values onto common_timestamps; xp must be sorted increasing."""
+    values = np.asarray(values, dtype=float)
+    if values.ndim == 1:
+        values = values.reshape(-1, 1)
+    out = np.zeros((len(common_timestamps), values.shape[1]))
+    for j in range(values.shape[1]):
+        out[:, j] = np.interp(common_timestamps, xp, values[:, j])
+    return out
+
+
+def _normalize_quaternion_rows(q):
+    q = np.asarray(q, dtype=float)
+    n = np.linalg.norm(q, axis=1, keepdims=True)
+    n = np.where(n < 1e-12, 1.0, n)
+    return q / n
+
+
 def sync_and_align_data(
     base_timestamps,
     base_position,
@@ -177,61 +204,91 @@ def sync_and_align_data(
     gt_position,
     gt_orientation,
     align=False,
+    base_linear_velocity=None,
+    base_angular_velocity=None,
+    gt_linear_velocity=None,
+    gt_angular_velocity=None,
+    gt_velocity_timestamps=None,
 ):
-    # Find the common time range
-    start_time = max(base_timestamps[0], gt_timestamps[0])
-    end_time = min(base_timestamps[-1], gt_timestamps[-1])
+    """
+    Resample base and ground-truth pose (and optionally velocities) onto a common
+    time grid over the overlap of all timestamp ranges. Series are sorted by
+    time before interpolation.
 
-    # Create a common time grid with actual data length
-    num_points = min(len(base_timestamps), len(gt_timestamps))
+    Returns a 5-tuple (pose only) or a 9-tuple when all velocity arrays and
+    gt_velocity_timestamps (or implicit gt_timestamps) are provided.
+    """
+    sync_vel = (
+        base_linear_velocity is not None
+        and base_angular_velocity is not None
+        and gt_linear_velocity is not None
+        and gt_angular_velocity is not None
+    )
+    if sync_vel:
+        base_ts, base_position, base_orientation, base_lv, base_av = _sort_by_timestamp(
+            base_timestamps,
+            base_position,
+            base_orientation,
+            base_linear_velocity,
+            base_angular_velocity,
+        )
+        gt_vts = gt_velocity_timestamps
+        if gt_vts is None:
+            gt_vts = gt_timestamps
+        gt_vts, gt_lv, gt_av = _sort_by_timestamp(
+            gt_vts, gt_linear_velocity, gt_angular_velocity
+        )
+    else:
+        base_ts, base_position, base_orientation = _sort_by_timestamp(
+            base_timestamps, base_position, base_orientation
+        )
+        base_lv = base_av = gt_lv = gt_av = None
+        gt_vts = None
+    gt_ts, gt_position, gt_orientation = _sort_by_timestamp(
+        gt_timestamps, gt_position, gt_orientation
+    )
+
+    start_time = max(base_ts[0], gt_ts[0])
+    end_time = min(base_ts[-1], gt_ts[-1])
+    if sync_vel:
+        start_time = max(start_time, gt_vts[0])
+        end_time = min(end_time, gt_vts[-1])
+
+    lengths = [len(base_ts), len(gt_ts)]
+    if sync_vel:
+        lengths.append(len(gt_vts))
+    num_points = max(1, min(lengths))
     common_timestamps = np.linspace(start_time, end_time, num_points)
 
-    # Interpolate base position
-    base_position_interp = np.zeros((len(common_timestamps), 3))
-    for i in range(3):  # x, y, z
-        base_position_interp[:, i] = np.interp(
-            common_timestamps, base_timestamps, base_position[:, i]
-        )
+    base_position_interp = _interp_vector(common_timestamps, base_ts, base_position)
+    gt_position_interp = _interp_vector(common_timestamps, gt_ts, gt_position)
 
-    # Interpolate ground truth position
-    gt_position_interp = np.zeros((len(common_timestamps), 3))
-    for i in range(3):  # x, y, z
-        gt_position_interp[:, i] = np.interp(
-            common_timestamps, gt_timestamps, gt_position[:, i]
-        )
+    base_orientation_interp = _interp_vector(
+        common_timestamps, base_ts, base_orientation
+    )
+    gt_orientation_interp = _interp_vector(common_timestamps, gt_ts, gt_orientation)
+    base_orientation_interp = _normalize_quaternion_rows(base_orientation_interp)
+    gt_orientation_interp = _normalize_quaternion_rows(gt_orientation_interp)
 
-    # Interpolate orientations
-    base_orientation_interp = np.zeros((len(common_timestamps), 4))
-    gt_orientation_interp = np.zeros((len(common_timestamps), 4))
-    for i in range(4):  # w, x, y, z
-        base_orientation_interp[:, i] = np.interp(
-            common_timestamps, base_timestamps, base_orientation[:, i]
-        )
-        gt_orientation_interp[:, i] = np.interp(
-            common_timestamps, gt_timestamps, gt_orientation[:, i]
-        )
+    if sync_vel:
+        base_linear_vel_interp = _interp_vector(common_timestamps, base_ts, base_lv)
+        base_angular_vel_interp = _interp_vector(common_timestamps, base_ts, base_av)
+        gt_linear_vel_interp = _interp_vector(common_timestamps, gt_vts, gt_lv)
+        gt_angular_vel_interp = _interp_vector(common_timestamps, gt_vts, gt_av)
 
-    # Exclude entries that are before the first common timestamp
-    base_position_interp = base_position_interp[common_timestamps >= start_time]
-    base_orientation_interp = base_orientation_interp[common_timestamps >= start_time]
-    gt_position_interp = gt_position_interp[common_timestamps >= start_time]
-    gt_orientation_interp = gt_orientation_interp[common_timestamps >= start_time]
-
+    n = len(common_timestamps)
     if align:
-        # Compute the initial rigid body transformation from the first timestamp
         R_gt = quaternion_to_rotation_matrix(gt_orientation_interp[0])
         R_base = quaternion_to_rotation_matrix(base_orientation_interp[0])
         R = R_gt.transpose() @ R_base
         t = base_position_interp[0] - R @ gt_position_interp[0]
 
-        # Apply transformation to base position and orientation
-        for i in range(len(common_timestamps)):
+        for i in range(n):
             gt_position_interp[i] = R @ gt_position_interp[i] + t
             gt_orientation_interp[i] = rotation_matrix_to_quaternion(
                 R @ quaternion_to_rotation_matrix(gt_orientation_interp[i])
             )
 
-        # Print transformation details
         print("Rotation matrix from gt to base:")
         print(R)
         print("\nTranslation vector from gt to base:")
@@ -239,6 +296,18 @@ def sync_and_align_data(
     else:
         print("Not spatially aligning data")
 
+    if sync_vel:
+        return (
+            common_timestamps,
+            base_position_interp,
+            base_orientation_interp,
+            gt_position_interp,
+            gt_orientation_interp,
+            base_linear_vel_interp,
+            base_angular_vel_interp,
+            gt_linear_vel_interp,
+            gt_angular_vel_interp,
+        )
     return (
         common_timestamps,
         base_position_interp,
