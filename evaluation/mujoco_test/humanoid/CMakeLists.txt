@@ -46,8 +46,6 @@ target_link_libraries(humanoid_mujoco_test PRIVATE
     pinocchio::pinocchio 
     nlohmann_json::nlohmann_json
     ${ZSTD_LIBRARIES}
-    pthread
-    dl
 )
 
 if (TARGET mcap::mcap)
