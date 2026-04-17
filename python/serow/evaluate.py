@@ -135,6 +135,10 @@ assert len(timestamps) == len(gt_linear_velocities)
 assert len(timestamps) == len(gt_angular_velocities)
 
 # Plot the base and ground truth trajectories 
+# Subtract each series' first sample so both curves start at 0 m (visual alignment only)
+base_positions = base_positions - base_positions[0]
+gt_positions = gt_positions - gt_positions[0]
+
 axis_sub = ("x", "y", "z")
 fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
 axis_names = ("X", "Y", "Z")
@@ -156,9 +160,12 @@ def quat_wxyz_to_euler(quat_wxyz, seq="xyz", degrees=True):
 
 base_orientations_euler = quat_wxyz_to_euler(base_orientations)
 gt_orientations_euler = quat_wxyz_to_euler(gt_orientations)
-# Subtract each series' first sample so both curves start at 0 deg (visual alignment only).
+
+# Subtract each series' first sample so both curves start at 0 deg (visual alignment only)
 base_orientations_euler = base_orientations_euler - base_orientations_euler[0]
 gt_orientations_euler = gt_orientations_euler - gt_orientations_euler[0]
+
+
 
 fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
 euler_labels = (
