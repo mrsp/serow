@@ -1,6 +1,6 @@
 {
   "Target": {
-    "robot": "h1",
+    "robot": "g1",
     "experiment": "flat_gamma"
   },
   "Paths": {

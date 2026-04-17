@@ -21,6 +21,7 @@ serow_layout.json:Zone.Identifier
 /serow_ros2/install/
 /serow_ros2/log/
 /python/datasets/*
+/python/__pycache__/
 /python/models/*
 /python/*_test.npz
 serow_predictions.mcap

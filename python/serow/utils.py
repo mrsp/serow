@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import os
 import torch
 from mpl_toolkits.mplot3d import Axes3D
+from scipy.spatial.transform import Rotation, Slerp
 
 
 def rotation_matrix_to_quaternion(R):
@@ -196,6 +197,62 @@ def _normalize_quaternion_rows(q):
     return q / n
 
 
+def _quaternion_wxyz_to_xyzw(q):
+    """SciPy Rotation uses quaternions as [x, y, z, w]; we use [w, x, y, z]."""
+    q = np.asarray(q, dtype=float)
+    if q.ndim == 1:
+        return np.array([q[1], q[2], q[3], q[0]], dtype=float)
+    return np.concatenate([q[:, 1:4], q[:, :1]], axis=1)
+
+
+def _quaternion_xyzw_to_wxyz(q):
+    q = np.asarray(q, dtype=float)
+    if q.ndim == 1:
+        return np.array([q[3], q[0], q[1], q[2]], dtype=float)
+    return np.concatenate([q[:, 3:4], q[:, :3]], axis=1)
+
+
+def _interp_quaternion_slerp(common_timestamps, xp, quat_wxyz):
+    """Interpolate unit quaternions [w,x,y,z] onto common_timestamps using SciPy Slerp."""
+    xp = np.asarray(xp, dtype=float)
+    q = np.asarray(quat_wxyz, dtype=float)
+    if q.ndim == 1:
+        q = q.reshape(1, 4)
+    if len(xp) == 0:
+        raise ValueError("empty orientation timestamp series")
+    if len(xp) == 1:
+        q0 = _normalize_quaternion_rows(q)[0]
+        return np.tile(q0, (len(common_timestamps), 1))
+    rotations = Rotation.from_quat(_quaternion_wxyz_to_xyzw(_normalize_quaternion_rows(q)))
+    slerp = Slerp(xp, rotations)
+    return _quaternion_xyzw_to_wxyz(slerp(common_timestamps).as_quat())
+
+
+def _umeyama_rigid_se3(source_xyz, target_xyz):
+    """
+    Rigid special case of Umeyama (scale fixed to 1): least-squares SE(3)
+    mapping source -> target as target ≈ R @ source + t.
+
+    source_xyz, target_xyz: (n, 3) corresponding points in the same frame.
+    """
+    X = np.asarray(source_xyz, dtype=float).reshape(-1, 3)
+    Y = np.asarray(target_xyz, dtype=float).reshape(-1, 3)
+    n = X.shape[0]
+    mu_x = X.mean(axis=0)
+    mu_y = Y.mean(axis=0)
+    Xc = X - mu_x
+    Yc = Y - mu_y
+    H = Xc.T @ Yc
+    U, _, Vt = np.linalg.svd(H)
+    R = Vt.T @ U.T
+    if np.linalg.det(R) < 0:
+        Vt = Vt.copy()
+        Vt[-1, :] *= -1.0
+        R = Vt.T @ U.T
+    t = mu_y - R @ mu_x
+    return R, t
+
+
 def sync_and_align_data(
     base_timestamps,
     base_position,
@@ -204,6 +261,7 @@ def sync_and_align_data(
     gt_position,
     gt_orientation,
     align=False,
+    n_points=5000,
     base_linear_velocity=None,
     base_angular_velocity=None,
     gt_linear_velocity=None,
@@ -217,6 +275,9 @@ def sync_and_align_data(
 
     Returns a 5-tuple (pose only) or a 9-tuple when all velocity arrays and
     gt_velocity_timestamps (or implicit gt_timestamps) are provided.
+
+    When align=True, GT linear and angular velocity are rotated by the same R
+    as GT position/orientation (translation does not affect velocity).
     """
     sync_vel = (
         base_linear_velocity is not None
@@ -263,12 +324,12 @@ def sync_and_align_data(
     base_position_interp = _interp_vector(common_timestamps, base_ts, base_position)
     gt_position_interp = _interp_vector(common_timestamps, gt_ts, gt_position)
 
-    base_orientation_interp = _interp_vector(
+    base_orientation_interp = _interp_quaternion_slerp(
         common_timestamps, base_ts, base_orientation
     )
-    gt_orientation_interp = _interp_vector(common_timestamps, gt_ts, gt_orientation)
-    base_orientation_interp = _normalize_quaternion_rows(base_orientation_interp)
-    gt_orientation_interp = _normalize_quaternion_rows(gt_orientation_interp)
+    gt_orientation_interp = _interp_quaternion_slerp(
+        common_timestamps, gt_ts, gt_orientation
+    )
 
     if sync_vel:
         base_linear_vel_interp = _interp_vector(common_timestamps, base_ts, base_lv)
@@ -278,16 +339,24 @@ def sync_and_align_data(
 
     n = len(common_timestamps)
     if align:
-        R_gt = quaternion_to_rotation_matrix(gt_orientation_interp[0])
-        R_base = quaternion_to_rotation_matrix(base_orientation_interp[0])
-        R = R_gt.transpose() @ R_base
-        t = base_position_interp[0] - R @ gt_position_interp[0]
+        if n >= 2:
+            n_min = min(n_points, len(gt_timestamps))
+            print(f"Using {n_min} points for alignment")
+            R, t = _umeyama_rigid_se3(gt_position_interp[:n_min], base_position_interp[:n_min])
+        else:
+            R_gt = quaternion_to_rotation_matrix(gt_orientation_interp[0])
+            R_base = quaternion_to_rotation_matrix(base_orientation_interp[0])
+            R = R_gt.T @ R_base
+            t = base_position_interp[0] - R @ gt_position_interp[0]
 
         for i in range(n):
             gt_position_interp[i] = R @ gt_position_interp[i] + t
             gt_orientation_interp[i] = rotation_matrix_to_quaternion(
                 R @ quaternion_to_rotation_matrix(gt_orientation_interp[i])
             )
+        if sync_vel:
+            gt_linear_vel_interp = (R @ gt_linear_vel_interp.T).T
+            gt_angular_vel_interp = (R @ gt_angular_vel_interp.T).T
 
         print("Rotation matrix from gt to base:")
         print(R)
