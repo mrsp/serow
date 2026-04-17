@@ -317,6 +317,8 @@ private:
     std::unique_ptr<LegOdometry> leg_odometry_;
     /// @brief indicates whether SEROW is initialized or not
     bool is_initialized_{};
+    /// @brief Indicates when SEROW has started
+    double start_time_{-1.0};
     /// @brief IMU bias estimation cycles
     size_t cycle_{};
     size_t imu_calibration_cycles_{};
