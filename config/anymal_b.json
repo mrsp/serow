@@ -102,6 +102,8 @@
   "attitude_estimator_proportional_gain": 0.000244948,
   "attitude_estimator_integral_gain": 0.000290386,
   "estimate_contact_status": true,
+  "beta": 0.33,
+  "beta0": -5.0,
   "median_window": 13,
   "tau_0": 1.0,
   "tau_1": 0.0,
