@@ -244,6 +244,10 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("estimate_contact_status", params_.estimate_contact_status))
         return false;
+    if (!checkConfigParam("beta", params_.beta))
+        return false;
+    if (!checkConfigParam("beta0", params_.beta0))
+        return false;
     if (!checkConfigParam("median_window", params_.median_window))
         return false;
     if (!checkConfigParam("convergence_cycles", params_.convergence_cycles))
@@ -822,24 +826,19 @@ void Serow::runContactEstimator(
     std::optional<std::map<std::string, ContactMeasurement>> contacts_probability) {
     // Current contact status
     std::map<std::string, bool> current_contact_status = state.contact_state_.contacts_status;
-
+    
     // Estimate the leg end-effector contact state
     if (!ft.empty()) {
         std::map<std::string, Eigen::Vector3d> contacts_force;
         std::map<std::string, Eigen::Vector3d> contacts_torque;
-        double den = 0.0;
+
         for (const auto& frame : state.getContactsFrame()) {
             state.contact_state_.timestamp = ft.at(frame).timestamp;
 
-            // Transform F/T to base frame
-            const Eigen::Matrix3d R_foot_to_base =
-                kin.base_to_foot_orientations.at(frame).toRotationMatrix();
-            const Eigen::Vector3d& frame_force = ft.at(frame).force;
+            const Eigen::Matrix3d R_foot_to_base = kin.base_to_foot_orientations.at(frame).toRotationMatrix();
+            const Eigen::Matrix3d R_world_to_base = state.base_state_.base_orientation.toRotationMatrix();
             const Eigen::Matrix3d& R_foot_to_force = params_.R_foot_to_force.at(frame);
-            const Eigen::Matrix3d& R_world_to_base =
-                state.base_state_.base_orientation.toRotationMatrix();
-            contacts_force[frame].noalias() =
-                R_world_to_base * R_foot_to_base * R_foot_to_force * frame_force;
+            contacts_force[frame].noalias() = R_world_to_base * R_foot_to_base * R_foot_to_force * ft.at(frame).force;
 
             // Process torque if not point feet
             if (!state.isPointFeet()) {
@@ -851,67 +850,31 @@ void Serow::runContactEstimator(
                 }
             }
 
-            // Estimate the contact status
-            if (params_.estimate_contact_status) {
-                // Create contact estimators if needed
-                if (contact_estimators_.count(frame) == 0) {
-                    contact_estimators_.emplace(
-                        frame,
-                        ContactDetector(frame, state.getMass(), params_.g, params_.median_window));
-                    contact_estimators_.at(frame).setState(
-                        state.contact_state_.contacts_force.at(frame).z());
-                }
-                contact_estimators_.at(frame).run(contacts_force.at(frame).z());
-                den += contact_estimators_.at(frame).getContactForce();
+            if (params_.estimate_contact_status && !contacts_probability.has_value()) {
+                // Logistic regression: P = 1 / (1 + exp(-(beta * fz + beta0)))
+                double fz = contacts_force[frame].z();
+                double logit_input = params_.beta * fz + params_.beta0;
+                state.contact_state_.contacts_probability[frame] = 1.0 / (1.0 + std::exp(-logit_input));
             }
         }
 
-        // Process contact probability
-        if (params_.estimate_contact_status && !contacts_probability.has_value()) {
-            den /= state.num_leg_ee_;
-            for (const auto& frame : state.getContactsFrame()) {
-                // Use std::clamp for bounds checking
-                if (den > params_.eps) {
-                    state.contact_state_.contacts_probability[frame] =
-                        std::clamp(contact_estimators_.at(frame).getContactForce() / den, 0.0, 1.0);
-                } else {
-                    state.contact_state_.contacts_probability[frame] = 0.0;
-                }
-            }
-        } else if (contacts_probability) {
+        if (contacts_probability.has_value()) {
             state.contact_state_.contacts_probability = std::move(contacts_probability.value());
-        } else {
-            throw std::runtime_error(
-                "No contact probability provided and contact status estimation is disabled");
         }
 
-        // Compute binary contact status
         for (const auto& frame : state.getContactsFrame()) {
-            state.contact_state_.contacts_status[frame] =
-                state.contact_state_.contacts_probability.at(frame) > 0.5;
-        }
-
-        // Estimate the COP in the local foot frame
-        for (const auto& frame : state.getContactsFrame()) {
-            kin.is_new_contact[frame] = false;
-            if (!current_contact_status.at(frame) &&
-                state.contact_state_.contacts_status.at(frame)) {
-                kin.is_new_contact[frame] = true;
-            }
+            state.contact_state_.contacts_status[frame] = state.contact_state_.contacts_probability.at(frame) > 0.5;
+            kin.is_new_contact[frame] = (!current_contact_status.at(frame) && state.contact_state_.contacts_status.at(frame));
             ft.at(frame).cop = Eigen::Vector3d::Zero();
-
-            // Calculate COP
-            if (!state.isPointFeet() && contacts_torque.count(frame) &&
-                state.contact_state_.contacts_probability.at(frame) > 0.0) {
-                const double z_force = contacts_force.at(frame).z();
-                if (std::abs(z_force) > 1e-6) {  // Avoid division by near-zero
-                    ft.at(frame).cop =
-                        Eigen::Vector3d(-contacts_torque.at(frame).y() / z_force,
-                                        contacts_torque.at(frame).x() / z_force, 0.0);
+            if (!state.isPointFeet() && contacts_torque.count(frame) && state.contact_state_.contacts_probability.at(frame) > 0.0) {
+                double z_force = contacts_force.at(frame).z();
+                if (std::abs(z_force) > 1e-6) {
+                    ft.at(frame).cop << -contacts_torque.at(frame).y() / z_force,
+                                         contacts_torque.at(frame).x() / z_force,
+                                         0.0;
                 }
             }
         }
-
         // Move contacts data to state
         state.contact_state_.contacts_force = std::move(contacts_force);
         if (!contacts_torque.empty()) {
@@ -919,7 +882,6 @@ void Serow::runContactEstimator(
         }
     }
 }
-
 void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
                              const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom) {

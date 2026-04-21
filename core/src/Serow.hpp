@@ -176,6 +176,9 @@ private:
         /// @brief cost weight when computing the instantaneous moment pivot with F/T. Only applies
         /// for flat feet
         double tau_1{};
+         /// @brief Coefficients for logistic regression contact estimator
+        double beta0{};
+        double beta{};
         /// @brief rate at which leg end-effector force (and optionally torque) measurements are
         /// available
         double force_torque_rate{};
