@@ -121,8 +121,8 @@
     // the user should provide the end-effector contact probabilities
     "estimate_contact_status": true,
     // Coefficients for logistic regression probability contact estimator
-    "beta": 0.33,
-    "beta0": -5.0,
+    "beta": 0.33, // From 0.1 to 0.6
+    "beta0": -5.0, // From -1.0 to -20.0
     // integer: moving median filter batch used to remove leg end-effector vertical force outliers.
     // Only applies if estimate_contact_status = true
     "median_window": 13,
