@@ -850,16 +850,14 @@ void Serow::runContactEstimator(
                 }
             }
 
-            if (params_.estimate_contact_status && !contacts_probability.has_value()) {
+            if (!contacts_probability.has_value()) {
                 // Logistic regression: P = 1 / (1 + exp(-(beta * fz + beta0)))
-                double fz = contacts_force[frame].z();
-                double logit_input = params_.beta * fz + params_.beta0;
+                const Eigen::Vector3d fz = R_foot_to_force * ft.at(frame).force;
+                double logit_input = params_.beta * fz.z() + params_.beta0;
                 state.contact_state_.contacts_probability[frame] = 1.0 / (1.0 + std::exp(-logit_input));
+            }else{
+                state.contact_state_.contacts_probability[frame] = std::move(contacts_probability.value()[frame]);
             }
-        }
-
-        if (contacts_probability.has_value()) {
-            state.contact_state_.contacts_probability = std::move(contacts_probability.value());
         }
 
         for (const auto& frame : state.getContactsFrame()) {
@@ -867,10 +865,10 @@ void Serow::runContactEstimator(
             kin.is_new_contact[frame] = (!current_contact_status.at(frame) && state.contact_state_.contacts_status.at(frame));
             ft.at(frame).cop = Eigen::Vector3d::Zero();
             if (!state.isPointFeet() && contacts_torque.count(frame) && state.contact_state_.contacts_probability.at(frame) > 0.0) {
-                double z_force = contacts_force.at(frame).z();
-                if (std::abs(z_force) > 1e-6) {
-                    ft.at(frame).cop << -contacts_torque.at(frame).y() / z_force,
-                                         contacts_torque.at(frame).x() / z_force,
+                const double fz = contacts_force.at(frame).z();
+                if (std::abs(fz) > 1e-6) {
+                    ft.at(frame).cop << -contacts_torque.at(frame).y() / fz,
+                                         contacts_torque.at(frame).x() / fz,
                                          0.0;
                 }
             }
