@@ -11,8 +11,8 @@
   "model_path": "anymal_b.urdf",
   "g": 9.81,
   "joint_rate": 400.0,
-  "estimate_joint_velocity": false,
-  "joint_position_variance": 1e-4,
+  "estimate_joint_velocity": true,
+  "joint_position_variance": 1e-5,
   "joint_velocity_variance": null,
   "smoothing_window": 7,
   "imu_rate": 400.0,
@@ -39,7 +39,7 @@
     -1.0
   ],
   "use_imu_orientation": false,
-  "calibrate_initial_imu_bias": false,
+  "calibrate_initial_imu_bias": true,
   "max_imu_calibration_cycles": 500,
   "bias_gyro": [
     -0.000881133,
@@ -99,19 +99,19 @@
     ]
   },
   "R_foot_to_torque": null,
-  "attitude_estimator_proportional_gain": 0.000244948,
-  "attitude_estimator_integral_gain": 0.000290386,
+  "attitude_estimator_proportional_gain": 0.1,
+  "attitude_estimator_integral_gain": 0.0,
   "estimate_contact_status": true,
   "beta": 0.33,
   "beta0": -5.0,
   "median_window": 13,
-  "tau_0": 1.0,
+  "tau_0": 5e-4,
   "tau_1": 0.0,
   "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [
-    5e-5,
-    5e-5,
-    5e-5
+    5e-2,
+    5e-2,
+    5e-2
   ],
   "imu_angular_velocity_bias_covariance": [
     1e-8,
@@ -119,9 +119,9 @@
     1e-8
   ],
   "imu_linear_acceleration_covariance": [
-    5e-3,
-    5e-3,
-    5e-3
+    5e-1,
+    5e-1,
+    5e-1
   ],
   "imu_linear_acceleration_bias_covariance": [
     1e-8,
@@ -193,7 +193,7 @@
   "resolution": 0.02,
   "radius": 0.10,
   "dist_variance_gain": 10.0,
-  "power": 2.0,
+  "power": 1.5,
   "log_data": true,
   "log_measurements": true,
   "log_dir": "/tmp/"
