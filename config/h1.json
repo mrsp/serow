@@ -102,7 +102,6 @@
     },
     "attitude_estimator_proportional_gain": 0.1,
     "attitude_estimator_integral_gain": 0.0,
-    "estimate_contact_status": true,
     "beta": 0.33,
     "beta0": -5.0,
     "median_window": 13,

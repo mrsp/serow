@@ -187,9 +187,6 @@ private:
         /// @brief rotation matrix from each foot frame to torque sensor frame. Can be empty if the
         /// robot only has FSRs instead of F/T
         std::map<std::string, Eigen::Matrix3d> R_foot_to_torque;
-        /// @brief whether or not to estimate the leg end-effector contact status. If set to false,
-        /// the user should provide the end-effector contact probabilities
-        bool estimate_contact_status{};
         /// @brief moving median filter batch used to remove leg end-effector vertical force
         /// outliers. Only applies if estimate_contact_status = true
         size_t median_window{};

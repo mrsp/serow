@@ -242,8 +242,6 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("tau_1", params_.tau_1))
         return false;
-    if (!checkConfigParam("estimate_contact_status", params_.estimate_contact_status))
-        return false;
     if (!checkConfigParam("beta", params_.beta))
         return false;
     if (!checkConfigParam("beta0", params_.beta0))
