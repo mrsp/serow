@@ -15,13 +15,13 @@ $ sudo make install
 
 
 
-Compile and run the go2_mujoco_test
+Compile and run the quad_mujoco_test
 
 ```
 $ cd serow/evaluation/mujoco_test/
 $ mkdir build 
 $ cd build && cmake ..
 $ make -j8
-$ ./go2_mujoco_test
+$ ./quad_mujoco_test
 ```
 This saves serow predictions to the mujoco_data/dataset where dataset is specified in the test_config.json
