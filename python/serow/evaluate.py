@@ -53,7 +53,7 @@ def generate_log(mcap_path):
     gt_angular_velocity = np.array(gt_angular_velocity)
     smooth_gt_linear_velocity = np.zeros_like(gt_linear_velocity)
     smooth_gt_angular_velocity = np.zeros_like(gt_angular_velocity)
-    window_size = 101
+    window_size = 51
     polyorder = 3
     for j in range(3):
         smooth_gt_linear_velocity[:, j] = signal.savgol_filter(

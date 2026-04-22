@@ -1,0 +1,235 @@
+{
+    "robot_name": "cogimon",
+    "base_frame": "base_link",
+    "point_feet": false,
+    "foot_frames": {
+        "0": "LFoot",
+        "1": "RFoot"
+    },
+    "model_path": "cogimon.urdf",
+    "g": 9.81,
+    "joint_rate": 200.0,
+    "estimate_joint_velocity": true,
+    "joint_position_variance": 1e-8,
+    "joint_velocity_variance": null,
+    "smoothing_window": 7,
+    "tau_0": 1e-4,
+    "tau_1": 5e-5,
+    "imu_rate": 200.0,
+    "R_base_to_gyro": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+    ],
+    "R_base_to_acc": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+    ],
+    "use_imu_orientation": false,
+    "calibrate_initial_imu_bias": true,
+    "max_imu_calibration_cycles": 350,
+    "bias_acc": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "bias_gyro": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "force_torque_rate": 200.0,
+    "R_foot_to_force": {
+        "0": [
+            -1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            -1.0
+        ],
+        "1": [
+            -1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            -1.0
+        ]
+    },
+    "R_foot_to_torque": {
+        "0": [
+            -1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            -1.0
+        ],
+        "1": [
+            -1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            -1.0
+        ]
+    },
+    "attitude_estimator_proportional_gain": 0.2,
+    "attitude_estimator_integral_gain": 0.0,
+    "estimate_contact_status": true,
+    "median_window": 13,
+    "convergence_cycles": 100,
+    "imu_angular_velocity_covariance": [
+        0.01,
+        0.01,
+        0.01
+    ],
+    "imu_angular_velocity_bias_covariance": [
+        1e-10,
+        1e-10,
+        1e-10
+    ],
+    "imu_linear_acceleration_covariance": [
+        0.1,
+        0.1,
+        0.1
+    ],
+    "imu_linear_acceleration_bias_covariance": [
+        1e-10,
+        1e-10,
+        1e-10
+    ],
+    "com_position_process_covariance": [
+        1e-6,
+        1e-6,
+        1e-6
+    ],
+    "com_linear_velocity_process_covariance": [
+        1e-3,
+        1e-3,
+        1e-3
+    ],
+    "external_forces_process_covariance": [
+        5.0,
+        5.0,
+        5.0
+    ],
+    "initial_base_position_covariance": [
+        1.0e-6,
+        1.0e-6,
+        1.0e-6
+    ],
+    "initial_base_orientation_covariance": [
+        1.0e-4,
+        1.0e-4,
+        1.0e-4
+    ],
+    "initial_base_linear_velocity_covariance": [
+        1.0e-3,
+        1.0e-3,
+        1.0e-3
+    ],
+    "initial_imu_linear_acceleration_bias_covariance": [
+        1.0e-6,
+        1.0e-6,
+        1.0e-6
+    ],
+    "initial_imu_angular_velocity_bias_covariance": [
+        1.0e-6,
+        1.0e-6,
+        1.0e-6
+    ],
+    "initial_com_position_covariance": [
+        1.0e-5,
+        1.0e-5,
+        1.0e-5
+    ],
+    "initial_com_linear_velocity_covariance": [
+        1.0e-3,
+        1.0e-3,
+        1.0e-3
+    ],
+    "initial_external_forces_covariance": [
+        50.0,
+        50.0,
+        50.0
+    ],
+    "T_base_to_odom": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+    ],
+    "enable_terrain_estimation": true,
+    "terrain_estimator": "fast",
+    "minimum_terrain_height_variance": 1e-4,
+    "maximum_contact_points": 4,
+    "maximum_recenter_distance": 0.85,
+    "minimum_contact_probability": 0.15,
+    "minimum_stable_contact_probability": 0.85,
+    "minimum_stable_foot_angular_velocity": 0.03,
+    "minimum_stable_foot_linear_velocity": 0.03,
+    "resolution": 0.02,
+    "radius": 0.4,
+    "dist_variance_gain": 1000.0,
+    "power": 1.5,
+    "T_base_to_ground_truth": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+    ],
+    "log_data": true,
+    "log_measurements": true,
+    "log_dir": "/tmp/"
+}

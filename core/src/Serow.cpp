@@ -1097,6 +1097,9 @@ void Serow::runCoMEstimator(State& state, KinematicMeasurement& kin,
             // Update CoM state with GRF and IMU measurements
             timers_["com-estimator-update"].start();
             com_estimator_.updateWithImu(state.centroidal_state_, state.base_state_, kin, grf);
+        } else {
+            // updateWithKinematics below always runs; timer must be started for every path
+            timers_["com-estimator-update"].start();
         }
     } else {
         timers_["com-estimator-update"].start();
