@@ -24,9 +24,9 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LZ4 REQUIRED liblz4)
 pkg_check_modules(ZSTD REQUIRED libzstd)
 
-add_executable(go2_mujoco_test ../go2_mujoco_test.cpp)
+add_executable(quad_mujoco_test ../quad_mujoco_test.cpp)
 
-target_link_libraries(go2_mujoco_test PRIVATE 
+target_link_libraries(quad_mujoco_test PRIVATE 
     serow 
     mcap
     pinocchio::pinocchio 
@@ -35,7 +35,7 @@ target_link_libraries(go2_mujoco_test PRIVATE
     ${ZSTD_LIBRARIES}
 )
 
-target_include_directories(go2_mujoco_test PRIVATE 
+target_include_directories(quad_mujoco_test PRIVATE 
     ${MCAP_INCLUDE_DIR}
     ${LZ4_INCLUDE_DIRS}
     ${ZSTD_INCLUDE_DIRS}

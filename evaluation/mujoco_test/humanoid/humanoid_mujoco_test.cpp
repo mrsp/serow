@@ -213,9 +213,7 @@ int main(int argc, char** argv) {
                 j_out["base_pose"]["position"] = { {"x", basePos.x()}, {"y", basePos.y()}, {"z", basePos.z()} };
                 j_out["base_pose"]["rotation"] = { {"w", baseOrient.w()}, {"x", baseOrient.x()}, {"y", baseOrient.y()}, {"z", baseOrient.z()} };
                 j_out["base_pose"]["linear_velocity"] = { {"x", baseLinVel.x()}, {"y", baseLinVel.y()}, {"z", baseLinVel.z()} };
-                std::cout << " Base Pos: " << basePos.transpose() << " | Base Orient (w,x,y,z): " 
-                          << baseOrient.w() << "," << baseOrient.x() << "," << baseOrient.y() << "," << baseOrient.z() 
-                          << " | Base LinVel: " << baseLinVel.transpose() << "\n";
+
                 // CoM State
                 auto comPos = state->getCoMPosition();
                 auto comVel = state->getCoMLinearVelocity();

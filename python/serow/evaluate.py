@@ -9,6 +9,7 @@ from scipy.spatial.transform import Rotation
 from read_mcap import (
     read_base_pose_ground_truth,
     read_base_states,
+    read_contact_states,
 )
 
 from utils import (
@@ -72,8 +73,11 @@ def generate_log(mcap_path):
         gt_vel = BaseVelocityGroundTruth(timestamp, v, w)
         base_velocity_ground_truth.append(gt_vel)
 
+    contact_states = read_contact_states(mcap_path + "/serow_proprioception.mcap")
+
     dataset = {
         "base_states": base_states,
+        "contact_states": contact_states,
         "base_pose_ground_truth": base_pose_ground_truth,
         "base_velocity_ground_truth": base_velocity_ground_truth,
     }
@@ -239,13 +243,30 @@ fig.suptitle(
 )
 plt.tight_layout()
 
-# Compute the Absolute Trajectory Error (ATE) for position, orientation, 
+# Compute the Absolute Trajectory Error (ATE) for position
 # linear velocity, and angular velocity
 def error(gt, est):
     return np.sqrt(np.mean((gt - est) ** 2))
 
+# Compute the Absolute Trajectory Error (ATE) for orientation
+def rotation_error_logmap(gt_quats, est_quats):
+    squared_errors = []
+
+    for gt_q, est_q in zip(gt_quats, est_quats):
+        R_gt = quaternion_to_rotation_matrix(gt_q)
+        R_est = quaternion_to_rotation_matrix(est_q)
+        R_err = R_gt.T @ R_est
+
+        omega = logMap(R_err)
+
+        angle_err_rad = np.linalg.norm(omega)
+        squared_errors.append(angle_err_rad ** 2)
+
+    rms_error_rad = np.sqrt(np.mean(squared_errors))
+    return np.degrees(rms_error_rad)
+
 ate = error(gt_positions, base_positions)
-ate_rot = error(gt_orientations_euler, base_orientations_euler)
+ate_rot = rotation_error_logmap(gt_orientations, base_orientations)
 print(f"Absolute Translation Error: {ate} m")
 print(f"Absolute Rotation Error: {ate_rot} deg")
 
@@ -253,7 +274,6 @@ ave = error(gt_linear_velocities, base_linear_velocities)
 ave_rot = error(gt_angular_velocities, base_angular_velocities)
 print(f"Absolute Linear Velocity Error: {ave} m/s")
 print(f"Absolute Angular Velocity Error: {ave_rot} deg/s")
-
 
 # Fetch the imu biases from the base states
 imu_linear_acceleration_biases = np.array([base.imu_linear_acceleration_bias for base in log["base_states"]])
@@ -284,4 +304,44 @@ for ax, i in zip(axes, range(3)):
 axes[-1].set_xlabel(r"$\mathrm{Time}$ (s)")
 fig.suptitle(r"IMU gyroscope bias")
 plt.tight_layout()
+
+# Plot contact probabilities
+contact_messages = log.get("contact_states", [])
+
+if not contact_messages:
+    print("Warning: No contact_states found. Ensure topic is '/contact_state'.")
+    leg_names = []
+else:
+    leg_names = list(contact_messages[0].contacts_status.keys())
+
+if len(leg_names) > 0:
+    contact_data = {name: [] for name in leg_names}
+    contact_timestamps = []
+
+    for msg in contact_messages:
+        contact_timestamps.append(msg.timestamp)
+        # Access the probability map for each leg
+        for name in leg_names:
+            # Get the probability for this specific leg from the message
+            prob = msg.contacts_probability.get(name, 0.0)
+            contact_data[name].append(prob)
+
+    contact_timestamps = np.array(contact_timestamps)
+
+    fig, axes = plt.subplots(len(leg_names), 1, figsize=(10, 2.5 * len(leg_names)), sharex=True)
+    if len(leg_names) == 1: axes = [axes]
+
+    for ax, name in zip(axes, leg_names):
+        probs = np.array(contact_data[name])
+        ax.plot(contact_timestamps, probs, label=f"{name} Prob", color='tab:blue')
+        ax.axhline(y=0.5, color='tab:red', linestyle='--', alpha=0.6, label="Threshold (0.5)")
+        ax.set_ylabel("P(contact)")
+        ax.set_ylim([-0.05, 1.05])
+        ax.legend(loc='upper right')
+        ax.grid(True, alpha=0.3)
+
+    axes[-1].set_xlabel("Time (s)")
+    fig.suptitle("Leg Contact Probabilities (Logistic Regression)")
+    plt.tight_layout()
+
 plt.show()
