@@ -254,7 +254,7 @@ private:
                     momentum_rate_.twist.linear.z =
                         state->getMass() * state->getCoMLinearAcceleration().z();
                     momentum_rate_.twist.angular.x = state->getCoMAngularMomentumRate().x();
-                    momentum_rate_.twist.angular.y = state->getCoMAngularMomentumRate().x();
+                    momentum_rate_.twist.angular.y = state->getCoMAngularMomentumRate().y();
                     momentum_rate_.twist.angular.z = state->getCoMAngularMomentumRate().z();
                     momentum_rate_publisher_.publish(momentum_rate_);
 

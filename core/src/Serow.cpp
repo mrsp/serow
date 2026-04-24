@@ -1517,40 +1517,16 @@ void Serow::setState(const State& state) {
 }
 
 void Serow::stopLogging() {
-    if (proprioception_logger_job_) {
-        // Wait for all jobs to finish
-        while (proprioception_logger_job_->isRunning()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-
-    if (exteroception_logger_job_) {
-        // Wait for all jobs to finish
-        while (exteroception_logger_job_->isRunning()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-
-    if (measurement_logger_job_) {
-        // Wait for all jobs to finish
-        while (measurement_logger_job_->isRunning()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-
-    if (timings_logger_job_) {
-        // Wait for all jobs to finish
-        while (timings_logger_job_->isRunning()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-
-    proprioception_logger_.reset();
-    exteroception_logger_.reset();
-    measurement_logger_.reset();
     proprioception_logger_job_.reset();
+    proprioception_logger_.reset();
+
     exteroception_logger_job_.reset();
+    exteroception_logger_.reset();
+
     measurement_logger_job_.reset();
+    measurement_logger_.reset();
+
+    timings_logger_job_.reset();
     last_log_time_.reset();
     for (auto& [name, timer] : timers_) {
         timer.reset();

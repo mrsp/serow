@@ -283,19 +283,23 @@ PYBIND11_MODULE(serow, m) {
                        "Joint position measurement (rad)")
         .def_readwrite("velocity", &serow::JointMeasurement::velocity,
                        "Optional joint velocity measurement (rad/s)")
+        .def_readwrite("effort", &serow::JointMeasurement::effort,
+                       "Optional joint effort measurement (Nm)")
         // Add pickle support
         .def(py::pickle(
             [](const serow::JointMeasurement& joint) {  // __getstate__
-                return py::make_tuple(joint.timestamp, joint.position, joint.velocity);
+                return py::make_tuple(joint.timestamp, joint.position, joint.velocity,
+                                      joint.effort);
             },
             [](py::tuple t) {  // __setstate__
-                if (t.size() != 3)
+                if (t.size() != 4)
                     throw std::runtime_error("Invalid state for JointMeasurement!");
 
                 serow::JointMeasurement joint;
                 joint.timestamp = t[0].cast<double>();
                 joint.position = t[1].cast<double>();
                 joint.velocity = t[2].cast<decltype(joint.velocity)>();
+                joint.effort = t[3].cast<decltype(joint.effort)>();
 
                 return joint;
             }));
@@ -995,20 +999,23 @@ PYBIND11_MODULE(serow, m) {
                        "Map of joint positions (string to double)")
         .def_readwrite("joints_velocity", &serow::JointState::joints_velocity,
                        "Map of joint velocities (string to double)")
+        .def_readwrite("joints_effort", &serow::JointState::joints_effort,
+                       "Map of joint efforts (string to double, Nm)")
         // Add pickle support
         .def(py::pickle(
             [](const serow::JointState& joint) {  // __getstate__
-                return py::make_tuple(joint.timestamp, joint.joints_position,
-                                      joint.joints_velocity);
+                return py::make_tuple(joint.timestamp, joint.joints_position, joint.joints_velocity,
+                                      joint.joints_effort);
             },
             [](py::tuple t) {  // __setstate__
-                if (t.size() != 3)
+                if (t.size() != 4)
                     throw std::runtime_error("Invalid state for JointState!");
 
                 serow::JointState joint;
                 joint.timestamp = t[0].cast<double>();
                 joint.joints_position = t[1].cast<decltype(joint.joints_position)>();
                 joint.joints_velocity = t[2].cast<decltype(joint.joints_velocity)>();
+                joint.joints_effort = t[3].cast<decltype(joint.joints_effort)>();
 
                 return joint;
             }));

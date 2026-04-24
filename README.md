@@ -8,8 +8,6 @@ We are actively developing and addressing issues with the estimation framework. 
 
 SEROW (State Estimation RObot Walking) facilitates legged robot state estimation. Designed as a versatile tool, SEROW offers a generalized estimation solution applicable to legged robots with N limbs, accommodating both point and flat feet configurations. Notably, the framework's codebase is openly accessible under the GNU GPLv3 License.
 
-
-
 # What Problem Does SEROW Solve?
 
 A legged robot (humanoid, quadruped, centaur) walks on the ground. Unlike a
@@ -44,7 +42,7 @@ single sensor can give the full answer. SEROW fuses all of them using principled
   - Does NOT directly inform where the base is in the world.
 
 ### Force/Torque (F/T) Sensors -- Pressure Sensors 
-  - Mounted at each foot (or ankle).
+  - Mounted at each foot.
   - Measure the Ground Reaction Force (GRF) and optionally torque.
   - Used for two things:
     (a) detecting whether a foot is in contact with the ground, and
@@ -96,14 +94,13 @@ export SEROW_PATH=<path-to-serow-package>
 * cmake 3.16.3 and later
 * gcc 9.4.0 and later
 
-
 ## Install
 * `mkdir build && cd build`
 * `cmake .. && make -j4`
 * `sudo make install`  
 
 ## Test
-* `cd test && mkdir build && cd build`
+* `cd evaluation/unit_tests && mkdir build && cd build`
 * `cmake .. && make -j4`
 * `./nao_test`
 
@@ -130,4 +127,3 @@ Upon usage in an academic work kindly cite: <br/>
 
 ## License
 [GNU GPLv3](LICENSE) 
-

@@ -274,23 +274,29 @@ public:
         q_.setZero(pmodel_->nq);
         qdot_.setZero(pmodel_->nv);
         effort_.setZero(pmodel_->nv);
-
         for (size_t i = 0; i < jnames_.size(); i++) {
-            const size_t jidx = pmodel_->getJointId(jnames_[i]);
+            if (qmap.count(jnames_[i]) == 0 || qdotmap.count(jnames_[i]) == 0) {
+                continue;
+            }
+
+            const pinocchio::JointIndex jidx = pmodel_->getJointId(jnames_[i]);
             const size_t qidx = pmodel_->idx_qs[jidx];
             const size_t vidx = pmodel_->idx_vs[jidx];
-
             if (pmodel_->nqs[jidx] == 2) {
                 // Continuous (revolute unbounded) joint stored as (cos, sin)
                 const double angle = qmap.at(jnames_[i]);
                 q_[qidx] = std::cos(angle);
                 q_[qidx + 1] = std::sin(angle);
                 qdot_[vidx] = qdotmap.at(jnames_[i]);
-                effort_[vidx] = effortmap.at(jnames_[i]);
+                if (effortmap.count(jnames_[i]) > 0) {
+                    effort_[vidx] = effortmap.at(jnames_[i]);
+                }
             } else {
                 q_[qidx] = qmap.at(jnames_[i]);
                 qdot_[vidx] = qdotmap.at(jnames_[i]);
-                effort_[vidx] = effortmap.at(jnames_[i]);
+                if (effortmap.count(jnames_[i]) > 0) {
+                    effort_[vidx] = effortmap.at(jnames_[i]);
+                }
             }
         }
     }

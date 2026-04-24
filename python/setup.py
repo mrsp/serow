@@ -35,7 +35,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name="serow",
-    version="0.1.0",
+    version="1.0.0",
     packages=find_packages(),
     package_dir={"": "."},
     ext_modules=[
