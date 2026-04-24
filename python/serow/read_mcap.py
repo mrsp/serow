@@ -639,6 +639,8 @@ def decode_joint_measurement(data: bytes) -> dict[str, serow.JointMeasurement]:
             msg.position = fb_msg.Positions(i)
         if i < fb_msg.VelocitiesLength():
             msg.velocity = fb_msg.Velocities(i)
+        if hasattr(fb_msg, "EffortsLength") and i < fb_msg.EffortsLength():
+            msg.effort = fb_msg.Efforts(i)
 
         joint_measurements[joint_name] = msg
 
@@ -691,6 +693,7 @@ def decode_joint_state(data: bytes) -> serow.JointState:
     names = []
     positions = []
     velocities = []
+    efforts = []
 
     for i in range(fb_msg.NamesLength()):
         name = fb_msg.Names(i)
@@ -705,9 +708,14 @@ def decode_joint_state(data: bytes) -> serow.JointState:
         vel = fb_msg.Velocities(i)
         velocities.append(vel)
 
+    if hasattr(fb_msg, "EffortsLength"):
+        for i in range(fb_msg.EffortsLength()):
+            efforts.append(fb_msg.Efforts(i))
+
     # Create new dictionaries
     joints_position = {}
     joints_velocity = {}
+    joints_effort = {}
 
     # Fill the dictionaries
     for i, name in enumerate(names):
@@ -715,10 +723,13 @@ def decode_joint_state(data: bytes) -> serow.JointState:
             joints_position[name] = positions[i]
         if i < len(velocities):
             joints_velocity[name] = velocities[i]
+        if i < len(efforts):
+            joints_effort[name] = efforts[i]
 
     # Assign the dictionaries to the joint_state object
     joint_state.joints_position = joints_position
     joint_state.joints_velocity = joints_velocity
+    joint_state.joints_effort = joints_effort
     return joint_state
 
 

@@ -646,23 +646,29 @@ public:
             std::vector<flatbuffers::Offset<flatbuffers::String>> joint_names_vec;
             std::vector<double> joint_positions_vec;
             std::vector<double> joint_velocities_vec;
+            std::vector<double> joint_efforts_vec;
 
             // Pre-allocate vectors for better performance
             joint_names_vec.reserve(joint_state.joints_position.size());
             joint_positions_vec.reserve(joint_state.joints_position.size());
             joint_velocities_vec.reserve(joint_state.joints_position.size());
+            joint_efforts_vec.reserve(joint_state.joints_position.size());
 
             // Build the vectors
             for (const auto& [name, position] : joint_state.joints_position) {
                 joint_names_vec.push_back(builder.CreateString(name));
                 joint_positions_vec.push_back(position);
                 joint_velocities_vec.push_back(joint_state.joints_velocity.at(name));
+                const auto eit = joint_state.joints_effort.find(name);
+                joint_efforts_vec.push_back(eit != joint_state.joints_effort.end() ? eit->second
+                                                                                   : 0.0);
             }
 
             // Create the vectors in the builder
             auto names_offset = builder.CreateVector(joint_names_vec);
             auto positions_offset = builder.CreateVector(joint_positions_vec);
             auto velocities_offset = builder.CreateVector(joint_velocities_vec);
+            auto efforts_offset = builder.CreateVector(joint_efforts_vec);
 
             // Create the root message
             foxglove::JointStateBuilder joint_states_builder(builder);
@@ -670,6 +676,7 @@ public:
             joint_states_builder.add_names(names_offset);
             joint_states_builder.add_positions(positions_offset);
             joint_states_builder.add_velocities(velocities_offset);
+            joint_states_builder.add_efforts(efforts_offset);
             auto joint_states_array = joint_states_builder.Finish();
 
             // Finish the buffer

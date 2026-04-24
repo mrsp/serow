@@ -133,6 +133,7 @@ public:
         // Initialize state vectors
         q_.setZero(pmodel_->nq);
         qdot_.setZero(pmodel_->nv);
+        effort_.setZero(pmodel_->nv);
 
         // Set default values for continuous joints if limits are invalid
         for (int i = 0; i < qmin_.size(); i++) {
@@ -190,10 +191,12 @@ public:
      * @brief Updates the joint configuration and kinematic data
      * @param qmap Map of joint names to their positions
      * @param qdotmap Map of joint names to their velocities
+     * @param effortmap Map of joint names to their efforts
      */
     void updateJointConfig(const std::map<std::string, double>& qmap,
-                           const std::map<std::string, double>& qdotmap) {
-        mapJointNamesIDs(qmap, qdotmap);
+                           const std::map<std::string, double>& qdotmap,
+                           const std::map<std::string, double>& effortmap) {
+        mapJointNamesIDs(qmap, qdotmap, effortmap);
         pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
         pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
     }
@@ -263,26 +266,37 @@ public:
      * @brief Maps joint names to their respective indices and assigns values for q_ and qdot_
      * @param qmap Map of joint names to their positions
      * @param qdotmap Map of joint names to their velocities
+     * @param effortmap Map of joint names to their efforts
      */
     void mapJointNamesIDs(const std::map<std::string, double>& qmap,
-                          const std::map<std::string, double>& qdotmap) {
+                          const std::map<std::string, double>& qdotmap,
+                          const std::map<std::string, double>& effortmap) {
         q_.setZero(pmodel_->nq);
         qdot_.setZero(pmodel_->nv);
-
+        effort_.setZero(pmodel_->nv);
         for (size_t i = 0; i < jnames_.size(); i++) {
-            const size_t jidx = pmodel_->getJointId(jnames_[i]);
+            if (qmap.count(jnames_[i]) == 0 || qdotmap.count(jnames_[i]) == 0) {
+                continue;
+            }
+
+            const pinocchio::JointIndex jidx = pmodel_->getJointId(jnames_[i]);
             const size_t qidx = pmodel_->idx_qs[jidx];
             const size_t vidx = pmodel_->idx_vs[jidx];
-
             if (pmodel_->nqs[jidx] == 2) {
                 // Continuous (revolute unbounded) joint stored as (cos, sin)
                 const double angle = qmap.at(jnames_[i]);
                 q_[qidx] = std::cos(angle);
                 q_[qidx + 1] = std::sin(angle);
                 qdot_[vidx] = qdotmap.at(jnames_[i]);
+                if (effortmap.count(jnames_[i]) > 0) {
+                    effort_[vidx] = effortmap.at(jnames_[i]);
+                }
             } else {
                 q_[qidx] = qmap.at(jnames_[i]);
                 qdot_[vidx] = qdotmap.at(jnames_[i]);
+                if (effortmap.count(jnames_[i]) > 0) {
+                    effort_[vidx] = effortmap.at(jnames_[i]);
+                }
             }
         }
     }
@@ -290,9 +304,11 @@ public:
     /**
      * @brief Computes the geometric Jacobian matrix of a frame
      * @param frame_name Name of the frame
+     * @param in_body_frame Whether to return the Jacobian in the body frame or in the local frame
      * @return Geometric Jacobian matrix
      */
-    Eigen::MatrixXd geometricJacobian(const std::string& frame_name) const {
+    Eigen::MatrixXd geometricJacobian(const std::string& frame_name,
+                                      bool in_body_frame = true) const {
         pinocchio::Data::Matrix6x J = pinocchio::Data::Matrix6x::Zero(6, pmodel_->nv);
 
         const pinocchio::Model::FrameIndex fid = pmodel_->getFrameId(frame_name, pinocchio::BODY);
@@ -303,10 +319,11 @@ public:
         }
 
         pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
-
-        const Eigen::Matrix3d& R = data_->oMf[fid].rotation();
-        J.topRows(3) = R * J.topRows(3);
-        J.bottomRows(3) = R * J.bottomRows(3);
+        if (in_body_frame) {
+            const Eigen::Matrix3d& R = data_->oMf[fid].rotation();
+            J.topRows(3) = R * J.topRows(3);
+            J.bottomRows(3) = R * J.bottomRows(3);
+        }
         return J;
     }
 
@@ -584,6 +601,19 @@ public:
         }
     }
 
+    /**
+     * @brief Computes the link wrench for a frame
+     * @param frame_name Name of the frame
+     * @param in_body_frame Whether to return the wrench in body frame or local link coordinates
+     * @return Link wrench in body frame or local link frame coordinates
+     */
+    Eigen::Matrix<double, 6, 1> linkWrench(const std::string& frame_name,
+                                           bool in_body_frame = true) const {
+        const Eigen::MatrixXd J = geometricJacobian(frame_name, in_body_frame);
+        Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(J.transpose());
+        return cod.solve(effort_);
+    }
+
 private:
     /// Pinocchio model
     std::unique_ptr<pinocchio::Model> pmodel_;
@@ -601,6 +631,8 @@ private:
     Eigen::VectorXd q_;
     /// Joint velocities (size nv)
     Eigen::VectorXd qdot_;
+    /// Joint efforts (size nv)
+    Eigen::VectorXd effort_;
     /// Per-joint position spectral density (size == jnames_.size())
     Eigen::VectorXd qp_;
     /// Per-joint velocity spectral density (size == jnames_.size())

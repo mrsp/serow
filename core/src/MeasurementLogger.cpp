@@ -314,9 +314,20 @@ public:
             }
             auto joint_velocities = builder.CreateVector(joint_velocities_vec);
 
+            std::vector<double> joint_efforts_vec;
+            for (const auto& [_, measurement] : joints) {
+                if (measurement.effort.has_value()) {
+                    joint_efforts_vec.push_back(measurement.effort.value());
+                } else {
+                    joint_efforts_vec.push_back(0.0);
+                }
+            }
+            auto joint_efforts = builder.CreateVector(joint_efforts_vec);
+
             // Create the joint measurement message
             auto measurement = foxglove::CreateJointMeasurements(builder, &time, joint_names,
-                                                                 joint_positions, joint_velocities);
+                                                                 joint_positions, joint_velocities,
+                                                                 joint_efforts);
 
             builder.Finish(measurement);
 
