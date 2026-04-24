@@ -248,8 +248,20 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("convergence_cycles", params_.convergence_cycles))
         return false;
-    if (!checkConfigParam("enable_terrain_estimation", params_.enable_terrain_estimation))
-        return false;
+
+    // Optional: if absent or JSON null, keep defaults (false)
+    if (config.contains("enable_terrain_estimation") &&
+        !config["enable_terrain_estimation"].is_null()) {
+        if (!checkConfigParam("enable_terrain_estimation", params_.enable_terrain_estimation)) {
+            return false;
+        }
+    }
+    if (config.contains("estimate_contact_wrench") &&
+        !config["estimate_contact_wrench"].is_null()) {
+        if (!checkConfigParam("estimate_contact_wrench", params_.estimate_contact_wrench)) {
+            return false;
+        }
+    }
 
     if (params_.enable_terrain_estimation) {
         if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
@@ -575,13 +587,20 @@ void Serow::logMeasurements(const ImuMeasurement& imu,
 
 void Serow::runJointsEstimator(State& state,
                                const std::map<std::string, JointMeasurement>& joints) {
-    // Estimate joint velocities
     std::map<std::string, double> joints_position;
     std::map<std::string, double> joints_velocity;
+    std::map<std::string, double> joints_effort;
     double joint_timestamp{};
     for (const auto& [key, value] : joints) {
         joints_position[key] = value.position;
         joint_timestamp = value.timestamp;
+        if (params_.estimate_contact_wrench && !value.effort.has_value()) {
+            throw std::runtime_error("Joint effort not provided for joint <" + key +
+                                     "> but contact wrench estimation is enabled");
+        }
+        if (value.effort.has_value()) {
+            joints_effort[key] = value.effort.value();
+        }
 
         if (!params_.estimate_joint_velocity) {
             if (!value.velocity.has_value() || !params_.joint_velocity_variance) {
@@ -618,6 +637,7 @@ void Serow::runJointsEstimator(State& state,
     state.joint_state_.timestamp = joint_timestamp;
     state.joint_state_.joints_position = std::move(joints_position);
     state.joint_state_.joints_velocity = std::move(joints_velocity);
+    state.joint_state_.joints_effort = std::move(joints_effort);
 }
 
 bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
@@ -689,7 +709,8 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
     }
 
     kinematic_estimator_->updateJointConfig(state.joint_state_.joints_position,
-                                            state.joint_state_.joints_velocity);
+                                            state.joint_state_.joints_velocity,
+                                            state.joint_state_.joints_effort);
 
     // Preallocate maps for leg end-effector kinematics
     std::map<std::string, Eigen::Vector3d> base_to_foot_positions;
@@ -1301,7 +1322,7 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
 
     // Early return if not initialized and no FT measurement
     if (!is_initialized_) {
-        if (!force_torque.has_value()) {
+        if (!params_.estimate_contact_wrench && !force_torque.has_value()) {
             timers_["total-time"].stop();
             return false;
         }
@@ -1312,15 +1333,17 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
 
     // Check if foot frames exist on the F/T measurement
     std::map<std::string, ForceTorqueMeasurement> ft;
-    if (force_torque.has_value()) {
-        for (const auto& frame : state_.contacts_frame_) {
-            if (force_torque.value().count(frame) == 0) {
-                throw std::runtime_error("Foot frame <" + frame +
-                                         "> does not exist in the force measurements");
+    if (!params_.estimate_contact_wrench) {
+        if (force_torque.has_value()) {
+            for (const auto& frame : state_.contacts_frame_) {
+                if (force_torque.value().count(frame) == 0) {
+                    throw std::runtime_error("Foot frame <" + frame +
+                                             "> does not exist in the force measurements");
+                }
             }
+            // Force-torque measurements are valid and ready to be consumed
+            ft = std::move(force_torque.value());
         }
-        // Force-torque measurements are valid and ready to be consumed
-        ft = std::move(force_torque.value());
     }
 
     // log the incoming measurements
@@ -1346,6 +1369,19 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
     timers_["forward-kinematics"].stop();
 
     // Estimate the contact state
+    if (params_.estimate_contact_wrench) {
+        ft.clear();
+        for (const auto& frame : state_.getContactsFrame()) {
+            const Eigen::Matrix<double, 6, 1>& wrench =
+                -kinematic_estimator_->linkWrench(frame, false);
+            ft[frame].force = wrench.head(3);
+            if (!state_.isPointFeet()) {
+                ft[frame].torque = wrench.tail(3);
+            }
+            ft[frame].timestamp = timestamp_;
+        }
+    }
+
     if (!ft.empty()) {
         timers_["contact-estimation"].start();
         runContactEstimator(state_, ft, kin, contacts_probability);

@@ -331,6 +331,9 @@ void SerowRos2::run() {
             if (!joint_state_data.velocity.empty() && i < joint_state_data.velocity.size()) {
                 joint.velocity = joint_state_data.velocity[i];
             }
+            if (!joint_state_data.effort.empty() && i < joint_state_data.effort.size()) {
+                joint.effort = joint_state_data.effort[i];
+            }
             joint_measurements[joint_state_data.name[i]] = std::move(joint);
         }
 

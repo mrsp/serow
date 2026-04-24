@@ -142,6 +142,8 @@ struct JointState {
     std::map<std::string, double> joints_position;
     /// Holds joint name to joint angular velocity in joint coordinates (rad/s)
     std::map<std::string, double> joints_velocity;
+    /// Holds joint name to joint effort in joint coordinates (Nm)
+    std::map<std::string, double> joints_effort;
 };
 
 /**

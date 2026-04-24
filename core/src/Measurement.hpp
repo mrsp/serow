@@ -32,12 +32,14 @@ namespace serow {
 
 /**
  * @struct JointMeasurement
- * @brief Represents a joint measurement consisting of timestamp, position, and optional velocity
+ * @brief Represents a joint measurement consisting of timestamp, position, optional velocity, and
+ * optional effort
  */
 struct JointMeasurement {
     double timestamp{};              ///< Timestamp of the measurement (s)
     double position{};               ///< Joint position measurement (rad)
     std::optional<double> velocity;  ///< Optional joint velocity measurement (rad/s)
+    std::optional<double> effort;    ///< Optional joint effort measurement (Nm)
 };
 
 /**

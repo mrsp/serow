@@ -15,6 +15,7 @@
   "joint_position_variance": 1e-5,
   "joint_velocity_variance": null,
   "smoothing_window": 7,
+  "estimate_contact_wrench": false,
   "imu_rate": 400.0,
   "R_base_to_gyro": [
     -1.0,
