@@ -1,0 +1,12 @@
+robot_name: "anymal"
+path_to_serow_library: "/usr/local/lib"
+topics:
+  joint_states: "/joint_states"
+  imu: "/base/imu"
+  ground_truth: "/ground_truth/odom"
+  external_odometry: ""
+synchronization:
+  imu_to_joint: 0.02
+  force_torque_to_joint: 0.02
+serow_config: "anymal.json"
+publish_path: false
