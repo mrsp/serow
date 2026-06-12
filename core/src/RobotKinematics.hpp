@@ -477,6 +477,15 @@ public:
         return total_mass_;
     }
 
+
+    /**
+    * @brief Get the Model object
+    * @return const pinocchio::Model&
+    */
+    const pinocchio::Model& getModel() const {
+        return *pmodel_;
+    }
+
     /**
      * @brief Computes the CoM position.
      * @return CoM position vector
