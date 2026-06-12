@@ -101,7 +101,8 @@ set(serow_headers
     BaseEstimator.hpp
     Serow.hpp 
     State.hpp 
-    ContactEKF.hpp 
+    ContactEKF.hpp
+    ContactWrenchEstimator.hpp
     CoMEKF.hpp 
     LegOdometry.hpp 
     ButterworthLPF.hpp 
