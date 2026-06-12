@@ -1,25 +1,25 @@
 {
-  "robot_name": "g1_12dof",
-  "base_frame": "pelvis",
-  "point_feet": false,
+  "robot_name": "anymal",
+  "base_frame": "base",
+  "point_feet": true,
   "foot_frames": {
-    "0": "left_ankle_roll_link",
-    "1": "right_ankle_roll_link"
+    "0": "LF_FOOT",
+    "1": "RF_FOOT",
+    "2": "LH_FOOT",
+    "3": "RH_FOOT"
   },
-  "model_path": "g1_12dof.urdf",
+  "model_path": "anymal_d.urdf",
   "g": 9.81,
-  "joint_rate": 500.0,
-  "estimate_joint_velocity": true,
-  "joint_position_variance": 1e-6,
-  "joint_velocity_variance": null,
+  "joint_rate": 400.0,
+  "estimate_joint_velocity": false,
+  "joint_position_variance": 1e-5,
+  "joint_velocity_variance": 0.0001,
   "smoothing_window": 7,
   "estimate_contact_wrench": false,
-  "observer_gain": 10.0,
-  "tau_0": 5e-4,
-  "tau_1": 1e-5,
-  "imu_rate": 500.0,
+  "observer_gain": 30.0,
+  "imu_rate": 400.0,
   "R_base_to_gyro": [
-    1.0,
+    -1.0,
     0.0,
     0.0,
     0.0,
@@ -27,10 +27,10 @@
     0.0,
     0.0,
     0.0,
-    1.0
+    -1.0
   ],
   "R_base_to_acc": [
-    1.0,
+    -1.0,
     0.0,
     0.0,
     0.0,
@@ -38,22 +38,22 @@
     0.0,
     0.0,
     0.0,
-    1.0
+    -1.0
   ],
-  "use_imu_orientation": false,
+  "use_imu_orientation": true,
   "calibrate_initial_imu_bias": true,
   "max_imu_calibration_cycles": 300,
-  "bias_acc": [
-    0.0,
-    0.0,
-    0.0
-  ],
   "bias_gyro": [
     0.0,
     0.0,
     0.0
   ],
-  "force_torque_rate": 500.0,
+  "bias_acc": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "force_torque_rate": 400.0,
   "R_foot_to_force": {
     "0": [
       1.0,
@@ -76,10 +76,8 @@
       0.0,
       0.0,
       1.0
-    ]
-  },
-  "R_foot_to_torque": {
-    "0": [
+    ],
+    "2": [
       1.0,
       0.0,
       0.0,
@@ -90,7 +88,7 @@
       0.0,
       1.0
     ],
-    "1": [
+    "3": [
       1.0,
       0.0,
       0.0,
@@ -102,30 +100,33 @@
       1.0
     ]
   },
-  "attitude_estimator_proportional_gain": 2.0,
+  "R_foot_to_torque": null,
+  "attitude_estimator_proportional_gain": 0.1,
   "attitude_estimator_integral_gain": 0.0,
-  "estimate_contact_status": true,
-  "median_window": 5,
-  "convergence_cycles": 0,
+  "estimate_contact_status": false,
+  "median_window": 13,
+  "tau_0": 5e-4,
+  "tau_1": 0.0,
+  "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [
-    0.05,
-    0.05,
-    0.05
+    5e-2,
+    5e-2,
+    5e-2
   ],
   "imu_angular_velocity_bias_covariance": [
-    1e-6,
-    1e-6,
-    1e-6
+    1e-8,
+    1e-8,
+    1e-8
   ],
   "imu_linear_acceleration_covariance": [
-    0.2,
-    0.2,
-    0.2
+    5e-1,
+    5e-1,
+    5e-1
   ],
   "imu_linear_acceleration_bias_covariance": [
-    1e-5,
-    1e-5,
-    1e-5
+    1e-8,
+    1e-8,
+    1e-8
   ],
   "com_position_process_covariance": [
     1e-6,
@@ -143,14 +144,14 @@
     5.0
   ],
   "initial_base_position_covariance": [
-    1e-6,
-    1e-6,
-    1e-6
-  ],
-  "initial_base_orientation_covariance": [
     1e-4,
     1e-4,
     1e-4
+  ],
+  "initial_base_orientation_covariance": [
+    1e-6,
+    1e-6,
+    1e-6
   ],
   "initial_base_linear_velocity_covariance": [
     1e-3,
@@ -158,14 +159,14 @@
     1e-3
   ],
   "initial_imu_linear_acceleration_bias_covariance": [
-    1e-6,
-    1e-6,
-    1e-6
+    1e-4,
+    1e-4,
+    1e-4
   ],
   "initial_imu_angular_velocity_bias_covariance": [
-    1e-6,
-    1e-6,
-    1e-6
+    1e-4,
+    1e-4,
+    1e-4
   ],
   "initial_com_position_covariance": [
     1e-6,
@@ -182,37 +183,17 @@
     1.0,
     1.0
   ],
+  "T_base_to_odom": null,
   "enable_terrain_estimation": false,
   "terrain_estimator": "fast",
-  "minimum_terrain_height_variance": 1e-2,
+  "minimum_terrain_height_variance": 1e-3,
   "maximum_contact_points": 4,
-  "maximum_recenter_distance": 1.5,
-  "minimum_contact_probability": 0.25,
-  "minimum_stable_contact_probability": 0.85,
-  "minimum_stable_foot_angular_velocity": 0.02,
-  "minimum_stable_foot_linear_velocity": 0.02,
-  "resolution": 0.015,
-  "radius": 0.4,
-  "dist_variance_gain": 100.0,
+  "maximum_recenter_distance": 0.35,
+  "minimum_contact_probability": 0.15,
+  "resolution": 0.02,
+  "radius": 0.10,
+  "dist_variance_gain": 10.0,
   "power": 1.5,
-  "T_base_to_ground_truth": [
-    1.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-    0.0,
-    0.0,
-    0.0,
-    0.0,
-    1.0
-  ],
   "log_data": true,
   "log_measurements": true,
   "log_dir": "/tmp/"

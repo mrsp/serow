@@ -30,6 +30,10 @@
     "joint_velocity_variance": null,
     // integer: smoothing window for the derivative estimators (joint velocity, IMU angular velocity, CoM Angular Momentum Derivative)
     "smoothing_window": 7,
+    // boolean: whether or not to estimate the leg end-effector contact wrench. If set to false, the user should provide the contact wrench measurements
+    "estimate_contact_wrench": false,
+    // double: observer gain for the contact wrench estimator. Only applies if estimate_contact_wrench = true
+    "observer_gain": 10.0,
     // Contact point estimator
     // double: cost weight when computing the instantaneous moment pivot with kinematics. 
     // Only applies for flat feet

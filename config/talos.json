@@ -13,6 +13,8 @@
     "joint_position_variance": 1e-6,
     "joint_velocity_variance": null,
     "smoothing_window": 7,
+    "estimate_contact_wrench": false,
+    "observer_gain": 10.0,
     "tau_0": 1.0,
     "tau_1": 0.001,
     "imu_rate": 50.0,
