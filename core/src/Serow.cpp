@@ -257,11 +257,17 @@ bool Serow::initialize(const std::string& config_file) {
         }
     }
     if (config.contains("estimate_contact_wrench") &&
-        !config["estimate_contact_wrench"].is_null()) {
+        !config["estimate_contact_wrench"].is_null() &&
+        config.contains("observer_gain") &&
+        !config["observer_gain"].is_null()) {
         if (!checkConfigParam("estimate_contact_wrench", params_.estimate_contact_wrench)) {
             return false;
         }
+        if (!checkConfigParam("observer_gain", params_.observer_gain)) {
+            return false;
+        }
     }
+
 
     if (params_.enable_terrain_estimation) {
         if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
@@ -515,6 +521,7 @@ bool Serow::initialize(const std::string& config_file) {
     timers_.try_emplace("com-estimator-predict");
     timers_.try_emplace("com-estimator-update");
     timers_.try_emplace("contact-estimation");
+    timers_.try_emplace("contact-wrench-estimation");
     timers_.try_emplace("frame-tree-update");
     timers_.try_emplace("total-time");
     return true;
@@ -941,6 +948,103 @@ void Serow::runContactEstimator(
     }
 }
 
+void Serow::runContactWrenchEstimator(const State& state,
+                                      std::map<std::string, ForceTorqueMeasurement>& ft,
+                                      const std::map<std::string, JointMeasurement>& joints) {
+    if (params_.estimate_contact_wrench && !contact_wrench_estimator_) {
+        contact_wrench_estimator_ = std::make_unique<ContactWrenchEstimator>(
+            kinematic_estimator_->getModel(), params_.observer_gain);
+    }
+
+    if (joints.empty()) {
+        return;
+    }
+
+    const double joint_timestamp = joints.begin()->second.timestamp;
+    const double dt = joint_timestamp - last_joint_timestamp_;
+    if (dt <= 0.0) {
+        return;
+    }
+
+    const pinocchio::Model& model = kinematic_estimator_->getModel();
+
+    Eigen::VectorXd q = pinocchio::neutral(model);
+    Eigen::VectorXd qdot = Eigen::VectorXd::Zero(model.nv);
+    Eigen::VectorXd effort = Eigen::VectorXd::Zero(model.nv);
+
+    size_t filled_joints = 0;
+    for (pinocchio::JointIndex jid = 1; jid < static_cast<pinocchio::JointIndex>(model.njoints);
+         ++jid) {
+        const std::string& joint_name = model.names[jid];
+        const auto it = joints.find(joint_name);
+
+        // Skip non-actuated/root joints that are not present in the measurement map.
+        if (it == joints.end()) {
+            if (model.nqs[jid] == 1 && model.nvs[jid] == 1) {
+                throw std::runtime_error(
+                    "Fatal Error: Missing measurement for model joint '" + joint_name +
+                    "'. Contact wrench estimation requires model-ordered joint data.");
+            }
+            continue;
+        }
+
+        const JointMeasurement& measurement = it->second;
+        if (!measurement.effort.has_value()) {
+            throw std::runtime_error("Fatal Error: Missing effort measurement for joint '" +
+                                     joint_name + "'. Contact wrench estimation aborted.");
+        }
+        if (!measurement.velocity.has_value()) {
+            throw std::runtime_error("Fatal Error: Missing velocity measurement for joint '" +
+                                     joint_name + "'. Contact wrench estimation aborted.");
+        }
+        if (model.nqs[jid] != 1 || model.nvs[jid] != 1) {
+            throw std::runtime_error(
+                "Fatal Error: Joint '" + joint_name +
+                "' is not a scalar actuated joint. Contact wrench estimation currently expects scalar joints.");
+        }
+
+        q[model.idx_qs[jid]] = measurement.position;
+        qdot[model.idx_vs[jid]] = measurement.velocity.value();
+        effort[model.idx_vs[jid]] = measurement.effort.value();
+        filled_joints++;
+    }
+
+    if (filled_joints != joints.size()) {
+        std::cerr << "Warning: Contact wrench estimator used " << filled_joints
+                  << " model joints, but " << joints.size()
+                  << " joint measurements were provided. Check joint names/order.\n";
+    }
+
+    contact_wrench_estimator_->update(q, qdot, effort, dt);
+
+    std::vector<std::string> contact_frames;
+    std::vector<pinocchio::FrameIndex> frame_ids;
+    contact_frames.reserve(state.getContactsFrame().size());
+    frame_ids.reserve(state.getContactsFrame().size());
+
+    for (const auto& frame : state.getContactsFrame()) {
+        contact_frames.push_back(frame);
+        frame_ids.push_back(model.getFrameId(frame, pinocchio::BODY));
+    }
+
+
+    const std::vector<Eigen::Vector3d> estimated_forces =
+        contact_wrench_estimator_->contactForces(q, frame_ids);
+
+    for (size_t i = 0; i < contact_frames.size(); ++i) {
+        const std::string& frame = contact_frames[i];
+        Eigen::Vector3d force = -estimated_forces[i];
+        force.z() = std::max(0.0, force.z());
+        ft[frame].force = force;
+        ft[frame].timestamp = joint_timestamp;
+
+
+        if (!state.isPointFeet()) {
+            ft[frame].torque = Eigen::Vector3d::Zero();
+        }
+    }
+}
+
 void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
                              const KinematicMeasurement& kin,
                              std::optional<OdometryMeasurement> odom) {
@@ -1290,10 +1394,6 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
         return false;
     }
 
-    timestamp_ = std::min(imu_timestamp, joint_timestamp);
-    last_imu_timestamp_ = imu_timestamp;
-    last_joint_timestamp_ = joint_timestamp;
-
     // Safety check: force_torque map must not be empty if provided
     auto ft_timestamp = (force_torque.has_value() && !force_torque.value().empty())
         ? std::optional<double>(force_torque.value().begin()->second.timestamp)
@@ -1370,16 +1470,9 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
 
     // Estimate the contact state
     if (params_.estimate_contact_wrench) {
-        ft.clear();
-        for (const auto& frame : state_.getContactsFrame()) {
-            const Eigen::Matrix<double, 6, 1>& wrench =
-                -kinematic_estimator_->linkWrench(frame, false);
-            ft[frame].force = wrench.head(3);
-            if (!state_.isPointFeet()) {
-                ft[frame].torque = wrench.tail(3);
-            }
-            ft[frame].timestamp = timestamp_;
-        }
+        timers_["contact-wrench-estimation"].start();
+        runContactWrenchEstimator(state_, ft, joints);
+        timers_["contact-wrench-estimation"].stop();
     }
 
     if (!ft.empty()) {
@@ -1414,6 +1507,12 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
     logExteroception(state_);
     timers_["total-time"].stop();
     logTimings();
+
+
+    timestamp_ = std::min(imu_timestamp, joint_timestamp);
+    last_imu_timestamp_ = imu_timestamp;
+    last_joint_timestamp_ = joint_timestamp;
+
     return true;
 }
 
@@ -1474,6 +1573,10 @@ Serow::~Serow() {
         // Reset other estimators
         if (attitude_estimator_) {
             attitude_estimator_.reset();
+        }
+
+        if (contact_wrench_estimator_) {
+            contact_wrench_estimator_.reset();
         }
 
         if (leg_odometry_) {
