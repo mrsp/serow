@@ -609,20 +609,6 @@ public:
                       << '\n';
         }
     }
-
-    /**
-     * @brief Computes the link wrench for a frame
-     * @param frame_name Name of the frame
-     * @param in_body_frame Whether to return the wrench in body frame or local link coordinates
-     * @return Link wrench in body frame or local link frame coordinates
-     */
-    Eigen::Matrix<double, 6, 1> linkWrench(const std::string& frame_name,
-                                           bool in_body_frame = true) const {
-        const Eigen::MatrixXd J = geometricJacobian(frame_name, in_body_frame);
-        Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(J.transpose());
-        return cod.solve(effort_);
-    }
-
 private:
     /// Pinocchio model
     std::unique_ptr<pinocchio::Model> pmodel_;
