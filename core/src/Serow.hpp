@@ -18,6 +18,7 @@
 #include "BaseEstimator.hpp"
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
+#include "ContactWrenchEstimator.hpp"
 #include "DerivativeEstimator.hpp"
 #include "ExteroceptionLogger.hpp"
 #include "LegOdometry.hpp"
@@ -187,6 +188,8 @@ private:
         /// @brief whether or not to estimate the leg end-effector contact wrench. If set to false,
         /// the user should provide the leg end-effector force and torque measurements
         bool estimate_contact_wrench{};
+        /// @brief gain for the contact wrench observer.
+        double observer_gain{};
         /// @brief whether or not to estimate the leg end-effector contact status. If set to false,
         /// the user should provide the end-effector contact probabilities
         bool estimate_contact_status{};
@@ -315,6 +318,8 @@ private:
     std::unique_ptr<Mahony> attitude_estimator_;
     /// @brief end-effector kinematic estimator that employs base attitude and joint measurements
     std::unique_ptr<RobotKinematics> kinematic_estimator_;
+    /// @brief contact wrench estimator based on geralized momentum observer
+    std::unique_ptr<ContactWrenchEstimator> contact_wrench_estimator_;
     /// @brief leg odometry estimator that employs end-effector kinematics to estimate the
     /// instantaneous moment pivot points
     std::unique_ptr<LegOdometry> leg_odometry_;
@@ -403,6 +408,13 @@ private:
     void runContactEstimator(
         State& state, std::map<std::string, ForceTorqueMeasurement>& ft, KinematicMeasurement& kin,
         std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
+    /// @brief Runs the contact wrench estimator to estimate the leg end-effector contact wrench
+    /// @param state the state of the robot
+    /// @param ft force/torque measurements
+    /// @param joints joint measurements
+    void runContactWrenchEstimator(
+        const State& state, std::map<std::string, ForceTorqueMeasurement>& ft, 
+        const std::map<std::string, JointMeasurement>& joints);
 
     /// @brief Runs the base estimator
     /// @param state the state of the robot
