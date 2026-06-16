@@ -1382,6 +1382,10 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
         return false;
     }
 
+    timestamp_ = std::min(imu_timestamp, joint_timestamp);
+    last_imu_timestamp_ = imu_timestamp;
+    last_joint_timestamp_ = joint_timestamp;
+
     if (joint_timestamp < last_joint_timestamp_) {
         std::cerr << "Joint measurements are out of order, skipping filtering" << '\n';
         timers_["total-time"].stop();
@@ -1507,11 +1511,6 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
     logExteroception(state_);
     timers_["total-time"].stop();
     logTimings();
-
-
-    timestamp_ = std::min(imu_timestamp, joint_timestamp);
-    last_imu_timestamp_ = imu_timestamp;
-    last_joint_timestamp_ = joint_timestamp;
 
     return true;
 }
