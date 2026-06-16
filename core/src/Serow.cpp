@@ -960,8 +960,7 @@ void Serow::runContactWrenchEstimator(const State& state,
         return;
     }
 
-    const double joint_timestamp = joints.begin()->second.timestamp;
-    const double dt = joint_timestamp - last_joint_timestamp_;
+    const double dt = timestamp_ - last_timestamp_;
     if (dt <= 0.0) {
         return;
     }
@@ -1036,9 +1035,7 @@ void Serow::runContactWrenchEstimator(const State& state,
         Eigen::Vector3d force = -estimated_forces[i];
         force.z() = std::max(0.0, force.z());
         ft[frame].force = force;
-        ft[frame].timestamp = joint_timestamp;
-
-
+        ft[frame].timestamp = timestamp_;
         if (!state.isPointFeet()) {
             ft[frame].torque = Eigen::Vector3d::Zero();
         }
@@ -1382,10 +1379,6 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
         return false;
     }
 
-    timestamp_ = std::min(imu_timestamp, joint_timestamp);
-    last_imu_timestamp_ = imu_timestamp;
-    last_joint_timestamp_ = joint_timestamp;
-
     if (joint_timestamp < last_joint_timestamp_) {
         std::cerr << "Joint measurements are out of order, skipping filtering" << '\n';
         timers_["total-time"].stop();
@@ -1397,6 +1390,8 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
         timers_["total-time"].stop();
         return false;
     }
+
+    timestamp_ = std::min(imu_timestamp, joint_timestamp);
 
     // Safety check: force_torque map must not be empty if provided
     auto ft_timestamp = (force_torque.has_value() && !force_torque.value().empty())
@@ -1473,7 +1468,7 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
     timers_["forward-kinematics"].stop();
 
     // Estimate the contact state
-    if (params_.estimate_contact_wrench) {
+    if (params_.estimate_contact_wrench && last_timestamp_ > 0.0) {
         timers_["contact-wrench-estimation"].start();
         runContactWrenchEstimator(state_, ft, joints);
         timers_["contact-wrench-estimation"].stop();
@@ -1506,6 +1501,9 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
         state_.is_valid_ = true;
     }
 
+    last_imu_timestamp_ = imu_timestamp;
+    last_joint_timestamp_ = joint_timestamp;
+    last_timestamp_ = timestamp_;
     // Log the estimated state
     logProprioception(state_, imu);
     logExteroception(state_);

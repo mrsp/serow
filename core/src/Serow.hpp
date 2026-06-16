@@ -358,6 +358,8 @@ private:
     double last_joint_timestamp_{-1.0};
     /// @brief Timestamp of the last force/torque measurement
     double last_ft_timestamp_{-1.0};
+    /// @brief Last used timestamp of the filter
+    double last_timestamp_{-1.0};
     /// @brief Timestamp of the last odometry measurement
     double last_odom_timestamp_{-1.0};
     std::vector<double> coeffs_joint_;
