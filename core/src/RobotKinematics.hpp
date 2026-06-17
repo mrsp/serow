@@ -28,11 +28,14 @@
 #include <map>
 #include <pinocchio/algorithm/center-of-mass.hpp>
 #include <pinocchio/algorithm/centroidal.hpp>
+#include <pinocchio/algorithm/compute-all-terms.hpp>
+#include <pinocchio/algorithm/crba.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/jacobian.hpp>
 #include <pinocchio/algorithm/joint-configuration.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/algorithm/model.hpp>
+#include <pinocchio/algorithm/rnea.hpp>
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/parsers/mjcf.hpp>
@@ -477,11 +480,10 @@ public:
         return total_mass_;
     }
 
-
     /**
-    * @brief Get the Model object
-    * @return const pinocchio::Model&
-    */
+     * @brief Get the Model object
+     * @return const pinocchio::Model&
+     */
     const pinocchio::Model& getModel() const {
         return *pmodel_;
     }
@@ -609,6 +611,39 @@ public:
                       << '\n';
         }
     }
+
+    Eigen::VectorXd getJointPositions() const {
+        return q_;
+    }
+
+    Eigen::VectorXd getJointVelocities() const {
+        return qdot_;
+    }
+
+    Eigen::VectorXd getJointEfforts() const {
+        return effort_;
+    }
+
+    void computeDynamicTerms() const {
+        // Updates dynamic quantities in *data_ for the current (q_, qdot_).
+        // In particular:
+        // - data_->M   : joint-space mass matrix M(q)
+        // - data_->nle : nonlinear effects / bias term b(q, qdot)
+        pinocchio::computeAllTerms(*pmodel_, *data_, q_, qdot_);
+
+        // Pinocchio typically fills only the upper-triangular part of M.
+        data_->M.triangularView<Eigen::StrictlyLower>() =
+            data_->M.transpose().triangularView<Eigen::StrictlyLower>();
+    }
+
+    Eigen::MatrixXd getMassMatrix() const {
+        return data_->M;
+    }
+
+    Eigen::VectorXd getNonlinearEffects() const {
+        return data_->nle;
+    }
+
 private:
     /// Pinocchio model
     std::unique_ptr<pinocchio::Model> pmodel_;

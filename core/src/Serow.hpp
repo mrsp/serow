@@ -317,7 +317,7 @@ private:
     /// @brief base attitude estimator that utilizes base IMU measurements
     std::unique_ptr<Mahony> attitude_estimator_;
     /// @brief end-effector kinematic estimator that employs base attitude and joint measurements
-    std::unique_ptr<RobotKinematics> kinematic_estimator_;
+    std::shared_ptr<RobotKinematics> kinematic_estimator_;
     /// @brief contact wrench estimator based on geralized momentum observer
     std::unique_ptr<ContactWrenchEstimator> contact_wrench_estimator_;
     /// @brief leg odometry estimator that employs end-effector kinematics to estimate the
@@ -411,12 +411,8 @@ private:
         State& state, std::map<std::string, ForceTorqueMeasurement>& ft, KinematicMeasurement& kin,
         std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
     /// @brief Runs the contact wrench estimator to estimate the leg end-effector contact wrench
-    /// @param state the state of the robot
-    /// @param ft force/torque measurements
-    /// @param joints joint measurements
-    void runContactWrenchEstimator(
-        const State& state, std::map<std::string, ForceTorqueMeasurement>& ft, 
-        const std::map<std::string, JointMeasurement>& joints);
+    /// @return Estimated contact wrench measurements (per contact frame)
+    std::map<std::string, ForceTorqueMeasurement> runContactWrenchEstimator();
 
     /// @brief Runs the base estimator
     /// @param state the state of the robot

@@ -24,14 +24,14 @@
 #include <Eigen/Dense>
 #endif
 
-#include <pinocchio/algorithm/crba.hpp>
-#include <pinocchio/algorithm/frames.hpp>
-#include <pinocchio/algorithm/jacobian.hpp>
-#include <pinocchio/algorithm/rnea.hpp>
-#include <pinocchio/multibody/data.hpp>
-#include <pinocchio/multibody/model.hpp>
+#include <memory>
+#include <optional>
+#include <set>
 #include <string>
 #include <vector>
+
+#include "Measurement.hpp"
+#include "RobotKinematics.hpp"
 
 namespace serow {
 
@@ -51,172 +51,121 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     /**
-     * @brief Constructs the estimator from a Pinocchio model
-     * @param model   Pinocchio model shared with RobotKinematics
+     * @brief Constructs the estimator from a kinematic estimator
+     * @param kinematic_estimator The kinematic estimator
+     * @param contact_frames The contact frames to estimate the wrenches for
      * @param gain    Observer gain K_I (typical range 10–100)
      */
-    ContactWrenchEstimator(const pinocchio::Model& model, double gain)
-        : model_(model), data_(model), gain_(gain) {
-        const int nv = model_.nv;
+    ContactWrenchEstimator(std::shared_ptr<RobotKinematics> kinematic_estimator,
+                           const std::set<std::string>& contact_frames, const double gain,
+                           const bool point_feet = true)
+        : kinematic_estimator_(kinematic_estimator),
+          contact_frames_(contact_frames),
+          point_feet_(point_feet),
+          gain_(gain) {
+        const int nv = kinematic_estimator->ndofActuated();
         residual_.setZero(nv);
         integral_.setZero(nv);
-        p_prev_.setZero(nv);
+        cols_per_contact_ = point_feet_ ? 3 : 6;
+        last_p_.setZero(nv);
+        A_.setZero(nv, cols_per_contact_ * static_cast<int>(contact_frames.size()));
     }
 
     ~ContactWrenchEstimator() = default;
 
     /**
      * @brief Integrates the observer one step forward
-     * @param q       Joint positions (size nq)
-     * @param qdot    Joint velocities (size nv)
-     * @param effort  Joint efforts (size nv)
-     * @param dt      Elapsed time since last call in seconds
+     * @param dt Elapsed time since last call in seconds
      */
-    void update(const Eigen::VectorXd& q, const Eigen::VectorXd& qdot,
-                const Eigen::VectorXd& effort, double dt) {
-        pinocchio::crba(model_, data_, q);
-        data_.M.triangularView<Eigen::StrictlyLower>() =
-            data_.M.transpose().triangularView<Eigen::StrictlyLower>();
-
-        const Eigen::VectorXd beta =
-            pinocchio::rnea(model_, data_, q, qdot, Eigen::VectorXd::Zero(model_.nv));
-
-        const Eigen::VectorXd p = data_.M * qdot;
-
-        if (!initialized_) {
-            p_prev_      = p;
-            initialized_ = true;
+    void update(const double timestamp) {
+        const Eigen::VectorXd qdot = kinematic_estimator_->getJointVelocities();
+        kinematic_estimator_->computeDynamicTerms();
+        const Eigen::MatrixXd M = kinematic_estimator_->getMassMatrix();
+        const Eigen::VectorXd p = M * qdot;
+        if (!last_timestamp_.has_value()) {
+            last_p_ = p;
+            last_timestamp_ = timestamp;
+            return;
+        }
+        const double dt = timestamp - last_timestamp_.value();
+        last_timestamp_ = timestamp;
+        if (dt <= 0.0) {
             return;
         }
 
-        const Eigen::VectorXd dp_dt = (p - p_prev_) / dt;
-        integral_ += (effort - beta - dp_dt - residual_) * dt;
-        residual_  = gain_ * integral_;
-        p_prev_    = p;
+        const Eigen::VectorXd effort = kinematic_estimator_->getJointEfforts();
+        const Eigen::VectorXd nle = kinematic_estimator_->getNonlinearEffects();
+        const Eigen::VectorXd dp_dt = (p - last_p_) / dt;
+        integral_ += (effort - nle - dp_dt - residual_) * dt;
+        residual_ = gain_ * integral_;
+        last_p_ = p;
     }
 
-    /**
-     * @brief Computes the contact wrench at a frame from the current observer residual
-     * @param q             Joint positions (size nq) — required to compute the Jacobian
-     * @param frame_id      Pinocchio frame index of the contact frame
-     * @param in_body_frame Express the wrench in the body frame when true, world frame when false
-     * @return [fx, fy, fz, tx, ty, tz] contact wrench
-     */
-    Eigen::Matrix<double, 6, 1> wrench(const Eigen::VectorXd& q, 
-                                       pinocchio::FrameIndex frame_id,
-                                       bool in_body_frame = true) const {
-        if (!initialized_) {
-            return Eigen::Matrix<double, 6, 1>::Zero();
+    std::map<std::string, ForceTorqueMeasurement> contactWrenches() {
+        std::map<std::string, ForceTorqueMeasurement> ft;
+
+        A_.setZero();
+        for (int i = 0; i < static_cast<int>(contact_frames_.size()); ++i) {
+            const std::string& frame = *std::next(contact_frames_.begin(), i);
+            if (point_feet_) {
+                // Point contact: residual ~= Jv(q)^T * f
+                const Eigen::MatrixXd Jv = kinematic_estimator_->linearJacobian(frame);
+                A_.middleCols(cols_per_contact_ * i, cols_per_contact_) = Jv.transpose();
+            } else {
+                // Full wrench: residual ~= J(q)^T * wrench
+                const Eigen::MatrixXd J = kinematic_estimator_->geometricJacobian(frame, false);
+                A_.middleCols(cols_per_contact_ * i, cols_per_contact_) = J.transpose();
+            }
         }
 
-        // 1. Compute Jacobians and Frame Placements based on current 'q'
-        pinocchio::computeJointJacobians(model_, data_, q);
-        pinocchio::updateFramePlacements(model_, data_);
+        Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(A_);
+        const Eigen::VectorXd wrench_stack = cod.solve(residual_);
 
-        // 2. Now it is safe to extract the Jacobian
-        pinocchio::Data::Matrix6x J = pinocchio::Data::Matrix6x::Zero(6, model_.nv);
-        pinocchio::getFrameJacobian(model_, data_, frame_id, pinocchio::LOCAL, J);
-
-        // 3. Rotate to body frame if requested (data_.oMf is now populated)
-        if (in_body_frame) {
-            const Eigen::Matrix3d& R = data_.oMf[frame_id].rotation();
-            J.topRows(3)    = R * J.topRows(3);
-            J.bottomRows(3) = R * J.bottomRows(3);
+        int offset = 0;
+        for (const std::string& frame : contact_frames_) {
+            ft[frame].force = -wrench_stack.segment<3>(offset);
+            ft[frame].force.z() = std::max(0.0, ft[frame].force.z());
+            if (!point_feet_) {
+                ft[frame].torque = -wrench_stack.segment<3>(offset + 3);
+            }
+            offset += cols_per_contact_;
+            ft[frame].timestamp = last_timestamp_.value();
         }
 
-        // 4. Solve for the wrench
-        Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(J.transpose());
-        return cod.solve(residual_);
-    }
-    
-
-
-    /**
-     * @brief Computes point-contact forces for several contact frames simultaneously.
-     *
-     * The generalized momentum residual contains the combined contribution of all
-     * external contacts:
-     *
-     *   residual ~= sum_i J_i(q)^T f_i
-     *
-     * Solving one foot at a time makes every foot try to explain the full residual.
-     * For point feet, build the stacked system
-     *
-     *   [J_1^T J_2^T ... J_N^T] [f_1 ... f_N]^T = residual
-     *
-     * and solve it once. Forces are returned in each contact frame's LOCAL frame,
-     * which matches the convention expected by Serow::runContactEstimator before
-     * it applies R_foot_to_force and the foot/base transforms.
-     */
-    std::vector<Eigen::Vector3d> contactForces(
-        const Eigen::VectorXd& q,
-        const std::vector<pinocchio::FrameIndex>& frame_ids) const {
-        std::vector<Eigen::Vector3d> output(frame_ids.size(), Eigen::Vector3d::Zero());
-
-        if (!initialized_ || frame_ids.empty()) {
-            return output;
-        }
-
-        pinocchio::computeJointJacobians(model_, data_, q);
-        pinocchio::updateFramePlacements(model_, data_);
-
-        Eigen::MatrixXd A(model_.nv, 3 * static_cast<int>(frame_ids.size()));
-        A.setZero();
-
-        for (size_t i = 0; i < frame_ids.size(); ++i) {
-            pinocchio::Data::Matrix6x J = pinocchio::Data::Matrix6x::Zero(6, model_.nv);
-            pinocchio::getFrameJacobian(model_, data_, frame_ids[i], pinocchio::LOCAL, J);
-
-            // Point contact: generalized external torque contribution is Jv^T * f.
-            A.middleCols(3 * static_cast<int>(i), 3) = J.topRows(3).transpose();
-        }
-
-        Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(A);
-        const Eigen::VectorXd f_stack = cod.solve(residual_);
-
-        for (size_t i = 0; i < frame_ids.size(); ++i) {
-            output[i] = f_stack.segment<3>(3 * static_cast<int>(i));
-        }
-
-        return output;
+        return ft;
     }
 
     /**
      * @brief Resets the observer state
-     *
-     * Call after liftoff, re-initialization, or prolonged swing to prevent integral drift.
      */
     void reset() {
+        last_timestamp_.reset();
         residual_.setZero();
         integral_.setZero();
-        p_prev_.setZero();
-        initialized_ = false;
+        last_p_.setZero();
+        A_.setZero();
     }
 
     /**
      * @brief Sets the observer gain at runtime
      * @param gain  New K_I value
      */
-    void setGain(double gain) {
+    void setGain(const double gain) {
         gain_ = gain;
     }
 
-    /**
-     * @brief Returns the raw observer residual r ≈ J^T * F_ext (size nv)
-     */
-    const Eigen::VectorXd& residual() const {
-        return residual_;
-    }
-
 private:
-    pinocchio::Model model_;
-    mutable pinocchio::Data data_;
-
-    double          gain_;
+    std::shared_ptr<RobotKinematics> kinematic_estimator_;
+    std::set<std::string> contact_frames_;
+    bool point_feet_{true};
+    int cols_per_contact_{3};
+    double gain_{0.0};
+    std::optional<double> last_timestamp_;
     Eigen::VectorXd residual_;
     Eigen::VectorXd integral_;
-    Eigen::VectorXd p_prev_;
-    bool            initialized_{false};
+    Eigen::VectorXd last_p_;
+    /// Stacked Jacobian matrix for the contact frames. Avoids reallocation of memory.
+    Eigen::MatrixXd A_;
 };
 
 }  // namespace serow
