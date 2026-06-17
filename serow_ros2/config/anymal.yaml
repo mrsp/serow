@@ -6,7 +6,7 @@ topics:
   ground_truth: "/ground_truth/odom"
   external_odometry: ""
 synchronization:
-  imu_to_joint: 0.02
-  ground_truth_to_joint: 0.02
+  imu_to_joint: 0.005
+  ground_truth_to_joint: 0.01
 serow_config: "anymal.json"
 publish_path: false
