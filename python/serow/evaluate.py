@@ -134,18 +134,41 @@ assert len(timestamps) == len(base_angular_velocities)
 assert len(timestamps) == len(gt_linear_velocities)
 assert len(timestamps) == len(gt_angular_velocities)
 
-# Plot the base and ground truth trajectories 
-# Subtract each series' first sample so both curves start at 0 m (visual alignment only)
-base_positions = base_positions - base_positions[0]
-gt_positions = gt_positions - gt_positions[0]
+def rot_angle_deg(q_est_wxyz, q_gt_wxyz):
+    re = Rotation.from_quat(np.roll(q_est_wxyz, -1))
+    rg = Rotation.from_quat(np.roll(q_gt_wxyz, -1))
+    return (re.inv() * rg).magnitude() * 180 / np.pi
+
+def vector_rmse(gt, est):
+    return np.sqrt(np.mean(np.linalg.norm(gt - est, axis=1) ** 2))
+
+# Absolute Trajectory Error (ATE) on SE(3)-aligned data (before any visual origin shift)
+pos_err = np.linalg.norm(base_positions - gt_positions, axis=1)
+ate = np.sqrt(np.mean(pos_err**2))
+rot_err = np.array([rot_angle_deg(e, g) for e, g in zip(base_orientations, gt_orientations)])
+ate_rot = np.sqrt(np.mean(rot_err**2))
+ave = vector_rmse(gt_linear_velocities, base_linear_velocities)
+ave_rot = vector_rmse(
+    gt_angular_velocities * 180 / np.pi,
+    base_angular_velocities * 180 / np.pi,
+)
+
+print(f"Absolute Translation Error: {ate} m")
+print(f"Absolute Rotation Error: {ate_rot} deg")
+print(f"Absolute Linear Velocity Error: {ave} m/s")
+print(f"Absolute Angular Velocity Error: {ave_rot} deg/s")
+
+# Visual-only origin shift for plots
+base_positions_plot = base_positions - base_positions[0]
+gt_positions_plot = gt_positions - gt_positions[0]
 
 axis_sub = ("x", "y", "z")
 fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
 axis_names = ("X", "Y", "Z")
 for ax, i, name in zip(axes, range(3), axis_names):
     sub = axis_sub[i]
-    ax.plot(timestamps, base_positions[:, i], label=rf"Est ${name}$")
-    ax.plot(timestamps, gt_positions[:, i], label=rf"GT ${name}$", linestyle="--", color="black")
+    ax.plot(timestamps, base_positions_plot[:, i], label=rf"Est ${name}$")
+    ax.plot(timestamps, gt_positions_plot[:, i], label=rf"GT ${name}$", linestyle="--", color="black")
     ax.set_ylabel(rf"$p_{{\mathrm{{base}},{sub}}}$ (m)")
     ax.legend()
     ax.grid(True)
@@ -153,19 +176,21 @@ axes[-1].set_xlabel(r"$\mathrm{Time}$ (s)")
 fig.suptitle(r"$\mathbf{p}_{\mathrm{base}}$ vs. $\mathbf{p}_{\mathrm{GT}}$ (position, m)")
 plt.tight_layout()
 
-# Plot the base and ground truth orientations as Euler angles 
+# Plot the base and ground truth orientations as Euler angles
 def quat_wxyz_to_euler(quat_wxyz, seq="xyz", degrees=True):
     quat_xyzw = np.roll(np.asarray(quat_wxyz, dtype=float), -1, axis=-1)
     return Rotation.from_quat(quat_xyzw).as_euler(seq, degrees=degrees)
 
-base_orientations_euler = quat_wxyz_to_euler(base_orientations)
-gt_orientations_euler = quat_wxyz_to_euler(gt_orientations)
+def unwrap_euler_deg(euler_deg):
+    """Remove ±180° jumps so roll/pitch/yaw evolve continuously over time."""
+    return np.rad2deg(np.unwrap(np.deg2rad(np.asarray(euler_deg, dtype=float)), axis=0))
+
+base_orientations_euler = unwrap_euler_deg(quat_wxyz_to_euler(base_orientations))
+gt_orientations_euler = unwrap_euler_deg(quat_wxyz_to_euler(gt_orientations))
 
 # Subtract each series' first sample so both curves start at 0 deg (visual alignment only)
 base_orientations_euler = base_orientations_euler - base_orientations_euler[0]
 gt_orientations_euler = gt_orientations_euler - gt_orientations_euler[0]
-
-
 
 fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
 euler_labels = (
@@ -238,22 +263,6 @@ fig.suptitle(
     r"(angular, deg/s)"
 )
 plt.tight_layout()
-
-# Compute the Absolute Trajectory Error (ATE) for position, orientation, 
-# linear velocity, and angular velocity
-def error(gt, est):
-    return np.sqrt(np.mean((gt - est) ** 2))
-
-ate = error(gt_positions, base_positions)
-ate_rot = error(gt_orientations_euler, base_orientations_euler)
-print(f"Absolute Translation Error: {ate} m")
-print(f"Absolute Rotation Error: {ate_rot} deg")
-
-ave = error(gt_linear_velocities, base_linear_velocities)
-ave_rot = error(gt_angular_velocities, base_angular_velocities)
-print(f"Absolute Linear Velocity Error: {ave} m/s")
-print(f"Absolute Angular Velocity Error: {ave_rot} deg/s")
-
 
 # Fetch the imu biases from the base states
 imu_linear_acceleration_biases = np.array([base.imu_linear_acceleration_bias for base in log["base_states"]])
