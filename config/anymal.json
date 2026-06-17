@@ -16,7 +16,7 @@
   "joint_velocity_variance": null,
   "smoothing_window": 11,
   "estimate_contact_wrench": true,
-  "observer_gain": 80.0,
+  "observer_gain": 50.0,
   "imu_rate": 400.0,
   "R_base_to_gyro": [
     -1.0,

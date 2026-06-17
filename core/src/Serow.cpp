@@ -509,8 +509,8 @@ bool Serow::initialize(const std::string& config_file) {
     reset();
     if (params_.estimate_contact_wrench) {
         contact_wrench_estimator_ = std::make_unique<ContactWrenchEstimator>(
-            kinematic_estimator_, state_.getContactsFrame(), params_.observer_gain,
-            state_.isPointFeet());
+            kinematic_estimator_, state_.getContactsFrame(), params_.observer_gain, coeffs_joint_,
+            params_.joint_rate, state_.isPointFeet());
     }
 
     // Create timers

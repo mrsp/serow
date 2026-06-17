@@ -30,6 +30,7 @@
 #include <string>
 #include <vector>
 
+#include "DerivativeEstimator.hpp"
 #include "Measurement.hpp"
 #include "RobotKinematics.hpp"
 
@@ -58,6 +59,7 @@ public:
      */
     ContactWrenchEstimator(std::shared_ptr<RobotKinematics> kinematic_estimator,
                            const std::set<std::string>& contact_frames, const double gain,
+                           const std::vector<double>& coeffs_joint, const double joint_rate,
                            const bool point_feet = true)
         : kinematic_estimator_(kinematic_estimator),
           contact_frames_(contact_frames),
@@ -67,8 +69,9 @@ public:
         residual_.setZero(nv);
         integral_.setZero(nv);
         cols_per_contact_ = point_feet_ ? 3 : 6;
-        last_p_.setZero(nv);
         A_.setZero(nv, cols_per_contact_ * static_cast<int>(contact_frames.size()));
+        p_derivative_estimator_ =
+            std::make_unique<DerivativeEstimator>("p Derivative", coeffs_joint, joint_rate, nv);
     }
 
     ~ContactWrenchEstimator() = default;
@@ -83,8 +86,8 @@ public:
         const Eigen::MatrixXd M = kinematic_estimator_->getMassMatrix();
         const Eigen::VectorXd p = M * qdot;
         if (!last_timestamp_.has_value()) {
-            last_p_ = p;
             last_timestamp_ = timestamp;
+            p_derivative_estimator_->filter(p, Eigen::VectorXd::Ones(qdot.size()), timestamp);
             return;
         }
         const double dt = timestamp - last_timestamp_.value();
@@ -95,10 +98,10 @@ public:
 
         const Eigen::VectorXd effort = kinematic_estimator_->getJointEfforts();
         const Eigen::VectorXd nle = kinematic_estimator_->getNonlinearEffects();
-        const Eigen::VectorXd dp_dt = (p - last_p_) / dt;
+        const Eigen::VectorXd dp_dt =
+            p_derivative_estimator_->filter(p, Eigen::VectorXd::Ones(qdot.size()), timestamp);
         integral_ += (effort - nle - dp_dt - residual_) * dt;
         residual_ = gain_ * integral_;
-        last_p_ = p;
     }
 
     std::map<std::string, ForceTorqueMeasurement> contactWrenches() {
@@ -107,13 +110,12 @@ public:
         A_.setZero();
         for (int i = 0; i < static_cast<int>(contact_frames_.size()); ++i) {
             const std::string& frame = *std::next(contact_frames_.begin(), i);
+            const Eigen::MatrixXd J = kinematic_estimator_->geometricJacobian(frame, false);
             if (point_feet_) {
                 // Point contact: residual ~= Jv(q)^T * f
-                const Eigen::MatrixXd Jv = kinematic_estimator_->linearJacobian(frame);
-                A_.middleCols(cols_per_contact_ * i, cols_per_contact_) = Jv.transpose();
+                A_.middleCols(cols_per_contact_ * i, cols_per_contact_) = J.topRows(3).transpose();
             } else {
                 // Full wrench: residual ~= J(q)^T * wrench
-                const Eigen::MatrixXd J = kinematic_estimator_->geometricJacobian(frame, false);
                 A_.middleCols(cols_per_contact_ * i, cols_per_contact_) = J.transpose();
             }
         }
@@ -142,8 +144,8 @@ public:
         last_timestamp_.reset();
         residual_.setZero();
         integral_.setZero();
-        last_p_.setZero();
         A_.setZero();
+        p_derivative_estimator_->reset();
     }
 
     /**
@@ -163,9 +165,9 @@ private:
     std::optional<double> last_timestamp_;
     Eigen::VectorXd residual_;
     Eigen::VectorXd integral_;
-    Eigen::VectorXd last_p_;
     /// Stacked Jacobian matrix for the contact frames. Avoids reallocation of memory.
     Eigen::MatrixXd A_;
+    std::unique_ptr<DerivativeEstimator> p_derivative_estimator_;  // derivative of the momentum
 };
 
 }  // namespace serow
