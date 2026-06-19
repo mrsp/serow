@@ -1,4 +1,4 @@
- <?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!-- =================================================================================== -->
 <!--   Copyright 2023 ANYbotics, https://www.anybotics.com                               -->
 <!-- =================================================================================== -->
@@ -1418,4 +1418,114 @@
 <!--      <inertia ixx="0.00019173168" ixy="0.00002292922" ixz="0.00000308205" iyy="0.00144879520" iyz="0.00000584565" izz="0.00162332503"/>-->
 <!--    </inertial>-->
 <!--  </link>-->
+
+  <!-- Inspection Payload -->
+  <joint name="base_to_inspection_payload_mount" type="fixed">
+    <parent link="base"/>
+    <child link="inspection_payload_mount"/>
+    <origin rpy="0 0 0" xyz="0.14253 0.0 0.092"/>
+  </joint>
+  <link name="inspection_payload_mount">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://anymal_d_simple_description/meshes/mount.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.00290 0.00 0.01050"/>
+      <mass value="0.21580"/>
+      <inertia ixx="0.00023461260" ixy="0.00000000486" ixz="0.00000355757" iyy="0.00020272719" iyz="0.00000000936" izz="0.00040505639"/>
+    </inertial>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.16 0.135 0.015"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="inspection_payload_mount_to_pan" type="revolute">
+    <parent link="inspection_payload_mount"/>
+    <child link="inspection_payload_pan"/>
+    <limit effort="20" lower="-2.6" upper="2.6" velocity="2"/>
+    <origin rpy="0 0 0" xyz="0 0 0.023"/>
+    <axis xyz="0 0 1"/>
+    <dynamics damping="0.05" friction="0.01"/>
+  </joint>
+  <link name="inspection_payload_pan">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://anymal_d_simple_description/meshes/pan.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.00068 -0.00349 0.07578"/>
+      <mass value="3.18886"/>
+      <inertia ixx="0.02661619524" ixy="0.00040736245" ixz="0.00195095864" iyy="0.01515399107" iyz="0.00077034252" izz="0.02200752038"/>
+    </inertial>
+    <collision>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.125"/>
+      <geometry>
+        <box size="0.18 0.24 0.21"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="inspection_payload_pan_to_tilt" type="revolute">
+    <parent link="inspection_payload_pan"/>
+    <child link="inspection_payload_tilt"/>
+    <limit effort="20" lower="-1.570796" upper="1.570796" velocity="2"/>
+    <origin rpy="0 0 0" xyz="0.03 0 0.152"/>
+    <axis xyz="0 1 0"/>
+    <dynamics damping="0.1" friction="0.5"/>
+  </joint>
+  <link name="inspection_payload_tilt">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://anymal_d_simple_description/meshes/tilt.dae" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.00534 -0.00379 -0.00091"/>
+      <mass value="2.084"/>
+      <inertia ixx="0.00743579757" ixy="0.00006988521" ixz="0.00003254125" iyy="0.00619264016" iyz="0.00002659381" izz="0.00593296152"/>
+    </inertial>
+  </link>
+  <joint name="inspection_payload_tilt_to_head" type="fixed">
+    <parent link="inspection_payload_tilt"/>
+    <child link="inspection_payload_head"/>
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.0"/>
+  </joint>
+  <link name="inspection_payload_head"/>
+  <joint name="inspection_payload_head_to_camera" type="fixed">
+    <parent link="inspection_payload_head"/>
+    <child link="inspection_payload_camera"/>
+    <origin rpy="-1.57079633 0 -1.57079633" xyz="0.055 -0.023 0.031"/>
+  </joint>
+  <link name="inspection_payload_camera"/>
+  <joint name="inspection_payload_head_to_thermal_camera" type="fixed">
+    <parent link="inspection_payload_head"/>
+    <child link="inspection_payload_thermal_camera"/>
+    <origin rpy="-1.57079633 0 -1.57079633" xyz="0.06840 -0.02300 -0.03000"/>
+  </joint>
+  <link name="inspection_payload_thermal_camera"/>
+  <joint name="inspection_payload_head_to_light" type="fixed">
+    <parent link="inspection_payload_head"/>
+    <child link="inspection_payload_light"/>
+    <origin rpy="-1.57079633 0 -1.57079633" xyz="0.05495 0.03000 0.03116"/>
+  </joint>
+  <link name="inspection_payload_light"/>
+  <joint name="inspection_payload_head_to_microphone" type="fixed">
+    <parent link="inspection_payload_head"/>
+    <child link="inspection_payload_microphone"/>
+    <origin rpy="-1.57079633 0 -1.57079633" xyz="0.06840 0.02300 -0.03000"/>
+  </joint>
+  <link name="inspection_payload_microphone"/>
+  <joint name="inspection_payload_mount_to_camera_default" type="fixed">
+    <parent link="inspection_payload_mount"/>
+    <child link="inspection_payload_camera_default"/>
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.175"/>
+  </joint>
+  <link name="inspection_payload_camera_default"/>
 </robot>
