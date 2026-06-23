@@ -85,7 +85,7 @@ void RightInvariantEKF::setState(const BaseState& state) {
     P_(ba_idx_, ba_idx_) = state.imu_linear_acceleration_bias_cov;
     last_imu_update_timestamp_ = state.timestamp;
     last_kin_update_timestamp_ = state.timestamp;
-    last_imu_update_timestamp_ = state.timestamp;
+    last_imu_predict_timestamp_ = state.timestamp;
     last_terrain_update_timestamp_ = state.timestamp;
 }
 
