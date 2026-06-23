@@ -82,6 +82,7 @@ private:
     // Input indices
     Eigen::Array3i ng_idx_;   ///< Indices for gyro input variables.
     Eigen::Array3i na_idx_;   ///< Indices for acceleration input variables.
+    Eigen::Array3i nz_idx_;   ///< Indices for zero input variables.
     Eigen::Array3i nbg_idx_;  ///< Indices for gyro bias input variables.
     Eigen::Array3i nba_idx_;  ///< Indices for accelerometer bias input variables.
     std::optional<double> last_imu_predict_timestamp_;  ///< Timestamp of the last IMU measurement
@@ -99,7 +100,7 @@ private:
     /// Constant (state-independent) part of the continuous-time A matrix
     Eigen::Matrix<double, 15, 15> Ac_;
     /// Constant part of the noise-input Jacobian L (bias-drift rows only)
-    Eigen::Matrix<double, 15, 12> Lc_;
+    Eigen::Matrix<double, 15, 15> Lc_;
 
     OutlierDetector base_position_outlier_detector;  ///< Outlier detector instance.
 
@@ -130,7 +131,7 @@ private:
      * @param angular_velocity Angular velocity measurements.
      * @return Tuple containing prediction Jacobians (state transition and input models).
      */
-    std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 12>>
+    std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 15>>
     computePredictionJacobians(const BaseState& state);
 
     /**

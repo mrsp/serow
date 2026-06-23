@@ -43,7 +43,8 @@ void RightInvariantEKF::init(const BaseState& state, std::set<std::string> conta
     // Input noise indices
     ng_idx_ = Eigen::Array3i::LinSpaced(0, 2);
     na_idx_ = ng_idx_ + 3;
-    nbg_idx_ = na_idx_ + 3;
+    nz_idx_ = na_idx_ + 3;
+    nbg_idx_ = nz_idx_ + 3;
     nba_idx_ = nbg_idx_ + 3;
 
     // Error covariance
@@ -60,8 +61,8 @@ void RightInvariantEKF::init(const BaseState& state, std::set<std::string> conta
     Ac_(p_idx_, v_idx_) = Eigen::Matrix3d::Identity();
 
     // Compute some parts of the Input-Noise Jacobian once since they are constants
-    // gyro (0), acc (3), gyro_bias (6), acc_bias (9)
-    Lc_.setZero(num_states_, num_inputs_);
+    // gyro (0), acc (3), zero (6), gyro_bias (9), acc_bias (12)
+    Lc_.setZero(num_states_, num_inputs_ + 3);
     Lc_(bg_idx_, nbg_idx_) = Eigen::Matrix3d::Identity();
     Lc_(ba_idx_, nba_idx_) = Eigen::Matrix3d::Identity();
     last_imu_predict_timestamp_.reset();
@@ -87,6 +88,8 @@ void RightInvariantEKF::setState(const BaseState& state) {
     last_kin_update_timestamp_ = state.timestamp;
     last_imu_predict_timestamp_ = state.timestamp;
     last_terrain_update_timestamp_ = state.timestamp;
+    first_odometry_position_.reset();
+    first_odometry_orientation_.reset();
 }
 
 // ---------------------------------------------------------------------------
@@ -106,14 +109,14 @@ void RightInvariantEKF::setState(const BaseState& state) {
 //    [ -[v]x R      -R  ]
 //    [ -[p]x R       0  ]
 //
-//  Lc (15x12):
-//    [ -R         0        0   0 ]   <- rotation
-//    [ -[v]x R   -R        0   0 ]   <- velocity
-//    [ -[p]x R    0        0   0 ]   <- position
-//    [  0         0        I   0 ]   <- gyro bias
-//    [  0         0        0   I ]   <- accel bias
+//  Lc (15x15):
+//    [ R         0        0   0  0]   <- rotation
+//    [ [v]x R    R        0   0  0]   <- velocity
+//    [ [p]x R    0        R   0  0]   <- position
+//    [  0        0        0   I  0]   <- gyro bias
+//    [  0        0        0   0  I]   <- accel bias
 // ---------------------------------------------------------------------------
-std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 12>>
+std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 15>>
 RightInvariantEKF::computePredictionJacobians(const BaseState& state) {
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
     const Eigen::Vector3d& v = state.base_linear_velocity;
@@ -121,7 +124,7 @@ RightInvariantEKF::computePredictionJacobians(const BaseState& state) {
 
     // Start from the constant (state-independent) parts
     Eigen::Matrix<double, 15, 15> Ac = Ac_;
-    Eigen::Matrix<double, 15, 12> Lc = Lc_;
+    Eigen::Matrix<double, 15, 15> Lc = Lc_;
 
     // A_Xtheta — bias coupling
     Ac(r_idx_, bg_idx_) = -R;
@@ -130,10 +133,11 @@ RightInvariantEKF::computePredictionJacobians(const BaseState& state) {
     Ac(p_idx_, bg_idx_).noalias() = -lie::so3::wedge(p) * R;
 
     // L — noise input Jacobian (state-dependent rows)
-    Lc(r_idx_, ng_idx_) = -R;
-    Lc(v_idx_, ng_idx_).noalias() = -lie::so3::wedge(v) * R;
-    Lc(v_idx_, na_idx_) = -R;
-    Lc(p_idx_, ng_idx_).noalias() = -lie::so3::wedge(p) * R;
+    Lc(r_idx_, ng_idx_) = R;
+    Lc(v_idx_, ng_idx_).noalias() = lie::so3::wedge(v) * R;
+    Lc(v_idx_, na_idx_) = R;
+    Lc(p_idx_, ng_idx_).noalias() = lie::so3::wedge(p) * R;
+    Lc(p_idx_, nz_idx_) = R;
 
     return std::make_tuple(Ac, Lc);
 }
@@ -163,14 +167,18 @@ void RightInvariantEKF::predict(BaseState& state, const ImuMeasurement& imu) {
     const Eigen::Matrix<double, 15, 15> Ad = I_ + Ac * dt + 0.5 * Ac * Ac * dt * dt;
 
     // Continuous noise covariance
-    Eigen::Matrix<double, 12, 12> Qc = Eigen::Matrix<double, 12, 12>::Zero();
+    Eigen::Matrix<double, 15, 15> Qc = Eigen::Matrix<double, 15, 15>::Zero();
     Qc(ng_idx_, ng_idx_) = imu.angular_velocity_cov;
     Qc(na_idx_, na_idx_) = imu.linear_acceleration_cov;
+    Qc(nz_idx_, nz_idx_) = Eigen::Matrix3d::Zero();
     Qc(nbg_idx_, nbg_idx_) = imu.angular_velocity_bias_cov;
     Qc(nba_idx_, nba_idx_) = imu.linear_acceleration_bias_cov;
 
-    // Discrete process noise
-    const Eigen::Matrix<double, 15, 15> Qd = Lc * Qc * Lc.transpose() * dt;
+    // Discrete process noise - Second-order Taylor expansion
+    const Eigen::Matrix<double, 15, 15> Gc = Lc * Qc * Lc.transpose();
+    Eigen::Matrix<double, 15, 15> Qd = Gc * dt;
+    Qd.noalias() += 0.5 * (Ac * Gc + Gc * Ac.transpose()) * dt * dt;
+    Qd = 0.5 * (Qd + Qd.transpose());  // enforce symmetry
 
     // Propagate covariance
     Eigen::Matrix<double, 15, 15> P_new;
