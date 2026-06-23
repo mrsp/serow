@@ -45,6 +45,9 @@ const std::string DEFAULT_OUTPUT_CSV =
 const std::string DEFAULT_OUTPUT_TUM =
     "/home/michael/github/serow/evaluation/anymal_test/anymal_data/test/cyn-1/serow/serow_traj_tum.csv";
 
+// false = use SEROW/momentum-observer contact estimator
+// true  = use binary contact_LF/RF/LH/RH flags from anymal_data.csv
+const bool USE_CONTACT_FLAGS = true;
 const std::vector<std::string> JOINTS = {
     "LF_HAA", "LF_HFE", "LF_KFE", "RF_HAA", "RF_HFE", "RF_KFE",
     "LH_HAA", "LH_HFE", "LH_KFE", "RH_HAA", "RH_HFE", "RH_KFE"};
@@ -282,8 +285,12 @@ int main(int argc, char** argv) {
             requireColumn(idx, "joint_vel_" + j);
             requireColumn(idx, "joint_eff_" + j);
         }
-        // for (const auto& leg : LEGS) requireColumn(idx, "contact_" + leg);
 
+        if (USE_CONTACT_FLAGS) {
+            for (const auto& leg : LEGS) {
+                requireColumn(idx, "contact_" + leg);
+            }
+        }
         size_t input_rows = 0;
         size_t filter_ok = 0;
         size_t written_rows = 0;
@@ -304,15 +311,22 @@ int main(int argc, char** argv) {
             // contact_LF/RF/LH/RH as the contact probabilities used by the estimator.
             // auto dummy_ft = makeDummyFootForces(leg_to_frame, t);
             // auto binary_contacts = makeBinaryContacts(row, idx, leg_to_frame);
-            
+
+            std::optional<std::map<std::string, serow::ForceTorqueMeasurement>> force_torque = std::nullopt;
+            std::optional<std::map<std::string, serow::ContactMeasurement>> contacts_probability = std::nullopt;
+
+            if (USE_CONTACT_FLAGS) {
+                force_torque = makeDummyFootForces(leg_to_frame, t);
+                contacts_probability = makeBinaryContacts(row, idx, leg_to_frame);
+            }
+
             const bool ok = estimator.filter(
                 imu,
                 joints,
-                std::nullopt,   // no external foot force/torque measurement
-                std::nullopt,   // no GT
-                std::nullopt,   // no precomputed contact probabilities
-                std::nullopt);  // no external odometry
-
+                force_torque,          // dummy FT only when USE_CONTACT_FLAGS=true
+                std::nullopt,          // no odometry
+                contacts_probability,  // binary contact flags only when USE_CONTACT_FLAGS=true
+                std::nullopt);         // no base-pose ground truth
             if (!ok) continue;
             ++filter_ok;
 

@@ -530,6 +530,17 @@ def run_evo_rmse(cmd: List[str]) -> float:
     return parse_evo_rmse(proc.stdout)
 
 
+def compute_evo_ate_only(gt_tum: Path, est_tum: Path) -> Dict[str, float]:
+    """Fast/debug metric path: compute only ATE with evo_ape."""
+    gt_s = str(gt_tum)
+    est_s = str(est_tum)
+    return {
+        "ATE": run_evo_rmse([
+            "evo_ape", "tum", gt_s, est_s, "-a"
+        ])
+    }
+
+
 def compute_evo_metrics(gt_tum: Path, est_tum: Path) -> Dict[str, float]:
     gt_s = str(gt_tum)
     est_s = str(est_tum)
@@ -734,12 +745,16 @@ def make_plot_trajectories(gt: Trajectory, est: Trajectory, R_vel: np.ndarray) -
 
 
 def metrics_title(metrics: Dict[str, float]) -> str:
-    return (
-        f"ATE={metrics['ATE']:.3f} m | "
-        f"ATEvel={metrics['ATEvel']:.3f} m/s | "
-        f"RPE Δ=1m: {metrics['RPE_1m_trans']:.4f} m, {metrics['RPE_1m_rot']:.4f}° | "
-        f"RPE Δ=1fr: {metrics['RPE_1f_trans']:.6f} m, {metrics['RPE_1f_rot']:.6f}°"
-    )
+    title = f"ATE={metrics['ATE']:.3f} m | ATEvel={metrics['ATEvel']:.3f} m/s"
+    rpe_keys = ["RPE_1m_trans", "RPE_1m_rot", "RPE_1f_trans", "RPE_1f_rot"]
+    if all(k in metrics for k in rpe_keys):
+        title += (
+            f" | RPE Δ=1m: {metrics['RPE_1m_trans']:.4f} m, {metrics['RPE_1m_rot']:.4f}°"
+            f" | RPE Δ=1fr: {metrics['RPE_1f_trans']:.6f} m, {metrics['RPE_1f_rot']:.6f}°"
+        )
+    else:
+        title += " | debug-fast: RPE skipped"
+    return title
 
 
 def plot_pose(gt_plot: Trajectory, est_plot: Trajectory, metrics: Dict[str, float], unwrap: bool) -> None:
@@ -859,6 +874,41 @@ def print_comparison_table(metrics: Dict[str, float], label: str) -> None:
     print("=" * total_w + "\n")
 
 
+def print_fast_comparison_table(metrics: Dict[str, float], label: str) -> None:
+    methods = ["MUSE", "IEKF", "IS", label]
+    rows = [
+        ("ATE [m]", "ATE"),
+        ("ATEvel [m/s]", "ATEvel"),
+    ]
+
+    label_w = 28
+    value_w = 12
+    total_w = label_w + (value_w + 1) * len(methods)
+
+    print("\n" + "=" * total_w)
+    print("Fast debug comparison table (RPE skipped)")
+    print("=" * total_w)
+    header = f"{'RMSE':<{label_w}}" + "".join(f" {m:>{value_w}}" for m in methods)
+    print(header)
+    print("-" * total_w)
+
+    for row_label, key in rows:
+        values = {
+            "MUSE": BENCHMARK_RESULTS["MUSE"][key],
+            "IEKF": BENCHMARK_RESULTS["IEKF"][key],
+            "IS": BENCHMARK_RESULTS["IS"][key],
+            label: metrics[key],
+        }
+        best = min(values.values())
+        line = f"{row_label:<{label_w}}"
+        for m in methods:
+            plain = f"{values[m]:.6f}"
+            padded = f"{plain:>{value_w}}"
+            line += " " + green_if_best(padded, values[m], best)
+        print(line)
+    print("=" * total_w + "\n")
+
+
 def print_diagnostics(gt: Trajectory, est: Trajectory, gt_path: Path, est_path: Path, workdir: Path, velocity_mode: str, velocity_align_mode: str) -> None:
     print("================ Inputs ================")
     print(f"GT path:        {gt_path}")
@@ -888,11 +938,20 @@ def main() -> None:
     parser.add_argument("--label", default="SEROW")
     parser.add_argument("--no-plots", action="store_true")
     parser.add_argument("--no-unwrap", action="store_true")
+    parser.add_argument(
+        "--debug-fast",
+        action="store_true",
+        help="Compute only ATE position and ATE velocity. Skip all RPE evo_rpe metrics.",
+    )
     args = parser.parse_args()
 
-    if shutil.which("evo_ape") is None or shutil.which("evo_rpe") is None:
+    if shutil.which("evo_ape") is None:
         raise RuntimeError(
-            "evo_ape/evo_rpe not found. Activate the benchmark environment first."
+            "evo_ape not found. Activate the benchmark environment first."
+        )
+    if not args.debug_fast and shutil.which("evo_rpe") is None:
+        raise RuntimeError(
+            "evo_rpe not found. Activate the benchmark environment first, or use --debug-fast."
         )
 
     dataset_root = args.dataset_root
@@ -927,7 +986,10 @@ def main() -> None:
     write_tum(gt, gt_tum)
     write_tum(est, est_tum)
 
-    metrics = compute_evo_metrics(gt_tum, est_tum)
+    if args.debug_fast:
+        metrics = compute_evo_ate_only(gt_tum, est_tum)
+    else:
+        metrics = compute_evo_metrics(gt_tum, est_tum)
 
     atevel, R_vel, vel_align_mode, vel_rotation_mode = compute_velocity_rmse(
         gt,
@@ -947,7 +1009,10 @@ def main() -> None:
         vel_align_mode,
     )
 
-    print_comparison_table(metrics, args.label)
+    if args.debug_fast:
+        print_fast_comparison_table(metrics, args.label)
+    else:
+        print_comparison_table(metrics, args.label)
 
     if not args.no_plots:
         gt_plot, est_pose_plot, est_vel_plot = make_plot_trajectories(gt, est, R_vel)
