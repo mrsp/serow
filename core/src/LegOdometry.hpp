@@ -114,12 +114,13 @@ public:
      * @param freq Joint state nominal frequency
      * @param g Gravity constant
      * @param eps Epsilon parameter
+     * @param coeffs_joint Coefficients for the base linear velocity estimator
      * @param force_torque_offset Force/Torque sensor offsets from the contact frames (optional)
      */
     LegOdometry(
         const Eigen::Vector3d& base_position, std::map<std::string, Eigen::Vector3d> feet_position,
         std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass, double alpha1,
-        double alpha3, double freq, double g, double eps,
+        double alpha3, double freq, double g, double eps, const std::vector<double>& coeffs_joint,
         std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset = std::nullopt);
 
     /**

@@ -652,8 +652,8 @@ void Serow::runJointsEstimator(State& state,
 
 bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
     // Transform IMU measurements to base frame
-    imu.angular_velocity = params_.R_base_to_gyro * imu.angular_velocity;
-    imu.linear_acceleration = params_.R_base_to_acc * imu.linear_acceleration;
+    imu.angular_velocity = params_.R_base_to_gyro * (imu.angular_velocity - params_.bias_gyro);
+    imu.linear_acceleration = params_.R_base_to_acc * (imu.linear_acceleration - params_.bias_acc);
 
     const Eigen::Matrix3d R_base_to_gyro_transpose = params_.R_base_to_gyro.transpose();
     const Eigen::Matrix3d R_base_to_acc_transpose = params_.R_base_to_acc.transpose();
@@ -703,8 +703,10 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
 
                     std::cout << "Calibration for stationary IMU finished at "
                               << imu_calibration_cycles_ << '\n';
-                    std::cout << "Gyrometer biases " << params_.bias_gyro.transpose() << '\n';
-                    std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << '\n';
+                    std::cout << "Gyrometer biases "
+                              << (R_base_to_gyro_transpose * params_.bias_gyro).transpose() << '\n';
+                    std::cout << "Accelerometer biases "
+                              << (R_base_to_acc_transpose * params_.bias_acc).transpose() << '\n';
                 }
             }
         }
@@ -777,7 +779,7 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
         leg_odometry_ = std::make_unique<LegOdometry>(
             state.base_state_.base_position, state.base_state_.feet_position,
             state.base_state_.feet_orientation, state.getMass(), params_.tau_0, params_.tau_1,
-            params_.joint_rate, params_.g, params_.eps);
+            params_.joint_rate, params_.g, params_.eps, coeffs_joint_);
     }
 
     // Compute linear velocity noise for contacts - Spectral densities
@@ -1582,8 +1584,8 @@ void Serow::reset() {
     state_ = std::move(state);
 
     // Load bias values from configuration
-    state_.base_state_.imu_angular_velocity_bias = params_.bias_gyro;
-    state_.base_state_.imu_linear_acceleration_bias = params_.bias_acc;
+    state_.base_state_.imu_angular_velocity_bias = params_.R_base_to_gyro * params_.bias_gyro;
+    state_.base_state_.imu_linear_acceleration_bias = params_.R_base_to_acc * params_.bias_acc;
 
     // Initialize state uncertainty
     state_.mass_ = kinematic_estimator_->getTotalMass();
