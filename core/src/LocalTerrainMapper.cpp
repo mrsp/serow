@@ -245,9 +245,11 @@ bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, f
     float nx_over_nz = 0.0f;
     float ny_over_nz = 0.0f;
     if (normal.has_value()) {
-        rc = params_.radius_cells * 2;
         nx_over_nz = normal.value()[0] / normal.value()[2];
         ny_over_nz = normal.value()[1] / normal.value()[2];
+        if (!point_feet_) {
+            rc = params_.radius_cells * 2;
+        }
     }
 
     for (int di = -rc; di <= rc; ++di) {

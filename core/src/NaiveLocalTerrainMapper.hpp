@@ -28,12 +28,14 @@ class TerrainElevationTest;
 
 class NaiveLocalTerrainMapper : public TerrainElevation {
 public:
+    explicit NaiveLocalTerrainMapper(bool point_feet = false) : TerrainElevation(point_feet) {}
+
     void recenter(const std::array<float, 2>& loc) override;
 
     void initializeLocalMap(const float height, const float variance,
                             const Params& params = Params()) override;
 
-    bool update(const std::array<float, 2>& loc, float height, float variance, 
+    bool update(const std::array<float, 2>& loc, float height, float variance,
                 std::optional<std::array<float, 3>> normal = std::nullopt) override;
 
     bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation) override;

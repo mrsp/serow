@@ -489,6 +489,12 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
                                   static_cast<float>(n_contact.y()),
                                   static_cast<float>(n_contact.z())};
                     }
+                } else {
+                    const Eigen::Matrix3d& R_world_to_base = T_world_to_base.linear();
+                    const Eigen::Vector3d n_contact =
+                        (R_world_to_base * Eigen::Vector3d::UnitZ()).normalized();
+                    normal = {static_cast<float>(n_contact.x()), static_cast<float>(n_contact.y()),
+                              static_cast<float>(n_contact.z())};
                 }
                 if (!terrain_estimator->update(
                         con_pos_xy, con_pos_z,

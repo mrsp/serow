@@ -57,6 +57,8 @@ inline int normalize(const int x) {
 
 class LocalTerrainMapper : public TerrainElevation {
 public:
+    explicit LocalTerrainMapper(bool point_feet = false) : TerrainElevation(point_feet) {}
+
     virtual void recenter(const std::array<float, 2>& loc) override;
 
     void initializeLocalMap(const float height, const float variance,

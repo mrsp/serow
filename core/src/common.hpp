@@ -140,6 +140,7 @@ public:
             this->min_stable_foot_linear_velocity = min_stable_foot_linear_velocity;
         }
     };
+    TerrainElevation(bool point_feet = false) : point_feet_(point_feet) {}
     virtual ~TerrainElevation() = default;
 
     void printMapInformation() {
@@ -354,6 +355,8 @@ protected:
     std::array<float, 2> local_map_origin_d_{0.0, 0.0};
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
+
+    bool point_feet_{false};
 };
 
 }  // namespace serow

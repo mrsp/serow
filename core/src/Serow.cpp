@@ -989,9 +989,9 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
 
             // Initialize terrain elevation mapper
             if (params_.terrain_estimator_type == "naive") {
-                terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
+                terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>(state.isPointFeet());
             } else if (params_.terrain_estimator_type == "fast") {
-                terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
+                terrain_estimator_ = std::make_shared<LocalTerrainMapper>(state.isPointFeet());
             } else {
                 throw std::runtime_error("Invalid terrain estimator type: " +
                                          params_.terrain_estimator_type);
