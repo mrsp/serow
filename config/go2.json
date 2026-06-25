@@ -16,13 +16,13 @@
     "joint_position_variance": 1e-5,
     "joint_velocity_variance": null,
     "smoothing_window": 7,
-    "estimate_contact_wrench": true,
+    "estimate_contact_wrench": false,
     "observer_gain": 20.0,
     "tau_0": 5e-4,
     "tau_1": 0.0,
     "imu_rate": 500.0,
     "R_base_to_gyro": [
-        -1.0,
+        1.0,
         0.0,
         0.0,
         0.0,
@@ -30,10 +30,10 @@
         0.0,
         0.0,
         0.0,
-        -1.0
+        1.0
     ],
     "R_base_to_acc": [
-        -1.0,
+        1.0,
         0.0,
         0.0,
         0.0,
@@ -41,10 +41,10 @@
         0.0,
         0.0,
         0.0,
-        -1.0
+        1.0
     ],
     "use_imu_orientation": false,
-    "calibrate_initial_imu_bias": false,
+    "calibrate_initial_imu_bias": true,
     "max_imu_calibration_cycles": 500,
     "bias_gyro": [
         0.0,
