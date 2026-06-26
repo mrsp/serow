@@ -18,7 +18,7 @@
 using namespace serow;
 using json = nlohmann::json;
 
-static constexpr bool USE_JOINT_EFFORT_CONTACT_WRENCH = false;
+static constexpr bool USE_JOINT_EFFORT_CONTACT_WRENCH = true;
 
 // Helper: Resolve Paths
 std::string resolvePath(const json& config, const std::string& path) {

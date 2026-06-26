@@ -190,6 +190,10 @@ private:
         bool estimate_contact_wrench{};
         /// @brief gain for the contact wrench observer.
         double observer_gain{};
+        /// @brief cutoff frequency for the contact wrench observer (Hz).
+        double contact_wrench_cutoff_frequency{};
+        /// @brief regularization parameter for the contact wrench observer.
+        double contact_wrench_regularization_parameter{};
         /// @brief whether or not to estimate the leg end-effector contact status. If set to false,
         /// the user should provide the end-effector contact probabilities
         bool estimate_contact_status{};
@@ -411,8 +415,10 @@ private:
         State& state, std::map<std::string, ForceTorqueMeasurement>& ft, KinematicMeasurement& kin,
         std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
     /// @brief Runs the contact wrench estimator to estimate the leg end-effector contact wrench
+    /// @param R_world_to_base rotation matrix from world frame to base frame
     /// @return Estimated contact wrench measurements (per contact frame)
-    std::map<std::string, ForceTorqueMeasurement> runContactWrenchEstimator();
+    std::map<std::string, ForceTorqueMeasurement> runContactWrenchEstimator(
+        const Eigen::Matrix3d& R_world_to_base);
 
     /// @brief Runs the base estimator
     /// @param state the state of the robot

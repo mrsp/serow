@@ -265,6 +265,14 @@ bool Serow::initialize(const std::string& config_file) {
         if (!checkConfigParam("observer_gain", params_.observer_gain)) {
             return false;
         }
+        if (!checkConfigParam("contact_wrench_cutoff_frequency",
+                              params_.contact_wrench_cutoff_frequency)) {
+            return false;
+        }
+        if (!checkConfigParam("contact_wrench_regularization_parameter",
+                              params_.contact_wrench_regularization_parameter)) {
+            return false;
+        }
     }
 
     if (params_.enable_terrain_estimation) {
@@ -509,8 +517,9 @@ bool Serow::initialize(const std::string& config_file) {
     reset();
     if (params_.estimate_contact_wrench) {
         contact_wrench_estimator_ = std::make_unique<ContactWrenchEstimator>(
-            kinematic_estimator_, state_.getContactsFrame(), params_.observer_gain, coeffs_joint_,
-            params_.joint_rate, state_.isPointFeet());
+            kinematic_estimator_, state_.getContactsFrame(), params_.observer_gain,
+            params_.joint_rate, params_.contact_wrench_cutoff_frequency,
+            params_.contact_wrench_regularization_parameter, state_.isPointFeet());
     }
 
     // Create timers
@@ -953,18 +962,14 @@ void Serow::runContactEstimator(
     }
 }
 
-std::map<std::string, ForceTorqueMeasurement> Serow::runContactWrenchEstimator() {
+std::map<std::string, ForceTorqueMeasurement> Serow::runContactWrenchEstimator(
+    const Eigen::Matrix3d& R_world_to_base) {
     if (!contact_wrench_estimator_) {
         return std::map<std::string, ForceTorqueMeasurement>();
     }
 
-    const double dt = timestamp_ - last_timestamp_;
-    if (dt <= 0.0) {
-        return std::map<std::string, ForceTorqueMeasurement>();
-    }
-
     contact_wrench_estimator_->update(timestamp_);
-    return contact_wrench_estimator_->contactWrenches();
+    return contact_wrench_estimator_->contactWrenches(R_world_to_base);
 }
 
 void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
@@ -1395,7 +1400,7 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
     // Estimate the contact state
     if (params_.estimate_contact_wrench && last_timestamp_ > 0.0) {
         timers_["contact-wrench-estimation"].start();
-        ft = runContactWrenchEstimator();
+        ft = runContactWrenchEstimator(imu.orientation.toRotationMatrix());
         timers_["contact-wrench-estimation"].stop();
     }
 

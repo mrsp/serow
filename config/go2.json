@@ -16,8 +16,10 @@
     "joint_position_variance": 1e-5,
     "joint_velocity_variance": null,
     "smoothing_window": 11,
-    "estimate_contact_wrench": false,
-    "observer_gain": 7.5,
+    "estimate_contact_wrench": true,
+    "observer_gain": 100.0,
+    "contact_wrench_cutoff_frequency": 10.0,
+    "contact_wrench_regularization_parameter": 1e-3,
     "tau_0": 5e-4,
     "tau_1": 0.0,
     "imu_rate": 500.0,
@@ -213,7 +215,7 @@
         0.0,
         1.0
     ],
-    "log_data": true,
-    "log_measurements": true,
+    "log_data": false,
+    "log_measurements": false,
     "log_dir": "/tmp/"
 }

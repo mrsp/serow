@@ -644,6 +644,10 @@ public:
         return data_->nle;
     }
 
+    Eigen::VectorXd getGravityEffects() const {
+        return data_->g;
+    }
+
 private:
     /// Pinocchio model
     std::unique_ptr<pinocchio::Model> pmodel_;

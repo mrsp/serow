@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 
-#include "DerivativeEstimator.hpp"
+#include "ButterworthLPF.hpp"
 #include "Measurement.hpp"
 #include "RobotKinematics.hpp"
 
@@ -39,13 +39,6 @@ namespace serow {
 /**
  * @class ContactWrenchEstimator
  * @brief Estimates contact wrenches at specified frames using the Generalized Momentum Observer.
- *
- * Implements De Luca & Mattone (2003). The observer integrates a residual signal:
- *
- *   r(t) = K_I * integral{ tau - beta(q, qdot) - r } dt
- *
- * where beta = C(q, qdot) * qdot + g(q). The residual satisfies r ≈ J^T * F_ext
- * asymptotically. Individual contact wrenches are recovered via F = (J^T)^+ * r.
  */
 class ContactWrenchEstimator {
 public:
@@ -56,22 +49,49 @@ public:
      * @param kinematic_estimator The kinematic estimator
      * @param contact_frames The contact frames to estimate the wrenches for
      * @param gain    Observer gain K_I (typical range 10–100)
+     * @param rate    Rate of the joint data (e.g. 100 Hz)
+     * @param cutoff_frequency Cutoff frequency of the residual LPF (e.g. 10 Hz)
+     * @param lambda Regularization parameter
+     * @param point_feet Whether the feet are point contacts or not
      */
     ContactWrenchEstimator(std::shared_ptr<RobotKinematics> kinematic_estimator,
                            const std::set<std::string>& contact_frames, const double gain,
-                           const std::vector<double>& coeffs_joint, const double joint_rate,
+                           const double rate, const double cutoff_frequency, const double lambda,
                            const bool point_feet = true)
         : kinematic_estimator_(kinematic_estimator),
           contact_frames_(contact_frames),
           point_feet_(point_feet),
-          gain_(gain) {
-        const int nv = kinematic_estimator->ndofActuated();
-        residual_.setZero(nv);
-        integral_.setZero(nv);
+          gain_(gain),
+          lambda_(lambda) {
+        nv_ = kinematic_estimator->ndofActuated();
+        residual_.setZero(nv_);
+        integral_.setZero(nv_);
         cols_per_contact_ = point_feet_ ? 3 : 6;
-        A_.setZero(nv, cols_per_contact_ * static_cast<int>(contact_frames.size()));
-        p_derivative_estimator_ =
-            std::make_unique<DerivativeEstimator>("p Derivative", coeffs_joint, joint_rate, nv);
+        p_prev_.setZero(nv_);
+        lpf_.resize(nv_);
+        for (int i = 0; i < nv_; ++i) {
+            lpf_[i] = std::make_unique<ButterworthLPF>(
+                std::string("Residual LPF ") + std::to_string(i), rate, cutoff_frequency, false);
+        }
+
+        // Construct all possible contact cases
+        std::vector<std::string> frames(contact_frames_.begin(), contact_frames_.end());
+        const int n = static_cast<int>(frames.size());
+        for (int mask = 1; mask < (1 << n); ++mask) {
+            std::set<std::string> active;
+            for (int i = 0; i < n; ++i) {
+                if (mask & (1 << i)) {
+                    active.insert(frames[i]);
+                }
+            }
+            contact_cases_[mask] = std::move(active);
+        }
+
+        // Allocate all possible A matrices for the contact cases
+        for (const auto& [mask, frames] : contact_cases_) {
+            const int n = static_cast<int>(frames.size());
+            A_[mask] = Eigen::MatrixXd::Zero(nv_, cols_per_contact_ * n);
+        }
     }
 
     ~ContactWrenchEstimator() = default;
@@ -87,53 +107,111 @@ public:
         const Eigen::VectorXd p = M * qdot;
         if (!last_timestamp_.has_value()) {
             last_timestamp_ = timestamp;
-            p_derivative_estimator_->filter(p, Eigen::VectorXd::Ones(qdot.size()), timestamp);
+            p_prev_ = p;
             return;
         }
         const double dt = timestamp - last_timestamp_.value();
         last_timestamp_ = timestamp;
         if (dt <= 0.0) {
+            p_prev_ = p;
             return;
         }
 
         const Eigen::VectorXd effort = kinematic_estimator_->getJointEfforts();
         const Eigen::VectorXd nle = kinematic_estimator_->getNonlinearEffects();
-        const Eigen::VectorXd dp_dt =
-            p_derivative_estimator_->filter(p, Eigen::VectorXd::Ones(qdot.size()), timestamp);
-        integral_ += (effort - nle - dp_dt - residual_) * dt;
-        residual_ = gain_ * integral_;
+        integral_ += (effort - nle - residual_) * dt;
+        residual_ = gain_ * (integral_ - (p - p_prev_));
+        for (int i = 0; i < nv_; ++i) {
+            residual_[i] = lpf_[i]->filter(residual_[i]);
+        }
+        p_prev_ = p;
     }
 
-    std::map<std::string, ForceTorqueMeasurement> contactWrenches() {
+    std::map<std::string, ForceTorqueMeasurement> contactWrenches(
+        const Eigen::Matrix3d& R_world_to_base) {
         std::map<std::string, ForceTorqueMeasurement> ft;
 
-        A_.setZero();
-        for (int i = 0; i < static_cast<int>(contact_frames_.size()); ++i) {
-            const std::string& frame = *std::next(contact_frames_.begin(), i);
-            const Eigen::MatrixXd J = kinematic_estimator_->geometricJacobian(frame, false);
-            if (point_feet_) {
-                // Point contact: residual ~= Jv(q)^T * f
-                A_.middleCols(cols_per_contact_ * i, cols_per_contact_) = J.topRows(3).transpose();
-            } else {
-                // Full wrench: residual ~= J(q)^T * wrench
-                A_.middleCols(cols_per_contact_ * i, cols_per_contact_) = J.transpose();
+        // Build stacked Jacobian for each contact case
+        for (const auto& [mask, frames] : contact_cases_) {
+            const int n = static_cast<int>(frames.size());
+            A_[mask].setZero();
+            for (int i = 0; i < n; ++i) {
+                const std::string& frame = *std::next(frames.begin(), i);
+                const Eigen::MatrixXd J = kinematic_estimator_->geometricJacobian(frame, false);
+                A_[mask].middleCols(cols_per_contact_ * i, cols_per_contact_) = J.transpose();
             }
         }
 
-        Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(A_);
-        const Eigen::VectorXd wrench_stack = cod.solve(residual_);
+        // Solve for contact wrenches and find case with minimum reconstruction error
+        int optimal_mask = -1;
+        double min_cost = std::numeric_limits<double>::max();
+        std::map<int, Eigen::VectorXd> wrenches;
 
-        int offset = 0;
-        for (const std::string& frame : contact_frames_) {
-            ft[frame].force = -wrench_stack.segment<3>(offset);
-            ft[frame].force.z() = std::max(0.0, ft[frame].force.z());
+        for (const auto& [mask, frames] : contact_cases_) {
+            const int num_contacts = static_cast<int>(frames.size());
+            Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(A_[mask]);
+            wrenches[mask] = cod.solve(residual_);
+
+            // Compute costs
+            const double residual_norm = residual_.squaredNorm();
+            const double cost =
+                (A_[mask] * wrenches[mask] - residual_).squaredNorm() / (residual_norm + 1e-9) +
+                lambda_ * num_contacts * cols_per_contact_;
+            if (cost < min_cost) {
+                min_cost = cost;
+                optimal_mask = mask;
+            }
+        }
+
+        if (optimal_mask < 0)
+            return ft;
+
+        // Extract only from the optimal case
+        const auto& optimal_frames = contact_cases_[optimal_mask];
+        Eigen::VectorXd& wrench = wrenches[optimal_mask];
+
+        // Transform the wrench to the base frame
+        int index = 0;
+        for (const std::string& frame : optimal_frames) {
+            wrench.segment<3>(cols_per_contact_ * index) =
+                -R_world_to_base * wrench.segment<3>(cols_per_contact_ * index);
+            if (wrench(2) < 0.0) {
+                wrench(2) = 0.0;
+            }
             if (!point_feet_) {
-                ft[frame].torque = -wrench_stack.segment<3>(offset + 3);
+                wrench.segment<3>(cols_per_contact_ * index + 3) =
+                    -R_world_to_base * wrench.segment<3>(cols_per_contact_ * index + 3);
             }
-            offset += cols_per_contact_;
-            ft[frame].timestamp = last_timestamp_.value();
+            ++index;
         }
 
+        // Active feet — extract from solved wrench
+        index = 0;
+        for (const std::string& frame : optimal_frames) {
+            ft[frame].force =
+                R_world_to_base.transpose() * wrench.segment<3>(cols_per_contact_ * index);
+            if (!point_feet_) {
+                ft[frame].torque =
+                    R_world_to_base.transpose() * wrench.segment<3>(cols_per_contact_ * index + 3);
+            }
+            ++index;
+        }
+
+        // Inactive feet — zero out explicitly for the caller
+        for (const std::string& frame : contact_frames_) {
+            if (optimal_frames.count(frame) == 0) {
+                ft[frame].force = Eigen::Vector3d::Zero();
+                if (!point_feet_) {
+                    ft[frame].torque = Eigen::Vector3d::Zero();
+                }
+            }
+        }
+
+        // std::cout << "Force Torque measurements estimated with cost: " << min_cost << std::endl;
+        // for (const auto& [frame, wrench] : ft) {
+        //     std::cout << "Frame: " << frame << " Force: " << wrench.force.transpose() <<
+        //     std::endl;
+        // }
         return ft;
     }
 
@@ -142,10 +220,15 @@ public:
      */
     void reset() {
         last_timestamp_.reset();
-        residual_.setZero();
-        integral_.setZero();
-        A_.setZero();
-        p_derivative_estimator_->reset();
+        residual_.setZero(nv_);
+        integral_.setZero(nv_);
+        for (auto& [mask, A] : A_) {
+            A.setZero();
+        }
+        p_prev_.setZero(nv_);
+        for (int i = 0; i < nv_; ++i) {
+            lpf_[i]->reset();
+        }
     }
 
     /**
@@ -166,8 +249,12 @@ private:
     Eigen::VectorXd residual_;
     Eigen::VectorXd integral_;
     /// Stacked Jacobian matrix for the contact frames. Avoids reallocation of memory.
-    Eigen::MatrixXd A_;
-    std::unique_ptr<DerivativeEstimator> p_derivative_estimator_;  // derivative of the momentum
+    std::map<int, Eigen::MatrixXd> A_;
+    std::map<int, std::set<std::string>> contact_cases_;
+    Eigen::VectorXd p_prev_;
+    int nv_;
+    std::vector<std::unique_ptr<ButterworthLPF>> lpf_;
+    double lambda_{5e-3};
 };
 
 }  // namespace serow
