@@ -415,10 +415,8 @@ private:
         State& state, std::map<std::string, ForceTorqueMeasurement>& ft, KinematicMeasurement& kin,
         std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
     /// @brief Runs the contact wrench estimator to estimate the leg end-effector contact wrench
-    /// @param R_world_to_base rotation matrix from world frame to base frame
     /// @return Estimated contact wrench measurements (per contact frame)
-    std::map<std::string, ForceTorqueMeasurement> runContactWrenchEstimator(
-        const Eigen::Matrix3d& R_world_to_base);
+    std::map<std::string, ForceTorqueMeasurement> runContactWrenchEstimator();
 
     /// @brief Runs the base estimator
     /// @param state the state of the robot

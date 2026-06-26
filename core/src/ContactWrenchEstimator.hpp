@@ -127,8 +127,7 @@ public:
         p_prev_ = p;
     }
 
-    std::map<std::string, ForceTorqueMeasurement> contactWrenches(
-        const Eigen::Matrix3d& R_world_to_base) {
+    std::map<std::string, ForceTorqueMeasurement> contactWrenches() {
         std::map<std::string, ForceTorqueMeasurement> ft;
 
         // Build stacked Jacobian for each contact case
@@ -170,29 +169,12 @@ public:
         const auto& optimal_frames = contact_cases_[optimal_mask];
         Eigen::VectorXd& wrench = wrenches[optimal_mask];
 
-        // Transform the wrench to the base frame
+        // Active feet — extract from solved wrench
         int index = 0;
         for (const std::string& frame : optimal_frames) {
-            wrench.segment<3>(cols_per_contact_ * index) =
-                -R_world_to_base * wrench.segment<3>(cols_per_contact_ * index);
-            if (wrench(2) < 0.0) {
-                wrench(2) = 0.0;
-            }
+            ft[frame].force = wrench.segment<3>(cols_per_contact_ * index);
             if (!point_feet_) {
-                wrench.segment<3>(cols_per_contact_ * index + 3) =
-                    -R_world_to_base * wrench.segment<3>(cols_per_contact_ * index + 3);
-            }
-            ++index;
-        }
-
-        // Active feet — extract from solved wrench
-        index = 0;
-        for (const std::string& frame : optimal_frames) {
-            ft[frame].force =
-                R_world_to_base.transpose() * wrench.segment<3>(cols_per_contact_ * index);
-            if (!point_feet_) {
-                ft[frame].torque =
-                    R_world_to_base.transpose() * wrench.segment<3>(cols_per_contact_ * index + 3);
+                ft[frame].torque = wrench.segment<3>(cols_per_contact_ * index + 3);
             }
             ++index;
         }
@@ -207,11 +189,6 @@ public:
             }
         }
 
-        // std::cout << "Force Torque measurements estimated with cost: " << min_cost << std::endl;
-        // for (const auto& [frame, wrench] : ft) {
-        //     std::cout << "Frame: " << frame << " Force: " << wrench.force.transpose() <<
-        //     std::endl;
-        // }
         return ft;
     }
 
