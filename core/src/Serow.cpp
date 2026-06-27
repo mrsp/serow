@@ -661,8 +661,8 @@ void Serow::runJointsEstimator(State& state,
 
 bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
     // Transform IMU measurements to base frame
-    imu.angular_velocity = params_.R_base_to_gyro * (imu.angular_velocity - params_.bias_gyro);
-    imu.linear_acceleration = params_.R_base_to_acc * (imu.linear_acceleration - params_.bias_acc);
+    imu.angular_velocity = params_.R_base_to_gyro * imu.angular_velocity;
+    imu.linear_acceleration = params_.R_base_to_acc * imu.linear_acceleration;
 
     const Eigen::Matrix3d R_base_to_gyro_transpose = params_.R_base_to_gyro.transpose();
     const Eigen::Matrix3d R_base_to_acc_transpose = params_.R_base_to_acc.transpose();

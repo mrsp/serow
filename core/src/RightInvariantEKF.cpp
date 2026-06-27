@@ -13,8 +13,104 @@
 #include "RightInvariantEKF.hpp"
 
 #include <cmath>
+#include <algorithm>
+#include <array>
+#include <limits>
+#include <unordered_map>
 
 #include "lie.hpp"
+
+
+namespace {
+
+// Terrain-only contact debouncer.  This does not change the contact flags used by
+// leg odometry; it only protects the terrain map and terrain EKF correction from
+// one-sample dropouts such as 1110111 and from the first samples after touchdown.
+struct TerrainContactFrameState {
+    bool stable{false};
+    int on_count{0};
+    int off_count{0};
+    int age{0};
+};
+
+struct TerrainContactFilterState {
+    std::map<std::string, TerrainContactFrameState> frames;
+    std::map<std::string, bool> became_stable;
+};
+
+std::unordered_map<const void*, TerrainContactFilterState> terrain_contact_filters;
+
+constexpr int kTerrainMinOnSamples = 3;
+constexpr int kTerrainMaxDropoutSamples = 2;
+constexpr int kTerrainMinOffSamples = 3;
+constexpr int kTerrainSkipAfterTouchdownSamples = 5;
+constexpr double kTerrainContactThreshold = 0.5;
+constexpr double kMinTerrainDt = 1e-6;
+constexpr double kMinTerrainVariance = 0.02 * 0.02;  // 2 cm minimum sigma
+constexpr double kMaxTerrainCorrection = 0.03;       // max |dz| per update [m]
+constexpr double kTerrainNisGate = 9.0;              // scalar 3-sigma gate
+
+bool isFinite(const Eigen::Vector3d& v) {
+    return std::isfinite(v.x()) && std::isfinite(v.y()) && std::isfinite(v.z());
+}
+
+std::map<std::string, double> filterTerrainContacts(
+    const void* key, const std::map<std::string, double>& raw_contacts_probability) {
+    auto& filter_state = terrain_contact_filters[key];
+    filter_state.became_stable.clear();
+
+    std::map<std::string, double> filtered;
+    for (const auto& [cf, cp] : raw_contacts_probability) {
+        const bool raw_contact = cp > kTerrainContactThreshold;
+        TerrainContactFrameState& s = filter_state.frames[cf];
+        const bool was_stable = s.stable;
+
+        if (raw_contact) {
+            ++s.on_count;
+            s.off_count = 0;
+
+            if (!s.stable && s.on_count >= kTerrainMinOnSamples) {
+                s.stable = true;
+                s.age = 0;
+            }
+        } else {
+            ++s.off_count;
+            s.on_count = 0;
+
+            // Fill short holes: 1110111 remains stable contact for terrain.
+            if (s.stable && s.off_count <= kTerrainMaxDropoutSamples) {
+                // keep stable=true
+            } else if (s.off_count >= kTerrainMinOffSamples) {
+                s.stable = false;
+                s.age = 0;
+            }
+        }
+
+        if (s.stable) {
+            ++s.age;
+        }
+
+        filter_state.became_stable[cf] = (!was_stable && s.stable);
+        filtered[cf] = (s.stable && s.age > kTerrainSkipAfterTouchdownSamples) ? 1.0 : 0.0;
+    }
+
+    return filtered;
+}
+
+bool terrainContactBecameStable(const void* key, const std::string& cf) {
+    const auto it = terrain_contact_filters.find(key);
+    if (it == terrain_contact_filters.end()) {
+        return false;
+    }
+    const auto jt = it->second.became_stable.find(cf);
+    return jt != it->second.became_stable.end() && jt->second;
+}
+
+void resetTerrainContactFilter(const void* key) {
+    terrain_contact_filters.erase(key);
+}
+
+}  // namespace
 
 namespace serow {
 
@@ -90,6 +186,7 @@ void RightInvariantEKF::setState(const BaseState& state) {
     last_terrain_update_timestamp_ = state.timestamp;
     first_odometry_position_.reset();
     first_odometry_orientation_.reset();
+    resetTerrainContactFilter(this);
 }
 
 // ---------------------------------------------------------------------------
@@ -296,17 +393,23 @@ void RightInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector
 }
 
 // ---------------------------------------------------------------------------
-// Terrain height update  (scalar, right-invariant)
-//   z = z_terrain - p_hat_z ≈ ξ_p^z  (world frame innovation)
-//   H = [0 ... 0  1  0 ... 0]   (1 at the p_z slot)
+// Terrain height update  (scalar, right-invariant, terrain-safe version)
+//   z = h_map(x_foot,y_foot) - z_foot_world
+//     = h_map - (p_z + [R p_bf]_z)
+//
+// The full first-order model can couple terrain height into orientation and
+// horizontal states.  With binary-only contacts and a learned/updated local map,
+// that coupling can create a feedback loop.  Therefore this implementation uses
+// a conservative p_z-only correction with NIS gating and per-update clipping.
 // ---------------------------------------------------------------------------
 void RightInvariantEKF::updateWithTerrain(
     BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
     const std::map<std::string, Eigen::Matrix3d>& contacts_position_cov,
     const std::map<std::string, double>& contacts_probability, const double timestamp,
     std::shared_ptr<TerrainElevation> terrain_estimator) {
-    const Eigen::Vector3d p_world_to_base = state.base_position;
-    const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
+    if (!terrain_estimator) {
+        return;
+    }
 
     double dt = nominal_kin_dt_;
     if (last_terrain_update_timestamp_.has_value()) {
@@ -314,46 +417,87 @@ void RightInvariantEKF::updateWithTerrain(
     }
     last_terrain_update_timestamp_ = timestamp;
 
-    if (dt < 0.0) {
+    if (dt <= 0.0 || !std::isfinite(dt)) {
         return;
     }
+    dt = std::max(dt, kMinTerrainDt);
+
+    const Eigen::Vector3d p_world_to_base = state.base_position;
+    const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
+    const int pz = p_idx_[2];
 
     Eigen::Matrix<double, 1, 15> H = Eigen::Matrix<double, 1, 15>::Zero();
-    // First-order approximation: terrain-height residual depends on contact world z, but we keep
-    // only direct sensitivity to base p_z and neglect orientation/contact-position coupling terms.
-    H(0, p_idx_[2]) = 1.0;
-
-    Eigen::Matrix<double, 15, 1> PH_transpose;
+    H(0, pz) = 1.0;
 
     for (const auto& [cf, cp] : contacts_probability) {
-        if (cp > 0.5) {
-            const Eigen::Vector3d con_pos_world =
-                R_world_to_base * contacts_position.at(cf) + p_world_to_base;
-            const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_world.x()),
-                                                     static_cast<float>(con_pos_world.y())};
-            const auto elevation = terrain_estimator->getElevation(con_pos_xy);
-            if (elevation.has_value() && elevation.value().updated) {
-                const Eigen::Matrix3d con_cov_world =
-                    R_world_to_base * contacts_position_cov.at(cf) * R_world_to_base.transpose();
-
-                const double z = static_cast<double>(elevation.value().height) - con_pos_world.z();
-
-                const double N =
-                    (static_cast<double>(elevation.value().variance + con_cov_world(2, 2)) + 1e-6) /
-                    (cp * dt);
-
-                PH_transpose.noalias() = P_ * H.transpose();
-                const double s = N + (H * PH_transpose)(0, 0);
-                const Eigen::Matrix<double, 15, 1> K = PH_transpose / s;
-                const Eigen::Matrix<double, 15, 1> dx = K * z;
-                const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
-                Eigen::Matrix<double, 15, 15> P_new;
-                P_new.noalias() = IKH * P_ * IKH.transpose();
-                P_new += K * N * K.transpose();
-                P_ = P_new;
-                updateState(state, dx, P_);
-            }
+        if (cp <= kTerrainContactThreshold) {
+            continue;
         }
+        if (contacts_position.count(cf) == 0 || contacts_position_cov.count(cf) == 0) {
+            continue;
+        }
+
+        const Eigen::Vector3d con_pos_world =
+            R_world_to_base * contacts_position.at(cf) + p_world_to_base;
+        if (!isFinite(con_pos_world)) {
+            continue;
+        }
+
+        const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_world.x()),
+                                                 static_cast<float>(con_pos_world.y())};
+        const auto elevation = terrain_estimator->getElevation(con_pos_xy);
+        if (!elevation.has_value()) {
+            continue;
+        }
+
+        // Important for the fast mapper: only use cells that came from direct
+        // contact updates.  Neighbor/interpolated cells can be useful for map
+        // visualization, but they should not be hard EKF height measurements.
+        if (!elevation.value().updated || !elevation.value().contact) {
+            continue;
+        }
+
+        const Eigen::Matrix3d con_cov_world =
+            R_world_to_base * contacts_position_cov.at(cf) * R_world_to_base.transpose();
+
+        const double residual =
+            static_cast<double>(elevation.value().height) - con_pos_world.z();
+        if (!std::isfinite(residual)) {
+            continue;
+        }
+
+        const double raw_N =
+            (static_cast<double>(elevation.value().variance) + con_cov_world(2, 2) + 1e-6) /
+            std::max(cp * dt, kMinTerrainDt);
+        const double N = std::max(raw_N, kMinTerrainVariance);
+
+        const double Pzz = std::max(P_(pz, pz), 0.0);
+        const double s = Pzz + N;
+        if (s <= 0.0 || !std::isfinite(s)) {
+            continue;
+        }
+
+        const double nis = residual * residual / s;
+        if (nis > kTerrainNisGate) {
+            // The map/foot height is inconsistent with the EKF covariance.
+            // Reject it instead of feeding the error back into the map/state.
+            continue;
+        }
+
+        Eigen::Matrix<double, 15, 1> K = Eigen::Matrix<double, 15, 1>::Zero();
+        K(pz) = Pzz / s;
+
+        Eigen::Matrix<double, 15, 1> dx = Eigen::Matrix<double, 15, 1>::Zero();
+        dx(pz) = std::clamp(K(pz) * residual, -kMaxTerrainCorrection,
+                            kMaxTerrainCorrection);
+
+        const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
+        Eigen::Matrix<double, 15, 15> P_new;
+        P_new.noalias() = IKH * P_ * IKH.transpose();
+        P_new += K * N * K.transpose();
+        P_ = 0.5 * (P_new + P_new.transpose());
+
+        updateState(state, dx, P_);
     }
 }
 
@@ -434,91 +578,32 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
                                const KinematicMeasurement& kin,
                                std::optional<OdometryMeasurement> odom,
                                std::shared_ptr<TerrainElevation> terrain_estimator) {
-    // Use the predicted state to update the terrain estimator
+    // Use raw contacts for the leg-velocity update, but use a debounced terrain-only
+    // contact stream for terrain-map updates and terrain EKF corrections.
+    std::map<std::string, double> terrain_contacts_probability;
+    double terrain_dt = nominal_kin_dt_;
+    bool terrain_dt_valid = true;
+
     if (terrain_estimator) {
-        double dt = nominal_kin_dt_;
+        terrain_contacts_probability = filterTerrainContacts(this, kin.contacts_probability);
+
         if (last_terrain_update_timestamp_.has_value()) {
-            dt = kin.timestamp - last_terrain_update_timestamp_.value();
+            terrain_dt = kin.timestamp - last_terrain_update_timestamp_.value();
         }
-
-        if (dt < 0.0) {
-            return;
+        if (terrain_dt <= 0.0 || !std::isfinite(terrain_dt)) {
+            terrain_dt_valid = false;
+            terrain_dt = nominal_kin_dt_;
         }
-
-        Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
-        T_world_to_base.translation() = state.base_position;
-        T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
-        for (const auto& [cf, cp] : kin.contacts_probability) {
-            if (cp > terrain_estimator->getMinContactProbability()) {
-                const Eigen::Vector3d con_pos_world =
-                    T_world_to_base * kin.contacts_position.at(cf);
-                const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_world.x()),
-                                                         static_cast<float>(con_pos_world.y())};
-                const float con_pos_z = static_cast<float>(con_pos_world.z());
-
-                // Transform measurement noise to world frame
-                const Eigen::Matrix3d con_cov = T_world_to_base.linear() *
-                    kin.contacts_position_noise.at(cf) * T_world_to_base.linear().transpose();
-
-                std::optional<std::array<float, 3>> normal = std::nullopt;
-                if (!point_feet_ && kin.contacts_orientation.has_value() &&
-                    kin.contacts_orientation.value().count(cf) > 0) {
-                    const Eigen::Matrix3d& R_world_to_base = T_world_to_base.linear();
-                    const Eigen::Vector3d n_contact =
-                        (R_world_to_base *
-                         kin.contacts_orientation.value().at(cf).toRotationMatrix() *
-                         Eigen::Vector3d::UnitZ())
-                            .normalized();
-                    // Compute the angular velocity of the leg end-effector in contact
-                    const Eigen::Vector3d omega_contact =
-                        R_world_to_base * kin.base_to_foot_angular_velocities.at(cf) +
-                        state.base_angular_velocity;
-                    // Compute the linear velocity of the leg end-effector in contact
-                    const Eigen::Vector3d p_base_to_leg =
-                        R_world_to_base * kin.base_to_foot_positions.at(cf);
-                    const Eigen::Vector3d v_contact = state.base_linear_velocity +
-                        state.base_angular_velocity.cross(p_base_to_leg) +
-                        R_world_to_base * kin.base_to_foot_linear_velocities.at(cf);
-                    // Update the terrain elevation with a plane contact if the leg in contact is
-                    // stable
-                    if (cp > terrain_estimator->getMinStableContactProbability() &&
-                        omega_contact.norm() <
-                            terrain_estimator->getMinStableFootAngularVelocity() &&
-                        v_contact.norm() < terrain_estimator->getMinStableFootLinearVelocity()) {
-                        normal = {static_cast<float>(n_contact.x()),
-                                  static_cast<float>(n_contact.y()),
-                                  static_cast<float>(n_contact.z())};
-                    }
-                } else {
-                    const Eigen::Matrix3d& R_world_to_base = T_world_to_base.linear();
-                    const Eigen::Vector3d n_contact =
-                        (R_world_to_base * Eigen::Vector3d::UnitZ()).normalized();
-                    normal = {static_cast<float>(n_contact.x()), static_cast<float>(n_contact.y()),
-                              static_cast<float>(n_contact.z())};
-                }
-                if (!terrain_estimator->update(
-                        con_pos_xy, con_pos_z,
-                        static_cast<float>((con_cov(2, 2) + 1e-6) / (cp * dt)), normal)) {
-                    std::cout << "Contact for " << cf
-                              << " is not inside the terrain elevation map and thus height is not "
-                                 "updated "
-                              << '\n';
-                } else {
-                    if (kin.is_new_contact.count(cf) > 0 && kin.is_new_contact.at(cf)) {
-                        terrain_estimator->addContactPoint(con_pos_xy);
-                    }
-                }
-            }
-        }
+        terrain_dt = std::max(terrain_dt, kMinTerrainDt);
     }
 
-    // Update the state with the absolute IMU orientation
+    // 1) Absolute IMU orientation update.
     if (use_imu_orientation_) {
         updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov, imu.timestamp);
     }
 
-    // Update the state with the absolute base linear velocity computed with leg kinematics only if
-    // there is contact
+    // 2) Base linear velocity update from leg odometry, only if at least one raw
+    // contact is available.  This remains separate from terrain contact debouncing.
     double den = 0.0;
     for (const auto& [cf, cp] : kin.contacts_probability) {
         den += cp;
@@ -528,17 +613,93 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
                                      kin.timestamp);
     }
 
+    // 3) Optional external odometry update.
     if (odom.has_value()) {
         updateWithOdometry(state, odom->base_position, odom->base_orientation,
                            odom->base_position_cov, odom->base_orientation_cov);
     }
 
-    // Update the state with the absolute terrain height at each contact location and
-    // potentially recenter the terrain mapper
-    if (terrain_estimator) {
+    // 4) Terrain correction from the OLD map only.  This is intentionally before
+    // writing the current contacts into the map, preventing a same-cycle feedback
+    // loop: wrong state -> wrong map update -> immediate EKF correction.
+    if (terrain_estimator && terrain_dt_valid) {
         updateWithTerrain(state, kin.contacts_position, kin.contacts_position_noise,
-                          kin.contacts_probability, kin.timestamp, terrain_estimator);
-        // Recenter the map
+                          terrain_contacts_probability, kin.timestamp, terrain_estimator);
+    }
+
+    // 5) Now update the terrain map using the corrected state.  Point feet do not
+    // provide a terrain plane normal, so normal stays nullopt for point_feet_.
+    if (terrain_estimator && terrain_dt_valid) {
+        Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
+        T_world_to_base.translation() = state.base_position;
+        T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
+
+        for (const auto& [cf, cp] : terrain_contacts_probability) {
+            if (cp <= terrain_estimator->getMinContactProbability()) {
+                continue;
+            }
+            if (kin.contacts_position.count(cf) == 0 || kin.contacts_position_noise.count(cf) == 0 ||
+                kin.base_to_foot_positions.count(cf) == 0 ||
+                kin.base_to_foot_linear_velocities.count(cf) == 0) {
+                continue;
+            }
+
+            const Eigen::Vector3d con_pos_world = T_world_to_base * kin.contacts_position.at(cf);
+            if (!isFinite(con_pos_world)) {
+                continue;
+            }
+
+            const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_world.x()),
+                                                     static_cast<float>(con_pos_world.y())};
+            const float con_pos_z = static_cast<float>(con_pos_world.z());
+
+            const Eigen::Matrix3d con_cov = T_world_to_base.linear() *
+                kin.contacts_position_noise.at(cf) * T_world_to_base.linear().transpose();
+
+            std::optional<std::array<float, 3>> normal = std::nullopt;
+            if (!point_feet_ && kin.contacts_orientation.has_value() &&
+                kin.contacts_orientation.value().count(cf) > 0 &&
+                kin.base_to_foot_angular_velocities.count(cf) > 0) {
+                const Eigen::Matrix3d& R_world_to_base = T_world_to_base.linear();
+                const Eigen::Vector3d n_contact =
+                    (R_world_to_base *
+                     kin.contacts_orientation.value().at(cf).toRotationMatrix() *
+                     Eigen::Vector3d::UnitZ())
+                        .normalized();
+
+                const Eigen::Vector3d omega_contact =
+                    R_world_to_base * kin.base_to_foot_angular_velocities.at(cf) +
+                    state.base_angular_velocity;
+
+                const Eigen::Vector3d p_base_to_leg =
+                    R_world_to_base * kin.base_to_foot_positions.at(cf);
+                const Eigen::Vector3d v_contact = state.base_linear_velocity +
+                    state.base_angular_velocity.cross(p_base_to_leg) +
+                    R_world_to_base * kin.base_to_foot_linear_velocities.at(cf);
+
+                if (cp > terrain_estimator->getMinStableContactProbability() &&
+                    omega_contact.norm() < terrain_estimator->getMinStableFootAngularVelocity() &&
+                    v_contact.norm() < terrain_estimator->getMinStableFootLinearVelocity() &&
+                    isFinite(n_contact) && std::fabs(n_contact.z()) > 1e-3) {
+                    normal = {static_cast<float>(n_contact.x()), static_cast<float>(n_contact.y()),
+                              static_cast<float>(n_contact.z())};
+                }
+            }
+
+            const float terrain_meas_variance = static_cast<float>(std::max(
+                (con_cov(2, 2) + 1e-6) / std::max(cp * terrain_dt, kMinTerrainDt),
+                kMinTerrainVariance));
+
+            if (!terrain_estimator->update(con_pos_xy, con_pos_z, terrain_meas_variance, normal)) {
+                if (verbose_) {
+                    std::cout << "[SEROW/RightInvariantEKF]: Contact for " << cf
+                              << " is outside the terrain elevation map; height not updated.\n";
+                }
+            } else if (terrainContactBecameStable(this, cf)) {
+                terrain_estimator->addContactPoint(con_pos_xy);
+            }
+        }
+
         const std::array<float, 2> base_pos_xy = {static_cast<float>(state.base_position.x()),
                                                   static_cast<float>(state.base_position.y())};
         const std::array<float, 2>& map_origin_xy = terrain_estimator->getMapOrigin();
@@ -580,9 +741,10 @@ void RightInvariantEKF::updateWithIMUOrientation(BaseState& state,
     }
     last_imu_update_timestamp_ = timestamp;
 
-    if (dt < 0.0) {
+    if (dt <= 0.0 || !std::isfinite(dt)) {
         return;
     }
+    dt = std::max(dt, kMinTerrainDt);
 
     Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
     H.block(0, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
@@ -620,9 +782,10 @@ void RightInvariantEKF::updateWithBaseLinearVelocity(
     }
     last_kin_update_timestamp_ = timestamp;
 
-    if (dt < 0.0) {
+    if (dt <= 0.0 || !std::isfinite(dt)) {
         return;
     }
+    dt = std::max(dt, kMinTerrainDt);
 
     Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
     H.block(0, v_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();

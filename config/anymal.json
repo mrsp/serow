@@ -12,10 +12,12 @@
   "g": 9.81,
   "joint_rate": 400.0,
   "estimate_joint_velocity": true,
-  "joint_position_variance": 5e-5,
+  "joint_position_variance": 5e-05,
   "joint_velocity_variance": null,
-  "smoothing_window": 7,
+  "smoothing_window": 11,
   "estimate_contact_wrench": false,
+  "contact_wrench_cutoff_frequency": 20.0,
+  "contact_wrench_regularization_parameter": 1e-06,
   "observer_gain": 55.0,
   "imu_rate": 400.0,
   "R_base_to_gyro": [
@@ -105,38 +107,38 @@
   "attitude_estimator_integral_gain": 0.0,
   "estimate_contact_status": false,
   "median_window": 7,
-  "tau_0": 1e-4,
-  "tau_1": 0.0,
+  "tau_0": 0.0002,
+  "tau_1": 0.0002,
   "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [
-    5e-2,
-    5e-2,
-    5e-2
+    0.03,
+    0.03,
+    0.03
   ],
   "imu_angular_velocity_bias_covariance": [
-    1e-10,
-    1e-10,
-    1e-10
+    2e-06,
+    2e-06,
+    2e-06
   ],
   "imu_linear_acceleration_covariance": [
-    5e-1,
-    5e-1,
-    5e-1
+    0.5,
+    0.5,
+    0.5
   ],
   "imu_linear_acceleration_bias_covariance": [
-    1e-10,
-    1e-10,
-    1e-10
+    1e-08,
+    1e-08,
+    1e-08
   ],
   "com_position_process_covariance": [
-    1e-6,
-    1e-6,
-    1e-6
+    1e-06,
+    1e-06,
+    1e-06
   ],
   "com_linear_velocity_process_covariance": [
-    1e-4,
-    1e-4,
-    1e-4
+    0.0001,
+    0.0001,
+    0.0001
   ],
   "external_forces_process_covariance": [
     5.0,
@@ -144,39 +146,39 @@
     5.0
   ],
   "initial_base_position_covariance": [
-    1e-8,
-    1e-8,
-    1e-8
+    1e-08,
+    1e-08,
+    1e-08
   ],
   "initial_base_orientation_covariance": [
-    1e-6,
-    1e-6,
-    1e-6
+    1e-06,
+    1e-06,
+    1e-06
   ],
   "initial_base_linear_velocity_covariance": [
-    1e-4,
-    1e-4,
-    1e-4
+    0.0001,
+    0.0001,
+    0.0001
   ],
   "initial_imu_linear_acceleration_bias_covariance": [
-    1e-4,
-    1e-4,
-    1e-4
+    0.0001,
+    0.0001,
+    0.0001
   ],
   "initial_imu_angular_velocity_bias_covariance": [
-    1e-4,
-    1e-4,
-    1e-4
+    0.0001,
+    0.0001,
+    0.0001
   ],
   "initial_com_position_covariance": [
-    1e-8,
-    1e-8,
-    1e-8
+    1e-08,
+    1e-08,
+    1e-08
   ],
   "initial_com_linear_velocity_covariance": [
-    1e-4,
-    1e-4,
-    1e-4
+    0.0001,
+    0.0001,
+    0.0001
   ],
   "initial_external_forces_covariance": [
     1.0,
@@ -184,16 +186,16 @@
     1.0
   ],
   "T_base_to_odom": null,
-  "enable_terrain_estimation": false,
+  "enable_terrain_estimation": true,
   "terrain_estimator": "fast",
-  "minimum_terrain_height_variance": 1e-2,
-  "maximum_contact_points": 4,
-  "maximum_recenter_distance": 0.45,
-  "minimum_contact_probability": 0.15,
-  "resolution": 0.02,
-  "radius": 0.1,
+  "minimum_terrain_height_variance": 0.01,
+  "maximum_contact_points": 8,
+  "maximum_recenter_distance": 0.8,
+  "minimum_contact_probability": 0.5,
+  "resolution": 0.03,
+  "radius": 0.03,
   "dist_variance_gain": 100.0,
-  "power": 1.5,
+  "power": 2.0,
   "log_data": false,
   "log_measurements": false,
   "log_dir": "/tmp/"

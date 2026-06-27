@@ -16,13 +16,13 @@
 #include <vector>
 
 #include <Eigen/Dense>
+#include <Eigen/SVD>
 #include <nlohmann/json.hpp>
 
 #include "serow/Serow.hpp"
 
 using json = nlohmann::json;
 
-namespace {
 
 // -----------------------------------------------------------------------------
 // Default paths. You can override all of these from the command line:
@@ -203,6 +203,75 @@ makeDummyFootForces(const std::map<std::string, std::string>& leg_to_frame, doub
     return ft;
 }
 
+std::map<std::string, serow::ForceTorqueMeasurement>
+makePseudoFootForces(const std::map<std::string, std::string>& leg_to_frame,
+                     const serow::ImuMeasurement& imu,
+                     const std::map<std::string, serow::ContactMeasurement>& contacts,
+                     double z_com) 
+{
+    std::map<std::string, serow::ForceTorqueMeasurement> ft;
+
+    // 1. Transform IMU Acceleration to Base Frame
+    // Applying the 180-deg pitch/yaw rotation from your URDF matrix
+    Eigen::Matrix3d R_acc_to_base;
+    R_acc_to_base << -1.0,  0.0,  0.0,
+                      0.0,  1.0,  0.0,
+                      0.0,  0.0, -1.0;
+    Eigen::Vector3d a_base = R_acc_to_base * imu.linear_acceleration;
+
+    // 2. Robot Parameters
+    const double mass = 57.02787; 
+    const double x_f = 0.32548;  // Front legs X offset from CoM
+    const double x_r = -0.28252; // Rear legs X offset from CoM
+    const double y_l = 0.10727;  // Left legs Y offset from CoM
+    const double y_r = -0.11073; // Right legs Y offset from CoM
+    
+    // 3. Safely extract contact flags (0.0 or 1.0)
+    auto get_contact = [&](const std::string& leg) {
+        const std::string& frame = leg_to_frame.at(leg);
+        auto it = contacts.find(frame);
+        return (it != contacts.end()) ? it->second : 0.0;
+    };
+    
+    double c_LF = get_contact("LF");
+    double c_RF = get_contact("RF");
+    double c_LH = get_contact("LH");
+    double c_RH = get_contact("RH");
+
+    // 4. Construct Geometric Matrix A (3 equations, 4 unknown forces)
+    Eigen::MatrixXd A(3, 4);
+    A << c_LF,       c_RF,       c_LH,       c_RH,
+         c_LF * x_f, c_RF * x_f, c_LH * x_r, c_RH * x_r,
+         c_LF * y_l, c_RF * y_r, c_LH * y_l, c_RH * y_r;
+
+    // 5. Construct Target Vector b (Forces & Moments acting on CoM)
+    Eigen::Vector3d b;
+        // 5. Construct Target Vector b (Forces & Moments acting on CoM)
+    b << mass * a_base.z(),                  
+         -mass * a_base.x() * z_com,         // Pitch Moment aligns with Row 1 (X offsets)
+         -mass * a_base.y() * z_com;         // Roll Moment aligns with Row 2 (Y offsets)
+
+    // 6. Solve for Forces using Moore-Penrose Pseudo-Inverse (SVD)
+    Eigen::Vector4d F = A.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
+
+    // 7. Assign Results to Measurement Map
+    auto set_ft = [&](const std::string& leg, double fz, double contact_flag) {
+        serow::ForceTorqueMeasurement m;
+        m.timestamp = imu.timestamp;
+        // Multiply by contact flag again to strictly enforce 0.0N if the foot is in the air
+        m.force = Eigen::Vector3d(0.0, 0.0, contact_flag * fz); 
+        m.torque = Eigen::Vector3d::Zero();
+        ft[leg_to_frame.at(leg)] = m;
+    };
+
+    set_ft("LF", F(0), c_LF);
+    set_ft("RF", F(1), c_RF);
+    set_ft("LH", F(2), c_LH);
+    set_ft("RH", F(3), c_RH);
+
+    return ft;
+}
+
 std::map<std::string, serow::ContactMeasurement>
 makeBinaryContacts(const std::vector<std::string>& row,
                    const std::map<std::string, size_t>& idx,
@@ -219,7 +288,8 @@ void writeCsvHeader(std::ofstream& out) {
     out << "t,x,y,z,qx,qy,qz,qw,vx,vy,vz,"
         << "com_x,com_y,com_z,com_vx,com_vy,com_vz,"
         << "bias_ax,bias_ay,bias_az,bias_gx,bias_gy,bias_gz,"
-        << "contact_LF,contact_RF,contact_LH,contact_RH\n";
+        << "contact_LF,contact_RF,contact_LH,contact_RH,"
+        << "fz_LF,fz_RF,fz_LH,fz_RH\n";
 }
 
 void writeTumLine(std::ofstream& tum,
@@ -231,21 +301,44 @@ void writeTumLine(std::ofstream& tum,
         << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
 }
 
-}  // namespace
 
 int main(int argc, char** argv) {
     try {
-        const std::string config_path = (argc > 1) ? argv[1] : DEFAULT_CONFIG;
-        const std::string sensor_csv = (argc > 2) ? argv[2] : DEFAULT_SENSOR_CSV;
-        const std::string output_csv = (argc > 3) ? argv[3] : DEFAULT_OUTPUT_CSV;
-        const std::string output_tum = (argc > 4) ? argv[4] : DEFAULT_OUTPUT_TUM;
-        const std::string joint_suffix = (argc > 5) ? argv[5] : "";
+        // 1. New Argument Parsing Logic
+        double time_limit = -1.0; // -1.0 means run the whole file
+        std::string config_path = DEFAULT_CONFIG;
+        std::string sensor_csv = DEFAULT_SENSOR_CSV;
+        std::string output_csv = DEFAULT_OUTPUT_CSV;
+        std::string output_tum = DEFAULT_OUTPUT_TUM;
+        std::string joint_suffix = "";
+
+        // If the user ONLY passed one argument and it's a number (e.g., "./anymal_test 100")
+        if (argc == 2 && std::isdigit(argv[1][0])) {
+            time_limit = std::stod(argv[1]);
+        } 
+        // Otherwise, use standard positional arguments
+        else {
+            config_path = (argc > 1) ? argv[1] : DEFAULT_CONFIG;
+            sensor_csv = (argc > 2) ? argv[2] : DEFAULT_SENSOR_CSV;
+            output_csv = (argc > 3) ? argv[3] : DEFAULT_OUTPUT_CSV;
+            output_tum = (argc > 4) ? argv[4] : DEFAULT_OUTPUT_TUM;
+            joint_suffix = (argc > 5) ? argv[5] : "";
+            if (argc > 6) {
+                time_limit = std::stod(argv[6]); // Optional 6th argument
+            }
+        }
 
         std::cout << "SEROW config:        " << config_path << "\n";
         std::cout << "Sensor input CSV:    " << sensor_csv << "\n";
         std::cout << "Prediction CSV:      " << output_csv << "\n";
         std::cout << "Prediction TUM:      " << output_tum << "\n";
         std::cout << "Joint-name suffix:   '" << joint_suffix << "'\n";
+        
+        if (time_limit > 0.0) {
+            std::cout << "Time Limit:          " << time_limit << " seconds\n";
+        } else {
+            std::cout << "Time Limit:          None (Running full dataset)\n";
+        }
 
         serow::Serow estimator;
         if (!estimator.initialize(config_path)) {
@@ -286,16 +379,30 @@ int main(int argc, char** argv) {
             requireColumn(idx, "joint_eff_" + j);
         }
 
-        if (USE_CONTACT_FLAGS) {
-            for (const auto& leg : LEGS) {
-                requireColumn(idx, "contact_" + leg);
-            }
+        // Even if USE_CONTACT_FLAGS is false, we still need to read them to generate forces
+        for (const auto& leg : LEGS) {
+            requireColumn(idx, "contact_" + leg);
         }
+        
         size_t input_rows = 0;
         size_t filter_ok = 0;
         size_t written_rows = 0;
         std::string line;
         auto start = std::chrono::high_resolution_clock::now();
+        
+        // Memory variables for Debouncer and Asymmetric Ramp
+        std::map<std::string, double> prev_forces = {{"LF", 0.0}, {"RF", 0.0}, {"LH", 0.0}, {"RH", 0.0}};
+        std::map<std::string, int> contact_counters = {{"LF", 0}, {"RF", 0}, {"LH", 0}, {"RH", 0}};
+        std::map<std::string, bool> logical_contacts = {{"LF", false}, {"RF", false}, {"LH", false}, {"RH", false}};
+
+        // Hysteresis / Debounce Settings
+        const int C_MAX = 5;          
+        const int THRESH_UPPER = 3;   
+        const int THRESH_LOWER = 1;   
+        const double ALPHA_RAMP = 0.15; 
+        
+        // 2. Variable to track when the dataset actually begins
+        double start_t = -1.0;
 
         while (std::getline(in, line)) {
             if (trim(line).empty()) continue;
@@ -303,30 +410,101 @@ int main(int argc, char** argv) {
             const auto row = split(line, delimiter);
             const double t = valueAt(row, idx, "t");
 
+            // Check our time limit
+            if (start_t < 0.0) {
+                start_t = t; // Capture the very first timestamp
+            }
+            if (time_limit > 0.0 && (t - start_t) > time_limit) {
+                std::cout << "\n--- Time limit of " << time_limit << "s reached. Stopping early. ---\n\n";
+                break; 
+            }
+
             serow::ImuMeasurement imu = makeImu(row, idx);
             auto joints = makeJoints(row, idx, joint_suffix);
-
-            // SEROW currently initializes/updates contact state only when a force-torque map exists.
-            // Since this ANYmal CSV has no force measurements, we provide zero dummy forces and pass
-            // contact_LF/RF/LH/RH as the contact probabilities used by the estimator.
-            // auto dummy_ft = makeDummyFootForces(leg_to_frame, t);
-            // auto binary_contacts = makeBinaryContacts(row, idx, leg_to_frame);
 
             std::optional<std::map<std::string, serow::ForceTorqueMeasurement>> force_torque = std::nullopt;
             std::optional<std::map<std::string, serow::ContactMeasurement>> contacts_probability = std::nullopt;
 
-            if (USE_CONTACT_FLAGS) {
-                force_torque = makeDummyFootForces(leg_to_frame, t);
-                contacts_probability = makeBinaryContacts(row, idx, leg_to_frame);
+            double fz_lf = 0.0, fz_rf = 0.0, fz_lh = 0.0, fz_rh = 0.0;
+            auto raw_contacts = makeBinaryContacts(row, idx, leg_to_frame);
+
+           if (USE_CONTACT_FLAGS) {
+                // MODE 1: Trust raw contacts directly. 
+                contacts_probability = raw_contacts;
+                
+                // SEROW REQUIRES a force-torque map to process contacts. 
+                // We must pass dummy 0.0N forces to trick it into reading the contacts.
+                std::map<std::string, serow::ForceTorqueMeasurement> dummy_ft;
+                for (const auto& leg : LEGS) {
+                    serow::ForceTorqueMeasurement m;
+                    m.timestamp = imu.timestamp;
+                    m.force = Eigen::Vector3d::Zero();
+                    m.torque = Eigen::Vector3d::Zero();
+                    dummy_ft[leg_to_frame.at(leg)] = m;
+                }
+                force_torque = dummy_ft;
+            } else {
+                std::map<std::string, serow::ContactMeasurement> clean_contacts;
+                
+                for (const auto& leg : LEGS) {
+                    double raw_flag = raw_contacts[leg_to_frame.at(leg)];
+                    
+                    if (raw_flag > 0.5) {
+                        contact_counters[leg] = std::min(C_MAX, contact_counters[leg] + 1);
+                    } else {
+                        contact_counters[leg] = std::max(0, contact_counters[leg] - 1);
+                    }
+                    
+                    if (contact_counters[leg] >= THRESH_UPPER) {
+                        logical_contacts[leg] = true;
+                    } else if (contact_counters[leg] <= THRESH_LOWER) {
+                        logical_contacts[leg] = false;
+                    }
+                    
+                    clean_contacts[leg_to_frame.at(leg)] = logical_contacts[leg] ? 1.0 : 0.0;
+                }
+
+                double z_com = 0.456;
+
+                auto target_ft = makePseudoFootForces(leg_to_frame, imu, clean_contacts, z_com); 
+                
+                std::map<std::string, serow::ForceTorqueMeasurement> ramped_ft;
+                for (const auto& leg : LEGS) {
+                    std::string frame = leg_to_frame.at(leg);
+                    double target_fz = target_ft[frame].force.z();
+                    double current_fz = 0.0;
+                    
+                    if (logical_contacts[leg]) {
+                        current_fz = prev_forces[leg] + ALPHA_RAMP * (target_fz - prev_forces[leg]);
+                    } else {
+                        current_fz = 0.0;
+                    }
+                    prev_forces[leg] = current_fz;
+                    
+                    serow::ForceTorqueMeasurement m;
+                    m.timestamp = imu.timestamp;
+                    m.force = Eigen::Vector3d(0.0, 0.0, current_fz);
+                    m.torque = Eigen::Vector3d::Zero();
+                    ramped_ft[frame] = m;
+
+                    if (leg == "LF") fz_lf = current_fz;
+                    if (leg == "RF") fz_rf = current_fz;
+                    if (leg == "LH") fz_lh = current_fz;
+                    if (leg == "RH") fz_rh = current_fz;
+                }
+
+                force_torque = ramped_ft;
+                contacts_probability = std::nullopt; 
             }
 
             const bool ok = estimator.filter(
                 imu,
                 joints,
-                force_torque,          // dummy FT only when USE_CONTACT_FLAGS=true
-                std::nullopt,          // no odometry
-                contacts_probability,  // binary contact flags only when USE_CONTACT_FLAGS=true
-                std::nullopt);         // no base-pose ground truth
+                force_torque,          
+                std::nullopt,          
+                contacts_probability,  
+                std::nullopt);         
+                
             if (!ok) continue;
             ++filter_ok;
 
@@ -343,14 +521,10 @@ int main(int argc, char** argv) {
 
             auto contact_state = estimator.getContactState(true);
 
-            double c_lf = 0.0;
-            double c_rf = 0.0;
-            double c_lh = 0.0;
-            double c_rh = 0.0;
+            double c_lf = 0.0, c_rf = 0.0, c_lh = 0.0, c_rh = 0.0;
 
             if (contact_state.has_value()) {
                 const auto& cp = contact_state->contacts_probability;
-
                 c_lf = cp.count(leg_to_frame.at("LF")) ? cp.at(leg_to_frame.at("LF")) : 0.0;
                 c_rf = cp.count(leg_to_frame.at("RF")) ? cp.at(leg_to_frame.at("RF")) : 0.0;
                 c_lh = cp.count(leg_to_frame.at("LH")) ? cp.at(leg_to_frame.at("LH")) : 0.0;
@@ -365,7 +539,8 @@ int main(int argc, char** argv) {
                 << com_v.x() << ',' << com_v.y() << ',' << com_v.z() << ','
                 << b_acc.x() << ',' << b_acc.y() << ',' << b_acc.z() << ','
                 << b_gyr.x() << ',' << b_gyr.y() << ',' << b_gyr.z() << ','
-                << c_lf << ',' << c_rf << ',' << c_lh << ',' << c_rh << '\n';
+                << c_lf << ',' << c_rf << ',' << c_lh << ',' << c_rh << ','
+                << fz_lf << ',' << fz_rf << ',' << fz_lh << ',' << fz_rh << '\n';
 
             writeTumLine(tum, t, p, q);
             ++written_rows;
