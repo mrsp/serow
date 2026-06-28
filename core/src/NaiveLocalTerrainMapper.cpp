@@ -18,10 +18,10 @@ namespace serow {
 
 // Coordinate conversion functions
 int NaiveLocalTerrainMapper::locationToGlobalIndex(const float loc) const {
-    if (loc > 0.0) {
-        return static_cast<int>(params_.resolution_inv * loc + 0.5);
+    if (loc > 0.0f) {
+        return static_cast<int>(params_.resolution_inv * loc + 0.5f);
     } else {
-        return static_cast<int>(params_.resolution_inv * loc - 0.5);
+        return static_cast<int>(params_.resolution_inv * loc - 0.5f);
     }
 }
 
@@ -58,12 +58,10 @@ std::array<float, 2> NaiveLocalTerrainMapper::localIndexToLocation(
 }
 
 bool NaiveLocalTerrainMapper::inside(const std::array<int, 2>& id_g) const {
-    int x = abs(id_g[0] - local_map_origin_i_[0]);
-    int y = abs(id_g[1] - local_map_origin_i_[1]);
-    if ((x - half_map_dim) > 0 || (y - half_map_dim) > 0) {
-        return false;
-    }
-    return true;
+    const int dx = id_g[0] - local_map_origin_i_[0];
+    const int dy = id_g[1] - local_map_origin_i_[1];
+
+    return (dx >= -half_map_dim && dx < half_map_dim && dy >= -half_map_dim && dy < half_map_dim);
 }
 
 bool NaiveLocalTerrainMapper::inside(const std::array<float, 2>& loc) const {
@@ -269,8 +267,8 @@ void NaiveLocalTerrainMapper::updateLocalMapOriginAndBound(const std::array<floa
     local_map_origin_i_ = new_origin_i;
     local_map_origin_d_ = new_origin_d;
 
-    local_map_bound_max_i_ = {local_map_origin_i_[0] + half_map_dim,
-                              local_map_origin_i_[1] + half_map_dim};
+    local_map_bound_max_i_ = {local_map_origin_i_[0] + half_map_dim - 1,
+                              local_map_origin_i_[1] + half_map_dim - 1};
     local_map_bound_min_i_ = {local_map_origin_i_[0] - half_map_dim,
                               local_map_origin_i_[1] - half_map_dim};
 
