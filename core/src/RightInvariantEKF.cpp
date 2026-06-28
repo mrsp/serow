@@ -12,103 +12,20 @@
  **/
 #include "RightInvariantEKF.hpp"
 
-#include <cmath>
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <limits>
 #include <unordered_map>
 
 #include "lie.hpp"
 
-
 namespace {
 
-// Terrain-only contact debouncer.  This does not change the contact flags used by
-// leg odometry; it only protects the terrain map and terrain EKF correction from
-// one-sample dropouts such as 1110111 and from the first samples after touchdown.
-struct TerrainContactFrameState {
-    bool stable{false};
-    int on_count{0};
-    int off_count{0};
-    int age{0};
-};
-
-struct TerrainContactFilterState {
-    std::map<std::string, TerrainContactFrameState> frames;
-    std::map<std::string, bool> became_stable;
-};
-
-std::unordered_map<const void*, TerrainContactFilterState> terrain_contact_filters;
-
-constexpr int kTerrainMinOnSamples = 3;
-constexpr int kTerrainMaxDropoutSamples = 2;
-constexpr int kTerrainMinOffSamples = 3;
-constexpr int kTerrainSkipAfterTouchdownSamples = 5;
-constexpr double kTerrainContactThreshold = 0.5;
-constexpr double kMinTerrainDt = 1e-6;
-constexpr double kMinTerrainVariance = 0.02 * 0.02;  // 2 cm minimum sigma
-constexpr double kMaxTerrainCorrection = 0.03;       // max |dz| per update [m]
-constexpr double kTerrainNisGate = 9.0;              // scalar 3-sigma gate
-
-bool isFinite(const Eigen::Vector3d& v) {
-    return std::isfinite(v.x()) && std::isfinite(v.y()) && std::isfinite(v.z());
-}
-
-std::map<std::string, double> filterTerrainContacts(
-    const void* key, const std::map<std::string, double>& raw_contacts_probability) {
-    auto& filter_state = terrain_contact_filters[key];
-    filter_state.became_stable.clear();
-
-    std::map<std::string, double> filtered;
-    for (const auto& [cf, cp] : raw_contacts_probability) {
-        const bool raw_contact = cp > kTerrainContactThreshold;
-        TerrainContactFrameState& s = filter_state.frames[cf];
-        const bool was_stable = s.stable;
-
-        if (raw_contact) {
-            ++s.on_count;
-            s.off_count = 0;
-
-            if (!s.stable && s.on_count >= kTerrainMinOnSamples) {
-                s.stable = true;
-                s.age = 0;
-            }
-        } else {
-            ++s.off_count;
-            s.on_count = 0;
-
-            // Fill short holes: 1110111 remains stable contact for terrain.
-            if (s.stable && s.off_count <= kTerrainMaxDropoutSamples) {
-                // keep stable=true
-            } else if (s.off_count >= kTerrainMinOffSamples) {
-                s.stable = false;
-                s.age = 0;
-            }
-        }
-
-        if (s.stable) {
-            ++s.age;
-        }
-
-        filter_state.became_stable[cf] = (!was_stable && s.stable);
-        filtered[cf] = (s.stable && s.age > kTerrainSkipAfterTouchdownSamples) ? 1.0 : 0.0;
-    }
-
-    return filtered;
-}
-
-bool terrainContactBecameStable(const void* key, const std::string& cf) {
-    const auto it = terrain_contact_filters.find(key);
-    if (it == terrain_contact_filters.end()) {
-        return false;
-    }
-    const auto jt = it->second.became_stable.find(cf);
-    return jt != it->second.became_stable.end() && jt->second;
-}
-
-void resetTerrainContactFilter(const void* key) {
-    terrain_contact_filters.erase(key);
-}
+static constexpr double kMinTerrainDt = 1e-6;
+static constexpr double kMaxTerrainCorrection = 0.05;  // max |dz| per update [m]
+static constexpr double kNisGate = 9.0;                // scalar 3-sigma gate
+static constexpr double kStableContactThreshold = 0.5;
 
 }  // namespace
 
@@ -186,7 +103,7 @@ void RightInvariantEKF::setState(const BaseState& state) {
     last_terrain_update_timestamp_ = state.timestamp;
     first_odometry_position_.reset();
     first_odometry_orientation_.reset();
-    resetTerrainContactFilter(this);
+    terrain_contact_filter_.reset();
 }
 
 // ---------------------------------------------------------------------------
@@ -430,7 +347,7 @@ void RightInvariantEKF::updateWithTerrain(
     H(0, pz) = 1.0;
 
     for (const auto& [cf, cp] : contacts_probability) {
-        if (cp <= kTerrainContactThreshold) {
+        if (cp < kStableContactThreshold) {
             continue;
         }
         if (contacts_position.count(cf) == 0 || contacts_position_cov.count(cf) == 0) {
@@ -439,7 +356,7 @@ void RightInvariantEKF::updateWithTerrain(
 
         const Eigen::Vector3d con_pos_world =
             R_world_to_base * contacts_position.at(cf) + p_world_to_base;
-        if (!isFinite(con_pos_world)) {
+        if (!(con_pos_world).allFinite()) {
             continue;
         }
 
@@ -451,45 +368,42 @@ void RightInvariantEKF::updateWithTerrain(
         }
 
         // Important for the fast mapper: only use cells that came from direct
-        // contact updates.  Neighbor/interpolated cells can be useful for map
+        // contact updates.  Interpolated cells can be useful for map
         // visualization, but they should not be hard EKF height measurements.
-        if (!elevation.value().updated || !elevation.value().contact) {
+        if (elevation.value().updated && !elevation.value().contact) {
             continue;
         }
 
         const Eigen::Matrix3d con_cov_world =
             R_world_to_base * contacts_position_cov.at(cf) * R_world_to_base.transpose();
 
-        const double residual =
-            static_cast<double>(elevation.value().height) - con_pos_world.z();
+        const double residual = static_cast<double>(elevation.value().height) - con_pos_world.z();
         if (!std::isfinite(residual)) {
             continue;
         }
 
-        const double raw_N =
+        const double N = std::max(
             (static_cast<double>(elevation.value().variance) + con_cov_world(2, 2) + 1e-6) /
-            std::max(cp * dt, kMinTerrainDt);
-        const double N = std::max(raw_N, kMinTerrainVariance);
+                (cp * dt),
+            static_cast<double>(terrain_estimator->getMinVariance()));
 
-        const double Pzz = std::max(P_(pz, pz), 0.0);
-        const double s = Pzz + N;
+        const double s = P_(pz, pz) + N;
         if (s <= 0.0 || !std::isfinite(s)) {
             continue;
         }
 
         const double nis = residual * residual / s;
-        if (nis > kTerrainNisGate) {
+        if (nis > kNisGate) {
             // The map/foot height is inconsistent with the EKF covariance.
             // Reject it instead of feeding the error back into the map/state.
             continue;
         }
 
         Eigen::Matrix<double, 15, 1> K = Eigen::Matrix<double, 15, 1>::Zero();
-        K(pz) = Pzz / s;
+        K(pz) = P_(pz, pz) / s;
 
         Eigen::Matrix<double, 15, 1> dx = Eigen::Matrix<double, 15, 1>::Zero();
-        dx(pz) = std::clamp(K(pz) * residual, -kMaxTerrainCorrection,
-                            kMaxTerrainCorrection);
+        dx(pz) = std::clamp(K(pz) * residual, -kMaxTerrainCorrection, kMaxTerrainCorrection);
 
         const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
         Eigen::Matrix<double, 15, 15> P_new;
@@ -585,7 +499,7 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
     bool terrain_dt_valid = true;
 
     if (terrain_estimator) {
-        terrain_contacts_probability = filterTerrainContacts(this, kin.contacts_probability);
+        terrain_contacts_probability = terrain_contact_filter_.filter(kin.contacts_probability);
 
         if (last_terrain_update_timestamp_.has_value()) {
             terrain_dt = kin.timestamp - last_terrain_update_timestamp_.value();
@@ -597,7 +511,7 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
         terrain_dt = std::max(terrain_dt, kMinTerrainDt);
     }
 
-    // 1) Absolute IMU orientation update.
+    // 1) Optional absolute IMU orientation update.
     if (use_imu_orientation_) {
         updateWithIMUOrientation(state, imu.orientation, imu.orientation_cov, imu.timestamp);
     }
@@ -619,17 +533,14 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
                            odom->base_position_cov, odom->base_orientation_cov);
     }
 
-    // 4) Terrain correction from the OLD map only.  This is intentionally before
-    // writing the current contacts into the map, preventing a same-cycle feedback
-    // loop: wrong state -> wrong map update -> immediate EKF correction.
     if (terrain_estimator && terrain_dt_valid) {
+        // 4) Terrain correction from the old map only.  This is intentionally before
+        // writing the current contacts into the map, preventing a same-cycle feedback
+        // loop: wrong state -> wrong map update -> immediate EKF correction.
         updateWithTerrain(state, kin.contacts_position, kin.contacts_position_noise,
                           terrain_contacts_probability, kin.timestamp, terrain_estimator);
-    }
 
-    // 5) Now update the terrain map using the corrected state.  Point feet do not
-    // provide a terrain plane normal, so normal stays nullopt for point_feet_.
-    if (terrain_estimator && terrain_dt_valid) {
+        // 5) Now update the terrain map using the corrected state.
         Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
         T_world_to_base.translation() = state.base_position;
         T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
@@ -638,14 +549,15 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
             if (cp <= terrain_estimator->getMinContactProbability()) {
                 continue;
             }
-            if (kin.contacts_position.count(cf) == 0 || kin.contacts_position_noise.count(cf) == 0 ||
+            if (kin.contacts_position.count(cf) == 0 ||
+                kin.contacts_position_noise.count(cf) == 0 ||
                 kin.base_to_foot_positions.count(cf) == 0 ||
                 kin.base_to_foot_linear_velocities.count(cf) == 0) {
                 continue;
             }
 
             const Eigen::Vector3d con_pos_world = T_world_to_base * kin.contacts_position.at(cf);
-            if (!isFinite(con_pos_world)) {
+            if (!(con_pos_world).allFinite()) {
                 continue;
             }
 
@@ -662,8 +574,7 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
                 kin.base_to_foot_angular_velocities.count(cf) > 0) {
                 const Eigen::Matrix3d& R_world_to_base = T_world_to_base.linear();
                 const Eigen::Vector3d n_contact =
-                    (R_world_to_base *
-                     kin.contacts_orientation.value().at(cf).toRotationMatrix() *
+                    (R_world_to_base * kin.contacts_orientation.value().at(cf).toRotationMatrix() *
                      Eigen::Vector3d::UnitZ())
                         .normalized();
 
@@ -680,22 +591,28 @@ void RightInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
                 if (cp > terrain_estimator->getMinStableContactProbability() &&
                     omega_contact.norm() < terrain_estimator->getMinStableFootAngularVelocity() &&
                     v_contact.norm() < terrain_estimator->getMinStableFootLinearVelocity() &&
-                    isFinite(n_contact) && std::fabs(n_contact.z()) > 1e-3) {
+                    (n_contact).allFinite() && std::fabs(n_contact.z()) > 1e-3) {
                     normal = {static_cast<float>(n_contact.x()), static_cast<float>(n_contact.y()),
                               static_cast<float>(n_contact.z())};
                 }
+            } else {
+                const Eigen::Matrix3d& R_world_to_base = T_world_to_base.linear();
+                const Eigen::Vector3d n_contact =
+                    (R_world_to_base * Eigen::Vector3d::UnitZ()).normalized();
+                normal = {static_cast<float>(n_contact.x()), static_cast<float>(n_contact.y()),
+                          static_cast<float>(n_contact.z())};
             }
 
-            const float terrain_meas_variance = static_cast<float>(std::max(
-                (con_cov(2, 2) + 1e-6) / std::max(cp * terrain_dt, kMinTerrainDt),
-                kMinTerrainVariance));
+            const float terrain_meas_variance = static_cast<float>(
+                std::max((con_cov(2, 2) + 1e-6) / (cp * terrain_dt),
+                         static_cast<double>(terrain_estimator->getMinVariance())));
 
             if (!terrain_estimator->update(con_pos_xy, con_pos_z, terrain_meas_variance, normal)) {
                 if (verbose_) {
                     std::cout << "[SEROW/RightInvariantEKF]: Contact for " << cf
                               << " is outside the terrain elevation map; height not updated.\n";
                 }
-            } else if (terrainContactBecameStable(this, cf)) {
+            } else if (terrain_contact_filter_.becameStable(cf)) {
                 terrain_estimator->addContactPoint(con_pos_xy);
             }
         }
@@ -744,7 +661,6 @@ void RightInvariantEKF::updateWithIMUOrientation(BaseState& state,
     if (dt <= 0.0 || !std::isfinite(dt)) {
         return;
     }
-    dt = std::max(dt, kMinTerrainDt);
 
     Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
     H.block(0, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
@@ -785,7 +701,6 @@ void RightInvariantEKF::updateWithBaseLinearVelocity(
     if (dt <= 0.0 || !std::isfinite(dt)) {
         return;
     }
-    dt = std::max(dt, kMinTerrainDt);
 
     Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
     H.block(0, v_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();

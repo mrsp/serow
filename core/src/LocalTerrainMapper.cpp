@@ -213,7 +213,7 @@ bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, f
         return false;
     }
 
-    variance = std::max(variance, params_.min_variance);
+    const float min_variance = std::max(params_.min_variance, 1e-6f);
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
     const int center_hash_id = globalIndexToHashId(center_idx);
     if (center_hash_id < 0 || center_hash_id >= static_cast<int>(elevation_.size())) {
@@ -228,8 +228,8 @@ bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, f
     const float prior_height = cell.height;
 
     // Ensure variances are positive to avoid division issues
-    const float effective_variance = std::max(variance, 1e-6f);
-    const float effective_prior_variance = std::max(prior_variance, 1e-6f);
+    const float effective_variance = std::max(variance, min_variance);
+    const float effective_prior_variance = std::max(prior_variance, min_variance);
 
     // Compute Kalman gain
     const float kalman_gain =
@@ -282,12 +282,14 @@ bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, f
             // Inflate measurement variance with distance
             const float sigma_scale = 1.0f + params_.dist_variance_gain * dist2;
             const float effective_neighbor_variance =
-                std::max(effective_variance * sigma_scale, 1e-6f);
-            const float effective_neighbor_prior_variance = std::max(neighbor.variance, 1e-6f);
+                std::max(effective_variance * sigma_scale, min_variance);
+            const float effective_neighbor_prior_variance =
+                std::max(neighbor.variance, min_variance);
             const float K = effective_neighbor_prior_variance /
                 (effective_neighbor_variance + effective_neighbor_prior_variance);
             neighbor.height = neighbor.height + K * (predicted_height - neighbor.height);
             neighbor.variance = (1.0f - K) * effective_neighbor_prior_variance;
+            neighbor.contact = true;
             neighbor.updated = true;
         }
     }

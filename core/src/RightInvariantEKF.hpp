@@ -115,6 +115,7 @@ private:
         first_odometry_orientation_;  ///< Initial odometry measurement orientation (world
                                       ///< coordinates).
 
+    TerrainContactFilter terrain_contact_filter_;  ///< Terrain contact filter instance.
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.
      * @param state Current state of the robot.
