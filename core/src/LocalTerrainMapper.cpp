@@ -22,32 +22,24 @@ bool LocalTerrainMapper::inside(const std::array<int, 2>& id_g) const {
     const int dx = id_g[0] - local_map_origin_i_[0];
     const int dy = id_g[1] - local_map_origin_i_[1];
 
-    return (dx >= -half_map_dim && dx < half_map_dim &&
-            dy >= -half_map_dim && dy < half_map_dim);
+    return (dx >= -half_map_dim && dx < half_map_dim && dy >= -half_map_dim && dy < half_map_dim);
 }
 
-void LocalTerrainMapper::updateLocalMapOriginAndBound(
-    const std::array<float, 2>& new_origin_d,
-    const std::array<int, 2>& new_origin_i) {
+void LocalTerrainMapper::updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
+                                                      const std::array<int, 2>& new_origin_i) {
     local_map_origin_i_ = new_origin_i;
     local_map_origin_d_ = new_origin_d;
 
-    local_map_bound_min_i_ = {
-        local_map_origin_i_[0] - half_map_dim,
-        local_map_origin_i_[1] - half_map_dim
-    };
-
-    local_map_bound_max_i_ = {
-        local_map_origin_i_[0] + half_map_dim - 1,
-        local_map_origin_i_[1] + half_map_dim - 1
-    };
+    local_map_bound_max_i_ = {local_map_origin_i_[0] + half_map_dim - 1,
+                              local_map_origin_i_[1] + half_map_dim - 1};
+    local_map_bound_min_i_ = {local_map_origin_i_[0] - half_map_dim,
+                              local_map_origin_i_[1] - half_map_dim};
 
     local_map_bound_min_d_ = globalIndexToLocation(local_map_bound_min_i_);
     local_map_bound_max_d_ = globalIndexToLocation(local_map_bound_max_i_);
 }
 
-void LocalTerrainMapper::clearOutOfMapCells(
-    const std::vector<int>& clear_id, const int i) {
+void LocalTerrainMapper::clearOutOfMapCells(const std::vector<int>& clear_id, const int i) {
     std::array<int, 2> ids{i, (i + 1) % 2};
 
     for (const int& x : clear_id) {
@@ -62,10 +54,9 @@ void LocalTerrainMapper::clearOutOfMapCells(
     }
 }
 
-int LocalTerrainMapper::localIndexToHashId(
-    const std::array<int, 2>& id_in) const {
-    if (id_in[0] < -half_map_dim || id_in[0] >= half_map_dim ||
-        id_in[1] < -half_map_dim || id_in[1] >= half_map_dim) {
+int LocalTerrainMapper::localIndexToHashId(const std::array<int, 2>& id_in) const {
+    if (id_in[0] < -half_map_dim || id_in[0] >= half_map_dim || id_in[1] < -half_map_dim ||
+        id_in[1] >= half_map_dim) {
         return -1;
     }
 
@@ -74,13 +65,6 @@ int LocalTerrainMapper::localIndexToHashId(
 
     return id0 * map_dim + id1;
 }
-
-std::array<int, 2> LocalTerrainMapper::globalIndexToLocalIndex(
-    const std::array<int, 2>& id_g) const {
-    return {normalize(id_g[0]), normalize(id_g[1])};
-}
-
-
 
 void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
     // Compute the shifting index
@@ -134,6 +118,23 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
     updateLocalMapOriginAndBound(new_origin_d, new_origin_i);
 }
 
+std::array<int, 2> LocalTerrainMapper::globalIndexToLocalIndex(
+    const std::array<int, 2>& id_g) const {
+    std::array<int, 2> id_l = {};
+    for (size_t i = 0; i < 2; i++) {
+        // Apply modulo to keep within bounds
+        id_l[i] = fast_mod<map_dim>(id_g[i]);
+        // Adjust to keep within [-half_map_dim, half_map_dim-1]
+        // Note: We use >= instead of > to ensure we never return half_map_dim,
+        // which would cause out-of-bounds access in localIndexToHashId
+        if (id_l[i] >= half_map_dim) {
+            id_l[i] -= map_dim;
+        } else if (id_l[i] < -half_map_dim) {
+            id_l[i] += map_dim;
+        }
+    }
+    return id_l;
+}
 
 int LocalTerrainMapper::locationToGlobalIndex(const float loc) const {
     if (loc >= 0.0f) {
@@ -147,7 +148,6 @@ std::array<int, 2> LocalTerrainMapper::locationToGlobalIndex(
     const std::array<float, 2>& loc) const {
     return {locationToGlobalIndex(loc[0]), locationToGlobalIndex(loc[1])};
 }
-
 
 std::array<float, 2> LocalTerrainMapper::globalIndexToLocation(
     const std::array<int, 2>& id_g) const {
