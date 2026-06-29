@@ -496,6 +496,7 @@ bool Serow::initialize(const std::string& config_file) {
     try {
         kinematic_estimator_ =
             std::make_shared<RobotKinematics>(model_filepath, params_.joint_position_variance);
+        kinematic_estimator_->setGravity(params_.g);
     } catch (const std::exception& e) {
         std::cerr << RED_COLOR << "Failed to create kinematic estimator: " << e.what()
                   << WHITE_COLOR << '\n';
@@ -729,9 +730,11 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
         throw std::runtime_error("Kinematic estimator not initialized");
     }
 
-    kinematic_estimator_->updateJointConfig(state.joint_state_.joints_position,
-                                            state.joint_state_.joints_velocity,
-                                            state.joint_state_.joints_effort);
+    kinematic_estimator_->updateJointConfig(
+        state.base_state_.base_position, state.base_state_.base_orientation,
+        state.base_state_.base_linear_velocity, state.base_state_.base_angular_velocity,
+        state.joint_state_.joints_position, state.joint_state_.joints_velocity,
+        state.joint_state_.joints_effort);
 
     // Preallocate maps for leg end-effector kinematics
     std::map<std::string, Eigen::Vector3d> base_to_foot_positions;
