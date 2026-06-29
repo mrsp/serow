@@ -496,6 +496,7 @@ bool Serow::initialize(const std::string& config_file) {
     try {
         kinematic_estimator_ =
             std::make_shared<RobotKinematics>(model_filepath, params_.joint_position_variance);
+        kinematic_estimator_->setGravity(params_.g);
     } catch (const std::exception& e) {
         std::cerr << RED_COLOR << "Failed to create kinematic estimator: " << e.what()
                   << WHITE_COLOR << '\n';

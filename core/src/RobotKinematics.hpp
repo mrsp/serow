@@ -169,14 +169,32 @@ public:
     }
 
     /**
-     * @brief Returns the velocity space dimension of the model (nv), i.e. true actuated DoF.
+     * @brief Returns the number of actuated velocity DoF (nv minus floating-base DoF).
      */
     int ndofActuated() const {
+        return nv_actuated_;
+    }
+
+    /**
+     * @brief Returns the full Pinocchio velocity dimension (nv), including floating-base DoF.
+     */
+    int ndofVelocity() const {
         return pmodel_->nv;
     }
 
     /**
+     * @brief Sets the gravity magnitude used in Pinocchio dynamics (world z, m/s^2).
+     */
+    void setGravity(const double g) {
+        pmodel_->gravity.linear() = Eigen::Vector3d(0.0, 0.0, -g);
+    }
+
+    /**
      * @brief Updates the joint configuration and kinematic data
+     * @param base_position Base position
+     * @param base_orientation Base orientation
+     * @param base_linear_velocity Base linear velocity
+     * @param base_angular_velocity Base angular velocity
      * @param qmap Map of joint names to their positions
      * @param qdotmap Map of joint names to their velocities
      * @param effortmap Map of joint names to their efforts
@@ -303,7 +321,7 @@ public:
     }
 
     /**
-     * @brief Computes the FULL geometric Jacobian matrix of a frame
+     * @brief Computes the actuated geometric Jacobian matrix of a frame
      * @param frame_name Name of the frame
      * @param in_body_frame Whether to return the Jacobian in the body frame or in the local frame
      * @return Geometric Jacobian matrix
@@ -320,13 +338,13 @@ public:
         }
 
         pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
-
+        Eigen::MatrixXd J_actuated = std::move(J.rightCols(nv_actuated_));
         if (in_body_frame) {
             const Eigen::Matrix3d& R = data_->oMf[fid].rotation();
-            J.topRows(3) = R * J.topRows(3);
-            J.bottomRows(3) = R * J.bottomRows(3);
+            J_actuated.topRows(3) = R * J_actuated.topRows(3);
+            J_actuated.bottomRows(3) = R * J_actuated.bottomRows(3);
         }
-        return J;
+        return J_actuated;
     }
 
     /**
@@ -439,7 +457,7 @@ public:
         }
 
         pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
-        Eigen::MatrixXd J_actuated = J.rightCols(nv_actuated_);
+        Eigen::MatrixXd J_actuated = std::move(J.rightCols(nv_actuated_));
         return data_->oMf[fid].rotation() * J_actuated.topRows(3);
     }
 
@@ -459,7 +477,7 @@ public:
         }
 
         pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
-        Eigen::MatrixXd J_actuated = J.rightCols(nv_actuated_);
+        Eigen::MatrixXd J_actuated = std::move(J.rightCols(nv_actuated_));
         return data_->oMf[fid].rotation() * J_actuated.bottomRows(3);
     }
 
@@ -503,7 +521,7 @@ public:
      * @return CoM Jacobian matrix
      */
     Eigen::MatrixXd comJacobian() const {
-        return pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
+        return pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_).rightCols(nv_actuated_);
     }
 
     /**
@@ -511,7 +529,7 @@ public:
      * @return CoM Spectral Density matrix
      */
     Eigen::MatrixXd comCovariance() const {
-        const Eigen::MatrixXd J_actuated = comJacobian().rightCols(nv_actuated_);
+        const Eigen::MatrixXd J_actuated = comJacobian();
         return J_actuated * qp_.asDiagonal() * J_actuated.transpose();
     }
 

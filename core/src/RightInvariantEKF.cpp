@@ -370,7 +370,7 @@ void RightInvariantEKF::updateWithTerrain(
         // Important for the fast mapper: only use cells that came from direct
         // contact updates.  Interpolated cells can be useful for map
         // visualization, but they should not be hard EKF height measurements.
-        if (elevation.value().updated && !elevation.value().contact) {
+        if (!elevation.value().updated) {
             continue;
         }
 

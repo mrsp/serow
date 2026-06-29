@@ -63,15 +63,16 @@ public:
           point_feet_(point_feet),
           gain_(gain),
           lambda_(lambda) {
-        nv_ = kinematic_estimator->ndofActuated();
-        residual_.setZero(nv_);
-        integral_.setZero(nv_);
+        // GMO runs on actuated DoF only; floating-base rows have zero actuator torque.
+        n_actuated_ = kinematic_estimator->ndofActuated();
+        residual_.setZero(n_actuated_);
+        integral_.setZero(n_actuated_);
         cols_per_contact_ = point_feet_ ? 3 : 6;
-        p_prev_.setZero(nv_);
-        lpf_.resize(nv_);
-        for (int i = 0; i < nv_; ++i) {
+        p_prev_.setZero(n_actuated_);
+        lpf_.resize(n_actuated_);
+        for (int i = 0; i < n_actuated_; ++i) {
             lpf_[i] = std::make_unique<ButterworthLPF>(
-                std::string("Residual LPF ") + std::to_string(i), rate, cutoff_frequency, false);
+                std::string("Momentum LPF ") + std::to_string(i), rate, cutoff_frequency, false);
         }
 
         // Construct all possible contact cases
@@ -90,7 +91,7 @@ public:
         // Allocate all possible A matrices for the contact cases
         for (const auto& [mask, frames] : contact_cases_) {
             const int n = static_cast<int>(frames.size());
-            A_[mask] = Eigen::MatrixXd::Zero(nv_, cols_per_contact_ * n);
+            A_[mask] = Eigen::MatrixXd::Zero(n_actuated_, cols_per_contact_ * n);
         }
     }
 
@@ -104,27 +105,30 @@ public:
         const Eigen::VectorXd qdot = kinematic_estimator_->getJointVelocities();
         kinematic_estimator_->computeDynamicTerms();
         const Eigen::MatrixXd M = kinematic_estimator_->getMassMatrix();
-        const Eigen::VectorXd p = M * qdot;
+        const Eigen::VectorXd p_actuated = (M * qdot).tail(n_actuated_);
         if (!last_timestamp_.has_value()) {
             last_timestamp_ = timestamp;
-            p_prev_ = p;
+            p_prev_ = p_actuated;
             return;
         }
         const double dt = timestamp - last_timestamp_.value();
         last_timestamp_ = timestamp;
         if (dt <= 0.0) {
-            p_prev_ = p;
+            p_prev_ = p_actuated;
             return;
         }
 
-        const Eigen::VectorXd effort = kinematic_estimator_->getJointEfforts();
-        const Eigen::VectorXd nle = kinematic_estimator_->getNonlinearEffects();
-        integral_ += (effort - nle - residual_) * dt;
-        residual_ = gain_ * (integral_ - (p - p_prev_));
-        for (int i = 0; i < nv_; ++i) {
-            residual_[i] = lpf_[i]->filter(residual_[i]);
+        const Eigen::VectorXd effort = kinematic_estimator_->getJointEfforts().tail(n_actuated_);
+        const Eigen::VectorXd nle = kinematic_estimator_->getNonlinearEffects().tail(n_actuated_);
+
+        const Eigen::VectorXd expected_error = effort - nle + residual_;
+        Eigen::VectorXd measured_error = (p_actuated - p_prev_) / dt;
+        for (int i = 0; i < n_actuated_; ++i) {
+            measured_error[i] = lpf_[i]->filter(measured_error[i]);
         }
-        p_prev_ = p;
+        integral_ += (measured_error - expected_error) * dt;
+        residual_ = gain_ * integral_;
+        p_prev_ = p_actuated;
     }
 
     std::map<std::string, ForceTorqueMeasurement> contactWrenches() {
@@ -137,7 +141,8 @@ public:
             for (int i = 0; i < n; ++i) {
                 const std::string& frame = *std::next(frames.begin(), i);
                 const Eigen::MatrixXd J = kinematic_estimator_->geometricJacobian(frame, false);
-                A_[mask].middleCols(cols_per_contact_ * i, cols_per_contact_) = J.transpose();
+                A_[mask].middleCols(cols_per_contact_ * i, cols_per_contact_) =
+                    J.topRows(cols_per_contact_).transpose();
             }
         }
 
@@ -197,13 +202,13 @@ public:
      */
     void reset() {
         last_timestamp_.reset();
-        residual_.setZero(nv_);
-        integral_.setZero(nv_);
+        residual_.setZero(n_actuated_);
+        integral_.setZero(n_actuated_);
         for (auto& [mask, A] : A_) {
             A.setZero();
         }
-        p_prev_.setZero(nv_);
-        for (int i = 0; i < nv_; ++i) {
+        p_prev_.setZero(n_actuated_);
+        for (int i = 0; i < n_actuated_; ++i) {
             lpf_[i]->reset();
         }
     }
@@ -229,7 +234,7 @@ private:
     std::map<int, Eigen::MatrixXd> A_;
     std::map<int, std::set<std::string>> contact_cases_;
     Eigen::VectorXd p_prev_;
-    int nv_;
+    int n_actuated_;
     std::vector<std::unique_ptr<ButterworthLPF>> lpf_;
     double lambda_{5e-3};
 };
