@@ -121,8 +121,8 @@
     2e-06
   ],
   "imu_linear_acceleration_covariance": [
-    0.5,
-    0.5,
+    1e-1,
+    1e-1,
     0.5
   ],
   "imu_linear_acceleration_bias_covariance": [
