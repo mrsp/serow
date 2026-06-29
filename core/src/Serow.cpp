@@ -729,9 +729,11 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
         throw std::runtime_error("Kinematic estimator not initialized");
     }
 
-    kinematic_estimator_->updateJointConfig(state.joint_state_.joints_position,
-                                            state.joint_state_.joints_velocity,
-                                            state.joint_state_.joints_effort);
+    kinematic_estimator_->updateJointConfig(
+        state.base_state_.base_position, state.base_state_.base_orientation,
+        state.base_state_.base_linear_velocity, state.base_state_.base_angular_velocity,
+        state.joint_state_.joints_position, state.joint_state_.joints_velocity,
+        state.joint_state_.joints_effort);
 
     // Preallocate maps for leg end-effector kinematics
     std::map<std::string, Eigen::Vector3d> base_to_foot_positions;
