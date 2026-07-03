@@ -644,23 +644,24 @@ public:
     }
 
     void computeDynamicTerms() const {
-        // Updates dynamic quantities in *data_ for the current (q_, qdot_).
-        // In particular:
-        // - data_->M   : joint-space mass matrix M(q)
-        // - data_->nle : nonlinear effects / bias term b(q, qdot)
-        pinocchio::computeAllTerms(*pmodel_, *data_, q_, qdot_);
+        // 1. Compute CRBA by explicitly passing the joint positions
+        pinocchio::crba(*pmodel_, *data_, q_);
 
-        // Pinocchio typically fills only the upper-triangular part of M.
+        // Make the mass matrix symmetric
         data_->M.triangularView<Eigen::StrictlyLower>() =
             data_->M.transpose().triangularView<Eigen::StrictlyLower>();
+
+        // 2. Compute the Coriolis matrix by passing both positions and velocities
+        pinocchio::computeCoriolisMatrix(*pmodel_, *data_, q_, qdot_);
     }
 
     Eigen::MatrixXd getMassMatrix() const {
         return data_->M;
     }
 
-    Eigen::VectorXd getNonlinearEffects() const {
-        return data_->nle;
+    Eigen::MatrixXd getCoriolisMatrix() {
+        pinocchio::computeCoriolisMatrix(*pmodel_, *data_, q_, qdot_);
+        return data_->C;
     }
 
     Eigen::VectorXd getGravityEffects() const {

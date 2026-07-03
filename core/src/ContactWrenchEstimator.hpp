@@ -102,33 +102,39 @@ public:
      * @param dt Elapsed time since last call in seconds
      */
     void update(const double timestamp) {
+        // 1. Fetch full-space configurations (nv elements)
         const Eigen::VectorXd qdot = kinematic_estimator_->getJointVelocities();
         kinematic_estimator_->computeDynamicTerms();
+
         const Eigen::MatrixXd M = kinematic_estimator_->getMassMatrix();
-        const Eigen::VectorXd p_actuated = (M * qdot).tail(n_actuated_);
+        // Actuated momentum mapping: row-slice matching actuated joint space
+        const Eigen::VectorXd p_actuated = M.bottomRows(n_actuated_) * qdot;
+
         if (!last_timestamp_.has_value()) {
             last_timestamp_ = timestamp;
-            p_prev_ = p_actuated;
+            integral_ = p_actuated;
             return;
         }
         const double dt = timestamp - last_timestamp_.value();
         last_timestamp_ = timestamp;
         if (dt <= 0.0) {
-            p_prev_ = p_actuated;
             return;
         }
 
+        // 2. Extract joint-space effort and gravity vectors (n_actuated elements)
         const Eigen::VectorXd effort = kinematic_estimator_->getJointEfforts().tail(n_actuated_);
-        const Eigen::VectorXd nle = kinematic_estimator_->getNonlinearEffects().tail(n_actuated_);
+        const Eigen::VectorXd gravity = kinematic_estimator_->getGravityEffects().tail(n_actuated_);
 
-        const Eigen::VectorXd expected_error = effort - nle + residual_;
-        Eigen::VectorXd measured_error = (p_actuated - p_prev_) / dt;
-        for (int i = 0; i < n_actuated_; ++i) {
-            measured_error[i] = lpf_[i]->filter(measured_error[i]);
-        }
-        integral_ += (measured_error - expected_error) * dt;
-        residual_ = gain_ * integral_;
-        p_prev_ = p_actuated;
+        // 3. Extract the coriolis effects (n_actuated elements)
+        const Eigen::MatrixXd C = kinematic_estimator_->getCoriolisMatrix();
+        const Eigen::VectorXd C_transpose_qdot = (C.transpose() * qdot).tail(n_actuated_);
+
+        // 4. GMO Integration step
+        const Eigen::VectorXd integral_dot = effort + C_transpose_qdot - gravity + residual_;
+        integral_ += integral_dot * dt;
+
+        // 5. Compute residual and update observer
+        residual_ = gain_ * (p_actuated - integral_);
     }
 
     std::map<std::string, ForceTorqueMeasurement> contactWrenches() {

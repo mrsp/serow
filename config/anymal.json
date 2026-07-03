@@ -18,7 +18,7 @@
   "estimate_contact_wrench": true,
   "contact_wrench_cutoff_frequency": 25.0,
   "contact_wrench_regularization_parameter": 5e-02,
-  "observer_gain": 45.0,
+  "observer_gain": 200.0,
   "imu_rate": 400.0,
   "R_base_to_gyro": [
     -1.0,
@@ -121,9 +121,9 @@
     2e-06
   ],
   "imu_linear_acceleration_covariance": [
-    1e-1,
-    1e-1,
-    0.5
+    5e-1,
+    5e-1,
+    5e-1
   ],
   "imu_linear_acceleration_bias_covariance": [
     1e-08,
