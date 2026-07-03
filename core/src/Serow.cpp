@@ -265,10 +265,6 @@ bool Serow::initialize(const std::string& config_file) {
         if (!checkConfigParam("observer_gain", params_.observer_gain)) {
             return false;
         }
-        if (!checkConfigParam("contact_wrench_cutoff_frequency",
-                              params_.contact_wrench_cutoff_frequency)) {
-            return false;
-        }
         if (!checkConfigParam("contact_wrench_regularization_parameter",
                               params_.contact_wrench_regularization_parameter)) {
             return false;
@@ -519,7 +515,6 @@ bool Serow::initialize(const std::string& config_file) {
     if (params_.estimate_contact_wrench) {
         contact_wrench_estimator_ = std::make_unique<ContactWrenchEstimator>(
             kinematic_estimator_, state_.getContactsFrame(), params_.observer_gain,
-            params_.joint_rate, params_.contact_wrench_cutoff_frequency,
             params_.contact_wrench_regularization_parameter, state_.isPointFeet());
     }
 

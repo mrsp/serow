@@ -15,6 +15,7 @@
     "smoothing_window": 7,
     "estimate_contact_wrench": false,
     "observer_gain": 10.0,
+    "contact_wrench_regularization_parameter": 1e-2,
     "tau_0": 1e-4,
     "tau_1": 5e-5,
     "imu_rate": 200.0,

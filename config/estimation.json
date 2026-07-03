@@ -34,6 +34,8 @@
     "estimate_contact_wrench": false,
     // double: observer gain for the contact wrench estimator. Only applies if estimate_contact_wrench = true
     "observer_gain": 10.0,
+    // double: regularization parameter for the contact wrench estimator. Only applies if estimate_contact_wrench = true
+    "contact_wrench_regularization_parameter": 1e-2,
     // Contact point estimator
     // double: cost weight when computing the instantaneous moment pivot with kinematics. 
     // Only applies for flat feet

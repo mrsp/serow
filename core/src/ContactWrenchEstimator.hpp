@@ -49,15 +49,12 @@ public:
      * @param kinematic_estimator The kinematic estimator
      * @param contact_frames The contact frames to estimate the wrenches for
      * @param gain    Observer gain K_I (typical range 10–100)
-     * @param rate    Rate of the joint data (e.g. 100 Hz)
-     * @param cutoff_frequency Cutoff frequency of the residual LPF (e.g. 10 Hz)
      * @param lambda Regularization parameter
      * @param point_feet Whether the feet are point contacts or not
      */
     ContactWrenchEstimator(std::shared_ptr<RobotKinematics> kinematic_estimator,
                            const std::set<std::string>& contact_frames, const double gain,
-                           const double rate, const double cutoff_frequency, const double lambda,
-                           const bool point_feet = true)
+                           const double lambda, const bool point_feet = true)
         : kinematic_estimator_(kinematic_estimator),
           contact_frames_(contact_frames),
           point_feet_(point_feet),
@@ -68,12 +65,6 @@ public:
         residual_.setZero(n_actuated_);
         integral_.setZero(n_actuated_);
         cols_per_contact_ = point_feet_ ? 3 : 6;
-        p_prev_.setZero(n_actuated_);
-        lpf_.resize(n_actuated_);
-        for (int i = 0; i < n_actuated_; ++i) {
-            lpf_[i] = std::make_unique<ButterworthLPF>(
-                std::string("Momentum LPF ") + std::to_string(i), rate, cutoff_frequency, false);
-        }
 
         // Construct all possible contact cases
         std::vector<std::string> frames(contact_frames_.begin(), contact_frames_.end());
@@ -213,10 +204,6 @@ public:
         for (auto& [mask, A] : A_) {
             A.setZero();
         }
-        p_prev_.setZero(n_actuated_);
-        for (int i = 0; i < n_actuated_; ++i) {
-            lpf_[i]->reset();
-        }
     }
 
     /**
@@ -239,10 +226,8 @@ private:
     /// Stacked Jacobian matrix for the contact frames. Avoids reallocation of memory.
     std::map<int, Eigen::MatrixXd> A_;
     std::map<int, std::set<std::string>> contact_cases_;
-    Eigen::VectorXd p_prev_;
     int n_actuated_;
-    std::vector<std::unique_ptr<ButterworthLPF>> lpf_;
-    double lambda_{5e-3};
+    double lambda_{1e-2};
 };
 
 }  // namespace serow

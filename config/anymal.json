@@ -16,7 +16,6 @@
   "joint_velocity_variance": null,
   "smoothing_window": 11,
   "estimate_contact_wrench": true,
-  "contact_wrench_cutoff_frequency": 25.0,
   "contact_wrench_regularization_parameter": 1e-02,
   "observer_gain": 200.0,
   "imu_rate": 400.0,
@@ -103,11 +102,11 @@
     ]
   },
   "R_foot_to_torque": null,
-  "attitude_estimator_proportional_gain": 0.01,
+  "attitude_estimator_proportional_gain": 0.2,
   "attitude_estimator_integral_gain": 0.0,
   "estimate_contact_status": true,
   "median_window": 11,
-  "tau_0": 0.001,
+  "tau_0": 0.00001,
   "tau_1": 0.0,
   "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [

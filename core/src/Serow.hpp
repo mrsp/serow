@@ -190,8 +190,6 @@ private:
         bool estimate_contact_wrench{};
         /// @brief gain for the contact wrench observer.
         double observer_gain{};
-        /// @brief cutoff frequency for the contact wrench observer (Hz).
-        double contact_wrench_cutoff_frequency{};
         /// @brief regularization parameter for the contact wrench observer.
         double contact_wrench_regularization_parameter{};
         /// @brief whether or not to estimate the leg end-effector contact status. If set to false,
