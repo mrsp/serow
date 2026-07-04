@@ -110,6 +110,9 @@ private:
                                   ///< step.
 
     std::optional<Eigen::Vector3d>
+        first_position_;  ///< Initial position estimate (world coordinates) when the first odometry
+                          ///< measurement is received.
+    std::optional<Eigen::Vector3d>
         first_odometry_position_;  ///< Initial odometry measurement position (world coordinates).
     std::optional<Eigen::Quaterniond>
         first_odometry_orientation_;  ///< Initial odometry measurement orientation (world

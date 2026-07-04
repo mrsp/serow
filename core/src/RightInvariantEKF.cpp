@@ -250,14 +250,17 @@ void RightInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector
                                            const Eigen::Quaterniond& base_orientation,
                                            const Eigen::Matrix3d& base_position_cov,
                                            const Eigen::Matrix3d& base_orientation_cov) {
-    if (!first_odometry_position_.has_value() || !first_odometry_orientation_.has_value()) {
+    if (!first_odometry_position_.has_value() || !first_odometry_orientation_.has_value() ||
+        !first_position_.has_value()) {
         first_odometry_position_ = base_position - state.base_position;
         first_odometry_orientation_ = state.base_orientation * base_orientation.inverse();
+        first_position_ = state.base_position;
         return;
     }
 
     // Remove the initial offset if any
-    const Eigen::Vector3d bp = base_position - first_odometry_position_.value();
+    const Eigen::Vector3d bp = first_position_.value() +
+        first_odometry_orientation_.value() * (base_position - first_odometry_position_.value());
     const Eigen::Quaterniond bo = first_odometry_orientation_.value() * base_orientation;
 
     // Construct the linearized measurement matrix H
