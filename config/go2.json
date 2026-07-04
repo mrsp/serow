@@ -19,6 +19,7 @@
     "estimate_contact_wrench": false,
     "observer_gain": 50.0,
     "contact_wrench_regularization_parameter": 1e-2,
+    "contact_wrench_estimator_type": "cod",
     "tau_0": 5e-4,
     "tau_1": 0.0,
     "imu_rate": 500.0,

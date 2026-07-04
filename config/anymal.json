@@ -17,6 +17,8 @@
   "smoothing_window": 11,
   "estimate_contact_wrench": true,
   "contact_wrench_regularization_parameter": 1e-02,
+  "contact_wrench_estimator_type": "llt",
+  "contact_wrench_estimator_llt_mu": 1e-6,
   "observer_gain": 200.0,
   "imu_rate": 400.0,
   "R_base_to_gyro": [

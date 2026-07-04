@@ -269,6 +269,16 @@ bool Serow::initialize(const std::string& config_file) {
                               params_.contact_wrench_regularization_parameter)) {
             return false;
         }
+        if (!checkConfigParam("contact_wrench_estimator_type",
+                              params_.contact_wrench_estimator_type)) {
+            return false;
+        }
+        if (params_.contact_wrench_estimator_type == "llt") {
+            if (!checkConfigParam("contact_wrench_estimator_llt_mu",
+                                  params_.contact_wrench_estimator_llt_mu)) {
+                return false;
+            }
+        }
     }
 
     if (params_.enable_terrain_estimation) {
@@ -515,7 +525,8 @@ bool Serow::initialize(const std::string& config_file) {
     if (params_.estimate_contact_wrench) {
         contact_wrench_estimator_ = std::make_unique<ContactWrenchEstimator>(
             kinematic_estimator_, state_.getContactsFrame(), params_.observer_gain,
-            params_.contact_wrench_regularization_parameter, state_.isPointFeet());
+            params_.contact_wrench_regularization_parameter, state_.isPointFeet(),
+            params_.contact_wrench_estimator_type, params_.contact_wrench_estimator_llt_mu);
     }
 
     // Create timers

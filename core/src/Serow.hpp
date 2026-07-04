@@ -192,6 +192,12 @@ private:
         double observer_gain{};
         /// @brief regularization parameter for the contact wrench observer.
         double contact_wrench_regularization_parameter{};
+        /// @brief type of the contact wrench estimator. Only applies if estimate_contact_wrench =
+        /// true
+        std::string contact_wrench_estimator_type{"llt"};
+        /// @brief Tikhonov regularization parameter for the contact wrench estimator. Only applies
+        /// if contact_wrench_estimator_type = "llt"
+        double contact_wrench_estimator_llt_mu{1e-6};
         /// @brief whether or not to estimate the leg end-effector contact status. If set to false,
         /// the user should provide the end-effector contact probabilities
         bool estimate_contact_status{};

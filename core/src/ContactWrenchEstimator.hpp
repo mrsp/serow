@@ -52,15 +52,20 @@ public:
      * @param gain    Observer gain K_I (typical range 10–100)
      * @param lambda Regularization parameter
      * @param point_feet Whether the feet are point contacts or not
+     * @param type The type of pseudo-inverse to use ("llt" or "cod")
+     * @param mu The Tikhonov regularization parameter only applies to the "llt" type
      */
     ContactWrenchEstimator(std::shared_ptr<RobotKinematics> kinematic_estimator,
                            const std::set<std::string>& contact_frames, const double gain,
-                           const double lambda, const bool point_feet = true)
+                           const double lambda, const bool point_feet = true,
+                           const std::string& type = "llt", const double mu = 1e-6)
         : kinematic_estimator_(kinematic_estimator),
           contact_frames_(contact_frames),
-          point_feet_(point_feet),
           gain_(gain),
-          lambda_(lambda) {
+          lambda_(lambda),
+          point_feet_(point_feet),
+          type_(type),
+          mu_(mu) {
         // GMO runs on actuated DoF only; floating-base rows have zero actuator torque.
         n_actuated_ = kinematic_estimator->ndofActuated();
         residual_.setZero(n_actuated_);
@@ -176,10 +181,22 @@ public:
         const double inv_residual_norm = 1.0 / (residual_norm + 1e-9);
         for (int mask = 1; mask < static_cast<int>(contact_cases_.size()); ++mask) {
             const Eigen::MatrixXd& A = A_[mask];
-            Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(A);
             Eigen::VectorXd& wrench = wrenches_[mask];
-            wrench = cod.solve(residual_);
-
+            if (type_ == "llt") {
+                // Right pseudo-inverse via normal equations on A*A^T (size n_actuated_ x
+                // n_actuated_, independent of contact count) instead of QR-based COD on the full
+                // wide A.
+                Eigen::MatrixXd AAT = A * A.transpose();
+                AAT.diagonal().array() +=
+                    mu_;  // Tikhonov term for numerical safety near rank deficiency
+                Eigen::LLT<Eigen::MatrixXd> llt(AAT);
+                wrench = A.transpose() * llt.solve(residual_);
+            } else {
+                // Use Complete Orthogonal Decomposition to solve the system of equations.
+                // More expensive than LLT but more numerically stable.
+                Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(A);
+                wrench = cod.solve(residual_);
+            }
             const double cost =
                 (A * wrench - residual_).squaredNorm() * inv_residual_norm + cost_offset_[mask];
             if (cost < min_cost) {
@@ -187,7 +204,6 @@ public:
                 optimal_mask = mask;
             }
         }
-
         if (optimal_mask < 0)
             return ft;
 
@@ -243,9 +259,7 @@ public:
 private:
     std::shared_ptr<RobotKinematics> kinematic_estimator_;
     std::set<std::string> contact_frames_;
-    bool point_feet_{true};
     int cols_per_contact_{3};
-    double gain_{0.0};
     std::optional<double> last_timestamp_;
     Eigen::VectorXd residual_;
     Eigen::VectorXd integral_;
@@ -265,7 +279,11 @@ private:
     std::unordered_set<std::string> active_set_scratch_;
 
     int n_actuated_;
+    double gain_{100.0};
     double lambda_{1e-2};
+    bool point_feet_{true};
+    std::string type_{"llt"};
+    double mu_{1e-6};
 };
 
 }  // namespace serow
