@@ -296,7 +296,8 @@ void RightInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector
 
             // Outlier detection with the base position measurement vector
             const Eigen::Vector3d& x_i = updated_state_i.base_position;
-            const Eigen::Matrix3d BetaT = bb - 2.0 * bp * x_i.transpose() + x_i * x_i.transpose() +
+            const Eigen::Matrix3d BetaT = bb - bp * x_i.transpose() - x_i * bp.transpose() +
+                x_i * x_i.transpose() +
                 H.block(3, p_idx_[0], 3, 3) * P_i.block(p_idx_[0], p_idx_[0], 3, 3) *
                     H.block(3, p_idx_[0], 3, 3).transpose();
             base_position_outlier_detector.estimate(BetaT, base_position_cov);
