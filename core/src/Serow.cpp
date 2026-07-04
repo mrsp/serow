@@ -875,16 +875,13 @@ void Serow::runContactEstimator(
             const Eigen::Matrix3d R_foot_to_base =
                 kin.base_to_foot_orientations.at(frame).toRotationMatrix();
             const Eigen::Vector3d& frame_force = ft.at(frame).force;
-            const Eigen::Matrix3d& R_foot_to_force = params_.R_foot_to_force.at(frame);
-            const Eigen::Matrix3d& R_world_to_base =
-                state.base_state_.base_orientation.toRotationMatrix();
             contacts_force[frame].noalias() =
-                R_world_to_base * R_foot_to_base * R_foot_to_force * frame_force;
+                R_foot_to_base * params_.R_foot_to_force.at(frame) * frame_force;
 
             // Process torque if not point feet
             if (!state.isPointFeet()) {
                 if (ft.count(frame) > 0 && ft.at(frame).torque.has_value()) {
-                    contacts_torque[frame].noalias() = R_world_to_base * R_foot_to_base *
+                    contacts_torque[frame].noalias() = R_foot_to_base *
                         params_.R_foot_to_torque.at(frame) * ft.at(frame).torque.value();
                 } else {
                     throw std::runtime_error("No torque measurement provided for frame: " + frame);
@@ -898,8 +895,7 @@ void Serow::runContactEstimator(
                     contact_estimators_.emplace(
                         frame,
                         ContactDetector(frame, state.getMass(), params_.g, params_.median_window));
-                    contact_estimators_.at(frame).setState(
-                        state.contact_state_.contacts_force.at(frame).z());
+                    contact_estimators_.at(frame).setState(contacts_force.at(frame).z());
                 }
                 contact_estimators_.at(frame).run(contacts_force.at(frame).z());
                 den += contact_estimators_.at(frame).getContactForce();
@@ -910,7 +906,6 @@ void Serow::runContactEstimator(
         if (params_.estimate_contact_status && !contacts_probability.has_value()) {
             den /= state.num_leg_ee_;
             for (const auto& frame : state.getContactsFrame()) {
-                // Use std::clamp for bounds checking
                 if (den > params_.eps) {
                     state.contact_state_.contacts_probability[frame] =
                         std::clamp(contact_estimators_.at(frame).getContactForce() / den, 0.0, 1.0);
@@ -925,10 +920,16 @@ void Serow::runContactEstimator(
                 "No contact probability provided and contact status estimation is disabled");
         }
 
-        // Compute binary contact status
+        // Compute binary contact status and transform to world frame
+        const Eigen::Matrix3d& R_world_to_base =
+            state.base_state_.base_orientation.toRotationMatrix();
         for (const auto& frame : state.getContactsFrame()) {
             state.contact_state_.contacts_status[frame] =
                 state.contact_state_.contacts_probability.at(frame) > 0.5;
+            contacts_force.at(frame) = R_world_to_base * contacts_force.at(frame);
+            if (!state.isPointFeet()) {
+                contacts_torque.at(frame) = R_world_to_base * contacts_torque.at(frame);
+            }
         }
 
         // Estimate the COP in the local foot frame
@@ -942,12 +943,12 @@ void Serow::runContactEstimator(
 
             // Calculate COP
             if (!state.isPointFeet() && contacts_torque.count(frame) &&
-                state.contact_state_.contacts_probability.at(frame) > 0.0) {
-                const double z_force = contacts_force.at(frame).z();
+                state.contact_state_.contacts_probability.at(frame) > params_.eps) {
+                const double z_force = ft.at(frame).force.z();
                 if (std::abs(z_force) > 1e-6) {  // Avoid division by near-zero
                     ft.at(frame).cop =
-                        Eigen::Vector3d(-contacts_torque.at(frame).y() / z_force,
-                                        contacts_torque.at(frame).x() / z_force, 0.0);
+                        Eigen::Vector3d(-ft.at(frame).torque.value().y() / z_force,
+                                        ft.at(frame).torque.value().x() / z_force, 0.0);
                 }
             }
         }
