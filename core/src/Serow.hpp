@@ -299,9 +299,9 @@ private:
         bool use_imu_orientation{false};
         /// @brief whether or not to enable verbose output
         bool verbose{false};
-        /// @brief type of the base estimator: "contact" for ContactEKF, "right-invariant" for
-        /// RightInvariantEKF
-        std::string base_estimator_type{"right-invariant"};
+        /// @brief type of the base estimator: "contact" for ContactEKF, "left-invariant" for
+        /// LeftInvariantEKF
+        std::string base_estimator_type{"left-invariant"};
     };
 
     /// @brief SEROW's configuration

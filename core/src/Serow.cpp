@@ -17,7 +17,7 @@
 #include <nlohmann/json.hpp>
 
 #include "ContactEKF.hpp"
-#include "RightInvariantEKF.hpp"
+#include "LeftInvariantEKF.hpp"
 
 using json = nlohmann::json;
 
@@ -186,7 +186,7 @@ bool Serow::initialize(const std::string& config_file) {
     if (!checkConfigParam("use_imu_orientation", params_.use_imu_orientation))
         return false;
 
-    // Base estimator type: "contact" or "right-invariant" (default)
+    // Base estimator type: "contact" or "left-invariant" (default)
     if (config.contains("base_estimator_type")) {
         if (!checkConfigParam("base_estimator_type", params_.base_estimator_type))
             return false;
@@ -1619,8 +1619,8 @@ void Serow::reset() {
     state_.centroidal_state_.external_forces_cov = params_.initial_external_forces_cov.asDiagonal();
 
     // Initialize the base and CoM estimators
-    if (params_.base_estimator_type == "right-invariant") {
-        base_estimator_ = std::make_unique<RightInvariantEKF>();
+    if (params_.base_estimator_type == "left-invariant") {
+        base_estimator_ = std::make_unique<LeftInvariantEKF>();
     } else {
         base_estimator_ = std::make_unique<ContactEKF>();
     }

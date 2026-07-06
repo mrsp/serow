@@ -2,7 +2,7 @@
     "robot_name": "go2",
     "base_frame": "base",
     "point_feet": true,
-    "base_estimator_type": "right-invariant",
+    "base_estimator_type": "left-invariant",
     "foot_frames": {
         "0": "FL_foot",
         "1": "FR_foot",

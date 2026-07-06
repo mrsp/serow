@@ -12,8 +12,8 @@
  **/
 
 /**
- * @file RightInvariantEKF.hpp
- * @brief Right-Invariant Extended Kalman Filter for state estimation in legged robots.
+ * @file LeftInvariantEKF.hpp
+ * @brief Left-Invariant Extended Kalman Filter for state estimation in legged robots.
  *        The filter state lives on SE_2(3) x R^6 and exploits the group-affine property of
  *        IMU-driven dynamics to obtain a state-independent linearized error propagation.
  *        Fuses IMU, leg-kinematic velocity, optional external odometry and terrain height.
@@ -34,11 +34,11 @@
 namespace serow {
 
 /**
- * @class RightInvariantEKF
- * @brief Right-Invariant Extended Kalman Filter on SE_2(3) for legged-robot state estimation,
+ * @class LeftInvariantEKF
+ * @brief Left-Invariant Extended Kalman Filter on SE_2(3) for legged-robot state estimation,
  *        fusing IMU data, leg-kinematic velocity, and optionally external odometry.
  */
-class RightInvariantEKF : public BaseEstimator {
+class LeftInvariantEKF : public BaseEstimator {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -133,10 +133,12 @@ private:
      * @brief Computes Jacobians for the prediction step of the EKF.
      * @param state Current state of the robot.
      * @param angular_velocity Angular velocity measurements.
+     * @param linear_acceleration Linear acceleration measurements.
      * @return Tuple containing prediction Jacobians (state transition and input models).
      */
     std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 15>>
-    computePredictionJacobians(const BaseState& state);
+    computePredictionJacobians(const BaseState& state, Eigen::Vector3d angular_velocity,
+                               Eigen::Vector3d linear_acceleration);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
