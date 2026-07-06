@@ -43,7 +43,7 @@
     0.0,
     -1.0
   ],
-  "use_imu_orientation": true,
+  "use_imu_orientation": false,
   "calibrate_initial_imu_bias": false,
   "max_imu_calibration_cycles": 250,
   "bias_gyro": [
@@ -187,7 +187,7 @@
     1.0
   ],
   "T_base_to_odom": null,
-  "enable_terrain_estimation": false,
+  "enable_terrain_estimation": true,
   "terrain_estimator": "fast",
   "minimum_terrain_height_variance": 1e-2,
   "maximum_contact_points": 4,

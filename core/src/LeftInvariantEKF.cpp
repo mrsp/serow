@@ -226,10 +226,10 @@ void LeftInvariantEKF::computeDiscreteDynamics(BaseState& state, double dt,
 // ---------------------------------------------------------------------------
 // Odometry update  (pose measurement in world frame)
 //
-//   z_R = log(R_y * R̂ᵀ) ≈ -R * ξ_R  (world frame innovation)
-//   z_p = p_y − p̂  ≈ -R * ξ_p     (world frame innovation)
-//   H   = [ -R  0  0 | 0 ]   (rotation row)
-//         [  0  0 -R | 0 ]   (position row)
+//   z_R = log(R^T * R_y) ≈  ξ_R     (left-invariant)
+//   z_p = p_y − p̂  ≈ R^T * ξ_p     (left-invariant)
+//   H   = [ I  0  0 | 0 ]   (rotation row)
+//         [  0  0 I | 0 ]   (position row)
 // ---------------------------------------------------------------------------
 void LeftInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3d& base_position,
                                           const Eigen::Quaterniond& base_orientation,
@@ -243,6 +243,8 @@ void LeftInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3
         return;
     }
 
+    const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
+    const Eigen::Matrix3d R_z = R.transpose() * base_position_cov * R;
     // Remove the initial offset if any
     const Eigen::Vector3d bp = first_position_.value() +
         first_odometry_orientation_.value() * (base_position - first_odometry_position_.value());
@@ -250,13 +252,13 @@ void LeftInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3
 
     // Construct the linearized measurement matrix H
     Eigen::Matrix<double, 6, 15> H = Eigen::Matrix<double, 6, 15>::Zero();
-    H.block(0, r_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix();
-    H.block(3, p_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix();
+    H.block(0, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
+    H.block(3, p_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
     // World-frame innovations
     Eigen::Matrix<double, 6, 1> z;
-    z.head(3) = lie::so3::logMap(bo * state.base_orientation.inverse());
-    z.tail(3) = bp - state.base_position;
+    z.head(3) = lie::so3::logMap(state.base_orientation.inverse() * bo);
+    z.tail(3) = R.transpose() * (bp - state.base_position);
 
     // RESKF outlier-robust update
     base_position_outlier_detector.init();
@@ -269,8 +271,7 @@ void LeftInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3
     const Eigen::Matrix3d bb = bp * bp.transpose();
     for (size_t i = 0; i < base_position_outlier_detector.iters; i++) {
         if (base_position_outlier_detector.zeta > base_position_outlier_detector.threshold) {
-            const Eigen::Matrix3d R_z = base_position_cov / base_position_outlier_detector.zeta;
-            N.bottomRightCorner<3, 3>() = R_z;
+            N.bottomRightCorner<3, 3>() = R_z / base_position_outlier_detector.zeta;
             const Eigen::Matrix<double, 6, 6> s = N + H * PH_transpose;
             const Eigen::Matrix<double, 15, 6> K =
                 s.ldlt().solve(PH_transpose.transpose()).transpose();
@@ -301,7 +302,7 @@ void LeftInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3
 // ---------------------------------------------------------------------------
 // Terrain height update  (scalar, terrain-safe version)
 //   z = h_map(x_foot,y_foot) - z_foot_world
-//     = h_map - (p_z + [-R p_bf]_z)
+//     = h_map - (p_z + [-I]_z)
 //
 // The full first-order model can couple terrain height into orientation and
 // horizontal states.  With binary-only contacts and a learned/updated local map,
@@ -349,21 +350,23 @@ void LeftInvariantEKF::updateWithTerrain(
         if (!elevation.has_value() || !elevation.value().updated)
             continue;
 
-        const Eigen::Matrix3d con_cov_world =
+        Eigen::Matrix3d con_cov_world =
             R_world_to_base * contacts_position_cov.at(cf) * R_world_to_base.transpose();
+        con_cov_world(2, 2) += static_cast<double>(elevation.value().variance);
 
         const double residual = static_cast<double>(elevation.value().height) - con_pos_world.z();
         if (!std::isfinite(residual))
             continue;
 
-        const double N = std::max(
-            (static_cast<double>(elevation.value().variance) + con_cov_world(2, 2) + 1e-6) /
-                (cp * dt),
-            static_cast<double>(terrain_estimator->getMinVariance()));
+        const double N = std::max((Eigen::Vector3d::UnitZ().transpose() *
+                                   (R_world_to_base.transpose() * con_cov_world * R_world_to_base))
+                                          .z() /
+                                      (cp * dt),
+                                  static_cast<double>(terrain_estimator->getMinVariance()));
 
         // Scalar effective Jacobian: the z-column entry of the full H,
-        // i.e. -R_world_to_base(2,2) since H = -e3^T * R_world_to_base.
-        const double h = -R_world_to_base(2, 2);
+        // i.e. -1.0 since H = -e3^T * I.
+        const double h = -1.0;
 
         const double Pzz = P_(pz, pz);
         const double s = h * h * Pzz + N;
@@ -392,10 +395,10 @@ void LeftInvariantEKF::updateWithTerrain(
 
 // ---------------------------------------------------------------------------
 // State retraction — world-frame error convention
-//   R+    = R * Exp(-xi_R)    (RIGHT multiply)
-//   v+    = v - xi_v          (world-frame additive)
-//   p+    = p - xi_p          (world-frame additive)
-//   b+    = b - db            (linear)
+//   R+    = R * Exp(xi_R)     (RIGHT multiply)
+//   v+    = v + R * xi_v      (world-frame)
+//   p+    = p + R * xi_p      (world-frame)
+//   b+    = b + db            (linear)
 //   v_body = R+^T  v+         (derived)
 // ---------------------------------------------------------------------------
 BaseState LeftInvariantEKF::updateStateCopy(const BaseState& state,
@@ -409,12 +412,12 @@ BaseState LeftInvariantEKF::updateStateCopy(const BaseState& state,
         Eigen::Quaterniond(R * lie::so3::expMap(-dx(r_idx_))).normalized();
 
     // World-frame velocity and position
-    updated_state.base_linear_velocity -= R * dx(v_idx_);
-    updated_state.base_position -= R * dx(p_idx_);
+    updated_state.base_linear_velocity += R * dx(v_idx_);
+    updated_state.base_position += R * dx(p_idx_);
 
     // Biases
-    updated_state.imu_angular_velocity_bias -= dx(bg_idx_);
-    updated_state.imu_linear_acceleration_bias -= dx(ba_idx_);
+    updated_state.imu_angular_velocity_bias += dx(bg_idx_);
+    updated_state.imu_linear_acceleration_bias += dx(ba_idx_);
 
     // Derive body-frame velocity
     const Eigen::Matrix3d R_new = updated_state.base_orientation.toRotationMatrix();
@@ -435,15 +438,15 @@ void LeftInvariantEKF::updateState(BaseState& state, const Eigen::Matrix<double,
                                    const Eigen::Matrix<double, 15, 15>& P) const {
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
     // World-frame orientation (right multiply)
-    state.base_orientation = Eigen::Quaterniond(R * lie::so3::expMap(-dx(r_idx_))).normalized();
+    state.base_orientation = Eigen::Quaterniond(R * lie::so3::expMap(dx(r_idx_))).normalized();
 
     // World-frame velocity and position
-    state.base_linear_velocity -= R * dx(v_idx_);
-    state.base_position -= R * dx(p_idx_);
+    state.base_linear_velocity += R * dx(v_idx_);
+    state.base_position += R * dx(p_idx_);
 
     // Biases
-    state.imu_angular_velocity_bias -= dx(bg_idx_);
-    state.imu_linear_acceleration_bias -= dx(ba_idx_);
+    state.imu_angular_velocity_bias += dx(bg_idx_);
+    state.imu_linear_acceleration_bias += dx(ba_idx_);
 
     // Derive body-frame velocity
     state.base_local_linear_velocity =
@@ -617,7 +620,7 @@ void LeftInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
 // ---------------------------------------------------------------------------
 // IMU orientation update  (world-measurement)
 //
-//   z = log(R_y * R_hat^T) ≈ -R * ξ_R  (world-frame innovation)
+//   z = log(R_hat^T * R_y) ≈ ξ_R  (left-invariant)
 //   H = [ I  0  0 | 0 ]
 // ---------------------------------------------------------------------------
 void LeftInvariantEKF::updateWithIMUOrientation(BaseState& state,
@@ -635,10 +638,9 @@ void LeftInvariantEKF::updateWithIMUOrientation(BaseState& state,
     }
 
     Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
-    H.block(0, r_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix();
+    H.block(0, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
-    // World-frame innovation: z = log(R_y * R_hat^T)
-    const Eigen::Vector3d z = lie::so3::logMap(imu_orientation * state.base_orientation.inverse());
+    const Eigen::Vector3d z = lie::so3::logMap(state.base_orientation.inverse() * imu_orientation);
     const Eigen::Matrix3d N = imu_orientation_cov / dt;
 
     const Eigen::Matrix<double, 15, 3> PH_transpose = P_ * H.transpose();
@@ -657,8 +659,8 @@ void LeftInvariantEKF::updateWithIMUOrientation(BaseState& state,
 // ---------------------------------------------------------------------------
 // Base linear velocity update  (world-frame measurement)
 //
-//   z = v_meas - v_hat ≈ - R * ξ_v      (world-frame innovation)
-//   H = [ 0   -R   0 | 0   0 ]
+//   z = v_meas - v_hat ≈ R^T * ξ_v      (left-invariant)
+//   H = [ 0   I   0 | 0   0 ]
 //
 // ---------------------------------------------------------------------------
 void LeftInvariantEKF::updateWithBaseLinearVelocity(BaseState& state,
@@ -674,13 +676,13 @@ void LeftInvariantEKF::updateWithBaseLinearVelocity(BaseState& state,
     if (dt <= 0.0 || !std::isfinite(dt)) {
         return;
     }
-
+    const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
     Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
-    H.block(0, v_idx_[0], 3, 3) = -state.base_orientation.toRotationMatrix();
+    H.block(0, v_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
-    const Eigen::Vector3d z = base_linear_velocity - state.base_linear_velocity;
+    const Eigen::Vector3d z = R.transpose() * (base_linear_velocity - state.base_linear_velocity);
 
-    const Eigen::Matrix3d N = base_linear_velocity_cov / dt;
+    const Eigen::Matrix3d N = (R.transpose() * base_linear_velocity_cov * R) / dt;
     const Eigen::Matrix<double, 15, 3> PH_transpose = P_ * H.transpose();
     const Eigen::Matrix3d s = N + H * PH_transpose;
     const Eigen::Matrix<double, 15, 3> K = s.ldlt().solve(PH_transpose.transpose()).transpose();
