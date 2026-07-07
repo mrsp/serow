@@ -75,7 +75,7 @@ void LeftInvariantEKF::init(const BaseState& state, std::set<std::string> contac
 
     // Compute some parts of the Input-Noise Jacobian once since they are constants
     // gyro (0), acc (3), zero (6), gyro_bias (9), acc_bias (12)
-    // Lc is Identity matrix
+    // Lc is Identity matrix for Left-Invariant EKF
     Lc_.setIdentity(num_states_, num_states_);
     last_imu_predict_timestamp_.reset();
     last_kin_update_timestamp_.reset();
@@ -135,7 +135,7 @@ LeftInvariantEKF::computePredictionJacobians(const BaseState& state,
     Eigen::Matrix<double, 15, 15> Ac = Ac_;
     Eigen::Matrix<double, 15, 15> Lc = Lc_;
 
-    // A_Xtheta — bias coupling
+    // Fill in the dynamic parts
     const Eigen::Matrix3d w_x = -lie::so3::wedge(angular_velocity);
     const Eigen::Matrix3d a_x = -lie::so3::wedge(linear_acceleration);
     Ac(r_idx_, r_idx_) = w_x;
@@ -190,7 +190,7 @@ void LeftInvariantEKF::predict(BaseState& state, const ImuMeasurement& imu) {
 }
 
 // ---------------------------------------------------------------------------
-// Discrete dynamics (world-frame LeftInvariantEKF)
+// Discrete dynamics (world-frame)
 //   R_{k+1} = R_k Exp(omega dt)
 //   v_{k+1} = v_k + (R_k a + g) dt
 //   p_{k+1} = p_k + v_k dt + 0.5 (R_k a + g) dt^2
@@ -226,8 +226,8 @@ void LeftInvariantEKF::computeDiscreteDynamics(BaseState& state, double dt,
 // ---------------------------------------------------------------------------
 // Odometry update  (pose measurement in world frame)
 //
-//   z_R = log(R^T * R_y) ≈  ξ_R     (left-invariant)
-//   z_p = p_y − p̂  ≈ R^T * ξ_p     (left-invariant)
+//   z_R = log(R^T * R_y)   ≈  ξ_R             (left-invariant)
+//   z_p = R^T * (p_y − p)  ≈  R^T * ξ_p       (left-invariant)
 //   H   = [ I  0  0 | 0 ]   (rotation row)
 //         [  0  0 I | 0 ]   (position row)
 // ---------------------------------------------------------------------------
@@ -255,7 +255,7 @@ void LeftInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3
     H.block(0, r_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
     H.block(3, p_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
-    // World-frame innovations
+    // Compute the innovations
     Eigen::Matrix<double, 6, 1> z;
     z.head(3) = lie::so3::logMap(state.base_orientation.inverse() * bo);
     z.tail(3) = R.transpose() * (bp - state.base_position);
@@ -286,7 +286,7 @@ void LeftInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3
                 x_i * x_i.transpose() +
                 H.block(3, p_idx_[0], 3, 3) * P_i.block(p_idx_[0], p_idx_[0], 3, 3) *
                     H.block(3, p_idx_[0], 3, 3).transpose();
-            base_position_outlier_detector.estimate(BetaT, base_position_cov);
+            base_position_outlier_detector.estimate(BetaT, R_z);
         } else {
             // Measurement is an outlier
             updated_state_i = state;
@@ -391,7 +391,7 @@ void LeftInvariantEKF::updateWithTerrain(
 }
 
 // ---------------------------------------------------------------------------
-// State retraction — world-frame error convention
+// State retraction
 //   R+    = R * Exp(xi_R)     (RIGHT multiply)
 //   v+    = v + R * xi_v      (world-frame)
 //   p+    = p + R * xi_p      (world-frame)
@@ -489,7 +489,7 @@ void LeftInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
     }
 
     // 2) Base linear velocity update from leg odometry, only if at least one raw
-    // contact is available.  This remains separate from terrain contact debouncing.
+    // contact is available.
     double den = 0.0;
     for (const auto& [cf, cp] : kin.contacts_probability) {
         den += cp;

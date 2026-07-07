@@ -36,7 +36,8 @@ namespace serow {
 /**
  * @class LeftInvariantEKF
  * @brief Left-Invariant Extended Kalman Filter on SE_2(3) for legged-robot state estimation,
- *        fusing IMU data, leg-kinematic velocity, and optionally external odometry.
+ *        fusing IMU data, leg-kinematic velocity, and optionally external odometry and terrain
+ *        height.
  */
 class LeftInvariantEKF : public BaseEstimator {
 public:
@@ -94,12 +95,11 @@ private:
     std::optional<double> last_terrain_update_timestamp_;  ///< Timestamp of the last terrain
                                                            ///< measurement used in the update step.
 
-    /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
-    /// matrix 15 x 15
+    /// Identity matrix, state uncertainty matrix 15 x 15
     Eigen::Matrix<double, 15, 15> I_, P_;
     /// Constant (state-independent) part of the continuous-time A matrix
     Eigen::Matrix<double, 15, 15> Ac_;
-    /// Constant part of the noise-input Jacobian L (bias-drift rows only)
+    /// Constant part of the noise-input Jacobian L (in our case Identity matrix)
     Eigen::Matrix<double, 15, 15> Lc_;
 
     OutlierDetector base_position_outlier_detector;  ///< Outlier detector instance.
