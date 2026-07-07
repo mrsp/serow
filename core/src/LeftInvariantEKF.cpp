@@ -302,12 +302,10 @@ void LeftInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3
 // ---------------------------------------------------------------------------
 // Terrain height update  (scalar, terrain-safe version)
 //   z = h_map(x_foot,y_foot) - z_foot_world
-//     = h_map - (p_z + [-I]_z)
 //
 // The full first-order model can couple terrain height into orientation and
-// horizontal states.  With binary-only contacts and a learned/updated local map,
-// that coupling can create a feedback loop.  Therefore this implementation uses
-// a conservative p_z-only correction with NIS gating and per-update clipping.
+// horizontal states.  In SBEE that coupling can create a feedback loop.  Therefore this
+// implementation uses a conservative p_z-only correction with NIS gating and per-update clipping.
 // ---------------------------------------------------------------------------
 void LeftInvariantEKF::updateWithTerrain(
     BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
@@ -331,61 +329,61 @@ void LeftInvariantEKF::updateWithTerrain(
 
     const Eigen::Vector3d p_world_to_base = state.base_position;
     const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
+    const Eigen::Matrix3d R_world_to_base_transpose = R_world_to_base.transpose();
     const int pz = p_idx_[2];
 
     for (const auto& [cf, cp] : contacts_probability) {
-        if (cp < kStableContactThreshold)
+        if (cp < kStableContactThreshold) {
             continue;
-        if (contacts_position.count(cf) == 0 || contacts_position_cov.count(cf) == 0)
+        }
+
+        if (contacts_position.count(cf) == 0 || contacts_position_cov.count(cf) == 0) {
             continue;
+        }
 
         const Eigen::Vector3d con_pos_world =
             R_world_to_base * contacts_position.at(cf) + p_world_to_base;
-        if (!(con_pos_world).allFinite())
+        if (!(con_pos_world).allFinite()) {
             continue;
+        }
 
         const std::array<float, 2> con_pos_xy = {static_cast<float>(con_pos_world.x()),
                                                  static_cast<float>(con_pos_world.y())};
+
         const auto elevation = terrain_estimator->getElevation(con_pos_xy);
-        if (!elevation.has_value() || !elevation.value().updated)
+        if (!elevation.has_value() || !elevation.value().updated) {
             continue;
+        }
 
         Eigen::Matrix3d con_cov_world =
-            R_world_to_base * contacts_position_cov.at(cf) * R_world_to_base.transpose();
+            R_world_to_base * contacts_position_cov.at(cf) * R_world_to_base_transpose;
         con_cov_world(2, 2) += static_cast<double>(elevation.value().variance);
 
-        const double residual = static_cast<double>(elevation.value().height) - con_pos_world.z();
-        if (!std::isfinite(residual))
-            continue;
+        // Compute the innovation
+        const double z = R_world_to_base_transpose(2, 2) *
+            (static_cast<double>(elevation.value().height) - con_pos_world.z());
 
-        const double N = std::max((Eigen::Vector3d::UnitZ().transpose() *
-                                   (R_world_to_base.transpose() * con_cov_world * R_world_to_base))
-                                          .z() /
-                                      (cp * dt),
-                                  static_cast<double>(terrain_estimator->getMinVariance()));
+        // Compute the measurement covariance
+        const double N = std::max(
+            (R_world_to_base_transpose * con_cov_world * R_world_to_base)(2, 2) / (cp * dt),
+            static_cast<double>(terrain_estimator->getMinVariance()));
 
         // Scalar effective Jacobian: the z-column entry of the full H,
-        // i.e. -1.0 since H = -e3^T * I.
-        const double h = -1.0;
-
+        // i.e. 1.0 since H = e3^T * I.
         const double Pzz = P_(pz, pz);
-        const double s = h * h * Pzz + N;
-        if (s <= 0.0 || !std::isfinite(s))
-            continue;
-
-        const double nis = residual * residual / s;
+        const double s = Pzz + N;
+        const double nis = z * z / s;
         if (nis > kNisGate)
             continue;
 
-        const double k = Pzz * h / s;  // scalar gain
-
-        double dz = std::clamp(k * residual, -kMaxTerrainCorrection, kMaxTerrainCorrection);
+        const double k = Pzz / s;
+        double dz = std::clamp(k * z, -kMaxTerrainCorrection, kMaxTerrainCorrection);
 
         Eigen::Matrix<double, 15, 1> dx = Eigen::Matrix<double, 15, 1>::Zero();
         dx(pz) = dz;
 
         // Only touch P_(pz,pz); leave every other entry of P untouched.
-        P_(pz, pz) = (1.0 - k * h) * Pzz;
+        P_(pz, pz) = (1.0 - k) * Pzz;
         P_(pz, pz) =
             std::max(P_(pz, pz), 1e-9);  // guard against negative variance from clamping dz
 
