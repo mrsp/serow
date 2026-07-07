@@ -107,19 +107,19 @@
   "attitude_estimator_proportional_gain": 0.2,
   "attitude_estimator_integral_gain": 0.0,
   "estimate_contact_status": true,
-  "median_window": 11,
-  "tau_0": 0.00001,
+  "median_window": 13,
+  "tau_0": 1e-5,
   "tau_1": 0.0,
   "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [
-    0.03,
-    0.03,
-    0.03
+    3e-2,
+    3e-2,
+    3e-2
   ],
   "imu_angular_velocity_bias_covariance": [
-    1e-08,
-    1e-08,
-    1e-08
+    1e-8,
+    1e-8,
+    1e-8
   ],
   "imu_linear_acceleration_covariance": [
     5e-1,
@@ -127,19 +127,19 @@
     5e-1
   ],
   "imu_linear_acceleration_bias_covariance": [
-    1e-08,
-    1e-08,
-    1e-08
+    1e-8,
+    1e-8,
+    1e-8
   ],
   "com_position_process_covariance": [
-    1e-06,
-    1e-06,
-    1e-06
+    1e-6,
+    1e-6,
+    1e-6
   ],
   "com_linear_velocity_process_covariance": [
-    0.0001,
-    0.0001,
-    0.0001
+    1e-4,
+    1e-4,
+    1e-4
   ],
   "external_forces_process_covariance": [
     5.0,
@@ -147,39 +147,39 @@
     5.0
   ],
   "initial_base_position_covariance": [
-    1e-08,
-    1e-08,
-    1e-08
+    1e-8,
+    1e-8,
+    1e-8
   ],
   "initial_base_orientation_covariance": [
-    1e-06,
-    1e-06,
-    1e-06
+    1e-6,
+    1e-6,
+    1e-6
   ],
   "initial_base_linear_velocity_covariance": [
-    0.0001,
-    0.0001,
-    0.0001
+    1e-4,
+    1e-4,
+    1e-4
   ],
   "initial_imu_linear_acceleration_bias_covariance": [
-    0.0001,
-    0.0001,
-    0.0001
+    1e-4,
+    1e-4,
+    1e-4
   ],
   "initial_imu_angular_velocity_bias_covariance": [
-    0.0001,
-    0.0001,
-    0.0001
+    1e-4,
+    1e-4,
+    1e-4
   ],
   "initial_com_position_covariance": [
-    1e-08,
-    1e-08,
-    1e-08
+    1e-8,
+    1e-8,
+    1e-8
   ],
   "initial_com_linear_velocity_covariance": [
-    0.0001,
-    0.0001,
-    0.0001
+    1e-4,
+    1e-4,
+    1e-4
   ],
   "initial_external_forces_covariance": [
     1.0,

@@ -373,20 +373,19 @@ void LeftInvariantEKF::updateWithTerrain(
         const double Pzz = P_(pz, pz);
         const double s = Pzz + N;
         const double nis = z * z / s;
-        if (nis > kNisGate)
+        if (nis > kNisGate) {
             continue;
+        }
 
         const double k = Pzz / s;
-        double dz = std::clamp(k * z, -kMaxTerrainCorrection, kMaxTerrainCorrection);
+        const double dz = std::clamp(k * z, -kMaxTerrainCorrection, kMaxTerrainCorrection);
 
         Eigen::Matrix<double, 15, 1> dx = Eigen::Matrix<double, 15, 1>::Zero();
         dx(pz) = dz;
 
         // Only touch P_(pz,pz); leave every other entry of P untouched.
-        P_(pz, pz) = (1.0 - k) * Pzz;
         P_(pz, pz) =
-            std::max(P_(pz, pz), 1e-9);  // guard against negative variance from clamping dz
-
+            std::max((1.0 - k) * Pzz, 1e-9);  // guard against negative variance from clamping
         updateState(state, dx, P_);
     }
 }
