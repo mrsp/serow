@@ -189,7 +189,7 @@
   "T_base_to_odom": null,
   "enable_terrain_estimation": true,
   "terrain_estimator": "fast",
-  "minimum_terrain_height_variance": 1e-3,
+  "minimum_terrain_height_variance": 5e-2,
   "maximum_contact_points": 4,
   "maximum_recenter_distance": 1.0,
   "minimum_contact_probability": 0.2,

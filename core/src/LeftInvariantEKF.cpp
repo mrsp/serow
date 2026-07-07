@@ -353,17 +353,14 @@ void LeftInvariantEKF::updateWithTerrain(
             continue;
         }
 
-        Eigen::Matrix3d con_cov_world =
-            R_world_to_base * contacts_position_cov.at(cf) * R_world_to_base_transpose;
-        con_cov_world(2, 2) += static_cast<double>(elevation.value().variance);
-
         // Compute the innovation
         const double z = R_world_to_base_transpose(2, 2) *
             (static_cast<double>(elevation.value().height) - con_pos_world.z());
 
         // Compute the measurement covariance
+        const double con_cov_z = static_cast<double>(elevation.value().variance);
         const double N = std::max(
-            (R_world_to_base_transpose * con_cov_world * R_world_to_base)(2, 2) / (cp * dt),
+            R_world_to_base_transpose(2, 2) * R_world_to_base(2, 2) * con_cov_z / (cp * dt),
             static_cast<double>(terrain_estimator->getMinVariance()));
 
         // Scalar effective Jacobian: the z-column entry of the full H,
