@@ -404,7 +404,7 @@ BaseState LeftInvariantEKF::updateStateCopy(const BaseState& state,
 
     // World-frame orientation (right multiply)
     updated_state.base_orientation =
-        Eigen::Quaterniond(R * lie::so3::expMap(-dx(r_idx_))).normalized();
+        Eigen::Quaterniond(R * lie::so3::expMap(dx(r_idx_))).normalized();
 
     // World-frame velocity and position
     updated_state.base_linear_velocity += R * dx(v_idx_);
@@ -415,9 +415,9 @@ BaseState LeftInvariantEKF::updateStateCopy(const BaseState& state,
     updated_state.imu_linear_acceleration_bias += dx(ba_idx_);
 
     // Derive body-frame velocity
-    const Eigen::Matrix3d R_new = updated_state.base_orientation.toRotationMatrix();
     updated_state.base_local_linear_velocity =
-        R_new.transpose() * updated_state.base_linear_velocity;
+        updated_state.base_orientation.toRotationMatrix().transpose() *
+        updated_state.base_linear_velocity;
 
     // Covariances (world-frame)
     updated_state.base_orientation_cov = P(r_idx_, r_idx_);
@@ -672,12 +672,13 @@ void LeftInvariantEKF::updateWithBaseLinearVelocity(BaseState& state,
         return;
     }
     const Eigen::Matrix3d R = state.base_orientation.toRotationMatrix();
+    const Eigen::Matrix3d R_transpose = R.transpose();
     Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
     H.block(0, v_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
 
-    const Eigen::Vector3d z = R.transpose() * (base_linear_velocity - state.base_linear_velocity);
+    const Eigen::Vector3d z = R_transpose * (base_linear_velocity - state.base_linear_velocity);
 
-    const Eigen::Matrix3d N = (R.transpose() * base_linear_velocity_cov * R) / dt;
+    const Eigen::Matrix3d N = (R_transpose * base_linear_velocity_cov * R) / dt;
     const Eigen::Matrix<double, 15, 3> PH_transpose = P_ * H.transpose();
     const Eigen::Matrix3d s = N + H * PH_transpose;
     const Eigen::Matrix<double, 15, 3> K = s.ldlt().solve(PH_transpose.transpose()).transpose();
