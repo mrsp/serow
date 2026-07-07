@@ -180,10 +180,8 @@ void LeftInvariantEKF::predict(BaseState& state, const ImuMeasurement& imu) {
     Qc(nba_idx_, nba_idx_) = imu.linear_acceleration_bias_cov;
 
     // Propagate covariance
-    Eigen::Matrix<double, 15, 15> P_new;
-    P_new.noalias() = Ad * P_ * Ad.transpose();
-    P_new += Qc * dt;
-    P_ = P_new;
+    const Eigen::Matrix<double, 15, 15> P_new = Ad * P_ * Ad.transpose() + Qc * dt;
+    P_ = 0.5 * (P_new + P_new.transpose());  // Enforce symmetry
 
     // Propagate the mean state (world-frame dynamics)
     computeDiscreteDynamics(state, dt, imu.angular_velocity, imu.linear_acceleration);
