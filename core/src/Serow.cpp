@@ -183,8 +183,10 @@ bool Serow::initialize(const std::string& config_file) {
     }
     params_.contacts_frame = std::move(contacts_frame);
 
-    if (!checkConfigParam("use_imu_orientation", params_.use_imu_orientation))
-        return false;
+    if (config.contains("use_imu_orientation")) {
+        if (!checkConfigParam("use_imu_orientation", params_.use_imu_orientation))
+            return false;
+    }
 
     // Base estimator type: "contact" or "left-invariant" (default)
     if (config.contains("base_estimator_type")) {
@@ -240,22 +242,19 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("tau_0", params_.tau_0))
         return false;
-    if (!checkConfigParam("tau_1", params_.tau_1))
-        return false;
-    if (!checkConfigParam("estimate_contact_status", params_.estimate_contact_status))
-        return false;
-    if (!checkConfigParam("median_window", params_.median_window))
-        return false;
-    if (!checkConfigParam("convergence_cycles", params_.convergence_cycles))
-        return false;
-
-    // Optional: if absent or JSON null, keep defaults (false)
-    if (config.contains("enable_terrain_estimation") &&
-        !config["enable_terrain_estimation"].is_null()) {
-        if (!checkConfigParam("enable_terrain_estimation", params_.enable_terrain_estimation)) {
+    if (!params_.point_feet) {
+        if (!checkConfigParam("tau_1", params_.tau_1)) {
             return false;
         }
     }
+    if (!checkConfigParam("estimate_contact_status", params_.estimate_contact_status))
+        return false;
+    if (params_.estimate_contact_status) {
+        if (!checkConfigParam("median_window", params_.median_window))
+            return false;
+    }
+    if (!checkConfigParam("convergence_cycles", params_.convergence_cycles))
+        return false;
     if (config.contains("estimate_contact_wrench") &&
         !config["estimate_contact_wrench"].is_null() && config.contains("observer_gain") &&
         !config["observer_gain"].is_null()) {
@@ -281,6 +280,12 @@ bool Serow::initialize(const std::string& config_file) {
         }
     }
 
+    if (config.contains("enable_terrain_estimation") &&
+        !config["enable_terrain_estimation"].is_null()) {
+        if (!checkConfigParam("enable_terrain_estimation", params_.enable_terrain_estimation)) {
+            return false;
+        }
+    }
     if (params_.enable_terrain_estimation) {
         if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
             return false;
