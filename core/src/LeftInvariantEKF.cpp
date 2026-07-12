@@ -23,8 +23,6 @@
 namespace {
 
 static constexpr double kMinTerrainDt = 1e-6;
-static constexpr double kMaxTerrainCorrection = 0.05;  // max |dz| per update [m]
-static constexpr double kNisGate = 9.0;                // scalar 3-sigma gate
 static constexpr double kStableContactThreshold = 0.5;
 
 }  // namespace
@@ -302,12 +300,10 @@ void LeftInvariantEKF::updateWithOdometry(BaseState& state, const Eigen::Vector3
 //   z = h_map(x_foot,y_foot) - z_foot_world
 //
 // The full first-order model can couple terrain height into orientation and
-// horizontal states.  In SBEE that coupling can create a feedback loop.  Therefore this
-// implementation uses a conservative p_z-only correction with NIS gating and per-update clipping.
+// horizontal states.  In SBEE that coupling can create a feedback loop.
 // ---------------------------------------------------------------------------
 void LeftInvariantEKF::updateWithTerrain(
     BaseState& state, const std::map<std::string, Eigen::Vector3d>& contacts_position,
-    const std::map<std::string, Eigen::Matrix3d>& contacts_position_cov,
     const std::map<std::string, double>& contacts_probability, const double timestamp,
     std::shared_ptr<TerrainElevation> terrain_estimator) {
     if (!terrain_estimator) {
@@ -325,21 +321,25 @@ void LeftInvariantEKF::updateWithTerrain(
     }
     dt = std::max(dt, kMinTerrainDt);
 
-    const Eigen::Vector3d p_world_to_base = state.base_position;
-    const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
-    const Eigen::Matrix3d R_world_to_base_transpose = R_world_to_base.transpose();
-    const int pz = p_idx_[2];
+    Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
+    H.block(0, p_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
+    Eigen::Vector3d z = Eigen::Vector3d::Zero();
+    Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
 
     for (const auto& [cf, cp] : contacts_probability) {
         if (cp < kStableContactThreshold) {
             continue;
         }
 
-        if (contacts_position.count(cf) == 0 || contacts_position_cov.count(cf) == 0) {
+        if (contacts_position.count(cf) == 0) {
             continue;
         }
 
-        const Eigen::Vector3d con_pos_world =
+        const Eigen::Vector3d p_world_to_base = state.base_position;
+        const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
+        const Eigen::Matrix3d R_world_to_base_transpose = R_world_to_base.transpose();
+
+        Eigen::Vector3d con_pos_world =
             R_world_to_base * contacts_position.at(cf) + p_world_to_base;
         if (!(con_pos_world).allFinite()) {
             continue;
@@ -353,34 +353,35 @@ void LeftInvariantEKF::updateWithTerrain(
             continue;
         }
 
+        // Construct the corrected contact position
+        con_pos_world.z() = static_cast<double>(elevation.value().height);
+
+        // Reconstruct the base position from the contact position
+        const Eigen::Vector3d p_world_to_base_measured =
+            con_pos_world - R_world_to_base * contacts_position.at(cf);
+
         // Compute the innovation
-        const double z = R_world_to_base_transpose(2, 2) *
-            (static_cast<double>(elevation.value().height) - con_pos_world.z());
+        z = R_world_to_base_transpose * (p_world_to_base_measured - p_world_to_base);
 
         // Compute the measurement covariance
-        const double con_cov_z = static_cast<double>(elevation.value().variance);
-        const double N = std::max(
-            R_world_to_base_transpose(2, 2) * R_world_to_base(2, 2) * con_cov_z / (cp * dt),
-            static_cast<double>(terrain_estimator->getMinVariance()));
+        N = Eigen::Matrix3d::Identity() *
+            std::max(static_cast<double>(elevation.value().variance),
+                     static_cast<double>(terrain_estimator->getMinVariance())) /
+            (cp * dt);
+        N(0, 0) = 1e6;
+        N(1, 1) = 1e6;
+        N = R_world_to_base_transpose * N * R_world_to_base;
 
-        // Scalar effective Jacobian: the z-column entry of the full H,
-        // i.e. 1.0 since H = e3^T * I.
-        const double Pzz = P_(pz, pz);
-        const double s = Pzz + N;
-        const double nis = z * z / s;
-        if (nis > kNisGate) {
-            continue;
-        }
+        const Eigen::Matrix<double, 15, 3> PH_transpose = P_ * H.transpose();
+        const Eigen::Matrix3d s = N + H * PH_transpose;
+        const Eigen::Matrix<double, 15, 3> K = s.ldlt().solve(PH_transpose.transpose()).transpose();
+        const Eigen::Matrix<double, 15, 1> dx = K * z;
 
-        const double k = Pzz / s;
-        const double dz = std::clamp(k * z, -kMaxTerrainCorrection, kMaxTerrainCorrection);
-
-        Eigen::Matrix<double, 15, 1> dx = Eigen::Matrix<double, 15, 1>::Zero();
-        dx(pz) = dz;
-
-        // Only touch P_(pz,pz); leave every other entry of P untouched.
-        P_(pz, pz) =
-            std::max((1.0 - k) * Pzz, 1e-9);  // guard against negative variance from clamping
+        const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
+        Eigen::Matrix<double, 15, 15> P_new;
+        P_new.noalias() = IKH * P_ * IKH.transpose();
+        P_new += K * N * K.transpose();
+        P_ = P_new;
         updateState(state, dx, P_);
     }
 }
@@ -501,13 +502,7 @@ void LeftInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
     }
 
     if (terrain_estimator && terrain_dt_valid) {
-        // 4) Terrain correction from the old map only.  This is intentionally before
-        // writing the current contacts into the map, preventing a same-cycle feedback
-        // loop: wrong state -> wrong map update -> immediate EKF correction.
-        updateWithTerrain(state, kin.contacts_position, kin.contacts_position_noise,
-                          terrain_contacts_probability, kin.timestamp, terrain_estimator);
-
-        // 5) Now update the terrain map using the corrected state.
+        // 4) Update the terrain map using the corrected state.
         Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
         T_world_to_base.translation() = state.base_position;
         T_world_to_base.linear() = state.base_orientation.toRotationMatrix();
@@ -594,6 +589,10 @@ void LeftInvariantEKF::update(BaseState& state, const ImuMeasurement& imu,
             terrain_estimator->recenter(base_pos_xy);
         }
         terrain_estimator->interpolateContactPoints();
+
+        // 5) Now apply a terrain correction from the new map.
+        updateWithTerrain(state, kin.contacts_position, terrain_contacts_probability, kin.timestamp,
+                          terrain_estimator);
     }
 
     Eigen::Isometry3d T_world_to_base = Eigen::Isometry3d::Identity();
