@@ -37,16 +37,29 @@ using json = nlohmann::json;
 // "LF_HAA_joint" instead of "LF_HAA". For the columns you gave, the default
 // assumes the model joint names are LF_HAA, LF_HFE, LF_KFE, ...
 // -----------------------------------------------------------------------------
+
+std::string getSerowBasePath() {
+    const char* envPath = std::getenv("SEROW_PATH");
+
+    if (envPath != nullptr) {
+        return std::string(envPath);
+    } else {
+        // Fallback in case you run the executable somewhere without the env var sourced
+        std::cerr << "Warning: SEROW_PATH environment variable not set. Using default path.\n";
+        return "/path/to/serow";
+    }
+}
+
 const std::string DEFAULT_CONFIG = "anymal.json";
+
 const std::string DEFAULT_SENSOR_CSV =
-    "/path/to/serow/evaluation/anymal_test/anymal_data/test/cyn-1/"
-    "anymal_data.csv";
+    getSerowBasePath() + "/evaluation/anymal_test/anymal_data/test/cyn-1/anymal_data.csv";
+
 const std::string DEFAULT_OUTPUT_CSV =
-    "/path/to/serow/evaluation/anymal_test/anymal_data/test/cyn-1/serow/"
-    "fused_state.csv";
+    getSerowBasePath() + "/evaluation/anymal_test/anymal_data/test/cyn-1/serow/fused_state.csv";
+
 const std::string DEFAULT_OUTPUT_TUM =
-    "/path/to/serow/evaluation/anymal_test/anymal_data/test/cyn-1/serow/"
-    "serow_traj_tum.csv";
+    getSerowBasePath() + "/evaluation/anymal_test/anymal_data/test/cyn-1/serow/serow_traj_tum.csv";
 
 // false = use SEROW/momentum-observer contact estimator
 // true  = use binary contact_LF/RF/LH/RH flags from anymal_data.csv
