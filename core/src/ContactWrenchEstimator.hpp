@@ -152,6 +152,9 @@ public:
 
     std::map<std::string, ForceTorqueMeasurement> contactWrenches() {
         std::map<std::string, ForceTorqueMeasurement> ft;
+        if (!last_timestamp_.has_value()) {
+            return ft;
+        }
 
         // Jacobian cache: compute each unique frame's Jacobian exactly once.
         jacobian_cache_.clear();
@@ -215,6 +218,7 @@ public:
         active_set_scratch_.clear();
         int index = 0;
         for (const std::string& frame : optimal_frames) {
+            ft[frame].timestamp = last_timestamp_.value();
             ft[frame].force = wrench.segment<3>(cols_per_contact_ * index);
             if (!point_feet_) {
                 ft[frame].torque = wrench.segment<3>(cols_per_contact_ * index + 3);
@@ -226,6 +230,7 @@ public:
         // Inactive feet — zero out explicitly for the caller.
         for (const std::string& frame : contact_frames_) {
             if (active_set_scratch_.find(frame) == active_set_scratch_.end()) {
+                ft[frame].timestamp = last_timestamp_.value();
                 ft[frame].force = Eigen::Vector3d::Zero();
                 if (!point_feet_) {
                     ft[frame].torque = Eigen::Vector3d::Zero();
