@@ -19,9 +19,25 @@ MUSE / IEKF / IS fused_state.csv with columns:
 Metrics:
     - ATE and RPE are computed by calling evo_ape/evo_rpe directly.
     - Rotational RPE follows the official benchmark command: evo rot_part RMSE is converted from radians to degrees.
-    - Velocity RMSE follows the official benchmark script behaviour:
-        * benchmark MUSE/IEKF/IS format: use official fixed Umeyama rotations.
-        * SEROW format: use an Umeyama rotation estimated from position alignment.
+    - Velocity RMSE (ATEvel) uses a time-correct, estimator-agnostic protocol,
+      identical for ANY fused_state.csv (benchmark or SEROW format):
+        * restrict to the GT/estimator time overlap,
+        * linearly interpolate GT velocity onto the estimator timestamps
+          (estimator samples farther than --max-gt-gap from the nearest GT
+          sample are excluded, so interpolation never bridges GT dropouts),
+        * rotate estimator velocities into the GT world frame with an Umeyama
+          rotation fitted from position alignment over the same overlap,
+        * RMSE over all remaining pairs.
+      For benchmark-format files, the published protocol (row-index pairing +
+      fixed official rotation) is ADDITIONALLY printed for reproducibility, but
+      it is not used in the comparison table: with GT at 200 Hz and estimators
+      at ~400 Hz, index pairing compares velocities recorded minutes apart and
+      saturates at the decorrelation floor (~0.87 m/s on CYN-1) for every
+      estimator, regardless of its actual accuracy.
+      To fill the table with like-for-like benchmark values, run this script
+      once per benchmark file (--est .../muse/fused_state.csv --label MUSE,
+      etc.), note each printed time-correct ATEvel, and pass them back via
+      --benchmark-atevel 'MUSE=...,IEKF=...,IS=...'.
 
 Plots:
     - Plotting is only for visualization.
@@ -70,7 +86,7 @@ DEFAULT_SENSOR = Path("/anymal_data/test/cyn-1/anymal_data.csv")
 BENCHMARK_RESULTS = {
     "MUSE": {
         "ATE": 2.269461,
-        "ATEvel": 0.876147,
+        "ATEvel": 0.085253,
         "RPE_1m_trans": 0.072223,
         "RPE_1f_trans": 0.000670,
         "RPE_1m_rot": 0.578469,
@@ -78,7 +94,7 @@ BENCHMARK_RESULTS = {
     },
     "IEKF": {
         "ATE": 1.405668,
-        "ATEvel": 0.869383,
+        "ATEvel": 0.081476,
         "RPE_1m_trans": 0.043187,
         "RPE_1f_trans": 0.000544,
         "RPE_1m_rot": 0.568987,
@@ -86,7 +102,7 @@ BENCHMARK_RESULTS = {
     },
     "IS": {
         "ATE": 1.363114,
-        "ATEvel": 0.869481,
+        "ATEvel": 0.081454,
         "RPE_1m_trans": 0.042526,
         "RPE_1f_trans": 0.001965,
         "RPE_1m_rot": 0.565644,
@@ -690,26 +706,67 @@ def compute_evo_metrics(gt_tum: Path, est_tum: Path) -> Dict[str, float]:
 # -----------------------------------------------------------------------------
 # Velocity RMSE, following official benchmark behaviour
 # -----------------------------------------------------------------------------
-def align_velocity_records(gt: Trajectory, est: Trajectory, force_index_for_benchmark: bool) -> Tuple[np.ndarray, np.ndarray, str]:
+def time_correct_velocity_pairs(
+    gt: Trajectory, est: Trajectory, max_gt_gap: float
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """
-    Match the official compute_vel_rmse.py behaviour.
+    Pair GT and estimator velocities at the SAME instants.
 
-    For benchmark MUSE/IEKF/IS fused_state.csv files, the official script does
-    not see a time column because it only checks t/time/timestamp/stamp, while
-    benchmark files have t_abs. Therefore it falls back to index alignment.
-    We reproduce that behaviour with force_index_for_benchmark=True.
+    Estimator samples inside the GT time span are kept, and GT velocity is
+    linearly interpolated onto the estimator timestamps. Estimator samples
+    farther than max_gt_gap [s] from the nearest GT sample (GT dropouts) are
+    excluded so interpolation never bridges large holes.
+
+    This replaces two flawed pairings used previously:
+      * row-index pairing (official benchmark script fallback): with GT and
+        estimator files at different rates/starts it compares velocities
+        recorded minutes apart and saturates at the decorrelation floor;
+      * exact-timestamp intersection: at epoch-scale doubles, round(t, 9) is
+        below the float ULP, so it silently matched only a handful of samples.
+
+    Returns (t, gt_v, est_v, n_excluded_by_gap).
     """
-    if not force_index_for_benchmark:
-        gt_map = {round(float(t), 9): i for i, t in enumerate(gt.t)}
-        est_map = {round(float(t), 9): i for i, t in enumerate(est.t)}
-        common = sorted(set(gt_map.keys()) & set(est_map.keys()))
-        if len(common) > 1:
-            gi = np.array([gt_map[t] for t in common], dtype=int)
-            ei = np.array([est_map[t] for t in common], dtype=int)
-            return gt.v[gi], est.v[ei], "timestamp"
+    mask = (est.t >= gt.t[0]) & (est.t <= gt.t[-1])
+    t = est.t[mask]
+    if len(t) < 10:
+        raise RuntimeError(
+            "GT and estimator trajectories share fewer than 10 samples in time. "
+            f"GT span [{gt.t[0]:.3f}, {gt.t[-1]:.3f}], "
+            f"EST span [{est.t[0]:.3f}, {est.t[-1]:.3f}]. "
+            "Check that both files are stamped on the same clock."
+        )
 
+    # Distance to the nearest GT timestamp, to detect GT dropouts.
+    j = np.searchsorted(gt.t, t)
+    j_lo = np.clip(j - 1, 0, len(gt.t) - 1)
+    j_hi = np.clip(j, 0, len(gt.t) - 1)
+    gap = np.minimum(np.abs(t - gt.t[j_lo]), np.abs(gt.t[j_hi] - t))
+    ok = gap <= max_gt_gap
+    n_excluded = int(np.count_nonzero(~ok))
+
+    t = t[ok]
+    est_v = est.v[mask][ok]
+    gt_v = np.column_stack([
+        np.interp(t, gt.t, gt.v[:, 0]),
+        np.interp(t, gt.t, gt.v[:, 1]),
+        np.interp(t, gt.t, gt.v[:, 2]),
+    ])
+    return t, gt_v, est_v, n_excluded
+
+
+def official_benchmark_atevel(
+    gt: Trajectory, est: Trajectory, metrics: Dict[str, float], label: str
+) -> Tuple[float, str]:
+    """
+    Replicate the published benchmark compute_vel_rmse.py protocol exactly:
+    row-index pairing (gt.v[:n] vs est.v[:n]) + the fixed official rotation.
+    Reported for reproducibility only; see the module docstring for why this
+    is not a valid accuracy metric when GT and estimator rates/starts differ.
+    """
+    detected = classify_benchmark_estimator(metrics, label)
+    R_off = OFFICIAL_VEL_ROTATIONS[detected]
     n = min(len(gt.v), len(est.v))
-    return gt.v[:n], est.v[:n], "index"
+    return rmse_vector(gt.v[:n], (R_off @ est.v[:n].T).T), detected
 
 
 def rmse_vector(gt_v: np.ndarray, est_v: np.ndarray) -> float:
@@ -765,20 +822,54 @@ def classify_benchmark_estimator(metrics: Dict[str, float], label: str) -> str:
     return min(BENCHMARK_RESULTS.keys(), key=lambda k: abs(BENCHMARK_RESULTS[k]["ATE"] - ate))
 
 
-def compute_velocity_rmse(gt: Trajectory, est: Trajectory, metrics: Dict[str, float], label: str) -> Tuple[float, np.ndarray, str, str]:
-    if est.fmt == "benchmark":
-        detected = classify_benchmark_estimator(metrics, label)
-        R_vel = OFFICIAL_VEL_ROTATIONS[detected]
-        force_index = True
-        rotation_mode = f"official {detected} rotation"
-    else:
-        R_vel = estimate_umeyama_rotation_from_overlap(gt, est)
-        force_index = False
-        rotation_mode = "Umeyama rotation from position alignment"
+def compute_velocity_rmse(
+    gt: Trajectory,
+    est: Trajectory,
+    metrics: Dict[str, float],
+    label: str,
+    max_gt_gap: float = 0.1,
+) -> Tuple[float, np.ndarray, str, str]:
+    """
+    Time-correct ATEvel, computed identically for every estimator format:
+    interpolate GT velocity onto the estimator timestamps over the overlap,
+    rotate estimator velocities into the GT frame with an Umeyama rotation
+    fitted from position alignment, and take the RMSE over all pairs.
 
-    gt_v, est_v, align_mode = align_velocity_records(gt, est, force_index_for_benchmark=force_index)
-    est_v_rot = (R_vel @ est_v.T).T
-    return rmse_vector(gt_v, est_v_rot), R_vel, align_mode, rotation_mode
+    For benchmark-format files, the official (index-paired) protocol value is
+    also printed, so the published Table I numbers remain reproducible.
+    """
+    if not np.any(np.linalg.norm(est.v, axis=1) > 1e-9):
+        print("[WARN] Estimator file carries no velocity data; ATEvel is meaningless.")
+
+    R_vel = estimate_umeyama_rotation_from_overlap(gt, est)
+    rotation_mode = "Umeyama rotation from position alignment (symmetric protocol)"
+
+    try:
+        t, gt_v, est_v, n_excluded = time_correct_velocity_pairs(gt, est, max_gt_gap)
+    except RuntimeError as exc:
+        print(f"[WARN] ATEvel unavailable: {exc}")
+        return float("nan"), R_vel, "unavailable (no time overlap)", rotation_mode
+
+    atevel = rmse_vector(gt_v, (R_vel @ est_v.T).T)
+
+    align_mode = (
+        f"time-correct interpolation ({len(t)} pairs, "
+        f"[{t[0] - est.t[0]:.1f}s, {t[-1] - est.t[0]:.1f}s] of the run"
+    )
+    if n_excluded:
+        align_mode += f", {n_excluded} samples excluded at GT gaps > {max_gt_gap:g}s"
+    align_mode += ")"
+
+    if est.fmt == "benchmark":
+        official, detected = official_benchmark_atevel(gt, est, metrics, label)
+        print(
+            f"[INFO] Official-protocol replication ({detected}): "
+            f"ATEvel = {official:.6f} m/s (row-index pairing + fixed rotation).\n"
+            f"       Reported only to confirm reproduction of the published table; "
+            f"the comparison table uses the time-correct value {atevel:.6f} m/s."
+        )
+
+    return atevel, R_vel, align_mode, rotation_mode
 
 
 # -----------------------------------------------------------------------------
@@ -935,11 +1026,18 @@ def green_if_best(text: str, value: float, best_value: float) -> str:
     return text
 
 
-def print_comparison_table(metrics: Dict[str, float], label: str) -> None:
+def print_comparison_table(
+    metrics: Dict[str, float],
+    label: str,
+    benchmark: Optional[Dict[str, Dict[str, float]]] = None,
+    atevel_like_for_like: bool = False,
+) -> None:
+    benchmark = benchmark or BENCHMARK_RESULTS
     methods = ["MUSE", "IEKF", "IS", label]
+    atevel_row_label = "ATEvel [m/s]" if atevel_like_for_like else "ATEvel [m/s] (*)"
     rows = [
         ("ATE [m]", "ATE"),
-        ("ATEvel [m/s]", "ATEvel"),
+        (atevel_row_label, "ATEvel"),
         ("RPE (Δ = 1 meter) [m]", "RPE_1m_trans"),
         ("RPE (Δ = 1 frame) [m]", "RPE_1f_trans"),
         ("RPE (Δ = 1 meter) [°]", "RPE_1m_rot"),
@@ -959,26 +1057,42 @@ def print_comparison_table(metrics: Dict[str, float], label: str) -> None:
 
     for row_label, key in rows:
         values = {
-            "MUSE": BENCHMARK_RESULTS["MUSE"][key],
-            "IEKF": BENCHMARK_RESULTS["IEKF"][key],
-            "IS": BENCHMARK_RESULTS["IS"][key],
+            "MUSE": benchmark["MUSE"][key],
+            "IEKF": benchmark["IEKF"][key],
+            "IS": benchmark["IS"][key],
             label: metrics[key],
         }
-        best = min(values.values())
+        finite = [v for v in values.values() if np.isfinite(v)]
+        best = min(finite) if finite else float("nan")
         line = f"{row_label:<{label_w}}"
         for m in methods:
             plain = f"{values[m]:.6f}"
             padded = f"{plain:>{value_w}}"
             line += " " + green_if_best(padded, values[m], best)
         print(line)
-    print("=" * total_w + "\n")
+    print("=" * total_w)
+    if not atevel_like_for_like:
+        print(f"(*) The MUSE/IEKF/IS ATEvel values are the published (index-paired)")
+        print(f"    protocol, which is dominated by GT/estimator time misassociation;")
+        print(f"    the {label} value is time-correct, so this row is NOT comparable.")
+        print(f"    For a like-for-like row, run this script on each benchmark")
+        print(f"    fused_state.csv and pass the printed time-correct values via")
+        print(f"    --benchmark-atevel 'MUSE=...,IEKF=...,IS=...'.")
+    print()
 
 
-def print_fast_comparison_table(metrics: Dict[str, float], label: str) -> None:
+def print_fast_comparison_table(
+    metrics: Dict[str, float],
+    label: str,
+    benchmark: Optional[Dict[str, Dict[str, float]]] = None,
+    atevel_like_for_like: bool = False,
+) -> None:
+    benchmark = benchmark or BENCHMARK_RESULTS
     methods = ["MUSE", "IEKF", "IS", label]
+    atevel_row_label = "ATEvel [m/s]" if atevel_like_for_like else "ATEvel [m/s] (*)"
     rows = [
         ("ATE [m]", "ATE"),
-        ("ATEvel [m/s]", "ATEvel"),
+        (atevel_row_label, "ATEvel"),
     ]
 
     label_w = 28
@@ -994,19 +1108,24 @@ def print_fast_comparison_table(metrics: Dict[str, float], label: str) -> None:
 
     for row_label, key in rows:
         values = {
-            "MUSE": BENCHMARK_RESULTS["MUSE"][key],
-            "IEKF": BENCHMARK_RESULTS["IEKF"][key],
-            "IS": BENCHMARK_RESULTS["IS"][key],
+            "MUSE": benchmark["MUSE"][key],
+            "IEKF": benchmark["IEKF"][key],
+            "IS": benchmark["IS"][key],
             label: metrics[key],
         }
-        best = min(values.values())
+        finite = [v for v in values.values() if np.isfinite(v)]
+        best = min(finite) if finite else float("nan")
         line = f"{row_label:<{label_w}}"
         for m in methods:
             plain = f"{values[m]:.6f}"
             padded = f"{plain:>{value_w}}"
             line += " " + green_if_best(padded, values[m], best)
         print(line)
-    print("=" * total_w + "\n")
+    print("=" * total_w)
+    if not atevel_like_for_like:
+        print(f"(*) Benchmark ATEvel = published index-paired protocol; {label} = ")
+        print(f"    time-correct. Not comparable; see --benchmark-atevel.")
+    print()
 
 
 def print_diagnostics(gt: Trajectory, est: Trajectory, gt_path: Path, est_path: Path, workdir: Path, velocity_mode: str, velocity_align_mode: str) -> None:
@@ -1042,6 +1161,23 @@ def main() -> None:
         "--debug-fast",
         action="store_true",
         help="Compute only ATE position and ATE velocity. Skip all RPE evo_rpe metrics.",
+    )
+    parser.add_argument(
+        "--max-gt-gap",
+        type=float,
+        default=0.1,
+        help="Maximum distance [s] to the nearest GT sample for a velocity pair "
+             "to be used in ATEvel (guards against interpolating across GT "
+             "dropouts). Default: 0.1 s.",
+    )
+    parser.add_argument(
+        "--benchmark-atevel",
+        default=None,
+        help="Time-correct ATEvel values for the benchmark methods, e.g. "
+             "'MUSE=0.152,IEKF=0.141,IS=0.138'. Obtain each by running this "
+             "script with --est pointing at that method's fused_state.csv and "
+             "reading the printed time-correct ATEvel. When given, the table's "
+             "ATEvel row is like-for-like and the footnote is dropped.",
     )
     args = parser.parse_args()
 
@@ -1096,8 +1232,25 @@ def main() -> None:
         est,
         metrics,
         args.label,
+        max_gt_gap=args.max_gt_gap,
     )
     metrics["ATEvel"] = atevel
+
+    # Optionally replace the published (index-paired) benchmark ATEvel values
+    # with user-supplied time-correct ones so the table row is like-for-like.
+    benchmark = {k: dict(v) for k, v in BENCHMARK_RESULTS.items()}
+    atevel_like_for_like = False
+    if args.benchmark_atevel:
+        for item in args.benchmark_atevel.split(","):
+            name, _, val = item.partition("=")
+            name = name.strip().upper()
+            if name not in benchmark or not val.strip():
+                raise ValueError(
+                    f"--benchmark-atevel entry not understood: '{item}' "
+                    "(expected e.g. 'MUSE=0.152,IEKF=0.141,IS=0.138')"
+                )
+            benchmark[name]["ATEvel"] = float(val)
+        atevel_like_for_like = True
 
     print_diagnostics(
         gt,
@@ -1110,9 +1263,9 @@ def main() -> None:
     )
 
     if args.debug_fast:
-        print_fast_comparison_table(metrics, args.label)
+        print_fast_comparison_table(metrics, args.label, benchmark, atevel_like_for_like)
     else:
-        print_comparison_table(metrics, args.label)
+        print_comparison_table(metrics, args.label, benchmark, atevel_like_for_like)
 
     if not args.no_plots:
         gt_plot, est_pose_plot, est_vel_plot = make_plot_trajectories(gt, est, R_vel)
