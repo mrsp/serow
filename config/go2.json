@@ -16,8 +16,9 @@
     "joint_position_variance": 1e-5,
     "joint_velocity_variance": null,
     "smoothing_window": 11,
-    "estimate_contact_wrench": true,
-    "observer_gain": 50.0,
+    "estimate_contact_wrench": false,
+    "contact_wrench_estimator_enable_refit": false,
+    "observer_gain": 9.0,
     "contact_wrench_regularization_parameter": 1e-2,
     "contact_wrench_estimator_type": "cod",
     "tau_0": 5e-4,
@@ -45,7 +46,6 @@
         0.0,
         1.0
     ],
-    "use_imu_orientation": false,
     "calibrate_initial_imu_bias": true,
     "max_imu_calibration_cycles": 500,
     "bias_gyro": [

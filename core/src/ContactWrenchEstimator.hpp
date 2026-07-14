@@ -54,17 +54,21 @@ public:
      * @param point_feet Whether the feet are point contacts or not
      * @param type The type of pseudo-inverse to use ("llt" or "cod")
      * @param mu The Tikhonov regularization parameter only applies to the "llt" type
+     * @param enable_refit Whether to enable refit after zeroing out wrench blocks that violate the
+     * unilateral constraint
      */
     ContactWrenchEstimator(std::shared_ptr<RobotKinematics> kinematic_estimator,
                            const std::set<std::string>& contact_frames, const double gain,
                            const double lambda, const bool point_feet = true,
-                           const std::string& type = "llt", const double mu = 1e-6)
+                           const std::string& type = "llt", const bool enable_refit = false,
+                           const double mu = 1e-6)
         : kinematic_estimator_(kinematic_estimator),
           contact_frames_(contact_frames),
           gain_(gain),
           lambda_(lambda),
           point_feet_(point_feet),
           type_(type),
+          enable_refit_(enable_refit),
           mu_(mu) {
         // GMO runs on actuated DoF only; floating-base rows have zero actuator torque.
         n_actuated_ = kinematic_estimator->ndofActuated();
@@ -150,18 +154,22 @@ public:
         residual_ = gain_ * (p_actuated - integral_);
     }
 
-    std::map<std::string, ForceTorqueMeasurement> contactWrenches() {
+    std::map<std::string, ForceTorqueMeasurement> contactWrenches(
+        const std::map<std::string, Eigen::Quaterniond>& feet_orientation) {
         std::map<std::string, ForceTorqueMeasurement> ft;
         if (!last_timestamp_.has_value()) {
             return ft;
         }
 
         // Jacobian cache: compute each unique frame's Jacobian exactly once.
+        std::map<std::string, Eigen::Vector3d> unit_z;
         jacobian_cache_.clear();
         for (const auto& frame : contact_frames_) {
             jacobian_cache_.emplace(
                 frame,
                 kinematic_estimator_->geometricJacobian(frame, false).topRows(cols_per_contact_));
+            unit_z[frame] = feet_orientation.at(frame).toRotationMatrix().transpose() *
+                Eigen::Vector3d::UnitZ();
         }
 
         // Build stacked Jacobian for each contact case.
@@ -184,22 +192,85 @@ public:
         const double inv_residual_norm = 1.0 / (residual_norm + 1e-9);
         for (int mask = 1; mask < static_cast<int>(contact_cases_.size()); ++mask) {
             const Eigen::MatrixXd& A = A_[mask];
+            const auto& frames = contact_cases_[mask];
+            const int num_contacts = static_cast<int>(frames.size());
             Eigen::VectorXd& wrench = wrenches_[mask];
+
             if (type_ == "llt") {
                 // Right pseudo-inverse via normal equations on A*A^T (size n_actuated_ x
-                // n_actuated_, independent of contact count) instead of QR-based COD on the full
-                // wide A.
-                Eigen::MatrixXd AAT = A * A.transpose();
-                AAT.diagonal().array() +=
-                    mu_;  // Tikhonov term for numerical safety near rank deficiency
-                Eigen::LLT<Eigen::MatrixXd> llt(AAT);
-                wrench = A.transpose() * llt.solve(residual_);
+                // n_actuated_, independent of contact count) instead of QR-based COD on the
+                // full wide A.
+                Eigen::MatrixXd A_active = A;
+                std::vector<bool> constrained(num_contacts, false);
+
+                // If refit is enabled, keep re-solving on a shrinking active set until no more
+                // contacts violate the constraint. If disabled, solve once and only zero out
+                // violating blocks afterward.
+                const int max_iters = enable_refit_ ? num_contacts : 0;
+                for (int iter = 0; iter <= max_iters; ++iter) {
+                    Eigen::MatrixXd AAT = A_active * A_active.transpose();
+                    AAT.diagonal().array() +=
+                        mu_;  // Tikhonov term for numerical safety near rank deficiency
+                    Eigen::LLT<Eigen::MatrixXd> llt(AAT);
+                    wrench = A_active.transpose() * llt.solve(residual_);
+
+                    bool changed = false;
+                    int index = 0;
+                    for (const std::string& frame : frames) {
+                        if (!constrained[index] &&
+                            unit_z.at(frame).dot(wrench.segment<3>(cols_per_contact_ * index)) <
+                                0.0) {
+                            constrained[index] = true;
+                            wrench.segment(cols_per_contact_ * index, cols_per_contact_).setZero();
+                            if (enable_refit_) {
+                                A_active.middleCols(cols_per_contact_ * index, cols_per_contact_)
+                                    .setZero();
+                            }
+                            changed = true;
+                        }
+                        ++index;
+                    }
+                    if (!enable_refit_ || !changed) {
+                        break;
+                    }
+                }
             } else {
                 // Use Complete Orthogonal Decomposition to solve the system of equations.
-                // More expensive than LLT but more numerically stable.
-                Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(A);
-                wrench = cod.solve(residual_);
+                // More expensive than LLT but more numerically stable. Same active-set logic
+                // applied on top, since COD alone doesn't enforce the sign constraint either.
+                Eigen::MatrixXd A_active = A;
+                std::vector<bool> constrained(num_contacts, false);
+
+                // If refit is enabled, keep re-solving on a shrinking active set until no more
+                // contacts violate the constraint. If disabled, solve once and only zero out
+                // violating blocks afterward.
+                const int max_iters = enable_refit_ ? num_contacts : 0;
+                for (int iter = 0; iter <= max_iters; ++iter) {
+                    Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(A_active);
+                    wrench = cod.solve(residual_);
+
+                    bool changed = false;
+                    int index = 0;
+                    for (const std::string& frame : frames) {
+                        if (!constrained[index] &&
+                            unit_z.at(frame).dot(wrench.segment<3>(cols_per_contact_ * index)) <
+                                0.0) {
+                            constrained[index] = true;
+                            wrench.segment(cols_per_contact_ * index, cols_per_contact_).setZero();
+                            if (enable_refit_) {
+                                A_active.middleCols(cols_per_contact_ * index, cols_per_contact_)
+                                    .setZero();
+                            }
+                            changed = true;
+                        }
+                        ++index;
+                    }
+                    if (!enable_refit_ || !changed) {
+                        break;
+                    }
+                }
             }
+
             const double cost =
                 (A * wrench - residual_).squaredNorm() * inv_residual_norm + cost_offset_[mask];
             if (cost < min_cost) {
@@ -274,7 +345,8 @@ private:
     std::vector<Eigen::MatrixXd> A_;
     /// Frames active in each contact case, indexed by mask.
     std::vector<std::vector<std::string>> contact_cases_;
-    /// Precomputed lambda_ * num_contacts * cols_per_contact_ per mask (static, call-invariant).
+    /// Precomputed lambda_ * num_contacts * cols_per_contact_ per mask (static,
+    /// call-invariant).
     std::vector<double> cost_offset_;
     /// Solved wrench per mask, reused across calls.
     std::vector<Eigen::VectorXd> wrenches_;
@@ -288,6 +360,7 @@ private:
     double lambda_{1e-2};
     bool point_feet_{true};
     std::string type_{"llt"};
+    bool enable_refit_{false};
     double mu_{1e-6};
 };
 

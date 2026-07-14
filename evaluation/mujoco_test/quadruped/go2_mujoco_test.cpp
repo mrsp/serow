@@ -18,7 +18,7 @@
 using namespace serow;
 using json = nlohmann::json;
 
-static constexpr bool USE_JOINT_EFFORT_CONTACT_WRENCH = true;
+static constexpr bool USE_JOINT_EFFORT_CONTACT_WRENCH = false;
 
 // Helper: Resolve Paths
 std::string resolvePath(const json& config, const std::string& path) {
@@ -153,10 +153,9 @@ int main(int argc, char** argv) {
             }
 
             for (const auto& leg : legs) {
-                measured_forces_local[leg] = Eigen::Vector3d(
-                    j_in["feet_forces"][leg]["x"],
-                    j_in["feet_forces"][leg]["y"],
-                    j_in["feet_forces"][leg]["z"]);
+                measured_forces_local[leg] =
+                    Eigen::Vector3d(j_in["feet_forces"][leg]["x"], j_in["feet_forces"][leg]["y"],
+                                    j_in["feet_forces"][leg]["z"]);
             }
 
             // When false, the measured forces are supplied to SEROW. When true,
@@ -290,13 +289,11 @@ int main(int argc, char** argv) {
                 // returns q_WF. Therefore f_F = R_WF^T f_W = q_WF^{-1} * f_W.
                 for (const auto& leg : legs) {
                     const std::string frame_name = leg + "_foot";
-                    const Eigen::Vector3d& measured_force_local =
-                        measured_forces_local.at(leg);
+                    const Eigen::Vector3d& measured_force_local = measured_forces_local.at(leg);
 
                     const Eigen::Quaterniond q_world_foot =
                         state->getFootOrientation(frame_name).normalized();
-                    const auto estimated_force_world_opt =
-                        state->getContactForce(frame_name);
+                    const auto estimated_force_world_opt = state->getContactForce(frame_name);
                     const bool force_available = estimated_force_world_opt.has_value();
 
                     const Eigen::Vector3d estimated_force_world =
@@ -320,13 +317,11 @@ int main(int argc, char** argv) {
                         {"x", estimated_force_world.x()},
                         {"y", estimated_force_world.y()},
                         {"z", estimated_force_world.z()}};
-                    j_out["foot_orientation_world"][frame_name] = {
-                        {"w", q_world_foot.w()},
-                        {"x", q_world_foot.x()},
-                        {"y", q_world_foot.y()},
-                        {"z", q_world_foot.z()}};
-                    j_out["estimated_contact_force_available"][frame_name] =
-                        force_available;
+                    j_out["foot_orientation_world"][frame_name] = {{"w", q_world_foot.w()},
+                                                                   {"x", q_world_foot.x()},
+                                                                   {"y", q_world_foot.y()},
+                                                                   {"z", q_world_foot.z()}};
+                    j_out["estimated_contact_force_available"][frame_name] = force_available;
                 }
 
                 std::string output_payload = j_out.dump();

@@ -195,6 +195,9 @@ private:
         /// @brief type of the contact wrench estimator. Only applies if estimate_contact_wrench =
         /// true
         std::string contact_wrench_estimator_type{};
+        /// @brief whether or not to enable refit after zeroing out wrench blocks that violate the
+        /// unilateral constraint
+        bool contact_wrench_estimator_enable_refit{};
         /// @brief Tikhonov regularization parameter for the contact wrench estimator. Only applies
         /// if contact_wrench_estimator_type = "llt"
         double contact_wrench_estimator_llt_mu{};
@@ -420,7 +423,9 @@ private:
         std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
     /// @brief Runs the contact wrench estimator to estimate the leg end-effector contact wrench
     /// @return Estimated contact wrench measurements (per contact frame)
-    std::map<std::string, ForceTorqueMeasurement> runContactWrenchEstimator();
+    /// @param feet_orientation the orientation of the feet w.r.t. the world frame
+    std::map<std::string, ForceTorqueMeasurement> runContactWrenchEstimator(
+        const std::map<std::string, Eigen::Quaterniond>& feet_orientation);
 
     /// @brief Runs the base estimator
     /// @param state the state of the robot
