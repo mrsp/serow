@@ -45,7 +45,7 @@ def load_gt_data(mcap_file):
     """Loads Ground Truth data from the input MCAP."""
     data_store = {
         "pos": [], "rot": [], "lin_vel": [], "ts": [], "com": [],
-        "acc": [], "gyr": [], "f_fl": [], "f_fr": [], "f_rl": [], "f_rr": []
+        "acc": [], "gyr": []
     }
 
     print(f"Loading Ground Truth from: {mcap_file}")
@@ -68,13 +68,6 @@ def load_gt_data(mcap_file):
             # IMU
             data_store["acc"].append([d["imu"]["linear_acceleration"]["x"], d["imu"]["linear_acceleration"]["y"], d["imu"]["linear_acceleration"]["z"]])
             data_store["gyr"].append([d["imu"]["angular_velocity"]["x"], d["imu"]["angular_velocity"]["y"], d["imu"]["angular_velocity"]["z"]])
-            
-            # Forces
-            ff = d["feet_forces"]
-            data_store["f_fl"].append([ff["FL"]["x"], ff["FL"]["y"], ff["FL"]["z"]])
-            data_store["f_fr"].append([ff["FR"]["x"], ff["FR"]["y"], ff["FR"]["z"]])
-            data_store["f_rl"].append([ff["RL"]["x"], ff["RL"]["y"], ff["RL"]["z"]])
-            data_store["f_rr"].append([ff["RR"]["x"], ff["RR"]["y"], ff["RR"]["z"]])
 
     # Convert all lists to numpy arrays
     return {k: np.array(v) for k, v in data_store.items()}
@@ -84,7 +77,12 @@ def load_serow_preds(mcap_file):
     """Loads Estimated data from the output MCAP."""
     data_store = {
         "pos": [], "rot": [], "lin_vel": [], "ts": [], "com_pos": [], "com_vel": [],
-        "b_acc": [], "b_gyr": []
+        "b_acc": [], "b_gyr": [],
+        "f_est_fl": [], "f_est_fr": [], "f_est_rl": [], "f_est_rr": [],
+        "f_meas_world_fl": [], "f_meas_world_fr": [],
+        "f_meas_world_rl": [], "f_meas_world_rr": [],
+        "f_meas_local_fl": [], "f_meas_local_fr": [],
+        "f_meas_local_rl": [], "f_meas_local_rr": []
     }
 
     print(f"Loading Predictions from: {mcap_file}")
@@ -116,6 +114,55 @@ def load_serow_preds(mcap_file):
             bias = d["imu_bias"]
             data_store["b_acc"].append([bias["accel"]["x"], bias["accel"]["y"], bias["accel"]["z"]])
             data_store["b_gyr"].append([bias["angVel"]["x"], bias["angVel"]["y"], bias["angVel"]["z"]])
+
+            # Both force signals are loaded from the prediction MCAP. The C++ runner
+            # rotates each base-local sensor vector with R_world_base before logging it.
+            # No force values from the input/ground-truth MCAP are used in the plots.
+            required_force_fields = (
+                "estimated_contact_forces_world",
+                "measured_contact_forces_world",
+            )
+            missing_fields = [field for field in required_force_fields if field not in d]
+            if missing_fields:
+                raise KeyError(
+                    "Prediction MCAP is missing force field(s) "
+                    f"{missing_fields}. Re-run the modified go2_mujoco_test executable."
+                )
+
+            estimated_forces = d["estimated_contact_forces_world"]
+            measured_forces_world = d["measured_contact_forces_world"]
+            measured_forces_local = d.get("measured_contact_forces_local", {})
+
+            for leg, est_key, measured_world_key, measured_local_key in (
+                ("FL", "f_est_fl", "f_meas_world_fl", "f_meas_local_fl"),
+                ("FR", "f_est_fr", "f_meas_world_fr", "f_meas_local_fr"),
+                ("RL", "f_est_rl", "f_meas_world_rl", "f_meas_local_rl"),
+                ("RR", "f_est_rr", "f_meas_world_rr", "f_meas_local_rr"),
+            ):
+                frame_name = f"{leg}_foot"
+                estimated_force = estimated_forces[frame_name]
+                measured_force_world = measured_forces_world[frame_name]
+                measured_force_local = measured_forces_local.get(
+                    frame_name, {"x": np.nan, "y": np.nan, "z": np.nan}
+                )
+
+                data_store[est_key].append(
+                    [estimated_force["x"], estimated_force["y"], estimated_force["z"]]
+                )
+                data_store[measured_world_key].append(
+                    [
+                        measured_force_world["x"],
+                        measured_force_world["y"],
+                        measured_force_world["z"],
+                    ]
+                )
+                data_store[measured_local_key].append(
+                    [
+                        measured_force_local["x"],
+                        measured_force_local["y"],
+                        measured_force_local["z"],
+                    ]
+                )
 
     return {k: np.array(v) for k, v in data_store.items()}
 
@@ -195,6 +242,23 @@ if __name__ == "__main__":
         print("Error: Empty data arrays.")
         exit()
 
+    print("Force comparison source: prediction MCAP only")
+    print("Measured-force transform: f_world = R_world_base @ f_base_local")
+    for leg, est_key, measured_key in (
+        ("FL", "f_est_fl", "f_meas_world_fl"),
+        ("FR", "f_est_fr", "f_meas_world_fr"),
+        ("RL", "f_est_rl", "f_meas_world_rl"),
+        ("RR", "f_est_rr", "f_meas_world_rr"),
+    ):
+        est_norm = np.linalg.norm(est[est_key], axis=1)
+        measured_norm = np.linalg.norm(est[measured_key], axis=1)
+        print(
+            f"  {leg}: estimated |F| median/max = "
+            f"{np.nanmedian(est_norm):.3f}/{np.nanmax(est_norm):.3f} N; "
+            f"rotated measured |F| median/max = "
+            f"{np.nanmedian(measured_norm):.3f}/{np.nanmax(measured_norm):.3f} N"
+        )
+
     # 2. Align Ground Truth to "Zero Start"
     print("Aligning Ground Truth to Estimation Frame (0,0,0)...")
     gt_pos_aligned, gt_rot_aligned = align_gt_to_estimation_frame(gt["pos"], gt["rot"])
@@ -266,22 +330,42 @@ if __name__ == "__main__":
         axs4[1].grid(True)
         axs4[1].set_xlabel("Time (s)")
 
-        # --- Figure 5: Forces (Diagnostic) ---
-        fig5, axs5 = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
-        fig5.suptitle("Feet Forces Z (GT)")
+        # --- Figures 5-8: Measured vs estimated contact forces ---
+        # One figure per foot, with Fx/Fy/Fz in separate subplots.
+        force_axes = ("Fx", "Fy", "Fz")
+        force_keys = {
+            "FL": ("f_est_fl", "f_meas_world_fl"),
+            "FR": ("f_est_fr", "f_meas_world_fr"),
+            "RL": ("f_est_rl", "f_meas_world_rl"),
+            "RR": ("f_est_rr", "f_meas_world_rr"),
+        }
+
+        for leg, (estimated_key, measured_key) in force_keys.items():
+            fig_force, axs_force = plt.subplots(3, 1, figsize=(11, 8), sharex=True)
+            fig_force.suptitle(
+                f"{leg} foot contact force: measured vs estimated (world frame)"
+            )
+
+            for axis_index, axis_name in enumerate(force_axes):
+                axs_force[axis_index].plot(
+                    est["ts"],
+                    est[measured_key][:, axis_index],
+                    label="Measured (rotated to world)",
+                )
+                axs_force[axis_index].plot(
+                    est["ts"],
+                    est[estimated_key][:, axis_index],
+                    label="GMO estimated (world)",
+                    linestyle="--",
+                )
+                axs_force[axis_index].set_ylabel(f"{axis_name} (N)")
+                axs_force[axis_index].grid(True, alpha=0.3)
+                axs_force[axis_index].legend(loc="upper right")
+
+            axs_force[-1].set_xlabel("Time (s)")
+            fig_force.tight_layout(rect=[0, 0, 1, 0.96])
         
-        axs5[0].plot(gt["ts"], gt["f_fl"][:, 2], color="blue", label="FL")
-        axs5[1].plot(gt["ts"], gt["f_fr"][:, 2], color="blue", label="FR")
-        axs5[2].plot(gt["ts"], gt["f_rl"][:, 2], color="blue", label="RL")
-        axs5[3].plot(gt["ts"], gt["f_rr"][:, 2], color="blue", label="RR")
-        
-        for ax in axs5:
-            ax.set_ylabel("Force Z")
-            ax.grid(True)
-            ax.legend(loc="upper right")
-        axs5[3].set_xlabel("Time (s)")
-        
-        #--- Figure 6: Raw IMU Measurements (Diagnostic) ---
+        #--- Figure 9: Raw IMU Measurements (Diagnostic) ---
         fig6, axs6 = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
         fig6.suptitle("Raw IMU Measurements")
 
