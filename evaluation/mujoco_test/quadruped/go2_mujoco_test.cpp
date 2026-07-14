@@ -18,7 +18,7 @@
 using namespace serow;
 using json = nlohmann::json;
 
-static constexpr bool USE_JOINT_EFFORT_CONTACT_WRENCH = false;
+static constexpr bool USE_JOINT_EFFORT_CONTACT_WRENCH = true;
 
 // Helper: Resolve Paths
 std::string resolvePath(const json& config, const std::string& path) {
@@ -86,6 +86,9 @@ int main(int argc, char** argv) {
                           ? "joint efforts -> SEROW contact wrench estimator"
                           : "feet_forces from MCAP")
                   << std::endl;
+        std::cout << "Measured force transform: local robot/base frame -> world frame using "
+                     "State base orientation"
+                  << std::endl;
 
         // ---------------------------------------------------------
         // SETUP MCAP WRITER
@@ -142,27 +145,37 @@ int main(int argc, char** argv) {
                                                    j_in["imu"]["angular_velocity"]["y"],
                                                    j_in["imu"]["angular_velocity"]["z"]);
 
-            // Parse Forces / Contact Wrench input
+            // Parse the measured per-foot forces from the input MCAP.
+            // The input vectors are expressed in the robot/base-local frame.
+            const std::vector<std::string> legs = {"FL", "FR", "RL", "RR"};
+            std::map<std::string, Eigen::Vector3d> measured_forces_local;
+
+            if (!j_in.contains("feet_forces")) {
+                throw std::runtime_error(
+                    "Input message has no 'feet_forces'; measured-force rotation cannot be "
+                    "performed.");
+            }
+
+            for (const auto& leg : legs) {
+                measured_forces_local[leg] =
+                    Eigen::Vector3d(j_in["feet_forces"][leg]["x"],
+                                    j_in["feet_forces"][leg]["y"],
+                                    j_in["feet_forces"][leg]["z"]);
+            }
+
+            // Parse Forces / Contact Wrench input.
+            // In GMO mode the measured forces are retained only for evaluation and are not
+            // supplied to SEROW.
             std::optional<std::map<std::string, serow::ForceTorqueMeasurement>> force_torque =
                 std::nullopt;
-
-            const std::vector<std::string> legs = {"FL", "FR", "RL", "RR"};
 
             if (!USE_JOINT_EFFORT_CONTACT_WRENCH) {
                 std::map<std::string, serow::ForceTorqueMeasurement> ft_map;
 
-                if (!j_in.contains("feet_forces")) {
-                    throw std::runtime_error(
-                        "USE_JOINT_EFFORT_CONTACT_WRENCH=false, but input message has no "
-                        "feet_forces.");
-                }
-
                 for (const auto& leg : legs) {
                     serow::ForceTorqueMeasurement ft;
                     ft.timestamp = timestamp;
-                    ft.force = Eigen::Vector3d(j_in["feet_forces"][leg]["x"],
-                                               j_in["feet_forces"][leg]["y"],
-                                               j_in["feet_forces"][leg]["z"]);
+                    ft.force = measured_forces_local.at(leg);
                     // Safe default if the SEROW configuration expects torque entries.
                     ft.torque = Eigen::Vector3d::Zero();
 
@@ -253,10 +266,16 @@ int main(int argc, char** argv) {
                 auto biasAcc = state->getImuLinearAccelerationBias();
                 auto biasGyr = state->getImuAngularVelocityBias();
 
-                // Get Contact Positions
-                auto get_contact = [&](const std::string& leg) -> Eigen::Vector3d {
-                    auto val = state->getContactPosition(leg + "_foot");
-                    return val.has_value() ? val.value() : Eigen::Vector3d::Zero();
+                // Get per-foot contact data from State.hpp.
+                // Contact forces returned by State are expressed in the world frame (N).
+                auto get_contact_position = [&](const std::string& leg) -> Eigen::Vector3d {
+                    const auto val = state->getContactPosition(leg + "_foot");
+                    return val.value_or(Eigen::Vector3d::Zero());
+                };
+
+                auto get_contact_force = [&](const std::string& leg) -> Eigen::Vector3d {
+                    const auto val = state->getContactForce(leg + "_foot");
+                    return val.value_or(Eigen::Vector3d::Zero());
                 };
 
                 json j_out;
@@ -286,19 +305,61 @@ int main(int argc, char** argv) {
                 j_out["imu_bias"]["angVel"] = {
                     {"x", biasGyr.x()}, {"y", biasGyr.y()}, {"z", biasGyr.z()}};
 
-                // Contact Positions
-                j_out["contact_positions"]["FL_foot"] = {{"x", get_contact("FL").x()},
-                                                         {"y", get_contact("FL").y()},
-                                                         {"z", get_contact("FL").z()}};
-                j_out["contact_positions"]["FR_foot"] = {{"x", get_contact("FR").x()},
-                                                         {"y", get_contact("FR").y()},
-                                                         {"z", get_contact("FR").z()}};
-                j_out["contact_positions"]["RL_foot"] = {{"x", get_contact("RL").x()},
-                                                         {"y", get_contact("RL").y()},
-                                                         {"z", get_contact("RL").z()}};
-                j_out["contact_positions"]["RR_foot"] = {{"x", get_contact("RR").x()},
-                                                         {"y", get_contact("RR").y()},
-                                                         {"z", get_contact("RR").z()}};
+                // Contact positions and forces.
+                //
+                // State::getContactForce() already returns the GMO force in world coordinates.
+                // The MCAP feet_forces vectors are expressed in the robot/base-local frame, so the
+                // same base rotation must be applied to every foot:
+                //
+                //     f_W = R_WB * f_B
+                //
+                // getBaseOrientation() is the base orientation in world coordinates and State.cpp
+                // uses its rotation matrix directly as the rotational part of the world base pose.
+                const Eigen::Quaterniond base_orientation_world = baseOrient.normalized();
+                const Eigen::Matrix3d rotation_world_base =
+                    base_orientation_world.toRotationMatrix();
+
+                // Log the exact rotation used, which makes the frame conversion easy to verify.
+                j_out["force_frame_transform"]["source_frame"] = "base_local";
+                j_out["force_frame_transform"]["target_frame"] = "world";
+                j_out["force_frame_transform"]["rotation_world_base"] = {
+                    {rotation_world_base(0, 0), rotation_world_base(0, 1),
+                     rotation_world_base(0, 2)},
+                    {rotation_world_base(1, 0), rotation_world_base(1, 1),
+                     rotation_world_base(1, 2)},
+                    {rotation_world_base(2, 0), rotation_world_base(2, 1),
+                     rotation_world_base(2, 2)}};
+
+                for (const auto& leg : legs) {
+                    const std::string frame_name = leg + "_foot";
+                    const Eigen::Vector3d contact_position = get_contact_position(leg);
+                    const Eigen::Vector3d estimated_force_world = get_contact_force(leg);
+                    const Eigen::Vector3d measured_force_local = measured_forces_local.at(leg);
+                    const Eigen::Vector3d measured_force_world =
+                        rotation_world_base * measured_force_local;
+
+                    j_out["contact_positions"][frame_name] = {
+                        {"x", contact_position.x()},
+                        {"y", contact_position.y()},
+                        {"z", contact_position.z()}};
+
+                    // Keep the raw local vector as a diagnostic, but serow_viz plots only the two
+                    // world-frame fields below.
+                    j_out["measured_contact_forces_local"][frame_name] = {
+                        {"x", measured_force_local.x()},
+                        {"y", measured_force_local.y()},
+                        {"z", measured_force_local.z()}};
+
+                    j_out["estimated_contact_forces_world"][frame_name] = {
+                        {"x", estimated_force_world.x()},
+                        {"y", estimated_force_world.y()},
+                        {"z", estimated_force_world.z()}};
+
+                    j_out["measured_contact_forces_world"][frame_name] = {
+                        {"x", measured_force_world.x()},
+                        {"y", measured_force_world.y()},
+                        {"z", measured_force_world.z()}};
+                }
 
                 std::string output_payload = j_out.dump();
 
