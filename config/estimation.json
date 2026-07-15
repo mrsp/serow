@@ -40,6 +40,8 @@
     "contact_wrench_estimator_type": "llt",
     // double: Tikhonov regularization parameter for the contact wrench estimator. Only applies if contact_wrench_estimator_type = "llt"
     "contact_wrench_estimator_llt_mu": 1e-6,
+    // boolean: whether or not to enable the refit of the contact wrench estimator. Refit is the process of re-solving the contact wrench estimation until no more contacts violate the unilateral contact constraints
+    "contact_wrench_estimator_enable_refit": false,
     // Contact point estimator
     // double: cost weight when computing the instantaneous moment pivot with kinematics. 
     // Only applies for flat feet

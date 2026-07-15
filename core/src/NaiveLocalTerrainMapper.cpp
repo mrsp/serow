@@ -110,7 +110,6 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
         return false;
     }
 
-    const float min_variance = std::max(params_.min_variance, 1e-6f);
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
     const std::array<int, 2> center_local_idx = globalIndexToLocalIndex(center_idx);
     const int center_hash_id = localIndexToHashId(center_local_idx);
@@ -125,13 +124,11 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
     const float prior_variance = cell.variance;
     const float prior_height = cell.height;
 
-    // Ensure variances are positive to avoid division issues
-    const float effective_variance = std::max(variance, min_variance);
-    const float effective_prior_variance = std::max(prior_variance, min_variance);
+    // Ensure prior variance is positive to avoid division issues
+    const float effective_prior_variance = std::max(prior_variance, 1e-6f);
 
     // Compute Kalman gain
-    const float kalman_gain =
-        effective_prior_variance / (effective_prior_variance + effective_variance);
+    const float kalman_gain = effective_prior_variance / (effective_prior_variance + variance);
 
     // Update height and variance
     cell.height = prior_height + kalman_gain * (height - prior_height);
@@ -142,9 +139,11 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
     float nx_over_nz = 0.0f;
     float ny_over_nz = 0.0f;
     if (normal.has_value()) {
-        rc = params_.radius_cells * 2;
         nx_over_nz = normal.value()[0] / normal.value()[2];
         ny_over_nz = normal.value()[1] / normal.value()[2];
+        if (!point_feet_) {
+            rc = params_.radius_cells * 2;
+        }
     }
 
     for (int di = -rc; di <= rc; ++di) {
@@ -177,10 +176,8 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
 
             // Inflate measurement variance with distance
             const float sigma_scale = 1.0f + params_.dist_variance_gain * dist2;
-            const float effective_neighbor_variance =
-                std::max(effective_variance * sigma_scale, min_variance);
-            const float effective_neighbor_prior_variance =
-                std::max(neighbor.variance, min_variance);
+            const float effective_neighbor_variance = variance * sigma_scale;
+            const float effective_neighbor_prior_variance = std::max(neighbor.variance, 1e-6f);
             const float K = effective_neighbor_prior_variance /
                 (effective_neighbor_variance + effective_neighbor_prior_variance);
             neighbor.height = neighbor.height + K * (predicted_height - neighbor.height);
