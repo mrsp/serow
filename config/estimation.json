@@ -30,6 +30,18 @@
     "joint_velocity_variance": null,
     // integer: smoothing window for the derivative estimators (joint velocity, IMU angular velocity, CoM Angular Momentum Derivative)
     "smoothing_window": 7,
+    // boolean: whether or not to estimate the leg end-effector contact wrench. If set to false, the user should provide the contact wrench measurements
+    "estimate_contact_wrench": false,
+    // double: observer gain for the contact wrench estimator. Only applies if estimate_contact_wrench = true
+    "observer_gain": 10.0,
+    // double: regularization parameter for the contact wrench estimator. Only applies if estimate_contact_wrench = true
+    "contact_wrench_regularization_parameter": 1e-2,
+    // string: type of the contact wrench estimator. Only applies if estimate_contact_wrench = true
+    "contact_wrench_estimator_type": "llt",
+    // double: Tikhonov regularization parameter for the contact wrench estimator. Only applies if contact_wrench_estimator_type = "llt"
+    "contact_wrench_estimator_llt_mu": 1e-6,
+    // boolean: whether or not to enable the refit of the contact wrench estimator. Refit is the process of re-solving the contact wrench estimation until no more contacts violate the unilateral contact constraints
+    "contact_wrench_estimator_enable_refit": false,
     // Contact point estimator
     // double: cost weight when computing the instantaneous moment pivot with kinematics. 
     // Only applies for flat feet

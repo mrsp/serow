@@ -1,0 +1,1283 @@
+#!/usr/bin/env python3
+"""
+SEROW / benchmark trajectory visualizer and evaluator for ANYmal CYN-1.
+
+Default use from the SEROW evaluation root:
+
+    python3 serow_viz.py
+
+The script expects, by default:
+
+    anymal_data/test/cyn-1/groundtruth.csv
+    anymal_data/test/cyn-1/serow/fused_state.csv
+
+It also works if serow/fused_state.csv is temporarily replaced by a benchmark
+MUSE / IEKF / IS fused_state.csv with columns:
+
+    t_rel,t_abs,px,py,pz,vx,vy,vz,qw,qx,qy,qz
+
+Metrics:
+    - ATE and RPE are computed by calling evo_ape/evo_rpe directly.
+    - Rotational RPE follows the official benchmark command: evo rot_part RMSE is converted from radians to degrees.
+    - Velocity RMSE (ATEvel) uses a time-correct, estimator-agnostic protocol,
+      identical for ANY fused_state.csv (benchmark or SEROW format):
+        * restrict to the GT/estimator time overlap,
+        * linearly interpolate GT velocity onto the estimator timestamps
+          (estimator samples farther than --max-gt-gap from the nearest GT
+          sample are excluded, so interpolation never bridges GT dropouts),
+        * rotate estimator velocities into the GT world frame with an Umeyama
+          rotation fitted from position alignment over the same overlap,
+        * RMSE over all remaining pairs.
+      For benchmark-format files, the published protocol (row-index pairing +
+      fixed official rotation) is ADDITIONALLY printed for reproducibility, but
+      it is not used in the comparison table: with GT at 200 Hz and estimators
+      at ~400 Hz, index pairing compares velocities recorded minutes apart and
+      saturates at the decorrelation floor (~0.87 m/s on CYN-1) for every
+      estimator, regardless of its actual accuracy.
+      To fill the table with like-for-like benchmark values, run this script
+      once per benchmark file (--est .../muse/fused_state.csv --label MUSE,
+      etc.), note each printed time-correct ATEvel, and pass them back via
+      --benchmark-atevel 'MUSE=...,IEKF=...,IS=...'.
+
+Plots:
+    - Plotting is only for visualization.
+    - Pose is SE(3)-aligned to GT and rebased to the common start.
+    - Velocity is rotated by the same velocity-frame alignment used for ATEvel.
+"""
+
+from __future__ import annotations
+
+import argparse
+import math
+import os
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation as R, Slerp
+
+def _detect_delimiter(csv_path: Path):
+    with open(csv_path, "r") as f:
+        first_line = f.readline()
+
+    if "\t" in first_line:
+        return "\t"
+    if "," in first_line:
+        return ","
+    return None  # whitespace
+# -----------------------------------------------------------------------------
+# User-requested defaults
+# -----------------------------------------------------------------------------
+DEFAULT_DATASET_ROOT = Path(".")
+DEFAULT_GT = Path("/anymal_data/test/cyn-1/groundtruth.csv")
+DEFAULT_EST = Path("/anymal_data/test/cyn-1/serow") / "fused_state.csv"
+DEFAULT_WORKDIR = Path(".serow_viz_eval")
+DEFAULT_SENSOR = Path("/anymal_data/test/cyn-1/anymal_data.csv")
+
+# -----------------------------------------------------------------------------
+# Official benchmark constants
+# -----------------------------------------------------------------------------
+BENCHMARK_RESULTS = {
+    "MUSE": {
+        "ATE": 2.269461,
+        "ATEvel": 0.085253,
+        "RPE_1m_trans": 0.072223,
+        "RPE_1f_trans": 0.000670,
+        "RPE_1m_rot": 0.578469,
+        "RPE_1f_rot": 0.002605,
+    },
+    "IEKF": {
+        "ATE": 1.405668,
+        "ATEvel": 0.081476,
+        "RPE_1m_trans": 0.043187,
+        "RPE_1f_trans": 0.000544,
+        "RPE_1m_rot": 0.568987,
+        "RPE_1f_rot": 0.002611,
+    },
+    "IS": {
+        "ATE": 1.363114,
+        "ATEvel": 0.081454,
+        "RPE_1m_trans": 0.042526,
+        "RPE_1f_trans": 0.001965,
+        "RPE_1m_rot": 0.565644,
+        "RPE_1f_rot": 0.002614,
+    },
+}
+
+# Official compute_vel_rmse.py rotations: estimator frame -> GT frame.
+ROT_MUSE = np.array([
+    [0.71744476, -0.69589424, -0.03168947],
+    [0.69644101,  0.71754045,  0.01027768],
+    [0.01558629, -0.02944351,  0.99944492],
+])
+ROT_IEKF = np.array([
+    [0.71849142, -0.69482244, -0.03149382],
+    [0.69527739,  0.71872202,  0.00529164],
+    [0.01895855, -0.02569894,  0.99948994],
+])
+ROT_IS = np.array([
+    [0.71790964, -0.69544522, -0.03101111],
+    [0.69589757,  0.71811755,  0.00580931],
+    [0.01822957, -0.02575112,  0.99950216],
+])
+OFFICIAL_VEL_ROTATIONS = {
+    "MUSE": ROT_MUSE,
+    "IEKF": ROT_IEKF,
+    "IS": ROT_IS,
+}
+
+
+@dataclass
+class Trajectory:
+    name: str
+    fmt: str
+    t: np.ndarray
+    p: np.ndarray
+    q_xyzw: np.ndarray
+    v: np.ndarray
+
+
+# -----------------------------------------------------------------------------
+# Path / CSV utilities
+# -----------------------------------------------------------------------------
+def resolve_path(dataset_root: Path, requested: Path, fallback_relative: Optional[Path] = None) -> Path:
+    """
+    Resolve paths robustly while preserving the user-requested constants.
+
+    The requested DEFAULT_GT / DEFAULT_EST start with '/anymal_data/...'. On a
+    normal Linux system that is absolute, but in this project it is usually
+    intended as relative to dataset_root. We therefore try both forms.
+    """
+    candidates: List[Path] = []
+
+    candidates.append(requested)
+    if requested.is_absolute():
+        candidates.append(dataset_root / str(requested).lstrip(os.sep))
+        candidates.append(Path.cwd() / str(requested).lstrip(os.sep))
+    else:
+        candidates.append(dataset_root / requested)
+        candidates.append(Path.cwd() / requested)
+
+    if fallback_relative is not None:
+        candidates.append(dataset_root / fallback_relative)
+        candidates.append(Path.cwd() / fallback_relative)
+
+    # Remove duplicates while keeping order.
+    unique: List[Path] = []
+    seen = set()
+    for c in candidates:
+        key = str(c)
+        if key not in seen:
+            unique.append(c)
+            seen.add(key)
+
+    for c in unique:
+        if c.exists():
+            return c
+
+    tried = "\n  ".join(str(c) for c in unique)
+    raise FileNotFoundError(f"Could not resolve path. Tried:\n  {tried}")
+
+
+def read_csv_auto(path: Path) -> pd.DataFrame:
+    df = pd.read_csv(path, sep=None, engine="python")
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+
+def require_columns(df: pd.DataFrame, cols: Iterable[str], path: Path) -> None:
+    missing = [c for c in cols if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"{path} is missing columns: {missing}\n"
+            f"Available columns: {list(df.columns)}"
+        )
+
+
+def normalize_quaternions(q: np.ndarray) -> np.ndarray:
+    n = np.linalg.norm(q, axis=1)
+    ok = n > 1e-12
+    if not np.all(ok):
+        q = q[ok]
+        n = n[ok]
+    return q / n[:, None]
+
+def plot_imu_biases(est_csv: Path, max_points: int = 30000):
+    """
+    Plot SEROW IMU bias estimates:
+      accel bias: bias_ax, bias_ay, bias_az  [m/s^2]
+      gyro  bias: bias_gx, bias_gy, bias_gz  [rad/s]
+
+    If the estimator file is benchmark/MUSE format and does not contain biases,
+    the function exits cleanly.
+    """
+
+    required_cols = [
+        "t",
+        "bias_ax", "bias_ay", "bias_az",
+        "bias_gx", "bias_gy", "bias_gz",
+    ]
+
+    delimiter = _detect_delimiter(est_csv)
+
+    try:
+        data = np.genfromtxt(
+            est_csv,
+            delimiter=delimiter,
+            names=True,
+            dtype=float,
+            encoding=None,
+        )
+    except Exception as e:
+        print(f"[WARN] Could not read IMU biases from {est_csv}: {e}")
+        return
+
+    if data.size == 0:
+        print(f"[WARN] Empty estimator file, cannot plot IMU biases: {est_csv}")
+        return
+
+    available_cols = list(data.dtype.names)
+
+    missing = [c for c in required_cols if c not in available_cols]
+    if missing:
+        print("[INFO] IMU bias plot skipped.")
+        print(f"       Missing columns in estimator file: {missing}")
+        return
+
+    t = np.asarray(data["t"], dtype=float)
+    t_rel = t - t[0]
+
+    bias_acc = np.column_stack([
+        np.asarray(data["bias_ax"], dtype=float),
+        np.asarray(data["bias_ay"], dtype=float),
+        np.asarray(data["bias_az"], dtype=float),
+    ])
+
+    bias_gyro = np.column_stack([
+        np.asarray(data["bias_gx"], dtype=float),
+        np.asarray(data["bias_gy"], dtype=float),
+        np.asarray(data["bias_gz"], dtype=float),
+    ])
+
+    # Downsample only for plotting speed, not for computation
+    n = len(t_rel)
+    if n > max_points:
+        step = int(np.ceil(n / max_points))
+        idx = np.arange(0, n, step)
+        t_rel_plot = t_rel[idx]
+        bias_acc_plot = bias_acc[idx]
+        bias_gyro_plot = bias_gyro[idx]
+    else:
+        t_rel_plot = t_rel
+        bias_acc_plot = bias_acc
+        bias_gyro_plot = bias_gyro
+
+    fig, axes = plt.subplots(2, 3, figsize=(16, 7), sharex=True)
+    fig.suptitle("Estimated IMU Biases", fontsize=14)
+
+    acc_names = ["bias_ax", "bias_ay", "bias_az"]
+    gyro_names = ["bias_gx", "bias_gy", "bias_gz"]
+
+    for i in range(3):
+        ax = axes[0, i]
+        ax.plot(t_rel_plot, bias_acc_plot[:, i])
+        ax.axhline(0.0, linestyle="--", linewidth=0.8)
+        ax.set_title(acc_names[i])
+        ax.set_ylabel("Accel bias [m/s²]")
+        ax.grid(True)
+
+    for i in range(3):
+        ax = axes[1, i]
+        ax.plot(t_rel_plot, bias_gyro_plot[:, i])
+        ax.axhline(0.0, linestyle="--", linewidth=0.8)
+        ax.set_title(gyro_names[i])
+        ax.set_ylabel("Gyro bias [rad/s]")
+        ax.set_xlabel("Time [s]")
+        ax.grid(True)
+
+    fig.tight_layout()
+    
+    
+def plot_pseudo_forces_vs_contacts(est_csv: Path, sensor_csv: Path, max_points: int = 50000):
+    """
+    Plots the pseudo-forces (fz) generated by the estimator alongside 
+    the binary contact flags from the original sensor data.
+    """
+    force_cols = ["fz_LF", "fz_RF", "fz_LH", "fz_RH"]
+    contact_cols = ["contact_LF", "contact_RF", "contact_LH", "contact_RH"]
+    leg_names = ["LF", "RF", "LH", "RH"]
+
+    try:
+        est_df = read_csv_auto(est_csv)
+        sensor_df = read_csv_auto(sensor_csv)
+    except Exception as e:
+        print(f"[WARN] Could not read files for force vs contact plot: {e}")
+        return
+
+    # Check if we generated the forces in the C++ output
+    missing_est = [c for c in ["t"] + force_cols if c not in est_df.columns]
+    if missing_est:
+        print("[INFO] Force vs Contact plot skipped.")
+        print(f"       Missing columns in {est_csv.name}: {missing_est}")
+        return
+
+    missing_sensor = [c for c in ["t"] + contact_cols if c not in sensor_df.columns]
+    if missing_sensor:
+        print("[INFO] Force vs Contact plot skipped.")
+        print(f"       Missing columns in {sensor_csv.name}: {missing_sensor}")
+        return
+
+    # Extract Data
+    t_est = est_df["t"].to_numpy(float)
+    t_sensor = sensor_df["t"].to_numpy(float)
+
+    forces = est_df[force_cols].to_numpy(float)
+    contacts = sensor_df[contact_cols].to_numpy(float)
+    contacts = (contacts > 0.5).astype(float) # Ensure binary
+
+    # Downsample if needed
+    n = min(len(est_df), len(sensor_df))
+    if n > max_points:
+        step = int(np.ceil(n / max_points))
+        idx = np.arange(0, n, step)
+    else:
+        idx = np.arange(n)
+
+    t_rel = t_est[idx] - t_est[0]
+    forces_plot = forces[idx]
+    contacts_plot = contacts[idx]
+
+    fig, axes = plt.subplots(4, 1, figsize=(15, 10), sharex=True)
+    fig.suptitle("Pseudo Forces vs. Binary Contact Flags", fontsize=14)
+
+    for i, ax1 in enumerate(axes):
+        # Primary Y-axis: Forces
+        color_force = 'tab:blue'
+        ax1.plot(t_rel, forces_plot[:, i], color=color_force, linewidth=1.5, label='Pseudo Force ($F_z$)')
+        ax1.set_ylabel(f"{leg_names[i]} Force [N]", color=color_force)
+        ax1.tick_params(axis='y', labelcolor=color_force)
+        ax1.grid(True, alpha=0.3)
+
+        # Secondary Y-axis: Contact Flags
+        ax2 = ax1.twinx()  
+        color_contact = 'tab:orange'
+        ax2.step(t_rel, contacts_plot[:, i], where='post', color=color_contact, linestyle='--', alpha=0.7, label='Contact Flag')
+        ax2.set_ylabel('Contact State', color=color_contact)
+        ax2.set_ylim(-0.1, 1.1)
+        ax2.set_yticks([0, 1])
+        ax2.tick_params(axis='y', labelcolor=color_contact)
+
+        if i == 0:
+            lines_1, labels_1 = ax1.get_legend_handles_labels()
+            lines_2, labels_2 = ax2.get_legend_handles_labels()
+            ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper right')
+
+    axes[-1].set_xlabel("Time [s]")
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+# -----------------------------------------------------------------------------
+# Loaders
+# -----------------------------------------------------------------------------
+def load_groundtruth(path: Path) -> Trajectory:
+    df = read_csv_auto(path)
+    required = ["t", "x", "y", "z", "qx", "qy", "qz", "qw", "vx", "vy", "vz"]
+    require_columns(df, required, path)
+
+    t = df["t"].to_numpy(float)
+    p = df[["x", "y", "z"]].to_numpy(float)
+    q = df[["qx", "qy", "qz", "qw"]].to_numpy(float)
+    v = df[["vx", "vy", "vz"]].to_numpy(float)
+
+    return clean_trajectory("GT", "groundtruth", t, p, q, v)
+
+
+def detect_estimator_format(df: pd.DataFrame) -> str:
+    cols = set(df.columns)
+
+    # Official benchmark MUSE/IEKF/IS format.
+    if {"t_rel", "t_abs", "px", "py", "pz", "vx", "vy", "vz", "qw", "qx", "qy", "qz"}.issubset(cols):
+        return "benchmark"
+
+    # SEROW format produced by anymal_csv_test.cpp.
+    if {"t", "x", "y", "z", "qx", "qy", "qz", "qw", "vx", "vy", "vz"}.issubset(cols):
+        return "serow"
+
+    # Some benchmark helper scripts call this anymal_state format.
+    if {"t", "px", "py", "pz", "qx", "qy", "qz", "qw"}.issubset(cols):
+        return "anymal_state"
+
+    raise ValueError(
+        "Could not detect estimator format. Supported formats are:\n"
+        "  SEROW:     t,x,y,z,qx,qy,qz,qw,vx,vy,vz\n"
+        "  Benchmark: t_rel,t_abs,px,py,pz,vx,vy,vz,qw,qx,qy,qz\n"
+        f"Available columns: {list(df.columns)}"
+    )
+
+
+def load_estimator(path: Path, label: str = "SEROW") -> Trajectory:
+    df = read_csv_auto(path)
+    fmt = detect_estimator_format(df)
+
+    if fmt == "benchmark":
+        required = ["t_abs", "px", "py", "pz", "vx", "vy", "vz", "qw", "qx", "qy", "qz"]
+        require_columns(df, required, path)
+        t = df["t_abs"].to_numpy(float)
+        p = df[["px", "py", "pz"]].to_numpy(float)
+        q = df[["qx", "qy", "qz", "qw"]].to_numpy(float)  # convert qw,qx,qy,qz file to xyzw
+        v = df[["vx", "vy", "vz"]].to_numpy(float)
+        return clean_trajectory(label, fmt, t, p, q, v)
+
+    if fmt == "serow":
+        required = ["t", "x", "y", "z", "qx", "qy", "qz", "qw", "vx", "vy", "vz"]
+        require_columns(df, required, path)
+        t = df["t"].to_numpy(float)
+        p = df[["x", "y", "z"]].to_numpy(float)
+        q = df[["qx", "qy", "qz", "qw"]].to_numpy(float)
+        v = df[["vx", "vy", "vz"]].to_numpy(float)
+        return clean_trajectory(label, fmt, t, p, q, v)
+
+    # anymal_state fallback: no velocity columns are guaranteed.
+    required = ["t", "px", "py", "pz", "qx", "qy", "qz", "qw"]
+    require_columns(df, required, path)
+    t = df["t"].to_numpy(float)
+    p = df[["px", "py", "pz"]].to_numpy(float)
+    q = df[["qx", "qy", "qz", "qw"]].to_numpy(float)
+    if {"vx", "vy", "vz"}.issubset(set(df.columns)):
+        v = df[["vx", "vy", "vz"]].to_numpy(float)
+    else:
+        v = np.zeros_like(p)
+    return clean_trajectory(label, fmt, t, p, q, v)
+
+def plot_contact_probabilities_one_to_one(est_csv: Path, sensor_csv: Path, max_points: int = 50000):
+    """
+    Plot SEROW estimated contact probabilities from fused_state.csv
+    against the binary contact flags from anymal_data.csv, aligned by timestamp.
+    """
+    contact_cols = ["contact_LF", "contact_RF", "contact_LH", "contact_RH"]
+    leg_names = ["LF", "RF", "LH", "RH"]
+
+    try:
+        est_df = read_csv_auto(est_csv)
+        sensor_df = read_csv_auto(sensor_csv)
+    except Exception as e:
+        print(f"[WARN] Could not read contact files: {e}")
+        return
+
+    if not all(c in est_df.columns for c in ["t"] + contact_cols) or \
+       not all(c in sensor_df.columns for c in ["t"] + contact_cols):
+        print("[INFO] Contact plot skipped due to missing columns.")
+        return
+
+    t_est = est_df["t"].to_numpy(float)
+    t_sensor = sensor_df["t"].to_numpy(float)
+    t_0 = t_est[0] # Baseline time
+
+    contact_prob = est_df[contact_cols].to_numpy(float)
+    contact_flag = (sensor_df[contact_cols].to_numpy(float) > 0.5).astype(float)
+
+    fig, axes = plt.subplots(4, 1, figsize=(15, 9), sharex=True)
+    fig.suptitle("SEROW estimated contact probabilities vs binary contact flags")
+
+    for i, ax in enumerate(axes):
+        # Plot estimator probability using estimator time
+        ax.plot(
+            t_est - t_0,
+            contact_prob[:, i],
+            label="SEROW estimated probability",
+            linewidth=1.2,
+        )
+
+        # Plot raw sensor flags using sensor time
+        ax.step(
+            t_sensor - t_0,
+            contact_flag[:, i],
+            where="post",
+            linestyle="--",
+            linewidth=1.0,
+            label="Binary contact flag",
+        )
+
+        ax.set_ylabel(leg_names[i])
+        ax.set_ylim(-0.05, 1.05)
+        ax.grid(True, alpha=0.3)
+
+        if i == 0:
+            ax.legend(loc="best")
+
+    # Limit the x-axis to the estimator's lifespan so the plot isn't stretched out
+    axes[-1].set_xlim(0, t_est[-1] - t_0)
+    axes[-1].set_xlabel("Time [s]")
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+
+
+def plot_pseudo_forces_vs_contacts(est_csv: Path, sensor_csv: Path, max_points: int = 50000):
+    """
+    Plots the pseudo-forces (fz) generated by the estimator alongside 
+    the binary contact flags from the original sensor data.
+    """
+    force_cols = ["fz_LF", "fz_RF", "fz_LH", "fz_RH"]
+    contact_cols = ["contact_LF", "contact_RF", "contact_LH", "contact_RH"]
+    leg_names = ["LF", "RF", "LH", "RH"]
+
+    try:
+        est_df = read_csv_auto(est_csv)
+        sensor_df = read_csv_auto(sensor_csv)
+    except Exception as e:
+        print(f"[WARN] Could not read files for force vs contact plot: {e}")
+        return
+
+    if not all(c in est_df.columns for c in ["t"] + force_cols) or \
+       not all(c in sensor_df.columns for c in ["t"] + contact_cols):
+        print("[INFO] Force vs Contact plot skipped due to missing columns.")
+        return
+
+    # Extract Data and Time Vectors
+    t_est = est_df["t"].to_numpy(float)
+    t_sensor = sensor_df["t"].to_numpy(float)
+    t_0 = t_est[0]
+
+    forces = est_df[force_cols].to_numpy(float)
+    contacts = (sensor_df[contact_cols].to_numpy(float) > 0.5).astype(float) 
+
+    fig, axes = plt.subplots(4, 1, figsize=(15, 10), sharex=True)
+    fig.suptitle("Pseudo Forces vs. Binary Contact Flags", fontsize=14)
+
+    for i, ax1 in enumerate(axes):
+        # Primary Y-axis: Forces (Using estimator time)
+        color_force = 'tab:blue'
+        ax1.plot(t_est - t_0, forces[:, i], color=color_force, linewidth=1.5, label='Pseudo Force ($F_z$)')
+        ax1.set_ylabel(f"{leg_names[i]} Force [N]", color=color_force)
+        ax1.tick_params(axis='y', labelcolor=color_force)
+        ax1.grid(True, alpha=0.3)
+
+        # Secondary Y-axis: Contact Flags (Using sensor time)
+        ax2 = ax1.twinx()  
+        color_contact = 'tab:orange'
+        ax2.step(t_sensor - t_0, contacts[:, i], where='post', color=color_contact, linestyle='--', alpha=0.7, label='Contact Flag')
+        ax2.set_ylabel('Contact State', color=color_contact)
+        ax2.set_ylim(-0.1, 1.1)
+        ax2.set_yticks([0, 1])
+        ax2.tick_params(axis='y', labelcolor=color_contact)
+
+        if i == 0:
+            lines_1, labels_1 = ax1.get_legend_handles_labels()
+            lines_2, labels_2 = ax2.get_legend_handles_labels()
+            ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper right')
+
+    axes[-1].set_xlim(0, t_est[-1] - t_0)
+    axes[-1].set_xlabel("Time [s]")
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+
+def clean_trajectory(name: str, fmt: str, t: np.ndarray, p: np.ndarray, q: np.ndarray, v: np.ndarray) -> Trajectory:
+    valid = (
+        np.isfinite(t)
+        & np.all(np.isfinite(p), axis=1)
+        & np.all(np.isfinite(q), axis=1)
+        & np.all(np.isfinite(v), axis=1)
+        & (np.linalg.norm(q, axis=1) > 1e-12)
+    )
+
+    t = t[valid]
+    p = p[valid]
+    q = q[valid]
+    v = v[valid]
+
+    order = np.argsort(t)
+    t = t[order]
+    p = p[order]
+    q = q[order]
+    v = v[order]
+
+    _, unique_idx = np.unique(t, return_index=True)
+    unique_idx = np.sort(unique_idx)
+    t = t[unique_idx]
+    p = p[unique_idx]
+    q = q[unique_idx]
+    v = v[unique_idx]
+
+    q = normalize_quaternions(q)
+    if len(q) != len(t):
+        raise RuntimeError("Quaternion normalization unexpectedly changed trajectory length.")
+
+    return Trajectory(name=name, fmt=fmt, t=t, p=p, q_xyzw=q, v=v)
+
+
+# -----------------------------------------------------------------------------
+# TUM + evo metrics
+# -----------------------------------------------------------------------------
+def write_tum(traj: Trajectory, out_path: Path) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    arr = np.column_stack([traj.t, traj.p, traj.q_xyzw])
+    np.savetxt(out_path, arr, fmt="%.9f %.9f %.9f %.9f %.9f %.9f %.9f %.9f")
+
+
+def parse_evo_rmse(output: str) -> float:
+    """
+    Parse exactly the 'rmse' row from evo output.
+    Do not parse the first float: evo prints max first.
+    """
+    for line in output.splitlines():
+        parts = line.strip().split()
+        if len(parts) >= 2 and parts[0] == "rmse":
+            return float(parts[1])
+    raise RuntimeError("Could not find RMSE in evo output. Full output:\n" + output)
+
+
+def run_evo_rmse(cmd: List[str]) -> float:
+    proc = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            "evo command failed:\n"
+            + " ".join(cmd)
+            + "\nOutput:\n"
+            + proc.stdout
+        )
+    return parse_evo_rmse(proc.stdout)
+
+
+def compute_evo_ate_only(gt_tum: Path, est_tum: Path) -> Dict[str, float]:
+    """Fast/debug metric path: compute only ATE with evo_ape."""
+    gt_s = str(gt_tum)
+    est_s = str(est_tum)
+    return {
+        "ATE": run_evo_rmse([
+            "evo_ape", "tum", gt_s, est_s, "-a"
+        ])
+    }
+
+
+def compute_evo_metrics(gt_tum: Path, est_tum: Path) -> Dict[str, float]:
+    gt_s = str(gt_tum)
+    est_s = str(est_tum)
+
+    metrics = {}
+    metrics["ATE"] = run_evo_rmse([
+        "evo_ape", "tum", gt_s, est_s, "-a"
+    ])
+
+    metrics["RPE_1m_trans"] = run_evo_rmse([
+        "evo_rpe", "tum", gt_s, est_s,
+        "--delta", "1", "--delta_unit", "m",
+        "--pose_relation", "point_distance",
+        "-a",
+    ])
+
+    metrics["RPE_1f_trans"] = run_evo_rmse([
+        "evo_rpe", "tum", gt_s, est_s,
+        "--delta", "1", "--delta_unit", "f",
+        "--pose_relation", "point_distance",
+        "-a",
+    ])
+
+    # Official convert_to_tum.py prints commands with two --pose_relation options:
+    #   --pose_relation angle_deg ... --pose_relation rot_part -a
+    # argparse/evo uses the last one, i.e. rot_part. evo reports this rotation
+    # RMSE in radians, while the paper table reports degrees. Therefore we run
+    # rot_part and convert the RMSE by 180/pi. Do NOT use angle_deg here; for
+    # these trajectories it gives the large ~25 deg values you observed.
+    metrics["RPE_1m_rot"] = run_evo_rmse([
+        "evo_rpe", "tum", gt_s, est_s,
+        "--delta", "1", "--delta_unit", "m",
+        "--pose_relation", "rot_part",
+        "-a",
+    ])
+
+    metrics["RPE_1f_rot"] = run_evo_rmse([
+        "evo_rpe", "tum", gt_s, est_s,
+        "--delta", "1", "--delta_unit", "f",
+        "--pose_relation", "rot_part",
+        "-a",
+    ])
+
+    return metrics
+
+
+# -----------------------------------------------------------------------------
+# Velocity RMSE, following official benchmark behaviour
+# -----------------------------------------------------------------------------
+def time_correct_velocity_pairs(
+    gt: Trajectory, est: Trajectory, max_gt_gap: float
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """
+    Pair GT and estimator velocities at the SAME instants.
+
+    Estimator samples inside the GT time span are kept, and GT velocity is
+    linearly interpolated onto the estimator timestamps. Estimator samples
+    farther than max_gt_gap [s] from the nearest GT sample (GT dropouts) are
+    excluded so interpolation never bridges large holes.
+
+    This replaces two flawed pairings used previously:
+      * row-index pairing (official benchmark script fallback): with GT and
+        estimator files at different rates/starts it compares velocities
+        recorded minutes apart and saturates at the decorrelation floor;
+      * exact-timestamp intersection: at epoch-scale doubles, round(t, 9) is
+        below the float ULP, so it silently matched only a handful of samples.
+
+    Returns (t, gt_v, est_v, n_excluded_by_gap).
+    """
+    mask = (est.t >= gt.t[0]) & (est.t <= gt.t[-1])
+    t = est.t[mask]
+    if len(t) < 10:
+        raise RuntimeError(
+            "GT and estimator trajectories share fewer than 10 samples in time. "
+            f"GT span [{gt.t[0]:.3f}, {gt.t[-1]:.3f}], "
+            f"EST span [{est.t[0]:.3f}, {est.t[-1]:.3f}]. "
+            "Check that both files are stamped on the same clock."
+        )
+
+    # Distance to the nearest GT timestamp, to detect GT dropouts.
+    j = np.searchsorted(gt.t, t)
+    j_lo = np.clip(j - 1, 0, len(gt.t) - 1)
+    j_hi = np.clip(j, 0, len(gt.t) - 1)
+    gap = np.minimum(np.abs(t - gt.t[j_lo]), np.abs(gt.t[j_hi] - t))
+    ok = gap <= max_gt_gap
+    n_excluded = int(np.count_nonzero(~ok))
+
+    t = t[ok]
+    est_v = est.v[mask][ok]
+    gt_v = np.column_stack([
+        np.interp(t, gt.t, gt.v[:, 0]),
+        np.interp(t, gt.t, gt.v[:, 1]),
+        np.interp(t, gt.t, gt.v[:, 2]),
+    ])
+    return t, gt_v, est_v, n_excluded
+
+
+def official_benchmark_atevel(
+    gt: Trajectory, est: Trajectory, metrics: Dict[str, float], label: str
+) -> Tuple[float, str]:
+    """
+    Replicate the published benchmark compute_vel_rmse.py protocol exactly:
+    row-index pairing (gt.v[:n] vs est.v[:n]) + the fixed official rotation.
+    Reported for reproducibility only; see the module docstring for why this
+    is not a valid accuracy metric when GT and estimator rates/starts differ.
+    """
+    detected = classify_benchmark_estimator(metrics, label)
+    R_off = OFFICIAL_VEL_ROTATIONS[detected]
+    n = min(len(gt.v), len(est.v))
+    return rmse_vector(gt.v[:n], (R_off @ est.v[:n].T).T), detected
+
+
+def rmse_vector(gt_v: np.ndarray, est_v: np.ndarray) -> float:
+    err = est_v - gt_v
+    return float(np.sqrt(np.mean(np.sum(err * err, axis=1))))
+
+
+def se3_umeyama_no_scale(source: np.ndarray, target: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Rigid alignment: target ~= R_align * source + t_align."""
+    mu_s = source.mean(axis=0)
+    mu_t = target.mean(axis=0)
+    A = source - mu_s
+    B = target - mu_t
+    H = A.T @ B
+    U, _, Vt = np.linalg.svd(H)
+    R_align = Vt.T @ U.T
+    if np.linalg.det(R_align) < 0:
+        Vt[-1, :] *= -1.0
+        R_align = Vt.T @ U.T
+    t_align = mu_t - R_align @ mu_s
+    return R_align, t_align
+
+
+def interpolate_positions(gt: Trajectory, t_query: np.ndarray) -> np.ndarray:
+    return np.column_stack([
+        np.interp(t_query, gt.t, gt.p[:, 0]),
+        np.interp(t_query, gt.t, gt.p[:, 1]),
+        np.interp(t_query, gt.t, gt.p[:, 2]),
+    ])
+
+
+def estimate_umeyama_rotation_from_overlap(gt: Trajectory, est: Trajectory) -> np.ndarray:
+    mask = (est.t >= gt.t[0]) & (est.t <= gt.t[-1])
+    if np.count_nonzero(mask) < 10:
+        return np.eye(3)
+    est_p = est.p[mask]
+    gt_p = interpolate_positions(gt, est.t[mask])
+    R_align, _ = se3_umeyama_no_scale(est_p, gt_p)
+    return R_align
+
+
+def classify_benchmark_estimator(metrics: Dict[str, float], label: str) -> str:
+    label_u = label.upper()
+    if "MUSE" in label_u:
+        return "MUSE"
+    if "IEKF" in label_u:
+        return "IEKF"
+    if label_u in {"IS", "INVARIANT_SMOOTHER", "INVARIANT SMOOTHER"} or "SMOOTHER" in label_u:
+        return "IS"
+
+    # If no explicit label was given, infer from ATE closest to reported results.
+    ate = metrics.get("ATE", math.inf)
+    return min(BENCHMARK_RESULTS.keys(), key=lambda k: abs(BENCHMARK_RESULTS[k]["ATE"] - ate))
+
+
+def compute_velocity_rmse(
+    gt: Trajectory,
+    est: Trajectory,
+    metrics: Dict[str, float],
+    label: str,
+    max_gt_gap: float = 0.1,
+) -> Tuple[float, np.ndarray, str, str]:
+    """
+    Time-correct ATEvel, computed identically for every estimator format:
+    interpolate GT velocity onto the estimator timestamps over the overlap,
+    rotate estimator velocities into the GT frame with an Umeyama rotation
+    fitted from position alignment, and take the RMSE over all pairs.
+
+    For benchmark-format files, the official (index-paired) protocol value is
+    also printed, so the published Table I numbers remain reproducible.
+    """
+    if not np.any(np.linalg.norm(est.v, axis=1) > 1e-9):
+        print("[WARN] Estimator file carries no velocity data; ATEvel is meaningless.")
+
+    R_vel = estimate_umeyama_rotation_from_overlap(gt, est)
+    rotation_mode = "Umeyama rotation from position alignment (symmetric protocol)"
+
+    try:
+        t, gt_v, est_v, n_excluded = time_correct_velocity_pairs(gt, est, max_gt_gap)
+    except RuntimeError as exc:
+        print(f"[WARN] ATEvel unavailable: {exc}")
+        return float("nan"), R_vel, "unavailable (no time overlap)", rotation_mode
+
+    atevel = rmse_vector(gt_v, (R_vel @ est_v.T).T)
+
+    align_mode = (
+        f"time-correct interpolation ({len(t)} pairs, "
+        f"[{t[0] - est.t[0]:.1f}s, {t[-1] - est.t[0]:.1f}s] of the run"
+    )
+    if n_excluded:
+        align_mode += f", {n_excluded} samples excluded at GT gaps > {max_gt_gap:g}s"
+    align_mode += ")"
+
+    if est.fmt == "benchmark":
+        official, detected = official_benchmark_atevel(gt, est, metrics, label)
+        print(
+            f"[INFO] Official-protocol replication ({detected}): "
+            f"ATEvel = {official:.6f} m/s (row-index pairing + fixed rotation).\n"
+            f"       Reported only to confirm reproduction of the published table; "
+            f"the comparison table uses the time-correct value {atevel:.6f} m/s."
+        )
+
+    return atevel, R_vel, align_mode, rotation_mode
+
+
+# -----------------------------------------------------------------------------
+# Plotting helpers
+# -----------------------------------------------------------------------------
+def rpy_from_quat_xyzw(q_xyzw: np.ndarray, benchmark_frame_fix: bool, unwrap: bool) -> np.ndarray:
+    rot_abs = R.from_quat(q_xyzw)
+    rot_rel = rot_abs[0].inv() * rot_abs
+    if benchmark_frame_fix:
+        frame_fix = R.from_euler("x", np.pi)
+        rot_rel = frame_fix * rot_rel * frame_fix.inv()
+    rpy_rad = rot_rel.as_euler("xyz", degrees=False)
+    if unwrap:
+        rpy_rad = np.unwrap(rpy_rad, axis=0)
+    return np.rad2deg(rpy_rad)
+
+
+def interpolate_gt_for_plot(gt: Trajectory, est: Trajectory) -> Trajectory:
+    mask = (est.t >= gt.t[0]) & (est.t <= gt.t[-1])
+    t = est.t[mask]
+    if len(t) < 2:
+        raise RuntimeError("Not enough overlapping timestamps for plotting.")
+
+    p = interpolate_positions(gt, t)
+    v = np.column_stack([
+        np.interp(t, gt.t, gt.v[:, 0]),
+        np.interp(t, gt.t, gt.v[:, 1]),
+        np.interp(t, gt.t, gt.v[:, 2]),
+    ])
+
+    slerp = Slerp(gt.t, R.from_quat(gt.q_xyzw))
+    q = slerp(t).as_quat()
+
+    return Trajectory("GT_sync", "groundtruth", t, p, q, v)
+
+
+def aligned_est_for_plot(gt_sync: Trajectory, est: Trajectory, R_pose: np.ndarray, t_pose: np.ndarray) -> Trajectory:
+    mask = (est.t >= gt_sync.t[0]) & (est.t <= gt_sync.t[-1])
+    t = est.t[mask]
+    p = (R_pose @ est.p[mask].T).T + t_pose
+    q = est.q_xyzw[mask]
+    v = est.v[mask]
+    return Trajectory(est.name + "_plot", est.fmt, t, p, q, v)
+
+
+def make_plot_trajectories(gt: Trajectory, est: Trajectory, R_vel: np.ndarray) -> Tuple[Trajectory, Trajectory, Trajectory]:
+    gt_sync = interpolate_gt_for_plot(gt, est)
+
+    mask = (est.t >= gt_sync.t[0]) & (est.t <= gt_sync.t[-1])
+    est_overlap = Trajectory(est.name, est.fmt, est.t[mask], est.p[mask], est.q_xyzw[mask], est.v[mask])
+
+    R_pose, t_pose = se3_umeyama_no_scale(est_overlap.p, gt_sync.p)
+    est_pose = aligned_est_for_plot(gt_sync, est_overlap, R_pose, t_pose)
+
+    # Rebase pose plot to common GT start so both curves start together visually.
+    p0 = gt_sync.p[0].copy()
+    gt_plot = Trajectory("GT", gt_sync.fmt, gt_sync.t - gt_sync.t[0], gt_sync.p - p0, gt_sync.q_xyzw, gt_sync.v)
+    est_pose_plot = Trajectory(est.name, est.fmt, est_pose.t - gt_sync.t[0], est_pose.p - p0, est_pose.q_xyzw, est_pose.v)
+
+    # Velocity plot uses the velocity-frame rotation used in ATEvel computation.
+    est_vel = Trajectory(est.name, est_overlap.fmt, est_overlap.t - gt_sync.t[0], est_overlap.p, est_overlap.q_xyzw, (R_vel @ est_overlap.v.T).T)
+
+    return gt_plot, est_pose_plot, est_vel
+
+
+def metrics_title(metrics: Dict[str, float]) -> str:
+    title = f"ATE={metrics['ATE']:.3f} m | ATEvel={metrics['ATEvel']:.3f} m/s"
+    rpe_keys = ["RPE_1m_trans", "RPE_1m_rot", "RPE_1f_trans", "RPE_1f_rot"]
+    if all(k in metrics for k in rpe_keys):
+        title += (
+            f" | RPE Δ=1m: {metrics['RPE_1m_trans']:.4f} m, {metrics['RPE_1m_rot']:.4f}°"
+            f" | RPE Δ=1fr: {metrics['RPE_1f_trans']:.6f} m, {metrics['RPE_1f_rot']:.6f}°"
+        )
+    else:
+        title += " | debug-fast: RPE skipped"
+    return title
+
+
+def plot_pose(gt_plot: Trajectory, est_plot: Trajectory, metrics: Dict[str, float], unwrap: bool) -> None:
+    gt_rpy = rpy_from_quat_xyzw(gt_plot.q_xyzw, benchmark_frame_fix=True, unwrap=unwrap)
+    est_rpy = rpy_from_quat_xyzw(est_plot.q_xyzw, benchmark_frame_fix=False, unwrap=unwrap)
+
+    fig = plt.figure(figsize=(15, 7))
+    fig.suptitle("CYN-1 pose estimate vs ground truth\n" + metrics_title(metrics))
+    gs = fig.add_gridspec(3, 3)
+
+    ax_traj = fig.add_subplot(gs[:, 0])
+    ax_traj.plot(gt_plot.p[:, 0], gt_plot.p[:, 1], "--", label="GT")
+    ax_traj.plot(est_plot.p[:, 0], est_plot.p[:, 1], label=est_plot.name)
+    ax_traj.set_title("(a) XY trajectory")
+    ax_traj.set_xlabel("x [m]")
+    ax_traj.set_ylabel("y [m]")
+    ax_traj.axis("equal")
+    ax_traj.grid(True, alpha=0.3)
+    ax_traj.legend(loc="best")
+
+    pos_labels = [r"$p_x$ [m]", r"$p_y$ [m]", r"$p_z$ [m]"]
+    for i in range(3):
+        ax = fig.add_subplot(gs[i, 1])
+        ax.plot(gt_plot.t, gt_plot.p[:, i], "--", label="GT")
+        ax.plot(est_plot.t, est_plot.p[:, i], label=est_plot.name)
+        ax.set_ylabel(pos_labels[i])
+        ax.grid(True, alpha=0.3)
+        if i == 0:
+            ax.set_title("(b) Position")
+            ax.legend(loc="best")
+        if i < 2:
+            ax.tick_params(labelbottom=False)
+        else:
+            ax.set_xlabel("Time since estimator start [s]")
+
+    ori_labels = ["roll [deg]", "pitch [deg]", "yaw [deg]"]
+    for i in range(3):
+        ax = fig.add_subplot(gs[i, 2])
+        ax.plot(gt_plot.t, gt_rpy[:, i], "--", label="GT")
+        ax.plot(est_plot.t, est_rpy[:, i], label=est_plot.name)
+        ax.set_ylabel(ori_labels[i])
+        ax.grid(True, alpha=0.3)
+        if i == 0:
+            ax.set_title("(c) Orientation")
+            ax.legend(loc="best")
+        if i < 2:
+            ax.tick_params(labelbottom=False)
+        else:
+            ax.set_xlabel("Time since estimator start [s]")
+
+    plt.tight_layout(rect=[0, 0, 1, 0.92])
+
+
+def plot_velocity(gt_plot: Trajectory, est_vel_plot: Trajectory, metrics: Dict[str, float]) -> None:
+    fig, axes = plt.subplots(3, 1, figsize=(15, 7), sharex=True)
+    fig.suptitle("CYN-1 velocity estimate vs ground truth\n" + metrics_title(metrics))
+    labels = [r"$v_x$ [m/s]", r"$v_y$ [m/s]", r"$v_z$ [m/s]"]
+
+    for i, ax in enumerate(axes):
+        ax.plot(gt_plot.t, gt_plot.v[:, i], "--", label="GT")
+        ax.plot(est_vel_plot.t, est_vel_plot.v[:, i], label=est_vel_plot.name)
+        ax.set_ylabel(labels[i])
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best")
+
+    axes[-1].set_xlabel("Time since estimator start [s]")
+    plt.tight_layout(rect=[0, 0, 1, 0.92])
+
+
+# -----------------------------------------------------------------------------
+# Terminal output
+# -----------------------------------------------------------------------------
+def green_if_best(text: str, value: float, best_value: float) -> str:
+    green = "\033[92m"
+    end = "\033[0m"
+    if np.isclose(value, best_value, rtol=1e-12, atol=1e-12):
+        return f"{green}{text}{end}"
+    return text
+
+
+def print_comparison_table(
+    metrics: Dict[str, float],
+    label: str,
+    benchmark: Optional[Dict[str, Dict[str, float]]] = None,
+    atevel_like_for_like: bool = False,
+) -> None:
+    benchmark = benchmark or BENCHMARK_RESULTS
+    methods = ["MUSE", "IEKF", "IS", label]
+    atevel_row_label = "ATEvel [m/s]" if atevel_like_for_like else "ATEvel [m/s] (*)"
+    rows = [
+        ("ATE [m]", "ATE"),
+        (atevel_row_label, "ATEvel"),
+        ("RPE (Δ = 1 meter) [m]", "RPE_1m_trans"),
+        ("RPE (Δ = 1 frame) [m]", "RPE_1f_trans"),
+        ("RPE (Δ = 1 meter) [°]", "RPE_1m_rot"),
+        ("RPE (Δ = 1 frame) [°]", "RPE_1f_rot"),
+    ]
+
+    label_w = 28
+    value_w = 12
+    total_w = label_w + (value_w + 1) * len(methods)
+
+    print("\n" + "=" * total_w)
+    print("Benchmark comparison table")
+    print("=" * total_w)
+    header = f"{'RMSE':<{label_w}}" + "".join(f" {m:>{value_w}}" for m in methods)
+    print(header)
+    print("-" * total_w)
+
+    for row_label, key in rows:
+        values = {
+            "MUSE": benchmark["MUSE"][key],
+            "IEKF": benchmark["IEKF"][key],
+            "IS": benchmark["IS"][key],
+            label: metrics[key],
+        }
+        finite = [v for v in values.values() if np.isfinite(v)]
+        best = min(finite) if finite else float("nan")
+        line = f"{row_label:<{label_w}}"
+        for m in methods:
+            plain = f"{values[m]:.6f}"
+            padded = f"{plain:>{value_w}}"
+            line += " " + green_if_best(padded, values[m], best)
+        print(line)
+    print("=" * total_w)
+    if not atevel_like_for_like:
+        print(f"(*) The MUSE/IEKF/IS ATEvel values are the published (index-paired)")
+        print(f"    protocol, which is dominated by GT/estimator time misassociation;")
+        print(f"    the {label} value is time-correct, so this row is NOT comparable.")
+        print(f"    For a like-for-like row, run this script on each benchmark")
+        print(f"    fused_state.csv and pass the printed time-correct values via")
+        print(f"    --benchmark-atevel 'MUSE=...,IEKF=...,IS=...'.")
+    print()
+
+
+def print_fast_comparison_table(
+    metrics: Dict[str, float],
+    label: str,
+    benchmark: Optional[Dict[str, Dict[str, float]]] = None,
+    atevel_like_for_like: bool = False,
+) -> None:
+    benchmark = benchmark or BENCHMARK_RESULTS
+    methods = ["MUSE", "IEKF", "IS", label]
+    atevel_row_label = "ATEvel [m/s]" if atevel_like_for_like else "ATEvel [m/s] (*)"
+    rows = [
+        ("ATE [m]", "ATE"),
+        (atevel_row_label, "ATEvel"),
+    ]
+
+    label_w = 28
+    value_w = 12
+    total_w = label_w + (value_w + 1) * len(methods)
+
+    print("\n" + "=" * total_w)
+    print("Fast debug comparison table (RPE skipped)")
+    print("=" * total_w)
+    header = f"{'RMSE':<{label_w}}" + "".join(f" {m:>{value_w}}" for m in methods)
+    print(header)
+    print("-" * total_w)
+
+    for row_label, key in rows:
+        values = {
+            "MUSE": benchmark["MUSE"][key],
+            "IEKF": benchmark["IEKF"][key],
+            "IS": benchmark["IS"][key],
+            label: metrics[key],
+        }
+        finite = [v for v in values.values() if np.isfinite(v)]
+        best = min(finite) if finite else float("nan")
+        line = f"{row_label:<{label_w}}"
+        for m in methods:
+            plain = f"{values[m]:.6f}"
+            padded = f"{plain:>{value_w}}"
+            line += " " + green_if_best(padded, values[m], best)
+        print(line)
+    print("=" * total_w)
+    if not atevel_like_for_like:
+        print(f"(*) Benchmark ATEvel = published index-paired protocol; {label} = ")
+        print(f"    time-correct. Not comparable; see --benchmark-atevel.")
+    print()
+
+
+def print_diagnostics(gt: Trajectory, est: Trajectory, gt_path: Path, est_path: Path, workdir: Path, velocity_mode: str, velocity_align_mode: str) -> None:
+    print("================ Inputs ================")
+    print(f"GT path:        {gt_path}")
+    print(f"Estimator path: {est_path}")
+    print(f"Estimator fmt:  {est.fmt}")
+    print(f"Workdir:        {workdir}")
+    print("----------------------------------------")
+    print(f"GT samples:     {len(gt.t)}")
+    print(f"EST samples:    {len(est.t)}")
+    print(f"GT time:        {gt.t[0]:.9f} -> {gt.t[-1]:.9f}")
+    print(f"EST time:       {est.t[0]:.9f} -> {est.t[-1]:.9f}")
+    print(f"Velocity mode:  {velocity_mode}")
+    print(f"Vel align by:   {velocity_align_mode}")
+    print("========================================")
+
+
+# -----------------------------------------------------------------------------
+# Main
+# -----------------------------------------------------------------------------
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset-root", type=Path, default=DEFAULT_DATASET_ROOT)
+    parser.add_argument("--gt", type=Path, default=DEFAULT_GT)
+    parser.add_argument("--est", type=Path, default=DEFAULT_EST)
+    parser.add_argument("--sensor", type=Path, default=DEFAULT_SENSOR)
+    parser.add_argument("--workdir", type=Path, default=DEFAULT_WORKDIR)
+    parser.add_argument("--label", default="SEROW")
+    parser.add_argument("--no-plots", action="store_true")
+    parser.add_argument("--no-unwrap", action="store_true")
+    parser.add_argument(
+        "--debug-fast",
+        action="store_true",
+        help="Compute only ATE position and ATE velocity. Skip all RPE evo_rpe metrics.",
+    )
+    parser.add_argument(
+        "--max-gt-gap",
+        type=float,
+        default=0.1,
+        help="Maximum distance [s] to the nearest GT sample for a velocity pair "
+             "to be used in ATEvel (guards against interpolating across GT "
+             "dropouts). Default: 0.1 s.",
+    )
+    parser.add_argument(
+        "--benchmark-atevel",
+        default=None,
+        help="Time-correct ATEvel values for the benchmark methods, e.g. "
+             "'MUSE=0.152,IEKF=0.141,IS=0.138'. Obtain each by running this "
+             "script with --est pointing at that method's fused_state.csv and "
+             "reading the printed time-correct ATEvel. When given, the table's "
+             "ATEvel row is like-for-like and the footnote is dropped.",
+    )
+    args = parser.parse_args()
+
+    if shutil.which("evo_ape") is None:
+        raise RuntimeError(
+            "evo_ape not found. Activate the benchmark environment first."
+        )
+    if not args.debug_fast and shutil.which("evo_rpe") is None:
+        raise RuntimeError(
+            "evo_rpe not found. Activate the benchmark environment first, or use --debug-fast."
+        )
+
+    dataset_root = args.dataset_root
+
+    gt_path = resolve_path(
+        dataset_root,
+        args.gt,
+        fallback_relative=Path("anymal_data/test/cyn-1/groundtruth.csv"),
+    )
+
+    est_path = resolve_path(
+        dataset_root,
+        args.est,
+        fallback_relative=Path("anymal_data/test/cyn-1/serow/fused_state.csv"),
+    )
+
+    sensor_path = resolve_path(
+        dataset_root,
+        args.sensor,
+        fallback_relative=Path("anymal_data/test/cyn-1/anymal_data.csv"),
+    )
+
+    workdir = args.workdir
+    workdir.mkdir(parents=True, exist_ok=True)
+
+    gt = load_groundtruth(gt_path)
+    est = load_estimator(est_path, label=args.label)
+
+    gt_tum = workdir / "groundtruth_traj_tum.csv"
+    est_tum = workdir / f"{args.label.lower()}_traj_tum.csv"
+
+    write_tum(gt, gt_tum)
+    write_tum(est, est_tum)
+
+    if args.debug_fast:
+        metrics = compute_evo_ate_only(gt_tum, est_tum)
+    else:
+        metrics = compute_evo_metrics(gt_tum, est_tum)
+
+    atevel, R_vel, vel_align_mode, vel_rotation_mode = compute_velocity_rmse(
+        gt,
+        est,
+        metrics,
+        args.label,
+        max_gt_gap=args.max_gt_gap,
+    )
+    metrics["ATEvel"] = atevel
+
+    # Optionally replace the published (index-paired) benchmark ATEvel values
+    # with user-supplied time-correct ones so the table row is like-for-like.
+    benchmark = {k: dict(v) for k, v in BENCHMARK_RESULTS.items()}
+    atevel_like_for_like = False
+    if args.benchmark_atevel:
+        for item in args.benchmark_atevel.split(","):
+            name, _, val = item.partition("=")
+            name = name.strip().upper()
+            if name not in benchmark or not val.strip():
+                raise ValueError(
+                    f"--benchmark-atevel entry not understood: '{item}' "
+                    "(expected e.g. 'MUSE=0.152,IEKF=0.141,IS=0.138')"
+                )
+            benchmark[name]["ATEvel"] = float(val)
+        atevel_like_for_like = True
+
+    print_diagnostics(
+        gt,
+        est,
+        gt_path,
+        est_path,
+        workdir,
+        vel_rotation_mode,
+        vel_align_mode,
+    )
+
+    if args.debug_fast:
+        print_fast_comparison_table(metrics, args.label, benchmark, atevel_like_for_like)
+    else:
+        print_comparison_table(metrics, args.label, benchmark, atevel_like_for_like)
+
+    if not args.no_plots:
+        gt_plot, est_pose_plot, est_vel_plot = make_plot_trajectories(gt, est, R_vel)
+
+        plot_pose(gt_plot, est_pose_plot, metrics, unwrap=not args.no_unwrap)
+        plot_velocity(gt_plot, est_vel_plot, metrics)
+        plot_imu_biases(est_path)
+        plot_contact_probabilities_one_to_one(est_path, sensor_path)
+        plot_pseudo_forces_vs_contacts(est_path, sensor_path) # <-- ADD THIS
+
+        plt.show()
+
+
+if __name__ == "__main__":
+    main()

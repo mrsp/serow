@@ -17,7 +17,7 @@
 #include <nlohmann/json.hpp>
 
 #include "ContactEKF.hpp"
-#include "RightInvariantEKF.hpp"
+#include "LeftInvariantEKF.hpp"
 
 using json = nlohmann::json;
 
@@ -183,10 +183,12 @@ bool Serow::initialize(const std::string& config_file) {
     }
     params_.contacts_frame = std::move(contacts_frame);
 
-    if (!checkConfigParam("use_imu_orientation", params_.use_imu_orientation))
-        return false;
+    if (config.contains("use_imu_orientation")) {
+        if (!checkConfigParam("use_imu_orientation", params_.use_imu_orientation))
+            return false;
+    }
 
-    // Base estimator type: "contact" or "right-invariant" (default)
+    // Base estimator type: "contact" or "left-invariant" (default)
     if (config.contains("base_estimator_type")) {
         if (!checkConfigParam("base_estimator_type", params_.base_estimator_type))
             return false;
@@ -240,29 +242,57 @@ bool Serow::initialize(const std::string& config_file) {
         return false;
     if (!checkConfigParam("tau_0", params_.tau_0))
         return false;
-    if (!checkConfigParam("tau_1", params_.tau_1))
-        return false;
+    if (!params_.point_feet) {
+        if (!checkConfigParam("tau_1", params_.tau_1)) {
+            return false;
+        }
+    }
     if (!checkConfigParam("estimate_contact_status", params_.estimate_contact_status))
         return false;
-    if (!checkConfigParam("median_window", params_.median_window))
-        return false;
+    if (params_.estimate_contact_status) {
+        if (!checkConfigParam("median_window", params_.median_window))
+            return false;
+    }
     if (!checkConfigParam("convergence_cycles", params_.convergence_cycles))
         return false;
+    if (config.contains("estimate_contact_wrench") &&
+        !config["estimate_contact_wrench"].is_null() && config.contains("observer_gain") &&
+        !config["observer_gain"].is_null()) {
+        if (!checkConfigParam("estimate_contact_wrench", params_.estimate_contact_wrench)) {
+            return false;
+        }
+        if (!checkConfigParam("observer_gain", params_.observer_gain)) {
+            return false;
+        }
+        if (!checkConfigParam("contact_wrench_regularization_parameter",
+                              params_.contact_wrench_regularization_parameter)) {
+            return false;
+        }
+        if (!checkConfigParam("contact_wrench_estimator_type",
+                              params_.contact_wrench_estimator_type)) {
+            return false;
+        }
+        if (config.contains("contact_wrench_estimator_enable_refit") &&
+            !config["contact_wrench_estimator_enable_refit"].is_null()) {
+            if (!checkConfigParam("contact_wrench_estimator_enable_refit",
+                                  params_.contact_wrench_estimator_enable_refit)) {
+                return false;
+            }
+        }
+        if (params_.contact_wrench_estimator_type == "llt") {
+            if (!checkConfigParam("contact_wrench_estimator_llt_mu",
+                                  params_.contact_wrench_estimator_llt_mu)) {
+                return false;
+            }
+        }
+    }
 
-    // Optional: if absent or JSON null, keep defaults (false)
     if (config.contains("enable_terrain_estimation") &&
         !config["enable_terrain_estimation"].is_null()) {
         if (!checkConfigParam("enable_terrain_estimation", params_.enable_terrain_estimation)) {
             return false;
         }
     }
-    if (config.contains("estimate_contact_wrench") &&
-        !config["estimate_contact_wrench"].is_null()) {
-        if (!checkConfigParam("estimate_contact_wrench", params_.estimate_contact_wrench)) {
-            return false;
-        }
-    }
-
     if (params_.enable_terrain_estimation) {
         if (!checkConfigParam("terrain_estimator", params_.terrain_estimator_type))
             return false;
@@ -483,7 +513,8 @@ bool Serow::initialize(const std::string& config_file) {
     // Ensure kinematic estimator exists before reset() initializes mass/CoM filter.
     try {
         kinematic_estimator_ =
-            std::make_unique<RobotKinematics>(model_filepath, params_.joint_position_variance);
+            std::make_shared<RobotKinematics>(model_filepath, params_.joint_position_variance);
+        kinematic_estimator_->setGravity(params_.g);
     } catch (const std::exception& e) {
         std::cerr << RED_COLOR << "Failed to create kinematic estimator: " << e.what()
                   << WHITE_COLOR << '\n';
@@ -503,6 +534,13 @@ bool Serow::initialize(const std::string& config_file) {
     }
 
     reset();
+    if (params_.estimate_contact_wrench) {
+        contact_wrench_estimator_ = std::make_unique<ContactWrenchEstimator>(
+            kinematic_estimator_, state_.getContactsFrame(), params_.observer_gain,
+            params_.contact_wrench_regularization_parameter, state_.isPointFeet(),
+            params_.contact_wrench_estimator_type, params_.contact_wrench_estimator_enable_refit,
+            params_.contact_wrench_estimator_llt_mu);
+    }
 
     // Create timers
     timers_.clear();
@@ -515,6 +553,7 @@ bool Serow::initialize(const std::string& config_file) {
     timers_.try_emplace("com-estimator-predict");
     timers_.try_emplace("com-estimator-update");
     timers_.try_emplace("contact-estimation");
+    timers_.try_emplace("contact-wrench-estimation");
     timers_.try_emplace("frame-tree-update");
     timers_.try_emplace("total-time");
     return true;
@@ -693,8 +732,10 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
 
                     std::cout << "Calibration for stationary IMU finished at "
                               << imu_calibration_cycles_ << '\n';
-                    std::cout << "Gyrometer biases " << params_.bias_gyro.transpose() << '\n';
-                    std::cout << "Accelerometer biases " << params_.bias_acc.transpose() << '\n';
+                    std::cout << "Gyrometer biases "
+                              << (R_base_to_gyro_transpose * params_.bias_gyro).transpose() << '\n';
+                    std::cout << "Accelerometer biases "
+                              << (R_base_to_acc_transpose * params_.bias_acc).transpose() << '\n';
                 }
             }
         }
@@ -708,9 +749,11 @@ KinematicMeasurement Serow::runForwardKinematics(State& state) {
         throw std::runtime_error("Kinematic estimator not initialized");
     }
 
-    kinematic_estimator_->updateJointConfig(state.joint_state_.joints_position,
-                                            state.joint_state_.joints_velocity,
-                                            state.joint_state_.joints_effort);
+    kinematic_estimator_->updateJointConfig(
+        state.base_state_.base_position, state.base_state_.base_orientation,
+        state.base_state_.base_linear_velocity, state.base_state_.base_angular_velocity,
+        state.joint_state_.joints_position, state.joint_state_.joints_velocity,
+        state.joint_state_.joints_effort);
 
     // Preallocate maps for leg end-effector kinematics
     std::map<std::string, Eigen::Vector3d> base_to_foot_positions;
@@ -767,7 +810,7 @@ void Serow::computeLegOdometry(const State& state, const ImuMeasurement& imu,
         leg_odometry_ = std::make_unique<LegOdometry>(
             state.base_state_.base_position, state.base_state_.feet_position,
             state.base_state_.feet_orientation, state.getMass(), params_.tau_0, params_.tau_1,
-            params_.joint_rate, params_.g, params_.eps);
+            params_.joint_rate, params_.g, params_.eps, coeffs_joint_);
     }
 
     // Compute linear velocity noise for contacts - Spectral densities
@@ -856,16 +899,13 @@ void Serow::runContactEstimator(
             const Eigen::Matrix3d R_foot_to_base =
                 kin.base_to_foot_orientations.at(frame).toRotationMatrix();
             const Eigen::Vector3d& frame_force = ft.at(frame).force;
-            const Eigen::Matrix3d& R_foot_to_force = params_.R_foot_to_force.at(frame);
-            const Eigen::Matrix3d& R_world_to_base =
-                state.base_state_.base_orientation.toRotationMatrix();
             contacts_force[frame].noalias() =
-                R_world_to_base * R_foot_to_base * R_foot_to_force * frame_force;
+                R_foot_to_base * params_.R_foot_to_force.at(frame) * frame_force;
 
             // Process torque if not point feet
             if (!state.isPointFeet()) {
                 if (ft.count(frame) > 0 && ft.at(frame).torque.has_value()) {
-                    contacts_torque[frame].noalias() = R_world_to_base * R_foot_to_base *
+                    contacts_torque[frame].noalias() = R_foot_to_base *
                         params_.R_foot_to_torque.at(frame) * ft.at(frame).torque.value();
                 } else {
                     throw std::runtime_error("No torque measurement provided for frame: " + frame);
@@ -879,8 +919,7 @@ void Serow::runContactEstimator(
                     contact_estimators_.emplace(
                         frame,
                         ContactDetector(frame, state.getMass(), params_.g, params_.median_window));
-                    contact_estimators_.at(frame).setState(
-                        state.contact_state_.contacts_force.at(frame).z());
+                    contact_estimators_.at(frame).setState(contacts_force.at(frame).z());
                 }
                 contact_estimators_.at(frame).run(contacts_force.at(frame).z());
                 den += contact_estimators_.at(frame).getContactForce();
@@ -891,7 +930,6 @@ void Serow::runContactEstimator(
         if (params_.estimate_contact_status && !contacts_probability.has_value()) {
             den /= state.num_leg_ee_;
             for (const auto& frame : state.getContactsFrame()) {
-                // Use std::clamp for bounds checking
                 if (den > params_.eps) {
                     state.contact_state_.contacts_probability[frame] =
                         std::clamp(contact_estimators_.at(frame).getContactForce() / den, 0.0, 1.0);
@@ -906,10 +944,16 @@ void Serow::runContactEstimator(
                 "No contact probability provided and contact status estimation is disabled");
         }
 
-        // Compute binary contact status
+        // Compute binary contact status and transform to world frame
+        const Eigen::Matrix3d& R_world_to_base =
+            state.base_state_.base_orientation.toRotationMatrix();
         for (const auto& frame : state.getContactsFrame()) {
             state.contact_state_.contacts_status[frame] =
                 state.contact_state_.contacts_probability.at(frame) > 0.5;
+            contacts_force.at(frame) = R_world_to_base * contacts_force.at(frame);
+            if (!state.isPointFeet()) {
+                contacts_torque.at(frame) = R_world_to_base * contacts_torque.at(frame);
+            }
         }
 
         // Estimate the COP in the local foot frame
@@ -923,12 +967,12 @@ void Serow::runContactEstimator(
 
             // Calculate COP
             if (!state.isPointFeet() && contacts_torque.count(frame) &&
-                state.contact_state_.contacts_probability.at(frame) > 0.0) {
-                const double z_force = contacts_force.at(frame).z();
+                state.contact_state_.contacts_probability.at(frame) > params_.eps) {
+                const double z_force = ft.at(frame).force.z();
                 if (std::abs(z_force) > 1e-6) {  // Avoid division by near-zero
                     ft.at(frame).cop =
-                        Eigen::Vector3d(-contacts_torque.at(frame).y() / z_force,
-                                        contacts_torque.at(frame).x() / z_force, 0.0);
+                        Eigen::Vector3d(-ft.at(frame).torque.value().y() / z_force,
+                                        ft.at(frame).torque.value().x() / z_force, 0.0);
                 }
             }
         }
@@ -939,6 +983,16 @@ void Serow::runContactEstimator(
             state.contact_state_.contacts_torque = std::move(contacts_torque);
         }
     }
+}
+
+std::map<std::string, ForceTorqueMeasurement> Serow::runContactWrenchEstimator(
+    const std::map<std::string, Eigen::Quaterniond>& feet_orientation) {
+    if (!contact_wrench_estimator_) {
+        return std::map<std::string, ForceTorqueMeasurement>();
+    }
+
+    contact_wrench_estimator_->update(timestamp_);
+    return contact_wrench_estimator_->contactWrenches(feet_orientation);
 }
 
 void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
@@ -963,9 +1017,9 @@ void Serow::runBaseEstimator(State& state, const ImuMeasurement& imu,
 
             // Initialize terrain elevation mapper
             if (params_.terrain_estimator_type == "naive") {
-                terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>();
+                terrain_estimator_ = std::make_shared<NaiveLocalTerrainMapper>(state.isPointFeet());
             } else if (params_.terrain_estimator_type == "fast") {
-                terrain_estimator_ = std::make_shared<LocalTerrainMapper>();
+                terrain_estimator_ = std::make_shared<LocalTerrainMapper>(state.isPointFeet());
             } else {
                 throw std::runtime_error("Invalid terrain estimator type: " +
                                          params_.terrain_estimator_type);
@@ -1291,8 +1345,6 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
     }
 
     timestamp_ = std::min(imu_timestamp, joint_timestamp);
-    last_imu_timestamp_ = imu_timestamp;
-    last_joint_timestamp_ = joint_timestamp;
 
     // Safety check: force_torque map must not be empty if provided
     auto ft_timestamp = (force_torque.has_value() && !force_torque.value().empty())
@@ -1369,17 +1421,10 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
     timers_["forward-kinematics"].stop();
 
     // Estimate the contact state
-    if (params_.estimate_contact_wrench) {
-        ft.clear();
-        for (const auto& frame : state_.getContactsFrame()) {
-            const Eigen::Matrix<double, 6, 1>& wrench =
-                -kinematic_estimator_->linkWrench(frame, false);
-            ft[frame].force = wrench.head(3);
-            if (!state_.isPointFeet()) {
-                ft[frame].torque = wrench.tail(3);
-            }
-            ft[frame].timestamp = timestamp_;
-        }
+    if (params_.estimate_contact_wrench && last_timestamp_ > 0.0) {
+        timers_["contact-wrench-estimation"].start();
+        ft = runContactWrenchEstimator(state_.base_state_.feet_orientation);
+        timers_["contact-wrench-estimation"].stop();
     }
 
     if (!ft.empty()) {
@@ -1409,11 +1454,15 @@ bool Serow::filter(ImuMeasurement imu, const std::map<std::string, JointMeasurem
         state_.is_valid_ = true;
     }
 
+    last_imu_timestamp_ = imu_timestamp;
+    last_joint_timestamp_ = joint_timestamp;
+    last_timestamp_ = timestamp_;
     // Log the estimated state
     logProprioception(state_, imu);
     logExteroception(state_);
     timers_["total-time"].stop();
     logTimings();
+
     return true;
 }
 
@@ -1476,6 +1525,10 @@ Serow::~Serow() {
             attitude_estimator_.reset();
         }
 
+        if (contact_wrench_estimator_) {
+            contact_wrench_estimator_.reset();
+        }
+
         if (leg_odometry_) {
             leg_odometry_.reset();
         }
@@ -1534,6 +1587,9 @@ void Serow::stopLogging() {
 }
 
 void Serow::reset() {
+    if (contact_wrench_estimator_) {
+        contact_wrench_estimator_.reset();
+    }
     joint_estimators_.clear();
     angular_momentum_derivative_estimator.reset();
     gyro_derivative_estimator.reset();
@@ -1556,8 +1612,8 @@ void Serow::reset() {
     state_ = std::move(state);
 
     // Load bias values from configuration
-    state_.base_state_.imu_angular_velocity_bias = params_.bias_gyro;
-    state_.base_state_.imu_linear_acceleration_bias = params_.bias_acc;
+    state_.base_state_.imu_angular_velocity_bias = params_.R_base_to_gyro * params_.bias_gyro;
+    state_.base_state_.imu_linear_acceleration_bias = params_.R_base_to_acc * params_.bias_acc;
 
     // Initialize state uncertainty
     state_.mass_ = kinematic_estimator_->getTotalMass();
@@ -1577,8 +1633,8 @@ void Serow::reset() {
     state_.centroidal_state_.external_forces_cov = params_.initial_external_forces_cov.asDiagonal();
 
     // Initialize the base and CoM estimators
-    if (params_.base_estimator_type == "right-invariant") {
-        base_estimator_ = std::make_unique<RightInvariantEKF>();
+    if (params_.base_estimator_type == "left-invariant") {
+        base_estimator_ = std::make_unique<LeftInvariantEKF>();
     } else {
         base_estimator_ = std::make_unique<ContactEKF>();
     }

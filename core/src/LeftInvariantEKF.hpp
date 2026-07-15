@@ -12,8 +12,8 @@
  **/
 
 /**
- * @file RightInvariantEKF.hpp
- * @brief Right-Invariant Extended Kalman Filter for state estimation in legged robots.
+ * @file LeftInvariantEKF.hpp
+ * @brief Left-Invariant Extended Kalman Filter for state estimation in legged robots.
  *        The filter state lives on SE_2(3) x R^6 and exploits the group-affine property of
  *        IMU-driven dynamics to obtain a state-independent linearized error propagation.
  *        Fuses IMU, leg-kinematic velocity, optional external odometry and terrain height.
@@ -34,11 +34,12 @@
 namespace serow {
 
 /**
- * @class RightInvariantEKF
- * @brief Right-Invariant Extended Kalman Filter on SE_2(3) for legged-robot state estimation,
- *        fusing IMU data, leg-kinematic velocity, and optionally external odometry.
+ * @class LeftInvariantEKF
+ * @brief Left-Invariant Extended Kalman Filter on SE_2(3) for legged-robot state estimation,
+ *        fusing IMU data, leg-kinematic velocity, and optionally external odometry and terrain
+ *        height.
  */
-class RightInvariantEKF : public BaseEstimator {
+class LeftInvariantEKF : public BaseEstimator {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -82,6 +83,7 @@ private:
     // Input indices
     Eigen::Array3i ng_idx_;   ///< Indices for gyro input variables.
     Eigen::Array3i na_idx_;   ///< Indices for acceleration input variables.
+    Eigen::Array3i nz_idx_;   ///< Indices for zero input variables.
     Eigen::Array3i nbg_idx_;  ///< Indices for gyro bias input variables.
     Eigen::Array3i nba_idx_;  ///< Indices for accelerometer bias input variables.
     std::optional<double> last_imu_predict_timestamp_;  ///< Timestamp of the last IMU measurement
@@ -93,13 +95,12 @@ private:
     std::optional<double> last_terrain_update_timestamp_;  ///< Timestamp of the last terrain
                                                            ///< measurement used in the update step.
 
-    /// Error Covariance, Linearized state transition model, Identity matrix, state uncertainty
-    /// matrix 15 x 15
+    /// Identity matrix, state uncertainty matrix 15 x 15
     Eigen::Matrix<double, 15, 15> I_, P_;
     /// Constant (state-independent) part of the continuous-time A matrix
     Eigen::Matrix<double, 15, 15> Ac_;
-    /// Constant part of the noise-input Jacobian L (bias-drift rows only)
-    Eigen::Matrix<double, 15, 12> Lc_;
+    /// Constant part of the noise-input Jacobian L (in our case Identity matrix)
+    Eigen::Matrix<double, 15, 15> Lc_;
 
     OutlierDetector base_position_outlier_detector;  ///< Outlier detector instance.
 
@@ -109,11 +110,15 @@ private:
                                   ///< step.
 
     std::optional<Eigen::Vector3d>
+        first_position_;  ///< Initial position estimate (world coordinates) when the first odometry
+                          ///< measurement is received.
+    std::optional<Eigen::Vector3d>
         first_odometry_position_;  ///< Initial odometry measurement position (world coordinates).
     std::optional<Eigen::Quaterniond>
         first_odometry_orientation_;  ///< Initial odometry measurement orientation (world
                                       ///< coordinates).
 
+    TerrainContactFilter terrain_contact_filter_;  ///< Terrain contact filter instance.
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.
      * @param state Current state of the robot.
@@ -128,10 +133,12 @@ private:
      * @brief Computes Jacobians for the prediction step of the EKF.
      * @param state Current state of the robot.
      * @param angular_velocity Angular velocity measurements.
+     * @param linear_acceleration Linear acceleration measurements.
      * @return Tuple containing prediction Jacobians (state transition and input models).
      */
-    std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 12>>
-    computePredictionJacobians(const BaseState& state);
+    std::tuple<Eigen::Matrix<double, 15, 15>, Eigen::Matrix<double, 15, 15>>
+    computePredictionJacobians(const BaseState& state, Eigen::Vector3d angular_velocity,
+                               Eigen::Vector3d linear_acceleration);
 
     /**
      * @brief Updates the robot's state based on odometry measurements.
@@ -150,14 +157,12 @@ private:
      * @brief Updates the robot's state based on terrain measurements.
      * @param state Current state of the robot.
      * @param contacts_position Positions of leg contacts.
-     * @param contacts_position_noise Spectral densities of leg contact positions.
      * @param contacts_probability Probabilities of leg contacts.
      * @param timestamp Timestamp of the terrain measurement.
      * @param terrain_estimator Terrain elevation mapper.
      */
     void updateWithTerrain(BaseState& state,
                            const std::map<std::string, Eigen::Vector3d>& contacts_position,
-                           const std::map<std::string, Eigen::Matrix3d>& contacts_position_noise,
                            const std::map<std::string, double>& contacts_probability,
                            const double timestamp,
                            std::shared_ptr<TerrainElevation> terrain_estimator);

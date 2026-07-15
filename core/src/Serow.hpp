@@ -18,6 +18,7 @@
 #include "BaseEstimator.hpp"
 #include "CoMEKF.hpp"
 #include "ContactDetector.hpp"
+#include "ContactWrenchEstimator.hpp"
 #include "DerivativeEstimator.hpp"
 #include "ExteroceptionLogger.hpp"
 #include "LegOdometry.hpp"
@@ -187,6 +188,19 @@ private:
         /// @brief whether or not to estimate the leg end-effector contact wrench. If set to false,
         /// the user should provide the leg end-effector force and torque measurements
         bool estimate_contact_wrench{};
+        /// @brief gain for the contact wrench observer.
+        double observer_gain{};
+        /// @brief regularization parameter for the contact wrench observer.
+        double contact_wrench_regularization_parameter{};
+        /// @brief type of the contact wrench estimator. Only applies if estimate_contact_wrench =
+        /// true
+        std::string contact_wrench_estimator_type{};
+        /// @brief whether or not to enable refit after zeroing out wrench blocks that violate the
+        /// unilateral constraint
+        bool contact_wrench_estimator_enable_refit{};
+        /// @brief Tikhonov regularization parameter for the contact wrench estimator. Only applies
+        /// if contact_wrench_estimator_type = "llt"
+        double contact_wrench_estimator_llt_mu{};
         /// @brief whether or not to estimate the leg end-effector contact status. If set to false,
         /// the user should provide the end-effector contact probabilities
         bool estimate_contact_status{};
@@ -241,56 +255,56 @@ private:
         double minimum_terrain_height_variance{};
         /// @brief maximum number of contact points to store in the terrain elevation mapper, used
         /// to smooth out the terrain elevation after each update
-        size_t maximum_contact_points{4};
+        size_t maximum_contact_points{};
         /// @brief maximum distance to recenter the terrain elevation mapper
-        double maximum_recenter_distance{0.35};
+        double maximum_recenter_distance{};
         /// @brief minimum contact probability to consider a contact point for terrain elevation
         /// estimation
-        double minimum_contact_probability{0.15};
+        double minimum_contact_probability{};
         /// @brief minimum stable contact probability to consider a contact plane for terrain
         /// elevation estimation
-        double minimum_stable_contact_probability{0.85};
+        double minimum_stable_contact_probability{};
         /// @brief minimum stable foot angular velocity to consider a contact plane for terrain
         /// elevation estimation
-        double minimum_stable_foot_angular_velocity{0.025};
+        double minimum_stable_foot_angular_velocity{};
         /// @brief minimum stable foot linear velocity to consider a contact plane for terrain
         /// elevation estimation
-        double minimum_stable_foot_linear_velocity{0.025};
+        double minimum_stable_foot_linear_velocity{};
         /// @brief resolution of the terrain elevation mapper
-        double resolution{0.02};
+        double resolution{};
         /// @brief radius of inflation per contact point for the terrain elevation mapper
-        double radius{0.20};
+        double radius{};
         /// @brief used to scale the variance of the terrain elevation mapper
-        double dist_variance_gain{100.0};
+        double dist_variance_gain{};
         /// @brief used to weight the contribution of the contact points to the terrain elevation
         /// mapper
-        double power{5.0};
+        double power{};
         /// @brief type of the terrain elevation mapper
         /// @param naive: uses a naive implementation of the terrain elevation mapper
         /// @param fast: uses a fast implementation of the terrain elevation mapper
         std::string terrain_estimator_type{};
         /// @brief whether or not to log the data
-        bool log_data{true};
-        bool log_measurements{false};
+        bool log_data{};
+        bool log_measurements{};
         /// @brief directory where log files will be stored
         std::string log_dir{"/tmp"};
         /// @brief offset between the base frame and the ground truth base frame
         Eigen::Isometry3d T_base_to_ground_truth{Eigen::Isometry3d::Identity()};
         /// @brief proportional gain for the base attitude estimator
-        double Kp{0.0};
+        double Kp{};
         /// @brief integral gain for the base attitude estimator
-        double Ki{0.0};
+        double Ki{};
         /// @brief set of contact frames
         std::set<std::string> contacts_frame{};
         /// @brief whether or not the robot has point feet
-        bool point_feet{false};
+        bool point_feet{};
         /// @brief whether or not to use the IMU orientation during the ContactEKF update step
-        bool use_imu_orientation{false};
+        bool use_imu_orientation{};
         /// @brief whether or not to enable verbose output
-        bool verbose{false};
-        /// @brief type of the base estimator: "contact" for ContactEKF, "right-invariant" for
-        /// RightInvariantEKF
-        std::string base_estimator_type{"right-invariant"};
+        bool verbose{};
+        /// @brief type of the base estimator: "contact" for ContactEKF, "left-invariant" for
+        /// LeftInvariantEKF
+        std::string base_estimator_type{"left-invariant"};
     };
 
     /// @brief SEROW's configuration
@@ -314,7 +328,9 @@ private:
     /// @brief base attitude estimator that utilizes base IMU measurements
     std::unique_ptr<Mahony> attitude_estimator_;
     /// @brief end-effector kinematic estimator that employs base attitude and joint measurements
-    std::unique_ptr<RobotKinematics> kinematic_estimator_;
+    std::shared_ptr<RobotKinematics> kinematic_estimator_;
+    /// @brief contact wrench estimator based on geralized momentum observer
+    std::unique_ptr<ContactWrenchEstimator> contact_wrench_estimator_;
     /// @brief leg odometry estimator that employs end-effector kinematics to estimate the
     /// instantaneous moment pivot points
     std::unique_ptr<LegOdometry> leg_odometry_;
@@ -353,6 +369,8 @@ private:
     double last_joint_timestamp_{-1.0};
     /// @brief Timestamp of the last force/torque measurement
     double last_ft_timestamp_{-1.0};
+    /// @brief Last used timestamp of the filter
+    double last_timestamp_{-1.0};
     /// @brief Timestamp of the last odometry measurement
     double last_odom_timestamp_{-1.0};
     std::vector<double> coeffs_joint_;
@@ -403,6 +421,11 @@ private:
     void runContactEstimator(
         State& state, std::map<std::string, ForceTorqueMeasurement>& ft, KinematicMeasurement& kin,
         std::optional<std::map<std::string, ContactMeasurement>> contacts_probability);
+    /// @brief Runs the contact wrench estimator to estimate the leg end-effector contact wrench
+    /// @return Estimated contact wrench measurements (per contact frame)
+    /// @param feet_orientation the orientation of the feet w.r.t. the world frame
+    std::map<std::string, ForceTorqueMeasurement> runContactWrenchEstimator(
+        const std::map<std::string, Eigen::Quaterniond>& feet_orientation);
 
     /// @brief Runs the base estimator
     /// @param state the state of the robot

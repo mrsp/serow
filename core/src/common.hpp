@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -140,6 +141,7 @@ public:
             this->min_stable_foot_linear_velocity = min_stable_foot_linear_velocity;
         }
     };
+    TerrainElevation(bool point_feet = false) : point_feet_(point_feet) {}
     virtual ~TerrainElevation() = default;
 
     void printMapInformation() {
@@ -213,6 +215,10 @@ public:
 
     float getMinContactProbability() const {
         return params_.min_contact_probability;
+    }
+
+    float getMinVariance() const {
+        return params_.min_variance;
     }
 
     float getMinStableContactProbability() const {
@@ -354,6 +360,95 @@ protected:
     std::array<float, 2> local_map_origin_d_{0.0, 0.0};
     std::array<float, 2> local_map_bound_max_d_{};
     std::array<float, 2> local_map_bound_min_d_{};
+
+    bool point_feet_{false};
+};
+
+// Terrain-only contact debouncer.  This does not change the contact flags used by
+// leg odometry; it only protects the terrain map and terrain EKF correction from
+// one-sample dropouts such as 1110111 and from the first samples after touchdown.
+struct TerrainContactFilterState {
+    bool stable{false};
+    int on_count{0};
+    int off_count{0};
+    int age{0};
+};
+
+class TerrainContactFilter {
+public:
+    struct Params {
+        int min_on_samples{3};
+        int max_dropout_samples{2};
+        int min_off_samples{3};
+        int skip_after_touchdown_samples{5};
+        double stable_contact_threshold{0.5};
+        Params() = default;
+        Params(const int min_on_samples, const int max_dropout_samples, const int min_off_samples,
+               const int skip_after_touchdown_samples, const double stable_contact_threshold)
+            : min_on_samples(min_on_samples),
+              max_dropout_samples(max_dropout_samples),
+              min_off_samples(min_off_samples),
+              skip_after_touchdown_samples(skip_after_touchdown_samples),
+              stable_contact_threshold(stable_contact_threshold) {}
+    };
+
+    TerrainContactFilter() = default;
+    explicit TerrainContactFilter(const Params& params) : params_(params) {}
+    std::map<std::string, double> filter(
+        const std::map<std::string, double>& contacts_probability) {
+        became_stable_.clear();
+
+        std::map<std::string, double> filtered;
+        for (const auto& [cf, cp] : contacts_probability) {
+            const bool stable_contact_candidate = cp > params_.stable_contact_threshold;
+            TerrainContactFilterState& s = state_[cf];
+            const bool was_stable = s.stable;
+            if (stable_contact_candidate) {
+                ++s.on_count;
+                s.off_count = 0;
+
+                if (!s.stable && s.on_count >= params_.min_on_samples) {
+                    s.stable = true;
+                    s.age = 0;
+                }
+            } else {
+                ++s.off_count;
+                s.on_count = 0;
+
+                // Fill short holes: 1110111 remains stable contact for terrain.
+                if (s.stable && s.off_count <= params_.max_dropout_samples) {
+                    // keep stable=true
+                } else if (s.off_count >= params_.min_off_samples) {
+                    s.stable = false;
+                    s.age = 0;
+                }
+            }
+
+            if (s.stable) {
+                ++s.age;
+            }
+
+            became_stable_[cf] = (!was_stable && s.stable);
+            filtered[cf] = (s.stable && s.age > params_.skip_after_touchdown_samples) ? 1.0 : 0.0;
+        }
+
+        return filtered;
+    }
+
+    bool becameStable(const std::string& cf) {
+        const auto jt = became_stable_.find(cf);
+        return jt != became_stable_.end() && jt->second;
+    }
+
+    void reset() {
+        state_.clear();
+        became_stable_.clear();
+    }
+
+private:
+    Params params_;
+    std::map<std::string, TerrainContactFilterState> state_;
+    std::map<std::string, bool> became_stable_;
 };
 
 }  // namespace serow

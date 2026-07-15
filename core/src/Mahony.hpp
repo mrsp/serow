@@ -53,6 +53,7 @@ public:
         integralFBx_ = 0.0;
         integralFBy_ = 0.0;
         integralFBz_ = 0.0;
+        decay_factor_ = std::exp(-nominal_dt_ / tau_);
         verbose_ = verbose;
         Q_gyro_ = Q_gyro;
         Q_acc_ = Q_acc;
@@ -100,7 +101,7 @@ public:
      *  @returns the orientation covariance matrix in the world frame
      */
     Eigen::Matrix3d getOrientationCov() const {
-        return R_ * P_ * R_.transpose() * dt_;
+        return R_ * P_ * R_.transpose() * nominal_dt_;
     }
 
     /** @fn filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc)
@@ -110,14 +111,6 @@ public:
      *  @param timestamp timestamp of the measurement
      */
     void filter(const Eigen::Vector3d& gyro, const Eigen::Vector3d& acc, double timestamp) {
-        dt_ = nominal_dt_;
-        if (timestamp_) {
-            dt_ = timestamp - timestamp_.value();
-            if (dt_ <= 0.0) {
-                dt_ = nominal_dt_;
-            }
-        }
-
         double gx = gyro(0);
         double gy = gyro(1);
         double gz = gyro(2);
@@ -126,14 +119,22 @@ public:
         double az = acc(2);
 
         // Small angle approximation of the rotation update
-        const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() - lie::so3::wedge(gyro) * dt_;
+        const Eigen::Matrix3d F = Eigen::Matrix3d::Identity() - lie::so3::wedge(gyro) * nominal_dt_;
+
+        // Estimated gravity direction
+        const double halfvx = q1_ * q3_ - q0_ * q2_;
+        const double halfvy = q0_ * q1_ + q2_ * q3_;
+        const double halfvz = q0_ * q0_ - 0.5 + q3_ * q3_;
+        const Eigen::Vector3d g_hat = Eigen::Vector3d(halfvx, halfvy, halfvz).normalized();
+        const Eigen::Matrix3d N = g_hat * g_hat.transpose();
+        const Eigen::Matrix3d D = Eigen::Matrix3d::Identity() - (1.0 - decay_factor_) * N;
 
         // Predict step (Uncertainty increases due to Gyro noise)
-        const double decay_factor = std::exp(-dt_ / tau_);
         Eigen::Matrix3d P_new;
-        P_new.noalias() = F * P_ * F.transpose() * decay_factor;
-        P_new += Q_gyro_ * dt_;
-        P_ = P_new;
+        P_new.noalias() = F * P_ * F.transpose();
+        P_new += Q_gyro_ * nominal_dt_;
+        P_new = D * P_new * D.transpose();  // yaw-only decay
+        P_ = std::move(P_new);
 
         // Valid accelerometer check
         if (!(std::abs(ax) < 1e-6 && std::abs(ay) < 1e-6 && std::abs(az) < 1e-6)) {
@@ -142,11 +143,6 @@ public:
             ax *= recipNorm;
             ay *= recipNorm;
             az *= recipNorm;
-
-            // Estimated gravity direction
-            const double halfvx = q1_ * q3_ - q0_ * q2_;
-            const double halfvy = q0_ * q1_ + q2_ * q3_;
-            const double halfvz = q0_ * q0_ - 0.5 + q3_ * q3_;
 
             // Error between measured and estimated gravity
             const double halfex = ay * halfvz - az * halfvy;
@@ -160,11 +156,11 @@ public:
 
             // Kalman-like covariance update (requires Kp > 0; R_acc scales ~ 1/Kp)
             if (twoKp_ > 0.0) {
-                const Eigen::Matrix3d R_acc = (Q_acc_ / dt_) / (twoKp_ * 0.5);
+                const Eigen::Matrix3d R_acc = Q_acc_ / (nominal_dt_ * twoKp_ * nominal_dt_);
                 const Eigen::Matrix3d S = H * P_ * H.transpose() + R_acc;
-                const Eigen::Matrix3d K =
-                    S.ldlt().solve((P_ * H.transpose()).transpose()).transpose();
-                P_ = (Eigen::Matrix3d::Identity() - K * H) * P_;
+                const Eigen::Matrix3d K = P_ * H.transpose() * S.inverse();
+                const Eigen::Matrix3d IKH = Eigen::Matrix3d::Identity() - K * H;
+                P_ = IKH * P_ * IKH.transpose() + K * R_acc * K.transpose();
             }
 
             // Integral feedback with anti-windup decay
@@ -191,8 +187,8 @@ public:
         const double qa = q0_;
         const double qb = q1_;
         const double qc = q2_;
-        gx *=
-            0.5 * nominal_dt_;  // For stability, we use the nominal sample time for the integration
+        // For stability, we use the nominal sample time for the integration
+        gx *= 0.5 * nominal_dt_;
         gy *= 0.5 * nominal_dt_;
         gz *= 0.5 * nominal_dt_;
         q0_ += (-qb * gx - qc * gy - q3_ * gz);
@@ -273,8 +269,9 @@ private:
     double integralFBz_ = 0.0;
     /// Nominal sample time
     double nominal_dt_ = 0.0;
-    /// Sample time
-    double dt_ = 0.0;
+    /// Decay factor for covariance decay to prevent yaw dimension of
+    /// covariance from growing unbounded due to unobservability
+    double decay_factor_ = 0.0;
     /// Timestamp of the last measurement
     std::optional<double> timestamp_ = std::nullopt;
     /// Whether to print verbose output

@@ -2,7 +2,7 @@
     "robot_name": "go2",
     "base_frame": "base",
     "point_feet": true,
-    "base_estimator_type": "right-invariant",
+    "base_estimator_type": "left-invariant",
     "foot_frames": {
         "0": "FL_foot",
         "1": "FR_foot",
@@ -15,7 +15,12 @@
     "estimate_joint_velocity": true,
     "joint_position_variance": 1e-5,
     "joint_velocity_variance": null,
-    "smoothing_window": 7,
+    "smoothing_window": 11,
+    "estimate_contact_wrench": false,
+    "contact_wrench_estimator_enable_refit": false,
+    "observer_gain": 9.0,
+    "contact_wrench_regularization_parameter": 1e-2,
+    "contact_wrench_estimator_type": "cod",
     "tau_0": 5e-4,
     "tau_1": 0.0,
     "imu_rate": 500.0,
@@ -41,7 +46,6 @@
         0.0,
         1.0
     ],
-    "use_imu_orientation": false,
     "calibrate_initial_imu_bias": true,
     "max_imu_calibration_cycles": 500,
     "bias_gyro": [
@@ -185,13 +189,13 @@
     "T_base_to_odom": null,
     "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
-    "minimum_terrain_height_variance": 1e-3,
+    "minimum_terrain_height_variance": 3e-4,
     "maximum_contact_points": 4,
     "maximum_recenter_distance": 0.35,
     "minimum_contact_probability": 0.2,
     "resolution": 0.02,
     "radius": 0.04,
-    "dist_variance_gain": 200.0,
+    "dist_variance_gain": 500.0,
     "power": 1.5,
     "T_base_to_ground_truth": [
         1.0,
@@ -211,7 +215,7 @@
         0.0,
         1.0
     ],
-    "log_data": true,
-    "log_measurements": true,
+    "log_data": false,
+    "log_measurements": false,
     "log_dir": "/tmp/"
 }

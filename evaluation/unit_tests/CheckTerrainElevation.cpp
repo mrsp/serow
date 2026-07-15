@@ -170,10 +170,10 @@ TEST_F(TerrainElevationTest, Normalize) {
         return (y < 0 ? y + range : y) + a;
     };
 
-    EXPECT_EQ(normalize(15), normalize_fn(15, -map_dim, map_dim));
-    EXPECT_EQ(normalize(-1), normalize_fn(-1, -map_dim, map_dim));
-    EXPECT_EQ(normalize(16), normalize_fn(16, -map_dim, map_dim));
-    EXPECT_EQ(normalize(-17), normalize_fn(-17, -map_dim, map_dim));
+    EXPECT_EQ(normalize(15), normalize_fn(15, -half_map_dim, half_map_dim - 1));
+    EXPECT_EQ(normalize(-1), normalize_fn(-1, -half_map_dim, half_map_dim - 1));
+    EXPECT_EQ(normalize(16), normalize_fn(16, -half_map_dim, half_map_dim - 1));
+    EXPECT_EQ(normalize(-17), normalize_fn(-17, -half_map_dim, half_map_dim - 1));
 }
 
 TEST_F(TerrainElevationTest, NormalizeRandomAndEdgeCases) {
@@ -191,7 +191,7 @@ TEST_F(TerrainElevationTest, NormalizeRandomAndEdgeCases) {
     // Test random numbers
     for (int i = 0; i < 100; ++i) {
         int64_t num = dist(gen);
-        EXPECT_EQ(normalize(num), normalize_fn(num, -half_map_dim, half_map_dim));
+        EXPECT_EQ(normalize(num), normalize_fn(num, -half_map_dim, half_map_dim - 1));
     }
 
     // Edge cases
@@ -214,13 +214,13 @@ TEST_F(TerrainElevationTest, NormalizeRandomAndEdgeCases) {
         std::numeric_limits<int>::min() + 1, std::numeric_limits<int>::max() - 1};
 
     for (int64_t num : edge_cases) {
-        EXPECT_EQ(normalize(num), normalize_fn(num, -half_map_dim, half_map_dim))
+        EXPECT_EQ(normalize(num), normalize_fn(num, -half_map_dim, half_map_dim - 1))
             << "Failed for number: " << num;
     }
 
     // Test sequences of numbers
     for (int i = -half_map_dim - 10; i <= half_map_dim + 10; ++i) {
-        EXPECT_EQ(normalize(i), normalize_fn(i, -half_map_dim, half_map_dim))
+        EXPECT_EQ(normalize(i), normalize_fn(i, -half_map_dim, half_map_dim - 1))
             << "Failed for number: " << i;
     }
 }

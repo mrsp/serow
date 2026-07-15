@@ -49,14 +49,19 @@ inline int fast_mod(const int x) {
 
 inline int normalize(const int x) {
     constexpr int a = -half_map_dim;
-    constexpr int b = half_map_dim;
-    constexpr int range = b - a + 1;
-    int y = (x - a) % range;
-    return (y < 0 ? y + range : y) + a;
-}
+    constexpr int range = map_dim;
 
+    int y = (x - a) % range;
+    if (y < 0) {
+        y += range;
+    }
+
+    return y + a;
+}
 class LocalTerrainMapper : public TerrainElevation {
 public:
+    explicit LocalTerrainMapper(bool point_feet = false) : TerrainElevation(point_feet) {}
+
     virtual void recenter(const std::array<float, 2>& loc) override;
 
     void initializeLocalMap(const float height, const float variance,

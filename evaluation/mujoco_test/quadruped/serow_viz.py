@@ -84,7 +84,11 @@ def load_serow_preds(mcap_file):
     """Loads Estimated data from the output MCAP."""
     data_store = {
         "pos": [], "rot": [], "lin_vel": [], "ts": [], "com_pos": [], "com_vel": [],
-        "b_acc": [], "b_gyr": []
+        "b_acc": [], "b_gyr": [],
+        "f_meas_fl_local": [], "f_meas_fr_local": [],
+        "f_meas_rl_local": [], "f_meas_rr_local": [],
+        "f_est_fl_local": [], "f_est_fr_local": [],
+        "f_est_rl_local": [], "f_est_rr_local": []
     }
 
     print(f"Loading Predictions from: {mcap_file}")
@@ -116,6 +120,38 @@ def load_serow_preds(mcap_file):
             bias = d["imu_bias"]
             data_store["b_acc"].append([bias["accel"]["x"], bias["accel"]["y"], bias["accel"]["z"]])
             data_store["b_gyr"].append([bias["angVel"]["x"], bias["angVel"]["y"], bias["angVel"]["z"]])
+
+            required_force_fields = (
+                "measured_contact_forces_local",
+                "estimated_contact_forces_local",
+            )
+            missing = [name for name in required_force_fields if name not in d]
+            if missing:
+                raise KeyError(
+                    f"Prediction MCAP is missing force field(s) {missing}. "
+                    "Re-run the modified go2_mujoco_test executable."
+                )
+
+            measured = d["measured_contact_forces_local"]
+            estimated = d["estimated_contact_forces_local"]
+            availability = d.get("estimated_contact_force_available", {})
+
+            force_keys = {
+                "FL_foot": ("f_meas_fl_local", "f_est_fl_local"),
+                "FR_foot": ("f_meas_fr_local", "f_est_fr_local"),
+                "RL_foot": ("f_meas_rl_local", "f_est_rl_local"),
+                "RR_foot": ("f_meas_rr_local", "f_est_rr_local"),
+            }
+
+            for frame_name, (meas_key, est_key) in force_keys.items():
+                fm = measured[frame_name]
+                data_store[meas_key].append([fm["x"], fm["y"], fm["z"]])
+
+                if availability.get(frame_name, True):
+                    fe = estimated[frame_name]
+                    data_store[est_key].append([fe["x"], fe["y"], fe["z"]])
+                else:
+                    data_store[est_key].append([np.nan, np.nan, np.nan])
 
     return {k: np.array(v) for k, v in data_store.items()}
 
@@ -266,20 +302,37 @@ if __name__ == "__main__":
         axs4[1].grid(True)
         axs4[1].set_xlabel("Time (s)")
 
-        # --- Figure 5: Forces (Diagnostic) ---
-        fig5, axs5 = plt.subplots(4, 1, figsize=(10, 8), sharex=True)
-        fig5.suptitle("Feet Forces Z (GT)")
-        
-        axs5[0].plot(gt["ts"], gt["f_fl"][:, 2], color="blue", label="FL")
-        axs5[1].plot(gt["ts"], gt["f_fr"][:, 2], color="blue", label="FR")
-        axs5[2].plot(gt["ts"], gt["f_rl"][:, 2], color="blue", label="RL")
-        axs5[3].plot(gt["ts"], gt["f_rr"][:, 2], color="blue", label="RR")
-        
-        for ax in axs5:
-            ax.set_ylabel("Force Z")
-            ax.grid(True)
-            ax.legend(loc="upper right")
-        axs5[3].set_xlabel("Time (s)")
+        # --- Figures 5-8: Contact forces in each local foot frame ---
+        force_series = {
+            "FL": (est["f_meas_fl_local"], est["f_est_fl_local"]),
+            "FR": (est["f_meas_fr_local"], est["f_est_fr_local"]),
+            "RL": (est["f_meas_rl_local"], est["f_est_rl_local"]),
+            "RR": (est["f_meas_rr_local"], est["f_est_rr_local"]),
+        }
+        force_axes = ["Fx", "Fy", "Fz"]
+
+        for leg, (measured_local, estimated_local) in force_series.items():
+            fig_force, axs_force = plt.subplots(3, 1, figsize=(12, 8), sharex=True)
+            fig_force.suptitle(f"{leg} contact force in local foot frame")
+
+            for axis_idx, axis_name in enumerate(force_axes):
+                axs_force[axis_idx].plot(
+                    est["ts"],
+                    measured_local[:, axis_idx],
+                    label="Measured (local, unchanged)",
+                )
+                axs_force[axis_idx].plot(
+                    est["ts"],
+                    estimated_local[:, axis_idx],
+                    linestyle="--",
+                    label="GMO estimate (world → local foot)",
+                )
+                axs_force[axis_idx].set_ylabel(f"{axis_name} [N]")
+                axs_force[axis_idx].grid(True, alpha=0.3)
+                axs_force[axis_idx].legend(loc="upper right")
+
+            axs_force[-1].set_xlabel("Time (s)")
+            fig_force.tight_layout(rect=[0, 0, 1, 0.95])
         
         #--- Figure 6: Raw IMU Measurements (Diagnostic) ---
         fig6, axs6 = plt.subplots(2, 1, figsize=(10, 8), sharex=True)

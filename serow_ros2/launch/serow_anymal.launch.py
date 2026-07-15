@@ -43,7 +43,7 @@ def _launch_setup(context):
 
 def generate_launch_description():
     default_config_file = os.path.join(
-        get_package_share_directory("serow_ros2"), "config", "anymal_b.yaml"
+        get_package_share_directory("serow_ros2"), "config", "anymal.yaml"
     )
     config_arg = DeclareLaunchArgument(
         "config_file",

@@ -28,11 +28,14 @@
 #include <map>
 #include <pinocchio/algorithm/center-of-mass.hpp>
 #include <pinocchio/algorithm/centroidal.hpp>
+#include <pinocchio/algorithm/compute-all-terms.hpp>
+#include <pinocchio/algorithm/crba.hpp>
 #include <pinocchio/algorithm/frames.hpp>
 #include <pinocchio/algorithm/jacobian.hpp>
 #include <pinocchio/algorithm/joint-configuration.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/algorithm/model.hpp>
+#include <pinocchio/algorithm/rnea.hpp>
 #include <pinocchio/multibody/data.hpp>
 #include <pinocchio/multibody/model.hpp>
 #include <pinocchio/parsers/mjcf.hpp>
@@ -85,11 +88,6 @@ public:
                 model_name);
         }
 
-        // Enforce fixed-base behavior by default by locking any root free-flyer joint.
-        // NOTE: data_ is intentionally created AFTER this call since buildReducedModel
-        // replaces *pmodel_ with a new model object, invalidating any previously created Data.
-        reduceRootFreeFlyerToFixedBase();
-
         // Additional safety checks
         if (pmodel_->lowerPositionLimit.size() == 0 || pmodel_->upperPositionLimit.size() == 0 ||
             pmodel_->velocityLimit.size() == 0) {
@@ -98,19 +96,9 @@ public:
                 model_name);
         }
 
-        // Create the data associated with the (possibly reduced) model
+        // Create the data associated with the model
         data_ = std::make_unique<pinocchio::Data>(*pmodel_);
-
-        // Initialize joint names excluding the "universe" joint and floating-base variants
-        jnames_.reserve(pmodel_->names.size());
-        for (const auto& jname : pmodel_->names) {
-            if (jname.find("universe") == std::string::npos &&
-                jname.find("world") == std::string::npos &&
-                jname.find("free") == std::string::npos &&
-                jname.find("floating") == std::string::npos) {
-                jnames_.push_back(jname);
-            }
-        }
+        initializeActuatedJoints();
 
         // Initialize the vectors with proper sizes before assignment
         qmin_.resize(jnames_.size());
@@ -181,22 +169,56 @@ public:
     }
 
     /**
-     * @brief Returns the velocity space dimension of the model (nv), i.e. true actuated DoF.
+     * @brief Returns the number of actuated velocity DoF (nv minus floating-base DoF).
      */
     int ndofActuated() const {
+        return nv_actuated_;
+    }
+
+    /**
+     * @brief Returns the full Pinocchio velocity dimension (nv), including floating-base DoF.
+     */
+    int ndofVelocity() const {
         return pmodel_->nv;
     }
 
     /**
+     * @brief Sets the gravity magnitude used in Pinocchio dynamics (world z, m/s^2).
+     */
+    void setGravity(const double g) {
+        pmodel_->gravity.linear() = Eigen::Vector3d(0.0, 0.0, -g);
+    }
+
+    /**
      * @brief Updates the joint configuration and kinematic data
+     * @param base_position Base position
+     * @param base_orientation Base orientation
+     * @param base_linear_velocity Base linear velocity
+     * @param base_angular_velocity Base angular velocity
      * @param qmap Map of joint names to their positions
      * @param qdotmap Map of joint names to their velocities
      * @param effortmap Map of joint names to their efforts
      */
-    void updateJointConfig(const std::map<std::string, double>& qmap,
+    void updateJointConfig(const Eigen::Vector3d& base_position,
+                           const Eigen::Quaterniond& base_orientation,
+                           const Eigen::Vector3d& base_linear_velocity,
+                           const Eigen::Vector3d& base_angular_velocity,
+                           const std::map<std::string, double>& qmap,
                            const std::map<std::string, double>& qdotmap,
                            const std::map<std::string, double>& effortmap) {
+        q_.setZero(pmodel_->nq);
+        qdot_.setZero(pmodel_->nv);
+        effort_.setZero(pmodel_->nv);
+        // Update the floating-base information (when the model has a free-flyer root)
+        if (floating_base_vdof_ == 6) {
+            q_.head(3) = base_position;
+            q_.segment(3, 4) = base_orientation.coeffs();
+            qdot_.head(3) = base_linear_velocity;
+            qdot_.segment(3, 3) = base_angular_velocity;
+        }
+        // Update the joint configuration
         mapJointNamesIDs(qmap, qdotmap, effortmap);
+        // Update the kinematic data
         pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
         pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
     }
@@ -271,9 +293,6 @@ public:
     void mapJointNamesIDs(const std::map<std::string, double>& qmap,
                           const std::map<std::string, double>& qdotmap,
                           const std::map<std::string, double>& effortmap) {
-        q_.setZero(pmodel_->nq);
-        qdot_.setZero(pmodel_->nv);
-        effort_.setZero(pmodel_->nv);
         for (size_t i = 0; i < jnames_.size(); i++) {
             if (qmap.count(jnames_[i]) == 0 || qdotmap.count(jnames_[i]) == 0) {
                 continue;
@@ -302,7 +321,7 @@ public:
     }
 
     /**
-     * @brief Computes the geometric Jacobian matrix of a frame
+     * @brief Computes the actuated geometric Jacobian matrix of a frame
      * @param frame_name Name of the frame
      * @param in_body_frame Whether to return the Jacobian in the body frame or in the local frame
      * @return Geometric Jacobian matrix
@@ -319,12 +338,13 @@ public:
         }
 
         pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
+        Eigen::MatrixXd J_actuated = std::move(J.rightCols(nv_actuated_));
         if (in_body_frame) {
             const Eigen::Matrix3d& R = data_->oMf[fid].rotation();
-            J.topRows(3) = R * J.topRows(3);
-            J.bottomRows(3) = R * J.bottomRows(3);
+            J_actuated.topRows(3) = R * J_actuated.topRows(3);
+            J_actuated.bottomRows(3) = R * J_actuated.bottomRows(3);
         }
-        return J;
+        return J_actuated;
     }
 
     /**
@@ -333,7 +353,7 @@ public:
      * @return Linear velocity
      */
     Eigen::Vector3d linearVelocity(const std::string& frame_name) const {
-        return linearJacobian(frame_name) * qdot_;
+        return linearJacobian(frame_name) * qdot_.tail(nv_actuated_);
     }
 
     /**
@@ -342,7 +362,7 @@ public:
      * @return Angular velocity
      */
     Eigen::Vector3d angularVelocity(const std::string& frame_name) const {
-        return angularJacobian(frame_name) * qdot_;
+        return angularJacobian(frame_name) * qdot_.tail(nv_actuated_);
     }
 
     /**
@@ -433,11 +453,12 @@ public:
         if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
             std::cerr << "WARNING: Link name " << frame_name << " is invalid! "
                       << "Returning zeros." << '\n';
-            return Eigen::MatrixXd::Zero(3, pmodel_->nv);
+            return Eigen::MatrixXd::Zero(3, nv_actuated_);
         }
 
         pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
-        return data_->oMf[fid].rotation() * J.topRows(3);
+        Eigen::MatrixXd J_actuated = std::move(J.rightCols(nv_actuated_));
+        return data_->oMf[fid].rotation() * J_actuated.topRows(3);
     }
 
     /**
@@ -452,11 +473,12 @@ public:
         if (fid >= static_cast<pinocchio::Model::FrameIndex>(pmodel_->nframes)) {
             std::cerr << "WARNING: Link name " << frame_name << " is invalid! "
                       << "Returning zeros." << '\n';
-            return Eigen::MatrixXd::Zero(3, pmodel_->nv);
+            return Eigen::MatrixXd::Zero(3, nv_actuated_);
         }
 
         pinocchio::getFrameJacobian(*pmodel_, *data_, fid, pinocchio::LOCAL, J);
-        return data_->oMf[fid].rotation() * J.bottomRows(3);
+        Eigen::MatrixXd J_actuated = std::move(J.rightCols(nv_actuated_));
+        return data_->oMf[fid].rotation() * J_actuated.bottomRows(3);
     }
 
     /**
@@ -478,6 +500,14 @@ public:
     }
 
     /**
+     * @brief Get the Model object
+     * @return const pinocchio::Model&
+     */
+    const pinocchio::Model& getModel() const {
+        return *pmodel_;
+    }
+
+    /**
      * @brief Computes the CoM position.
      * @return CoM position vector
      */
@@ -491,7 +521,7 @@ public:
      * @return CoM Jacobian matrix
      */
     Eigen::MatrixXd comJacobian() const {
-        return pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
+        return pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_).rightCols(nv_actuated_);
     }
 
     /**
@@ -499,8 +529,8 @@ public:
      * @return CoM Spectral Density matrix
      */
     Eigen::MatrixXd comCovariance() const {
-        const Eigen::MatrixXd J = comJacobian();
-        return J * qp_.asDiagonal() * J.transpose();
+        const Eigen::MatrixXd J_actuated = comJacobian();
+        return J_actuated * qp_.asDiagonal() * J_actuated.transpose();
     }
 
     /**
@@ -509,8 +539,8 @@ public:
      */
     std::pair<Eigen::Vector3d, Eigen::Matrix3d> comAngularMomentumAndCovariance() const {
         pinocchio::computeCentroidalMap(*pmodel_, *data_, q_);
-        const Eigen::MatrixXd Ag_angular = data_->Ag.bottomRows(3);
-        const Eigen::Vector3d h_angular = Ag_angular * qdot_;
+        const Eigen::MatrixXd Ag_angular = data_->Ag.bottomRows(3).rightCols(nv_actuated_);
+        const Eigen::Vector3d h_angular = Ag_angular * qdot_.tail(nv_actuated_);
         const Eigen::Matrix3d cov = Ag_angular * qn_.asDiagonal() * Ag_angular.transpose();
         return {h_angular, cov};
     }
@@ -531,7 +561,7 @@ public:
      */
     Eigen::Matrix3d comAngularMomentumCovariance() const {
         pinocchio::computeCentroidalMap(*pmodel_, *data_, q_);
-        const Eigen::MatrixXd Ag_angular = data_->Ag.bottomRows(3);
+        const Eigen::MatrixXd Ag_angular = data_->Ag.bottomRows(3).rightCols(nv_actuated_);
         return Ag_angular * qn_.asDiagonal() * Ag_angular.transpose();
     }
 
@@ -601,25 +631,91 @@ public:
         }
     }
 
-    /**
-     * @brief Computes the link wrench for a frame
-     * @param frame_name Name of the frame
-     * @param in_body_frame Whether to return the wrench in body frame or local link coordinates
-     * @return Link wrench in body frame or local link frame coordinates
-     */
-    Eigen::Matrix<double, 6, 1> linkWrench(const std::string& frame_name,
-                                           bool in_body_frame = true) const {
-        const Eigen::MatrixXd J = geometricJacobian(frame_name, in_body_frame);
-        Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cod(J.transpose());
-        return cod.solve(effort_);
+    Eigen::VectorXd getJointPositions() const {
+        return q_;
+    }
+
+    Eigen::VectorXd getJointVelocities() const {
+        return qdot_;
+    }
+
+    Eigen::VectorXd getJointEfforts() const {
+        return effort_;
+    }
+
+    void computeDynamicTerms() const {
+        // 1. Compute CRBA by explicitly passing the joint positions
+        pinocchio::crba(*pmodel_, *data_, q_);
+
+        // Make the mass matrix symmetric
+        data_->M.triangularView<Eigen::StrictlyLower>() =
+            data_->M.transpose().triangularView<Eigen::StrictlyLower>();
+
+        // 2. Compute the Coriolis matrix by passing both positions and velocities
+        pinocchio::computeCoriolisMatrix(*pmodel_, *data_, q_, qdot_);
+    }
+
+    Eigen::MatrixXd getMassMatrix() const {
+        return data_->M;
+    }
+
+    Eigen::MatrixXd getCoriolisMatrix() {
+        pinocchio::computeCoriolisMatrix(*pmodel_, *data_, q_, qdot_);
+        return data_->C;
+    }
+
+    Eigen::VectorXd getGravityEffects() const {
+        return data_->g;
     }
 
 private:
+    /**
+     * @brief Detects floating-base DoF and builds actuated joint name list.
+     *
+     * Actuated joints are those with nvs > 0, excluding the free-flyer root (nvs == 6 at idx_vs
+     * == 0). Fixed joints (nvs == 0) are excluded. qp_/qn_ and Jacobian actuated columns are sized
+     * to nv_actuated_.
+     */
+    void initializeActuatedJoints() {
+        floating_base_vdof_ = 0;
+        for (pinocchio::JointIndex jidx = 1;
+             jidx < static_cast<pinocchio::JointIndex>(pmodel_->njoints); ++jidx) {
+            if (pmodel_->idx_vs[jidx] == 0 && pmodel_->nvs[jidx] == 6) {
+                floating_base_vdof_ = 6;
+                break;
+            }
+        }
+        nv_actuated_ = pmodel_->nv - floating_base_vdof_;
+
+        jnames_.clear();
+        jnames_.reserve(pmodel_->njoints);
+        for (pinocchio::JointIndex jidx = 1;
+             jidx < static_cast<pinocchio::JointIndex>(pmodel_->njoints); ++jidx) {
+            if (pmodel_->nvs[jidx] == 0) {
+                continue;
+            }
+            if (pmodel_->nvs[jidx] == 6 && pmodel_->idx_vs[jidx] == 0) {
+                continue;
+            }
+            jnames_.push_back(pmodel_->names[jidx]);
+        }
+
+        if (static_cast<int>(jnames_.size()) != nv_actuated_) {
+            throw std::runtime_error("Actuated DoF mismatch after joint filtering: expected " +
+                                     std::to_string(nv_actuated_) + " velocity DoF, found " +
+                                     std::to_string(jnames_.size()) + " actuated joint names");
+        }
+    }
+
     /// Pinocchio model
     std::unique_ptr<pinocchio::Model> pmodel_;
     /// Pinocchio data (always consistent with *pmodel_)
     std::unique_ptr<pinocchio::Data> data_;
-    /// Filtered joint names (excludes universe / floating-base joints)
+    /// Velocity DoF of the floating-base root joint (0 or 6)
+    int floating_base_vdof_{0};
+    /// Number of actuated velocity DoF (nv minus floating-base DoF)
+    int nv_actuated_{0};
+    /// Actuated joint names (excludes universe, fixed joints, and floating-base root)
     std::vector<std::string> jnames_;
     /// Joint position lower limits
     Eigen::VectorXd qmin_;
@@ -641,34 +737,6 @@ private:
     double total_mass_{0.0};
     /// BODY frame names
     std::vector<std::string> frame_names_;
-
-    /**
-     * @brief Locks root free-flyer joints so the model is fixed-base by default.
-     *
-     * Iterates all joints whose parent is the universe (index 0) and whose
-     * configuration/velocity dimensions match a free-flyer (nq=7, nv=6).
-     * buildReducedModel replaces *pmodel_ in-place; data_ must be (re-)created
-     * after this call, which the constructor guarantees.
-     */
-    void reduceRootFreeFlyerToFixedBase() {
-        std::vector<pinocchio::JointIndex> joints_to_lock;
-        joints_to_lock.reserve(pmodel_->njoints);  // upper bound;
-
-        for (pinocchio::JointIndex jid = 1;
-             jid < static_cast<pinocchio::JointIndex>(pmodel_->njoints); ++jid) {
-            const bool is_root_joint = (pmodel_->parents[jid] == 0);
-            // Prefer the joint type name to be robust against future convention changes.
-            const bool is_free_flyer = (pmodel_->joints[jid].shortname() == "JointModelFreeFlyer");
-            if (is_root_joint && is_free_flyer) {
-                joints_to_lock.push_back(jid);
-            }
-        }
-
-        if (!joints_to_lock.empty()) {
-            const Eigen::VectorXd qref = pinocchio::neutral(*pmodel_);
-            *pmodel_ = pinocchio::buildReducedModel(*pmodel_, joints_to_lock, qref);
-        }
-    }
 };
 
 }  // namespace serow

@@ -18,7 +18,7 @@ namespace serow {
 LegOdometry::LegOdometry(
     const Eigen::Vector3d& base_position, std::map<std::string, Eigen::Vector3d> feet_position,
     std::map<std::string, Eigen::Quaterniond> feet_orientation, double mass, double alpha1,
-    double alpha3, double freq, double g, double eps,
+    double alpha3, double freq, double g, double eps, const std::vector<double>& coeffs_joint,
     std::optional<std::map<std::string, Eigen::Vector3d>> force_torque_offset) {
     params_.mass = mass;
     params_.alpha1 = alpha1;
@@ -41,11 +41,10 @@ LegOdometry::LegOdometry(
     base_linear_velocity_ = Eigen::Vector3d::Zero();
     base_linear_velocity_cov_ = Eigen::Matrix3d::Identity() * 1e4;
 
-    // Initialize the base linear velocity estimator with a time horizon of 5 times the nominal
-    // sample time
+    // Initialize the base linear velocity estimator
     nominal_dt_ = 1.0 / params_.freq;
     base_linear_velocity_estimator_ = std::make_unique<DerivativeEstimator>(
-        "Base Linear Velocity", std::vector<double>{}, params_.freq, 3, nominal_dt_ * 5.0);
+        "Base Linear Velocity", coeffs_joint, params_.freq, 3);
 }
 
 const Eigen::Vector3d& LegOdometry::getBasePosition() const {
@@ -211,9 +210,9 @@ void LegOdometry::estimate(
     }
 
     // Estimate base linear velocity using the derivative estimator
-    base_linear_velocity_ = base_linear_velocity_estimator_->filter(
-        base_position_, base_linear_velocity_cov.diagonal() * dt * dt, timestamp);
-    base_linear_velocity_cov_ = base_linear_velocity_estimator_->getCovariance().asDiagonal();
+    base_linear_velocity_ =
+        base_linear_velocity_estimator_->filter(base_position_, Eigen::Vector3d::Ones(), timestamp);
+    base_linear_velocity_cov_ = base_linear_velocity_cov;
     timestamp_ = timestamp;
 }
 

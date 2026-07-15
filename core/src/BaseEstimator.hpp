@@ -14,7 +14,7 @@
 /**
  * @file BaseEstimator.hpp
  * @brief Abstract interface for base state estimators (EKF variants).
- *        Concrete implementations include ContactEKF and RightInvariantEKF.
+ *        Concrete implementations include ContactEKF and LeftInvariantEKF.
  * @author Stylianos Piperakis
  */
 

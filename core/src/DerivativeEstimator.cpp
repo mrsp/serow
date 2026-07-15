@@ -16,6 +16,27 @@
 
 namespace serow {
 
+std::vector<double> computeSGCoefficients(const int M) {
+    std::vector<double> coeffs;
+    Eigen::MatrixXd J = Eigen::MatrixXd::Zero(M, 3);
+    for (int i = 0; i < M; ++i) {
+        const double idx = -static_cast<double>(i);  // 0, -1, -2...
+        J(i, 0) = 1.0;                               // Constant term
+        J(i, 1) = idx;                               // Linear term (t)
+        J(i, 2) = idx * idx;                         // Quadratic term (t^2)
+    }
+
+    // Pseudoinverse: (J^T * J)^-1 * J^T
+    const Eigen::MatrixXd J_pinv = (J.transpose() * J).ldlt().solve(J.transpose());
+
+    // The second row corresponds to the 1st derivative
+    coeffs.resize(M);
+    for (int i = 0; i < M; ++i) {
+        coeffs[i] = J_pinv(1, i);
+    }
+    return coeffs;
+}
+
 DerivativeEstimator::DerivativeEstimator(const std::string& name,
                                          const std::vector<double>& coefficients, double f_sampling,
                                          size_t dim, double time_horizon, bool verbose) {

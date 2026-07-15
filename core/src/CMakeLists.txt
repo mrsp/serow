@@ -92,7 +92,7 @@ set(serow_src
     ForceTorqueMeasurementBuffer.cpp
     OdometryMeasurementBuffer.cpp
     ImuMeasurementBuffer.cpp
-    RightInvariantEKF.cpp
+    LeftInvariantEKF.cpp
 )
 
 # Header files
@@ -101,7 +101,8 @@ set(serow_headers
     BaseEstimator.hpp
     Serow.hpp 
     State.hpp 
-    ContactEKF.hpp 
+    ContactEKF.hpp
+    ContactWrenchEstimator.hpp
     CoMEKF.hpp 
     LegOdometry.hpp 
     ButterworthLPF.hpp 
@@ -125,7 +126,7 @@ set(serow_headers
     ForceTorqueMeasurementBuffer.hpp
     OdometryMeasurementBuffer.hpp
     ImuMeasurementBuffer.hpp
-    RightInvariantEKF.hpp
+    LeftInvariantEKF.hpp
 )
 
 add_library(serow SHARED ${serow_headers} ${serow_src})

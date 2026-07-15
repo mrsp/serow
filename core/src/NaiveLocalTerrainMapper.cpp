@@ -18,10 +18,10 @@ namespace serow {
 
 // Coordinate conversion functions
 int NaiveLocalTerrainMapper::locationToGlobalIndex(const float loc) const {
-    if (loc > 0.0) {
-        return static_cast<int>(params_.resolution_inv * loc + 0.5);
+    if (loc > 0.0f) {
+        return static_cast<int>(params_.resolution_inv * loc + 0.5f);
     } else {
-        return static_cast<int>(params_.resolution_inv * loc - 0.5);
+        return static_cast<int>(params_.resolution_inv * loc - 0.5f);
     }
 }
 
@@ -58,12 +58,10 @@ std::array<float, 2> NaiveLocalTerrainMapper::localIndexToLocation(
 }
 
 bool NaiveLocalTerrainMapper::inside(const std::array<int, 2>& id_g) const {
-    int x = abs(id_g[0] - local_map_origin_i_[0]);
-    int y = abs(id_g[1] - local_map_origin_i_[1]);
-    if ((x - half_map_dim) > 0 || (y - half_map_dim) > 0) {
-        return false;
-    }
-    return true;
+    const int dx = id_g[0] - local_map_origin_i_[0];
+    const int dy = id_g[1] - local_map_origin_i_[1];
+
+    return (dx >= -half_map_dim && dx < half_map_dim && dy >= -half_map_dim && dy < half_map_dim);
 }
 
 bool NaiveLocalTerrainMapper::inside(const std::array<float, 2>& loc) const {
@@ -112,7 +110,6 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
         return false;
     }
 
-    variance = std::max(params_.min_variance, variance);
     const std::array<int, 2> center_idx = locationToGlobalIndex(loc);
     const std::array<int, 2> center_local_idx = globalIndexToLocalIndex(center_idx);
     const int center_hash_id = localIndexToHashId(center_local_idx);
@@ -127,13 +124,11 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
     const float prior_variance = cell.variance;
     const float prior_height = cell.height;
 
-    // Ensure variances are positive to avoid division issues
-    const float effective_variance = std::max(variance, 1e-6f);
+    // Ensure prior variance is positive to avoid division issues
     const float effective_prior_variance = std::max(prior_variance, 1e-6f);
 
     // Compute Kalman gain
-    const float kalman_gain =
-        effective_prior_variance / (effective_prior_variance + effective_variance);
+    const float kalman_gain = effective_prior_variance / (effective_prior_variance + variance);
 
     // Update height and variance
     cell.height = prior_height + kalman_gain * (height - prior_height);
@@ -144,9 +139,11 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
     float nx_over_nz = 0.0f;
     float ny_over_nz = 0.0f;
     if (normal.has_value()) {
-        rc = params_.radius_cells * 2;
         nx_over_nz = normal.value()[0] / normal.value()[2];
         ny_over_nz = normal.value()[1] / normal.value()[2];
+        if (!point_feet_) {
+            rc = params_.radius_cells * 2;
+        }
     }
 
     for (int di = -rc; di <= rc; ++di) {
@@ -179,13 +176,13 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
 
             // Inflate measurement variance with distance
             const float sigma_scale = 1.0f + params_.dist_variance_gain * dist2;
-            const float effective_neighbor_variance =
-                std::max(effective_variance * sigma_scale, 1e-6f);
+            const float effective_neighbor_variance = variance * sigma_scale;
             const float effective_neighbor_prior_variance = std::max(neighbor.variance, 1e-6f);
             const float K = effective_neighbor_prior_variance /
                 (effective_neighbor_variance + effective_neighbor_prior_variance);
             neighbor.height = neighbor.height + K * (predicted_height - neighbor.height);
             neighbor.variance = (1.0f - K) * effective_neighbor_prior_variance;
+            neighbor.contact = true;
             neighbor.updated = true;
         }
     }
@@ -269,8 +266,8 @@ void NaiveLocalTerrainMapper::updateLocalMapOriginAndBound(const std::array<floa
     local_map_origin_i_ = new_origin_i;
     local_map_origin_d_ = new_origin_d;
 
-    local_map_bound_max_i_ = {local_map_origin_i_[0] + half_map_dim,
-                              local_map_origin_i_[1] + half_map_dim};
+    local_map_bound_max_i_ = {local_map_origin_i_[0] + half_map_dim - 1,
+                              local_map_origin_i_[1] + half_map_dim - 1};
     local_map_bound_min_i_ = {local_map_origin_i_[0] - half_map_dim,
                               local_map_origin_i_[1] - half_map_dim};
 
