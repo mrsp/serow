@@ -564,7 +564,7 @@ void Serow::initializeLogging() {
         proprioception_logger_job_ = std::make_unique<ThreadPool>(1);
     }
     if (!exteroception_logger_job_) {
-        exteroception_logger_job_ = std::make_unique<ThreadPool>();
+        exteroception_logger_job_ = std::make_unique<ThreadPool>(1);
     }
     if (!measurement_logger_job_) {
         measurement_logger_job_ = std::make_unique<ThreadPool>(1);
@@ -1223,11 +1223,8 @@ void Serow::logExteroception(const State& state) {
         // Capture shared_ptrs directly to ensure they remain valid even if Serow is destroyed
         auto terrain_estimator = terrain_estimator_;
         auto exteroception_logger = exteroception_logger_;
-        // Capture resolution value to avoid any potential issues with global variable access
-        const double res_base =
-            terrain_estimator ? static_cast<double>(terrain_estimator->getResolution()) : 0.02;
         exteroception_logger_job_->addJob([terrain_estimator, exteroception_logger,
-                                           ts = state.base_state_.timestamp, res_base,
+                                           ts = state.base_state_.timestamp,
                                            start_time = start_time_]() {
             try {
                 if (!terrain_estimator || !exteroception_logger) {
@@ -1237,71 +1234,18 @@ void Serow::logExteroception(const State& state) {
                 if (!exteroception_logger->isInitialized()) {
                     exteroception_logger->setStartTime(start_time);
                 }
-                const size_t downsample_factor = 4;
-                const auto [origin, bound_max, bound_min] = terrain_estimator->getLocalMapInfo();
-                const double res = res_base * downsample_factor;
-                if (!(res > 0.0) || !std::isfinite(res)) {
-                    std::cerr << "Error in exteroception logging: invalid resolution " << res
-                              << '\n';
-                    return;
-                }
 
-                // Calculate actual downsampled dimensions
-                const double dx =
-                    static_cast<double>(bound_max[0]) - static_cast<double>(bound_min[0]);
-                const double dy =
-                    static_cast<double>(bound_max[1]) - static_cast<double>(bound_min[1]);
-                if (!std::isfinite(dx) || !std::isfinite(dy) || dx <= 0.0 || dy <= 0.0) {
+                constexpr size_t downsample_factor = 4;
+                const auto grid =
+                    terrain_estimator->copyDownsampledElevationGrid(downsample_factor);
+                if (!grid.has_value()) {
                     // Bounds can be temporarily invalid during init/recenter; just skip logging.
                     return;
                 }
-                const uint32_t width = static_cast<uint32_t>(std::ceil(dx / res));
-                const uint32_t height = static_cast<uint32_t>(std::ceil(dy / res));
-                if (width == 0 || height == 0) {
-                    return;
-                }
 
-                // Prevent overflow in size computations
-                const size_t grid_size = static_cast<size_t>(width) * static_cast<size_t>(height);
-                constexpr size_t max_grid_size =
-                    static_cast<size_t>(map_dim) * static_cast<size_t>(map_dim);
-                if (grid_size == 0 || grid_size > max_grid_size) {
-                    std::cerr << "Skipping exteroception log due to unexpected grid size: "
-                              << grid_size << " (w=" << width << ", h=" << height << ")" << '\n';
-                    return;
-                }
-
-                exteroception_logger->setGridParameters(res, width, height, origin[0], origin[1]);
-
-                // Pre-allocate grid with exact size
-                std::vector<float> elevation(grid_size, std::numeric_limits<float>::quiet_NaN());
-                std::vector<float> variance(grid_size, std::numeric_limits<float>::quiet_NaN());
-
-                // Use integer-based iteration for consistency
-                for (uint32_t row = 0; row < height; ++row) {
-                    for (uint32_t col = 0; col < width; ++col) {
-                        // Calculate world coordinates from grid indices
-                        float x = bound_min[0] + col * res;
-                        float y = bound_min[1] + row * res;
-                        const auto& cell = terrain_estimator->getElevation({x, y});
-                        if (cell.has_value()) {
-                            const uint32_t idx = row * width + col;
-                            if (idx < grid_size) {
-                                elevation[idx] = cell.value().height;
-                                variance[idx] = cell.value().variance;
-                            }
-                        }
-                    }
-                }
-
-                // Verify size
-                if (elevation.size() != grid_size) {
-                    std::cerr << "Grid size mismatch: expected " << grid_size << ", got "
-                              << elevation.size() << '\n';
-                    return;  // Don't log invalid data
-                }
-
-                exteroception_logger->log(elevation, variance, ts);
+                exteroception_logger->setGridParameters(grid->resolution, grid->width, grid->height,
+                                                        grid->origin[0], grid->origin[1]);
+                exteroception_logger->log(grid->elevation, grid->variance, ts);
             } catch (const std::exception& e) {
                 std::cerr << "Error in exteroception logging thread: " << e.what() << '\n';
             }

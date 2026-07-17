@@ -825,6 +825,24 @@ PYBIND11_MODULE(serow, m) {
         .def_readwrite("updated", &serow::ElevationCell::updated,
                        "Whether this cell has been updated");
 
+    // Binding for TerrainElevation::DownsampledElevationGrid
+    py::class_<serow::TerrainElevation::DownsampledElevationGrid>(
+        m, "DownsampledElevationGrid",
+        "Downsampled elevation/variance grid snapshot from the local terrain map")
+        .def(py::init<>())
+        .def_readwrite("elevation", &serow::TerrainElevation::DownsampledElevationGrid::elevation,
+                       "Row-major elevation values (NaN where unknown)")
+        .def_readwrite("variance", &serow::TerrainElevation::DownsampledElevationGrid::variance,
+                       "Row-major variance values (NaN where unknown)")
+        .def_readwrite("origin", &serow::TerrainElevation::DownsampledElevationGrid::origin,
+                       "Map origin [x, y]")
+        .def_readwrite("resolution", &serow::TerrainElevation::DownsampledElevationGrid::resolution,
+                       "Downsampled cell resolution (m)")
+        .def_readwrite("width", &serow::TerrainElevation::DownsampledElevationGrid::width,
+                       "Grid width in cells")
+        .def_readwrite("height", &serow::TerrainElevation::DownsampledElevationGrid::height,
+                       "Grid height in cells");
+
     // Binding for TerrainElevation::Params
     py::class_<serow::TerrainElevation::Params>(m, "TerrainElevationParams",
                                                 "Parameters for the terrain elevation mapper")
@@ -874,8 +892,10 @@ PYBIND11_MODULE(serow, m) {
         m, "TerrainElevation", "Abstract base class for terrain elevation mapping")
         .def("print_map_information", &serow::TerrainElevation::printMapInformation,
              "Prints terrain map metadata to stdout")
-        .def("get_map_origin", &serow::TerrainElevation::getMapOrigin,
-             "Returns the map origin as [x, y]")
+        .def(
+            "get_map_origin",
+            [](const serow::TerrainElevation& self) { return self.getMapOrigin(); },
+            "Returns the map origin as [x, y]")
         .def("recenter", &serow::TerrainElevation::recenter, py::arg("location"),
              "Recenters the local map around the given [x, y] location")
         .def("initialize_local_map", &serow::TerrainElevation::initializeLocalMap,
@@ -901,6 +921,10 @@ PYBIND11_MODULE(serow, m) {
              "Returns the full elevation map as an array of ElevationCells")
         .def("get_local_map_info", &serow::TerrainElevation::getLocalMapInfo,
              "Returns (origin, bound_max, bound_min) of the local map")
+        .def("copy_downsampled_elevation_grid",
+             &serow::TerrainElevation::copyDownsampledElevationGrid, py::arg("downsample_factor"),
+             "Returns a consistent downsampled elevation/variance grid snapshot, or None if "
+             "unavailable")
         .def("add_contact_point", &serow::TerrainElevation::addContactPoint, py::arg("point"),
              "Adds a contact point [x, y] to the contact point buffer")
         .def("get_max_recenter_distance", &serow::TerrainElevation::getMaxRecenterDistance,
@@ -909,6 +933,8 @@ PYBIND11_MODULE(serow, m) {
              "Returns the map resolution (m/cell)")
         .def("get_min_contact_probability", &serow::TerrainElevation::getMinContactProbability,
              "Returns the minimum contact probability threshold")
+        .def("get_min_variance", &serow::TerrainElevation::getMinVariance,
+             "Returns the minimum terrain height variance (m^2)")
         .def("get_min_stable_contact_probability",
              &serow::TerrainElevation::getMinStableContactProbability,
              "Returns the minimum stable contact probability threshold")
@@ -928,13 +954,15 @@ PYBIND11_MODULE(serow, m) {
     py::class_<serow::LocalTerrainMapper, serow::TerrainElevation,
                std::shared_ptr<serow::LocalTerrainMapper>>(
         m, "LocalTerrainMapper", "Fast local terrain elevation mapper using hash-based indexing")
-        .def(py::init<>(), "Default constructor");
+        .def(py::init<bool>(), py::arg("point_feet") = false,
+             "Constructs a LocalTerrainMapper (point_feet enables point-foot contact model)");
 
     // Binding for NaiveLocalTerrainMapper (concrete implementation)
     py::class_<serow::NaiveLocalTerrainMapper, serow::TerrainElevation,
                std::shared_ptr<serow::NaiveLocalTerrainMapper>>(
         m, "NaiveLocalTerrainMapper", "Naive local terrain elevation mapper")
-        .def(py::init<>(), "Default constructor");
+        .def(py::init<bool>(), py::arg("point_feet") = false,
+             "Constructs a NaiveLocalTerrainMapper (point_feet enables point-foot contact model)");
 
     // Binding for CentroidalState
     py::class_<serow::CentroidalState>(m, "CentroidalState",

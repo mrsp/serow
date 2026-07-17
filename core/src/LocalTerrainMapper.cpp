@@ -55,6 +55,8 @@ void LocalTerrainMapper::clearOutOfMapCells(const std::vector<int>& clear_id, co
 }
 
 void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
     // Compute the shifting index
     const std::array<int, 2> new_origin_i = locationToGlobalIndex(loc);
     const std::array<float, 2> new_origin_d = globalIndexToLocation(new_origin_i);
@@ -63,7 +65,6 @@ void LocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
     const std::array<int, 2> shift_num = {new_origin_i[0] - local_map_origin_i_[0],
                                           new_origin_i[1] - local_map_origin_i_[1]};
 
-    std::lock_guard<std::mutex> lock(mutex_);
     // If shift is too large, reset the entire map
     if (std::abs(shift_num[0]) >= map_dim || std::abs(shift_num[1]) >= map_dim) {
         resetLocalMap();
@@ -292,9 +293,8 @@ bool LocalTerrainMapper::update(const std::array<float, 2>& loc, float height, f
     return true;
 }
 
-std::optional<ElevationCell> LocalTerrainMapper::getElevation(const std::array<float, 2>& loc) {
-    std::lock_guard lock(mutex_);
-
+std::optional<ElevationCell> LocalTerrainMapper::getElevationUnlocked(
+    const std::array<float, 2>& loc) {
     if (!inside(loc)) {
         return std::nullopt;
     }
@@ -310,7 +310,9 @@ std::optional<ElevationCell> LocalTerrainMapper::getElevation(const std::array<f
 
 void LocalTerrainMapper::initializeLocalMap(const float height, const float variance,
                                             const Params& params) {
-    default_elevation_ = std::move(ElevationCell(height, variance));
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    default_elevation_ = ElevationCell(height, variance);
     params_ = params;
 
     // Make sure the max recenter distance is within the map bounds
@@ -355,9 +357,8 @@ bool LocalTerrainMapper::isHashIdValid(const int id) const {
     return true;
 }
 
-bool LocalTerrainMapper::setElevation(const std::array<float, 2>& loc,
-                                      const ElevationCell& elevation) {
-    std::lock_guard<std::mutex> lock(mutex_);
+bool LocalTerrainMapper::setElevationUnlocked(const std::array<float, 2>& loc,
+                                              const ElevationCell& elevation) {
     if (!inside(loc)) {
         return false;
     }

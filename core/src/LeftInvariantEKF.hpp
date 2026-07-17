@@ -36,7 +36,7 @@ namespace serow {
 /**
  * @class LeftInvariantEKF
  * @brief Left-Invariant Extended Kalman Filter on SE_2(3) for legged-robot state estimation,
- *        fusing IMU data, leg-kinematic velocity, and optionally external odometry and terrain
+ *        fusing IMU data, base leg-kinematic velocity, and optionally external odometry and terrain
  *        height.
  */
 class LeftInvariantEKF : public BaseEstimator {

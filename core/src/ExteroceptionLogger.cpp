@@ -84,11 +84,13 @@ public:
     }
 
     void setStartTime(double timestamp) {
+        std::lock_guard<std::mutex> lock(mutex_);
         start_time_ = timestamp;
     }
 
     void log(const std::vector<float>& elevation, const std::vector<float>& variance,
              double timestamp) {
+        std::lock_guard<std::mutex> lock(mutex_);
         try {
             if (!start_time_.has_value()) {
                 start_time_ = timestamp;
@@ -157,7 +159,8 @@ public:
                                         elev_bytes + sizeof(float));
 
                 // Add variance bytes
-                const uint8_t* var_bytes = reinterpret_cast<const uint8_t*>(&variance[i]);
+                const float log_variance = std::log10(std::max(variance[i], 1e-4f));
+                const uint8_t* var_bytes = reinterpret_cast<const uint8_t*>(&log_variance);
                 interleaved_data.insert(interleaved_data.end(), var_bytes,
                                         var_bytes + sizeof(float));
             }
@@ -188,15 +191,18 @@ public:
     }
 
     double getLastTimestamp() const {
+        std::lock_guard<std::mutex> lock(mutex_);
         return last_timestamp_;
     }
 
     bool isInitialized() const {
+        std::lock_guard<std::mutex> lock(mutex_);
         return start_time_.has_value();
     }
 
     void setGridParameters(double resolution, uint32_t width, uint32_t height, double origin_x,
                            double origin_y) {
+        std::lock_guard<std::mutex> lock(mutex_);
         grid_resolution_ = resolution;
         grid_width_ = width;
         grid_height_ = height;
@@ -212,6 +218,7 @@ private:
     double grid_origin_x_{0.0};
     double grid_origin_y_{0.0};
 
+    // Caller must hold mutex_.
     void writeMessage(uint16_t channel_id, uint64_t sequence, double timestamp,
                       const std::byte* data, size_t data_size) {
         if (data_size == 0 || data == nullptr) {
@@ -227,7 +234,6 @@ private:
             message.dataSize = data_size;
             message.data = data;
 
-            std::lock_guard<std::mutex> lock(writer_mutex_);
             // Keep MCAP record log_time non-decreasing; flatbuffer payload time unchanged.
             ns_timestamp = std::max(ns_timestamp, last_log_time_ns_);
             last_log_time_ns_ = ns_timestamp;
@@ -276,7 +282,7 @@ private:
     double last_timestamp_{-1.0};
     std::optional<double> start_time_;
     uint64_t last_log_time_ns_{0};
-    std::mutex writer_mutex_;
+    mutable std::mutex mutex_;
     // MCAP writing components
     std::unique_ptr<mcap::FileWriter> file_writer_;
     std::unique_ptr<mcap::McapWriter> writer_;

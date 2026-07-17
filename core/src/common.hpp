@@ -11,15 +11,19 @@
  * see <https://www.gnu.org/licenses/>.
  **/
 #pragma once
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <deque>
 #include <filesystem>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -167,9 +171,15 @@ public:
     virtual bool update(const std::array<float, 2>& loc, float height, float variance,
                         std::optional<std::array<float, 3>> normal = std::nullopt) = 0;
 
-    virtual bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation) = 0;
+    bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return setElevationUnlocked(loc, elevation);
+    }
 
-    virtual std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) = 0;
+    std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return getElevationUnlocked(loc);
+    }
 
     virtual bool inside(const std::array<int, 2>& id_g) const = 0;
 
@@ -184,7 +194,80 @@ public:
     virtual std::tuple<std::array<float, 2>, std::array<float, 2>, std::array<float, 2>>
     getLocalMapInfo() = 0;
 
+    // Downsampled elevation/variance grid built under one lock (consistent snapshot).
+    struct DownsampledElevationGrid {
+        std::vector<float> elevation;
+        std::vector<float> variance;
+        std::array<float, 2> origin{};
+        double resolution{};
+        uint32_t width{};
+        uint32_t height{};
+    };
+
+    std::optional<DownsampledElevationGrid> copyDownsampledElevationGrid(size_t downsample_factor) {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        if (downsample_factor == 0) {
+            return std::nullopt;
+        }
+
+        const double res =
+            static_cast<double>(params_.resolution) * static_cast<double>(downsample_factor);
+        if (!(res > 0.0) || !std::isfinite(res)) {
+            return std::nullopt;
+        }
+
+        const auto& origin = local_map_origin_d_;
+        const auto& bound_max = local_map_bound_max_d_;
+        const auto& bound_min = local_map_bound_min_d_;
+
+        const double dx = static_cast<double>(bound_max[0]) - static_cast<double>(bound_min[0]);
+        const double dy = static_cast<double>(bound_max[1]) - static_cast<double>(bound_min[1]);
+        if (!std::isfinite(dx) || !std::isfinite(dy) || dx <= 0.0 || dy <= 0.0) {
+            return std::nullopt;
+        }
+
+        const uint32_t width = static_cast<uint32_t>(std::ceil(dx / res));
+        const uint32_t height = static_cast<uint32_t>(std::ceil(dy / res));
+        if (width == 0 || height == 0) {
+            return std::nullopt;
+        }
+
+        const size_t grid_size = static_cast<size_t>(width) * static_cast<size_t>(height);
+        constexpr size_t max_grid_size =
+            static_cast<size_t>(map_dim) * static_cast<size_t>(map_dim);
+        if (grid_size == 0 || grid_size > max_grid_size) {
+            return std::nullopt;
+        }
+
+        DownsampledElevationGrid grid;
+        grid.origin = origin;
+        grid.resolution = res;
+        grid.width = width;
+        grid.height = height;
+        grid.elevation.assign(grid_size, std::numeric_limits<float>::quiet_NaN());
+        grid.variance.assign(grid_size, std::numeric_limits<float>::quiet_NaN());
+
+        for (uint32_t row = 0; row < height; ++row) {
+            for (uint32_t col = 0; col < width; ++col) {
+                const float x = bound_min[0] + static_cast<float>(col * res);
+                const float y = bound_min[1] + static_cast<float>(row * res);
+                const auto cell = getElevationUnlocked({x, y});
+                if (!cell.has_value()) {
+                    continue;
+                }
+                const size_t idx = static_cast<size_t>(row) * width + col;
+                grid.elevation[idx] = cell->height;
+                grid.variance[idx] = cell->variance;
+            }
+        }
+
+        return grid;
+    }
+
     void addContactPoint(const std::array<float, 2>& point) {
+        std::lock_guard<std::mutex> lock(mutex_);
+
         // Check if the point is inside the local map
         if (!inside(point)) {
             return;
@@ -238,6 +321,8 @@ public:
     }
 
     void interpolateContactPoints() {
+        std::lock_guard<std::mutex> lock(mutex_);
+
         // Minimum number of contact points to compute a valid BBox else nothing to do here
         if (contact_points_.size() < 4) {
             return;
@@ -286,7 +371,7 @@ public:
         for (float x = min_x; x <= max_x; x += step) {
             for (float y = min_y; y <= max_y; y += step) {
                 std::array<float, 2> point{x, y};
-                auto cell = getElevation(point);
+                auto cell = getElevationUnlocked(point);
 
                 // Skip if cell doesn't exist or already has contact
                 if (!cell || cell->contact) {
@@ -299,7 +384,7 @@ public:
 
                 // Calculate weighted sum from all contact points
                 for (const auto& contact_point : contact_points_) {
-                    auto contact_cell = getElevation(contact_point);
+                    auto contact_cell = getElevationUnlocked(contact_point);
                     if (!contact_cell) {
                         continue;
                     }
@@ -335,7 +420,7 @@ public:
                     new_cell.variance = weighted_variance;
                     new_cell.contact = false;
                     new_cell.updated = true;
-                    setElevation(point, new_cell);
+                    setElevationUnlocked(point, new_cell);
                 }
             }
         }
@@ -348,6 +433,13 @@ public:
 protected:
     virtual void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
                                               const std::array<int, 2>& new_origin_i) = 0;
+
+    // Unlocked accessors for callers that already hold mutex_.
+    virtual bool setElevationUnlocked(const std::array<float, 2>& loc,
+                                      const ElevationCell& elevation) = 0;
+    virtual std::optional<ElevationCell> getElevationUnlocked(const std::array<float, 2>& loc) = 0;
+
+    mutable std::mutex mutex_;
 
     std::array<ElevationCell, map_size> elevation_;
     Params params_;

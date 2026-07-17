@@ -20,7 +20,7 @@ pip3 install -r requirements.txt
 Remove existing build (if present):
 
 ```
-cd SEROW_PATH
+cd $SEROW_PATH
 rm -rf build
 mkdir build && cd build
 ```
@@ -36,7 +36,7 @@ sudo make install
 Fix Python schemas and build the package:
 
 ```
-cd SEROW_PATH/python
+cd $SEROW_PATH/python
 ./add_imports.sh
 python3 setup.py build_ext --inplace
 ```

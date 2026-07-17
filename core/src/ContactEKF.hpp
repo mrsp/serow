@@ -33,7 +33,6 @@
 #include <memory>
 
 #include "BaseEstimator.hpp"
-#include "ButterworthLPF.hpp"
 #include "LocalTerrainMapper.hpp"
 #include "Measurement.hpp"
 #include "OutlierDetector.hpp"
@@ -44,7 +43,7 @@ namespace serow {
 /**
  * @class ContactEKF
  * @brief Implements an Extended Kalman Filter (EKF) for state estimation in humanoid robots,
- *        specifically for fusing IMU data, base leg contact measurements, and external odometry.
+ *        specifically for fusing IMU data, base leg-kinematic velocity, and external odometry.
  */
 class ContactEKF : public BaseEstimator {
 public:
@@ -115,14 +114,15 @@ private:
                                   ///< step.
 
     std::optional<Eigen::Vector3d>
+        first_position_;  ///< Initial position estimate (world coordinates) when the first odometry
+                          ///< measurement is received.
+    std::optional<Eigen::Vector3d>
         first_odometry_position_;  ///< Initial odometry measurement position (world coordinates).
     std::optional<Eigen::Quaterniond>
         first_odometry_orientation_;  ///< Initial odometry measurement orientation (world
                                       ///< coordinates).
 
-    /// @brief low pass filter for the base linear velocity in the z direction
-    /// @note This smoother only applies when the terrain is estimated
-    std::unique_ptr<ButterworthLPF> base_linear_velocity_z_lpf_;
+    TerrainContactFilter terrain_contact_filter_;  ///< Terrain contact filter instance.
 
     /**
      * @brief Computes discrete dynamics for the prediction step of the EKF.
@@ -160,14 +160,12 @@ private:
      * @brief Updates the robot's state based on terrain measurements.
      * @param state Current state of the robot.
      * @param contacts_position Positions of leg contacts.
-     * @param contacts_position_noise Spectral densities of leg contact positions.
      * @param contacts_probability Probabilities of leg contacts.
      * @param timestamp Timestamp of the terrain measurement.
      * @param terrain_estimator Terrain elevation mapper.
      */
     void updateWithTerrain(BaseState& state,
                            const std::map<std::string, Eigen::Vector3d>& contacts_position,
-                           const std::map<std::string, Eigen::Matrix3d>& contacts_position_noise,
                            const std::map<std::string, double>& contacts_probability,
                            const double timestamp,
                            std::shared_ptr<TerrainElevation> terrain_estimator);

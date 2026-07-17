@@ -15,7 +15,6 @@
 #include <array>
 #include <cmath>
 #include <iostream>
-#include <mutex>
 #include <optional>
 #include <vector>
 #include "common.hpp"
@@ -70,10 +69,6 @@ public:
     bool update(const std::array<float, 2>& loc, float height, float variance,
                 std::optional<std::array<float, 3>> normal = std::nullopt) override;
 
-    bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation) override;
-
-    std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) override;
-
     bool inside(const std::array<int, 2>& id_g) const override;
 
     bool inside(const std::array<float, 2>& location) const override;
@@ -109,6 +104,10 @@ private:
     void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
                                       const std::array<int, 2>& new_origin_i) override;
 
+    bool setElevationUnlocked(const std::array<float, 2>& loc,
+                              const ElevationCell& elevation) override;
+    std::optional<ElevationCell> getElevationUnlocked(const std::array<float, 2>& loc) override;
+
     void resetLocalMap();
 
     void resetCell(const int& hash_id);
@@ -116,8 +115,6 @@ private:
     void clearOutOfMapCells(const std::vector<int>& clear_id, const int i);
 
     int locationToGlobalIndex(const float loc) const;
-
-    std::mutex mutex_;
 
     friend class TerrainElevationTest;  // Allow full access
 };

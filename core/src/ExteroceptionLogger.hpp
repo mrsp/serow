@@ -58,6 +58,5 @@ public:
 private:
     class Impl;  // Forward declaration of the implementation class
     std::unique_ptr<Impl> pimpl_;
-    double last_timestamp_{-1.0};
 };
 }  // namespace serow

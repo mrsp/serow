@@ -15,7 +15,6 @@
 #include <array>
 #include <cmath>
 #include <iostream>
-#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -37,10 +36,6 @@ public:
 
     bool update(const std::array<float, 2>& loc, float height, float variance,
                 std::optional<std::array<float, 3>> normal = std::nullopt) override;
-
-    bool setElevation(const std::array<float, 2>& loc, const ElevationCell& elevation) override;
-
-    std::optional<ElevationCell> getElevation(const std::array<float, 2>& loc) override;
 
     bool inside(const std::array<int, 2>& id_g) const override;
 
@@ -83,11 +78,13 @@ private:
     void updateLocalMapOriginAndBound(const std::array<float, 2>& new_origin_d,
                                       const std::array<int, 2>& new_origin_i) override;
 
+    bool setElevationUnlocked(const std::array<float, 2>& loc,
+                              const ElevationCell& elevation) override;
+    std::optional<ElevationCell> getElevationUnlocked(const std::array<float, 2>& loc) override;
+
     int localIndexToHashId(const std::array<int, 2>& id_l) const;
 
     int globalIndexToHashId(const std::array<int, 2>& id_g) const;
-
-    std::mutex mutex_;
 
     friend class serow::TerrainElevationTest;  // Allow full access
 };

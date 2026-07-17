@@ -78,6 +78,8 @@ void NaiveLocalTerrainMapper::resetLocalMap() {
 
 void NaiveLocalTerrainMapper::initializeLocalMap(const float height, const float variance,
                                                  const Params& params) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
     default_elevation_ = ElevationCell(height, variance);
     params_ = params;
 
@@ -191,11 +193,12 @@ bool NaiveLocalTerrainMapper::update(const std::array<float, 2>& loc, float heig
 }
 
 void NaiveLocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
     const std::array<int, 2> new_origin_i = locationToGlobalIndex(loc);
     const std::array<int, 2> shift = {new_origin_i[0] - local_map_origin_i_[0],
                                       new_origin_i[1] - local_map_origin_i_[1]};
 
-    std::lock_guard<std::mutex> lock(mutex_);
     // If shift is too large, reset the entire map
     if (std::abs(shift[0]) >= map_dim || std::abs(shift[1]) >= map_dim) {
         resetLocalMap();
@@ -233,9 +236,8 @@ void NaiveLocalTerrainMapper::recenter(const std::array<float, 2>& loc) {
     updateLocalMapOriginAndBound(loc, new_origin_i);
 }
 
-std::optional<ElevationCell> NaiveLocalTerrainMapper::getElevation(
+std::optional<ElevationCell> NaiveLocalTerrainMapper::getElevationUnlocked(
     const std::array<float, 2>& loc) {
-    std::lock_guard<std::mutex> lock(mutex_);
     if (!inside(loc)) {
         return std::nullopt;
     }
@@ -246,9 +248,8 @@ std::optional<ElevationCell> NaiveLocalTerrainMapper::getElevation(
     return elevation_[hash_id];
 }
 
-bool NaiveLocalTerrainMapper::setElevation(const std::array<float, 2>& loc,
-                                           const ElevationCell& elevation) {
-    std::lock_guard<std::mutex> lock(mutex_);
+bool NaiveLocalTerrainMapper::setElevationUnlocked(const std::array<float, 2>& loc,
+                                                   const ElevationCell& elevation) {
     if (!inside(loc)) {
         return false;
     }

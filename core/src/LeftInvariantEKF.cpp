@@ -98,6 +98,7 @@ void LeftInvariantEKF::setState(const BaseState& state) {
     last_kin_update_timestamp_ = state.timestamp;
     last_imu_predict_timestamp_ = state.timestamp;
     last_terrain_update_timestamp_ = state.timestamp;
+    first_position_.reset();
     first_odometry_position_.reset();
     first_odometry_orientation_.reset();
     terrain_contact_filter_.reset();
