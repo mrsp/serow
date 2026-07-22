@@ -104,6 +104,12 @@ export SEROW_PATH=<path-to-serow-package>
 * `cmake .. && make -j4`
 * `./nao_test`
 
+## Quick start with C/C++
+![CPP](https://lh3.googleusercontent.com/d/1chIABsTYsl_i2-puxHTDTTnKserSl8bb)
+
+## Quick start with Python
+![Python](https://lh3.googleusercontent.com/d/1BWUzaa9WDWIIorzlb4vtNwH41XIkxzp2)
+
 ## Visualize data 
 * Logs are saved under `/tmp` 
 * Run [Foxglove](https://foxglove.dev/download)

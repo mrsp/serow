@@ -2,117 +2,97 @@
 
 import numpy as np
 from serow import (
-    ContactEKF,
-    BaseState,
+    ForceTorqueMeasurement,
     ImuMeasurement,
-    KinematicMeasurement,
-    OdometryMeasurement,
+    JointMeasurement,
+    Serow,
 )
 
 
 def main():
-    # Initialize the EKF
-    ekf = ContactEKF()
+    # Initialize SEROW
+    serow = Serow()
+    serow.initialize("nao.json")
 
-    # Create initial state
-    state = BaseState()
-    state.timestamp = 0.0
-    state.base_position = np.array([0.0, 0.0, 0.0]) 
-    state.base_orientation = np.array([1.0, 0.0, 0.0, 0.0])  # Identity quaternion
-    state.base_linear_velocity = np.array([0.0, 0.0, 0.0])
-    state.imu_angular_velocity_bias = np.array([0.0, 0.0, 0.0])
-    state.imu_linear_acceleration_bias = np.array([0.0, 0.0, 0.0])
-
-    # Initialize contact positions (example for a bipedal robot)
-    state.contacts_position = {
-        "left_foot": np.array([0.0, 0.1, -1.0]),  
-        "right_foot": np.array([0.0, -0.1, -1.0]), 
-    }
-
-    # Initialize contact orientations
-    state.contacts_orientation = {
-        "left_foot": np.array([1.0, 0.0, 0.0, 0.0]),  # Identity quaternion
-        "right_foot": np.array([1.0, 0.0, 0.0, 0.0]),  # Identity quaternion
-    }
-
-    # Initialize covariances
-    state.base_position_cov = np.eye(3) * 0.01  # 10cm uncertainty
-    state.base_orientation_cov = np.eye(3) * 0.01  # ~5.7 degrees uncertainty
-    state.base_linear_velocity_cov = np.eye(3) * 0.1  # 0.3 m/s uncertainty
-    state.imu_angular_velocity_bias_cov = np.eye(3) * 0.0001
-    state.imu_linear_acceleration_bias_cov = np.eye(3) * 0.0001
-
-
-    # Initialize the EKF
-    contacts_frame = {"left_foot", "right_foot"}
-    g = 9.81  # Gravity constant
-    imu_rate = 1000.0  # IMU update rate in Hz
-    kin_rate = 1000.0  # Kinematic measurement update rate in Hz
-    eps = 0.05  # Minimum contact probability to update the state with kinematics
-    point_feet = False  # Robot has point feet?
-    use_imu_orientation = True  # Use the IMU orientation during the ContactEKF update step
-    ekf.init(state, contacts_frame, g, imu_rate, kin_rate, eps, point_feet, use_imu_orientation)
-
-    # Create IMU measurement
+    # Create the IMU measurement for the IMU in the base
+    g = np.array([0.0, 0.0, -9.81])
     imu = ImuMeasurement()
-    imu.timestamp = 0.0  
-    imu.angular_velocity = np.array([0.0, 0.0, 0.0])  # No rotation
-    imu.linear_acceleration = np.array([0.0, 0.0, g])  # Gravity only
-    imu.angular_velocity_cov = np.eye(3) * 0.0001
-    imu.linear_acceleration_cov = np.eye(3) * 0.0001
-    imu.angular_velocity_bias_cov = np.eye(3) * 0.000001
-    imu.linear_acceleration_bias_cov = np.eye(3) * 0.000001
-    imu.orientation = np.array([1.0, 0.0, 0.0, 0.0])
-    imu.orientation_cov = np.eye(3) * 0.0001
+    imu.timestamp = 0.01
+    imu.linear_acceleration = np.array([0.1, -0.1, 0.05]) - g
+    imu.angular_velocity = np.array([-0.1, 0.1, 0.0])
 
-    # Create kinematic measurement
-    kin = KinematicMeasurement()
-    kin.timestamp = 0.0
-    kin.base_linear_velocity = np.array([0.0, 0.0, 0.0])
-    kin.base_linear_velocity_cov = np.eye(3) * 0.0001
-    kin.contacts_status = {
-        "left_foot": True,  # Left foot in contact
-        "right_foot": True,  # Right foot in contact
-    }
-    kin.contacts_probability = {"left_foot": 1.0, "right_foot": 1.0}
-    kin.contacts_position = {
-        "left_foot": np.array([0.0, 0.1, -1.0]),
-        "right_foot": np.array([0.0, -0.1, -1.0]),
-    }
-    kin.contacts_orientation = {
-        "left_foot": np.array([1.0, 0.0, 0.0, 0.0]),
-        "right_foot": np.array([1.0, 0.0, 0.0, 0.0]),
-    }
+    # Create the joint measurements for all joints
+    joint_names = (
+        "HeadYaw",
+        "HeadPitch",
+        "LHipYawPitch",
+        "LHipRoll",
+        "LHipPitch",
+        "LKneePitch",
+        "LAnklePitch",
+        "LAnkleRoll",
+        "LShoulderPitch",
+        "LShoulderRoll",
+        "LElbowYaw",
+        "LElbowRoll",
+        "LWristYaw",
+        "LHand",
+        "RHipYawPitch",
+        "RHipRoll",
+        "RHipPitch",
+        "RKneePitch",
+        "RAnklePitch",
+        "RAnkleRoll",
+        "RShoulderPitch",
+        "RShoulderRoll",
+        "RElbowYaw",
+        "RElbowRoll",
+        "RWristYaw",
+        "RHand",
+    )
+    joints = {}
+    for name in joint_names:
+        jm = JointMeasurement()
+        jm.timestamp = 0.01
+        jm.position = 0.0
+        joints[name] = jm
 
-    # Create odometry measurement (optional)
-    odom = OdometryMeasurement()
-    odom.timestamp = 0.001
-    odom.base_position = np.array([0.0, 0.0, 0.0])
-    odom.base_orientation = np.array([1.0, 0.0, 0.0, 0.0])
-    odom.base_position_cov = np.eye(3) * 0.01
-    odom.base_orientation_cov = np.eye(3) * 0.01
+    # Create the force torque measurements for the leg end-effectors
+    force_torque = {}
+    for frame in ("l_ankle", "r_ankle"):
+        ft = ForceTorqueMeasurement()
+        ft.timestamp = 0.01
+        ft.force = np.array([0.0, 0.0, 40.0])
+        ft.torque = np.array([0.0, 0.0, 0.0])
+        force_torque[frame] = ft
 
-    # Run a few prediction/update steps
-    for i in range(10):
-        # Update timestamps
-        dt = 1.0 / imu_rate 
-        imu.timestamp += dt
-        kin.timestamp += dt
-        odom.timestamp += dt
+    # Run SEROW
+    serow.filter(imu, joints, force_torque)
 
-        # Predict step
-        ekf.predict(state, imu)
+    # Get the state
+    state = serow.get_state(allow_invalid=True)
 
-        # Update step (pass None for both optional parameters)
-        ekf.update(state, imu, kin, None, None)
-
-        # Print some state information
-        print(f"\nStep {i+1}:")
-        print(f"Position: {state.base_position}")
-        print(f"Velocity: {state.base_linear_velocity}")
-        print(f"Orientation: {state.base_orientation}")
-        print(f"Left foot position: {state.contacts_position['left_foot']}")
-        print(f"Right foot position: {state.contacts_position['right_foot']}")
+    # Print parts of the state
+    print(f"Base position in world frame: {state.get_base_position()}")
+    print(f"Base velocity in world frame: {state.get_base_linear_velocity()}")
+    print(f"Base orientation w.r.t the world frame: {state.get_base_orientation()}")
+    print(
+        f"Left leg contact position in world frame: {state.get_contact_position('l_ankle')}"
+    )
+    print(
+        f"Right leg contact position in world frame: {state.get_contact_position('r_ankle')}"
+    )
+    print(
+        "Left leg contact orientation w.r.t the world frame: "
+        f"{state.get_contact_orientation('l_ankle')}"
+    )
+    print(
+        "Right leg contact orientation w.r.t the world frame: "
+        f"{state.get_contact_orientation('r_ankle')}"
+    )
+    print(f"CoM position in world frame: {state.get_com_position()}")
+    print(f"CoM linear velocity in world frame: {state.get_com_linear_velocity()}")
+    print(f"CoM external forces in world frame: {state.get_com_external_forces()}")
 
 
 if __name__ == "__main__":
