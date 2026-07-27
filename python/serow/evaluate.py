@@ -134,19 +134,25 @@ assert len(timestamps) == len(base_angular_velocities)
 assert len(timestamps) == len(gt_linear_velocities)
 assert len(timestamps) == len(gt_angular_velocities)
 
-def rot_angle_deg(q_est_wxyz, q_gt_wxyz):
-    re = Rotation.from_quat(np.roll(q_est_wxyz, -1))
-    rg = Rotation.from_quat(np.roll(q_gt_wxyz, -1))
-    return (re.inv() * rg).magnitude() * 180 / np.pi
-
 def vector_rmse(gt, est):
     return np.sqrt(np.mean(np.linalg.norm(gt - est, axis=1) ** 2))
+
+def quat_wxyz_to_euler(quat_wxyz, seq="xyz", degrees=True):
+    quat_xyzw = np.roll(np.asarray(quat_wxyz, dtype=float), -1, axis=-1)
+    return Rotation.from_quat(quat_xyzw).as_euler(seq, degrees=degrees)
+
+def unwrap_euler_deg(euler_deg):
+    """Remove ±180° jumps so roll/pitch/yaw evolve continuously over time."""
+    return np.rad2deg(np.unwrap(np.deg2rad(np.asarray(euler_deg, dtype=float)), axis=0))
 
 # Absolute Trajectory Error (ATE) on SE(3)-aligned data (before any visual origin shift)
 pos_err = np.linalg.norm(base_positions - gt_positions, axis=1)
 ate = np.sqrt(np.mean(pos_err**2))
-rot_err = np.array([rot_angle_deg(e, g) for e, g in zip(base_orientations, gt_orientations)])
-ate_rot = np.sqrt(np.mean(rot_err**2))
+base_orientations_euler = unwrap_euler_deg(quat_wxyz_to_euler(base_orientations))
+gt_orientations_euler = unwrap_euler_deg(quat_wxyz_to_euler(gt_orientations))
+base_orientations_euler = base_orientations_euler - base_orientations_euler[0]
+gt_orientations_euler = gt_orientations_euler - gt_orientations_euler[0]
+ate_rot = vector_rmse(gt_orientations_euler, base_orientations_euler)
 ave = vector_rmse(gt_linear_velocities, base_linear_velocities)
 ave_rot = vector_rmse(
     gt_angular_velocities * 180 / np.pi,
@@ -176,22 +182,7 @@ axes[-1].set_xlabel(r"$\mathrm{Time}$ (s)")
 fig.suptitle(r"$\mathbf{p}_{\mathrm{base}}$ vs. $\mathbf{p}_{\mathrm{GT}}$ (position, m)")
 plt.tight_layout()
 
-# Plot the base and ground truth orientations as Euler angles
-def quat_wxyz_to_euler(quat_wxyz, seq="xyz", degrees=True):
-    quat_xyzw = np.roll(np.asarray(quat_wxyz, dtype=float), -1, axis=-1)
-    return Rotation.from_quat(quat_xyzw).as_euler(seq, degrees=degrees)
-
-def unwrap_euler_deg(euler_deg):
-    """Remove ±180° jumps so roll/pitch/yaw evolve continuously over time."""
-    return np.rad2deg(np.unwrap(np.deg2rad(np.asarray(euler_deg, dtype=float)), axis=0))
-
-base_orientations_euler = unwrap_euler_deg(quat_wxyz_to_euler(base_orientations))
-gt_orientations_euler = unwrap_euler_deg(quat_wxyz_to_euler(gt_orientations))
-
-# Subtract each series' first sample so both curves start at 0 deg (visual alignment only)
-base_orientations_euler = base_orientations_euler - base_orientations_euler[0]
-gt_orientations_euler = gt_orientations_euler - gt_orientations_euler[0]
-
+# Plot the base and ground truth orientations as Euler angles 
 fig, axes = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
 euler_labels = (
     (r"$\phi$", "roll"),
