@@ -322,11 +322,7 @@ void LeftInvariantEKF::updateWithTerrain(
     }
     dt = std::max(dt, kMinTerrainDt);
 
-    Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
-    H.block(0, p_idx_[0], 3, 3) = Eigen::Matrix3d::Identity();
-    Eigen::Vector3d z = Eigen::Vector3d::Zero();
-    Eigen::Matrix3d N = Eigen::Matrix3d::Zero();
-
+    Eigen::Matrix<double, 1, 15> H = Eigen::Matrix<double, 1, 15>::Zero();
     for (const auto& [cf, cp] : contacts_probability) {
         if (cp < kStableContactThreshold) {
             continue;
@@ -338,7 +334,6 @@ void LeftInvariantEKF::updateWithTerrain(
 
         const Eigen::Vector3d p_world_to_base = state.base_position;
         const Eigen::Matrix3d R_world_to_base = state.base_orientation.toRotationMatrix();
-        const Eigen::Matrix3d R_world_to_base_transpose = R_world_to_base.transpose();
 
         Eigen::Vector3d con_pos_world =
             R_world_to_base * contacts_position.at(cf) + p_world_to_base;
@@ -362,27 +357,25 @@ void LeftInvariantEKF::updateWithTerrain(
             con_pos_world - R_world_to_base * contacts_position.at(cf);
 
         // Compute the innovation
-        z = R_world_to_base_transpose * (p_world_to_base_measured - p_world_to_base);
+        const double z = p_world_to_base_measured.z() - p_world_to_base.z();
+
+        // Construct the measurement matrix
+        H.block(0, p_idx_[0], 1, 3) = Eigen::Vector3d::UnitZ().transpose() * R_world_to_base;
 
         // Compute the measurement covariance
-        N = Eigen::Matrix3d::Identity() *
-            std::max(static_cast<double>(elevation.value().variance),
-                     static_cast<double>(terrain_estimator->getMinVariance())) /
+        const double N = std::max(static_cast<double>(elevation.value().variance),
+                                  static_cast<double>(terrain_estimator->getMinVariance())) /
             (cp * dt);
-        N(0, 0) = 1e6;
-        N(1, 1) = 1e6;
-        N = R_world_to_base_transpose * N * R_world_to_base;
 
-        const Eigen::Matrix<double, 15, 3> PH_transpose = P_ * H.transpose();
-        const Eigen::Matrix3d s = N + H * PH_transpose;
-        const Eigen::Matrix<double, 15, 3> K = s.ldlt().solve(PH_transpose.transpose()).transpose();
-        const Eigen::Matrix<double, 15, 1> dx = K * z;
-
+        const Eigen::Matrix<double, 15, 1> PH_transpose = P_ * H.transpose();
+        const double s = N + (H * PH_transpose)(0, 0);
+        const Eigen::Matrix<double, 15, 1> K = PH_transpose / s;
+        Eigen::Matrix<double, 15, 1> dx = K * z;
         const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
         Eigen::Matrix<double, 15, 15> P_new;
         P_new.noalias() = IKH * P_ * IKH.transpose();
         P_new += K * N * K.transpose();
-        P_ = P_new;
+        P_ = std::move(P_new);
         updateState(state, dx, P_);
     }
 }
@@ -644,7 +637,7 @@ void LeftInvariantEKF::updateWithIMUOrientation(BaseState& state,
     Eigen::Matrix<double, 15, 15> P_new;
     P_new.noalias() = IKH * P_ * IKH.transpose();
     P_new += K * N * K.transpose();
-    P_ = P_new;
+    P_ = std::move(P_new);
     updateState(state, dx, P_);
 }
 
@@ -685,7 +678,7 @@ void LeftInvariantEKF::updateWithBaseLinearVelocity(BaseState& state,
     Eigen::Matrix<double, 15, 15> P_new;
     P_new.noalias() = IKH * P_ * IKH.transpose();
     P_new += K * N * K.transpose();
-    P_ = P_new;
+    P_ = std::move(P_new);
     updateState(state, dx, P_);
 }
 
