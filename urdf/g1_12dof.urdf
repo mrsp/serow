@@ -246,6 +246,15 @@
     <axis xyz="1 0 0"/>
     <limit lower="-0.2618" upper="0.2618" effort="50" velocity="37"/>
   </joint>
+
+  <!-- contact frame: in the sole plane (spheres at z=-0.03, r=0.005), centred in the
+       contact patch (x from -0.05 to 0.12). massless -> Pinocchio BODY frame only. -->
+  <link name="left_foot_sole"/>
+  <joint name="left_foot_sole_joint" type="fixed">
+    <origin xyz="0.1 0 -0.035" rpy="0 0 0"/>
+    <parent link="left_ankle_roll_link"/>
+    <child link="left_foot_sole"/>
+  </joint>
   <link name="right_hip_pitch_link">
     <inertial>
       <origin xyz="0.002741 -0.047791 -0.02606" rpy="0 0 0"/>
@@ -437,6 +446,15 @@
     <child link="right_ankle_roll_link"/>
     <axis xyz="1 0 0"/>
     <limit lower="-0.2618" upper="0.2618" effort="50" velocity="37"/>
+  </joint>
+
+  <!-- contact frame: in the sole plane (spheres at z=-0.03, r=0.005), centred in the
+       contact patch (x from -0.05 to 0.12). massless -> Pinocchio BODY frame only. -->
+  <link name="right_foot_sole"/>
+  <joint name="right_foot_sole_joint" type="fixed">
+    <origin xyz="0.10 0 -0.035" rpy="0 0 0"/>
+    <parent link="right_ankle_roll_link"/>
+    <child link="right_foot_sole"/>
   </joint>
 
   <!-- Torso -->
