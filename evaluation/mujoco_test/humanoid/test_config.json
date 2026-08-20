@@ -1,7 +1,7 @@
 {
   "Target": {
     "robot": "g1",
-    "experiment": "flat_gamma"
+    "experiment": "slope"
   },
   "Paths": {
     "base_path": "evaluation/mujoco_test/humanoid/mujoco_data",
@@ -11,8 +11,8 @@
   "RobotDatabase": {
     "g1": {
       "contact_map": {
-        "left": "left_ankle_roll_link",
-        "right": "right_ankle_roll_link"
+        "left": "left_foot_sole",
+        "right": "right_foot_sole"
       }
     },
     "h1": {
