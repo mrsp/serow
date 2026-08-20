@@ -46,6 +46,7 @@
         0.0,
         1.0
     ],
+    "initialize_attitude_from_gravity": false,
     "calibrate_initial_imu_bias": true,
     "max_imu_calibration_cycles": 500,
     "bias_gyro": [
@@ -194,7 +195,7 @@
     "maximum_recenter_distance": 0.35,
     "minimum_contact_probability": 0.2,
     "resolution": 0.02,
-    "radius": 0.04,
+    "radius": 0.2,
     "dist_variance_gain": 500.0,
     "power": 1.5,
     "T_base_to_ground_truth": [
@@ -215,7 +216,7 @@
         0.0,
         1.0
     ],
-    "log_data": false,
-    "log_measurements": false,
+    "log_data": true,
+    "log_measurements": true,
     "log_dir": "/tmp/"
 }

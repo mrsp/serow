@@ -104,6 +104,7 @@
       1.0
     ]
   },
+  "initialize_attitude_from_gravity": false,
   "R_foot_to_torque": null,
   "attitude_estimator_proportional_gain": 1.0,
   "attitude_estimator_integral_gain": 0.3,

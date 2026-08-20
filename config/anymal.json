@@ -44,6 +44,7 @@
     0.0,
     -1.0
   ],
+  "initialize_attitude_from_gravity": false,
   "calibrate_initial_imu_bias": false,
   "max_imu_calibration_cycles": 250,
   "bias_gyro": [

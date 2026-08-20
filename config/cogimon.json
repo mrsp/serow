@@ -42,6 +42,7 @@
         0.0,
         1.0
     ],
+    "initialize_attitude_from_gravity": false,
     "use_imu_orientation": false,
     "calibrate_initial_imu_bias": true,
     "max_imu_calibration_cycles": 350,
