@@ -77,8 +77,25 @@
     ],
     // boolean: whether or not to use the IMU orientation during the ContactEKF update step
     "use_imu_orientation": true,
-    // boolean: whether or not to initialize the base attitude from the gravity vector.
+    // Base attitude initialization
+    // boolean: whether or not to initialize the base attitude from the measured gravity direction.
+    // Requires the robot to be stationary at start-up. The rotation axis is horizontal by
+    // construction hence the yaw, which is unobservable, is left intact
     "initialize_attitude_from_gravity": false,
+    // integer: number of IMU measurements to average when initializing the base attitude from
+    // gravity. Set it from imu_rate to span 1-2 s, long enough to average out the sway of a
+    // balancing robot. Sensor noise is not the limiting factor, the tilt error it induces decays as
+    // sigma / (g * sqrt(samples)), the limiting factor is for how long the robot is truly
+    // stationary. Only applies if initialize_attitude_from_gravity = true
+    "attitude_leveling_samples": 200,
+    // double: maximum per axis accelerometer standard deviation (m/s^2) over the averaging window
+    // for it to be accepted as stationary, if exceeded the initial base attitude is kept as is.
+    // Divide by g for the equivalent tilt wander, e.g. 0.1 m/s^2 amounts to 0.58 deg, which has to
+    // stay below the tilt being corrected. To set it for a new robot, run once with a large value,
+    // read the standard deviation reported by the estimator on a stationary recording and set 2-3
+    // times that. If it keeps being exceeded the robot is not stationary, loosening it averages
+    // over motion. Only applies if initialize_attitude_from_gravity = true
+    "attitude_leveling_acceleration_std": 0.1,
     // boolean: whether or not to estimate initial values for the IMU gyro/accelerometer biases
     "calibrate_initial_imu_bias": false,
     // integer: number of IMU measurements to use for estimating the IMU gyro/accelerometer biases
