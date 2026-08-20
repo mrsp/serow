@@ -145,6 +145,16 @@ private:
         std::string base_frame{};
         /// @brief gravity constant (m/s^2)
         double g{};
+        /// @brief whether or not to initialize the base attitude from the measured gravity
+        /// direction. Requires the robot to be stationary at start-up
+        bool initialize_attitude_from_gravity{};
+        /// @brief number of IMU measurements to average when initializing the base attitude from
+        /// gravity. Only applies if initialize_attitude_from_gravity = true
+        size_t attitude_leveling_samples{};
+        /// @brief maximum per axis accelerometer standard deviation (m/s^2) for the averaging
+        /// window to be accepted as stationary. Only applies if
+        /// initialize_attitude_from_gravity = true
+        double attitude_leveling_acceleration_std{};
         /// @brief whether or not to estimate initial values for the IMU gyro/accelerometer biases
         bool calibrate_initial_imu_bias{};
         /// @brief number of IMU measurements to use for estimating the IMU gyro/accelerometer
@@ -341,6 +351,14 @@ private:
     /// @brief IMU bias estimation cycles
     size_t cycle_{};
     size_t imu_calibration_cycles_{};
+    /// @brief whether the base attitude has been leveled from gravity
+    bool attitude_leveled_{false};
+    /// @brief number of IMU measurements accumulated for leveling the base attitude
+    size_t leveling_samples_{0};
+    /// @brief sum of the accumulated linear accelerations (m/s^2)
+    Eigen::Vector3d leveling_acceleration_sum_{Eigen::Vector3d::Zero()};
+    /// @brief sum of the squared accumulated linear accelerations (m^2/s^4)
+    Eigen::Vector3d leveling_acceleration_squared_sum_{Eigen::Vector3d::Zero()};
     /// @brief Terrain elevation mapper
     std::shared_ptr<TerrainElevation> terrain_estimator_;
     /// @brief Data loggers
@@ -375,7 +393,6 @@ private:
     double last_odom_timestamp_{-1.0};
     std::vector<double> coeffs_joint_;
     std::vector<double> coeffs_imu_;
-
     /// @brief Logs the measurements
     /// @param imu IMU measurement
     /// @param joints joint measurements
@@ -396,6 +413,12 @@ private:
     /// @param imu IMU measurement
     /// @return true if the IMU estimation is calibrated and initialized
     bool runImuEstimator(State& state, ImuMeasurement& imu);
+
+    /// @brief Levels the initial base attitude with the measured gravity direction
+    /// @param state the state of the robot
+    /// @param imu IMU measurement
+    /// @return true if the base attitude is leveled, false while samples are collected
+    bool levelBaseAttitude(State& state, const ImuMeasurement& imu);
 
     /// @brief Runs the forward kinematics
     /// @param state the state of the robot
