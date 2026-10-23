@@ -1,0 +1,13 @@
+ NO CALIBRATE
+ ====================================================================
+  ATE [m]  (Umeyama-aligned, evo_ape -a)               0.154702
+  ATE [m]  (no alignment)                              0.179339
+  ATEvel [m/s]                                         0.012368
+  Attitude [deg]  (geodesic)                           0.959704
+  RPE trans, delta = 1 m [m]                           0.056071
+  RPE trans, delta = 1 frame [m]                       0.000125
+  RPE rot, delta = 1 m  [evo rot_part convention]      0.229481
+  RPE rot, delta = 1 frame  [evo rot_part convention]  0.010648
+  RPE rot, delta = 1 m  [deg, geodesic]                0.162268
+  RPE rot, delta = 1 frame  [deg, geodesic]            0.007530
+
