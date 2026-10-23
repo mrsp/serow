@@ -10,9 +10,9 @@
     "g": 9.81,
     "joint_rate": 500.0,
     "estimate_joint_velocity": true,
-    "joint_position_variance": 1e-9,
+    "joint_position_variance": 1e-5,
     "joint_velocity_variance": null,
-    "smoothing_window": 19,
+    "smoothing_window": 17,
     "estimate_contact_wrench": false,
     "observer_gain": 10.0,
     "contact_wrench_regularization_parameter": 1e-2,
@@ -43,7 +43,7 @@
         1.0
     ],
     "use_imu_orientation": false,
-    "calibrate_initial_imu_bias": false,
+    "calibrate_initial_imu_bias": true,
     "max_imu_calibration_cycles": 500,
     "bias_acc": [
         0.0,
@@ -104,10 +104,10 @@
             1.0
         ]
     },
-    "attitude_estimator_proportional_gain": 0.1,
+    "attitude_estimator_proportional_gain": 0.5,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
-    "median_window": 13,
+    "median_window": 21,
     "convergence_cycles": 100,
     "imu_angular_velocity_covariance": [
         0.01,
@@ -115,14 +115,14 @@
         0.01
     ],
     "imu_angular_velocity_bias_covariance": [
-        1e-8,
-        1e-8,
-        1e-8
+        1e-5,
+        1e-5,
+        1e-5
     ],
     "imu_linear_acceleration_covariance": [
-        0.3,
-        0.3,
-        0.3
+        0.5,
+        0.5,
+        0.5
     ],
     "imu_linear_acceleration_bias_covariance": [
         1e-8,
@@ -185,7 +185,7 @@
         1.0
     ],
     "T_base_to_odom": null,
-    "enable_terrain_estimation": true,
+    "enable_terrain_estimation": false,
     "terrain_estimator": "fast",
     "minimum_terrain_height_variance": 1e-3,
     "maximum_contact_points": 4,

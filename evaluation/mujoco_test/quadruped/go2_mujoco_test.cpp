@@ -118,6 +118,18 @@ int main(int argc, char** argv) {
         size_t message_count = 0;
         auto start_time = std::chrono::high_resolution_clock::now();
 
+        // Warm-up accounting. Every input frame is fed to the filter, but no
+        // output message is written until filter() succeeds AND getState(true)
+        // returns a valid state, so the prediction MCAP starts later than the
+        // input MCAP. Without these counters the drop is silent, which shows up
+        // downstream only as ground truth extending before the estimate.
+        size_t input_frames = 0;
+        size_t skipped_filter = 0;
+        size_t skipped_state = 0;
+        bool first_input_logged = false;
+        bool first_output_logged = false;
+        double first_input_timestamp = 0.0;
+
         auto messages = reader.readMessages();
 
         for (const auto& msgView : messages) {
@@ -131,6 +143,13 @@ int main(int argc, char** argv) {
             std::string payload(reinterpret_cast<const char*>(msg.data), msg.dataSize);
             json j_in = json::parse(payload);
             double timestamp = j_in["timestamp"];
+
+            ++input_frames;
+            if (!first_input_logged) {
+                first_input_timestamp = timestamp;
+                first_input_logged = true;
+                std::cout << "First input frame at t = " << timestamp << " s" << std::endl;
+            }
 
             // Parse IMU
             serow::ImuMeasurement imu;
@@ -238,12 +257,25 @@ int main(int argc, char** argv) {
                 base_pose_gt);  // optional GT if present in MCAP
 
             if (!ok) {
+                ++skipped_filter;
                 continue;
             }
 
             //  Write Output
+            // getState(true) asks for the *valid* state, so it stays empty
+            // through SEROW's initialization (IMU bias calibration / initial
+            // attitude settling, sized by the calibration-cycle setting in
+            // go2.json) even after filter() has started succeeding.
             auto state = estimator.getState(true);
             if (state.has_value()) {
+                if (!first_output_logged) {
+                    first_output_logged = true;
+                    std::cout << "First valid state at t = " << timestamp << " s  (warm-up "
+                              << (timestamp - first_input_timestamp) << " s, " << skipped_filter
+                              << " frames rejected by filter, " << skipped_state
+                              << " with no valid state)" << std::endl;
+                }
+
                 auto basePos = state->getBasePosition();
                 auto baseOrient = state->getBaseOrientation();
                 auto baseLinVel = state->getBaseLinearVelocity();
@@ -339,10 +371,20 @@ int main(int argc, char** argv) {
                     std::cerr << "Warning: Failed to write message: " << writeStatus.message
                               << std::endl;
                 }
+            } else {
+                ++skipped_state;
             }
         }
 
         writer.close();
+
+        std::cout << "Warm-up: " << input_frames << " input frames, " << message_count
+                  << " written, " << (input_frames - message_count) << " dropped ("
+                  << skipped_filter << " filter, " << skipped_state << " state)." << std::endl;
+        if (!first_output_logged) {
+            std::cerr << "Warning: the estimator never produced a valid state. The prediction "
+                      << "MCAP is empty." << std::endl;
+        }
 
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration =

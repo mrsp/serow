@@ -8,9 +8,9 @@
     "2": "RL_foot",
     "3": "RR_foot"
   },
-  "model_path": "go1.champ.urdf",
+  "model_path": "go1.urdf",
   "g": 9.81,
-  "joint_rate": 500.0,
+  "joint_rate": 469.0,
   "estimate_joint_velocity": true,
   "joint_position_variance": 1e-5,
   "joint_velocity_variance": null,
@@ -21,7 +21,7 @@
   "contact_wrench_estimator_type": "cod",
   "tau_0": 5e-4,
   "tau_1": 0.1,
-  "imu_rate": 500.0,
+  "imu_rate": 469.0,
   "R_base_to_gyro": [
     1.0,
     0.0,
@@ -44,8 +44,8 @@
     0.0,
     1.0
   ],
-  "use_imu_orientation": true,
-  "calibrate_initial_imu_bias": true,
+  "use_imu_orientation": false,
+  "calibrate_initial_imu_bias": false,
   "max_imu_calibration_cycles": 100,
   "bias_gyro": [
     0.0,
@@ -57,7 +57,7 @@
     0.0,
     0.0
   ],
-  "force_torque_rate": 100.0,
+  "force_torque_rate": 469.0,
   "R_foot_to_force": {
     "0": [
       1.0,
@@ -186,7 +186,7 @@
     1.0
   ],
   "T_base_to_odom": null,
-  "enable_terrain_estimation": false,
+  "enable_terrain_estimation": true,
   "terrain_estimator": "fast",
   "minimum_terrain_height_variance": 1e-3,
   "maximum_contact_points": 4,

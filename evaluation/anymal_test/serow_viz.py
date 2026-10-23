@@ -81,6 +81,214 @@ DEFAULT_WORKDIR = Path(".serow_viz_eval")
 DEFAULT_SENSOR = Path("/anymal_data/test/cyn-1/anymal_data.csv")
 
 # -----------------------------------------------------------------------------
+# Shared plotting style (ported from terrain_ablation_plots.py)
+#
+# Same palette, line weights, font sizes, and below-axes legend as the Go2
+# terrain-ablation figures, so both robots' plots read as one figure set.
+# -----------------------------------------------------------------------------
+# Base font sizes, as in terrain_ablation_plots.py.  They are tuned for a
+# 7-inch-wide figure that LaTeX scales down to \columnwidth.
+FIGURE_SIZE = (7.0, 6.2)
+TITLE_FONT_SIZE = 18
+AXIS_LABEL_FONT_SIZE = 15
+TICK_LABEL_FONT_SIZE = 13
+LEGEND_FONT_SIZE = 13
+PANEL_TITLE_FONT_SIZE = 16
+# The metrics line under the title is long; it gets its own smaller size.
+METRICS_FONT_SIZE = 12
+
+# The figures here are 15-16 inches wide, not 7.  A literal 13 pt legend on a
+# 15-inch canvas has less than half the apparent size it has on the 7-inch
+# ablation figures, which is why it reads as tiny.  Fonts and stroke weights
+# are therefore multiplied by STYLE_SCALE.
+#
+# Matching the ablation figures' final on-page size exactly would need
+# 15/7 = 2.14, but at that scale the labels of a 3-panel figure collide.
+# 1.5 is the practical compromise for these wide multi-panel layouts; raise it
+# toward 2.1 for the single-column 3x1 stacks, or set it to 1.0 to use the
+# numbers above literally.
+STYLE_SCALE = 1.5
+
+
+def _scale(fig=None) -> float:
+    return STYLE_SCALE
+
+
+def _fs(size: float, fig=None) -> float:
+    """Font size scaled for these wide canvases."""
+    return size * STYLE_SCALE
+
+
+# Vertical bands, in inches, so spacing looks the same on a 15x7 and a 15x10
+# figure.  TITLE_BAND is the space kept clear above the axes; TITLE_TOP is how
+# far the title text sits from the top edge; LEGEND_BAND is the space below.
+# These scale with the fonts, or big text would overflow its band.
+TITLE_TOP_INCHES = 0.22
+TITLE_BAND_INCHES = 0.45
+SUBTITLE_GAP_INCHES = 0.30
+SUBTITLE_BAND_INCHES = 0.28
+LEGEND_BAND_INCHES = 0.42
+LEGEND_PAD_INCHES = 0.04
+LEGEND_COLUMNS = 3
+
+# The metrics line (ATE / ATEvel / RPE) is printed to the terminal anyway and
+# does not belong on a paper figure.  Set True to put it back under the title.
+SHOW_METRICS_IN_TITLE = False
+
+# Start both pose curves at the origin instead of showing the whole-trajectory
+# alignment residual at t=0.  Plotting only; metrics are unaffected.
+REBASE_PLOT_TO_ORIGIN = True
+
+# The reference is drawn FIRST as a wide light band and the estimate goes on
+# top as a thin opaque line.  Dash patterns are avoided: these signals are
+# sampled far faster than the figure has pixels, so dashes alias into solid
+# lines and a thick reference simply paints over the estimate.
+# `solid_capstyle="butt"` stops each sample from rendering as a rounded blob.
+GROUND_TRUTH_STYLE = {
+    "color": "#090808",
+    "linestyle": "--",
+    "linewidth": 1.0,
+    "alpha": 1.0,
+    "solid_capstyle": "butt",
+    "zorder": 1,
+}
+ESTIMATE_STYLE = {
+    "color": "#0072b2",
+    "linestyle": "-",
+    "linewidth": 0.9,
+    "alpha": 1.0,
+    "solid_capstyle": "butt",
+    "zorder": 3,
+}
+SECONDARY_STYLE = {
+    "color": "#d55e00",
+    "linestyle": "-",
+    "linewidth": 0.9,
+    "alpha": 1.0,
+    "solid_capstyle": "butt",
+    "zorder": 2,
+}
+ZERO_LINE_STYLE = {
+    "color": "#4d4d4d",
+    "linestyle": "--",
+    "linewidth": 1.0,
+    "alpha": 0.8,
+    "zorder": 1,
+}
+ESTIMATE_COLOR = ESTIMATE_STYLE["color"]
+SECONDARY_COLOR = SECONDARY_STYLE["color"]
+REFERENCE_COLOR = GROUND_TRUTH_STYLE["color"]
+
+# Vector output with ~10^5 points per axis makes huge PDFs.  Curves are
+# rasterized inside the axes; text, ticks, and grid stay vector.
+RASTERIZE_LINES = True
+RASTERIZED_DPI = 600
+
+# Default location and formats for automatically saved figures.
+DEFAULT_PLOT_DIR = Path("figures")
+DEFAULT_PLOT_FORMATS = ("pdf",)
+
+
+def save_figure(figure, output_directory: Path, stem: str,
+                formats: Iterable[str] = ("pdf",), dpi: int = 300) -> None:
+    """Write one figure to <output_directory>/<stem>.<ext> for each format.
+
+    ``figure`` may be None: the plot helpers return None when they skip a
+    figure because of missing CSV columns, and skipping should not be fatal.
+    """
+    if figure is None:
+        return
+    output_directory.mkdir(parents=True, exist_ok=True)
+    for extension in formats:
+        output_path = output_directory / f"{stem}.{extension}"
+        save_kwargs = {"bbox_inches": "tight"}
+        if extension == "png":
+            save_kwargs["dpi"] = dpi
+        elif RASTERIZE_LINES:
+            # For PDF/SVG, dpi only sets the resolution of the rasterized
+            # curves; axes, text, and ticks stay vector.
+            save_kwargs["dpi"] = RASTERIZED_DPI
+        figure.savefig(output_path, format=extension, **save_kwargs)
+        print(f"Saved: {output_path}")
+
+
+def _draw(axis, x, y, style: dict, label: Optional[str] = None, step: bool = False):
+    """Plot one series in the shared style, rasterizing the curve itself."""
+    plot_fn = axis.step if step else axis.plot
+    kwargs = dict(style)
+    # Scale stroke weights with the fonts, or a 1 pt line on a 15-inch figure
+    # becomes a hairline next to 28 pt labels.
+    scale = _scale(axis.figure)
+    kwargs["linewidth"] = kwargs.get("linewidth", 1.0) * scale
+    if step:
+        kwargs["where"] = "post"
+        kwargs.pop("solid_capstyle", None)
+    line = plot_fn(x, y, label=label, **kwargs)[0]
+    if RASTERIZE_LINES:
+        line.set_rasterized(True)
+    return line
+
+
+def _style_axis(axis, ylabel: Optional[str] = None, title: Optional[str] = None) -> None:
+    if ylabel is not None:
+        axis.set_ylabel(ylabel, fontsize=_fs(AXIS_LABEL_FONT_SIZE, axis.figure))
+    if title is not None:
+        axis.set_title(title, fontsize=_fs(PANEL_TITLE_FONT_SIZE, axis.figure), pad=5)
+    axis.tick_params(axis="both", labelsize=_fs(TICK_LABEL_FONT_SIZE, axis.figure))
+    axis.grid(True, alpha=0.3)
+
+
+def _figure_titles(fig, title: str, subtitle: Optional[str] = None) -> None:
+    """Title just above the axes, with an optional smaller line under it.
+
+    The offsets are in inches, converted to figure fractions.  A fixed
+    fraction (the previous behaviour) put the title an inch clear of the axes
+    on a 7-inch-tall figure and much closer on a short one.
+    """
+    height = fig.get_figheight()
+    fig.suptitle(title, fontsize=_fs(TITLE_FONT_SIZE, fig),
+                 y=1.0 - TITLE_TOP_INCHES * _scale(fig) / height)
+    if subtitle and SHOW_METRICS_IN_TITLE:
+        fig.text(
+            0.5,
+            1.0 - (TITLE_TOP_INCHES + SUBTITLE_GAP_INCHES) * _scale(fig) / height,
+            subtitle, ha="center", va="top",
+            fontsize=_fs(METRICS_FONT_SIZE, fig), color="#333333",
+        )
+
+
+def _bottom_legend(fig, handles, labels, has_subtitle: bool = False) -> None:
+    """Single-row legend just below the axes, as in terrain_ablation_plots.py.
+
+    Bands are reserved in inches so the gaps look the same on a 15x7 pose
+    figure and a 15x10 force figure.  Outside the data area, the legend can
+    never cover a trace.
+    """
+    height = fig.get_figheight()
+    scale = _scale(fig)
+    title_band = TITLE_BAND_INCHES
+    if has_subtitle and SHOW_METRICS_IN_TITLE:
+        title_band += SUBTITLE_BAND_INCHES
+
+    fig.tight_layout(
+        rect=(0.0, LEGEND_BAND_INCHES * scale / height,
+              1.0, 1.0 - title_band * scale / height)
+    )
+    fig.legend(
+        handles,
+        labels,
+        loc="lower center",
+        bbox_to_anchor=(0.5, LEGEND_PAD_INCHES * scale / height),
+        ncol=LEGEND_COLUMNS,
+        frameon=False,
+        fontsize=_fs(LEGEND_FONT_SIZE, fig),
+        handlelength=2.4,
+        columnspacing=1.6,
+        borderaxespad=0.0,
+    )
+
+
+# -----------------------------------------------------------------------------
 # Official benchmark constants
 # -----------------------------------------------------------------------------
 BENCHMARK_RESULTS = {
@@ -279,107 +487,35 @@ def plot_imu_biases(est_csv: Path, max_points: int = 30000):
         bias_gyro_plot = bias_gyro
 
     fig, axes = plt.subplots(2, 3, figsize=(16, 7), sharex=True)
-    fig.suptitle("Estimated IMU Biases", fontsize=14)
+    _figure_titles(fig, "Estimated IMU Biases")
 
     acc_names = ["bias_ax", "bias_ay", "bias_az"]
     gyro_names = ["bias_gx", "bias_gy", "bias_gz"]
 
+    handles: List = []
     for i in range(3):
         ax = axes[0, i]
-        ax.plot(t_rel_plot, bias_acc_plot[:, i])
-        ax.axhline(0.0, linestyle="--", linewidth=0.8)
-        ax.set_title(acc_names[i])
-        ax.set_ylabel("Accel bias [m/s²]")
-        ax.grid(True)
+        bias_line = _draw(ax, t_rel_plot, bias_acc_plot[:, i], ESTIMATE_STYLE, "Estimated bias")
+        zero_line = ax.axhline(0.0, label="Zero", **ZERO_LINE_STYLE)
+        _style_axis(ax, ylabel="Accel bias [m/s²]", title=acc_names[i])
+        if not handles:
+            handles = [bias_line, zero_line]
 
     for i in range(3):
         ax = axes[1, i]
-        ax.plot(t_rel_plot, bias_gyro_plot[:, i])
-        ax.axhline(0.0, linestyle="--", linewidth=0.8)
-        ax.set_title(gyro_names[i])
-        ax.set_ylabel("Gyro bias [rad/s]")
-        ax.set_xlabel("Time [s]")
-        ax.grid(True)
+        _draw(ax, t_rel_plot, bias_gyro_plot[:, i], ESTIMATE_STYLE, "Estimated bias")
+        ax.axhline(0.0, **ZERO_LINE_STYLE)
+        _style_axis(ax, ylabel="Gyro bias [rad/s]", title=gyro_names[i])
+        ax.set_xlabel("Time [s]", fontsize=_fs(AXIS_LABEL_FONT_SIZE, ax.figure))
 
-    fig.tight_layout()
+    _bottom_legend(fig, handles, ["Estimated bias", "Zero"])
+    return fig
     
     
-def plot_pseudo_forces_vs_contacts(est_csv: Path, sensor_csv: Path, max_points: int = 50000):
-    """
-    Plots the pseudo-forces (fz) generated by the estimator alongside 
-    the binary contact flags from the original sensor data.
-    """
-    force_cols = ["fz_LF", "fz_RF", "fz_LH", "fz_RH"]
-    contact_cols = ["contact_LF", "contact_RF", "contact_LH", "contact_RH"]
-    leg_names = ["LF", "RF", "LH", "RH"]
+# NOTE: an earlier, identical-in-purpose definition of
+# plot_pseudo_forces_vs_contacts lived here and was silently shadowed by the
+# one defined further down; only the later one ever ran.  Removed.
 
-    try:
-        est_df = read_csv_auto(est_csv)
-        sensor_df = read_csv_auto(sensor_csv)
-    except Exception as e:
-        print(f"[WARN] Could not read files for force vs contact plot: {e}")
-        return
-
-    # Check if we generated the forces in the C++ output
-    missing_est = [c for c in ["t"] + force_cols if c not in est_df.columns]
-    if missing_est:
-        print("[INFO] Force vs Contact plot skipped.")
-        print(f"       Missing columns in {est_csv.name}: {missing_est}")
-        return
-
-    missing_sensor = [c for c in ["t"] + contact_cols if c not in sensor_df.columns]
-    if missing_sensor:
-        print("[INFO] Force vs Contact plot skipped.")
-        print(f"       Missing columns in {sensor_csv.name}: {missing_sensor}")
-        return
-
-    # Extract Data
-    t_est = est_df["t"].to_numpy(float)
-    t_sensor = sensor_df["t"].to_numpy(float)
-
-    forces = est_df[force_cols].to_numpy(float)
-    contacts = sensor_df[contact_cols].to_numpy(float)
-    contacts = (contacts > 0.5).astype(float) # Ensure binary
-
-    # Downsample if needed
-    n = min(len(est_df), len(sensor_df))
-    if n > max_points:
-        step = int(np.ceil(n / max_points))
-        idx = np.arange(0, n, step)
-    else:
-        idx = np.arange(n)
-
-    t_rel = t_est[idx] - t_est[0]
-    forces_plot = forces[idx]
-    contacts_plot = contacts[idx]
-
-    fig, axes = plt.subplots(4, 1, figsize=(15, 10), sharex=True)
-    fig.suptitle("Pseudo Forces vs. Binary Contact Flags", fontsize=14)
-
-    for i, ax1 in enumerate(axes):
-        # Primary Y-axis: Forces
-        color_force = 'tab:blue'
-        ax1.plot(t_rel, forces_plot[:, i], color=color_force, linewidth=1.5, label='Pseudo Force ($F_z$)')
-        ax1.set_ylabel(f"{leg_names[i]} Force [N]", color=color_force)
-        ax1.tick_params(axis='y', labelcolor=color_force)
-        ax1.grid(True, alpha=0.3)
-
-        # Secondary Y-axis: Contact Flags
-        ax2 = ax1.twinx()  
-        color_contact = 'tab:orange'
-        ax2.step(t_rel, contacts_plot[:, i], where='post', color=color_contact, linestyle='--', alpha=0.7, label='Contact Flag')
-        ax2.set_ylabel('Contact State', color=color_contact)
-        ax2.set_ylim(-0.1, 1.1)
-        ax2.set_yticks([0, 1])
-        ax2.tick_params(axis='y', labelcolor=color_contact)
-
-        if i == 0:
-            lines_1, labels_1 = ax1.get_legend_handles_labels()
-            lines_2, labels_2 = ax2.get_legend_handles_labels()
-            ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper right')
-
-    axes[-1].set_xlabel("Time [s]")
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
 # -----------------------------------------------------------------------------
 # Loaders
 # -----------------------------------------------------------------------------
@@ -419,7 +555,7 @@ def detect_estimator_format(df: pd.DataFrame) -> str:
     )
 
 
-def load_estimator(path: Path, label: str = "SEROW") -> Trajectory:
+def load_estimator(path: Path, label: str = "SBEE") -> Trajectory:
     df = read_csv_auto(path)
     fmt = detect_estimator_format(df)
 
@@ -453,9 +589,14 @@ def load_estimator(path: Path, label: str = "SEROW") -> Trajectory:
         v = np.zeros_like(p)
     return clean_trajectory(label, fmt, t, p, q, v)
 
-def plot_contact_probabilities_one_to_one(est_csv: Path, sensor_csv: Path, max_points: int = 50000):
+def plot_contact_probabilities_one_to_one(
+    est_csv: Path,
+    sensor_csv: Path,
+    max_points: int = 50000,
+    label: str = "Estimated contact confidence",
+):
     """
-    Plot SEROW estimated contact probabilities from fused_state.csv
+    Plot estimated contact probabilities from fused_state.csv
     against the binary contact flags from anymal_data.csv, aligned by timestamp.
     """
     contact_cols = ["contact_LF", "contact_RF", "contact_LH", "contact_RH"]
@@ -481,38 +622,28 @@ def plot_contact_probabilities_one_to_one(est_csv: Path, sensor_csv: Path, max_p
     contact_flag = (sensor_df[contact_cols].to_numpy(float) > 0.5).astype(float)
 
     fig, axes = plt.subplots(4, 1, figsize=(15, 9), sharex=True)
-    fig.suptitle("SEROW estimated contact probabilities vs binary contact flags")
+    _figure_titles(fig, "Estimated Contact Confidence vs Binary Contact Flags")
 
+    handles: List = []
     for i, ax in enumerate(axes):
-        # Plot estimator probability using estimator time
-        ax.plot(
-            t_est - t_0,
-            contact_prob[:, i],
-            label="SEROW estimated probability",
-            linewidth=1.2,
+        # Binary flag first, as the wide reference band underneath.
+        flag_line = _draw(
+            ax, t_sensor - t_0, contact_flag[:, i], GROUND_TRUTH_STYLE,
+            "Binary contact flag", step=True,
         )
-
-        # Plot raw sensor flags using sensor time
-        ax.step(
-            t_sensor - t_0,
-            contact_flag[:, i],
-            where="post",
-            linestyle="--",
-            linewidth=1.0,
-            label="Binary contact flag",
+        prob_line = _draw(
+            ax, t_est - t_0, contact_prob[:, i], ESTIMATE_STYLE, label,
         )
-
-        ax.set_ylabel(leg_names[i])
+        _style_axis(ax, ylabel=leg_names[i])
         ax.set_ylim(-0.05, 1.05)
-        ax.grid(True, alpha=0.3)
-
-        if i == 0:
-            ax.legend(loc="best")
+        if not handles:
+            handles = [flag_line, prob_line]
 
     # Limit the x-axis to the estimator's lifespan so the plot isn't stretched out
     axes[-1].set_xlim(0, t_est[-1] - t_0)
-    axes[-1].set_xlabel("Time [s]")
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    axes[-1].set_xlabel("Time [s]", fontsize=_fs(AXIS_LABEL_FONT_SIZE, fig))
+    _bottom_legend(fig, handles, ["Binary contact flag", label])
+    return fig
 
 
 def plot_pseudo_forces_vs_contacts(est_csv: Path, sensor_csv: Path, max_points: int = 50000):
@@ -545,33 +676,45 @@ def plot_pseudo_forces_vs_contacts(est_csv: Path, sensor_csv: Path, max_points: 
     contacts = (sensor_df[contact_cols].to_numpy(float) > 0.5).astype(float) 
 
     fig, axes = plt.subplots(4, 1, figsize=(15, 10), sharex=True)
-    fig.suptitle("Pseudo Forces vs. Binary Contact Flags", fontsize=14)
+    _figure_titles(fig, "Pseudo Forces vs. Binary Contact Flags")
 
+    handles: List = []
     for i, ax1 in enumerate(axes):
         # Primary Y-axis: Forces (Using estimator time)
-        color_force = 'tab:blue'
-        ax1.plot(t_est - t_0, forces[:, i], color=color_force, linewidth=1.5, label='Pseudo Force ($F_z$)')
-        ax1.set_ylabel(f"{leg_names[i]} Force [N]", color=color_force)
-        ax1.tick_params(axis='y', labelcolor=color_force)
+        force_line = _draw(
+            ax1, t_est - t_0, forces[:, i],
+            {**ESTIMATE_STYLE, "linewidth": 1.2}, "Pseudo force ($F_z$)",
+        )
+        # Short labels: the panels are ~2 inches tall and a long rotated label
+        # at the scaled font size runs into the row above.
+        ax1.set_ylabel(f"{leg_names[i]} [N]", color=ESTIMATE_COLOR,
+                       fontsize=_fs(AXIS_LABEL_FONT_SIZE, fig))
+        ax1.tick_params(axis="y", labelcolor=ESTIMATE_COLOR,
+                        labelsize=_fs(TICK_LABEL_FONT_SIZE, fig))
+        ax1.tick_params(axis="x", labelsize=_fs(TICK_LABEL_FONT_SIZE, fig))
         ax1.grid(True, alpha=0.3)
 
         # Secondary Y-axis: Contact Flags (Using sensor time)
-        ax2 = ax1.twinx()  
-        color_contact = 'tab:orange'
-        ax2.step(t_sensor - t_0, contacts[:, i], where='post', color=color_contact, linestyle='--', alpha=0.7, label='Contact Flag')
-        ax2.set_ylabel('Contact State', color=color_contact)
+        ax2 = ax1.twinx()
+        flag_line = _draw(
+            ax2, t_sensor - t_0, contacts[:, i],
+            {**SECONDARY_STYLE, "linewidth": 1.2, "alpha": 0.85},
+            "Contact flag", step=True,
+        )
+        ax2.set_ylabel("Contact", color=SECONDARY_COLOR,
+                       fontsize=_fs(AXIS_LABEL_FONT_SIZE, fig))
         ax2.set_ylim(-0.1, 1.1)
         ax2.set_yticks([0, 1])
-        ax2.tick_params(axis='y', labelcolor=color_contact)
+        ax2.tick_params(axis="y", labelcolor=SECONDARY_COLOR,
+                        labelsize=_fs(TICK_LABEL_FONT_SIZE, fig))
 
-        if i == 0:
-            lines_1, labels_1 = ax1.get_legend_handles_labels()
-            lines_2, labels_2 = ax2.get_legend_handles_labels()
-            ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper right')
+        if not handles:
+            handles = [force_line, flag_line]
 
     axes[-1].set_xlim(0, t_est[-1] - t_0)
-    axes[-1].set_xlabel("Time [s]")
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    axes[-1].set_xlabel("Time [s]", fontsize=_fs(AXIS_LABEL_FONT_SIZE, fig))
+    _bottom_legend(fig, handles, ["Pseudo force ($F_z$)", "Contact flag"])
+    return fig
 
 def clean_trajectory(name: str, fmt: str, t: np.ndarray, p: np.ndarray, q: np.ndarray, v: np.ndarray) -> Trajectory:
     valid = (
@@ -924,10 +1067,22 @@ def make_plot_trajectories(gt: Trajectory, est: Trajectory, R_vel: np.ndarray) -
     R_pose, t_pose = se3_umeyama_no_scale(est_overlap.p, gt_sync.p)
     est_pose = aligned_est_for_plot(gt_sync, est_overlap, R_pose, t_pose)
 
-    # Rebase pose plot to common GT start so both curves start together visually.
-    p0 = gt_sync.p[0].copy()
-    gt_plot = Trajectory("GT", gt_sync.fmt, gt_sync.t - gt_sync.t[0], gt_sync.p - p0, gt_sync.q_xyzw, gt_sync.v)
-    est_pose_plot = Trajectory(est.name, est.fmt, est_pose.t - gt_sync.t[0], est_pose.p - p0, est_pose.q_xyzw, est_pose.v)
+    # Rebase the pose plot so both curves start at the origin.
+    #
+    # Previously both were shifted by the same GT start point.  The Umeyama
+    # alignment is a least-squares fit over the WHOLE overlap, so it leaves a
+    # residual at t=0: the estimate started a few tens of centimetres away
+    # from GT and the two curves visibly took off from different points.
+    # gt_sync and est_pose share a time grid by construction (gt_sync is GT
+    # interpolated onto the estimator timestamps), so index 0 is the same
+    # instant for both and subtracting each curve's own first sample is a
+    # like-for-like shift.  This is cosmetic: ATE and the other metrics are
+    # computed elsewhere on unshifted data.  Set REBASE_PLOT_TO_ORIGIN = False
+    # to go back to showing the alignment residual at the start.
+    gt_p0 = gt_sync.p[0].copy()
+    est_p0 = est_pose.p[0].copy() if REBASE_PLOT_TO_ORIGIN else gt_p0
+    gt_plot = Trajectory("GT", gt_sync.fmt, gt_sync.t - gt_sync.t[0], gt_sync.p - gt_p0, gt_sync.q_xyzw, gt_sync.v)
+    est_pose_plot = Trajectory(est.name, est.fmt, est_pose.t - gt_sync.t[0], est_pose.p - est_p0, est_pose.q_xyzw, est_pose.v)
 
     # Velocity plot uses the velocity-frame rotation used in ATEvel computation.
     est_vel = Trajectory(est.name, est_overlap.fmt, est_overlap.t - gt_sync.t[0], est_overlap.p, est_overlap.q_xyzw, (R_vel @ est_overlap.v.T).T)
@@ -953,66 +1108,67 @@ def plot_pose(gt_plot: Trajectory, est_plot: Trajectory, metrics: Dict[str, floa
     est_rpy = rpy_from_quat_xyzw(est_plot.q_xyzw, benchmark_frame_fix=False, unwrap=unwrap)
 
     fig = plt.figure(figsize=(15, 7))
-    fig.suptitle("CYN-1 pose estimate vs ground truth\n" + metrics_title(metrics))
+    _figure_titles(fig, "Pose estimate vs ground truth", metrics_title(metrics))
     gs = fig.add_gridspec(3, 3)
 
     ax_traj = fig.add_subplot(gs[:, 0])
-    ax_traj.plot(gt_plot.p[:, 0], gt_plot.p[:, 1], "--", label="GT")
-    ax_traj.plot(est_plot.p[:, 0], est_plot.p[:, 1], label=est_plot.name)
-    ax_traj.set_title("(a) XY trajectory")
-    ax_traj.set_xlabel("x [m]")
-    ax_traj.set_ylabel("y [m]")
+    gt_line = _draw(ax_traj, gt_plot.p[:, 0], gt_plot.p[:, 1], GROUND_TRUTH_STYLE, "Ground truth")
+    est_line = _draw(ax_traj, est_plot.p[:, 0], est_plot.p[:, 1], ESTIMATE_STYLE, est_plot.name)
+    _style_axis(ax_traj, title="(a) XY trajectory")
+    ax_traj.set_xlabel("x [m]", fontsize=_fs(AXIS_LABEL_FONT_SIZE, fig))
+    ax_traj.set_ylabel("y [m]", fontsize=_fs(AXIS_LABEL_FONT_SIZE, fig))
     ax_traj.axis("equal")
-    ax_traj.grid(True, alpha=0.3)
-    ax_traj.legend(loc="best")
 
     pos_labels = [r"$p_x$ [m]", r"$p_y$ [m]", r"$p_z$ [m]"]
     for i in range(3):
         ax = fig.add_subplot(gs[i, 1])
-        ax.plot(gt_plot.t, gt_plot.p[:, i], "--", label="GT")
-        ax.plot(est_plot.t, est_plot.p[:, i], label=est_plot.name)
-        ax.set_ylabel(pos_labels[i])
-        ax.grid(True, alpha=0.3)
-        if i == 0:
-            ax.set_title("(b) Position")
-            ax.legend(loc="best")
+        _draw(ax, gt_plot.t, gt_plot.p[:, i], GROUND_TRUTH_STYLE, "Ground truth")
+        _draw(ax, est_plot.t, est_plot.p[:, i], ESTIMATE_STYLE, est_plot.name)
+        _style_axis(ax, ylabel=pos_labels[i], title="(b) Position" if i == 0 else None)
         if i < 2:
             ax.tick_params(labelbottom=False)
         else:
-            ax.set_xlabel("Time since estimator start [s]")
+            ax.set_xlabel("Time [s]",
+                          fontsize=_fs(AXIS_LABEL_FONT_SIZE, fig))
 
-    ori_labels = ["roll [deg]", "pitch [deg]", "yaw [deg]"]
+    # Short unit strings: at the scaled font size, "roll [deg]" is tall enough
+    # to collide with the label of the panel above it.
+    ori_labels = [r"roll [$^\circ$]", r"pitch [$^\circ$]", r"yaw [$^\circ$]"]
     for i in range(3):
         ax = fig.add_subplot(gs[i, 2])
-        ax.plot(gt_plot.t, gt_rpy[:, i], "--", label="GT")
-        ax.plot(est_plot.t, est_rpy[:, i], label=est_plot.name)
-        ax.set_ylabel(ori_labels[i])
-        ax.grid(True, alpha=0.3)
-        if i == 0:
-            ax.set_title("(c) Orientation")
-            ax.legend(loc="best")
+        _draw(ax, gt_plot.t, gt_rpy[:, i], GROUND_TRUTH_STYLE, "Ground truth")
+        _draw(ax, est_plot.t, est_rpy[:, i], ESTIMATE_STYLE, est_plot.name)
+        _style_axis(ax, ylabel=ori_labels[i], title="(c) Orientation" if i == 0 else None)
         if i < 2:
             ax.tick_params(labelbottom=False)
         else:
-            ax.set_xlabel("Time since estimator start [s]")
+            ax.set_xlabel("Time [s]",
+                          fontsize=_fs(AXIS_LABEL_FONT_SIZE, fig))
 
-    plt.tight_layout(rect=[0, 0, 1, 0.92])
+    # One legend for the whole figure instead of three in-panel ones.
+    _bottom_legend(fig, [gt_line, est_line], ["Ground truth", est_plot.name],
+                   has_subtitle=True)
+    return fig
 
 
 def plot_velocity(gt_plot: Trajectory, est_vel_plot: Trajectory, metrics: Dict[str, float]) -> None:
     fig, axes = plt.subplots(3, 1, figsize=(15, 7), sharex=True)
-    fig.suptitle("CYN-1 velocity estimate vs ground truth\n" + metrics_title(metrics))
+    _figure_titles(fig, "Velocity estimate vs ground truth", metrics_title(metrics))
     labels = [r"$v_x$ [m/s]", r"$v_y$ [m/s]", r"$v_z$ [m/s]"]
 
+    handles: List = []
     for i, ax in enumerate(axes):
-        ax.plot(gt_plot.t, gt_plot.v[:, i], "--", label="GT")
-        ax.plot(est_vel_plot.t, est_vel_plot.v[:, i], label=est_vel_plot.name)
-        ax.set_ylabel(labels[i])
-        ax.grid(True, alpha=0.3)
-        ax.legend(loc="best")
+        gt_line = _draw(ax, gt_plot.t, gt_plot.v[:, i], GROUND_TRUTH_STYLE, "Ground truth")
+        est_line = _draw(ax, est_vel_plot.t, est_vel_plot.v[:, i], ESTIMATE_STYLE, est_vel_plot.name)
+        _style_axis(ax, ylabel=labels[i])
+        if not handles:
+            handles = [gt_line, est_line]
 
-    axes[-1].set_xlabel("Time since estimator start [s]")
-    plt.tight_layout(rect=[0, 0, 1, 0.92])
+    axes[-1].set_xlabel("Time [s]",
+                        fontsize=_fs(AXIS_LABEL_FONT_SIZE, fig))
+    _bottom_legend(fig, handles, ["Ground truth", est_vel_plot.name],
+                   has_subtitle=True)
+    return fig
 
 
 # -----------------------------------------------------------------------------
@@ -1154,8 +1310,40 @@ def main() -> None:
     parser.add_argument("--est", type=Path, default=DEFAULT_EST)
     parser.add_argument("--sensor", type=Path, default=DEFAULT_SENSOR)
     parser.add_argument("--workdir", type=Path, default=DEFAULT_WORKDIR)
-    parser.add_argument("--label", default="SEROW")
+    parser.add_argument("--label", default="SBEE")
     parser.add_argument("--no-plots", action="store_true")
+    parser.add_argument(
+        "--plot-dir",
+        type=Path,
+        default=DEFAULT_PLOT_DIR,
+        help=(
+            "Directory for automatically saved figures "
+            f"(default: {DEFAULT_PLOT_DIR}). Created if missing."
+        ),
+    )
+    parser.add_argument(
+        "--plot-formats",
+        nargs="+",
+        choices=("pdf", "svg", "png"),
+        default=list(DEFAULT_PLOT_FORMATS),
+        help="Formats to save each figure in (default: pdf).",
+    )
+    parser.add_argument(
+        "--no-save-plots",
+        action="store_true",
+        help="Display the figures without writing any files.",
+    )
+    parser.add_argument(
+        "--no-show",
+        action="store_true",
+        help="Save the figures without opening GUI windows (for headless runs).",
+    )
+    parser.add_argument(
+        "--plot-dpi",
+        type=int,
+        default=300,
+        help="Resolution for PNG output (default: 300).",
+    )
     parser.add_argument("--no-unwrap", action="store_true")
     parser.add_argument(
         "--debug-fast",
@@ -1270,13 +1458,33 @@ def main() -> None:
     if not args.no_plots:
         gt_plot, est_pose_plot, est_vel_plot = make_plot_trajectories(gt, est, R_vel)
 
-        plot_pose(gt_plot, est_pose_plot, metrics, unwrap=not args.no_unwrap)
-        plot_velocity(gt_plot, est_vel_plot, metrics)
-        plot_imu_biases(est_path)
-        plot_contact_probabilities_one_to_one(est_path, sensor_path)
-        plot_pseudo_forces_vs_contacts(est_path, sensor_path) # <-- ADD THIS
+        figures = [
+            ("pose", plot_pose(gt_plot, est_pose_plot, metrics, unwrap=not args.no_unwrap)),
+            ("velocity", plot_velocity(gt_plot, est_vel_plot, metrics)),
+            ("imu_biases", plot_imu_biases(est_path)),
+            ("contact_probabilities", plot_contact_probabilities_one_to_one(
+                est_path, sensor_path, "Estimated probability")),
+            ("pseudo_forces", plot_pseudo_forces_vs_contacts(est_path, sensor_path)),
+        ]
 
-        plt.show()
+        if not args.no_save_plots:
+            plot_dir = args.plot_dir.expanduser().resolve()
+            # Filenames carry the estimator label so runs of different
+            # estimators into the same directory do not overwrite each other.
+            prefix = args.label.lower().replace(" ", "_")
+            for stem, figure in figures:
+                save_figure(
+                    figure,
+                    plot_dir,
+                    f"{prefix}_{stem}",
+                    tuple(args.plot_formats),
+                    args.plot_dpi,
+                )
+
+        if args.no_show:
+            plt.close("all")
+        else:
+            plt.show()
 
 
 if __name__ == "__main__":
