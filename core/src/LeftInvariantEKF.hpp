@@ -99,7 +99,7 @@ private:
     Eigen::Matrix<double, 15, 15> I_, P_;
     /// Schmidt-Kalman partial update matrix
     Eigen::Matrix<double, 15, 15> L_{Eigen::Matrix<double, 15, 15>::Zero()};
-    /// Schmidt-Kalman partial update matrix for the position and velocity states
+    /// Schmidt-Kalman partial update matrix for the position state
     Eigen::Matrix3d L_3_{Eigen::Vector3d(0.0, 0.0, 1.0).asDiagonal()};
 
     /// Constant (state-independent) part of the continuous-time A matrix
