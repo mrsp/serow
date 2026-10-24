@@ -97,6 +97,11 @@ private:
 
     /// Identity matrix, state uncertainty matrix 15 x 15
     Eigen::Matrix<double, 15, 15> I_, P_;
+    /// Schmidt-Kalman partial update matrix
+    Eigen::Matrix<double, 15, 15> L_{Eigen::Matrix<double, 15, 15>::Zero()};
+    /// Schmidt-Kalman partial update matrix for the position state
+    Eigen::Matrix3d L_3_{Eigen::Vector3d(0.0, 0.0, 1.0).asDiagonal()};
+
     /// Constant (state-independent) part of the continuous-time A matrix
     Eigen::Matrix<double, 15, 15> Ac_;
     /// Constant part of the noise-input Jacobian L (in our case Identity matrix)

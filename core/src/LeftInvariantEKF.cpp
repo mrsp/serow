@@ -367,9 +367,13 @@ void LeftInvariantEKF::updateWithTerrain(
                                   static_cast<double>(terrain_estimator->getMinVariance())) /
             (cp * dt);
 
+        // Schmidt-Kalman partial update
+        const Eigen::Matrix3d L_3 = R_world_to_base.transpose() * L_3_ * R_world_to_base;
+        L_.block(p_idx_[0], p_idx_[0], 3, 3) = L_3;
+
         const Eigen::Matrix<double, 15, 1> PH_transpose = P_ * H.transpose();
         const double s = N + (H * PH_transpose)(0, 0);
-        const Eigen::Matrix<double, 15, 1> K = PH_transpose / s;
+        const Eigen::Matrix<double, 15, 1> K = L_ * PH_transpose / s;
         Eigen::Matrix<double, 15, 1> dx = K * z;
         const Eigen::Matrix<double, 15, 15> IKH = I_ - K * H;
         Eigen::Matrix<double, 15, 15> P_new;
