@@ -44,7 +44,7 @@
   ],
   "use_imu_orientation": false,
   "initialize_attitude_from_gravity": true,
-  "attitude_leveling_samples": 1000,
+  "attitude_leveling_samples": 400,
   "attitude_leveling_acceleration_std": 0.1,
   "calibrate_initial_imu_bias": false,
   "max_imu_calibration_cycles": 300,
@@ -108,9 +108,9 @@
     ]
   },
   "attitude_estimator_proportional_gain": 2.0,
-  "attitude_estimator_integral_gain": 0.0,
+  "attitude_estimator_integral_gain": 0.2,
   "estimate_contact_status": true,
-  "median_window": 5,
+  "median_window": 3,
   "convergence_cycles": 100,
   "imu_angular_velocity_covariance": [
     1e-7,
@@ -187,7 +187,7 @@
     1.0,
     1.0
   ],
-  "enable_terrain_estimation": false,
+  "enable_terrain_estimation": true,
   "terrain_estimator": "fast",
   "minimum_terrain_height_variance": 1e-2,
   "maximum_contact_points": 4,
@@ -197,8 +197,8 @@
   "minimum_stable_foot_angular_velocity": 0.02,
   "minimum_stable_foot_linear_velocity": 0.02,
   "resolution": 0.015,
-  "radius": 0.35,
-  "dist_variance_gain": 100.0,
+  "radius": 0.55,
+  "dist_variance_gain": 80.0,
   "power": 1.5,
   "T_base_to_ground_truth": [
     1.0,
