@@ -13,7 +13,7 @@
     "g": 9.81,
     "joint_rate": 500.0,
     "estimate_joint_velocity": true,
-    "joint_position_variance": 1e-5,
+    "joint_position_variance": 1e-4,
     "joint_velocity_variance": null,
     "smoothing_window": 11,
     "estimate_contact_wrench": false,
@@ -109,7 +109,7 @@
     "attitude_estimator_proportional_gain": 0.1,
     "attitude_estimator_integral_gain": 0.0,
     "estimate_contact_status": true,
-    "median_window": 17,
+    "median_window": 21,
     "convergence_cycles": 100,
     "imu_angular_velocity_covariance": [
         1e-2,
@@ -122,9 +122,9 @@
         1e-8
     ],
     "imu_linear_acceleration_covariance": [
-        2e-1,
-        2e-1,
-        2e-1
+        2e-3,
+        2e-3,
+        2e-3
     ],
     "imu_linear_acceleration_bias_covariance": [
         1e-6,
@@ -189,7 +189,7 @@
     "T_base_to_odom": null,
     "enable_terrain_estimation": true,
     "terrain_estimator": "fast",
-    "minimum_terrain_height_variance": 3e-4,
+    "minimum_terrain_height_variance": 3e-6,
     "maximum_contact_points": 4,
     "maximum_recenter_distance": 0.35,
     "minimum_contact_probability": 0.2,
