@@ -218,6 +218,28 @@ bool Serow::initialize(const std::string& config_file) {
             return false;
     }
 
+    // Base attitude initialization
+    if (config.contains("initialize_attitude_from_gravity") &&
+        !config["initialize_attitude_from_gravity"].is_null()) {
+        if (!checkConfigParam("initialize_attitude_from_gravity",
+                              params_.initialize_attitude_from_gravity)) {
+            return false;
+        }
+    }
+    if (params_.initialize_attitude_from_gravity) {
+        if (!checkConfigParam("attitude_leveling_samples", params_.attitude_leveling_samples))
+            return false;
+        if (params_.attitude_leveling_samples == 0) {
+            std::cerr << RED_COLOR
+                      << "Configuration: attitude_leveling_samples must be greater than zero\n"
+                      << WHITE_COLOR;
+            return false;
+        }
+        if (!checkConfigParam("attitude_leveling_acceleration_std",
+                              params_.attitude_leveling_acceleration_std))
+            return false;
+    }
+
     // Load other scalar parameters
     if (!checkConfigParam("force_torque_rate", params_.force_torque_rate))
         return false;
@@ -679,6 +701,50 @@ void Serow::runJointsEstimator(State& state,
     state.joint_state_.joints_effort = std::move(joints_effort);
 }
 
+bool Serow::levelBaseAttitude(State& state, const ImuMeasurement& imu) {
+    if (attitude_leveled_) {
+        return true;
+    }
+    leveling_acceleration_sum_ += imu.linear_acceleration;
+    leveling_acceleration_squared_sum_ +=
+        imu.linear_acceleration.cwiseProduct(imu.linear_acceleration);
+    if (++leveling_samples_ < params_.attitude_leveling_samples) {
+        return false;
+    }
+    attitude_leveled_ = true;
+    const double samples = static_cast<double>(leveling_samples_);
+    const Eigen::Vector3d mean = leveling_acceleration_sum_ / samples;
+    const Eigen::Vector3d variance =
+        (leveling_acceleration_squared_sum_ / samples - mean.cwiseProduct(mean)).cwiseMax(0.0);
+    if (variance.maxCoeff() > params_.attitude_leveling_acceleration_std *
+                                  params_.attitude_leveling_acceleration_std) {
+        std::cout << RED_COLOR << "[SEROW/levelBaseAttitude]: IMU acceleration std "
+                  << std::sqrt(variance.maxCoeff()) << " m/s^2 exceeds "
+                  << params_.attitude_leveling_acceleration_std
+                  << ", keeping the initial base attitude" << "\n"
+                  << WHITE_COLOR;
+        return true;
+    }
+    // Rotate the measured gravity direction onto the world z axis, the rotation axis is
+    // horizontal hence the yaw is left intact
+    const Eigen::Vector3d gravity_direction = mean.normalized();
+    const Eigen::Vector3d axis = gravity_direction.cross(Eigen::Vector3d::UnitZ());
+    const double sin_angle = axis.norm();
+    if (sin_angle > 1e-9) {
+        state.base_state_.base_orientation =
+            Eigen::Quaterniond(
+                Eigen::AngleAxisd(std::atan2(sin_angle, gravity_direction.z()), axis / sin_angle))
+                .normalized();
+    }
+    if (params_.verbose) {
+        const Eigen::Matrix3d R = state.base_state_.base_orientation.toRotationMatrix();
+        std::cout << "[SEROW/levelBaseAttitude]: Leveled with " << leveling_samples_
+                  << " IMU samples, roll " << std::atan2(R(2, 1), R(2, 2)) * 180.0 / M_PI
+                  << " deg, pitch " << std::asin(-R(2, 0)) * 180.0 / M_PI << " deg" << '\n';
+    }
+    return true;
+}
+
 bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
     // Transform IMU measurements to base frame
     imu.angular_velocity = params_.R_base_to_gyro * imu.angular_velocity;
@@ -695,6 +761,12 @@ bool Serow::runImuEstimator(State& state, ImuMeasurement& imu) {
         params_.linear_acceleration_cov.asDiagonal() * R_base_to_acc_transpose;
     imu.linear_acceleration_bias_cov = params_.R_base_to_acc *
         params_.linear_acceleration_bias_cov.asDiagonal() * R_base_to_acc_transpose;
+
+    // Initialize the base frame attitude from the measured gravity direction. Runs before the
+    // attitude estimator is constructed so that it is seeded with the leveled attitude
+    if (params_.initialize_attitude_from_gravity && !levelBaseAttitude(state, imu)) {
+        return false;
+    }
 
     // Estimate the base frame attitude
     if (!attitude_estimator_) {
@@ -1546,6 +1618,10 @@ void Serow::reset() {
     is_initialized_ = false;
     cycle_ = 0;
     imu_calibration_cycles_ = 0;
+    attitude_leveled_ = false;
+    leveling_samples_ = 0;
+    leveling_acceleration_sum_.setZero();
+    leveling_acceleration_squared_sum_.setZero();
     last_imu_timestamp_ = -1.0;
     last_joint_timestamp_ = -1.0;
     last_ft_timestamp_ = -1.0;
